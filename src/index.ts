@@ -1,12 +1,13 @@
 /**
  * vlist - Lightweight Virtual List
  * High-performance virtual scrolling with zero dependencies
+ * Supports compression for handling 1M+ items
  *
  * @packageDocumentation
  */
 
 // Main factory
-export { createVList } from './vlist';
+export { createVList } from "./vlist";
 
 // Types
 export type {
@@ -37,7 +38,7 @@ export type {
   // Events
   EventHandler,
   Unsubscribe,
-} from './types';
+} from "./types";
 
 // Core utilities (for advanced usage)
 export {
@@ -45,6 +46,7 @@ export {
   calculateVisibleRange,
   calculateRenderRange,
   calculateTotalHeight,
+  calculateActualHeight,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,
@@ -52,7 +54,22 @@ export {
   isInRange,
   getRangeCount,
   diffRanges,
-} from './core/virtual';
+} from "./core/virtual";
+
+// Compression utilities (for handling 1M+ items)
+export {
+  MAX_VIRTUAL_HEIGHT,
+  getCompressionState,
+  needsCompression,
+  getMaxItemsWithoutCompression,
+  getCompressionInfo,
+  calculateCompressedVisibleRange,
+  calculateCompressedRenderRange,
+  calculateCompressedItemPosition,
+  calculateCompressedScrollToIndex,
+  calculateIndexFromScrollPosition,
+  type CompressionState,
+} from "./core/compression";
 
 export {
   // Selection state management
@@ -65,10 +82,10 @@ export {
   isSelected,
   getSelectedIds,
   getSelectedItems,
-} from './core/selection';
+} from "./core/selection";
 
 export {
   // Event emitter
   createEmitter,
   type Emitter,
-} from './core/events';
+} from "./core/events";
