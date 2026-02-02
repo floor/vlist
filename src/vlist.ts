@@ -109,19 +109,22 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
+  // Mutable reference to context (needed for callbacks that run after ctx is created)
+  let ctxRef: VListContext<T> | null = null;
+
   // Create data manager
   const dataManager = createDataManager<T>({
-    adapter,
-    initialItems,
-    initialTotal: initialItems?.length,
+    ...(adapter ? { adapter } : {}),
+    ...(initialItems ? { initialItems } : {}),
+    ...(initialItems?.length ? { initialTotal: initialItems.length } : {}),
     pageSize: INITIAL_LOAD_SIZE,
     onStateChange: () => {
-      if (ctx.state.isInitialized) {
+      if (ctxRef?.state.isInitialized) {
         updateViewport();
       }
     },
     onItemsLoaded: (loadedItems, _offset, total) => {
-      if (ctx.state.isInitialized) {
+      if (ctxRef?.state.isInitialized) {
         forceRender();
         emitter.emit("load:end", { items: loadedItems, total });
       }
@@ -148,9 +151,9 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create scroll controller
   const scrollController = createScrollController(dom.viewport, {
     compressed: initialCompression.isCompressed,
-    compression: initialCompression.isCompressed
-      ? initialCompression
-      : undefined,
+    ...(initialCompression.isCompressed
+      ? { compression: initialCompression }
+      : {}),
     onScroll: (data) => {
       handleScroll(data.scrollTop, data.direction);
     },
@@ -189,7 +192,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create Context
   // ===========================================================================
 
-  const ctx: VListContext<T> = createContext(
+  const ctx: VListContext<T> = (ctxRef = createContext(
     {
       itemHeight,
       overscan,
@@ -210,7 +213,7 @@ export const createVList = <T extends VListItem = VListItem>(
       isInitialized: false,
       isDestroyed: false,
     },
-  );
+  ));
 
   // ===========================================================================
   // Internal Helpers

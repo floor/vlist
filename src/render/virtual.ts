@@ -8,12 +8,10 @@
 
 import type { Range, ViewportState } from "../types";
 import {
-  MAX_VIRTUAL_HEIGHT,
   getCompressionState,
   calculateCompressedVisibleRange,
   calculateCompressedRenderRange,
   calculateCompressedScrollToIndex,
-  type CompressionState,
 } from "./compression";
 
 // =============================================================================

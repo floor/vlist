@@ -8,7 +8,6 @@
 
 import type {
   VListItem,
-  VListConfig,
   VListEvents,
   Range,
   ViewportState,
