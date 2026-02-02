@@ -144,8 +144,17 @@ export interface ViewportState {
   /** Container height */
   containerHeight: number;
 
-  /** Total content height */
+  /** Total content height (may be capped for compression) */
   totalHeight: number;
+
+  /** Actual total height without compression (totalItems × itemHeight) */
+  actualHeight: number;
+
+  /** Whether compression is active */
+  isCompressed: boolean;
+
+  /** Compression ratio (1 = no compression, <1 = compressed) */
+  compressionRatio: number;
 
   /** Visible item range */
   visibleRange: Range;

@@ -130,26 +130,50 @@ describe("calculateItemOffset", () => {
 });
 
 describe("calculateScrollToIndex", () => {
+  // Note: signature is (index, itemHeight, containerHeight, totalItems, align)
+  // For small lists (no compression), result = index * itemHeight adjusted for alignment
+
   it("should scroll to start alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, "start");
+    const result = calculateScrollToIndex(10, 50, 500, 100, "start");
     expect(result).toBe(500); // 10 * 50
   });
 
   it("should scroll to center alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, "center");
+    const result = calculateScrollToIndex(10, 50, 500, 100, "center");
     // itemTop = 500, center = 500 - (500 - 50) / 2 = 500 - 225 = 275
     expect(result).toBe(275);
   });
 
   it("should scroll to end alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, "end");
-    // itemBottom = 550, end = 550 - 500 = 50
+    const result = calculateScrollToIndex(10, 50, 500, 100, "end");
+    // itemTop = 500, end = 500 - (500 - 50) = 50
     expect(result).toBe(50);
   });
 
   it("should default to start alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500);
+    const result = calculateScrollToIndex(10, 50, 500, 100);
     expect(result).toBe(500);
+  });
+
+  it("should handle compressed lists (1M+ items)", () => {
+    // 1 million items at 40px = 40M pixels (exceeds 16M limit)
+    // compressionRatio = 16M / 40M = 0.4
+    // For index 500000: ratio = 500000/1000000 = 0.5
+    // targetPosition = 0.5 * 16M = 8M
+    const totalItems = 1_000_000;
+    const itemHeight = 40;
+    const containerHeight = 600;
+    const result = calculateScrollToIndex(
+      500_000,
+      itemHeight,
+      containerHeight,
+      totalItems,
+      "start",
+    );
+
+    // Should map to compressed position
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBeLessThan(16_000_000);
   });
 });
 

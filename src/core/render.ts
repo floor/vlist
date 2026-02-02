@@ -1,6 +1,7 @@
 /**
  * vlist - DOM Rendering
  * Efficient DOM rendering with element pooling
+ * Supports compression for large lists (1M+ items)
  */
 
 import type {
@@ -10,6 +11,12 @@ import type {
   Range,
   RenderedItem,
 } from "../types";
+
+import {
+  getCompressionState,
+  calculateCompressedItemPosition,
+  type CompressionState,
+} from "./compression";
 
 // =============================================================================
 // Types
@@ -30,6 +37,14 @@ export interface ElementPool {
   stats: () => { poolSize: number; created: number; reused: number };
 }
 
+/** Compression context for positioning */
+export interface CompressionContext {
+  scrollTop: number;
+  totalItems: number;
+  containerHeight: number;
+  rangeStart: number;
+}
+
 /** Renderer instance */
 export interface Renderer<T extends VListItem = VListItem> {
   /** Render items for a range */
@@ -38,7 +53,11 @@ export interface Renderer<T extends VListItem = VListItem> {
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    compressionCtx?: CompressionContext,
   ) => void;
+
+  /** Update item positions (for compressed scrolling) */
+  updatePositions: (compressionCtx: CompressionContext) => void;
 
   /** Update a single item */
   updateItem: (
@@ -118,15 +137,33 @@ export const createElementPool = (
 
 /**
  * Create a renderer for managing DOM elements
+ * Supports compression for large lists
  */
 export const createRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
   template: ItemTemplate<T>,
   itemHeight: number,
   classPrefix: string,
+  totalItemsGetter?: () => number,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, RenderedItem>();
+
+  // Cache compression state to avoid recalculating
+  let cachedCompression: CompressionState | null = null;
+  let cachedTotalItems = 0;
+
+  /**
+   * Get or update compression state
+   */
+  const getCompression = (totalItems: number): CompressionState => {
+    if (cachedCompression && cachedTotalItems === totalItems) {
+      return cachedCompression;
+    }
+    cachedCompression = getCompressionState(totalItems, itemHeight);
+    cachedTotalItems = totalItems;
+    return cachedCompression;
+  };
 
   /**
    * Create item state for template
@@ -156,15 +193,45 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Position an element at the correct offset
+   * Uses compression-aware positioning for large lists
    */
-  const positionElement = (element: HTMLElement, index: number): void => {
-    const offset = index * itemHeight;
+  const positionElement = (
+    element: HTMLElement,
+    index: number,
+    compressionCtx?: CompressionContext,
+  ): void => {
     element.style.position = "absolute";
     element.style.top = "0";
     element.style.left = "0";
     element.style.right = "0";
     element.style.height = `${itemHeight}px`;
-    element.style.transform = `translateY(${offset}px)`;
+
+    let offset: number;
+
+    if (compressionCtx) {
+      const compression = getCompression(compressionCtx.totalItems);
+
+      if (compression.isCompressed) {
+        // Use compression-aware positioning
+        offset = calculateCompressedItemPosition(
+          index,
+          compressionCtx.scrollTop,
+          itemHeight,
+          compressionCtx.totalItems,
+          compressionCtx.containerHeight,
+          compression,
+          compressionCtx.rangeStart,
+        );
+      } else {
+        // Normal positioning
+        offset = index * itemHeight;
+      }
+    } else {
+      // Fallback to simple positioning
+      offset = index * itemHeight;
+    }
+
+    element.style.transform = `translateY(${Math.round(offset)}px)`;
   };
 
   /**
@@ -196,6 +263,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     item: T,
     isSelected: boolean,
     isFocused: boolean,
+    compressionCtx?: CompressionContext,
   ): HTMLElement => {
     const element = pool.acquire();
     const state = createItemState(isSelected, isFocused);
@@ -212,19 +280,21 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
     // Apply styling
     applyClasses(element, isSelected, isFocused);
-    positionElement(element, index);
+    positionElement(element, index, compressionCtx);
 
     return element;
   };
 
   /**
    * Render items for a range
+   * Supports compression context for large lists
    */
   const render = (
     items: T[],
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    compressionCtx?: CompressionContext,
   ): void => {
     const indicesToKeep = new Set<number>();
 
@@ -254,15 +324,32 @@ export const createRenderer = <T extends VListItem = VListItem>(
       const existing = rendered.get(i);
 
       if (existing) {
-        // Update existing element
+        // Update existing element - also update position for compressed lists
         applyClasses(existing.element, isSelected, isFocused);
         existing.element.setAttribute("aria-selected", String(isSelected));
+        positionElement(existing.element, i, compressionCtx);
       } else {
         // Render new element
-        const element = renderItem(i, item, isSelected, isFocused);
+        const element = renderItem(
+          i,
+          item,
+          isSelected,
+          isFocused,
+          compressionCtx,
+        );
         itemsContainer.appendChild(element);
         rendered.set(i, { index: i, element });
       }
+    }
+  };
+
+  /**
+   * Update positions of all rendered items (for compressed scrolling)
+   * Call this on scroll when using compression
+   */
+  const updatePositions = (compressionCtx: CompressionContext): void => {
+    for (const [index, renderedItem] of rendered) {
+      positionElement(renderedItem.element, index, compressionCtx);
     }
   };
 
@@ -316,6 +403,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
+    updatePositions,
     updateItem,
     getElement,
     clear,

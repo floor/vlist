@@ -1,6 +1,7 @@
 /**
  * vlist - Main Entry Point
  * Creates a virtual list instance with all features
+ * Supports compression for handling 1M+ items via manual wheel scrolling
  */
 
 import type {
@@ -20,7 +21,15 @@ import {
   updateViewportItems,
   calculateScrollToIndex,
   rangesEqual,
+  getCompressionState,
 } from "./core/virtual";
+
+import {
+  getCompressionState as getCompression,
+  calculateCompressedItemPosition,
+} from "./core/compression";
+
+import type { CompressionContext } from "./core/render";
 
 import { createEmitter } from "./core/events";
 
@@ -148,15 +157,33 @@ export const createVList = <T extends VListItem = VListItem>(
     overscan,
   );
 
-  // Create scroll controller
-  const scrollController = createScrollController(dom.viewport);
+  // Get initial compression state
+  const initialCompression = getCompression(
+    dataManager.getState().total,
+    itemHeight,
+  );
 
-  // Create renderer
+  // Create scroll controller with compression support if needed
+  const scrollController = createScrollController(dom.viewport, {
+    compressed: initialCompression.isCompressed,
+    compression: initialCompression.isCompressed
+      ? initialCompression
+      : undefined,
+    onScroll: (data) => {
+      handleScroll(data.scrollTop, data.direction);
+    },
+    onIdle: () => {
+      // Could emit idle event if needed
+    },
+  });
+
+  // Create renderer (with totalItems getter for compression)
   const renderer = createRenderer<T>(
     dom.items,
     template,
     itemHeight,
     classPrefix,
+    () => dataManager.getState().total,
   );
 
   // Track last render range to avoid unnecessary re-renders
@@ -190,12 +217,45 @@ export const createVList = <T extends VListItem = VListItem>(
   // =============================================================================
 
   /**
+   * Get compression context for rendering
+   * In compressed mode, items are positioned relative to viewport using the virtual scroll index
+   */
+  const getCompressionContext = (): CompressionContext => ({
+    scrollTop: viewportState.scrollTop,
+    totalItems: dataManager.getState().total,
+    containerHeight: viewportState.containerHeight,
+    rangeStart: viewportState.renderRange.start,
+  });
+
+  /**
+   * Update compression mode when total items changes
+   */
+  const updateCompressionMode = (): void => {
+    const total = dataManager.getState().total;
+    const compression = getCompression(total, itemHeight);
+
+    if (compression.isCompressed && !scrollController.isCompressed()) {
+      // Enable compression mode
+      scrollController.enableCompression(compression);
+    } else if (!compression.isCompressed && scrollController.isCompressed()) {
+      // Disable compression mode
+      scrollController.disableCompression();
+    } else if (compression.isCompressed) {
+      // Update compression config
+      scrollController.updateConfig({ compression });
+    }
+  };
+
+  /**
    * Update viewport state and re-render if needed
    */
   const updateViewport = (): void => {
     if (isDestroyed) return;
 
     const dataState = dataManager.getState();
+
+    // Update compression mode if needed
+    updateCompressionMode();
 
     // Update viewport state with new item count
     viewportState = updateViewportItems(
@@ -205,7 +265,8 @@ export const createVList = <T extends VListItem = VListItem>(
       overscan,
     );
 
-    // Update content height
+    // Update content height (uses virtualHeight, capped for compression)
+    // In compressed mode, this sets the virtual height for scroll bounds
     updateContentHeight(dom.content, viewportState.totalHeight);
 
     // Render if range changed
@@ -218,22 +279,28 @@ export const createVList = <T extends VListItem = VListItem>(
   const renderIfNeeded = (): void => {
     if (isDestroyed) return;
 
-    const { renderRange } = viewportState;
+    const { renderRange, isCompressed } = viewportState;
 
     if (!rangesEqual(renderRange, lastRenderRange)) {
       const items = getItemsForRange(renderRange);
+      const compressionCtx = isCompressed ? getCompressionContext() : undefined;
 
       renderer.render(
         items,
         renderRange,
         selectionState.selected,
         selectionState.focusedIndex,
+        compressionCtx,
       );
 
       lastRenderRange = { ...renderRange };
 
       // Emit range change
       emitter.emit("range:change", { range: renderRange });
+    } else if (isCompressed) {
+      // Range didn't change but we're compressed - update positions on scroll
+      // In compressed mode (manual wheel scroll), items are positioned relative to viewport
+      renderer.updatePositions(getCompressionContext());
     }
   };
 
@@ -243,26 +310,28 @@ export const createVList = <T extends VListItem = VListItem>(
   const forceRender = (): void => {
     if (isDestroyed) return;
 
-    const { renderRange } = viewportState;
+    const { renderRange, isCompressed } = viewportState;
     const items = getItemsForRange(renderRange);
+    const compressionCtx = isCompressed ? getCompressionContext() : undefined;
 
     renderer.render(
       items,
       renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
   };
 
   /**
-   * Handle scroll events
+   * Handle scroll events (works for both native and compressed scroll)
    */
   const handleScroll = (scrollTop: number, direction: "up" | "down"): void => {
     if (isDestroyed) return;
 
     const dataState = dataManager.getState();
 
-    // Update viewport state
+    // Update viewport state with current scroll position
     viewportState = updateViewportState(
       viewportState,
       scrollTop,
@@ -277,7 +346,7 @@ export const createVList = <T extends VListItem = VListItem>(
     // Emit scroll event
     emitter.emit("scroll", { scrollTop, direction });
 
-    // Check for infinite scroll
+    // Check for infinite scroll (use virtual height for distance calculation)
     if (adapter && !dataState.isLoading && dataState.hasMore) {
       const distanceFromBottom =
         viewportState.totalHeight - scrollTop - viewportState.containerHeight;
@@ -333,11 +402,15 @@ export const createVList = <T extends VListItem = VListItem>(
 
       // Re-render
       const items = getItemsForRange(viewportState.renderRange);
+      const compressionCtx = viewportState.isCompressed
+        ? getCompressionContext()
+        : undefined;
       renderer.render(
         items,
         viewportState.renderRange,
         selectionState.selected,
         selectionState.focusedIndex,
+        compressionCtx,
       );
 
       // Emit selection change
@@ -408,11 +481,15 @@ export const createVList = <T extends VListItem = VListItem>(
 
       // Re-render
       const items = getItemsForRange(viewportState.renderRange);
+      const compressionCtx = viewportState.isCompressed
+        ? getCompressionContext()
+        : undefined;
       renderer.render(
         items,
         viewportState.renderRange,
         selectionState.selected,
         selectionState.focusedIndex,
+        compressionCtx,
       );
 
       // Emit selection change if selection changed
@@ -504,16 +581,18 @@ export const createVList = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Scroll to specific index
+   * Scroll to specific index (compression-aware)
    */
   const scrollToIndex = (
     index: number,
     align: "start" | "center" | "end" = "start",
   ): void => {
+    const dataState = dataManager.getState();
     const position = calculateScrollToIndex(
       index,
       itemHeight,
       viewportState.containerHeight,
+      dataState.total,
       align,
     );
 
@@ -549,11 +628,15 @@ export const createVList = <T extends VListItem = VListItem>(
     selectionState = selectItems(selectionState, ids, selectionMode);
 
     const items = getItemsForRange(viewportState.renderRange);
+    const compressionCtx = viewportState.isCompressed
+      ? getCompressionContext()
+      : undefined;
     renderer.render(
       items,
       viewportState.renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
 
     emitter.emit("selection:change", {
@@ -569,11 +652,15 @@ export const createVList = <T extends VListItem = VListItem>(
     selectionState = deselectItems(selectionState, ids);
 
     const items = getItemsForRange(viewportState.renderRange);
+    const compressionCtx = viewportState.isCompressed
+      ? getCompressionContext()
+      : undefined;
     renderer.render(
       items,
       viewportState.renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
 
     emitter.emit("selection:change", {
@@ -591,11 +678,15 @@ export const createVList = <T extends VListItem = VListItem>(
     selectionState = toggleSelection(selectionState, id, selectionMode);
 
     const items = getItemsForRange(viewportState.renderRange);
+    const compressionCtx = viewportState.isCompressed
+      ? getCompressionContext()
+      : undefined;
     renderer.render(
       items,
       viewportState.renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
 
     emitter.emit("selection:change", {
@@ -614,11 +705,15 @@ export const createVList = <T extends VListItem = VListItem>(
     selectionState = selectAll(selectionState, allItems, selectionMode);
 
     const items = getItemsForRange(viewportState.renderRange);
+    const compressionCtx = viewportState.isCompressed
+      ? getCompressionContext()
+      : undefined;
     renderer.render(
       items,
       viewportState.renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
 
     emitter.emit("selection:change", {
@@ -634,11 +729,15 @@ export const createVList = <T extends VListItem = VListItem>(
     selectionState = clearSelection(selectionState);
 
     const items = getItemsForRange(viewportState.renderRange);
+    const compressionCtx = viewportState.isCompressed
+      ? getCompressionContext()
+      : undefined;
     renderer.render(
       items,
       viewportState.renderRange,
       selectionState.selected,
       selectionState.focusedIndex,
+      compressionCtx,
     );
 
     emitter.emit("selection:change", {
@@ -707,7 +806,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // =============================================================================
 
   // Attach event listeners
-  scrollController.onScroll(handleScroll);
+  // Note: scroll handling is set up via config callback in createScrollController
   dom.items.addEventListener("click", handleItemClick);
   dom.root.addEventListener("keydown", handleKeydown);
 

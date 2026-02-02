@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>vlist - Million Items Stress Test</title>
+        <title>vlist - 1 Million Items (Compression Demo)</title>
         <link rel="stylesheet" href="../dist/vlist.css" />
         <style>
             * {
@@ -36,6 +36,10 @@
                 border-radius: 20px;
                 font-size: 14px;
                 font-weight: 600;
+            }
+
+            .badge.compressed {
+                background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
             }
 
             .description {
@@ -218,15 +222,15 @@
     </head>
     <body>
         <h1>
-            🚀 Large List Stress Test
-            <span class="badge">100,000</span>
+            🚀 1 Million Items
+            <span class="badge compressed">Compressed</span>
         </h1>
         <p class="description">
-            Testing vlist with 100,000 items. Virtual scrolling ensures only
-            visible items are rendered.
-            <br /><small style="color: #fa709a"
-                >⚠️ Browser limit: ~350K items max with 48px height (16.7M pixel
-                height limit)</small
+            Testing vlist with <strong>1,000,000 items</strong>. Compression
+            automatically handles the 16M pixel browser limit. <br /><small
+                style="color: #43e97b"
+                >✅ Compression ratio: <span id="compression-ratio">--</span> |
+                Virtual height: <span id="virtual-height">--</span></small
             >
         </p>
 
@@ -290,12 +294,25 @@
         </div>
 
         <script type="module">
-            import { createVList } from "../dist/index.js";
+            import {
+                createVList,
+                getCompressionState,
+                getCompressionInfo,
+            } from "../dist/index.js";
 
-            // Browser max height is ~16,777,216px
-            // With 48px items: max ~349,525 items
-            // Using 100,000 for safe demonstration
-            const TOTAL = 100_000;
+            // 1 MILLION ITEMS!
+            // Without compression: 1M × 48px = 48M pixels (exceeds 16M limit)
+            // With compression: automatically capped at 16M virtual pixels
+            const TOTAL = 1_000_000;
+            const ITEM_HEIGHT = 48;
+
+            // Show compression info
+            const compression = getCompressionState(TOTAL, ITEM_HEIGHT);
+            console.log(getCompressionInfo(TOTAL, ITEM_HEIGHT));
+            document.getElementById("compression-ratio").textContent =
+                `${(compression.ratio * 100).toFixed(1)}%`;
+            document.getElementById("virtual-height").textContent =
+                `${(compression.virtualHeight / 1_000_000).toFixed(1)}M px`;
             const colors = [
                 "linear-gradient(90deg, #667eea, #764ba2)",
                 "linear-gradient(90deg, #f093fb, #f5576c)",
@@ -359,7 +376,7 @@
 
             const list = createVList({
                 container: "#list-container",
-                itemHeight: 48,
+                itemHeight: ITEM_HEIGHT,
                 items: items,
                 overscan: 5,
                 template: (item, index) => `

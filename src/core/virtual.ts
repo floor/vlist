@@ -1,9 +1,31 @@
 /**
  * vlist - Virtual Scrolling Core
- * Pure functions for virtual scroll calculations
+ * Pure functions for virtual scroll calculations with compression support
+ *
+ * Compression is automatically applied when the total list height exceeds
+ * browser limits (~16M pixels). This allows handling millions of items.
  */
 
 import type { Range, ViewportState } from "../types";
+import {
+  MAX_VIRTUAL_HEIGHT,
+  getCompressionState,
+  calculateCompressedVisibleRange,
+  calculateCompressedRenderRange,
+  calculateCompressedScrollToIndex,
+  type CompressionState,
+} from "./compression";
+
+// =============================================================================
+// Re-export compression utilities
+// =============================================================================
+
+export {
+  MAX_VIRTUAL_HEIGHT,
+  getCompressionState,
+  needsCompression,
+} from "./compression";
+export type { CompressionState } from "./compression";
 
 // =============================================================================
 // Range Calculations
@@ -11,6 +33,7 @@ import type { Range, ViewportState } from "../types";
 
 /**
  * Calculate the visible range of items based on scroll position
+ * Automatically handles compression for large lists
  * Pure function - no side effects
  */
 export const calculateVisibleRange = (
@@ -19,18 +42,14 @@ export const calculateVisibleRange = (
   itemHeight: number,
   totalItems: number,
 ): Range => {
-  if (totalItems === 0 || itemHeight === 0) {
-    return { start: 0, end: 0 };
-  }
-
-  const start = Math.floor(scrollTop / itemHeight);
-  const visibleCount = Math.ceil(containerHeight / itemHeight);
-  const end = Math.min(start + visibleCount, totalItems - 1);
-
-  return {
-    start: Math.max(0, start),
-    end: Math.max(0, end),
-  };
+  const compression = getCompressionState(totalItems, itemHeight);
+  return calculateCompressedVisibleRange(
+    scrollTop,
+    containerHeight,
+    itemHeight,
+    totalItems,
+    compression,
+  );
 };
 
 /**
@@ -42,21 +61,26 @@ export const calculateRenderRange = (
   overscan: number,
   totalItems: number,
 ): Range => {
-  if (totalItems === 0) {
-    return { start: 0, end: 0 };
-  }
-
-  return {
-    start: Math.max(0, visibleRange.start - overscan),
-    end: Math.min(totalItems - 1, visibleRange.end + overscan),
-  };
+  return calculateCompressedRenderRange(visibleRange, overscan, totalItems);
 };
 
 /**
- * Calculate total content height
+ * Calculate total content height (capped for compression)
  * Pure function - no side effects
  */
 export const calculateTotalHeight = (
+  totalItems: number,
+  itemHeight: number,
+): number => {
+  const compression = getCompressionState(totalItems, itemHeight);
+  return compression.virtualHeight;
+};
+
+/**
+ * Calculate actual total height (without compression cap)
+ * Pure function - no side effects
+ */
+export const calculateActualHeight = (
   totalItems: number,
   itemHeight: number,
 ): number => {
@@ -65,6 +89,7 @@ export const calculateTotalHeight = (
 
 /**
  * Calculate the offset (translateY) for an item
+ * For non-compressed lists only - use calculateCompressedItemPosition for compressed
  * Pure function - no side effects
  */
 export const calculateItemOffset = (
@@ -80,30 +105,25 @@ export const calculateItemOffset = (
 
 /**
  * Calculate scroll position to bring an index into view
+ * Automatically handles compression for large lists
  * Pure function - no side effects
  */
 export const calculateScrollToIndex = (
   index: number,
   itemHeight: number,
   containerHeight: number,
+  totalItems: number,
   align: "start" | "center" | "end" = "start",
 ): number => {
-  const itemTop = index * itemHeight;
-  const itemBottom = itemTop + itemHeight;
-
-  switch (align) {
-    case "start":
-      return itemTop;
-
-    case "center":
-      return itemTop - (containerHeight - itemHeight) / 2;
-
-    case "end":
-      return itemBottom - containerHeight;
-
-    default:
-      return itemTop;
-  }
+  const compression = getCompressionState(totalItems, itemHeight);
+  return calculateCompressedScrollToIndex(
+    index,
+    itemHeight,
+    containerHeight,
+    totalItems,
+    compression,
+    align,
+  );
 };
 
 /**
@@ -135,7 +155,7 @@ export const getScrollDirection = (
 // =============================================================================
 
 /**
- * Create initial viewport state
+ * Create initial viewport state with compression support
  * Pure function - no side effects
  */
 export const createViewportState = (
@@ -144,19 +164,27 @@ export const createViewportState = (
   totalItems: number,
   overscan: number,
 ): ViewportState => {
-  const totalHeight = calculateTotalHeight(totalItems, itemHeight);
-  const visibleRange = calculateVisibleRange(
+  const compression = getCompressionState(totalItems, itemHeight);
+  const visibleRange = calculateCompressedVisibleRange(
     0,
     containerHeight,
     itemHeight,
     totalItems,
+    compression,
   );
-  const renderRange = calculateRenderRange(visibleRange, overscan, totalItems);
+  const renderRange = calculateCompressedRenderRange(
+    visibleRange,
+    overscan,
+    totalItems,
+  );
 
   return {
     scrollTop: 0,
     containerHeight,
-    totalHeight,
+    totalHeight: compression.virtualHeight,
+    actualHeight: compression.actualHeight,
+    isCompressed: compression.isCompressed,
+    compressionRatio: compression.ratio,
     visibleRange,
     renderRange,
   };
@@ -173,13 +201,19 @@ export const updateViewportState = (
   totalItems: number,
   overscan: number,
 ): ViewportState => {
-  const visibleRange = calculateVisibleRange(
+  const compression = getCompressionState(totalItems, itemHeight);
+  const visibleRange = calculateCompressedVisibleRange(
     scrollTop,
     state.containerHeight,
     itemHeight,
     totalItems,
+    compression,
   );
-  const renderRange = calculateRenderRange(visibleRange, overscan, totalItems);
+  const renderRange = calculateCompressedRenderRange(
+    visibleRange,
+    overscan,
+    totalItems,
+  );
 
   return {
     ...state,
@@ -200,19 +234,27 @@ export const updateViewportSize = (
   totalItems: number,
   overscan: number,
 ): ViewportState => {
-  const totalHeight = calculateTotalHeight(totalItems, itemHeight);
-  const visibleRange = calculateVisibleRange(
+  const compression = getCompressionState(totalItems, itemHeight);
+  const visibleRange = calculateCompressedVisibleRange(
     state.scrollTop,
     containerHeight,
     itemHeight,
     totalItems,
+    compression,
   );
-  const renderRange = calculateRenderRange(visibleRange, overscan, totalItems);
+  const renderRange = calculateCompressedRenderRange(
+    visibleRange,
+    overscan,
+    totalItems,
+  );
 
   return {
     ...state,
     containerHeight,
-    totalHeight,
+    totalHeight: compression.virtualHeight,
+    actualHeight: compression.actualHeight,
+    isCompressed: compression.isCompressed,
+    compressionRatio: compression.ratio,
     visibleRange,
     renderRange,
   };
@@ -228,18 +270,26 @@ export const updateViewportItems = (
   totalItems: number,
   overscan: number,
 ): ViewportState => {
-  const totalHeight = calculateTotalHeight(totalItems, itemHeight);
-  const visibleRange = calculateVisibleRange(
+  const compression = getCompressionState(totalItems, itemHeight);
+  const visibleRange = calculateCompressedVisibleRange(
     state.scrollTop,
     state.containerHeight,
     itemHeight,
     totalItems,
+    compression,
   );
-  const renderRange = calculateRenderRange(visibleRange, overscan, totalItems);
+  const renderRange = calculateCompressedRenderRange(
+    visibleRange,
+    overscan,
+    totalItems,
+  );
 
   return {
     ...state,
-    totalHeight,
+    totalHeight: compression.virtualHeight,
+    actualHeight: compression.actualHeight,
+    isCompressed: compression.isCompressed,
+    compressionRatio: compression.ratio,
     visibleRange,
     renderRange,
   };

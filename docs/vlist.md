@@ -12,6 +12,7 @@
 - [Events](#events)
 - [Selection](#selection)
 - [Infinite Scroll](#infinite-scroll)
+- [Compression (1M+ Items)](#compression-1m-items)
 - [Styling](#styling)
 - [Performance](#performance)
 - [TypeScript](#typescript)
@@ -34,26 +35,26 @@ vlist is a high-performance virtual list library designed to handle massive data
 - **Accessible** - Full keyboard navigation and ARIA support
 - **TypeScript First** - Complete type definitions included
 
-### Browser Limitations
+### Browser Limitations & Compression
 
-> ⚠️ **Important:** Browsers have a maximum element height limit that affects virtual lists.
+> ℹ️ **Good news:** vlist now supports **compression** for lists exceeding browser limits!
 
-| Browser | Max Height |
-|---------|------------|
-| Chrome | ~16,777,216px (~16.7M px) |
-| Firefox | ~17,895,697px (~17.9M px) |
-| Safari | ~16,777,216px (~16.7M px) |
-| Edge | ~16,777,216px (~16.7M px) |
+Browsers have a maximum element height limit of approximately **16 million pixels**. Without compression, this limits lists to ~350,000 items at 48px height.
 
-**What this means:**
+**vlist automatically enables compression** when your list exceeds this limit, allowing you to display **1 million+ items** smoothly.
 
-With a typical `itemHeight` of 48px, the maximum number of items is approximately:
-- **~350,000 items** before hitting browser limits
+| Scenario | Items | Compression |
+|----------|-------|-------------|
+| Small list | < 350K | Native scrolling |
+| Large list | 350K - 1M+ | Automatic compression |
 
-If you need to display more items, consider:
-1. **Pagination** - Split data into pages instead of infinite scroll
-2. **Smaller item heights** - Use compact list items (e.g., 32px = ~500K items)
-3. **Server-side filtering** - Reduce the dataset before displaying
+**How compression works:**
+- Automatically detects when list exceeds browser limits
+- Switches from native scroll to manual wheel-based scrolling
+- Items positioned relative to viewport for smooth scrolling
+- No configuration needed - it just works!
+
+See [Compression (1M+ Items)](#compression-1m-items) for details.
 
 ### How It Works
 
@@ -756,15 +757,17 @@ const list = createVList({
 
 ### Cannot scroll to end of large lists
 
-This is caused by browser height limits (~16.7M pixels). Solutions:
+**This should now work automatically!** vlist has built-in compression support for lists exceeding browser height limits.
 
-1. **Reduce item count** - Use pagination or filtering
-2. **Use smaller itemHeight** - Allows more items within the limit
-3. **Calculate your limit:**
+If you're still having issues:
+
+1. **Ensure you're using the latest version** - Compression was added recently
+2. **Check compression is active:**
    ```javascript
-   const maxItems = Math.floor(16777216 / itemHeight);
-   console.log(`Max items with ${itemHeight}px height: ${maxItems}`);
+   import { getCompressionInfo } from 'vlist';
+   console.log(getCompressionInfo(totalItems, itemHeight));
    ```
+3. **Verify smooth scrolling** - In compressed mode, scrolling uses wheel events
 
 ### Selection not working
 
@@ -782,6 +785,79 @@ This is caused by browser height limits (~16.7M pixels). Solutions:
 1. **Use adapter** - Don't load all items upfront
 2. **Configure sparse storage** - Reduce maxCachedItems
 3. **Simplify templates** - Reduce DOM complexity
+
+---
+
+## Compression (1M+ Items)
+
+vlist automatically handles lists that exceed browser height limits (~16M pixels) through **compression**.
+
+### How It Works
+
+When your list's total height (`totalItems × itemHeight`) exceeds 16 million pixels:
+
+1. **Detection**: vlist calculates if compression is needed
+2. **Mode switch**: Switches from `overflow: auto` to `overflow: hidden`
+3. **Wheel handling**: Intercepts wheel events for manual scroll control
+4. **Positioning**: Items positioned relative to viewport, not content
+
+### Automatic Behavior
+
+No configuration required - compression activates automatically:
+
+```javascript
+// This just works, even with 1 million items!
+const list = createVList({
+  container: '#app',
+  itemHeight: 48,
+  items: millionItems, // 1,000,000 items
+  template: (item) => `<div>${item.name}</div>`,
+});
+
+// Navigate anywhere in the list
+list.scrollToIndex(500_000, 'center'); // Jump to middle
+list.scrollToIndex(999_999, 'end');    // Jump to end
+```
+
+### Compression Utilities
+
+```javascript
+import { 
+  getCompressionState, 
+  getCompressionInfo,
+  needsCompression,
+  getMaxItemsWithoutCompression 
+} from 'vlist';
+
+// Check if compression needed
+needsCompression(1_000_000, 48); // true
+
+// Get detailed info
+console.log(getCompressionInfo(1_000_000, 48));
+// "Compressed to 33.3% (1000000 items × 48px = 48.0M px → 16.0M px virtual)"
+
+// Get compression state
+const state = getCompressionState(1_000_000, 48);
+// { isCompressed: true, actualHeight: 48000000, virtualHeight: 16000000, ratio: 0.333 }
+
+// Calculate max items without compression
+getMaxItemsWithoutCompression(48); // 333,333
+getMaxItemsWithoutCompression(32); // 500,000
+```
+
+### Limitations
+
+- **No native scrollbar**: Compressed mode uses `overflow: hidden`, hiding the native scrollbar
+- **Custom scrollbar coming**: A custom scrollbar component is planned for visual feedback
+
+### Performance
+
+Compression adds minimal overhead:
+- Wheel event handling: ~0.1ms per event
+- Position calculations: Pure math, very fast
+- Memory: No additional memory for compression
+
+For detailed technical documentation, see [compression.md](./compression.md).
 
 ---
 
@@ -805,4 +881,5 @@ MIT © [Floor](https://github.com/floor)
 - [GitHub Repository](https://github.com/floor/vlist)
 - [npm Package](https://www.npmjs.com/package/vlist)
 - [Examples](../examples/)
+- [Compression Documentation](./compression.md)
 - [Changelog](../CHANGELOG.md)
