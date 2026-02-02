@@ -14,7 +14,7 @@ import {
   mock,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createScrollbar, type Scrollbar } from "../src/core/scrollbar";
+import { createScrollbar, type Scrollbar } from "../src/scroll/scrollbar";
 
 // =============================================================================
 // JSDOM Setup

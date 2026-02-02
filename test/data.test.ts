@@ -8,7 +8,7 @@ import {
   createDataManager,
   mergeRanges,
   calculateMissingRanges,
-} from "../src/core/data";
+} from "../src/data";
 
 import type { VListItem, VListAdapter } from "../src/types";
 

@@ -45,6 +45,14 @@ export interface CompressionContext {
   rangeStart: number;
 }
 
+/** DOM structure created by createDOMStructure */
+export interface DOMStructure {
+  root: HTMLElement;
+  viewport: HTMLElement;
+  content: HTMLElement;
+  items: HTMLElement;
+}
+
 /** Renderer instance */
 export interface Renderer<T extends VListItem = VListItem> {
   /** Render items for a range */
@@ -421,12 +429,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
-): {
-  root: HTMLElement;
-  viewport: HTMLElement;
-  content: HTMLElement;
-  items: HTMLElement;
-} => {
+): DOMStructure => {
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
