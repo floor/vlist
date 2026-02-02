@@ -190,7 +190,7 @@ export const createViewportState = (
 
 /**
  * Update viewport state after scroll
- * Pure function - returns new state
+ * Mutates state in place for performance on scroll hot path
  */
 export const updateViewportState = (
   state: ViewportState,
@@ -213,17 +213,17 @@ export const updateViewportState = (
     totalItems,
   );
 
-  return {
-    ...state,
-    scrollTop,
-    visibleRange,
-    renderRange,
-  };
+  // Mutate in place to avoid object allocation on every scroll tick
+  state.scrollTop = scrollTop;
+  state.visibleRange = visibleRange;
+  state.renderRange = renderRange;
+
+  return state;
 };
 
 /**
  * Update viewport state when container resizes
- * Pure function - returns new state
+ * Mutates state in place for performance
  */
 export const updateViewportSize = (
   state: ViewportState,
@@ -246,21 +246,21 @@ export const updateViewportSize = (
     totalItems,
   );
 
-  return {
-    ...state,
-    containerHeight,
-    totalHeight: compression.virtualHeight,
-    actualHeight: compression.actualHeight,
-    isCompressed: compression.isCompressed,
-    compressionRatio: compression.ratio,
-    visibleRange,
-    renderRange,
-  };
+  // Mutate in place to avoid object allocation
+  state.containerHeight = containerHeight;
+  state.totalHeight = compression.virtualHeight;
+  state.actualHeight = compression.actualHeight;
+  state.isCompressed = compression.isCompressed;
+  state.compressionRatio = compression.ratio;
+  state.visibleRange = visibleRange;
+  state.renderRange = renderRange;
+
+  return state;
 };
 
 /**
  * Update viewport state when total items changes
- * Pure function - returns new state
+ * Mutates state in place for performance
  */
 export const updateViewportItems = (
   state: ViewportState,
@@ -282,15 +282,15 @@ export const updateViewportItems = (
     totalItems,
   );
 
-  return {
-    ...state,
-    totalHeight: compression.virtualHeight,
-    actualHeight: compression.actualHeight,
-    isCompressed: compression.isCompressed,
-    compressionRatio: compression.ratio,
-    visibleRange,
-    renderRange,
-  };
+  // Mutate in place to avoid object allocation
+  state.totalHeight = compression.virtualHeight;
+  state.actualHeight = compression.actualHeight;
+  state.isCompressed = compression.isCompressed;
+  state.compressionRatio = compression.ratio;
+  state.visibleRange = visibleRange;
+  state.renderRange = renderRange;
+
+  return state;
 };
 
 // =============================================================================

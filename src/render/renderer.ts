@@ -186,6 +186,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Apply template result to element
+   * Uses replaceChildren() for efficient HTMLElement replacement
    */
   const applyTemplate = (
     element: HTMLElement,
@@ -194,34 +195,36 @@ export const createRenderer = <T extends VListItem = VListItem>(
     if (typeof result === "string") {
       element.innerHTML = result;
     } else {
-      element.innerHTML = "";
-      element.appendChild(result);
+      // replaceChildren() is more efficient than innerHTML="" + appendChild()
+      // It's a single DOM operation instead of two
+      element.replaceChildren(result);
     }
   };
 
+  // Pre-computed static style string (set once per element)
+  const staticStyles = `position:absolute;top:0;left:0;right:0;height:${itemHeight}px`;
+
   /**
-   * Position an element at the correct offset
+   * Apply static styles to an element (called once when element is created)
+   */
+  const applyStaticStyles = (element: HTMLElement): void => {
+    element.style.cssText = staticStyles;
+  };
+
+  /**
+   * Calculate the offset for an element
    * Uses compression-aware positioning for large lists
    */
-  const positionElement = (
-    element: HTMLElement,
+  const calculateOffset = (
     index: number,
     compressionCtx?: CompressionContext,
-  ): void => {
-    element.style.position = "absolute";
-    element.style.top = "0";
-    element.style.left = "0";
-    element.style.right = "0";
-    element.style.height = `${itemHeight}px`;
-
-    let offset: number;
-
+  ): number => {
     if (compressionCtx) {
       const compression = getCompression(compressionCtx.totalItems);
 
       if (compression.isCompressed) {
         // Use compression-aware positioning
-        offset = calculateCompressedItemPosition(
+        return calculateCompressedItemPosition(
           index,
           compressionCtx.scrollTop,
           itemHeight,
@@ -230,30 +233,48 @@ export const createRenderer = <T extends VListItem = VListItem>(
           compression,
           compressionCtx.rangeStart,
         );
-      } else {
-        // Normal positioning
-        offset = index * itemHeight;
       }
-    } else {
-      // Fallback to simple positioning
-      offset = index * itemHeight;
     }
+    // Normal positioning (non-compressed or no context)
+    return index * itemHeight;
+  };
 
+  /**
+   * Position an element at the correct offset (transform only)
+   * Static styles should already be applied via applyStaticStyles
+   */
+  const positionElement = (
+    element: HTMLElement,
+    index: number,
+    compressionCtx?: CompressionContext,
+  ): void => {
+    const offset = calculateOffset(index, compressionCtx);
     element.style.transform = `translateY(${Math.round(offset)}px)`;
+  };
+
+  // Pre-computed class names for toggle operations
+  const baseClass = `${classPrefix}-item`;
+  const selectedClass = `${classPrefix}-item--selected`;
+  const focusedClass = `${classPrefix}-item--focused`;
+
+  /**
+   * Apply base class to element (called once when element is created)
+   */
+  const applyBaseClass = (element: HTMLElement): void => {
+    element.className = baseClass;
   };
 
   /**
    * Apply classes to element based on state
+   * Uses classList.toggle() for efficient incremental updates
    */
   const applyClasses = (
     element: HTMLElement,
     isSelected: boolean,
     isFocused: boolean,
   ): void => {
-    let className = `${classPrefix}-item`;
-    if (isSelected) className += ` ${classPrefix}-item--selected`;
-    if (isFocused) className += ` ${classPrefix}-item--focused`;
-    element.className = className;
+    element.classList.toggle(selectedClass, isSelected);
+    element.classList.toggle(focusedClass, isFocused);
   };
 
   /**
@@ -269,6 +290,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
     const element = pool.acquire();
     const state = createItemState(isSelected, isFocused);
 
+    // Apply static styles once (position, dimensions)
+    applyStaticStyles(element);
+
+    // Apply base class once
+    applyBaseClass(element);
+
     // Set data attributes
     element.setAttribute("data-index", String(index));
     element.setAttribute("data-id", String(item.id));
@@ -279,7 +306,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     const result = template(item, index, state);
     applyTemplate(element, result);
 
-    // Apply styling
+    // Apply state-dependent classes (selected, focused)
     applyClasses(element, isSelected, isFocused);
     positionElement(element, index, compressionCtx);
 
