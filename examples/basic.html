@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vlist - Basic Example</title>
+  <link rel="stylesheet" href="../dist/vlist.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .description {
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .stats {
+      background: #fff;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    #list-container {
+      height: 500px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .item-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 100%;
+    }
+
+    .item-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .item-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .item-name {
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-email {
+      font-size: 13px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-index {
+      font-size: 12px;
+      color: #aaa;
+      min-width: 50px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Basic Virtual List</h1>
+  <p class="description">A simple virtual list with 10,000 static items. Only visible items are rendered in the DOM.</p>
+
+  <div class="stats" id="stats">Loading...</div>
+
+  <div id="list-container"></div>
+
+  <script type="module">
+    import { createVList } from '../dist/index.js';
+
+    // Generate 10,000 test items
+    const items = Array.from({ length: 10000 }, (_, i) => ({
+      id: i + 1,
+      name: `User ${i + 1}`,
+      email: `user${i + 1}@example.com`,
+      initials: `U${(i + 1) % 100}`,
+    }));
+
+    // Create the virtual list
+    const list = createVList({
+      container: '#list-container',
+      itemHeight: 64,
+      items: items,
+      template: (item, index) => `
+        <div class="item-content">
+          <div class="item-avatar">${item.initials}</div>
+          <div class="item-details">
+            <div class="item-name">${item.name}</div>
+            <div class="item-email">${item.email}</div>
+          </div>
+          <div class="item-index">#${index + 1}</div>
+        </div>
+      `,
+    });
+
+    // Update stats
+    const updateStats = () => {
+      const domItems = document.querySelectorAll('.vlist-item').length;
+      document.getElementById('stats').innerHTML = `
+        <strong>Total items:</strong> ${items.length.toLocaleString()} |
+        <strong>DOM elements:</strong> ${domItems} |
+        <strong>Memory saved:</strong> ~${Math.round((1 - domItems / items.length) * 100)}%
+      `;
+    };
+
+    // Update stats on scroll
+    list.on('scroll', updateStats);
+    updateStats();
+
+    // Log events
+    list.on('item:click', ({ item, index }) => {
+      console.log('Clicked:', item.name, 'at index', index);
+    });
+
+    list.on('range:change', ({ range }) => {
+      console.log('Visible range:', range.start, '-', range.end);
+      updateStats();
+    });
+  </script>
+</body>
+</html>
