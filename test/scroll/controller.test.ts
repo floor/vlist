@@ -10,7 +10,7 @@ import {
   isAtTop,
   getScrollPercentage,
   isRangeVisible,
-} from "../src/scroll";
+} from "../../src/scroll";
 
 // Mock requestAnimationFrame for testing
 let rafCallbacks: Array<() => void> = [];

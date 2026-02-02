@@ -9,6 +9,12 @@
  * - Efficient counting: Track item count without iterating
  */
 
+// Debug flag - set to true to enable logging
+const DEBUG = false;
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log("[sparse-storage]", ...args);
+};
+
 import type { VListItem, Range } from "../types";
 
 // =============================================================================
@@ -228,13 +234,20 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     const chunk = chunks.get(chunkIndex);
 
     if (!chunk) {
+      // log(`get: index=${index}, chunkIndex=${chunkIndex} - chunk not found`);
       return undefined;
     }
 
     // Update access time for LRU
     chunk.lastAccess = Date.now();
 
-    return chunk.items[getIndexInChunk(index)];
+    const item = chunk.items[getIndexInChunk(index)];
+    if (item === undefined) {
+      log(
+        `get: index=${index}, chunkIndex=${chunkIndex} - item undefined in chunk`,
+      );
+    }
+    return item;
   };
 
   const has = (index: number): boolean => {
@@ -265,6 +278,9 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     if (isNew) {
       chunk.count++;
       cachedItemCount++;
+      // log(
+      //   `set: index=${index}, chunkIndex=${chunkIndex}, cachedItemCount=${cachedItemCount}`,
+      // );
     }
 
     // Update total if needed
@@ -503,8 +519,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
       cachedChunks: chunks.size,
       chunkSize,
       maxCachedItems,
-      memoryEfficiency:
-        totalItems > 0 ? 1 - cachedItemCount / totalItems : 1,
+      memoryEfficiency: totalItems > 0 ? 1 - cachedItemCount / totalItems : 1,
     };
   };
 
@@ -600,10 +615,8 @@ export const calculateMissingRanges = (
   chunkSize: number,
 ): Range[] => {
   // Align to chunk boundaries for efficient loading
-  const alignedStart =
-    Math.floor(needed.start / chunkSize) * chunkSize;
-  const alignedEnd =
-    Math.ceil((needed.end + 1) / chunkSize) * chunkSize - 1;
+  const alignedStart = Math.floor(needed.start / chunkSize) * chunkSize;
+  const alignedEnd = Math.ceil((needed.end + 1) / chunkSize) * chunkSize - 1;
 
   const alignedNeeded = { start: alignedStart, end: alignedEnd };
 

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, mock } from "bun:test";
-import { createEmitter } from "../src/events";
+import { createEmitter } from "../../src/events";
 
 // Test event types
 interface TestEvents {

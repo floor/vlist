@@ -3,6 +3,12 @@
  * Handles data with sparse storage for million+ item support
  */
 
+// Debug flag - set to true to enable logging
+const DEBUG = false;
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log("[data-manager]", ...args);
+};
+
 import type { VListItem, VListAdapter, AdapterParams, Range } from "../types";
 
 import {
@@ -197,7 +203,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
   let pendingRanges: Range[] = [];
 
   // Track active load requests to prevent duplicates
-  const activeLoads = new Set<string>();
+  const activeLoads = new Map<string, Promise<void>>();
 
   // ==========================================================================
   // Internal Helpers
@@ -308,14 +314,18 @@ export const createDataManager = <T extends VListItem = VListItem>(
   const getItemsInRange = (start: number, end: number): T[] => {
     const items: T[] = [];
     const total = storage.getTotal();
+    let loadedCount = 0;
+    let placeholderCount = 0;
 
     for (let i = start; i <= end && i < total; i++) {
       const item = storage.get(i);
       if (item !== undefined) {
         items.push(item);
+        loadedCount++;
       } else {
         // Generate placeholder for unloaded
         items.push(placeholders.generate(i));
+        placeholderCount++;
       }
     }
 
@@ -333,6 +343,8 @@ export const createDataManager = <T extends VListItem = VListItem>(
   };
 
   const setItems = (items: T[], offset: number = 0, total?: number): void => {
+    log(`setItems: offset=${offset}, count=${items.length}, total=${total}`);
+
     // Analyze structure for placeholders from first batch
     if (!placeholders.hasAnalyzedStructure() && items.length > 0) {
       placeholders.analyzeStructure(items);
@@ -418,6 +430,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
     const rangeKey = getRangeKey(start, end);
 
+    // If already loading this exact range, wait for it
     // Skip if already loading this range
     if (activeLoads.has(rangeKey)) {
       return;
@@ -435,52 +448,115 @@ export const createDataManager = <T extends VListItem = VListItem>(
       return;
     }
 
-    // Load each missing range
+    // Split missing ranges into individual chunks to properly deduplicate
+    const chunkSize = storage.chunkSize;
+    const chunksToLoad: Array<{ start: number; end: number }> = [];
+
     for (const range of missingRanges) {
-      const key = getRangeKey(range.start, range.end);
+      // Split this range into individual chunks
+      const firstChunk = Math.floor(range.start / chunkSize);
+      const lastChunk = Math.floor(range.end / chunkSize);
+
+      for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
+        const chunkStart = chunkIdx * chunkSize;
+        const chunkEnd = chunkStart + chunkSize - 1;
+        const key = getRangeKey(chunkStart, chunkEnd);
+
+        // Only add if not already in our list and not already loading
+        if (
+          !chunksToLoad.some((c) => c.start === chunkStart) &&
+          !activeLoads.has(key)
+        ) {
+          chunksToLoad.push({ start: chunkStart, end: chunkEnd });
+        }
+      }
+    }
+
+    // Load each chunk
+    const loadPromises: Promise<void>[] = [];
+
+    // First, collect promises for chunks already being loaded
+    for (const range of missingRanges) {
+      const firstChunk = Math.floor(range.start / chunkSize);
+      const lastChunk = Math.floor(range.end / chunkSize);
+
+      for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
+        const chunkStart = chunkIdx * chunkSize;
+        const chunkEnd = chunkStart + chunkSize - 1;
+        const key = getRangeKey(chunkStart, chunkEnd);
+
+        if (activeLoads.has(key)) {
+          const existingPromise = activeLoads.get(key)!;
+          if (!loadPromises.includes(existingPromise)) {
+            loadPromises.push(existingPromise);
+          }
+        }
+      }
+    }
+
+    // Now load chunks that aren't already loading
+    for (const chunk of chunksToLoad) {
+      const key = getRangeKey(chunk.start, chunk.end);
+
+      // Double-check it's not loading (could have been added by concurrent call)
       if (activeLoads.has(key)) {
+        const existingPromise = activeLoads.get(key)!;
+        if (!loadPromises.includes(existingPromise)) {
+          loadPromises.push(existingPromise);
+        }
         continue;
       }
 
-      activeLoads.add(key);
-      pendingRanges.push(range);
-      isLoading = true;
-      error = undefined;
-      notifyStateChange();
-
-      try {
-        const limit = range.end - range.start + 1;
-        const params: AdapterParams = {
-          offset: range.start,
-          limit,
-          cursor: undefined,
-        };
-
-        const response = await adapter.read(params);
-
-        // Store items
-        setItems(response.items, range.start, response.total);
-
-        // Update cursor and hasMore
-        if (response.cursor) {
-          cursor = response.cursor;
-        }
-        if (response.hasMore !== undefined) {
-          hasMore = response.hasMore;
-        } else if (response.total !== undefined) {
-          hasMore = storage.getCachedCount() < response.total;
-        }
-      } catch (err) {
-        error = err instanceof Error ? err : new Error(String(err));
-      } finally {
-        activeLoads.delete(key);
-        pendingRanges = pendingRanges.filter(
-          (r) => r.start !== range.start || r.end !== range.end,
-        );
-        isLoading = activeLoads.size > 0;
+      // Create the load promise for this chunk
+      const loadPromise = (async () => {
+        pendingRanges.push(chunk);
+        isLoading = true;
+        error = undefined;
         notifyStateChange();
-      }
+
+        try {
+          const limit = chunk.end - chunk.start + 1;
+          const params: AdapterParams = {
+            offset: chunk.start,
+            limit,
+            cursor: undefined,
+          };
+
+          const response = await adapter.read(params);
+
+          // Store items
+          setItems(response.items, chunk.start, response.total);
+          log(
+            `loadRange: stored items, cached=${storage.getCachedCount()}, total=${storage.getTotal()}`,
+          );
+
+          // Update cursor and hasMore
+          if (response.cursor) {
+            cursor = response.cursor;
+          }
+          if (response.hasMore !== undefined) {
+            hasMore = response.hasMore;
+          } else if (response.total !== undefined) {
+            hasMore = storage.getCachedCount() < response.total;
+          }
+        } catch (err) {
+          error = err instanceof Error ? err : new Error(String(err));
+        } finally {
+          activeLoads.delete(key);
+          pendingRanges = pendingRanges.filter(
+            (r) => r.start !== chunk.start || r.end !== chunk.end,
+          );
+          isLoading = activeLoads.size > 0;
+          notifyStateChange();
+        }
+      })();
+
+      activeLoads.set(key, loadPromise);
+      loadPromises.push(loadPromise);
     }
+
+    // Wait for all loads to complete
+    await Promise.all(loadPromises);
   };
 
   const ensureRange = async (start: number, end: number): Promise<void> => {

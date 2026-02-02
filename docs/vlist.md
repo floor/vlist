@@ -484,6 +484,24 @@ template: (item, index) => {
 }
 ```
 
+#### Automatic Placeholder Replacement
+
+When data loads, placeholders are automatically replaced with real content. The renderer detects when an item's ID changes (from `__placeholder_X` to a real ID) and re-applies the template. This happens seamlessly during:
+
+- Initial data load
+- Fast scrolling (when you scroll past unloaded regions)
+- Jumping to specific positions
+
+No manual intervention is required - just ensure your template handles both placeholder and real items appropriately.
+
+#### Chunk-Based Loading
+
+Data is loaded in chunks (default: 100 items per chunk) aligned to chunk boundaries. When scrolling quickly:
+
+- Multiple ranges may be requested simultaneously
+- Duplicate requests for the same chunk are automatically deduplicated
+- The renderer updates as soon as each chunk loads
+
 ---
 
 ## Styling

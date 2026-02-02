@@ -332,7 +332,20 @@ export const createRenderer = <T extends VListItem = VListItem>(
       const existing = rendered.get(i);
 
       if (existing) {
-        // Update existing element - also update position for compressed lists
+        // Check if the item ID changed (e.g., placeholder replaced with real data)
+        const existingId = existing.element.getAttribute("data-id");
+        const newId = String(item.id);
+        const itemChanged = existingId !== newId;
+
+        if (itemChanged) {
+          // Re-apply template when item data changes (placeholder -> real data)
+          const state = createItemState(isSelected, isFocused);
+          const result = template(item, i, state);
+          applyTemplate(existing.element, result);
+          existing.element.setAttribute("data-id", newId);
+        }
+
+        // Always update classes, selection state, and position
         applyClasses(existing.element, isSelected, isFocused);
         existing.element.setAttribute("aria-selected", String(isSelected));
         positionElement(existing.element, i, compressionCtx);

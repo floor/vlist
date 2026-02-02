@@ -6,6 +6,12 @@
  * This keeps vlist.ts focused on orchestration.
  */
 
+// Debug flag
+const DEBUG = false;
+const log = (msg: string, ...args: unknown[]) => {
+  if (DEBUG) console.log(`[handlers] ${msg}`, ...args);
+};
+
 import type { VListItem } from "./types";
 import type { VListContext } from "./context";
 
@@ -94,6 +100,9 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Ensure visible range is loaded (for sparse data)
     const { renderRange } = ctx.state.viewportState;
+    log(
+      `scroll: requesting ensureRange ${renderRange.start}-${renderRange.end}`,
+    );
     ctx.dataManager
       .ensureRange(renderRange.start, renderRange.end)
       .catch((error) => {

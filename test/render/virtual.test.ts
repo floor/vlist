@@ -19,7 +19,7 @@ import {
   isInRange,
   getRangeCount,
   diffRanges,
-} from "../src/render/virtual";
+} from "../../src/render/virtual";
 
 describe("calculateVisibleRange", () => {
   it("should return empty range when totalItems is 0", () => {
