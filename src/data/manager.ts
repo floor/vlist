@@ -3,12 +3,6 @@
  * Handles data with sparse storage for million+ item support
  */
 
-// Debug flag - set to true to enable logging
-const DEBUG = false;
-const log = (...args: unknown[]) => {
-  if (DEBUG) console.log("[data-manager]", ...args);
-};
-
 import type { VListItem, VListAdapter, AdapterParams, Range } from "../types";
 
 import {
@@ -343,8 +337,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
   };
 
   const setItems = (items: T[], offset: number = 0, total?: number): void => {
-    log(`setItems: offset=${offset}, count=${items.length}, total=${total}`);
-
     // Analyze structure for placeholders from first batch
     if (!placeholders.hasAnalyzedStructure() && items.length > 0) {
       placeholders.analyzeStructure(items);
@@ -526,9 +518,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
           // Store items
           setItems(response.items, chunk.start, response.total);
-          log(
-            `loadRange: stored items, cached=${storage.getCachedCount()}, total=${storage.getTotal()}`,
-          );
 
           // Update cursor and hasMore
           if (response.cursor) {
