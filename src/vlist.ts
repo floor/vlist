@@ -61,6 +61,8 @@ import {
 
 import { createScrollController } from "./core/scroll";
 
+import { createScrollbar, type Scrollbar } from "./core/scrollbar";
+
 import { createDataManager, type DataManager } from "./core/data";
 
 // =============================================================================
@@ -101,6 +103,7 @@ export const createVList = <T extends VListItem = VListItem>(
     adapter,
     overscan = DEFAULT_OVERSCAN,
     selection: selectionConfig,
+    scrollbar: scrollbarConfig,
     classPrefix = DEFAULT_CLASS_PREFIX,
   } = config;
 
@@ -186,6 +189,31 @@ export const createVList = <T extends VListItem = VListItem>(
     () => dataManager.getState().total,
   );
 
+  // Create custom scrollbar for compressed mode
+  // Auto-enable when compressed, unless explicitly disabled
+  const shouldEnableScrollbar =
+    scrollbarConfig?.enabled ?? initialCompression.isCompressed;
+
+  let scrollbar: Scrollbar | null = null;
+
+  if (shouldEnableScrollbar) {
+    scrollbar = createScrollbar(
+      dom.viewport,
+      (position) => {
+        // Scrollbar interaction triggers scroll
+        scrollController.scrollTo(position);
+      },
+      scrollbarConfig,
+      classPrefix,
+    );
+
+    // Initialize scrollbar bounds
+    scrollbar.updateBounds(initialCompression.virtualHeight, dimensions.height);
+
+    // Add class to hide native scrollbar
+    dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+  }
+
   // Track last render range to avoid unnecessary re-renders
   let lastRenderRange: Range = { start: 0, end: 0 };
 
@@ -237,12 +265,33 @@ export const createVList = <T extends VListItem = VListItem>(
     if (compression.isCompressed && !scrollController.isCompressed()) {
       // Enable compression mode
       scrollController.enableCompression(compression);
+
+      // Create scrollbar if not exists and auto-enable is on
+      if (!scrollbar && scrollbarConfig?.enabled !== false) {
+        scrollbar = createScrollbar(
+          dom.viewport,
+          (position) => {
+            scrollController.scrollTo(position);
+          },
+          scrollbarConfig,
+          classPrefix,
+        );
+        dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+      }
     } else if (!compression.isCompressed && scrollController.isCompressed()) {
       // Disable compression mode
       scrollController.disableCompression();
     } else if (compression.isCompressed) {
       // Update compression config
       scrollController.updateConfig({ compression });
+    }
+
+    // Update scrollbar bounds
+    if (scrollbar) {
+      scrollbar.updateBounds(
+        compression.virtualHeight,
+        viewportState.containerHeight,
+      );
     }
   };
 
@@ -339,6 +388,12 @@ export const createVList = <T extends VListItem = VListItem>(
       dataState.total,
       overscan,
     );
+
+    // Update custom scrollbar position
+    if (scrollbar) {
+      scrollbar.updatePosition(scrollTop);
+      scrollbar.show();
+    }
 
     // Render if needed
     renderIfNeeded();
@@ -794,6 +849,10 @@ export const createVList = <T extends VListItem = VListItem>(
 
     // Cleanup
     scrollController.destroy();
+    if (scrollbar) {
+      scrollbar.destroy();
+      scrollbar = null;
+    }
     renderer.destroy();
     emitter.clear();
 

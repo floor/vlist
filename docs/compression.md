@@ -210,46 +210,31 @@ Key test scenarios:
 - [x] Near-bottom interpolation
 - [x] Smooth scrolling for 1M+ items
 - [x] Automatic mode switching
-- [x] Comprehensive tests (261 passing)
+- [x] Custom scrollbar for compressed mode
+- [x] Comprehensive tests (284 passing)
 
-### 🚧 TODO: Custom Scrollbar
+## Custom Scrollbar
 
-The compressed mode uses `overflow: hidden`, which hides the native scrollbar. A custom scrollbar is needed for:
+The compressed mode uses `overflow: hidden`, which hides the native scrollbar. A custom scrollbar provides:
 - Visual feedback of scroll position
 - Click-to-scroll functionality
 - Drag-to-scroll functionality
+- Auto-hide after idle (configurable)
 
-## Next Steps: Custom Scrollbar Implementation
-
-### Reference: mtrl-addons Scrollbar
-
-See `mtrl-addons/src/core/viewport/features/scrollbar.ts` for reference implementation.
-
-### Requirements
-
-1. **Visual scrollbar track and thumb**
-   - Track: Full height of viewport
-   - Thumb: Size proportional to visible content ratio
-   - Position: Maps to current scroll position
-
-2. **Interactions**
-   - Click on track → Jump to position
-   - Drag thumb → Scroll proportionally
-   - Mouse wheel on track → Scroll
-
-3. **Styling**
-   - Match vlist visual style
-   - Auto-hide after idle (optional)
-   - Custom colors via CSS variables
-
-### Proposed API
+### API
 
 ```typescript
 interface ScrollbarConfig {
+  /** Enable scrollbar (default: auto - enabled when compressed) */
   enabled?: boolean;
+  
+  /** Auto-hide scrollbar after idle (default: true) */
   autoHide?: boolean;
+  
+  /** Auto-hide delay in milliseconds (default: 1000) */
   autoHideDelay?: number;
-  width?: number;
+  
+  /** Minimum thumb size in pixels (default: 30) */
   minThumbSize?: number;
 }
 
@@ -266,36 +251,50 @@ const list = createVList({
 });
 ```
 
-### Implementation Plan
+### Features
 
-1. **Create `src/core/scrollbar.ts`**
-   - DOM structure (track, thumb)
-   - Position calculations
-   - Event handlers (click, drag)
+1. **Visual scrollbar track and thumb**
+   - Track: Full height of viewport
+   - Thumb: Size proportional to visible content ratio
+   - Position: Maps to current scroll position
 
-2. **Integrate with ScrollController**
-   - Update thumb position on scroll
-   - Emit scroll events on interaction
+2. **Interactions**
+   - Click on track → Jump to position (centers thumb at click)
+   - Drag thumb → Scroll proportionally
+   - Hover on viewport → Show scrollbar
 
-3. **Add CSS styles**
-   - `src/styles/scrollbar.scss`
-   - CSS variables for customization
+3. **Styling**
+   - Matches vlist visual style
+   - Auto-hide after idle (configurable)
+   - Full dark mode support
+   - Custom colors via CSS variables
 
-4. **Update vlist.ts**
-   - Optional scrollbar config
-   - Auto-enable for compressed lists
-
-### CSS Variables (Proposed)
+### CSS Variables
 
 ```css
 :root {
+  /* Custom Scrollbar (for compressed mode) */
   --vlist-scrollbar-width: 8px;
-  --vlist-scrollbar-track-bg: rgba(0, 0, 0, 0.1);
-  --vlist-scrollbar-thumb-bg: rgba(0, 0, 0, 0.3);
-  --vlist-scrollbar-thumb-hover-bg: rgba(0, 0, 0, 0.5);
-  --vlist-scrollbar-thumb-radius: 4px;
+  --vlist-scrollbar-track-bg: transparent;
+  --vlist-scrollbar-custom-thumb-bg: rgba(0, 0, 0, 0.3);
+  --vlist-scrollbar-custom-thumb-hover-bg: rgba(0, 0, 0, 0.5);
+  --vlist-scrollbar-custom-thumb-radius: 4px;
+}
+
+/* Dark mode automatically adjusts */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+  }
 }
 ```
+
+### Implementation Files
+
+- `src/core/scrollbar.ts` - Scrollbar component
+- `src/styles/vlist.css` - CSS styles (scrollbar section)
+- `test/scrollbar.test.ts` - Unit tests (23 tests)
 
 ## Files Reference
 
@@ -305,8 +304,10 @@ const list = createVList({
 | `src/core/scroll.ts` | Scroll controller (native + compressed) |
 | `src/core/render.ts` | Item rendering with compression support |
 | `src/core/virtual.ts` | Viewport state management |
+| `src/core/scrollbar.ts` | Custom scrollbar component |
 | `src/vlist.ts` | Main entry point |
 | `test/compression.test.ts` | Compression tests |
+| `test/scrollbar.test.ts` | Scrollbar tests |
 
 ## Example: Million Items
 
@@ -337,5 +338,5 @@ list.scrollToIndex(999_999, 'end');
 
 ---
 
-*Last updated: January 2025*
-*Status: Compression working, scrollbar pending*
+*Last updated: January  *
+*Status: Compression and custom scrollbar fully implemented*

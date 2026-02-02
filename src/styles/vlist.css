@@ -22,6 +22,13 @@
     --vlist-scrollbar-thumb: #d1d5db;
     --vlist-scrollbar-thumb-hover: #9ca3af;
 
+    /* Custom Scrollbar (for compressed mode) */
+    --vlist-scrollbar-width: 8px;
+    --vlist-scrollbar-track-bg: transparent;
+    --vlist-scrollbar-custom-thumb-bg: rgba(0, 0, 0, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-bg: rgba(0, 0, 0, 0.5);
+    --vlist-scrollbar-custom-thumb-radius: 4px;
+
     /* Spacing */
     --vlist-item-padding-x: 1rem;
     --vlist-item-padding-y: 0.75rem;
@@ -45,6 +52,8 @@
         --vlist-text-muted: #9ca3af;
         --vlist-scrollbar-thumb: #4b5563;
         --vlist-scrollbar-thumb-hover: #6b7280;
+        --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
+        --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
     }
 }
 
@@ -60,6 +69,8 @@
     --vlist-text-muted: #9ca3af;
     --vlist-scrollbar-thumb: #4b5563;
     --vlist-scrollbar-thumb-hover: #6b7280;
+    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
 }
 
 /* =============================================================================
@@ -81,7 +92,7 @@
 
 /* Focus state */
 .vlist:focus {
-    // outline: 2px solid var(--vlist-focus-ring);
+    outline: 2px solid var(--vlist-focus-ring);
     outline-offset: 2px;
 }
 
@@ -318,4 +329,65 @@
             var(--vlist-transition-timing),
         transform 0.2s ease-out,
         opacity 0.2s ease-out;
+}
+
+/* =============================================================================
+   Custom Scrollbar (for compressed mode)
+   ============================================================================= */
+
+/* Scrollbar track */
+.vlist-scrollbar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--vlist-scrollbar-width);
+    height: 100%;
+    background-color: var(--vlist-scrollbar-track-bg);
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Visible state */
+.vlist-scrollbar--visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Scrollbar thumb */
+.vlist-scrollbar-thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    background-color: var(--vlist-scrollbar-custom-thumb-bg);
+    border-radius: var(--vlist-scrollbar-custom-thumb-radius);
+    cursor: pointer;
+    transition: background-color 0.15s ease-out;
+}
+
+.vlist-scrollbar-thumb:hover {
+    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+}
+
+/* Dragging state */
+.vlist-scrollbar--dragging {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.vlist-scrollbar--dragging .vlist-scrollbar-thumb {
+    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+}
+
+/* Hide native scrollbar when custom scrollbar is active */
+.vlist-viewport--custom-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.vlist-viewport--custom-scrollbar::-webkit-scrollbar {
+    display: none;
 }

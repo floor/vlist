@@ -47,8 +47,30 @@ export interface VListConfig<T extends VListItem = VListItem> {
   /** Selection configuration */
   selection?: SelectionConfig;
 
+  /** Custom scrollbar configuration (for compressed mode) */
+  scrollbar?: ScrollbarConfig;
+
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
+}
+
+// =============================================================================
+// Scrollbar
+// =============================================================================
+
+/** Scrollbar configuration */
+export interface ScrollbarConfig {
+  /** Enable scrollbar (default: auto - enabled when compressed) */
+  enabled?: boolean;
+
+  /** Auto-hide scrollbar after idle (default: true) */
+  autoHide?: boolean;
+
+  /** Auto-hide delay in milliseconds (default: 1000) */
+  autoHideDelay?: number;
+
+  /** Minimum thumb size in pixels (default: 30) */
+  minThumbSize?: number;
 }
 
 /** Item template function */
