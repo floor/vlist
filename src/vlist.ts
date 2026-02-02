@@ -1,7 +1,12 @@
 /**
  * vlist - Main Entry Point
  * Creates a virtual list instance with all features
- * Supports compression for handling 1M+ items via manual wheel scrolling
+ *
+ * This is the composition root that:
+ * 1. Validates configuration
+ * 2. Creates all domain components
+ * 3. Wires them together via context
+ * 4. Attaches handlers and returns public API
  */
 
 import type {
@@ -11,60 +16,44 @@ import type {
   VListEvents,
   EventHandler,
   Unsubscribe,
-  Range,
   SelectionMode,
 } from "./types";
 
 // Domain imports
 import {
   createViewportState,
-  updateViewportState,
   updateViewportItems,
-  calculateScrollToIndex,
-  rangesEqual,
-  getCompressionState,
   getCompression,
-  calculateCompressedItemPosition,
   createRenderer,
   createDOMStructure,
   updateContentHeight,
   resolveContainer,
   getContainerDimensions,
-  type CompressionContext,
+  rangesEqual,
 } from "./render";
 
 import { createEmitter } from "./events";
+import { createSelectionState } from "./selection";
+import { createScrollController, createScrollbar } from "./scroll";
+import { createDataManager } from "./data";
 
+// Context, handlers, and methods
+import { createContext, type VListContext } from "./context";
 import {
-  createSelectionState,
-  selectItems,
-  deselectItems,
-  toggleSelection,
-  selectAll,
-  clearSelection,
-  setFocusedIndex,
-  moveFocusUp,
-  moveFocusDown,
-  moveFocusToFirst,
-  moveFocusToLast,
-  selectFocused,
-  getSelectedIds,
-  getSelectedItems,
-  isSelected,
-} from "./selection";
-
+  createScrollHandler,
+  createClickHandler,
+  createKeyboardHandler,
+} from "./handlers";
 import {
-  createScrollController,
-  createScrollbar,
-  type Scrollbar,
-} from "./scroll";
+  createDataMethods,
+  createScrollMethods,
+  createSelectionMethods,
+} from "./methods";
 
-import { createDataManager, type DataManager } from "./data";
-
+// Constants
 import {
   DEFAULT_OVERSCAN,
   DEFAULT_CLASS_PREFIX,
-  LOAD_MORE_THRESHOLD,
   INITIAL_LOAD_SIZE,
 } from "./constants";
 
@@ -78,7 +67,10 @@ import {
 export const createVList = <T extends VListItem = VListItem>(
   config: VListConfig<T>,
 ): VList<T> => {
-  // Validate config
+  // ===========================================================================
+  // Validation
+  // ===========================================================================
+
   if (!config.container) {
     throw new Error("[vlist] Container is required");
   }
@@ -89,7 +81,10 @@ export const createVList = <T extends VListItem = VListItem>(
     throw new Error("[vlist] Template is required");
   }
 
+  // ===========================================================================
   // Configuration
+  // ===========================================================================
+
   const {
     itemHeight,
     template,
@@ -103,51 +98,41 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
-  // Resolve container
-  const containerElement = resolveContainer(config.container);
+  // ===========================================================================
+  // Create Domain Components
+  // ===========================================================================
 
-  // Create DOM structure
+  // Resolve container and create DOM structure
+  const containerElement = resolveContainer(config.container);
   const dom = createDOMStructure(containerElement, classPrefix);
 
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
-  // Track if initialized (to avoid calling updateViewport before renderer exists)
-  let isInitialized = false;
-
-  // Create data manager with config object
-  const dataManager: DataManager<T> = createDataManager<T>({
+  // Create data manager
+  const dataManager = createDataManager<T>({
     adapter,
     initialItems,
     initialTotal: initialItems?.length,
     pageSize: INITIAL_LOAD_SIZE,
     onStateChange: () => {
-      // Only update viewport after initialization is complete
-      if (isInitialized) {
+      if (ctx.state.isInitialized) {
         updateViewport();
       }
     },
-    onItemsLoaded: (loadedItems, offset, total) => {
-      if (isInitialized) {
-        // Force re-render to replace placeholders with loaded data
+    onItemsLoaded: (loadedItems, _offset, total) => {
+      if (ctx.state.isInitialized) {
         forceRender();
-
-        emitter.emit("load:end", {
-          items: loadedItems,
-          total,
-        });
+        emitter.emit("load:end", { items: loadedItems, total });
       }
     },
   });
 
-  // Create selection state
-  let selectionState = createSelectionState(selectionConfig?.initial);
-
   // Get container dimensions
   const dimensions = getContainerDimensions(dom.viewport);
 
-  // Create viewport state
-  let viewportState = createViewportState(
+  // Create initial viewport state
+  const initialViewportState = createViewportState(
     dimensions.height,
     itemHeight,
     dataManager.getState().total,
@@ -160,7 +145,7 @@ export const createVList = <T extends VListItem = VListItem>(
     itemHeight,
   );
 
-  // Create scroll controller with compression support if needed
+  // Create scroll controller
   const scrollController = createScrollController(dom.viewport, {
     compressed: initialCompression.isCompressed,
     compression: initialCompression.isCompressed
@@ -174,7 +159,7 @@ export const createVList = <T extends VListItem = VListItem>(
     },
   });
 
-  // Create renderer (with totalItems getter for compression)
+  // Create renderer
   const renderer = createRenderer<T>(
     dom.items,
     template,
@@ -183,71 +168,53 @@ export const createVList = <T extends VListItem = VListItem>(
     () => dataManager.getState().total,
   );
 
-  // Create custom scrollbar for compressed mode
-  // Auto-enable when compressed, unless explicitly disabled
+  // Create scrollbar (auto-enable when compressed)
   const shouldEnableScrollbar =
     scrollbarConfig?.enabled ?? initialCompression.isCompressed;
+  let scrollbar = shouldEnableScrollbar
+    ? createScrollbar(
+        dom.viewport,
+        (position) => scrollController.scrollTo(position),
+        scrollbarConfig,
+        classPrefix,
+      )
+    : null;
 
-  let scrollbar: Scrollbar | null = null;
-
-  if (shouldEnableScrollbar) {
-    scrollbar = createScrollbar(
-      dom.viewport,
-      (position) => {
-        // Scrollbar interaction triggers scroll
-        scrollController.scrollTo(position);
-      },
-      scrollbarConfig,
-      classPrefix,
-    );
-
-    // Initialize scrollbar bounds
+  if (scrollbar) {
     scrollbar.updateBounds(initialCompression.virtualHeight, dimensions.height);
-
-    // Add class to hide native scrollbar
     dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
   }
 
-  // Track last render range to avoid unnecessary re-renders
-  let lastRenderRange: Range = { start: 0, end: 0 };
+  // ===========================================================================
+  // Create Context
+  // ===========================================================================
 
-  // Track if destroyed
-  let isDestroyed = false;
+  const ctx: VListContext<T> = createContext(
+    {
+      itemHeight,
+      overscan,
+      classPrefix,
+      selectionMode,
+      hasAdapter: !!adapter,
+    },
+    dom,
+    dataManager,
+    scrollController,
+    renderer,
+    emitter,
+    scrollbar,
+    {
+      viewportState: initialViewportState,
+      selectionState: createSelectionState(selectionConfig?.initial),
+      lastRenderRange: { start: 0, end: 0 },
+      isInitialized: false,
+      isDestroyed: false,
+    },
+  );
 
-  // =============================================================================
-  // Helper Functions
-  // =============================================================================
-
-  /**
-   * Get items for the current render range
-   */
-  const getItemsForRange = (range: Range): T[] => {
-    return dataManager.getItemsInRange(range.start, range.end);
-  };
-
-  /**
-   * Get all loaded items (for selection operations)
-   */
-  const getAllLoadedItems = (): T[] => {
-    const total = dataManager.getState().total;
-    if (total === 0) return [];
-    return dataManager.getItemsInRange(0, total - 1);
-  };
-
-  // =============================================================================
-  // Internal Methods
-  // =============================================================================
-
-  /**
-   * Get compression context for rendering
-   * In compressed mode, items are positioned relative to viewport using the virtual scroll index
-   */
-  const getCompressionContext = (): CompressionContext => ({
-    scrollTop: viewportState.scrollTop,
-    totalItems: dataManager.getState().total,
-    containerHeight: viewportState.containerHeight,
-    rangeStart: viewportState.renderRange.start,
-  });
+  // ===========================================================================
+  // Internal Helpers
+  // ===========================================================================
 
   /**
    * Update compression mode when total items changes
@@ -257,26 +224,23 @@ export const createVList = <T extends VListItem = VListItem>(
     const compression = getCompression(total, itemHeight);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
-      // Enable compression mode
       scrollController.enableCompression(compression);
 
       // Create scrollbar if not exists and auto-enable is on
       if (!scrollbar && scrollbarConfig?.enabled !== false) {
         scrollbar = createScrollbar(
           dom.viewport,
-          (position) => {
-            scrollController.scrollTo(position);
-          },
+          (position) => scrollController.scrollTo(position),
           scrollbarConfig,
           classPrefix,
         );
         dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+        // Update context reference
+        (ctx as any).scrollbar = scrollbar;
       }
     } else if (!compression.isCompressed && scrollController.isCompressed()) {
-      // Disable compression mode
       scrollController.disableCompression();
     } else if (compression.isCompressed) {
-      // Update compression config
       scrollController.updateConfig({ compression });
     }
 
@@ -284,7 +248,7 @@ export const createVList = <T extends VListItem = VListItem>(
     if (scrollbar) {
       scrollbar.updateBounds(
         compression.virtualHeight,
-        viewportState.containerHeight,
+        ctx.state.viewportState.containerHeight,
       );
     }
   };
@@ -293,7 +257,7 @@ export const createVList = <T extends VListItem = VListItem>(
    * Update viewport state and re-render if needed
    */
   const updateViewport = (): void => {
-    if (isDestroyed) return;
+    if (ctx.state.isDestroyed) return;
 
     const dataState = dataManager.getState();
 
@@ -301,517 +265,100 @@ export const createVList = <T extends VListItem = VListItem>(
     updateCompressionMode();
 
     // Update viewport state with new item count
-    viewportState = updateViewportItems(
-      viewportState,
+    ctx.state.viewportState = updateViewportItems(
+      ctx.state.viewportState,
       itemHeight,
       dataState.total,
       overscan,
     );
 
-    // Update content height (uses virtualHeight, capped for compression)
-    // In compressed mode, this sets the virtual height for scroll bounds
-    updateContentHeight(dom.content, viewportState.totalHeight);
+    // Update content height
+    updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
 
-    // Render if range changed
+    // Re-render
     renderIfNeeded();
   };
 
   /**
-   * Render items if the range has changed
+   * Render if the range has changed
    */
   const renderIfNeeded = (): void => {
-    if (isDestroyed) return;
+    if (ctx.state.isDestroyed) return;
 
-    const { renderRange, isCompressed } = viewportState;
+    const { renderRange, isCompressed } = ctx.state.viewportState;
 
-    if (!rangesEqual(renderRange, lastRenderRange)) {
-      const items = getItemsForRange(renderRange);
-      const compressionCtx = isCompressed ? getCompressionContext() : undefined;
-
-      renderer.render(
-        items,
-        renderRange,
-        selectionState.selected,
-        selectionState.focusedIndex,
-        compressionCtx,
-      );
-
-      lastRenderRange = { ...renderRange };
-
-      // Emit range change
-      emitter.emit("range:change", { range: renderRange });
-    } else if (isCompressed) {
-      // Range didn't change but we're compressed - update positions on scroll
-      // In compressed mode (manual wheel scroll), items are positioned relative to viewport
-      renderer.updatePositions(getCompressionContext());
+    // Check if render range changed
+    if (rangesEqual(renderRange, ctx.state.lastRenderRange)) {
+      // Range unchanged, but still update positions in compressed mode
+      if (isCompressed) {
+        renderer.updatePositions(ctx.getCompressionContext());
+      }
+      return;
     }
-  };
 
-  /**
-   * Force re-render current range (used when data loads to replace placeholders)
-   */
-  const forceRender = (): void => {
-    if (isDestroyed) return;
-
-    const { renderRange, isCompressed } = viewportState;
-    const items = getItemsForRange(renderRange);
-    const compressionCtx = isCompressed ? getCompressionContext() : undefined;
+    // Render new range
+    const items = ctx.getItemsForRange(renderRange);
+    const compressionCtx = isCompressed
+      ? ctx.getCompressionContext()
+      : undefined;
 
     renderer.render(
       items,
       renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
+      ctx.state.selectionState.selected,
+      ctx.state.selectionState.focusedIndex,
       compressionCtx,
     );
+
+    ctx.state.lastRenderRange = { ...renderRange };
+
+    // Emit range change
+    emitter.emit("range:change", { range: renderRange });
   };
 
   /**
-   * Handle scroll events (works for both native and compressed scroll)
+   * Force re-render current range
    */
-  const handleScroll = (scrollTop: number, direction: "up" | "down"): void => {
-    if (isDestroyed) return;
+  const forceRender = (): void => {
+    if (ctx.state.isDestroyed) return;
 
-    const dataState = dataManager.getState();
-
-    // Update viewport state with current scroll position
-    viewportState = updateViewportState(
-      viewportState,
-      scrollTop,
-      itemHeight,
-      dataState.total,
-      overscan,
-    );
-
-    // Update custom scrollbar position
-    if (scrollbar) {
-      scrollbar.updatePosition(scrollTop);
-      scrollbar.show();
-    }
-
-    // Render if needed
-    renderIfNeeded();
-
-    // Emit scroll event
-    emitter.emit("scroll", { scrollTop, direction });
-
-    // Check for infinite scroll (use virtual height for distance calculation)
-    if (adapter && !dataState.isLoading && dataState.hasMore) {
-      const distanceFromBottom =
-        viewportState.totalHeight - scrollTop - viewportState.containerHeight;
-
-      if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
-        emitter.emit("load:start", {
-          offset: dataState.cached,
-          limit: INITIAL_LOAD_SIZE,
-        });
-
-        dataManager.loadMore().catch((error) => {
-          emitter.emit("error", { error, context: "loadMore" });
-        });
-      }
-    }
-
-    // Ensure visible range is loaded (for sparse data)
-    const { renderRange } = viewportState;
-    dataManager
-      .ensureRange(renderRange.start, renderRange.end)
-      .catch((error) => {
-        emitter.emit("error", { error, context: "ensureRange" });
-      });
-  };
-
-  /**
-   * Handle item click
-   */
-  const handleItemClick = (event: MouseEvent): void => {
-    if (isDestroyed) return;
-
-    const target = event.target as HTMLElement;
-    const itemElement = target.closest("[data-index]") as HTMLElement | null;
-
-    if (!itemElement) return;
-
-    const index = parseInt(itemElement.dataset.index ?? "-1", 10);
-    if (index < 0) return;
-
-    const item = dataManager.getItem(index);
-    if (!item) return;
-
-    // Emit click event
-    emitter.emit("item:click", { item, index, event });
-
-    // Handle selection
-    if (selectionMode !== "none") {
-      // Update focused index
-      selectionState = setFocusedIndex(selectionState, index);
-
-      // Toggle selection
-      selectionState = toggleSelection(selectionState, item.id, selectionMode);
-
-      // Re-render
-      const items = getItemsForRange(viewportState.renderRange);
-      const compressionCtx = viewportState.isCompressed
-        ? getCompressionContext()
-        : undefined;
-      renderer.render(
-        items,
-        viewportState.renderRange,
-        selectionState.selected,
-        selectionState.focusedIndex,
-        compressionCtx,
-      );
-
-      // Emit selection change
-      emitter.emit("selection:change", {
-        selected: getSelectedIds(selectionState),
-        items: getSelectedItems(selectionState, getAllLoadedItems()),
-      });
-    }
-  };
-
-  /**
-   * Handle keyboard navigation
-   */
-  const handleKeydown = (event: KeyboardEvent): void => {
-    if (isDestroyed || selectionMode === "none") return;
-
-    const dataState = dataManager.getState();
-    const totalItems = dataState.total;
-
-    let handled = false;
-    let newState = selectionState;
-
-    switch (event.key) {
-      case "ArrowUp":
-        newState = moveFocusUp(selectionState, totalItems);
-        handled = true;
-        break;
-
-      case "ArrowDown":
-        newState = moveFocusDown(selectionState, totalItems);
-        handled = true;
-        break;
-
-      case "Home":
-        newState = moveFocusToFirst(selectionState, totalItems);
-        handled = true;
-        break;
-
-      case "End":
-        newState = moveFocusToLast(selectionState, totalItems);
-        handled = true;
-        break;
-
-      case " ":
-      case "Enter":
-        if (selectionState.focusedIndex >= 0) {
-          const focusedItem = dataManager.getItem(selectionState.focusedIndex);
-          if (focusedItem) {
-            newState = toggleSelection(
-              selectionState,
-              focusedItem.id,
-              selectionMode,
-            );
-          }
-          handled = true;
-        }
-        break;
-    }
-
-    if (handled) {
-      event.preventDefault();
-      selectionState = newState;
-
-      // Scroll focused item into view
-      if (selectionState.focusedIndex >= 0) {
-        scrollToIndex(selectionState.focusedIndex, "center");
-      }
-
-      // Re-render
-      const items = getItemsForRange(viewportState.renderRange);
-      const compressionCtx = viewportState.isCompressed
-        ? getCompressionContext()
-        : undefined;
-      renderer.render(
-        items,
-        viewportState.renderRange,
-        selectionState.selected,
-        selectionState.focusedIndex,
-        compressionCtx,
-      );
-
-      // Emit selection change if selection changed
-      if (event.key === " " || event.key === "Enter") {
-        emitter.emit("selection:change", {
-          selected: getSelectedIds(selectionState),
-          items: getSelectedItems(selectionState, getAllLoadedItems()),
-        });
-      }
-    }
-  };
-
-  // =============================================================================
-  // Public API
-  // =============================================================================
-
-  /**
-   * Set items (replaces all)
-   */
-  const setItems = (items: T[]): void => {
-    dataManager.setItems(items, 0, items.length);
-  };
-
-  /**
-   * Append items to the end
-   */
-  const appendItems = (items: T[]): void => {
-    const currentTotal = dataManager.getState().total;
-    dataManager.setItems(items, currentTotal);
-  };
-
-  /**
-   * Prepend items to the start
-   * Note: This shifts all existing indices, so we need to reload
-   */
-  const prependItems = (items: T[]): void => {
-    // Get existing items
-    const existingTotal = dataManager.getState().total;
-    const existingItems =
-      existingTotal > 0
-        ? dataManager.getItemsInRange(0, existingTotal - 1)
-        : [];
-
-    // Clear and re-add with new items first
-    dataManager.clear();
-    dataManager.setItems([...items, ...existingItems], 0);
-  };
-
-  /**
-   * Update a single item by ID
-   */
-  const updateItem = (id: string | number, updates: Partial<T>): void => {
-    const updated = dataManager.updateItem(id, updates);
-
-    if (updated) {
-      // Re-render the specific item if visible
-      const index = dataManager.getIndexById(id);
-      const item = dataManager.getItem(index);
-
-      if (
-        item &&
-        index >= viewportState.renderRange.start &&
-        index <= viewportState.renderRange.end
-      ) {
-        renderer.updateItem(
-          index,
-          item,
-          isSelected(selectionState, id),
-          selectionState.focusedIndex === index,
-        );
-      }
-    }
-  };
-
-  /**
-   * Remove item by ID
-   */
-  const removeItem = (id: string | number): void => {
-    dataManager.removeItem(id);
-  };
-
-  /**
-   * Reload data
-   */
-  const reload = async (): Promise<void> => {
-    if (adapter) {
-      await dataManager.reload();
-    }
-  };
-
-  /**
-   * Scroll to specific index (compression-aware)
-   */
-  const scrollToIndex = (
-    index: number,
-    align: "start" | "center" | "end" = "start",
-  ): void => {
-    const dataState = dataManager.getState();
-    const position = calculateScrollToIndex(
-      index,
-      itemHeight,
-      viewportState.containerHeight,
-      dataState.total,
-      align,
-    );
-
-    scrollController.scrollTo(position);
-  };
-
-  /**
-   * Scroll to specific item by ID
-   */
-  const scrollToItem = (
-    id: string | number,
-    align: "start" | "center" | "end" = "start",
-  ): void => {
-    const index = dataManager.getIndexById(id);
-    if (index >= 0) {
-      scrollToIndex(index, align);
-    }
-  };
-
-  /**
-   * Get current scroll position
-   */
-  const getScrollPosition = (): number => {
-    return scrollController.getScrollTop();
-  };
-
-  /**
-   * Select item(s) by ID
-   */
-  const select = (...ids: Array<string | number>): void => {
-    if (selectionMode === "none") return;
-
-    selectionState = selectItems(selectionState, ids, selectionMode);
-
-    const items = getItemsForRange(viewportState.renderRange);
-    const compressionCtx = viewportState.isCompressed
-      ? getCompressionContext()
+    const { renderRange, isCompressed } = ctx.state.viewportState;
+    const items = ctx.getItemsForRange(renderRange);
+    const compressionCtx = isCompressed
+      ? ctx.getCompressionContext()
       : undefined;
+
     renderer.render(
       items,
-      viewportState.renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
+      renderRange,
+      ctx.state.selectionState.selected,
+      ctx.state.selectionState.focusedIndex,
       compressionCtx,
     );
-
-    emitter.emit("selection:change", {
-      selected: getSelectedIds(selectionState),
-      items: getSelectedItems(selectionState, getAllLoadedItems()),
-    });
   };
 
-  /**
-   * Deselect item(s) by ID
-   */
-  const deselect = (...ids: Array<string | number>): void => {
-    selectionState = deselectItems(selectionState, ids);
+  // ===========================================================================
+  // Create Handlers
+  // ===========================================================================
 
-    const items = getItemsForRange(viewportState.renderRange);
-    const compressionCtx = viewportState.isCompressed
-      ? getCompressionContext()
-      : undefined;
-    renderer.render(
-      items,
-      viewportState.renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
-      compressionCtx,
-    );
+  const handleScroll = createScrollHandler(ctx, renderIfNeeded);
+  const handleClick = createClickHandler(ctx, forceRender);
 
-    emitter.emit("selection:change", {
-      selected: getSelectedIds(selectionState),
-      items: getSelectedItems(selectionState, getAllLoadedItems()),
-    });
-  };
+  // Create scroll methods first (needed by keyboard handler)
+  const scrollMethods = createScrollMethods(ctx);
+  const handleKeydown = createKeyboardHandler(ctx, scrollMethods.scrollToIndex);
 
-  /**
-   * Toggle selection
-   */
-  const toggleSelect = (id: string | number): void => {
-    if (selectionMode === "none") return;
+  // ===========================================================================
+  // Create API Methods
+  // ===========================================================================
 
-    selectionState = toggleSelection(selectionState, id, selectionMode);
+  const dataMethods = createDataMethods(ctx);
+  const selectionMethods = createSelectionMethods(ctx);
 
-    const items = getItemsForRange(viewportState.renderRange);
-    const compressionCtx = viewportState.isCompressed
-      ? getCompressionContext()
-      : undefined;
-    renderer.render(
-      items,
-      viewportState.renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
-      compressionCtx,
-    );
+  // ===========================================================================
+  // Event Subscription
+  // ===========================================================================
 
-    emitter.emit("selection:change", {
-      selected: getSelectedIds(selectionState),
-      items: getSelectedItems(selectionState, getAllLoadedItems()),
-    });
-  };
-
-  /**
-   * Select all items
-   */
-  const selectAllItems = (): void => {
-    if (selectionMode !== "multiple") return;
-
-    const allItems = getAllLoadedItems();
-    selectionState = selectAll(selectionState, allItems, selectionMode);
-
-    const items = getItemsForRange(viewportState.renderRange);
-    const compressionCtx = viewportState.isCompressed
-      ? getCompressionContext()
-      : undefined;
-    renderer.render(
-      items,
-      viewportState.renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
-      compressionCtx,
-    );
-
-    emitter.emit("selection:change", {
-      selected: getSelectedIds(selectionState),
-      items: getSelectedItems(selectionState, allItems),
-    });
-  };
-
-  /**
-   * Clear selection
-   */
-  const clearSelectionState = (): void => {
-    selectionState = clearSelection(selectionState);
-
-    const items = getItemsForRange(viewportState.renderRange);
-    const compressionCtx = viewportState.isCompressed
-      ? getCompressionContext()
-      : undefined;
-    renderer.render(
-      items,
-      viewportState.renderRange,
-      selectionState.selected,
-      selectionState.focusedIndex,
-      compressionCtx,
-    );
-
-    emitter.emit("selection:change", {
-      selected: [],
-      items: [],
-    });
-  };
-
-  /**
-   * Get selected item IDs
-   */
-  const getSelected = (): Array<string | number> => {
-    return getSelectedIds(selectionState);
-  };
-
-  /**
-   * Get selected items
-   */
-  const getSelectedItemsList = (): T[] => {
-    return getSelectedItems(selectionState, getAllLoadedItems());
-  };
-
-  /**
-   * Subscribe to an event
-   */
   const on = <K extends keyof VListEvents<T>>(
     event: K,
     handler: EventHandler<VListEvents<T>[K]>,
@@ -819,9 +366,6 @@ export const createVList = <T extends VListItem = VListItem>(
     return emitter.on(event, handler);
   };
 
-  /**
-   * Unsubscribe from an event
-   */
   const off = <K extends keyof VListEvents<T>>(
     event: K,
     handler: EventHandler<VListEvents<T>[K]>,
@@ -829,23 +373,23 @@ export const createVList = <T extends VListItem = VListItem>(
     emitter.off(event, handler);
   };
 
-  /**
-   * Destroy the instance
-   */
-  const destroy = (): void => {
-    if (isDestroyed) return;
+  // ===========================================================================
+  // Destroy
+  // ===========================================================================
 
-    isDestroyed = true;
+  const destroy = (): void => {
+    if (ctx.state.isDestroyed) return;
+
+    ctx.state.isDestroyed = true;
 
     // Remove event listeners
-    dom.items.removeEventListener("click", handleItemClick);
+    dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
 
-    // Cleanup
+    // Cleanup components
     scrollController.destroy();
     if (scrollbar) {
       scrollbar.destroy();
-      scrollbar = null;
     }
     renderer.destroy();
     emitter.clear();
@@ -854,20 +398,19 @@ export const createVList = <T extends VListItem = VListItem>(
     dom.root.remove();
   };
 
-  // =============================================================================
+  // ===========================================================================
   // Initialization
-  // =============================================================================
+  // ===========================================================================
 
   // Attach event listeners
-  // Note: scroll handling is set up via config callback in createScrollController
-  dom.items.addEventListener("click", handleItemClick);
+  dom.items.addEventListener("click", handleClick);
   dom.root.addEventListener("keydown", handleKeydown);
 
   // Mark as initialized
-  isInitialized = true;
+  ctx.state.isInitialized = true;
 
   // Initial render
-  updateContentHeight(dom.content, viewportState.totalHeight);
+  updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
   renderIfNeeded();
 
   // Load initial data if using adapter
@@ -879,45 +422,44 @@ export const createVList = <T extends VListItem = VListItem>(
     });
   }
 
-  // =============================================================================
+  // ===========================================================================
   // Return Public API
-  // =============================================================================
+  // ===========================================================================
 
   return {
+    // Properties
     get element() {
       return dom.root;
     },
 
     get items() {
-      return getAllLoadedItems() as readonly T[];
+      return ctx.getAllLoadedItems() as readonly T[];
     },
 
     get total() {
       return dataManager.getState().total;
     },
 
-    setItems,
-    appendItems,
-    prependItems,
-    updateItem,
-    removeItem,
-    reload,
+    // Data methods
+    ...dataMethods,
 
-    scrollToIndex,
-    scrollToItem,
-    getScrollPosition,
+    // Scroll methods
+    ...scrollMethods,
 
-    select,
-    deselect,
-    toggleSelect,
-    selectAll: selectAllItems,
-    clearSelection: clearSelectionState,
-    getSelected,
-    getSelectedItems: getSelectedItemsList,
+    // Selection methods
+    select: selectionMethods.select,
+    deselect: selectionMethods.deselect,
+    toggleSelect: selectionMethods.toggleSelect,
+    selectAll: selectionMethods.selectAll,
+    clearSelection: selectionMethods.clearSelection,
+    getSelected: selectionMethods.getSelected,
+    getSelectedItems: selectionMethods.getSelectedItems,
 
+    // Events
     on,
     off,
 
+    // Lifecycle
     destroy,
   };
 };
