@@ -119,7 +119,7 @@ const updateVelocityTracker = (
   // Calculate average velocity from recent samples
   let avgVelocity = instantVelocity;
   if (samples.length > 1) {
-    const oldest = samples[0];
+    const oldest = samples[0]!;
     const totalDistance = newPosition - oldest.position;
     const totalTime = now - oldest.time;
     avgVelocity = totalTime > 0 ? totalDistance / totalTime : instantVelocity;
@@ -158,9 +158,6 @@ export const createScrollController = (
   let velocityTracker = createVelocityTracker();
   let isScrolling = false;
   let idleTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  // DOM references
-  let contentElement: HTMLElement | null = null;
 
   // =============================================================================
   // Native Scroll Handling
@@ -385,9 +382,6 @@ export const createScrollController = (
   // =============================================================================
   // Initialization
   // =============================================================================
-
-  // Find content element (for measuring actual content height)
-  contentElement = viewport.querySelector("[class*='-content']") as HTMLElement;
 
   if (compressed && compression) {
     // Start in compressed mode

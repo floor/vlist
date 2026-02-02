@@ -9,7 +9,7 @@
 import type { VListItem } from "./types";
 import type { VListContext } from "./context";
 
-import { updateViewportState, rangesEqual } from "./render";
+import { updateViewportState } from "./render";
 import {
   setFocusedIndex,
   toggleSelection,
@@ -111,7 +111,7 @@ export const createScrollHandler = <T extends VListItem>(
  */
 export const createClickHandler = <T extends VListItem>(
   ctx: VListContext<T>,
-  forceRender: RenderFunction,
+  _forceRender: RenderFunction,
 ) => {
   return (event: MouseEvent): void => {
     if (ctx.state.isDestroyed) return;
@@ -133,7 +133,10 @@ export const createClickHandler = <T extends VListItem>(
     // Handle selection
     if (ctx.config.selectionMode !== "none") {
       // Update focused index
-      ctx.state.selectionState = setFocusedIndex(ctx.state.selectionState, index);
+      ctx.state.selectionState = setFocusedIndex(
+        ctx.state.selectionState,
+        index,
+      );
 
       // Toggle selection
       ctx.state.selectionState = toggleSelection(
@@ -159,7 +162,10 @@ export const createClickHandler = <T extends VListItem>(
       // Emit selection change
       ctx.emitter.emit("selection:change", {
         selected: getSelectedIds(ctx.state.selectionState),
-        items: getSelectedItems(ctx.state.selectionState, ctx.getAllLoadedItems()),
+        items: getSelectedItems(
+          ctx.state.selectionState,
+          ctx.getAllLoadedItems(),
+        ),
       });
     }
   };
@@ -251,7 +257,10 @@ export const createKeyboardHandler = <T extends VListItem>(
       if (event.key === " " || event.key === "Enter") {
         ctx.emitter.emit("selection:change", {
           selected: getSelectedIds(ctx.state.selectionState),
-          items: getSelectedItems(ctx.state.selectionState, ctx.getAllLoadedItems()),
+          items: getSelectedItems(
+            ctx.state.selectionState,
+            ctx.getAllLoadedItems(),
+          ),
         });
       }
     }

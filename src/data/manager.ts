@@ -3,13 +3,7 @@
  * Handles data with sparse storage for million+ item support
  */
 
-import type {
-  VListItem,
-  VListAdapter,
-  AdapterParams,
-  AdapterResponse,
-  Range,
-} from "../types";
+import type { VListItem, VListAdapter, AdapterParams, Range } from "../types";
 
 import {
   createSparseStorage,
@@ -60,7 +54,7 @@ export interface DataManagerConfig<T extends VListItem = VListItem> {
 }
 
 /** Data state */
-export interface DataState<T extends VListItem = VListItem> {
+export interface DataState<_T extends VListItem = VListItem> {
   /** Total items (declared, may be larger than loaded) */
   total: number;
 
@@ -183,7 +177,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
   // Create sparse storage
   const storage = createSparseStorage<T>({
     ...storageConfig,
-    onEvict: (count, ranges) => {
+    onEvict: (count, _ranges) => {
       onItemsEvicted?.(count);
       notifyStateChange();
     },

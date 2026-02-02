@@ -190,7 +190,7 @@ export const calculateCompressedItemPosition = (
   totalItems: number,
   containerHeight: number,
   compression: CompressionState,
-  rangeStart?: number,
+  _rangeStart?: number,
 ): number => {
   if (!compression.isCompressed || totalItems === 0) {
     // Normal: absolute position in content space (scroll handled by container)

@@ -152,7 +152,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   template: ItemTemplate<T>,
   itemHeight: number,
   classPrefix: string,
-  totalItemsGetter?: () => number,
+  _totalItemsGetter?: () => number,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, RenderedItem>();
