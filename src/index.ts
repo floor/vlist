@@ -26,6 +26,9 @@ export type {
   SelectionConfig,
   SelectionState,
 
+  // Scrollbar
+  ScrollbarConfig,
+
   // Data adapter
   VListAdapter,
   AdapterParams,
