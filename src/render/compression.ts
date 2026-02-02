@@ -17,16 +17,10 @@
  */
 
 import type { Range } from "../types";
+import { MAX_VIRTUAL_HEIGHT } from "../constants";
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-/**
- * Maximum virtual height in pixels
- * Most browsers support ~16.7M pixels, we use 16M for safety margin
- */
-export const MAX_VIRTUAL_HEIGHT = 16_000_000;
+// Re-export for convenience
+export { MAX_VIRTUAL_HEIGHT };
 
 // =============================================================================
 // Compression State

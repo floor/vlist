@@ -15,7 +15,7 @@ import {
   needsCompression,
   getMaxItemsWithoutCompression,
   getCompressionInfo,
-} from "../src/core/compression";
+} from "../src/render/compression";
 
 // =============================================================================
 // Constants Tests

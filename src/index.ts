@@ -43,7 +43,7 @@ export type {
   Unsubscribe,
 } from "./types";
 
-// Core utilities (for advanced usage)
+// Render domain (virtual scrolling, compression)
 export {
   // Virtual scrolling calculations
   calculateVisibleRange,
@@ -57,12 +57,10 @@ export {
   isInRange,
   getRangeCount,
   diffRanges,
-} from "./core/virtual";
-
-// Compression utilities (for handling 1M+ items)
-export {
+  // Compression utilities (for handling 1M+ items)
   MAX_VIRTUAL_HEIGHT,
   getCompressionState,
+  getCompression,
   needsCompression,
   getMaxItemsWithoutCompression,
   getCompressionInfo,
@@ -72,10 +70,10 @@ export {
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
   type CompressionState,
-} from "./core/compression";
+} from "./render";
 
+// Selection domain
 export {
-  // Selection state management
   createSelectionState,
   selectItems,
   deselectItems,
@@ -85,10 +83,30 @@ export {
   isSelected,
   getSelectedIds,
   getSelectedItems,
-} from "./core/selection";
+} from "./selection";
 
+// Events domain
+export { createEmitter, type Emitter } from "./events";
+
+// Data domain (for advanced usage)
 export {
-  // Event emitter
-  createEmitter,
-  type Emitter,
-} from "./core/events";
+  createDataManager,
+  createSparseStorage,
+  createPlaceholderManager,
+  isPlaceholderItem,
+  filterPlaceholders,
+  mergeRanges,
+  calculateMissingRanges,
+  type DataManager,
+  type SparseStorage,
+  type PlaceholderManager,
+} from "./data";
+
+// Scroll domain (for advanced usage)
+export {
+  createScrollController,
+  createScrollbar,
+  rafThrottle,
+  type ScrollController,
+  type Scrollbar,
+} from "./scroll";

@@ -15,6 +15,7 @@ import type {
   SelectionMode,
 } from "./types";
 
+// Domain imports
 import {
   createViewportState,
   updateViewportState,
@@ -22,16 +23,17 @@ import {
   calculateScrollToIndex,
   rangesEqual,
   getCompressionState,
-} from "./core/virtual";
-
-import {
-  getCompressionState as getCompression,
+  getCompression,
   calculateCompressedItemPosition,
-} from "./core/compression";
+  createRenderer,
+  createDOMStructure,
+  updateContentHeight,
+  resolveContainer,
+  getContainerDimensions,
+  type CompressionContext,
+} from "./render";
 
-import type { CompressionContext } from "./core/render";
-
-import { createEmitter } from "./core/events";
+import { createEmitter } from "./events";
 
 import {
   createSelectionState,
@@ -49,30 +51,22 @@ import {
   getSelectedIds,
   getSelectedItems,
   isSelected,
-} from "./core/selection";
+} from "./selection";
 
 import {
-  createRenderer,
-  createDOMStructure,
-  updateContentHeight,
-  resolveContainer,
-  getContainerDimensions,
-} from "./core/render";
+  createScrollController,
+  createScrollbar,
+  type Scrollbar,
+} from "./scroll";
 
-import { createScrollController } from "./core/scroll";
+import { createDataManager, type DataManager } from "./data";
 
-import { createScrollbar, type Scrollbar } from "./core/scrollbar";
-
-import { createDataManager, type DataManager } from "./core/data";
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const DEFAULT_OVERSCAN = 3;
-const DEFAULT_CLASS_PREFIX = "vlist";
-const LOAD_MORE_THRESHOLD = 200; // pixels from bottom
-const INITIAL_LOAD_SIZE = 50;
+import {
+  DEFAULT_OVERSCAN,
+  DEFAULT_CLASS_PREFIX,
+  LOAD_MORE_THRESHOLD,
+  INITIAL_LOAD_SIZE,
+} from "./constants";
 
 // =============================================================================
 // Main Factory

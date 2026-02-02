@@ -3,7 +3,10 @@
  * Pure functions for managing selection state
  */
 
-import type { SelectionMode, SelectionState, VListItem } from '../types';
+import type { VListItem, SelectionMode, SelectionState } from "../types";
+
+// Re-export SelectionState for convenience
+export type { SelectionState } from "../types";
 
 // =============================================================================
 // State Creation
@@ -14,7 +17,7 @@ import type { SelectionMode, SelectionState, VListItem } from '../types';
  * Pure function - no side effects
  */
 export const createSelectionState = (
-  initial?: Array<string | number>
+  initial?: Array<string | number>,
 ): SelectionState => ({
   selected: new Set(initial ?? []),
   focusedIndex: -1,
@@ -31,13 +34,13 @@ export const createSelectionState = (
 export const selectItems = (
   state: SelectionState,
   ids: Array<string | number>,
-  mode: SelectionMode
+  mode: SelectionMode,
 ): SelectionState => {
-  if (mode === 'none') return state;
+  if (mode === "none") return state;
 
   const newSelected = new Set(state.selected);
 
-  if (mode === 'single') {
+  if (mode === "single") {
     // Single mode: replace selection
     newSelected.clear();
     if (ids.length > 0) {
@@ -62,7 +65,7 @@ export const selectItems = (
  */
 export const deselectItems = (
   state: SelectionState,
-  ids: Array<string | number>
+  ids: Array<string | number>,
 ): SelectionState => {
   const newSelected = new Set(state.selected);
 
@@ -83,9 +86,9 @@ export const deselectItems = (
 export const toggleSelection = (
   state: SelectionState,
   id: string | number,
-  mode: SelectionMode
+  mode: SelectionMode,
 ): SelectionState => {
-  if (mode === 'none') return state;
+  if (mode === "none") return state;
 
   if (state.selected.has(id)) {
     return deselectItems(state, [id]);
@@ -101,9 +104,9 @@ export const toggleSelection = (
 export const selectAll = <T extends VListItem>(
   state: SelectionState,
   items: T[],
-  mode: SelectionMode
+  mode: SelectionMode,
 ): SelectionState => {
-  if (mode !== 'multiple') return state;
+  if (mode !== "multiple") return state;
 
   return {
     ...state,
@@ -130,7 +133,7 @@ export const clearSelection = (state: SelectionState): SelectionState => ({
  */
 export const setFocusedIndex = (
   state: SelectionState,
-  index: number
+  index: number,
 ): SelectionState => ({
   ...state,
   focusedIndex: index,
@@ -143,7 +146,7 @@ export const setFocusedIndex = (
 export const moveFocusUp = (
   state: SelectionState,
   totalItems: number,
-  wrap: boolean = true
+  wrap: boolean = true,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
@@ -166,7 +169,7 @@ export const moveFocusUp = (
 export const moveFocusDown = (
   state: SelectionState,
   totalItems: number,
-  wrap: boolean = true
+  wrap: boolean = true,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
@@ -188,7 +191,7 @@ export const moveFocusDown = (
  */
 export const moveFocusToFirst = (
   state: SelectionState,
-  totalItems: number
+  totalItems: number,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
@@ -204,7 +207,7 @@ export const moveFocusToFirst = (
  */
 export const moveFocusToLast = (
   state: SelectionState,
-  totalItems: number
+  totalItems: number,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
@@ -222,12 +225,12 @@ export const moveFocusByPage = (
   state: SelectionState,
   totalItems: number,
   pageSize: number,
-  direction: 'up' | 'down'
+  direction: "up" | "down",
 ): SelectionState => {
   if (totalItems === 0) return state;
 
   let newIndex =
-    direction === 'up'
+    direction === "up"
       ? state.focusedIndex - pageSize
       : state.focusedIndex + pageSize;
 
@@ -250,7 +253,7 @@ export const moveFocusByPage = (
  */
 export const isSelected = (
   state: SelectionState,
-  id: string | number
+  id: string | number,
 ): boolean => {
   return state.selected.has(id);
 };
@@ -260,7 +263,7 @@ export const isSelected = (
  * Pure function - no side effects
  */
 export const getSelectedIds = (
-  state: SelectionState
+  state: SelectionState,
 ): Array<string | number> => {
   return Array.from(state.selected);
 };
@@ -271,7 +274,7 @@ export const getSelectedIds = (
  */
 export const getSelectedItems = <T extends VListItem>(
   state: SelectionState,
-  items: T[]
+  items: T[],
 ): T[] => {
   return items.filter((item) => state.selected.has(item.id));
 };
@@ -303,9 +306,13 @@ export const isSelectionEmpty = (state: SelectionState): boolean => {
 export const selectFocused = <T extends VListItem>(
   state: SelectionState,
   items: T[],
-  mode: SelectionMode
+  mode: SelectionMode,
 ): SelectionState => {
-  if (mode === 'none' || state.focusedIndex < 0 || state.focusedIndex >= items.length) {
+  if (
+    mode === "none" ||
+    state.focusedIndex < 0 ||
+    state.focusedIndex >= items.length
+  ) {
     return state;
   }
 
@@ -324,9 +331,9 @@ export const selectRange = <T extends VListItem>(
   items: T[],
   fromIndex: number,
   toIndex: number,
-  mode: SelectionMode
+  mode: SelectionMode,
 ): SelectionState => {
-  if (mode !== 'multiple') return state;
+  if (mode !== "multiple") return state;
 
   const start = Math.min(fromIndex, toIndex);
   const end = Math.max(fromIndex, toIndex);
