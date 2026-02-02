@@ -1,0 +1,55 @@
+{
+  "name": "vlist",
+  "version": "0.1.0",
+  "description": "Lightweight, high-performance virtual list with zero dependencies",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles": "./dist/vlist.css"
+  },
+  "files": [
+    "dist",
+    "examples"
+  ],
+  "scripts": {
+    "build": "bun run build.ts",
+    "dev": "bun run build.ts --watch",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "serve": "bunx serve .",
+    "examples": "echo 'Open http://localhost:3333/examples in your browser' && bunx serve .",
+    "prepublishOnly": "bun run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/floor/vlist.git"
+  },
+  "keywords": [
+    "virtual-list",
+    "virtual-scroll",
+    "infinite-scroll",
+    "virtualization",
+    "performance",
+    "typescript"
+  ],
+  "author": "floor",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/floor/vlist/issues"
+  },
+  "homepage": "https://github.com/floor/vlist#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.18",
+    "@types/bun": "^1.0.0",
+    "autoprefixer": "^10.4.24",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.0.0"
+  }
+}

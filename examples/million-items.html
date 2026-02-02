@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>vlist - Million Items Stress Test</title>
+        <link rel="stylesheet" href="../dist/vlist.css" />
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    Oxygen, Ubuntu, sans-serif;
+                background: #1a1a2e;
+                color: #eee;
+                padding: 20px;
+                min-height: 100vh;
+            }
+
+            h1 {
+                margin-bottom: 10px;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .badge {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+
+            .description {
+                color: #aaa;
+                margin-bottom: 20px;
+            }
+
+            .metrics {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 12px;
+                margin-bottom: 20px;
+            }
+
+            .metric {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 15px;
+                text-align: center;
+            }
+
+            .metric-value {
+                font-size: 28px;
+                font-weight: 700;
+                color: #667eea;
+                font-family: "Monaco", "Menlo", monospace;
+            }
+
+            .metric-value.highlight {
+                color: #43e97b;
+            }
+
+            .metric-value.warning {
+                color: #fa709a;
+            }
+
+            .metric-label {
+                font-size: 12px;
+                color: #888;
+                margin-top: 5px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .controls {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }
+
+            button {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                background: rgba(102, 126, 234, 0.2);
+                color: #667eea;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+                border: 1px solid rgba(102, 126, 234, 0.3);
+            }
+
+            button:hover {
+                background: rgba(102, 126, 234, 0.3);
+            }
+
+            button.primary {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+            }
+
+            button.primary:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            }
+
+            input[type="number"] {
+                padding: 10px 15px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.05);
+                color: #fff;
+                font-size: 14px;
+                width: 150px;
+            }
+
+            input[type="number"]:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+
+            #list-container {
+                height: 500px;
+                background: rgba(255, 255, 255, 0.03);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                overflow: hidden;
+            }
+
+            .item-content {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 0 16px;
+                height: 100%;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            .item-index {
+                width: 80px;
+                font-family: "Monaco", "Menlo", monospace;
+                font-size: 12px;
+                color: #667eea;
+            }
+
+            .item-bar {
+                flex: 1;
+                height: 8px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+
+            .item-bar-fill {
+                height: 100%;
+                border-radius: 4px;
+                transition: width 0.3s ease;
+            }
+
+            .item-value {
+                width: 60px;
+                text-align: right;
+                font-family: "Monaco", "Menlo", monospace;
+                font-size: 13px;
+                color: #aaa;
+            }
+
+            .item-hash {
+                width: 100px;
+                font-family: "Monaco", "Menlo", monospace;
+                font-size: 11px;
+                color: #555;
+            }
+
+            .performance-bar {
+                margin-top: 20px;
+                padding: 15px;
+                background: rgba(255, 255, 255, 0.03);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .perf-title {
+                font-size: 12px;
+                color: #888;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .perf-times {
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+                font-family: "Monaco", "Menlo", monospace;
+                font-size: 13px;
+            }
+
+            .perf-time {
+                color: #aaa;
+            }
+
+            .perf-time span {
+                color: #43e97b;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>
+            🚀 Large List Stress Test
+            <span class="badge">100,000</span>
+        </h1>
+        <p class="description">
+            Testing vlist with 100,000 items. Virtual scrolling ensures only
+            visible items are rendered.
+            <br /><small style="color: #fa709a"
+                >⚠️ Browser limit: ~350K items max with 48px height (16.7M pixel
+                height limit)</small
+            >
+        </p>
+
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-value" id="total-items">0</div>
+                <div class="metric-label">Total Items</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value highlight" id="dom-nodes">0</div>
+                <div class="metric-label">DOM Nodes</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="memory-saved">0%</div>
+                <div class="metric-label">Memory Saved</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="scroll-pos">0</div>
+                <div class="metric-label">Scroll Position</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="visible-range">0-0</div>
+                <div class="metric-label">Visible Range</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="fps">--</div>
+                <div class="metric-label">FPS</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="primary" id="jump-random">Jump to Random</button>
+            <button id="jump-start">Jump to Start</button>
+            <button id="jump-middle">Jump to Middle</button>
+            <button id="jump-end">Jump to End</button>
+            <input
+                type="number"
+                id="jump-to"
+                placeholder="Jump to index..."
+                min="0"
+                max="999999"
+            />
+            <button id="jump-btn">Go</button>
+        </div>
+
+        <div id="list-container"></div>
+
+        <div class="performance-bar">
+            <div class="perf-title">Performance Metrics</div>
+            <div class="perf-times">
+                <div class="perf-time">
+                    Init: <span id="perf-init">--</span>
+                </div>
+                <div class="perf-time">
+                    Render: <span id="perf-render">--</span>
+                </div>
+                <div class="perf-time">
+                    Last Scroll: <span id="perf-scroll">--</span>
+                </div>
+            </div>
+        </div>
+
+        <script type="module">
+            import { createVList } from "../dist/index.js";
+
+            // Browser max height is ~16,777,216px
+            // With 48px items: max ~349,525 items
+            // Using 100,000 for safe demonstration
+            const TOTAL = 100_000;
+            const colors = [
+                "linear-gradient(90deg, #667eea, #764ba2)",
+                "linear-gradient(90deg, #f093fb, #f5576c)",
+                "linear-gradient(90deg, #4facfe, #00f2fe)",
+                "linear-gradient(90deg, #43e97b, #38f9d7)",
+                "linear-gradient(90deg, #fa709a, #fee140)",
+                "linear-gradient(90deg, #a8edea, #fed6e3)",
+                "linear-gradient(90deg, #ff9a9e, #fecfef)",
+                "linear-gradient(90deg, #ffecd2, #fcb69f)",
+            ];
+
+            // Simple hash function for consistent values
+            const hash = (n) => {
+                let h = n * 2654435761;
+                h ^= h >>> 16;
+                return Math.abs(h);
+            };
+
+            // Generate items on demand (lazy generation)
+            const generateItem = (index) => ({
+                id: index,
+                value: hash(index) % 100,
+                hash: hash(index).toString(16).slice(0, 8).toUpperCase(),
+                color: colors[index % colors.length],
+            });
+
+            // Generate all items
+            console.time("Generate items");
+            const items = Array.from({ length: TOTAL }, (_, i) =>
+                generateItem(i),
+            );
+            console.timeEnd("Generate items");
+
+            // FPS counter
+            let frameCount = 0;
+            let lastFpsUpdate = performance.now();
+            let currentFps = 0;
+
+            const updateFps = () => {
+                frameCount++;
+                const now = performance.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    currentFps = Math.round(
+                        (frameCount * 1000) / (now - lastFpsUpdate),
+                    );
+                    document.getElementById("fps").textContent = currentFps;
+                    document.getElementById("fps").className =
+                        currentFps < 30
+                            ? "metric-value warning"
+                            : "metric-value highlight";
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                }
+                requestAnimationFrame(updateFps);
+            };
+            requestAnimationFrame(updateFps);
+
+            // Create the list
+            console.time("Create list");
+            const initStart = performance.now();
+
+            const list = createVList({
+                container: "#list-container",
+                itemHeight: 48,
+                items: items,
+                overscan: 5,
+                template: (item, index) => `
+        <div class="item-content">
+          <div class="item-index">#${(index + 1).toLocaleString()}</div>
+          <div class="item-bar">
+            <div class="item-bar-fill" style="width: ${item.value}%; background: ${item.color}"></div>
+          </div>
+          <div class="item-value">${item.value}%</div>
+          <div class="item-hash">${item.hash}</div>
+        </div>
+      `,
+            });
+
+            const initTime = performance.now() - initStart;
+            console.timeEnd("Create list");
+
+            document.getElementById("perf-init").textContent =
+                `${initTime.toFixed(2)}ms`;
+
+            // Update metrics
+            const updateMetrics = () => {
+                const domNodes =
+                    document.querySelectorAll(".vlist-item").length;
+                const memorySaved = ((1 - domNodes / TOTAL) * 100).toFixed(4);
+
+                document.getElementById("total-items").textContent =
+                    TOTAL.toLocaleString();
+                document.getElementById("dom-nodes").textContent = domNodes;
+                document.getElementById("memory-saved").textContent =
+                    `${memorySaved}%`;
+            };
+
+            // Event handlers
+            let lastScrollTime = 0;
+
+            list.on("scroll", ({ scrollTop }) => {
+                const now = performance.now();
+                if (lastScrollTime > 0) {
+                    const scrollTime = now - lastScrollTime;
+                    document.getElementById("perf-scroll").textContent =
+                        `${scrollTime.toFixed(2)}ms`;
+                }
+                lastScrollTime = now;
+
+                document.getElementById("scroll-pos").textContent =
+                    Math.round(scrollTop).toLocaleString();
+                updateMetrics();
+            });
+
+            list.on("range:change", ({ range }) => {
+                document.getElementById("visible-range").textContent =
+                    `${range.start.toLocaleString()}-${range.end.toLocaleString()}`;
+
+                const renderStart = performance.now();
+                requestAnimationFrame(() => {
+                    const renderTime = performance.now() - renderStart;
+                    document.getElementById("perf-render").textContent =
+                        `${renderTime.toFixed(2)}ms`;
+                });
+            });
+
+            // Controls
+            document
+                .getElementById("jump-random")
+                .addEventListener("click", () => {
+                    const randomIndex = Math.floor(Math.random() * TOTAL);
+                    list.scrollToIndex(randomIndex, "center");
+                });
+
+            document
+                .getElementById("jump-start")
+                .addEventListener("click", () => {
+                    list.scrollToIndex(0, "start");
+                });
+
+            document
+                .getElementById("jump-middle")
+                .addEventListener("click", () => {
+                    list.scrollToIndex(Math.floor(TOTAL / 2), "center");
+                });
+
+            document
+                .getElementById("jump-end")
+                .addEventListener("click", () => {
+                    list.scrollToIndex(TOTAL - 1, "end");
+                });
+
+            document
+                .getElementById("jump-btn")
+                .addEventListener("click", () => {
+                    const input = document.getElementById("jump-to");
+                    const index = parseInt(input.value);
+                    if (!isNaN(index) && index >= 0 && index < TOTAL) {
+                        list.scrollToIndex(index, "center");
+                    }
+                });
+
+            document
+                .getElementById("jump-to")
+                .addEventListener("keypress", (e) => {
+                    if (e.key === "Enter") {
+                        document.getElementById("jump-btn").click();
+                    }
+                });
+
+            // Initial metrics
+            updateMetrics();
+        </script>
+    </body>
+</html>

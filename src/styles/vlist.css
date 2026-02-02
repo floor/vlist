@@ -1,0 +1,321 @@
+/**
+ * vlist - CSS Styles
+ * Lightweight, customizable styles for the virtual list
+ * Compatible with Tailwind CSS v4 or standalone
+ */
+
+/* =============================================================================
+   CSS Custom Properties (Design Tokens)
+   ============================================================================= */
+
+:root {
+    /* Colors - Light Mode */
+    --vlist-bg: #ffffff;
+    --vlist-bg-hover: #f9fafb;
+    --vlist-bg-selected: #eff6ff;
+    --vlist-bg-selected-hover: #dbeafe;
+    --vlist-border: #e5e7eb;
+    --vlist-border-selected: #3b82f6;
+    --vlist-text: #111827;
+    --vlist-text-muted: #6b7280;
+    --vlist-focus-ring: #3b82f6;
+    --vlist-scrollbar-thumb: #d1d5db;
+    --vlist-scrollbar-thumb-hover: #9ca3af;
+
+    /* Spacing */
+    --vlist-item-padding-x: 1rem;
+    --vlist-item-padding-y: 0.75rem;
+    --vlist-border-radius: 0.5rem;
+
+    /* Transitions */
+    --vlist-transition-duration: 150ms;
+    --vlist-transition-timing: ease-in-out;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --vlist-bg: #111827;
+        --vlist-bg-hover: #1f2937;
+        --vlist-bg-selected: rgba(59, 130, 246, 0.2);
+        --vlist-bg-selected-hover: rgba(59, 130, 246, 0.3);
+        --vlist-border: #374151;
+        --vlist-border-selected: #3b82f6;
+        --vlist-text: #f9fafb;
+        --vlist-text-muted: #9ca3af;
+        --vlist-scrollbar-thumb: #4b5563;
+        --vlist-scrollbar-thumb-hover: #6b7280;
+    }
+}
+
+/* Dark Mode Class Override */
+.dark {
+    --vlist-bg: #111827;
+    --vlist-bg-hover: #1f2937;
+    --vlist-bg-selected: rgba(59, 130, 246, 0.2);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.3);
+    --vlist-border: #374151;
+    --vlist-border-selected: #3b82f6;
+    --vlist-text: #f9fafb;
+    --vlist-text-muted: #9ca3af;
+    --vlist-scrollbar-thumb: #4b5563;
+    --vlist-scrollbar-thumb-hover: #6b7280;
+}
+
+/* =============================================================================
+   Base Component Styles
+   ============================================================================= */
+
+/* Root container */
+.vlist {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--vlist-bg);
+    color: var(--vlist-text);
+    border: 1px solid var(--vlist-border);
+    border-radius: var(--vlist-border-radius);
+    outline: none;
+}
+
+/* Focus state */
+.vlist:focus {
+    // outline: 2px solid var(--vlist-focus-ring);
+    outline-offset: 2px;
+}
+
+/* Viewport (scrollable area) */
+.vlist-viewport {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vlist-scrollbar-thumb) transparent;
+}
+
+/* Webkit scrollbar */
+.vlist-viewport::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.vlist-viewport::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.vlist-viewport::-webkit-scrollbar-thumb {
+    background-color: var(--vlist-scrollbar-thumb);
+    border-radius: 3px;
+}
+
+.vlist-viewport::-webkit-scrollbar-thumb:hover {
+    background-color: var(--vlist-scrollbar-thumb-hover);
+}
+
+/* Content container (sets total height) */
+.vlist-content {
+    position: relative;
+    width: 100%;
+}
+
+/* Items container */
+.vlist-items {
+    position: relative;
+    width: 100%;
+}
+
+/* Individual item */
+.vlist-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
+    border-bottom: 1px solid var(--vlist-border);
+    background-color: var(--vlist-bg);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--vlist-transition-duration)
+        var(--vlist-transition-timing);
+}
+
+/* Item hover state */
+.vlist-item:hover {
+    background-color: var(--vlist-bg-hover);
+}
+
+/* Item selected state */
+.vlist-item--selected {
+    background-color: var(--vlist-bg-selected);
+    border-left: 4px solid var(--vlist-border-selected);
+    padding-left: calc(var(--vlist-item-padding-x) - 4px);
+}
+
+.vlist-item--selected:hover {
+    background-color: var(--vlist-bg-selected-hover);
+}
+
+/* Item focused state (keyboard navigation) */
+.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring);
+    outline-offset: -2px;
+    z-index: 1;
+}
+
+/* Combined selected + focused */
+.vlist-item--selected.vlist-item--focused {
+    outline-color: var(--vlist-border-selected);
+}
+
+/* =============================================================================
+   Variants
+   ============================================================================= */
+
+/* Compact variant */
+.vlist--compact .vlist-item {
+    padding: 0.5rem 0.75rem;
+}
+
+.vlist--compact .vlist-item--selected {
+    padding-left: calc(0.75rem - 4px);
+}
+
+/* Comfortable variant */
+.vlist--comfortable .vlist-item {
+    padding: 1rem 1.25rem;
+}
+
+.vlist--comfortable .vlist-item--selected {
+    padding-left: calc(1.25rem - 4px);
+}
+
+/* Borderless variant */
+.vlist--borderless {
+    border: none;
+    border-radius: 0;
+}
+
+.vlist--borderless .vlist-item {
+    border-bottom: none;
+}
+
+/* Striped variant */
+.vlist--striped .vlist-item:nth-child(even) {
+    background-color: var(--vlist-bg-hover);
+}
+
+.vlist--striped .vlist-item:nth-child(even):hover {
+    background-color: var(--vlist-bg-selected);
+}
+
+/* =============================================================================
+   Loading & Empty States
+   ============================================================================= */
+
+/* Loading indicator */
+.vlist-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 20;
+}
+
+.dark .vlist-loading {
+    background-color: rgba(17, 24, 39, 0.8);
+}
+
+.vlist-loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 4px solid var(--vlist-border);
+    border-top-color: var(--vlist-focus-ring);
+    border-radius: 50%;
+    animation: vlist-spin 1s linear infinite;
+}
+
+@keyframes vlist-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Empty state */
+.vlist-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--vlist-text-muted);
+    padding: 2rem;
+    text-align: center;
+}
+
+.vlist-empty-icon {
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.vlist-empty-text {
+    font-size: 1.125rem;
+    font-weight: 500;
+}
+
+.vlist-empty-subtext {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    opacity: 0.75;
+}
+
+/* =============================================================================
+   Utility Classes
+   ============================================================================= */
+
+/* Hide scrollbar but keep functionality */
+.vlist-scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.vlist-scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* =============================================================================
+   Animation
+   ============================================================================= */
+
+/* Fade in animation for new items */
+@keyframes vlist-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.vlist-item--enter {
+    animation: vlist-fade-in 0.2s ease-out;
+}
+
+/* Smooth item transitions */
+.vlist--animate .vlist-item {
+    transition:
+        background-color var(--vlist-transition-duration)
+            var(--vlist-transition-timing),
+        transform 0.2s ease-out,
+        opacity 0.2s ease-out;
+}
