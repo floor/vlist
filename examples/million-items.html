@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>vlist - 1 Million Items (Compression Demo)</title>
+        <title>vlist - Million Items (Compression Demo)</title>
         <link rel="stylesheet" href="../dist/vlist.css" />
         <style>
             * {
@@ -89,6 +89,7 @@
                 gap: 10px;
                 margin-bottom: 20px;
                 flex-wrap: wrap;
+                align-items: center;
             }
 
             button {
@@ -117,6 +118,34 @@
             button.primary:hover {
                 transform: translateY(-1px);
                 box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            }
+
+            .size-toggle {
+                display: flex;
+                gap: 5px;
+                background: rgba(255, 255, 255, 0.05);
+                padding: 4px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .size-toggle button {
+                background: transparent;
+                color: #888;
+                padding: 8px 16px;
+                border: none;
+                font-weight: 600;
+            }
+
+            .size-toggle button.active {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            }
+
+            .size-toggle button:hover:not(.active) {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ccc;
             }
 
             input[type="number"] {
@@ -218,17 +247,61 @@
             .perf-time span {
                 color: #43e97b;
             }
+
+            .loading-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(26, 26, 46, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                gap: 15px;
+                border-radius: 12px;
+                z-index: 10;
+            }
+
+            .loading-overlay.hidden {
+                display: none;
+            }
+
+            .loading-spinner {
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(102, 126, 234, 0.3);
+                border-top-color: #667eea;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .loading-text {
+                color: #888;
+                font-size: 14px;
+            }
+
+            #list-wrapper {
+                position: relative;
+            }
         </style>
     </head>
     <body>
         <h1>
-            🚀 1 Million Items
+            🚀 <span id="title-count">1 Million</span> Items
             <span class="badge compressed">Compressed</span>
         </h1>
         <p class="description">
-            Testing vlist with <strong>1,000,000 items</strong>. Compression
-            automatically handles the 16M pixel browser limit. <br /><small
-                style="color: #43e97b"
+            Testing vlist with <strong id="desc-count">1,000,000 items</strong>.
+            Compression automatically handles the 16M pixel browser limit.
+            <br /><small style="color: #43e97b"
                 >✅ Compression ratio: <span id="compression-ratio">--</span> |
                 Virtual height: <span id="virtual-height">--</span></small
             >
@@ -262,6 +335,11 @@
         </div>
 
         <div class="controls">
+            <div class="size-toggle">
+                <button id="size-1m" class="active">1M</button>
+                <button id="size-2m">2M</button>
+                <button id="size-5m">5M</button>
+            </div>
             <button class="primary" id="jump-random">Jump to Random</button>
             <button id="jump-start">Jump to Start</button>
             <button id="jump-middle">Jump to Middle</button>
@@ -271,18 +349,26 @@
                 id="jump-to"
                 placeholder="Jump to index..."
                 min="0"
-                max="999999"
             />
             <button id="jump-btn">Go</button>
         </div>
 
-        <div id="list-container"></div>
+        <div id="list-wrapper">
+            <div id="list-container"></div>
+            <div class="loading-overlay hidden" id="loading-overlay">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Generating items...</div>
+            </div>
+        </div>
 
         <div class="performance-bar">
             <div class="perf-title">Performance Metrics</div>
             <div class="perf-times">
                 <div class="perf-time">
                     Init: <span id="perf-init">--</span>
+                </div>
+                <div class="perf-time">
+                    Generate: <span id="perf-generate">--</span>
                 </div>
                 <div class="perf-time">
                     Render: <span id="perf-render">--</span>
@@ -300,19 +386,13 @@
                 getCompressionInfo,
             } from "../dist/index.js";
 
-            // 1 MILLION ITEMS!
-            // Without compression: 1M × 48px = 48M pixels (exceeds 16M limit)
-            // With compression: automatically capped at 16M virtual pixels
-            const TOTAL = 1_000_000;
             const ITEM_HEIGHT = 48;
+            const SIZES = {
+                "1m": 1_000_000,
+                "2m": 2_000_000,
+                "5m": 5_000_000,
+            };
 
-            // Show compression info
-            const compression = getCompressionState(TOTAL, ITEM_HEIGHT);
-            console.log(getCompressionInfo(TOTAL, ITEM_HEIGHT));
-            document.getElementById("compression-ratio").textContent =
-                `${(compression.ratio * 100).toFixed(1)}%`;
-            document.getElementById("virtual-height").textContent =
-                `${(compression.virtualHeight / 1_000_000).toFixed(1)}M px`;
             const colors = [
                 "linear-gradient(90deg, #667eea, #764ba2)",
                 "linear-gradient(90deg, #f093fb, #f5576c)",
@@ -339,12 +419,10 @@
                 color: colors[index % colors.length],
             });
 
-            // Generate all items
-            console.time("Generate items");
-            const items = Array.from({ length: TOTAL }, (_, i) =>
-                generateItem(i),
-            );
-            console.timeEnd("Generate items");
+            let list = null;
+            let currentSize = "1m";
+            let currentTotal = SIZES[currentSize];
+            let items = [];
 
             // FPS counter
             let frameCount = 0;
@@ -370,80 +448,176 @@
             };
             requestAnimationFrame(updateFps);
 
-            // Create the list
-            console.time("Create list");
-            const initStart = performance.now();
+            // Update compression info display
+            const updateCompressionInfo = (total) => {
+                const compression = getCompressionState(total, ITEM_HEIGHT);
+                console.log(getCompressionInfo(total, ITEM_HEIGHT));
+                document.getElementById("compression-ratio").textContent =
+                    `${(compression.ratio * 100).toFixed(1)}%`;
+                document.getElementById("virtual-height").textContent =
+                    `${(compression.virtualHeight / 1_000_000).toFixed(1)}M px`;
+            };
 
-            const list = createVList({
-                container: "#list-container",
-                itemHeight: ITEM_HEIGHT,
-                items: items,
-                overscan: 5,
-                template: (item, index) => `
-        <div class="item-content">
-          <div class="item-index">#${(index + 1).toLocaleString()}</div>
-          <div class="item-bar">
-            <div class="item-bar-fill" style="width: ${item.value}%; background: ${item.color}"></div>
-          </div>
-          <div class="item-value">${item.value}%</div>
-          <div class="item-hash">${item.hash}</div>
-        </div>
-      `,
-            });
-
-            const initTime = performance.now() - initStart;
-            console.timeEnd("Create list");
-
-            document.getElementById("perf-init").textContent =
-                `${initTime.toFixed(2)}ms`;
+            // Update title and description
+            const updateTitleAndDesc = (total) => {
+                const millions = total / 1_000_000;
+                document.getElementById("title-count").textContent =
+                    millions === 1 ? "1 Million" : `${millions} Million`;
+                document.getElementById("desc-count").textContent =
+                    total.toLocaleString() + " items";
+                document.getElementById("jump-to").max = total - 1;
+            };
 
             // Update metrics
             const updateMetrics = () => {
                 const domNodes =
                     document.querySelectorAll(".vlist-item").length;
-                const memorySaved = ((1 - domNodes / TOTAL) * 100).toFixed(4);
+                const memorySaved = (
+                    (1 - domNodes / currentTotal) *
+                    100
+                ).toFixed(4);
 
                 document.getElementById("total-items").textContent =
-                    TOTAL.toLocaleString();
+                    currentTotal.toLocaleString();
                 document.getElementById("dom-nodes").textContent = domNodes;
                 document.getElementById("memory-saved").textContent =
                     `${memorySaved}%`;
             };
 
-            // Event handlers
-            let lastScrollTime = 0;
+            // Create list function
+            const createList = async (size) => {
+                const total = SIZES[size];
+                currentSize = size;
+                currentTotal = total;
 
-            list.on("scroll", ({ scrollTop }) => {
-                const now = performance.now();
-                if (lastScrollTime > 0) {
-                    const scrollTime = now - lastScrollTime;
-                    document.getElementById("perf-scroll").textContent =
-                        `${scrollTime.toFixed(2)}ms`;
+                // Show loading overlay
+                document
+                    .getElementById("loading-overlay")
+                    .classList.remove("hidden");
+
+                // Wait a frame to let the UI update
+                await new Promise((resolve) => setTimeout(resolve, 10));
+
+                // Destroy existing list
+                if (list) {
+                    list.destroy();
                 }
-                lastScrollTime = now;
 
-                document.getElementById("scroll-pos").textContent =
-                    Math.round(scrollTop).toLocaleString();
-                updateMetrics();
-            });
+                // Update UI
+                updateTitleAndDesc(total);
+                updateCompressionInfo(total);
 
-            list.on("range:change", ({ range }) => {
-                document.getElementById("visible-range").textContent =
-                    `${range.start.toLocaleString()}-${range.end.toLocaleString()}`;
+                // Generate items
+                console.time("Generate items");
+                const generateStart = performance.now();
+                items = Array.from({ length: total }, (_, i) =>
+                    generateItem(i),
+                );
+                const generateTime = performance.now() - generateStart;
+                console.timeEnd("Generate items");
+                document.getElementById("perf-generate").textContent =
+                    `${generateTime.toFixed(0)}ms`;
 
-                const renderStart = performance.now();
-                requestAnimationFrame(() => {
-                    const renderTime = performance.now() - renderStart;
-                    document.getElementById("perf-render").textContent =
-                        `${renderTime.toFixed(2)}ms`;
+                // Create the list
+                console.time("Create list");
+                const initStart = performance.now();
+
+                list = createVList({
+                    container: "#list-container",
+                    itemHeight: ITEM_HEIGHT,
+                    items: items,
+                    overscan: 5,
+                    template: (item, index) => `
+                        <div class="item-content">
+                            <div class="item-index">#${(index + 1).toLocaleString()}</div>
+                            <div class="item-bar">
+                                <div class="item-bar-fill" style="width: ${item.value}%; background: ${item.color}"></div>
+                            </div>
+                            <div class="item-value">${item.value}%</div>
+                            <div class="item-hash">${item.hash}</div>
+                        </div>
+                    `,
                 });
+
+                const initTime = performance.now() - initStart;
+                console.timeEnd("Create list");
+
+                document.getElementById("perf-init").textContent =
+                    `${initTime.toFixed(2)}ms`;
+
+                // Event handlers
+                let lastScrollTime = 0;
+
+                list.on("scroll", ({ scrollTop }) => {
+                    const now = performance.now();
+                    if (lastScrollTime > 0) {
+                        const scrollTime = now - lastScrollTime;
+                        document.getElementById("perf-scroll").textContent =
+                            `${scrollTime.toFixed(2)}ms`;
+                    }
+                    lastScrollTime = now;
+
+                    document.getElementById("scroll-pos").textContent =
+                        Math.round(scrollTop).toLocaleString();
+                    updateMetrics();
+                });
+
+                list.on("range:change", ({ range }) => {
+                    document.getElementById("visible-range").textContent =
+                        `${range.start.toLocaleString()}-${range.end.toLocaleString()}`;
+
+                    const renderStart = performance.now();
+                    requestAnimationFrame(() => {
+                        const renderTime = performance.now() - renderStart;
+                        document.getElementById("perf-render").textContent =
+                            `${renderTime.toFixed(2)}ms`;
+                    });
+                });
+
+                // Initial metrics
+                updateMetrics();
+
+                // Hide loading overlay
+                document
+                    .getElementById("loading-overlay")
+                    .classList.add("hidden");
+            };
+
+            // Size toggle buttons
+            document.getElementById("size-1m").addEventListener("click", () => {
+                if (currentSize === "1m") return;
+                document
+                    .querySelectorAll(".size-toggle button")
+                    .forEach((b) => b.classList.remove("active"));
+                document.getElementById("size-1m").classList.add("active");
+                createList("1m");
             });
 
-            // Controls
+            document.getElementById("size-2m").addEventListener("click", () => {
+                if (currentSize === "2m") return;
+                document
+                    .querySelectorAll(".size-toggle button")
+                    .forEach((b) => b.classList.remove("active"));
+                document.getElementById("size-2m").classList.add("active");
+                createList("2m");
+            });
+
+            document.getElementById("size-5m").addEventListener("click", () => {
+                if (currentSize === "5m") return;
+                document
+                    .querySelectorAll(".size-toggle button")
+                    .forEach((b) => b.classList.remove("active"));
+                document.getElementById("size-5m").classList.add("active");
+                createList("5m");
+            });
+
+            // Jump controls
             document
                 .getElementById("jump-random")
                 .addEventListener("click", () => {
-                    const randomIndex = Math.floor(Math.random() * TOTAL);
+                    const randomIndex = Math.floor(
+                        Math.random() * currentTotal,
+                    );
                     list.scrollToIndex(randomIndex, "center");
                 });
 
@@ -456,13 +630,13 @@
             document
                 .getElementById("jump-middle")
                 .addEventListener("click", () => {
-                    list.scrollToIndex(Math.floor(TOTAL / 2), "center");
+                    list.scrollToIndex(Math.floor(currentTotal / 2), "center");
                 });
 
             document
                 .getElementById("jump-end")
                 .addEventListener("click", () => {
-                    list.scrollToIndex(TOTAL - 1, "end");
+                    list.scrollToIndex(currentTotal - 1, "end");
                 });
 
             document
@@ -470,7 +644,7 @@
                 .addEventListener("click", () => {
                     const input = document.getElementById("jump-to");
                     const index = parseInt(input.value);
-                    if (!isNaN(index) && index >= 0 && index < TOTAL) {
+                    if (!isNaN(index) && index >= 0 && index < currentTotal) {
                         list.scrollToIndex(index, "center");
                     }
                 });
@@ -483,8 +657,8 @@
                     }
                 });
 
-            // Initial metrics
-            updateMetrics();
+            // Initialize with 1M items
+            createList("1m");
         </script>
     </body>
 </html>

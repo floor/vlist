@@ -250,17 +250,10 @@ export const createRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
   ): void => {
-    const classes = [`${classPrefix}-item`];
-
-    if (isSelected) {
-      classes.push(`${classPrefix}-item--selected`);
-    }
-
-    if (isFocused) {
-      classes.push(`${classPrefix}-item--focused`);
-    }
-
-    element.className = classes.join(" ");
+    let className = `${classPrefix}-item`;
+    if (isSelected) className += ` ${classPrefix}-item--selected`;
+    if (isFocused) className += ` ${classPrefix}-item--focused`;
+    element.className = className;
   };
 
   /**
@@ -304,16 +297,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
-    const indicesToKeep = new Set<number>();
-
-    // Determine which indices are in the new range
-    for (let i = range.start; i <= range.end; i++) {
-      indicesToKeep.add(i);
-    }
-
     // Remove items outside the new range
     for (const [index, renderedItem] of rendered) {
-      if (!indicesToKeep.has(index)) {
+      if (index < range.start || index > range.end) {
         renderedItem.element.remove();
         pool.release(renderedItem.element);
         rendered.delete(index);

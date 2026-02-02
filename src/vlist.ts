@@ -9,12 +9,6 @@
  * 4. Attaches handlers and returns public API
  */
 
-// Debug flag - set to true to enable logging
-const DEBUG = false;
-const log = (msg: string, ...args: unknown[]) => {
-  if (DEBUG) console.log(`[vlist] ${msg}`, ...args);
-};
-
 import type {
   VListConfig,
   VListItem,
@@ -314,16 +308,6 @@ export const createVList = <T extends VListItem = VListItem>(
       ? ctx.getCompressionContext()
       : undefined;
 
-    // Debug: count placeholders
-    const placeholderCount = items.filter(
-      (i) => i && (i as any)._isPlaceholder,
-    ).length;
-    if (placeholderCount > 0) {
-      log(
-        `render range=${renderRange.start}-${renderRange.end} items=${items.length} placeholders=${placeholderCount}`,
-      );
-    }
-
     renderer.render(
       items,
       renderRange,
@@ -349,35 +333,6 @@ export const createVList = <T extends VListItem = VListItem>(
     const compressionCtx = isCompressed
       ? ctx.getCompressionContext()
       : undefined;
-
-    // Debug: count placeholders and check data manager state
-    const placeholderCount = items.filter(
-      (i) => i && (i as any)._isPlaceholder,
-    ).length;
-
-    // Additional debug: check if items are actually in the data manager
-    if (placeholderCount > 0) {
-      const dataState = dataManager.getState();
-      const loadedRanges =
-        (dataManager as any).getStorage?.()?.getLoadedRanges?.() || [];
-      log(
-        `forceRender range=${renderRange.start}-${renderRange.end} items=${items.length} placeholders=${placeholderCount} cached=${dataState.cached} total=${dataState.total}`,
-      );
-      log(`  loadedRanges: ${JSON.stringify(loadedRanges)}`);
-
-      // Check first few placeholders - are they really not in storage?
-      let placeholderDetails: string[] = [];
-      for (let i = renderRange.start; i <= renderRange.end; i++) {
-        const item = dataManager.getItem(i);
-        if (item && (item as any)._isPlaceholder) {
-          placeholderDetails.push(`${i}:notLoaded`);
-          if (placeholderDetails.length >= 3) break;
-        }
-      }
-      if (placeholderDetails.length > 0) {
-        log(`  placeholder indices: ${placeholderDetails.join(", ")}`);
-      }
-    }
 
     renderer.render(
       items,

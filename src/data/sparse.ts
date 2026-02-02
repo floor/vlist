@@ -1,19 +1,7 @@
 /**
  * vlist - Sparse Storage
  * Efficient storage for million+ item virtual lists
- *
- * Key concepts:
- * - Chunk-based storage: Items stored in chunks, not one big array
- * - Sparse array: Only loaded chunks exist in memory
- * - LRU eviction: Remove distant chunks when memory limit exceeded
- * - Efficient counting: Track item count without iterating
  */
-
-// Debug flag - set to true to enable logging
-const DEBUG = false;
-const log = (...args: unknown[]) => {
-  if (DEBUG) console.log("[sparse-storage]", ...args);
-};
 
 import type { VListItem, Range } from "../types";
 
@@ -241,13 +229,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     // Update access time for LRU
     chunk.lastAccess = Date.now();
 
-    const item = chunk.items[getIndexInChunk(index)];
-    if (item === undefined) {
-      log(
-        `get: index=${index}, chunkIndex=${chunkIndex} - item undefined in chunk`,
-      );
-    }
-    return item;
+    return chunk.items[getIndexInChunk(index)];
   };
 
   const has = (index: number): boolean => {
