@@ -3,7 +3,7 @@
  * Scroll, click, and keyboard event handlers
  */
 
-import type { VListItem } from "./types";
+import type { VListItem, Range } from "./types";
 import type { VListContext } from "./context";
 
 import { updateViewportState } from "./render";
@@ -44,17 +44,21 @@ export const createScrollHandler = <T extends VListItem>(
   ctx: VListContext<T>,
   renderIfNeeded: RenderFunction,
 ) => {
+  // Track last ensured range to avoid redundant ensureRange calls
+  let lastEnsuredRange: Range | null = null;
+
   return (scrollTop: number, direction: "up" | "down"): void => {
     if (ctx.state.isDestroyed) return;
 
-    const dataState = ctx.dataManager.getState();
+    // Use direct getters to avoid object allocation on every scroll tick
+    const total = ctx.dataManager.getTotal();
 
     // Update viewport state with current scroll position
     ctx.state.viewportState = updateViewportState(
       ctx.state.viewportState,
       scrollTop,
       ctx.config.itemHeight,
-      dataState.total,
+      total,
       ctx.config.overscan,
     );
 
@@ -71,7 +75,12 @@ export const createScrollHandler = <T extends VListItem>(
     ctx.emitter.emit("scroll", { scrollTop, direction });
 
     // Check for infinite scroll (use virtual height for distance calculation)
-    if (ctx.config.hasAdapter && !dataState.isLoading && dataState.hasMore) {
+    // Use direct getters to avoid object allocation
+    if (
+      ctx.config.hasAdapter &&
+      !ctx.dataManager.getIsLoading() &&
+      ctx.dataManager.getHasMore()
+    ) {
       const distanceFromBottom =
         ctx.state.viewportState.totalHeight -
         scrollTop -
@@ -79,7 +88,7 @@ export const createScrollHandler = <T extends VListItem>(
 
       if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
         ctx.emitter.emit("load:start", {
-          offset: dataState.cached,
+          offset: ctx.dataManager.getCached(),
           limit: INITIAL_LOAD_SIZE,
         });
 
@@ -90,12 +99,21 @@ export const createScrollHandler = <T extends VListItem>(
     }
 
     // Ensure visible range is loaded (for sparse data)
+    // Only call when range actually changes to avoid redundant async operations
+    // (inlined rangesEqual check for hot path performance)
     const { renderRange } = ctx.state.viewportState;
-    ctx.dataManager
-      .ensureRange(renderRange.start, renderRange.end)
-      .catch((error) => {
-        ctx.emitter.emit("error", { error, context: "ensureRange" });
-      });
+    if (
+      !lastEnsuredRange ||
+      renderRange.start !== lastEnsuredRange.start ||
+      renderRange.end !== lastEnsuredRange.end
+    ) {
+      lastEnsuredRange = { start: renderRange.start, end: renderRange.end };
+      ctx.dataManager
+        .ensureRange(renderRange.start, renderRange.end)
+        .catch((error) => {
+          ctx.emitter.emit("error", { error, context: "ensureRange" });
+        });
+    }
   };
 };
 
@@ -182,8 +200,8 @@ export const createKeyboardHandler = <T extends VListItem>(
   return (event: KeyboardEvent): void => {
     if (ctx.state.isDestroyed || ctx.config.selectionMode === "none") return;
 
-    const dataState = ctx.dataManager.getState();
-    const totalItems = dataState.total;
+    // Use direct getter to avoid object allocation
+    const totalItems = ctx.dataManager.getTotal();
 
     let handled = false;
     let newState = ctx.state.selectionState;

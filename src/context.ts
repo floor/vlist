@@ -17,8 +17,15 @@ import type {
 import type { DataManager } from "./data";
 import type { ScrollController, Scrollbar } from "./scroll";
 import type { Emitter } from "./events";
-import type { Renderer, DOMStructure, CompressionContext } from "./render";
+import type {
+  Renderer,
+  DOMStructure,
+  CompressionContext,
+  CompressionState,
+} from "./render";
 import type { SelectionState } from "./selection";
+
+import { getCompressionState } from "./render";
 
 // =============================================================================
 // Types
@@ -33,6 +40,12 @@ export interface VListContextConfig {
   readonly hasAdapter: boolean;
 }
 
+/** Cached compression state */
+export interface CachedCompression {
+  state: CompressionState;
+  totalItems: number;
+}
+
 /** Mutable state managed by the context */
 export interface VListContextState {
   viewportState: ViewportState;
@@ -40,6 +53,8 @@ export interface VListContextState {
   lastRenderRange: Range;
   isInitialized: boolean;
   isDestroyed: boolean;
+  /** Cached compression state (invalidated when totalItems changes) */
+  cachedCompression: CachedCompression | null;
 }
 
 /**
@@ -69,6 +84,8 @@ export interface VListContext<T extends VListItem = VListItem> {
   getItemsForRange: (range: Range) => T[];
   getAllLoadedItems: () => T[];
   getCompressionContext: () => CompressionContext;
+  /** Get cached compression state (recalculates only when totalItems changes) */
+  getCachedCompression: () => CompressionState;
 }
 
 // =============================================================================
@@ -94,6 +111,14 @@ export const createContext = <T extends VListItem = VListItem>(
   // State is mutable and will be updated by handlers
   const state = initialState;
 
+  // Reusable compression context object (avoids allocation on every frame)
+  const reusableCompressionCtx: CompressionContext = {
+    scrollTop: 0,
+    totalItems: 0,
+    containerHeight: 0,
+    rangeStart: 0,
+  };
+
   /**
    * Get items for a render range
    */
@@ -105,19 +130,43 @@ export const createContext = <T extends VListItem = VListItem>(
    * Get all loaded items (for selection operations)
    */
   const getAllLoadedItems = (): T[] => {
-    const total = dataManager.getState().total;
+    const total = dataManager.getTotal();
     return dataManager.getItemsInRange(0, total - 1);
   };
 
   /**
-   * Get compression context for rendering
+   * Get cached compression state
+   * Only recalculates when totalItems changes
    */
-  const getCompressionContext = (): CompressionContext => ({
-    scrollTop: state.viewportState.scrollTop,
-    totalItems: dataManager.getState().total,
-    containerHeight: state.viewportState.containerHeight,
-    rangeStart: state.viewportState.renderRange.start,
-  });
+  const getCachedCompression = (): CompressionState => {
+    const totalItems = dataManager.getTotal();
+
+    // Return cached if still valid
+    if (
+      state.cachedCompression &&
+      state.cachedCompression.totalItems === totalItems
+    ) {
+      return state.cachedCompression.state;
+    }
+
+    // Recalculate and cache
+    const compression = getCompressionState(totalItems, config.itemHeight);
+    state.cachedCompression = { state: compression, totalItems };
+    return compression;
+  };
+
+  /**
+   * Get compression context for rendering
+   * Reuses a single object to avoid allocation on every scroll frame
+   */
+  const getCompressionContext = (): CompressionContext => {
+    reusableCompressionCtx.scrollTop = state.viewportState.scrollTop;
+    reusableCompressionCtx.totalItems = dataManager.getTotal();
+    reusableCompressionCtx.containerHeight =
+      state.viewportState.containerHeight;
+    reusableCompressionCtx.rangeStart = state.viewportState.renderRange.start;
+    return reusableCompressionCtx;
+  };
 
   return {
     config,
@@ -131,5 +180,6 @@ export const createContext = <T extends VListItem = VListItem>(
     getItemsForRange,
     getAllLoadedItems,
     getCompressionContext,
+    getCachedCompression,
   };
 };

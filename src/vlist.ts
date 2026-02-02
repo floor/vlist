@@ -29,7 +29,6 @@ import {
   updateContentHeight,
   resolveContainer,
   getContainerDimensions,
-  rangesEqual,
 } from "./render";
 
 import { createEmitter } from "./events";
@@ -123,10 +122,8 @@ export const createVList = <T extends VListItem = VListItem>(
         updateViewport();
       }
     },
-    onItemsLoaded: (loadedItems, offset, total) => {
+    onItemsLoaded: (loadedItems, _offset, total) => {
       if (ctxRef?.state.isInitialized) {
-        const { renderRange } = ctxRef.state.viewportState;
-        const loadedEnd = offset + loadedItems.length - 1;
         // Always re-render when items load - the current range may have placeholders
         forceRender();
         emitter.emit("load:end", { items: loadedItems, total });
@@ -215,6 +212,10 @@ export const createVList = <T extends VListItem = VListItem>(
       lastRenderRange: { start: 0, end: 0 },
       isInitialized: false,
       isDestroyed: false,
+      cachedCompression: {
+        state: initialCompression,
+        totalItems: dataManager.getState().total,
+      },
     },
   ));
 
@@ -292,9 +293,13 @@ export const createVList = <T extends VListItem = VListItem>(
     if (ctx.state.isDestroyed) return;
 
     const { renderRange, isCompressed } = ctx.state.viewportState;
+    const lastRange = ctx.state.lastRenderRange;
 
-    // Check if render range changed
-    if (rangesEqual(renderRange, ctx.state.lastRenderRange)) {
+    // Check if render range changed (inlined for hot path performance)
+    if (
+      renderRange.start === lastRange.start &&
+      renderRange.end === lastRange.end
+    ) {
       // Range unchanged, but still update positions in compressed mode
       if (isCompressed) {
         renderer.updatePositions(ctx.getCompressionContext());

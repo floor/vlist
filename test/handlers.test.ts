@@ -3,7 +3,15 @@
  * Tests for scroll, click, and keyboard event handlers
  */
 
-import { describe, it, expect, mock, beforeEach, beforeAll, afterAll } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  mock,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "bun:test";
 import { JSDOM } from "jsdom";
 import {
   createScrollHandler,
@@ -11,7 +19,11 @@ import {
   createKeyboardHandler,
 } from "../src/handlers";
 import { createSelectionState } from "../src/selection";
-import type { VListContext, VListContextConfig, VListContextState } from "../src/context";
+import type {
+  VListContext,
+  VListContextConfig,
+  VListContextState,
+} from "../src/context";
 import type { VListItem, ViewportState, Range } from "../src/types";
 import type { DataManager } from "../src/data";
 import type { ScrollController } from "../src/scroll";
@@ -64,7 +76,9 @@ const createTestItems = (count: number): TestItem[] => {
   }));
 };
 
-const createMockConfig = (overrides?: Partial<VListContextConfig>): VListContextConfig => ({
+const createMockConfig = (
+  overrides?: Partial<VListContextConfig>,
+): VListContextConfig => ({
   itemHeight: 40,
   overscan: 3,
   classPrefix: "vlist",
@@ -86,7 +100,9 @@ const createMockDOM = (): DOMStructure => {
   return { root, viewport, content, items };
 };
 
-const createMockViewportState = (overrides?: Partial<ViewportState>): ViewportState => ({
+const createMockViewportState = (
+  overrides?: Partial<ViewportState>,
+): ViewportState => ({
   scrollTop: 0,
   containerHeight: 500,
   totalHeight: 4000,
@@ -98,27 +114,48 @@ const createMockViewportState = (overrides?: Partial<ViewportState>): ViewportSt
   ...overrides,
 });
 
-const createMockState = (overrides?: Partial<VListContextState>): VListContextState => ({
+const createMockState = (
+  overrides?: Partial<VListContextState>,
+): VListContextState => ({
   viewportState: createMockViewportState(),
   selectionState: createSelectionState(),
   lastRenderRange: { start: 0, end: 0 },
   isInitialized: true,
   isDestroyed: false,
+  cachedCompression: null,
   ...overrides,
 });
 
-const createMockDataManager = <T extends VListItem>(items: T[]): DataManager<T> => ({
+const createMockDataManager = <T extends VListItem>(
+  items: T[],
+  options?: { isLoading?: boolean; hasMore?: boolean },
+): DataManager<T> => ({
   getState: mock(() => ({
     total: items.length,
     cached: items.length,
-    isLoading: false,
-    hasMore: false,
+    isLoading: options?.isLoading ?? false,
+    pendingRanges: [],
+    error: undefined,
+    hasMore: options?.hasMore ?? false,
     cursor: undefined,
   })),
+  // Direct getters for hot-path access (avoid object allocation)
+  getTotal: mock(() => items.length),
+  getCached: mock(() => items.length),
+  getIsLoading: mock(() => options?.isLoading ?? false),
+  getHasMore: mock(() => options?.hasMore ?? false),
+  getStorage: mock(() => ({}) as any),
+  getPlaceholders: mock(() => ({}) as any),
   getItem: mock((index: number) => items[index]),
-  getItemById: mock((id: string | number) => items.find(item => item.id === id)),
-  getIndexById: mock((id: string | number) => items.findIndex(item => item.id === id)),
-  getItemsInRange: mock((start: number, end: number) => items.slice(start, Math.min(end + 1, items.length))),
+  getItemById: mock((id: string | number) =>
+    items.find((item) => item.id === id),
+  ),
+  getIndexById: mock((id: string | number) =>
+    items.findIndex((item) => item.id === id),
+  ),
+  getItemsInRange: mock((start: number, end: number) =>
+    items.slice(start, Math.min(end + 1, items.length)),
+  ),
   isItemLoaded: mock((index: number) => index >= 0 && index < items.length),
   setItems: mock(() => {}),
   setTotal: mock(() => {}),
@@ -129,6 +166,7 @@ const createMockDataManager = <T extends VListItem>(items: T[]): DataManager<T> 
   loadInitial: mock(async () => {}),
   loadMore: mock(async () => true),
   reload: mock(async () => {}),
+  evictDistant: mock(() => {}),
   clear: mock(() => {}),
   reset: mock(() => {}),
 });
@@ -137,6 +175,9 @@ const createMockScrollController = (): ScrollController => ({
   getScrollTop: mock(() => 0),
   scrollTo: mock(() => {}),
   scrollBy: mock(() => {}),
+  isAtTop: mock(() => true),
+  isAtBottom: mock(() => false),
+  getScrollPercentage: mock(() => 0),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
@@ -148,6 +189,7 @@ const createMockRenderer = <T extends VListItem>(): Renderer<T> => ({
   render: mock(() => {}),
   updateItem: mock(() => {}),
   updatePositions: mock(() => {}),
+  getElement: mock(() => undefined),
   clear: mock(() => {}),
   destroy: mock(() => {}),
 });
@@ -193,13 +235,21 @@ const createMockContext = <T extends VListItem>(
     emitter,
     scrollbar,
     state,
-    getItemsForRange: mock((range: Range) => items.slice(range.start, range.end + 1)),
+    getItemsForRange: mock((range: Range) =>
+      items.slice(range.start, range.end + 1),
+    ),
     getAllLoadedItems: mock(() => items),
     getCompressionContext: mock(() => ({
       scrollTop: state.viewportState.scrollTop,
       totalItems: items.length,
       containerHeight: state.viewportState.containerHeight,
       rangeStart: state.viewportState.renderRange.start,
+    })),
+    getCachedCompression: mock(() => ({
+      isCompressed: false,
+      actualHeight: items.length * config.itemHeight,
+      virtualHeight: items.length * config.itemHeight,
+      ratio: 1,
     })),
   };
 };
@@ -271,12 +321,11 @@ describe("createScrollHandler", () => {
   describe("infinite scroll", () => {
     it("should trigger load more when near bottom with adapter", () => {
       ctx = createMockContext(items, { hasAdapter: true });
-      (ctx.dataManager.getState as any).mockReturnValue({
-        total: 100,
-        cached: 100,
-        isLoading: false,
-        hasMore: true,
-      });
+      // Mock direct getters for infinite scroll check
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
 
       // Set viewport near bottom
       ctx.state.viewportState = createMockViewportState({
@@ -289,18 +338,20 @@ describe("createScrollHandler", () => {
 
       handler(3400, "down");
 
-      expect(ctx.emitter.emit).toHaveBeenCalledWith("load:start", expect.any(Object));
+      expect(ctx.emitter.emit).toHaveBeenCalledWith(
+        "load:start",
+        expect.any(Object),
+      );
       expect(ctx.dataManager.loadMore).toHaveBeenCalled();
     });
 
     it("should not trigger load when already loading", () => {
       ctx = createMockContext(items, { hasAdapter: true });
-      (ctx.dataManager.getState as any).mockReturnValue({
-        total: 100,
-        cached: 100,
-        isLoading: true, // Already loading
-        hasMore: true,
-      });
+      // Mock direct getters - isLoading is true
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(true); // Already loading
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
 
       ctx.state.viewportState = createMockViewportState({
         totalHeight: 4000,
@@ -317,12 +368,11 @@ describe("createScrollHandler", () => {
 
     it("should not trigger load when no more data", () => {
       ctx = createMockContext(items, { hasAdapter: true });
-      (ctx.dataManager.getState as any).mockReturnValue({
-        total: 100,
-        cached: 100,
-        isLoading: false,
-        hasMore: false, // No more data
-      });
+      // Mock direct getters - hasMore is false
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(false); // No more data
 
       ctx.state.viewportState = createMockViewportState({
         totalHeight: 4000,
@@ -393,7 +443,10 @@ describe("createClickHandler", () => {
 
       handler(event);
 
-      expect(ctx.emitter.emit).not.toHaveBeenCalledWith("item:click", expect.any(Object));
+      expect(ctx.emitter.emit).not.toHaveBeenCalledWith(
+        "item:click",
+        expect.any(Object),
+      );
     });
 
     it("should not process clicks when destroyed", () => {
@@ -445,7 +498,10 @@ describe("createClickHandler", () => {
 
       handler(event);
 
-      expect(ctx.emitter.emit).toHaveBeenCalledWith("selection:change", expect.any(Object));
+      expect(ctx.emitter.emit).toHaveBeenCalledWith(
+        "selection:change",
+        expect.any(Object),
+      );
     });
 
     it("should not update selection when selection mode is none", () => {
@@ -570,7 +626,10 @@ describe("createKeyboardHandler", () => {
       const event = new KeyboardEvent("keydown", { key: " " });
       handler(event);
 
-      expect(ctx.emitter.emit).toHaveBeenCalledWith("selection:change", expect.any(Object));
+      expect(ctx.emitter.emit).toHaveBeenCalledWith(
+        "selection:change",
+        expect.any(Object),
+      );
     });
   });
 
@@ -580,7 +639,9 @@ describe("createKeyboardHandler", () => {
 
       const event = new KeyboardEvent("keydown", { key: "ArrowDown" });
       const preventDefaultMock = mock(() => {});
-      Object.defineProperty(event, "preventDefault", { value: preventDefaultMock });
+      Object.defineProperty(event, "preventDefault", {
+        value: preventDefaultMock,
+      });
 
       handler(event);
 
@@ -631,7 +692,7 @@ describe("createKeyboardHandler", () => {
     });
 
     it("should handle empty list", () => {
-      ctx = createMockContext([], { selectionMode: "single" });
+      ctx = createMockContext([] as TestItem[], { selectionMode: "single" });
       (ctx.dataManager.getState as any).mockReturnValue({
         total: 0,
         cached: 0,

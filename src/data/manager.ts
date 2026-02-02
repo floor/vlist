@@ -83,6 +83,19 @@ export interface DataManager<T extends VListItem = VListItem> {
   /** Get current state */
   getState: () => DataState<T>;
 
+  // Direct getters for hot-path access (avoid object allocation)
+  /** Get total item count (direct getter, no allocation) */
+  getTotal: () => number;
+
+  /** Get cached item count (direct getter, no allocation) */
+  getCached: () => number;
+
+  /** Check if currently loading (direct getter, no allocation) */
+  getIsLoading: () => boolean;
+
+  /** Check if more items available (direct getter, no allocation) */
+  getHasMore: () => boolean;
+
   /** Get sparse storage */
   getStorage: () => SparseStorage<T>;
 
@@ -253,6 +266,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
   // ==========================================================================
   // State
   // ==========================================================================
+
+  // Direct getters for hot-path access (avoid object allocation)
+  const getTotal = (): number => storage.getTotal();
+  const getCached = (): number => storage.getCachedCount();
+  const getIsLoading = (): boolean => isLoading;
+  const getHasMore = (): boolean => hasMore;
 
   const getState = (): DataState<T> => ({
     total: storage.getTotal(),
@@ -661,6 +680,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   return {
     getState,
+    getTotal,
+    getCached,
+    getIsLoading,
+    getHasMore,
     getStorage,
     getPlaceholders,
 

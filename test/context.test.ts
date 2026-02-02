@@ -110,6 +110,7 @@ const createMockState = (
   lastRenderRange: { start: 0, end: 0 },
   isInitialized: false,
   isDestroyed: false,
+  cachedCompression: null,
   ...overrides,
 });
 
@@ -120,9 +121,18 @@ const createMockDataManager = <T extends VListItem>(
     total: items.length,
     cached: items.length,
     isLoading: false,
+    pendingRanges: [],
+    error: undefined,
     hasMore: false,
     cursor: undefined,
   })),
+  // Direct getters for hot-path access (avoid object allocation)
+  getTotal: mock(() => items.length),
+  getCached: mock(() => items.length),
+  getIsLoading: mock(() => false),
+  getHasMore: mock(() => false),
+  getStorage: mock(() => ({}) as any),
+  getPlaceholders: mock(() => ({}) as any),
   getItem: mock((index: number) => items[index]),
   getItemById: mock((id: string | number) =>
     items.find((item) => item.id === id),
@@ -143,6 +153,7 @@ const createMockDataManager = <T extends VListItem>(
   loadInitial: mock(async () => {}),
   loadMore: mock(async () => true),
   reload: mock(async () => {}),
+  evictDistant: mock(() => {}),
   clear: mock(() => {}),
   reset: mock(() => {}),
 });
@@ -151,6 +162,9 @@ const createMockScrollController = (): ScrollController => ({
   getScrollTop: mock(() => 0),
   scrollTo: mock(() => {}),
   scrollBy: mock(() => {}),
+  isAtTop: mock(() => true),
+  isAtBottom: mock(() => false),
+  getScrollPercentage: mock(() => 0),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
@@ -162,11 +176,14 @@ const createMockRenderer = <T extends VListItem>(): Renderer<T> => ({
   render: mock(() => {}),
   updateItem: mock(() => {}),
   updatePositions: mock(() => {}),
+  getElement: mock(() => undefined),
   clear: mock(() => {}),
   destroy: mock(() => {}),
 });
 
-const createMockEmitter = <T>(): Emitter<T> => ({
+const createMockEmitter = <
+  T extends Record<string, unknown>,
+>(): Emitter<T> => ({
   on: mock(() => () => {}),
   off: mock(() => {}),
   emit: mock(() => {}),
