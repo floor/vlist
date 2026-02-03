@@ -71,6 +71,8 @@ type RenderFunction = () => void;
 - Emit scroll events
 - Trigger infinite scroll data loading
 - Ensure visible range data is loaded
+- **Velocity-based load cancellation**: Skip loading when scrolling fast
+- **Preloading**: Load items ahead based on scroll direction at medium velocity
 
 **Usage:**
 ```typescript
@@ -79,6 +81,29 @@ const handleScroll = createScrollHandler(ctx, renderIfNeeded);
 // Called by scroll controller
 handleScroll(scrollTop, 'down');
 ```
+
+**Velocity-Based Loading:**
+
+The scroll handler implements intelligent loading based on scroll velocity:
+
+| Velocity | Behavior |
+|----------|----------|
+| Slow (< `preloadThreshold`) | Load visible range only |
+| Medium (`preloadThreshold` to `cancelThreshold`) | Preload items ahead in scroll direction |
+| Fast (> `cancelThreshold`) | Skip loading, defer to idle |
+
+The thresholds are configurable via `LoadingConfig`:
+
+```typescript
+// In VListConfig
+loading: {
+  cancelThreshold: 25,    // px/ms - skip loading above this
+  preloadThreshold: 2,    // px/ms - start preloading above this
+  preloadAhead: 50,       // items to preload ahead
+}
+```
+
+When velocity drops below `cancelThreshold`, any pending range is loaded immediately for smooth transitions.
 
 ### Click Handler
 

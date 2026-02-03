@@ -149,6 +149,8 @@ interface VListConfig<T extends VListItem> {
   adapter?: VListAdapter<T>;        // Async data adapter for infinite scroll
   overscan?: number;                // Extra items to render (default: 3)
   selection?: SelectionConfig;      // Selection configuration
+  scrollbar?: ScrollbarConfig;      // Custom scrollbar configuration
+  loading?: LoadingConfig;          // Loading behavior configuration
   classPrefix?: string;             // CSS class prefix (default: 'vlist')
 }
 ```
@@ -191,6 +193,41 @@ template: (item, index, { selected, focused }) => `
   </div>
 `
 ```
+
+**⚠️ Important**: The `state` object is **reused** for performance. Templates should read from it immediately and not store the reference.
+
+### LoadingConfig
+
+Configure velocity-based loading and preloading behavior:
+
+```typescript
+interface LoadingConfig {
+  cancelThreshold?: number;   // Skip loading above this velocity (default: 25 px/ms)
+  preloadThreshold?: number;  // Start preloading above this velocity (default: 2 px/ms)
+  preloadAhead?: number;      // Items to preload ahead (default: 50)
+}
+```
+
+**Example:**
+
+```typescript
+const list = createVList({
+  // ... other config
+  loading: {
+    cancelThreshold: 30,    // Skip loading when scrolling very fast
+    preloadThreshold: 5,    // Start preloading at medium scroll speed
+    preloadAhead: 100,      // Preload 100 items in scroll direction
+  },
+});
+```
+
+**Velocity-based loading strategy:**
+
+| Scroll Speed | Behavior |
+|--------------|----------|
+| Slow (< `preloadThreshold`) | Load visible range only |
+| Medium (`preloadThreshold` to `cancelThreshold`) | Preload items ahead |
+| Fast (> `cancelThreshold`) | Skip loading, defer to idle |
 
 ---
 
@@ -298,6 +335,7 @@ list.total      // Total item count (readonly)
 | `load:start` | `{ offset, limit }` | Data loading started |
 | `load:end` | `{ items, total }` | Data loading completed |
 | `error` | `{ error, context }` | Error occurred |
+| `resize` | `{ height, width }` | Container was resized |
 
 ### Event Usage
 

@@ -115,6 +115,9 @@ interface VListConfig<T extends VListItem = VListItem> {
   /** Custom scrollbar configuration (for compressed mode) */
   scrollbar?: ScrollbarConfig;
   
+  /** Loading behavior configuration */
+  loading?: LoadingConfig;
+  
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
 }
@@ -156,6 +159,8 @@ template: (item, index, state) => {
 }
 ```
 
+**⚠️ Important**: The `state` object is **reused** for performance. Templates should read from it immediately and not store the reference. See [optimization.md](./optimization.md) for details.
+
 #### `SelectionConfig`
 
 Selection behavior configuration.
@@ -190,6 +195,51 @@ interface ScrollbarConfig {
   /** Minimum thumb size in pixels (default: 30) */
   minThumbSize?: number;
 }
+```
+
+#### `LoadingConfig`
+
+Loading behavior configuration for velocity-based loading and preloading.
+
+```typescript
+interface LoadingConfig {
+  /**
+   * Velocity threshold above which data loading is skipped (px/ms)
+   * When scrolling faster than this, loading is deferred until scroll stops.
+   * Default: 25 px/ms
+   */
+  cancelThreshold?: number;
+
+  /**
+   * Velocity threshold for preloading (px/ms)
+   * When scrolling faster than this but slower than cancelThreshold,
+   * extra items are preloaded in the scroll direction.
+   * Default: 2 px/ms
+   */
+  preloadThreshold?: number;
+
+  /**
+   * Number of extra items to preload ahead of scroll direction
+   * Only applies when velocity is between preloadThreshold and cancelThreshold.
+   * Default: 50 items
+   */
+  preloadAhead?: number;
+}
+```
+
+**Usage Example**:
+```typescript
+const list = createVList({
+  container: '#list',
+  itemHeight: 50,
+  template: myTemplate,
+  adapter: myAdapter,
+  loading: {
+    cancelThreshold: 30,    // Skip loading above 30 px/ms
+    preloadThreshold: 5,    // Start preloading above 5 px/ms
+    preloadAhead: 100,      // Preload 100 items ahead
+  },
+});
 ```
 
 ### State Types
@@ -350,6 +400,9 @@ interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   
   /** Error occurred */
   'error': { error: Error; context: string };
+  
+  /** Container resized */
+  'resize': { height: number; width: number };
 }
 
 type EventMap = Record<string, unknown>;
