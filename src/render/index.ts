@@ -19,6 +19,7 @@ export {
 export {
   createViewportState,
   updateViewportState,
+  updateViewportSize,
   updateViewportItems,
   calculateVisibleRange,
   calculateRenderRange,
