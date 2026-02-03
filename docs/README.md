@@ -5,6 +5,7 @@
 ## Quick Links
 
 - **[Main Documentation](./vlist.md)** - Getting started, configuration, and usage
+- **[Styles Guide](./styles.md)** - CSS tokens, variants, dark mode, and customization
 - **[Compression Guide](./compression.md)** - Handling large lists (1M+ items)
 
 ## Module Documentation
