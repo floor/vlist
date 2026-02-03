@@ -148,6 +148,9 @@ export const createVList = <T extends VListItem = VListItem>(
     itemHeight,
   );
 
+  // Mutable reference to scroll handler (needed for idle callback)
+  let handleScrollRef: ReturnType<typeof createScrollHandler> | null = null;
+
   // Create scroll controller
   const scrollController = createScrollController(dom.viewport, {
     compressed: initialCompression.isCompressed,
@@ -155,10 +158,16 @@ export const createVList = <T extends VListItem = VListItem>(
       ? { compression: initialCompression }
       : {}),
     onScroll: (data) => {
-      handleScroll(data.scrollTop, data.direction);
+      if (handleScrollRef) {
+        handleScrollRef(data.scrollTop, data.direction);
+      }
     },
     onIdle: () => {
-      // Could emit idle event if needed
+      // When scrolling stops, load any pending ranges that were skipped
+      // due to high velocity scrolling
+      if (handleScrollRef?.loadPendingRange) {
+        handleScrollRef.loadPendingRange();
+      }
     },
   });
 
@@ -353,6 +362,9 @@ export const createVList = <T extends VListItem = VListItem>(
   // ===========================================================================
 
   const handleScroll = createScrollHandler(ctx, renderIfNeeded);
+  // Wire up the scroll handler reference for the scroll controller callbacks
+  handleScrollRef = handleScroll;
+
   const handleClick = createClickHandler(ctx, forceRender);
 
   // Create scroll methods first (needed by keyboard handler)

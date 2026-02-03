@@ -178,6 +178,8 @@ const createMockScrollController = (): ScrollController => ({
   isAtTop: mock(() => true),
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
+  getVelocity: mock(() => 0),
+  isScrolling: mock(() => false),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
@@ -395,6 +397,76 @@ describe("createScrollHandler", () => {
       handler(500, "down");
 
       expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
+
+    it("should skip loading when velocity is too high", () => {
+      // Set high velocity (above CANCEL_LOAD_VELOCITY_THRESHOLD of 25 px/ms)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(500, "down");
+
+      // Should NOT call ensureRange when scrolling too fast
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+    });
+
+    it("should load when velocity is below threshold", () => {
+      // Set low velocity (below CANCEL_LOAD_VELOCITY_THRESHOLD of 25 px/ms)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 10);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(500, "down");
+
+      // Should call ensureRange when scrolling slowly
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
+
+    it("should load pending range when idle", () => {
+      // Need hasAdapter: true for loadPendingRange to work
+      ctx.config.hasAdapter = true;
+
+      // Set high velocity initially
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // Scroll with high velocity - should NOT load
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+
+      // Call loadPendingRange (simulating idle callback)
+      handler.loadPendingRange();
+
+      // Now ensureRange should have been called
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
+
+    it("should not load pending range if none exists", () => {
+      // Set low velocity - will load immediately, no pending range
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 5);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // Scroll with low velocity - loads immediately
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+
+      // Reset mock
+      (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mockClear();
+
+      // Call loadPendingRange - should not call ensureRange again
+      handler.loadPendingRange();
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
     });
   });
 });

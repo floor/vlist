@@ -257,3 +257,117 @@ describe("isRangeVisible", () => {
     expect(isRangeVisible(5, 5, 10, 20)).toBe(false);
   });
 });
+
+// =============================================================================
+// Scroll Controller Tests
+// =============================================================================
+
+import { createScrollController } from "../../src/scroll";
+import { JSDOM } from "jsdom";
+
+describe("createScrollController", () => {
+  let dom: JSDOM;
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
+      url: "http://localhost",
+      pretendToBeVisual: true,
+    });
+
+    // Set up globals
+    globalThis.document = dom.window.document;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+
+    viewport = dom.window.document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 2000 });
+    dom.window.document.body.appendChild(viewport);
+  });
+
+  describe("velocity tracking", () => {
+    it("should expose getVelocity method", () => {
+      const controller = createScrollController(viewport);
+
+      expect(typeof controller.getVelocity).toBe("function");
+      // Initially velocity should be 0
+      expect(controller.getVelocity()).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should expose isScrolling method", () => {
+      const controller = createScrollController(viewport);
+
+      expect(typeof controller.isScrolling).toBe("function");
+      // Initially should not be scrolling
+      expect(controller.isScrolling()).toBe(false);
+
+      controller.destroy();
+    });
+
+    it("should return absolute velocity value", () => {
+      const controller = createScrollController(viewport);
+
+      // Velocity should always be non-negative (absolute value)
+      expect(controller.getVelocity()).toBeGreaterThanOrEqual(0);
+
+      controller.destroy();
+    });
+  });
+
+  describe("basic operations", () => {
+    it("should return scroll position", () => {
+      const controller = createScrollController(viewport);
+
+      expect(controller.getScrollTop()).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should check if at top", () => {
+      const controller = createScrollController(viewport);
+
+      expect(controller.isAtTop()).toBe(true);
+
+      controller.destroy();
+    });
+
+    it("should return scroll percentage", () => {
+      const controller = createScrollController(viewport);
+
+      expect(controller.getScrollPercentage()).toBe(0);
+
+      controller.destroy();
+    });
+  });
+
+  describe("compression mode", () => {
+    it("should expose isCompressed method", () => {
+      const controller = createScrollController(viewport);
+
+      expect(typeof controller.isCompressed).toBe("function");
+      expect(controller.isCompressed()).toBe(false);
+
+      controller.destroy();
+    });
+
+    it("should start in compressed mode when configured", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      expect(controller.isCompressed()).toBe(true);
+
+      controller.destroy();
+    });
+  });
+});

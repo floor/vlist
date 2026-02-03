@@ -18,7 +18,11 @@ import {
   getSelectedItems,
 } from "./selection";
 
-import { LOAD_MORE_THRESHOLD, INITIAL_LOAD_SIZE } from "./constants";
+import {
+  LOAD_MORE_THRESHOLD,
+  INITIAL_LOAD_SIZE,
+  CANCEL_LOAD_VELOCITY_THRESHOLD,
+} from "./constants";
 
 // =============================================================================
 // Types
@@ -33,21 +37,61 @@ export type ScrollToIndexFunction = (
   align?: "start" | "center" | "end",
 ) => void;
 
+/** Scroll handler with velocity-aware loading */
+export interface ScrollHandler {
+  (scrollTop: number, direction: "up" | "down"): void;
+  /** Load any pending range that was skipped due to high velocity (called on idle) */
+  loadPendingRange: () => void;
+}
+
 // =============================================================================
 // Scroll Handler
 // =============================================================================
 
 /**
  * Create the scroll event handler
+ *
+ * Implements velocity-based load cancellation:
+ * - When scrolling fast (velocity > CANCEL_LOAD_VELOCITY_THRESHOLD), skip loading
+ * - When scrolling slowly (velocity < SLOW_SCROLL_VELOCITY_THRESHOLD), allow loading
+ * - When idle (onIdle callback), always load the visible range
  */
 export const createScrollHandler = <T extends VListItem>(
   ctx: VListContext<T>,
   renderIfNeeded: RenderFunction,
-) => {
+): ScrollHandler => {
   // Track last ensured range to avoid redundant ensureRange calls
   let lastEnsuredRange: Range | null = null;
 
-  return (scrollTop: number, direction: "up" | "down"): void => {
+  // Track pending range that was skipped due to high velocity
+  let pendingRange: Range | null = null;
+
+  /**
+   * Check if we should load data based on current scroll velocity
+   * Returns true if velocity is low enough to allow loading
+   */
+  const canLoadAtCurrentVelocity = (): boolean => {
+    const velocity = ctx.scrollController.getVelocity();
+    return velocity <= CANCEL_LOAD_VELOCITY_THRESHOLD;
+  };
+
+  /**
+   * Load the pending range if any (called on idle)
+   */
+  const loadPendingRange = (): void => {
+    if (pendingRange && ctx.config.hasAdapter) {
+      const range = pendingRange;
+      pendingRange = null;
+
+      // Always load on idle, regardless of previous state
+      ctx.dataManager.ensureRange(range.start, range.end).catch((error) => {
+        ctx.emitter.emit("error", { error, context: "ensureRange" });
+      });
+    }
+  };
+
+  // Create the main scroll handler
+  const handleScroll = (scrollTop: number, direction: "up" | "down"): void => {
     if (ctx.state.isDestroyed) return;
 
     // Use direct getters to avoid object allocation on every scroll tick
@@ -102,19 +146,37 @@ export const createScrollHandler = <T extends VListItem>(
     // Only call when range actually changes to avoid redundant async operations
     // (inlined rangesEqual check for hot path performance)
     const { renderRange } = ctx.state.viewportState;
-    if (
+    const rangeChanged =
       !lastEnsuredRange ||
       renderRange.start !== lastEnsuredRange.start ||
-      renderRange.end !== lastEnsuredRange.end
-    ) {
+      renderRange.end !== lastEnsuredRange.end;
+
+    if (rangeChanged) {
       lastEnsuredRange = { start: renderRange.start, end: renderRange.end };
-      ctx.dataManager
-        .ensureRange(renderRange.start, renderRange.end)
-        .catch((error) => {
-          ctx.emitter.emit("error", { error, context: "ensureRange" });
-        });
+
+      // Velocity-based load cancellation:
+      // - If scrolling too fast, skip loading and save range for later
+      // - If scrolling slowly, load immediately
+      // - If idle, always load (handled by onIdle callback)
+      if (canLoadAtCurrentVelocity()) {
+        // Velocity is acceptable, load the range
+        pendingRange = null;
+        ctx.dataManager
+          .ensureRange(renderRange.start, renderRange.end)
+          .catch((error) => {
+            ctx.emitter.emit("error", { error, context: "ensureRange" });
+          });
+      } else {
+        // Scrolling too fast - save range for loading when idle
+        pendingRange = { start: renderRange.start, end: renderRange.end };
+      }
     }
   };
+
+  // Attach the idle handler for loading pending ranges
+  (handleScroll as ScrollHandler).loadPendingRange = loadPendingRange;
+
+  return handleScroll as ScrollHandler;
 };
 
 // =============================================================================

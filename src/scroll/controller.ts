@@ -64,6 +64,12 @@ export interface ScrollController {
   /** Get scroll percentage (0-1) */
   getScrollPercentage: () => number;
 
+  /** Get current scroll velocity (px/ms, absolute value) */
+  getVelocity: () => number;
+
+  /** Check if currently scrolling */
+  isScrolling: () => boolean;
+
   /** Update configuration (e.g., when compression state changes) */
   updateConfig: (config: Partial<ScrollControllerConfig>) => void;
 
@@ -370,6 +376,10 @@ export const createScrollController = (
 
   const isCompressedMode = (): boolean => compressed;
 
+  const getVelocityValue = (): number => Math.abs(velocityTracker.velocity);
+
+  const getIsScrolling = (): boolean => isScrolling;
+
   const destroy = (): void => {
     if (idleTimeout) {
       clearTimeout(idleTimeout);
@@ -401,6 +411,8 @@ export const createScrollController = (
     isAtTop,
     isAtBottom,
     getScrollPercentage,
+    getVelocity: getVelocityValue,
+    isScrolling: getIsScrolling,
     updateConfig,
     enableCompression,
     disableCompression,

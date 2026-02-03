@@ -27,6 +27,18 @@ export const INITIAL_LOAD_SIZE = 50;
 export const DEFAULT_PAGE_SIZE = 50;
 
 // =============================================================================
+// Velocity-Based Load Cancellation
+// =============================================================================
+
+/**
+ * Velocity threshold above which data loading is cancelled (px/ms)
+ * When scrolling faster than this, we skip loading data since the user
+ * is likely scrolling quickly past content they don't want to see.
+ * Default: 25 px/ms (same as mtrl-addons viewport)
+ */
+export const CANCEL_LOAD_VELOCITY_THRESHOLD = 25;
+
+// =============================================================================
 // Compression (Large Lists)
 // =============================================================================
 
