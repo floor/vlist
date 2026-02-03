@@ -66,14 +66,8 @@ export const createScrollHandler = <T extends VListItem>(
   // Track pending range that was skipped due to high velocity
   let pendingRange: Range | null = null;
 
-  /**
-   * Check if we should load data based on current scroll velocity
-   * Returns true if velocity is low enough to allow loading
-   */
-  const canLoadAtCurrentVelocity = (): boolean => {
-    const velocity = ctx.scrollController.getVelocity();
-    return velocity <= CANCEL_LOAD_VELOCITY_THRESHOLD;
-  };
+  // Track previous velocity to detect when it crosses below threshold
+  let previousVelocity = 0;
 
   /**
    * Load the pending range if any (called on idle)
@@ -93,6 +87,27 @@ export const createScrollHandler = <T extends VListItem>(
   // Create the main scroll handler
   const handleScroll = (scrollTop: number, direction: "up" | "down"): void => {
     if (ctx.state.isDestroyed) return;
+
+    // Get current velocity for threshold checks
+    const currentVelocity = ctx.scrollController.getVelocity();
+    const canLoad = currentVelocity <= CANCEL_LOAD_VELOCITY_THRESHOLD;
+
+    // Check if velocity just dropped below threshold - load pending range immediately
+    // This creates smoother transitions vs waiting for idle
+    if (
+      pendingRange &&
+      previousVelocity > CANCEL_LOAD_VELOCITY_THRESHOLD &&
+      currentVelocity <= CANCEL_LOAD_VELOCITY_THRESHOLD
+    ) {
+      const range = pendingRange;
+      pendingRange = null;
+      ctx.dataManager.ensureRange(range.start, range.end).catch((error) => {
+        ctx.emitter.emit("error", { error, context: "ensureRange" });
+      });
+    }
+
+    // Update previous velocity for next tick
+    previousVelocity = currentVelocity;
 
     // Use direct getters to avoid object allocation on every scroll tick
     const total = ctx.dataManager.getTotal();
@@ -157,8 +172,9 @@ export const createScrollHandler = <T extends VListItem>(
       // Velocity-based load cancellation:
       // - If scrolling too fast, skip loading and save range for later
       // - If scrolling slowly, load immediately
-      // - If idle, always load (handled by onIdle callback)
-      if (canLoadAtCurrentVelocity()) {
+      // - When velocity drops below threshold, load immediately (handled above)
+      // - If idle, always load (handled by onIdle callback as fallback)
+      if (canLoad) {
         // Velocity is acceptable, load the range
         pendingRange = null;
         ctx.dataManager
