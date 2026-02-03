@@ -19,11 +19,12 @@
   ],
   "scripts": {
     "build": "bun run build.ts",
+    "build:examples": "bun build examples/velocity-loading/script.js --outdir=examples/dist --minify --format=esm",
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "serve": "bunx serve .",
-    "examples": "echo 'Open http://localhost:3333/examples in your browser' && bunx serve .",
+    "examples": "bun run build:examples && echo 'Open http://localhost:3333/examples in your browser' && bunx serve .",
     "prepublishOnly": "bun run build",
     "link:mtrl": "cd ~/Code/mtrl && bun link && cd - && bun link mtrl",
     "link:mtrl-addons": "cd ~/Code/mtrl-addons && bun link && cd - && bun link mtrl-addons",

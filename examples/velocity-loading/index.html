@@ -15,23 +15,9 @@
         <link rel="stylesheet" href="/examples/velocity-loading/styles.css" />
     </head>
     <body class="mtrl-app">
-        <!-- Import Map for ES modules -->
-        <script type="importmap">
-            {
-                "imports": {
-                    "mtrl": "/node_modules/mtrl/dist/index.js",
-                    "mtrl-addons": "/node_modules/mtrl-addons/dist/index.mjs",
-                    "vlist": "/dist/index.js"
-                }
-            }
-        </script>
-
         <div class="mtrl-content" id="content"></div>
 
-        <!-- Import the example script -->
-        <script
-            type="module"
-            src="/examples/velocity-loading/script.js"
-        ></script>
+        <!-- Bundled example script (tree-shaken, ~130KB vs ~500KB unbundled) -->
+        <script type="module" src="/examples/dist/script.js"></script>
     </body>
 </html>
