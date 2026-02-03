@@ -18,11 +18,7 @@ import {
   getSelectedItems,
 } from "./selection";
 
-import {
-  LOAD_MORE_THRESHOLD,
-  INITIAL_LOAD_SIZE,
-  CANCEL_LOAD_VELOCITY_THRESHOLD,
-} from "./constants";
+import { LOAD_MORE_THRESHOLD, INITIAL_LOAD_SIZE } from "./constants";
 
 // =============================================================================
 // Types
@@ -90,14 +86,15 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Get current velocity for threshold checks
     const currentVelocity = ctx.scrollController.getVelocity();
-    const canLoad = currentVelocity <= CANCEL_LOAD_VELOCITY_THRESHOLD;
+    const { cancelLoadThreshold, preloadThreshold, preloadAhead } = ctx.config;
+    const canLoad = currentVelocity <= cancelLoadThreshold;
 
     // Check if velocity just dropped below threshold - load pending range immediately
     // This creates smoother transitions vs waiting for idle
     if (
       pendingRange &&
-      previousVelocity > CANCEL_LOAD_VELOCITY_THRESHOLD &&
-      currentVelocity <= CANCEL_LOAD_VELOCITY_THRESHOLD
+      previousVelocity > cancelLoadThreshold &&
+      currentVelocity <= cancelLoadThreshold
     ) {
       const range = pendingRange;
       pendingRange = null;
@@ -169,19 +166,34 @@ export const createScrollHandler = <T extends VListItem>(
     if (rangeChanged) {
       lastEnsuredRange = { start: renderRange.start, end: renderRange.end };
 
-      // Velocity-based load cancellation:
-      // - If scrolling too fast, skip loading and save range for later
-      // - If scrolling slowly, load immediately
+      // Velocity-based load cancellation and preloading:
+      // - If scrolling too fast (> CANCEL_LOAD_VELOCITY_THRESHOLD), skip loading
+      // - If scrolling at medium speed (> PRELOAD_VELOCITY_THRESHOLD), preload ahead
+      // - If scrolling slowly, load visible range only
       // - When velocity drops below threshold, load immediately (handled above)
       // - If idle, always load (handled by onIdle callback as fallback)
       if (canLoad) {
         // Velocity is acceptable, load the range
         pendingRange = null;
-        ctx.dataManager
-          .ensureRange(renderRange.start, renderRange.end)
-          .catch((error) => {
-            ctx.emitter.emit("error", { error, context: "ensureRange" });
-          });
+
+        // Calculate preload range based on scroll direction and velocity
+        let loadStart = renderRange.start;
+        let loadEnd = renderRange.end;
+
+        // Preload ahead when scrolling at medium velocity
+        if (currentVelocity > preloadThreshold) {
+          if (direction === "down") {
+            // Scrolling down - preload items below
+            loadEnd = Math.min(renderRange.end + preloadAhead, total - 1);
+          } else {
+            // Scrolling up - preload items above
+            loadStart = Math.max(renderRange.start - preloadAhead, 0);
+          }
+        }
+
+        ctx.dataManager.ensureRange(loadStart, loadEnd).catch((error) => {
+          ctx.emitter.emit("error", { error, context: "ensureRange" });
+        });
       } else {
         // Scrolling too fast - save range for loading when idle
         pendingRange = { start: renderRange.start, end: renderRange.end };

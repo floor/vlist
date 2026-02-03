@@ -27,7 +27,7 @@ export const INITIAL_LOAD_SIZE = 50;
 export const DEFAULT_PAGE_SIZE = 50;
 
 // =============================================================================
-// Velocity-Based Load Cancellation
+// Velocity-Based Load Cancellation & Preloading
 // =============================================================================
 
 /**
@@ -37,6 +37,22 @@ export const DEFAULT_PAGE_SIZE = 50;
  * Default: 25 px/ms (same as mtrl-addons viewport)
  */
 export const CANCEL_LOAD_VELOCITY_THRESHOLD = 25;
+
+/**
+ * Velocity threshold for preloading (px/ms)
+ * When scrolling faster than this but slower than CANCEL_LOAD_VELOCITY_THRESHOLD,
+ * we preload extra items in the scroll direction to reduce placeholder flashing.
+ * Default: 2 px/ms (medium scroll speed)
+ */
+export const PRELOAD_VELOCITY_THRESHOLD = 2;
+
+/**
+ * Number of extra items to preload ahead of scroll direction
+ * Only applies when velocity is between PRELOAD_VELOCITY_THRESHOLD and
+ * CANCEL_LOAD_VELOCITY_THRESHOLD.
+ * Default: 50 items
+ */
+export const PRELOAD_ITEMS_AHEAD = 50;
 
 // =============================================================================
 // Compression (Large Lists)
