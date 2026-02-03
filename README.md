@@ -374,4 +374,4 @@ MIT © [Floor](https://github.com/floor)
 
 ## Credits
 
-Inspired by [react-window](https://github.com/bvaughn/react-window), [virtual-scroller](https://github.com/nicgirault/react-virtual-scroller), and the [mtrl](https://github.com/nicgirault/mtrl) design system.
+Inspired by the [mtrl-addons](https://github.com/floor/mtrl-addons) vlist component.
