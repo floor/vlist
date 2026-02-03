@@ -97,9 +97,9 @@ interface VelocityTracker {
   samples: Array<{ position: number; time: number }>;
 }
 
-const createVelocityTracker = (): VelocityTracker => ({
+const createVelocityTracker = (initialPosition = 0): VelocityTracker => ({
   velocity: 0,
-  lastPosition: 0,
+  lastPosition: initialPosition,
   lastTime: performance.now(),
   samples: [],
 });
@@ -245,7 +245,9 @@ export const createScrollController = (
 
     idleTimeout = setTimeout(() => {
       isScrolling = false;
-      velocityTracker = createVelocityTracker();
+      // Reset velocity tracker with current scroll position to avoid
+      // calculating huge velocity on next scroll event
+      velocityTracker = createVelocityTracker(scrollPosition);
 
       if (onIdle) {
         onIdle();

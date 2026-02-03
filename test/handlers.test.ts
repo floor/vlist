@@ -517,6 +517,61 @@ describe("createScrollHandler", () => {
       handler.loadPendingRange();
       expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
     });
+
+    it("should load when scrolling UP with low velocity", () => {
+      // Set low velocity (below CANCEL_LOAD_VELOCITY_THRESHOLD of 25 px/ms)
+      // Note: getVelocity() returns absolute value, so direction doesn't matter
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 10);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll down to establish a range
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+
+      // Reset mock
+      (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mockClear();
+
+      // Scroll UP with low velocity - should also trigger load
+      handler(400, "up");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+    });
+
+    it("should skip loading when scrolling UP with high velocity", () => {
+      // Set high velocity (above CANCEL_LOAD_VELOCITY_THRESHOLD of 25 px/ms)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // Scroll UP with high velocity - should NOT load
+      handler(400, "up");
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+    });
+
+    it("should load pending range when scrolling UP and velocity drops", () => {
+      let currentVelocity = 50; // Start with high velocity
+
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => currentVelocity);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll UP with high velocity - should NOT load
+      handler(400, "up");
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+
+      // Velocity drops below threshold
+      currentVelocity = 10;
+
+      // Second scroll UP - should load pending range AND new range
+      handler(300, "up");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
   });
 });
 
