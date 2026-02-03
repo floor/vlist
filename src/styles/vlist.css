@@ -90,8 +90,12 @@
     outline: none;
 }
 
-/* Focus state */
+/* Focus state - only show for keyboard navigation */
 .vlist:focus {
+    outline: none;
+}
+
+.vlist:focus-visible {
     outline: 2px solid var(--vlist-focus-ring);
     outline-offset: 2px;
 }
