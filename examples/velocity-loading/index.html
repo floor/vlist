@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>vlist - Velocity-Based Loading Example</title>
+
+        <!-- Load mtrl core styles -->
+        <link rel="stylesheet" href="/node_modules/mtrl/dist/styles.css" />
+
+        <!-- Load vlist styles -->
+        <link rel="stylesheet" href="/dist/vlist.css" />
+
+        <!-- Example-specific styles -->
+        <link rel="stylesheet" href="/examples/velocity-loading/styles.css" />
+    </head>
+    <body class="mtrl-app">
+        <!-- Import Map for ES modules -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "mtrl": "/node_modules/mtrl/dist/index.js",
+                    "mtrl-addons": "/node_modules/mtrl-addons/dist/index.mjs",
+                    "vlist": "/dist/index.js"
+                }
+            }
+        </script>
+
+        <div class="mtrl-content" id="content"></div>
+
+        <!-- Import the example script -->
+        <script
+            type="module"
+            src="/examples/velocity-loading/script.js"
+        ></script>
+    </body>
+</html>
