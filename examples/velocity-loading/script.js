@@ -10,10 +10,10 @@ import { createVList } from "vlist";
 
 // Constants
 const CANCEL_LOAD_VELOCITY_THRESHOLD = 25; // px/ms
-const TOTAL_ITEMS = 100000;
+const TOTAL_ITEMS = 1000000;
 
 // Simulated API
-let simulatedDelay = 300;
+let simulatedDelay = 0;
 
 const generateItem = (id) => ({
   id,
