@@ -611,17 +611,27 @@ export const calculateMissingRanges = (
   let current = alignedNeeded.start;
 
   for (const range of merged) {
-    if (range.start > current && range.start <= alignedNeeded.end) {
-      // Gap before this loaded range
+    // Skip ranges that end before our current position
+    if (range.end < current) {
+      continue;
+    }
+
+    // If this range starts after our aligned needed range, we're done
+    // (any remaining gap will be handled after the loop)
+    if (range.start > alignedNeeded.end) {
+      break;
+    }
+
+    // If there's a gap before this loaded range, record it
+    if (range.start > current) {
       missing.push({
         start: current,
         end: Math.min(range.start - 1, alignedNeeded.end),
       });
     }
 
-    if (range.end >= current) {
-      current = range.end + 1;
-    }
+    // Advance current past this loaded range
+    current = range.end + 1;
 
     if (current > alignedNeeded.end) break;
   }
