@@ -22,6 +22,7 @@ import type {
 // Domain imports
 import {
   createViewportState,
+  updateViewportSize,
   updateViewportItems,
   getCompression,
   createRenderer,
@@ -400,6 +401,52 @@ export const createVList = <T extends VListItem = VListItem>(
   // Destroy
   // ===========================================================================
 
+  // ===========================================================================
+  // ResizeObserver for Container Resize
+  // ===========================================================================
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    if (ctx.state.isDestroyed) return;
+
+    for (const entry of entries) {
+      const newHeight = entry.contentRect.height;
+      const currentHeight = ctx.state.viewportState.containerHeight;
+
+      // Only update if height changed significantly (>1px to avoid float precision issues)
+      if (Math.abs(newHeight - currentHeight) > 1) {
+        ctx.state.viewportState = updateViewportSize(
+          ctx.state.viewportState,
+          newHeight,
+          itemHeight,
+          dataManager.getTotal(),
+          overscan,
+        );
+
+        // Update content height and scrollbar bounds
+        updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+        if (scrollbar) {
+          scrollbar.updateBounds(
+            ctx.state.viewportState.totalHeight,
+            newHeight,
+          );
+        }
+
+        // Re-render with new visible range
+        renderIfNeeded();
+
+        // Emit resize event
+        emitter.emit("resize", {
+          height: newHeight,
+          width: entry.contentRect.width,
+        });
+      }
+    }
+  });
+
+  // ===========================================================================
+  // Destroy
+  // ===========================================================================
+
   const destroy = (): void => {
     if (ctx.state.isDestroyed) return;
 
@@ -408,6 +455,9 @@ export const createVList = <T extends VListItem = VListItem>(
     // Remove event listeners
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
+
+    // Disconnect ResizeObserver
+    resizeObserver.disconnect();
 
     // Cleanup components
     scrollController.destroy();
@@ -428,6 +478,9 @@ export const createVList = <T extends VListItem = VListItem>(
   // Attach event listeners
   dom.items.addEventListener("click", handleClick);
   dom.root.addEventListener("keydown", handleKeydown);
+
+  // Observe viewport for resize
+  resizeObserver.observe(dom.viewport);
 
   // Mark as initialized
   ctx.state.isInitialized = true;

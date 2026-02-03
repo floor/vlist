@@ -211,6 +211,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Error occurred */
   error: { error: Error; context: string };
+
+  /** Container resized */
+  resize: { height: number; width: number };
 }
 
 /** Event handler type */

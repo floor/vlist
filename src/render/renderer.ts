@@ -177,15 +177,19 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Create item state for template
+   * Reusable item state object to avoid allocation per render
+   * Note: Templates should not store or mutate this object reference
    */
-  const createItemState = (
-    isSelected: boolean,
-    isFocused: boolean,
-  ): ItemState => ({
-    selected: isSelected,
-    focused: isFocused,
-  });
+  const reusableItemState: ItemState = { selected: false, focused: false };
+
+  /**
+   * Get item state for template (reuses single object to reduce GC pressure)
+   */
+  const getItemState = (isSelected: boolean, isFocused: boolean): ItemState => {
+    reusableItemState.selected = isSelected;
+    reusableItemState.focused = isFocused;
+    return reusableItemState;
+  };
 
   /**
    * Apply template result to element
@@ -291,7 +295,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): HTMLElement => {
     const element = pool.acquire();
-    const state = createItemState(isSelected, isFocused);
+    const state = getItemState(isSelected, isFocused);
 
     // Apply static styles once (position, dimensions)
     applyStaticStyles(element);
@@ -365,7 +369,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
         if (itemChanged) {
           // Re-apply template when item data changes (placeholder -> real data)
-          const state = createItemState(isSelected, isFocused);
+          const state = getItemState(isSelected, isFocused);
           const result = template(item, i, state);
           applyTemplate(existing.element, result);
           existing.element.dataset.id = newId;
@@ -421,13 +425,13 @@ export const createRenderer = <T extends VListItem = VListItem>(
     const existing = rendered.get(index);
 
     if (existing) {
-      const state = createItemState(isSelected, isFocused);
+      const state = getItemState(isSelected, isFocused);
       const result = template(item, index, state);
 
       applyTemplate(existing.element, result);
       applyClasses(existing.element, isSelected, isFocused);
-      existing.element.setAttribute("data-id", String(item.id));
-      existing.element.setAttribute("aria-selected", String(isSelected));
+      existing.element.dataset.id = String(item.id);
+      existing.element.ariaSelected = String(isSelected);
     }
   };
 
