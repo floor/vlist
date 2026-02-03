@@ -1,8 +1,11 @@
 // script.js - vlist Velocity-Based Loading Example
 // Demonstrates how vlist skips loading when scrolling fast and loads when velocity drops
 
-import { createButton, createSlider, addClass, removeClass } from "mtrl";
-import { createLayout } from "mtrl-addons";
+// Direct imports for optimal tree-shaking
+import createButton from "mtrl/components/button";
+import createSlider from "mtrl/components/slider";
+import { addClass, removeClass } from "mtrl/core/dom";
+import { createLayout } from "mtrl-addons/layout";
 import { createVList } from "vlist";
 
 // Constants
@@ -144,32 +147,37 @@ const createVelocityExample = (container) => {
   // Create vlist after a frame to ensure container has dimensions
   let list;
 
+  // Item template schemas for createLayout
+  const createPlaceholderSchema = () => [
+    { class: "item-content" },
+    [{ class: "item-avatar item-avatar--placeholder" }],
+    [
+      { class: "item-details" },
+      [{ class: "item-name item-name--placeholder" }],
+      [{ class: "item-email item-email--placeholder" }],
+    ],
+  ];
+
+  const createItemSchema = (item, index) => [
+    { class: "item-content" },
+    [{ class: "item-avatar", text: item.avatar }],
+    [
+      { class: "item-details" },
+      [{ class: "item-name", text: `${item.name} (${index})` }],
+      [{ class: "item-email", text: item.email }],
+      [{ class: "item-role", text: item.role }],
+    ],
+  ];
+
   const createList = () => {
     list = createVList({
       container: showcaseElement,
       itemHeight: 72,
       template: (item, index) => {
-        if (item._isPlaceholder) {
-          return `
-            <div class="item-content">
-              <div class="item-avatar item-avatar--placeholder"></div>
-              <div class="item-details">
-                <div class="item-name item-name--placeholder"></div>
-                <div class="item-email item-email--placeholder"></div>
-              </div>
-            </div>
-          `;
-        }
-        return `
-          <div class="item-content">
-            <div class="item-avatar">${item.avatar}</div>
-            <div class="item-details">
-              <div class="item-name">${item.name} (${index})</div>
-              <div class="item-email">${item.email}</div>
-              <div class="item-role">${item.role}</div>
-            </div>
-          </div>
-        `;
+        const schema = item._isPlaceholder
+          ? createPlaceholderSchema()
+          : createItemSchema(item, index);
+        return createLayout(schema).element;
       },
       adapter: {
         read: async ({ offset, limit }) => {
@@ -192,6 +200,7 @@ const createVelocityExample = (container) => {
         const velocity = Math.abs(scrollTop - lastScrollTop) / timeDelta;
         stats.setVelocity(velocity);
         updateControls();
+        scheduleVelocityDecay();
       }
       lastScrollTop = scrollTop;
       lastScrollTime = now;
@@ -277,9 +286,9 @@ const createVelocityExample = (container) => {
         {
           label: "API Delay (ms)",
           min: 0,
-          max: 2000,
+          max: 1000,
           value: simulatedDelay,
-          step: 100,
+          step: 20,
         },
       ],
 
@@ -361,6 +370,18 @@ const createVelocityExample = (container) => {
   // Track velocity from scroll events
   let lastScrollTop = 0;
   let lastScrollTime = performance.now();
+  let velocityDecayTimeout = null;
+
+  // Reset velocity to 0 if no scroll event occurs within 100ms
+  const scheduleVelocityDecay = () => {
+    if (velocityDecayTimeout) {
+      clearTimeout(velocityDecayTimeout);
+    }
+    velocityDecayTimeout = setTimeout(() => {
+      stats.setVelocity(0);
+      updateControls();
+    }, 100);
+  };
 
   // Wire up controls
   controls.delay.on("change", (e) => {
