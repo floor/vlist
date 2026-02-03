@@ -38,6 +38,12 @@ export interface VListContextConfig {
   readonly classPrefix: string;
   readonly selectionMode: SelectionMode;
   readonly hasAdapter: boolean;
+  /** Velocity threshold above which loading is skipped (px/ms) */
+  readonly cancelLoadThreshold: number;
+  /** Velocity threshold for preloading (px/ms) */
+  readonly preloadThreshold: number;
+  /** Number of items to preload ahead of scroll direction */
+  readonly preloadAhead: number;
 }
 
 /** Cached compression state */

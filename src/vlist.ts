@@ -55,6 +55,9 @@ import {
   DEFAULT_OVERSCAN,
   DEFAULT_CLASS_PREFIX,
   INITIAL_LOAD_SIZE,
+  CANCEL_LOAD_VELOCITY_THRESHOLD,
+  PRELOAD_VELOCITY_THRESHOLD,
+  PRELOAD_ITEMS_AHEAD,
 } from "./constants";
 
 // =============================================================================
@@ -93,10 +96,18 @@ export const createVList = <T extends VListItem = VListItem>(
     overscan = DEFAULT_OVERSCAN,
     selection: selectionConfig,
     scrollbar: scrollbarConfig,
+    loading: loadingConfig,
     classPrefix = DEFAULT_CLASS_PREFIX,
   } = config;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
+
+  // Loading thresholds (with defaults from constants)
+  const cancelLoadThreshold =
+    loadingConfig?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;
+  const preloadThreshold =
+    loadingConfig?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
+  const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
 
   // ===========================================================================
   // Create Domain Components
@@ -209,6 +220,9 @@ export const createVList = <T extends VListItem = VListItem>(
       classPrefix,
       selectionMode,
       hasAdapter: !!adapter,
+      cancelLoadThreshold,
+      preloadThreshold,
+      preloadAhead,
     },
     dom,
     dataManager,
