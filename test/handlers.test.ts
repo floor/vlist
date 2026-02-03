@@ -449,6 +449,55 @@ describe("createScrollHandler", () => {
       expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
     });
 
+    it("should load pending range immediately when velocity drops below threshold", () => {
+      let currentVelocity = 50; // Start with high velocity
+
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => currentVelocity);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll with high velocity - should NOT load
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+
+      // Velocity drops below threshold (25 px/ms)
+      currentVelocity = 10;
+
+      // Second scroll - should load immediately because velocity crossed threshold
+      handler(600, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
+
+    it("should load pending range AND new range when velocity drops below threshold", () => {
+      let currentVelocity = 50;
+
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => currentVelocity);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll with high velocity - creates pending range
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
+
+      // Velocity drops below threshold:
+      // - Pending range from previous scroll is loaded immediately
+      // - New range for current scroll is also loaded (since velocity is now acceptable)
+      currentVelocity = 10;
+      handler(600, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(2);
+
+      // Reset mock to check subsequent calls
+      (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mockClear();
+
+      // Velocity stays low - only one call via normal path
+      handler(700, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+    });
+
     it("should not load pending range if none exists", () => {
       // Set low velocity - will load immediately, no pending range
       (
