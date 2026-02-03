@@ -87,23 +87,53 @@ export interface ScrollController {
 }
 
 // =============================================================================
-// Velocity Tracker
+// Velocity Tracker (Ring Buffer Implementation)
 // =============================================================================
+
+/** Maximum number of samples to keep (100ms window at 60fps ≈ 6 samples) */
+const VELOCITY_SAMPLE_COUNT = 8;
+
+/** Maximum age of samples in milliseconds */
+const VELOCITY_SAMPLE_MAX_AGE = 100;
+
+interface VelocitySample {
+  position: number;
+  time: number;
+}
 
 interface VelocityTracker {
   velocity: number;
   lastPosition: number;
   lastTime: number;
-  samples: Array<{ position: number; time: number }>;
+  /** Ring buffer of samples */
+  samples: VelocitySample[];
+  /** Current write index in ring buffer */
+  writeIndex: number;
+  /** Number of valid samples */
+  sampleCount: number;
 }
 
-const createVelocityTracker = (initialPosition = 0): VelocityTracker => ({
-  velocity: 0,
-  lastPosition: initialPosition,
-  lastTime: performance.now(),
-  samples: [],
-});
+const createVelocityTracker = (initialPosition = 0): VelocityTracker => {
+  // Pre-allocate sample array to avoid allocations during scrolling
+  const samples: VelocitySample[] = new Array(VELOCITY_SAMPLE_COUNT);
+  for (let i = 0; i < VELOCITY_SAMPLE_COUNT; i++) {
+    samples[i] = { position: 0, time: 0 };
+  }
 
+  return {
+    velocity: 0,
+    lastPosition: initialPosition,
+    lastTime: performance.now(),
+    samples,
+    writeIndex: 0,
+    sampleCount: 0,
+  };
+};
+
+/**
+ * Update velocity tracker in place (no allocations)
+ * Uses ring buffer for samples to avoid array operations
+ */
 const updateVelocityTracker = (
   tracker: VelocityTracker,
   newPosition: number,
@@ -113,30 +143,49 @@ const updateVelocityTracker = (
 
   if (timeDelta === 0) return tracker;
 
-  const positionDelta = newPosition - tracker.lastPosition;
-  const instantVelocity = positionDelta / timeDelta;
+  // Add new sample to ring buffer (reuse existing object)
+  const sample = tracker.samples[tracker.writeIndex]!;
+  sample.position = newPosition;
+  sample.time = now;
 
-  // Keep recent samples (last 100ms)
-  const samples = [
-    ...tracker.samples.filter((s) => now - s.time < 100),
-    { position: newPosition, time: now },
-  ];
-
-  // Calculate average velocity from recent samples
-  let avgVelocity = instantVelocity;
-  if (samples.length > 1) {
-    const oldest = samples[0]!;
-    const totalDistance = newPosition - oldest.position;
-    const totalTime = now - oldest.time;
-    avgVelocity = totalTime > 0 ? totalDistance / totalTime : instantVelocity;
+  // Advance write index (wrap around)
+  tracker.writeIndex = (tracker.writeIndex + 1) % VELOCITY_SAMPLE_COUNT;
+  if (tracker.sampleCount < VELOCITY_SAMPLE_COUNT) {
+    tracker.sampleCount++;
   }
 
-  return {
-    velocity: avgVelocity,
-    lastPosition: newPosition,
-    lastTime: now,
-    samples,
-  };
+  // Find oldest valid sample (within time window)
+  let oldestValidIndex = -1;
+  let oldestTime = now;
+  const cutoffTime = now - VELOCITY_SAMPLE_MAX_AGE;
+
+  for (let i = 0; i < tracker.sampleCount; i++) {
+    const s = tracker.samples[i]!;
+    if (s.time >= cutoffTime && s.time < oldestTime) {
+      oldestTime = s.time;
+      oldestValidIndex = i;
+    }
+  }
+
+  // Calculate velocity from oldest valid sample to current position
+  let velocity: number;
+  if (oldestValidIndex >= 0 && oldestTime < now) {
+    const oldest = tracker.samples[oldestValidIndex]!;
+    const totalDistance = newPosition - oldest.position;
+    const totalTime = now - oldest.time;
+    velocity = totalDistance / totalTime;
+  } else {
+    // Fallback to instant velocity
+    const positionDelta = newPosition - tracker.lastPosition;
+    velocity = positionDelta / timeDelta;
+  }
+
+  // Update tracker in place
+  tracker.velocity = velocity;
+  tracker.lastPosition = newPosition;
+  tracker.lastTime = now;
+
+  return tracker;
 };
 
 // =============================================================================
