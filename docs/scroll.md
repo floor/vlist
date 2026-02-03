@@ -44,16 +44,25 @@ No  → Native Mode (scroll events)
 
 ### Velocity Tracking
 
-The controller tracks scroll velocity for smooth momentum:
+The controller tracks scroll velocity using a **circular buffer** for optimal performance (zero allocations during scrolling):
 
 ```typescript
 interface VelocityTracker {
   velocity: number;      // Current velocity (px/ms)
   lastPosition: number;  // Previous scroll position
   lastTime: number;      // Timestamp of last update
-  samples: Array<{ position: number; time: number }>;
+  samples: VelocitySample[];  // Pre-allocated circular buffer (5 samples)
+  sampleIndex: number;   // Current write index
+  sampleCount: number;   // Number of valid samples (0-5)
+}
+
+interface VelocitySample {
+  position: number;
+  time: number;
 }
 ```
+
+The circular buffer pre-allocates 5 sample slots and overwrites the oldest sample on each update, avoiding array allocation/spread operations during scrolling.
 
 ## API Reference
 
@@ -111,6 +120,12 @@ interface ScrollController {
   
   /** Get scroll percentage (0-1) */
   getScrollPercentage: () => number;
+  
+  /** Get current scroll velocity (px/ms, absolute value) */
+  getVelocity: () => number;
+  
+  /** Check if currently scrolling */
+  isScrolling: () => boolean;
   
   /** Update configuration */
   updateConfig: (config: Partial<ScrollControllerConfig>) => void;
@@ -532,19 +547,27 @@ const throttledCallback = rafThrottle((scrollTop) => {
 });
 ```
 
-### Velocity Sampling
+### Velocity Sampling (Circular Buffer)
 
-Velocity is calculated from recent samples (last 100ms):
+Velocity is calculated using a pre-allocated circular buffer of 5 samples:
 
 ```typescript
-// Keeps only recent samples
-const samples = tracker.samples.filter(s => now - s.time < 100);
+// Write to current slot (no allocation)
+const currentSample = tracker.samples[tracker.sampleIndex]!;
+currentSample.position = newPosition;
+currentSample.time = now;
 
-// Average velocity from samples
-const totalDistance = newPosition - samples[0].position;
-const totalTime = now - samples[0].time;
-const avgVelocity = totalDistance / totalTime;
+// Advance index (wrap around)
+tracker.sampleIndex = (tracker.sampleIndex + 1) % SAMPLE_COUNT;
+tracker.sampleCount = Math.min(tracker.sampleCount + 1, SAMPLE_COUNT);
+
+// Find oldest sample and calculate average velocity
+const oldestIndex = (tracker.sampleIndex - tracker.sampleCount + SAMPLE_COUNT) % SAMPLE_COUNT;
+const oldest = tracker.samples[oldestIndex]!;
+const avgVelocity = (newPosition - oldest.position) / (now - oldest.time);
 ```
+
+This approach eliminates array allocation and garbage collection during scrolling.
 
 ## Scrollbar Interactions
 

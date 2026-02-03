@@ -110,7 +110,10 @@ export const createElementPool = (
     }
 
     created++;
-    return document.createElement(tagName);
+    const newElement = document.createElement(tagName);
+    // Set static attributes once per element lifetime (never change)
+    newElement.setAttribute("role", "option");
+    return newElement;
   };
 
   const release = (element: HTMLElement): void => {
@@ -174,15 +177,19 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Create item state for template
+   * Reusable item state object to avoid allocation per render
+   * Note: Templates should not store or mutate this object reference
    */
-  const createItemState = (
-    isSelected: boolean,
-    isFocused: boolean,
-  ): ItemState => ({
-    selected: isSelected,
-    focused: isFocused,
-  });
+  const reusableItemState: ItemState = { selected: false, focused: false };
+
+  /**
+   * Get item state for template (reuses single object to reduce GC pressure)
+   */
+  const getItemState = (isSelected: boolean, isFocused: boolean): ItemState => {
+    reusableItemState.selected = isSelected;
+    reusableItemState.focused = isFocused;
+    return reusableItemState;
+  };
 
   /**
    * Apply template result to element
@@ -288,7 +295,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): HTMLElement => {
     const element = pool.acquire();
-    const state = createItemState(isSelected, isFocused);
+    const state = getItemState(isSelected, isFocused);
 
     // Apply static styles once (position, dimensions)
     applyStaticStyles(element);
@@ -296,11 +303,11 @@ export const createRenderer = <T extends VListItem = VListItem>(
     // Apply base class once
     applyBaseClass(element);
 
-    // Set data attributes
-    element.setAttribute("data-index", String(index));
-    element.setAttribute("data-id", String(item.id));
-    element.setAttribute("role", "option");
-    element.setAttribute("aria-selected", String(isSelected));
+    // Set data attributes using dataset (faster than setAttribute)
+    // Note: role="option" is set once in pool.acquire()
+    element.dataset.index = String(index);
+    element.dataset.id = String(item.id);
+    element.ariaSelected = String(isSelected);
 
     // Apply template
     const result = template(item, index, state);
@@ -316,6 +323,11 @@ export const createRenderer = <T extends VListItem = VListItem>(
   /**
    * Render items for a range
    * Supports compression context for large lists
+   *
+   * Uses DocumentFragment batching to minimize DOM operations:
+   * - Collects all new elements in a fragment
+   * - Appends them in a single DOM operation
+   * - Reduces layout thrashing during fast scrolling
    */
   const render = (
     items: T[],
@@ -333,6 +345,11 @@ export const createRenderer = <T extends VListItem = VListItem>(
       }
     }
 
+    // Collect new elements for batched DOM insertion
+    // Using DocumentFragment reduces layout thrashing when adding multiple elements
+    const fragment = document.createDocumentFragment();
+    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+
     // Add/update items in range
     for (let i = range.start; i <= range.end; i++) {
       // Items array is 0-indexed relative to range.start
@@ -346,24 +363,24 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
       if (existing) {
         // Check if the item ID changed (e.g., placeholder replaced with real data)
-        const existingId = existing.element.getAttribute("data-id");
+        const existingId = existing.element.dataset.id;
         const newId = String(item.id);
         const itemChanged = existingId !== newId;
 
         if (itemChanged) {
           // Re-apply template when item data changes (placeholder -> real data)
-          const state = createItemState(isSelected, isFocused);
+          const state = getItemState(isSelected, isFocused);
           const result = template(item, i, state);
           applyTemplate(existing.element, result);
-          existing.element.setAttribute("data-id", newId);
+          existing.element.dataset.id = newId;
         }
 
         // Always update classes, selection state, and position
         applyClasses(existing.element, isSelected, isFocused);
-        existing.element.setAttribute("aria-selected", String(isSelected));
+        existing.element.ariaSelected = String(isSelected);
         positionElement(existing.element, i, compressionCtx);
       } else {
-        // Render new element
+        // Render new element and add to fragment (not directly to DOM)
         const element = renderItem(
           i,
           item,
@@ -371,8 +388,17 @@ export const createRenderer = <T extends VListItem = VListItem>(
           isFocused,
           compressionCtx,
         );
-        itemsContainer.appendChild(element);
-        rendered.set(i, { index: i, element });
+        fragment.appendChild(element);
+        newElements.push({ index: i, element });
+      }
+    }
+
+    // Batch append all new elements in a single DOM operation
+    if (newElements.length > 0) {
+      itemsContainer.appendChild(fragment);
+      // Register elements in rendered map after DOM insertion
+      for (const { index, element } of newElements) {
+        rendered.set(index, { index, element });
       }
     }
   };
@@ -399,13 +425,13 @@ export const createRenderer = <T extends VListItem = VListItem>(
     const existing = rendered.get(index);
 
     if (existing) {
-      const state = createItemState(isSelected, isFocused);
+      const state = getItemState(isSelected, isFocused);
       const result = template(item, index, state);
 
       applyTemplate(existing.element, result);
       applyClasses(existing.element, isSelected, isFocused);
-      existing.element.setAttribute("data-id", String(item.id));
-      existing.element.setAttribute("aria-selected", String(isSelected));
+      existing.element.dataset.id = String(item.id);
+      existing.element.ariaSelected = String(isSelected);
     }
   };
 

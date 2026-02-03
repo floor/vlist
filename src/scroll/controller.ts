@@ -87,22 +87,45 @@ export interface ScrollController {
 }
 
 // =============================================================================
-// Velocity Tracker
+// Velocity Tracker (Circular Buffer)
 // =============================================================================
+
+/** Number of samples in circular buffer (avoids array allocation on every update) */
+const VELOCITY_SAMPLE_COUNT = 5;
+
+interface VelocitySample {
+  position: number;
+  time: number;
+}
 
 interface VelocityTracker {
   velocity: number;
   lastPosition: number;
   lastTime: number;
-  samples: Array<{ position: number; time: number }>;
+  /** Circular buffer of samples (pre-allocated, reused) */
+  samples: VelocitySample[];
+  /** Current write index in circular buffer */
+  sampleIndex: number;
+  /** Number of valid samples (0 to VELOCITY_SAMPLE_COUNT) */
+  sampleCount: number;
 }
 
-const createVelocityTracker = (initialPosition = 0): VelocityTracker => ({
-  velocity: 0,
-  lastPosition: initialPosition,
-  lastTime: performance.now(),
-  samples: [],
-});
+const createVelocityTracker = (initialPosition = 0): VelocityTracker => {
+  // Pre-allocate sample array to avoid allocation during scrolling
+  const samples: VelocitySample[] = new Array(VELOCITY_SAMPLE_COUNT);
+  for (let i = 0; i < VELOCITY_SAMPLE_COUNT; i++) {
+    samples[i] = { position: 0, time: 0 };
+  }
+
+  return {
+    velocity: 0,
+    lastPosition: initialPosition,
+    lastTime: performance.now(),
+    samples,
+    sampleIndex: 0,
+    sampleCount: 0,
+  };
+};
 
 const updateVelocityTracker = (
   tracker: VelocityTracker,
@@ -113,30 +136,43 @@ const updateVelocityTracker = (
 
   if (timeDelta === 0) return tracker;
 
-  const positionDelta = newPosition - tracker.lastPosition;
-  const instantVelocity = positionDelta / timeDelta;
+  // Write to current slot in circular buffer (no allocation)
+  const currentSample = tracker.samples[tracker.sampleIndex]!;
+  currentSample.position = newPosition;
+  currentSample.time = now;
 
-  // Keep recent samples (last 100ms)
-  const samples = [
-    ...tracker.samples.filter((s) => now - s.time < 100),
-    { position: newPosition, time: now },
-  ];
+  // Advance index (wrap around)
+  tracker.sampleIndex = (tracker.sampleIndex + 1) % VELOCITY_SAMPLE_COUNT;
+  tracker.sampleCount = Math.min(
+    tracker.sampleCount + 1,
+    VELOCITY_SAMPLE_COUNT,
+  );
 
-  // Calculate average velocity from recent samples
-  let avgVelocity = instantVelocity;
-  if (samples.length > 1) {
-    const oldest = samples[0]!;
+  // Calculate average velocity from samples
+  let avgVelocity: number;
+
+  if (tracker.sampleCount > 1) {
+    // Find oldest valid sample (circular buffer)
+    const oldestIndex =
+      (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
+      VELOCITY_SAMPLE_COUNT;
+    const oldest = tracker.samples[oldestIndex]!;
     const totalDistance = newPosition - oldest.position;
     const totalTime = now - oldest.time;
-    avgVelocity = totalTime > 0 ? totalDistance / totalTime : instantVelocity;
+    avgVelocity =
+      totalTime > 0
+        ? totalDistance / totalTime
+        : (newPosition - tracker.lastPosition) / timeDelta;
+  } else {
+    avgVelocity = (newPosition - tracker.lastPosition) / timeDelta;
   }
 
-  return {
-    velocity: avgVelocity,
-    lastPosition: newPosition,
-    lastTime: now,
-    samples,
-  };
+  // Update tracker state (mutate in place to avoid allocation)
+  tracker.velocity = avgVelocity;
+  tracker.lastPosition = newPosition;
+  tracker.lastTime = now;
+
+  return tracker;
 };
 
 // =============================================================================

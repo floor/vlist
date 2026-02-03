@@ -54,6 +54,61 @@ interface ElementPool {
 }
 ```
 
+When acquiring elements, the pool also sets the static `role="option"` attribute once per element lifetime, avoiding repeated `setAttribute` calls during rendering.
+
+### DocumentFragment Batching
+
+When rendering new items, the renderer collects them in a `DocumentFragment` and appends them in a single DOM operation. This reduces layout thrashing during fast scrolling:
+
+```typescript
+// Collect new elements
+const fragment = document.createDocumentFragment();
+const newElements: Array<{ index: number; element: HTMLElement }> = [];
+
+for (let i = range.start; i <= range.end; i++) {
+  // ... render logic ...
+  if (!existing) {
+    fragment.appendChild(element);
+    newElements.push({ index: i, element });
+  }
+}
+
+// Single DOM operation
+if (newElements.length > 0) {
+  itemsContainer.appendChild(fragment);
+}
+```
+
+### Optimized Attribute Setting
+
+The renderer uses `dataset` and direct property assignment instead of `setAttribute` for better performance:
+
+```typescript
+// Fast: direct property assignment
+element.dataset.index = String(index);
+element.dataset.id = String(item.id);
+element.ariaSelected = String(isSelected);
+
+// Slower: setAttribute (avoided)
+// element.setAttribute("data-index", String(index));
+```
+
+### Reusable ItemState
+
+The `ItemState` object passed to templates is reused to reduce GC pressure:
+
+```typescript
+const reusableItemState: ItemState = { selected: false, focused: false };
+
+const getItemState = (isSelected: boolean, isFocused: boolean): ItemState => {
+  reusableItemState.selected = isSelected;
+  reusableItemState.focused = isFocused;
+  return reusableItemState;
+};
+```
+
+**⚠️ Important**: Templates should read from the state object immediately and not store the reference, as it will be mutated on the next render call.
+
 ### Virtual Scrolling
 
 Only items within the visible range (plus overscan buffer) are rendered:

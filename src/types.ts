@@ -50,8 +50,40 @@ export interface VListConfig<T extends VListItem = VListItem> {
   /** Custom scrollbar configuration (for compressed mode) */
   scrollbar?: ScrollbarConfig;
 
+  /** Loading behavior configuration */
+  loading?: LoadingConfig;
+
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
+}
+
+// =============================================================================
+// Loading Configuration
+// =============================================================================
+
+/** Loading behavior configuration */
+export interface LoadingConfig {
+  /**
+   * Velocity threshold above which data loading is skipped (px/ms)
+   * When scrolling faster than this, loading is deferred until scroll stops.
+   * Default: 25 px/ms
+   */
+  cancelThreshold?: number;
+
+  /**
+   * Velocity threshold for preloading (px/ms)
+   * When scrolling faster than this but slower than cancelThreshold,
+   * extra items are preloaded in the scroll direction.
+   * Default: 2 px/ms
+   */
+  preloadThreshold?: number;
+
+  /**
+   * Number of extra items to preload ahead of scroll direction
+   * Only applies when velocity is between preloadThreshold and cancelThreshold.
+   * Default: 50 items
+   */
+  preloadAhead?: number;
 }
 
 // =============================================================================
@@ -211,6 +243,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Error occurred */
   error: { error: Error; context: string };
+
+  /** Container resized */
+  resize: { height: number; width: number };
 }
 
 /** Event handler type */
