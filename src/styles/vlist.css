@@ -165,8 +165,8 @@
 /* Item selected state */
 .vlist-item--selected {
     background-color: var(--vlist-bg-selected);
-    border-left: 4px solid var(--vlist-border-selected);
-    padding-left: calc(var(--vlist-item-padding-x) - 4px);
+    // border-left: 4px solid var(--vlist-border-selected);
+    // padding-left: calc(var(--vlist-item-padding-x) - 4px);
 }
 
 .vlist-item--selected:hover {
@@ -174,7 +174,7 @@
 }
 
 /* Item focused state (keyboard navigation) */
-.vlist-item--focused {
+.vlist-item--focused-visible {
     outline: 2px solid var(--vlist-focus-ring);
     outline-offset: -2px;
     z-index: 1;
