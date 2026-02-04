@@ -1,0 +1,373 @@
+/**
+ * vlist - Basic Example Styles
+ * Layout styles based on mtrl-app content.scss + custom panel styles
+ * Note: mtrl-addons layout system adds "mtrl-" prefix to all class names
+ */
+
+/* ============================================================================
+   Layout - Content (based on mtrl-app content.scss)
+   ============================================================================ */
+
+.mtrl-content {
+    margin: 0 auto 100px;
+    max-width: 1024px;
+    flex: 1;
+    height: 100%;
+    transition:
+        background-color 200ms cubic-bezier(0.2, 0, 0, 1),
+        margin 200ms ease;
+    padding: 0 10px;
+    padding-bottom: 16px;
+}
+
+.mtrl-content .mtrl-content__header {
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.mtrl-content .mtrl-content__box {
+    flex: 1;
+    height: 100%;
+    padding: 24px;
+    border-radius: 16px;
+    gap: 5px;
+    background-color: var(--mtrl-sys-color-surface-container);
+}
+
+.mtrl-content .mtrl-content__box.mtrl-content-info {
+    background-color: var(--mtrl-sys-color-outline-variant);
+    color: var(--mtrl-sys-color-on-surface-bright);
+    padding: 32px 56px 56px;
+}
+
+.mtrl-content .mtrl-content__title {
+    font-family: var(--mtrl-sys-typescale-display-large-font-family);
+    font-size: var(--mtrl-sys-typescale-display-large-font-size, 57px);
+    font-weight: 500;
+    line-height: var(--mtrl-sys-typescale-display-large-line-height, 64px);
+    letter-spacing: var(
+        --mtrl-sys-typescale-display-large-letter-spacing,
+        -0.25px
+    );
+    margin: 0;
+}
+
+.mtrl-content .mtrl-content__description {
+    font-family: var(--mtrl-sys-typescale-headline-small-font-family);
+    font-size: var(--mtrl-sys-typescale-headline-small-font-size, 24px);
+    font-weight: var(--mtrl-sys-typescale-headline-small-font-weight, 400);
+    line-height: var(--mtrl-sys-typescale-headline-small-line-height, 32px);
+    margin: 8px 0 0 0;
+}
+
+.mtrl-content .mtrl-content__body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Footer */
+.mtrl-content .mtrl-content__footer {
+    background-color: var(--mtrl-sys-color-surface-container);
+    border-radius: 16px;
+    display: flex;
+    margin-top: 32px;
+}
+
+.mtrl-content .mtrl-content__footer-section {
+    flex: 5;
+    display: flex;
+    flex-direction: column;
+    padding: 48px 56px;
+}
+
+.mtrl-content .mtrl-content__footer-text {
+    font-size: 14px;
+    color: var(--mtrl-sys-color-on-surface-variant, #a0a0a0);
+    line-height: 1.7;
+    max-width: 900px;
+    margin: 0;
+}
+
+/* ============================================================================
+   Layout - Components Section
+   ============================================================================ */
+
+.mtrl-components__section {
+    background-color: var(--mtrl-sys-color-surface-container);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.mtrl-components__section-head {
+    margin-bottom: 20px;
+}
+
+.mtrl-components__section-title {
+    font-family: var(--mtrl-sys-typescale-headline-small-font-family);
+    font-size: var(--mtrl-sys-typescale-headline-small-font-size, 24px);
+    font-weight: var(--mtrl-sys-typescale-headline-small-font-weight, 400);
+    line-height: var(--mtrl-sys-typescale-headline-small-line-height, 32px);
+    color: var(--mtrl-sys-color-on-surface);
+    margin: 0 0 8px 0;
+}
+
+.mtrl-components__section-description {
+    font-size: 14px;
+    color: var(--mtrl-sys-color-on-surface-variant);
+    margin: 0;
+}
+
+.mtrl-components__section-body {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    min-height: 600px;
+}
+
+@media (max-width: 900px) {
+    .mtrl-components__section-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mtrl-components__section-showcase {
+    min-height: 600px;
+    overflow: hidden;
+    position: relative;
+    flex: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    padding: 40px 24px 40px;
+    color: var(--mtrl-sys-color-on-surface);
+    margin: 0;
+}
+
+/* Ensure vlist fills the showcase container */
+.mtrl-components__section-showcase .vlist {
+    height: 640px !important;
+    width: 320px;
+    border: 2px solid var(--vlist-border);
+    border-radius: 2px;
+}
+
+.mtrl-components__section-info {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 600px;
+}
+
+/* ============================================================================
+   Panels
+   ============================================================================ */
+
+.mtrl-panel {
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 16px;
+}
+
+.mtrl-panel__title {
+    font-weight: 400;
+    margin-bottom: 8px;
+    font-size: 18px;
+    color: var(--mtrl-sys-color-on-surface);
+}
+
+/* ============================================================================
+   Stats Grid
+   ============================================================================ */
+
+.mtrl-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.mtrl-stat-card {
+    background-color: var(--mtrl-sys-color-surface);
+    background-color: var(--mtrl-sys-color-secondary-container);
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.mtrl-stat-card__label {
+    font-size: 11px;
+    text-align: center;
+    color: var(--mtrl-sys-color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mtrl-stat-card__value {
+    font-size: 24px;
+    font-weight: 600;
+    margin-top: 4px;
+    text-align: center;
+}
+
+.mtrl-stat-card__value--success {
+    color: #43e97b;
+}
+
+.mtrl-stat-card__value--small {
+    font-size: 16px;
+    height: 28.5px;
+}
+
+/* ============================================================================
+   Visible Range Display
+   ============================================================================ */
+
+.mtrl-range-display {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--mtrl-sys-color-on-surface);
+    margin-bottom: 8px;
+}
+
+.mtrl-range-display__value {
+    font-weight: 700;
+    color: var(--mtrl-sys-color-primary);
+}
+
+.mtrl-range-bar {
+    position: relative;
+    height: 24px;
+    background-color: var(--mtrl-sys-color-surface-container-highest);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.mtrl-range-bar__fill {
+    position: absolute;
+    height: 100%;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transition: left 0.15s ease-out, width 0.15s ease-out;
+}
+
+.mtrl-range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--mtrl-sys-color-on-surface-variant);
+}
+
+/* ============================================================================
+   Memory Efficiency Display
+   ============================================================================ */
+
+.mtrl-efficiency-display {
+    text-align: center;
+    padding: 16px;
+    background-color: var(--mtrl-sys-color-surface);
+    border-radius: 12px;
+    margin-top: 8px;
+}
+
+.mtrl-efficiency-display__value {
+    font-size: 48px;
+    font-weight: 700;
+    color: #43e97b;
+    line-height: 1;
+}
+
+.mtrl-efficiency-display__label {
+    font-size: 12px;
+    color: var(--mtrl-sys-color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+}
+
+/* ============================================================================
+   List Item Styles
+   ============================================================================ */
+
+.vlist-item {
+    border-bottom: none;
+}
+
+.mtrl-item-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0;
+    height: 100%;
+}
+
+.mtrl-item-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.mtrl-item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.mtrl-item-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--mtrl-sys-color-on-surface);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mtrl-item-email {
+    font-size: 13px;
+    color: var(--mtrl-sys-color-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mtrl-item-index {
+    font-size: 12px;
+    color: var(--mtrl-sys-color-on-surface-variant);
+    min-width: 50px;
+    text-align: right;
+}
+
+/* ============================================================================
+   Selected Item Highlight
+   ============================================================================ */
+
+.vlist-item--selected .mtrl-item-content {
+    background-color: var(--mtrl-sys-color-primary-container);
+    border-radius: 8px;
+    margin: 0 4px;
+    padding: 0 12px;
+}
+
+.vlist-item--selected .mtrl-item-avatar {
+    background: var(--mtrl-sys-color-primary);
+}
+
+.vlist-item--selected .mtrl-item-name {
+    color: var(--mtrl-sys-color-on-primary-container);
+}
+
+.vlist-item--selected .mtrl-item-email {
+    color: var(--mtrl-sys-color-on-primary-container);
+    opacity: 0.8;
+}

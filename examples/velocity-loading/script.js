@@ -11,6 +11,7 @@ import { createVList } from "vlist";
 // Constants
 const CANCEL_LOAD_VELOCITY_THRESHOLD = 25; // px/ms
 const TOTAL_ITEMS = 1000000;
+const UPDATE_THROTTLE_MS = 50; // Throttle UI updates
 
 // Simulated API
 let simulatedDelay = 0;
@@ -33,24 +34,20 @@ const fetchItems = async (offset, limit) => {
   return { items, total: TOTAL_ITEMS, hasMore: end < TOTAL_ITEMS };
 };
 
-// Stats tracking
+// Stats tracking (simplified)
 const createStatsTracker = () => {
-  let loadRequests = 0;
-  let currentVelocity = 0;
-  let isLoading = false;
+  const state = {
+    loadRequests: 0,
+    currentVelocity: 0,
+    isLoading: false,
+  };
 
   return {
-    trackLoad: () => loadRequests++,
-    setVelocity: (v) => {
-      currentVelocity = v;
-    },
-    setLoading: (l) => {
-      isLoading = l;
-    },
-    getStats: () => ({ loadRequests, currentVelocity, isLoading }),
-    reset: () => {
-      loadRequests = 0;
-    },
+    trackLoad: () => state.loadRequests++,
+    setVelocity: (v) => (state.currentVelocity = v),
+    setLoading: (l) => (state.isLoading = l),
+    getStats: () => state,
+    reset: () => (state.loadRequests = 0),
   };
 };
 
@@ -112,6 +109,41 @@ const createComponentSection = (info) => [
   ],
 ];
 
+// Cached template schemas (created once, not on every render)
+const PLACEHOLDER_SCHEMA = [
+  { class: "item-content" },
+  [{ class: "item-avatar item-avatar--placeholder" }],
+  [
+    { class: "item-details" },
+    [{ class: "item-name item-name--placeholder" }],
+    [{ class: "item-email item-email--placeholder" }],
+  ],
+];
+
+// Cache for placeholder element (clone instead of recreate)
+let cachedPlaceholderElement = null;
+
+const getPlaceholderElement = () => {
+  if (!cachedPlaceholderElement) {
+    cachedPlaceholderElement = createLayout(PLACEHOLDER_SCHEMA).element;
+  }
+  return cachedPlaceholderElement.cloneNode(true);
+};
+
+const createItemElement = (item, index) => {
+  const schema = [
+    { class: "item-content" },
+    [{ class: "item-avatar", text: item.avatar }],
+    [
+      { class: "item-details" },
+      [{ class: "item-name", text: `${item.name} (${index})` }],
+      [{ class: "item-email", text: item.email }],
+      [{ class: "item-role", text: item.role }],
+    ],
+  ];
+  return createLayout(schema).element;
+};
+
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
   createVelocityExample(document.getElementById("content"));
@@ -140,34 +172,9 @@ const createVelocityExample = (container) => {
     layout.body,
   ).component;
 
-  // Create vlist in the showcase (left side)
-  // The layout system returns elements directly or via .element property
   const showcaseElement = section.showcase.element || section.showcase;
 
-  // Create vlist after a frame to ensure container has dimensions
-  let list;
-
-  // Item template schemas for createLayout
-  const createPlaceholderSchema = () => [
-    { class: "item-content" },
-    [{ class: "item-avatar item-avatar--placeholder" }],
-    [
-      { class: "item-details" },
-      [{ class: "item-name item-name--placeholder" }],
-      [{ class: "item-email item-email--placeholder" }],
-    ],
-  ];
-
-  const createItemSchema = (item, index) => [
-    { class: "item-content" },
-    [{ class: "item-avatar", text: item.avatar }],
-    [
-      { class: "item-details" },
-      [{ class: "item-name", text: `${item.name} (${index})` }],
-      [{ class: "item-email", text: item.email }],
-      [{ class: "item-role", text: item.role }],
-    ],
-  ];
+  let list = null;
 
   const createList = () => {
     list = createVList({
@@ -177,19 +184,18 @@ const createVelocityExample = (container) => {
         mode: "single",
       },
       template: (item, index) => {
-        const schema = item._isPlaceholder
-          ? createPlaceholderSchema()
-          : createItemSchema(item, index);
-        return createLayout(schema).element;
+        return item._isPlaceholder
+          ? getPlaceholderElement()
+          : createItemElement(item, index);
       },
       adapter: {
         read: async ({ offset, limit }) => {
           stats.trackLoad();
           stats.setLoading(true);
-          updateControls();
+          scheduleUpdate();
           const result = await fetchItems(offset, limit);
           stats.setLoading(false);
-          updateControls();
+          scheduleUpdate();
           return result;
         },
       },
@@ -202,7 +208,7 @@ const createVelocityExample = (container) => {
       if (timeDelta > 0) {
         const velocity = Math.abs(scrollTop - lastScrollTop) / timeDelta;
         stats.setVelocity(velocity);
-        updateControls();
+        scheduleUpdate();
         scheduleVelocityDecay();
       }
       lastScrollTop = scrollTop;
@@ -211,19 +217,17 @@ const createVelocityExample = (container) => {
 
     list.on("load:start", () => {
       stats.setLoading(true);
-      updateControls();
+      scheduleUpdate();
     });
 
     list.on("load:end", () => {
       stats.setLoading(false);
-      updateControls();
+      scheduleUpdate();
     });
   };
 
   // Use requestAnimationFrame to ensure layout is complete
-  requestAnimationFrame(() => {
-    createList();
-  });
+  requestAnimationFrame(createList);
 
   // Create controls in the info panel (right side)
   const controls = createLayout(
@@ -239,15 +243,17 @@ const createVelocityExample = (container) => {
           { class: "stats-grid" },
           [
             { class: "stat-card" },
-
-            ["loadRequests", { class: "stat-card__value" }],
-            [{ class: "stat-card__label", text: "Load Request" }],
+            ["loadRequests", { class: "stat-card__value", text: "0" }],
+            [{ class: "stat-card__label", text: "Load Requests" }],
           ],
           [
             { class: "stat-card" },
             [
               "isLoading",
-              { class: "stat-card__value stat-card__value--small" },
+              {
+                class: "stat-card__value stat-card__value--small",
+                text: "✓ Idle",
+              },
             ],
             [{ class: "stat-card__label", text: "Status" }],
           ],
@@ -257,13 +263,12 @@ const createVelocityExample = (container) => {
       // Velocity panel
       [
         "velocityPanel",
-        { tag: "div", class: "mtrl-panel" }[
-          { class: "panel__title", text: "Scroll Velocity" }
-        ],
+        { tag: "div", class: "mtrl-panel" },
+        [{ class: "panel__title", text: "Scroll Velocity" }],
         [
-          "velocityDisplay",
           { class: "velocity-display" },
-          [{ class: "velocity-display__unit", text: "px/ms" }],
+          ["velocityValue", { class: "velocity-display__value", text: "0.0" }],
+          [{ class: "velocity-display__unit", text: " px/ms" }],
         ],
         [
           { class: "velocity-bar" },
@@ -276,10 +281,16 @@ const createVelocityExample = (container) => {
         [
           { class: "velocity-labels" },
           [{ text: "0" }],
-          ["velocityThreshold"],
+          [
+            "velocityThreshold",
+            { text: `Threshold: ${CANCEL_LOAD_VELOCITY_THRESHOLD}` },
+          ],
           [{ text: "50+" }],
         ],
-        ["velocityStatus", { class: "mtrl-velocity-status" }],
+        [
+          "velocityStatus",
+          { class: "mtrl-velocity-status", text: "✅ Loading allowed" },
+        ],
       ],
 
       // Sliders
@@ -325,49 +336,94 @@ const createVelocityExample = (container) => {
     section.info,
   ).component;
 
-  // Update panels function
+  // Cache previous state to avoid unnecessary DOM updates
+  let prevState = {
+    loadRequests: -1,
+    isLoading: null,
+    isAboveThreshold: null,
+    velocityPercent: -1,
+  };
+
+  // Update panels function (optimized - only update changed values)
   const updateControls = () => {
     const { loadRequests, currentVelocity, isLoading } = stats.getStats();
     const velocityPercent = Math.min(100, (currentVelocity / 50) * 100);
     const isAboveThreshold = currentVelocity > CANCEL_LOAD_VELOCITY_THRESHOLD;
 
-    controls.loadRequests.innerHTML = `${loadRequests}`;
-
-    if (isLoading) {
-      controls.isLoading.classList.add("mtrl-stat-card__value--loading");
-      controls.isLoading.classList.remove("mtrl-stat-card__value--idle");
-      controls.isLoading.innerHTML = "Loading...";
-    } else {
-      controls.isLoading.classList.remove("mtrl-stat-card__value--loading");
-      controls.isLoading.classList.add("mtrl-stat-card__value--idle");
-      controls.isLoading.innerHTML = "✓ Idle";
+    // Only update load requests if changed
+    if (prevState.loadRequests !== loadRequests) {
+      controls.loadRequests.textContent = loadRequests;
+      prevState.loadRequests = loadRequests;
     }
 
-    if (isAboveThreshold) {
-      addClass(controls.velocityDisplay, "velocity-display--fast");
-      addClass(controls.velocityThreshold, "velocity-labels__threshold--fast");
-      addClass(controls.velocityPercent, "velocity-bar__fill--fast");
-      removeClass(controls.velocityPercent, "velocity-bar__fill--slow");
-      addClass(controls.velocityStatus, "velocity-status--skipped");
-      removeClass(controls.velocityStatus, "velocity-status--allowed");
-      controls.velocityStatus.innerHTML = "🚫 Loading skipped";
-    } else {
-      removeClass(controls.velocityDisplay, "velocity-display--fast");
-      removeClass(controls.velocityPercent, "velocity-bar__fill--fast");
-      removeClass(
-        controls.velocityThreshold,
-        "velocity-labels__threshold--fast",
-      );
-      addClass(controls.velocityPercent, "velocity-bar__fill--slow");
-      removeClass(controls.velocityPercent, "velocity-bar__fill--fast");
-      removeClass(controls.velocityStatus, "velocity-status--skipped");
-      addClass(controls.velocityStatus, "velocity-status--allowed");
-      controls.velocityStatus.innerHTML = "✅ Loading allowed";
+    // Only update loading status if changed
+    if (prevState.isLoading !== isLoading) {
+      if (isLoading) {
+        addClass(controls.isLoading, "stat-card__value--loading");
+        removeClass(controls.isLoading, "stat-card__value--idle");
+        controls.isLoading.textContent = "Loading...";
+      } else {
+        removeClass(controls.isLoading, "stat-card__value--loading");
+        addClass(controls.isLoading, "stat-card__value--idle");
+        controls.isLoading.textContent = "✓ Idle";
+      }
+      prevState.isLoading = isLoading;
     }
 
-    controls.velocityDisplay.innerHTML = `${currentVelocity.toFixed(1)}`;
-    controls.velocityPercent.style.width = `${velocityPercent}%`;
-    controls.velocityThreshold.innerHTML = `Threshold: ${CANCEL_LOAD_VELOCITY_THRESHOLD}`;
+    // Only update threshold status if changed
+    if (prevState.isAboveThreshold !== isAboveThreshold) {
+      if (isAboveThreshold) {
+        addClass(
+          controls.velocityValue.parentElement,
+          "velocity-display--fast",
+        );
+        addClass(
+          controls.velocityThreshold,
+          "velocity-labels__threshold--fast",
+        );
+        addClass(controls.velocityPercent, "velocity-bar__fill--fast");
+        removeClass(controls.velocityPercent, "velocity-bar__fill--slow");
+        addClass(controls.velocityStatus, "velocity-status--skipped");
+        removeClass(controls.velocityStatus, "velocity-status--allowed");
+        controls.velocityStatus.textContent = "🚫 Loading skipped";
+      } else {
+        removeClass(
+          controls.velocityValue.parentElement,
+          "velocity-display--fast",
+        );
+        removeClass(
+          controls.velocityThreshold,
+          "velocity-labels__threshold--fast",
+        );
+        removeClass(controls.velocityPercent, "velocity-bar__fill--fast");
+        addClass(controls.velocityPercent, "velocity-bar__fill--slow");
+        removeClass(controls.velocityStatus, "velocity-status--skipped");
+        addClass(controls.velocityStatus, "velocity-status--allowed");
+        controls.velocityStatus.textContent = "✅ Loading allowed";
+      }
+      prevState.isAboveThreshold = isAboveThreshold;
+    }
+
+    // Always update velocity display and bar (these change frequently)
+    controls.velocityValue.textContent = currentVelocity.toFixed(1);
+
+    // Only update bar width if changed significantly (avoid sub-pixel updates)
+    const roundedPercent = Math.round(velocityPercent);
+    if (prevState.velocityPercent !== roundedPercent) {
+      controls.velocityPercent.style.width = `${roundedPercent}%`;
+      prevState.velocityPercent = roundedPercent;
+    }
+  };
+
+  // Throttled update scheduling
+  let updateScheduled = false;
+  const scheduleUpdate = () => {
+    if (updateScheduled) return;
+    updateScheduled = true;
+    requestAnimationFrame(() => {
+      updateControls();
+      updateScheduled = false;
+    });
   };
 
   // Track velocity from scroll events
@@ -382,7 +438,7 @@ const createVelocityExample = (container) => {
     }
     velocityDecayTimeout = setTimeout(() => {
       stats.setVelocity(0);
-      updateControls();
+      scheduleUpdate();
     }, 100);
   };
 
@@ -413,11 +469,12 @@ const createVelocityExample = (container) => {
 
   controls.resetStats.on("click", () => {
     stats.reset();
-    updateControls();
+    prevState.loadRequests = -1; // Force update
+    scheduleUpdate();
   });
 
   // Initial update
-  updateControls();
+  scheduleUpdate();
 
   return { layout, section, list, stats, controls };
 };
