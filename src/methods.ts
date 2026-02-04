@@ -38,7 +38,10 @@ export interface DataMethods<T extends VListItem> {
 /** Scroll API methods */
 export interface ScrollMethods {
   scrollToIndex: (index: number, align?: "start" | "center" | "end") => void;
-  scrollToItem: (id: string | number, align?: "start" | "center" | "end") => void;
+  scrollToItem: (
+    id: string | number,
+    align?: "start" | "center" | "end",
+  ) => void;
   getScrollPosition: () => number;
 }
 
@@ -213,7 +216,9 @@ const renderAndEmitSelection = <T extends VListItem>(
 
   ctx.emitter.emit("selection:change", {
     selected: getSelectedIds(ctx.state.selectionState),
-    items: getSelectedItems(ctx.state.selectionState, ctx.getAllLoadedItems()),
+    items: getSelectedItems(ctx.state.selectionState, (id) =>
+      ctx.dataManager.getItemById(id),
+    ),
   });
 };
 
@@ -313,6 +318,8 @@ export const createSelectionMethods = <T extends VListItem>(
    * Get selected items
    */
   getSelectedItems: (): T[] => {
-    return getSelectedItems(ctx.state.selectionState, ctx.getAllLoadedItems());
+    return getSelectedItems(ctx.state.selectionState, (id) =>
+      ctx.dataManager.getItemById(id),
+    );
   },
 });

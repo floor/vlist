@@ -269,14 +269,21 @@ export const getSelectedIds = (
 };
 
 /**
- * Get selected items
+ * Get selected items using ID lookup (O(k) where k = selected count)
  * Pure function - no side effects
  */
 export const getSelectedItems = <T extends VListItem>(
   state: SelectionState,
-  items: T[],
+  getItemById: (id: string | number) => T | undefined,
 ): T[] => {
-  return items.filter((item) => state.selected.has(item.id));
+  const items: T[] = [];
+  for (const id of state.selected) {
+    const item = getItemById(id);
+    if (item) {
+      items.push(item);
+    }
+  }
+  return items;
 };
 
 /**

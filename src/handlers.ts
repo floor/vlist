@@ -267,9 +267,8 @@ export const createClickHandler = <T extends VListItem>(
       // Emit selection change
       ctx.emitter.emit("selection:change", {
         selected: getSelectedIds(ctx.state.selectionState),
-        items: getSelectedItems(
-          ctx.state.selectionState,
-          ctx.getAllLoadedItems(),
+        items: getSelectedItems(ctx.state.selectionState, (id) =>
+          ctx.dataManager.getItemById(id),
         ),
       });
     }
@@ -362,9 +361,8 @@ export const createKeyboardHandler = <T extends VListItem>(
       if (event.key === " " || event.key === "Enter") {
         ctx.emitter.emit("selection:change", {
           selected: getSelectedIds(ctx.state.selectionState),
-          items: getSelectedItems(
-            ctx.state.selectionState,
-            ctx.getAllLoadedItems(),
+          items: getSelectedItems(ctx.state.selectionState, (id) =>
+            ctx.dataManager.getItemById(id),
           ),
         });
       }
