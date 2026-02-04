@@ -408,10 +408,13 @@ describe("getSelectedIds", () => {
 });
 
 describe("getSelectedItems", () => {
-  it("should return selected items", () => {
+  it("should return selected items using lookup function", () => {
     const state = createSelectionState([2, 4]);
     const items = createTestItems(5);
-    const selected = getSelectedItems(state, items);
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const getItemById = (id: string | number) => itemMap.get(id);
+
+    const selected = getSelectedItems(state, getItemById);
 
     expect(selected).toHaveLength(2);
     expect(selected.find((i) => i.id === 2)).toBeDefined();
@@ -421,18 +424,43 @@ describe("getSelectedItems", () => {
   it("should return empty array when nothing selected", () => {
     const state = createSelectionState();
     const items = createTestItems(5);
-    const selected = getSelectedItems(state, items);
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const getItemById = (id: string | number) => itemMap.get(id);
+
+    const selected = getSelectedItems(state, getItemById);
 
     expect(selected).toHaveLength(0);
   });
 
-  it("should handle missing items gracefully", () => {
+  it("should skip items not found by lookup", () => {
     const state = createSelectionState([1, 100]); // 100 doesn't exist
     const items = createTestItems(5);
-    const selected = getSelectedItems(state, items);
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const getItemById = (id: string | number) => itemMap.get(id);
+
+    const selected = getSelectedItems(state, getItemById);
 
     expect(selected).toHaveLength(1);
     expect(selected[0]?.id).toBe(1);
+  });
+
+  it("should be O(k) complexity where k is selected count", () => {
+    // Create a large dataset
+    const items = createTestItems(10000);
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    let lookupCount = 0;
+    const getItemById = (id: string | number) => {
+      lookupCount++;
+      return itemMap.get(id);
+    };
+
+    // Select only 3 items
+    const state = createSelectionState([1, 5000, 10000]);
+    const selected = getSelectedItems(state, getItemById);
+
+    // Should only call lookup 3 times, not 10000 times
+    expect(lookupCount).toBe(3);
+    expect(selected).toHaveLength(3);
   });
 });
 
