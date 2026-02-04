@@ -173,6 +173,9 @@ const createVelocityExample = (container) => {
     list = createVList({
       container: showcaseElement,
       itemHeight: 72,
+      selection: {
+        mode: "single",
+      },
       template: (item, index) => {
         const schema = item._isPlaceholder
           ? createPlaceholderSchema()
