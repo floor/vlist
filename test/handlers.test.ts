@@ -84,6 +84,9 @@ const createMockConfig = (
   classPrefix: "vlist",
   selectionMode: "none",
   hasAdapter: false,
+  cancelLoadThreshold: 25,
+  preloadThreshold: 10,
+  preloadAhead: 20,
   ...overrides,
 });
 

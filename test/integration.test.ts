@@ -45,6 +45,41 @@ beforeAll(() => {
   global.KeyboardEvent = dom.window.KeyboardEvent;
   global.Element = dom.window.Element;
 
+  // Mock ResizeObserver (not supported in JSDOM)
+  global.ResizeObserver = class ResizeObserver {
+    private callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(_target: Element) {
+      // Immediately call with mock entry for initial size
+      this.callback(
+        [
+          {
+            target: _target,
+            contentRect: {
+              width: 300,
+              height: 500,
+              top: 0,
+              left: 0,
+              bottom: 500,
+              right: 300,
+              x: 0,
+              y: 0,
+              toJSON: () => ({}),
+            },
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          } as ResizeObserverEntry,
+        ],
+        this,
+      );
+    }
+    unobserve(_target: Element) {}
+    disconnect() {}
+  };
+
   // Mock scrollTo for JSDOM (not supported natively)
   if (!dom.window.Element.prototype.scrollTo) {
     dom.window.Element.prototype.scrollTo = function (
