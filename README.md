@@ -13,7 +13,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🎯 **Simple API** - Easy to use with TypeScript support
 - 📜 **Infinite scroll** - Built-in async adapter support
 - ✅ **Selection** - Single and multiple selection modes
-- 🎨 **Tailwind CSS** - Beautiful, customizable styles
+- 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 
 ## Sandbox
@@ -63,8 +63,8 @@ const list = createVList({
   item: {
     height: 48,
     template: (item) => `
-      <div class="flex items-center gap-3">
-        <img src="${item.avatar}" class="w-8 h-8 rounded-full" />
+      <div class="item-content">
+        <img src="${item.avatar}" class="avatar" />
         <span>${item.name}</span>
       </div>
     `,
@@ -107,7 +107,7 @@ const list = createVList({
   item: {
     height: 56,
     template: (item, index, { selected }) => `
-      <div class="flex items-center gap-3 ${selected ? 'font-bold' : ''}">
+      <div class="item-content ${selected ? 'selected' : ''}">
         <span>${item.name}</span>
         ${selected ? '✓' : ''}
       </div>
@@ -177,14 +177,14 @@ const list = createVList({
     template: (item, index, { selected, focused }) => {
       // Return an HTMLElement for more control
       const el = document.createElement('div');
-      el.className = 'flex items-center gap-4 p-2';
+      el.className = 'item-content';
       el.innerHTML = `
-        <img src="${item.avatar}" class="w-12 h-12 rounded-full" />
-        <div class="flex-1">
-          <div class="font-medium">${item.name}</div>
-          <div class="text-sm text-gray-500">${item.email}</div>
+        <img src="${item.avatar}" class="avatar avatar--large" />
+        <div class="item-details">
+          <div class="item-name">${item.name}</div>
+          <div class="item-email">${item.email}</div>
         </div>
-        <div class="text-xs text-gray-400">${item.role}</div>
+        <div class="item-role">${item.role}</div>
       `;
       return el;
     },
@@ -274,7 +274,7 @@ When selection is enabled, the list supports full keyboard navigation:
 
 ## Styling
 
-### Using Tailwind CSS
+### Default Styles
 
 Import the default styles:
 
@@ -282,20 +282,7 @@ Import the default styles:
 import 'vlist/styles';
 ```
 
-Or customize with your own Tailwind classes in the template:
-
-```typescript
-item: {
-  height: 56,
-  template: (item, index, { selected }) => `
-    <div class="${selected ? 'bg-blue-100' : 'bg-white'} p-4 hover:bg-gray-50">
-      ${item.name}
-    </div>
-  `,
-}
-```
-
-### CSS Custom Properties
+### CSS Classes
 
 The component uses these CSS class names:
 
