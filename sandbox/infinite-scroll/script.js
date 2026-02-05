@@ -199,11 +199,13 @@ const createInfiniteScrollExample = (container) => {
   const createList = () => {
     list = createVList({
       container: showcaseElement,
-      itemHeight: 72,
-      template: (item, index) => {
-        return item._isPlaceholder
-          ? getPlaceholderElement()
-          : createItemElement(item);
+      item: {
+        height: 72,
+        template: (item, index) => {
+          return item._isPlaceholder
+            ? getPlaceholderElement()
+            : createItemElement(item);
+        },
       },
       adapter: {
         read: async ({ offset, limit }) => {

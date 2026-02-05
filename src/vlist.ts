@@ -77,11 +77,14 @@ export const createVList = <T extends VListItem = VListItem>(
   if (!config.container) {
     throw new Error("[vlist] Container is required");
   }
-  if (!config.itemHeight || config.itemHeight <= 0) {
-    throw new Error("[vlist] itemHeight must be a positive number");
+  if (!config.item) {
+    throw new Error("[vlist] item configuration is required");
   }
-  if (!config.template) {
-    throw new Error("[vlist] Template is required");
+  if (!config.item.height || config.item.height <= 0) {
+    throw new Error("[vlist] item.height must be a positive number");
+  }
+  if (!config.item.template) {
+    throw new Error("[vlist] item.template is required");
   }
 
   // ===========================================================================
@@ -89,8 +92,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // ===========================================================================
 
   const {
-    itemHeight,
-    template,
+    item: itemConfig,
     items: initialItems,
     adapter,
     overscan = DEFAULT_OVERSCAN,
@@ -99,6 +101,8 @@ export const createVList = <T extends VListItem = VListItem>(
     loading: loadingConfig,
     classPrefix = DEFAULT_CLASS_PREFIX,
   } = config;
+
+  const { height: itemHeight, template } = itemConfig;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 

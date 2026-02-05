@@ -179,14 +179,16 @@ const createVelocityExample = (container) => {
   const createList = () => {
     list = createVList({
       container: showcaseElement,
-      itemHeight: 72,
+      item: {
+        height: 72,
+        template: (item, index) => {
+          return item._isPlaceholder
+            ? getPlaceholderElement()
+            : createItemElement(item, index);
+        },
+      },
       selection: {
         mode: "single",
-      },
-      template: (item, index) => {
-        return item._isPlaceholder
-          ? getPlaceholderElement()
-          : createItemElement(item, index);
       },
       adapter: {
         read: async ({ offset, limit }) => {

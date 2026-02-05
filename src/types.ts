@@ -24,16 +24,22 @@ export interface VListItem {
 // Configuration
 // =============================================================================
 
+/** Item-specific configuration */
+export interface ItemConfig<T extends VListItem = VListItem> {
+  /** Fixed item height in pixels (required for virtual scrolling) */
+  height: number;
+
+  /** Template function to render each item */
+  template: ItemTemplate<T>;
+}
+
 /** Main configuration for createVList */
 export interface VListConfig<T extends VListItem = VListItem> {
   /** Container element or selector */
   container: HTMLElement | string;
 
-  /** Fixed item height in pixels (required for virtual scrolling) */
-  itemHeight: number;
-
-  /** Template function to render each item */
-  template: ItemTemplate<T>;
+  /** Item configuration (height and template) */
+  item: ItemConfig<T>;
 
   /** Static items array (optional if using adapter) */
   items?: T[];
