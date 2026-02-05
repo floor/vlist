@@ -16,29 +16,34 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🎨 **Tailwind CSS** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 
-## Examples
+## Sandbox
 
-Run the examples locally:
+Run the sandbox locally to explore examples:
 
 ```bash
 # Install dependencies
 bun install
 
-# Build the library
-bun run build
-
-# Serve examples
-bun run examples
+# Build and serve sandbox
+bun run sandbox
 ```
 
-Then open http://localhost:3000/examples in your browser.
+Then open http://localhost:3337/sandbox in your browser.
+
+To stop the server, press `Ctrl+C` in the terminal.
+
+**Development mode** (auto-rebuilds on changes):
+```bash
+bun run dev:sandbox
+```
 
 | Example | Description |
 |---------|-------------|
-| [Basic](examples/basic.html) | Simple list with 10,000 static items |
-| [Selection](examples/selection.html) | Single/multiple selection with keyboard navigation |
-| [Infinite Scroll](examples/infinite-scroll.html) | Async data loading with simulated API |
-| [Million Items](examples/million-items.html) | Stress test with 1,000,000 items |
+| [Basic](sandbox/basic/) | Pure vanilla JS - no frameworks, no dependencies |
+| [Selection](sandbox/selection/) | Single/multiple selection with keyboard navigation |
+| [Infinite Scroll](sandbox/infinite-scroll/) | Async data loading with simulated API |
+| [Million Items](sandbox/million-items/) | Stress test with 1,000,000 items |
+| [Velocity Loading](sandbox/velocity-loading/) | Velocity-based load skipping demo |
 
 ## Installation
 
