@@ -405,17 +405,19 @@ import { createVList } from 'vlist';
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item, index, { selected, focused }) => `
+      <div class="item ${selected ? 'selected' : ''} ${focused ? 'focused' : ''}">
+        ${item.name}
+      </div>
+    `,
+  },
   items: users,
   selection: {
     mode: 'multiple',
     initial: ['user-1']  // Pre-selected
   },
-  template: (item, index, { selected, focused }) => `
-    <div class="item ${selected ? 'selected' : ''} ${focused ? 'focused' : ''}">
-      ${item.name}
-    </div>
-  `
 });
 
 // Listen for selection changes

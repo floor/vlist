@@ -60,13 +60,15 @@ import 'vlist/styles';
 // Simple usage with static data
 const list = createVList({
   container: '#my-list',
-  itemHeight: 48,
-  template: (item) => `
-    <div class="flex items-center gap-3">
-      <img src="${item.avatar}" class="w-8 h-8 rounded-full" />
-      <span>${item.name}</span>
-    </div>
-  `,
+  item: {
+    height: 48,
+    template: (item) => `
+      <div class="flex items-center gap-3">
+        <img src="${item.avatar}" class="w-8 h-8 rounded-full" />
+        <span>${item.name}</span>
+      </div>
+    `,
+  },
   items: [
     { id: 1, name: 'Alice', avatar: '/avatars/alice.jpg' },
     { id: 2, name: 'Bob', avatar: '/avatars/bob.jpg' },
@@ -81,8 +83,10 @@ const list = createVList({
 interface VListConfig<T> {
   // Required
   container: HTMLElement | string;  // Container element or selector
-  itemHeight: number;               // Fixed item height in pixels
-  template: ItemTemplate<T>;        // Render function for each item
+  item: {
+    height: number;                 // Fixed item height in pixels
+    template: ItemTemplate<T>;      // Render function for each item
+  };
 
   // Optional
   items?: T[];                      // Static items array
@@ -100,13 +104,15 @@ interface VListConfig<T> {
 ```typescript
 const list = createVList({
   container: '#my-list',
-  itemHeight: 56,
-  template: (item, index, { selected }) => `
-    <div class="flex items-center gap-3 ${selected ? 'font-bold' : ''}">
-      <span>${item.name}</span>
-      ${selected ? '✓' : ''}
-    </div>
-  `,
+  item: {
+    height: 56,
+    template: (item, index, { selected }) => `
+      <div class="flex items-center gap-3 ${selected ? 'font-bold' : ''}">
+        <span>${item.name}</span>
+        ${selected ? '✓' : ''}
+      </div>
+    `,
+  },
   items: users,
   selection: {
     mode: 'multiple',      // 'none' | 'single' | 'multiple'
@@ -131,8 +137,10 @@ list.clearSelection();
 ```typescript
 const list = createVList({
   container: '#my-list',
-  itemHeight: 64,
-  template: (item) => `<div>${item.title}</div>`,
+  item: {
+    height: 64,
+    template: (item) => `<div>${item.title}</div>`,
+  },
   adapter: {
     read: async ({ offset, limit }) => {
       const response = await fetch(
@@ -164,20 +172,22 @@ list.on('load:end', ({ items, total }) => {
 ```typescript
 const list = createVList({
   container: '#my-list',
-  itemHeight: 72,
-  template: (item, index, { selected, focused }) => {
-    // Return an HTMLElement for more control
-    const el = document.createElement('div');
-    el.className = 'flex items-center gap-4 p-2';
-    el.innerHTML = `
-      <img src="${item.avatar}" class="w-12 h-12 rounded-full" />
-      <div class="flex-1">
-        <div class="font-medium">${item.name}</div>
-        <div class="text-sm text-gray-500">${item.email}</div>
-      </div>
-      <div class="text-xs text-gray-400">${item.role}</div>
-    `;
-    return el;
+  item: {
+    height: 72,
+    template: (item, index, { selected, focused }) => {
+      // Return an HTMLElement for more control
+      const el = document.createElement('div');
+      el.className = 'flex items-center gap-4 p-2';
+      el.innerHTML = `
+        <img src="${item.avatar}" class="w-12 h-12 rounded-full" />
+        <div class="flex-1">
+          <div class="font-medium">${item.name}</div>
+          <div class="text-sm text-gray-500">${item.email}</div>
+        </div>
+        <div class="text-xs text-gray-400">${item.role}</div>
+      `;
+      return el;
+    },
   },
   items: users,
 });
@@ -275,11 +285,14 @@ import 'vlist/styles';
 Or customize with your own Tailwind classes in the template:
 
 ```typescript
-template: (item, index, { selected }) => `
-  <div class="${selected ? 'bg-blue-100' : 'bg-white'} p-4 hover:bg-gray-50">
-    ${item.name}
-  </div>
-`
+item: {
+  height: 56,
+  template: (item, index, { selected }) => `
+    <div class="${selected ? 'bg-blue-100' : 'bg-white'} p-4 hover:bg-gray-50">
+      ${item.name}
+    </div>
+  `,
+}
 ```
 
 ### CSS Custom Properties
@@ -323,8 +336,10 @@ interface User {
 
 const list = createVList<User>({
   container: '#users',
-  itemHeight: 48,
-  template: (user) => `<div>${user.name} - ${user.email}</div>`,
+  item: {
+    height: 48,
+    template: (user) => `<div>${user.name} - ${user.email}</div>`,
+  },
   items: users,
 });
 

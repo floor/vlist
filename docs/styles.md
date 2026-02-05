@@ -22,8 +22,10 @@ import 'vlist/styles';
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
-  template: (item) => `<div>${item.name}</div>`,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: data
 });
 ```
@@ -301,8 +303,9 @@ Style items directly in your template function:
 ```typescript
 const list = createVList({
   container: '#app',
-  itemHeight: 64,
-  template: (item, index, { selected, focused }) => `
+  item: {
+    height: 64,
+    template: (item, index, { selected, focused }) => `
     <div class="flex items-center gap-4 w-full">
       <img 
         src="${item.avatar}" 
@@ -313,9 +316,9 @@ const list = createVList({
         <div class="font-medium truncate ${selected ? 'text-blue-600' : ''}">${item.name}</div>
         <div class="text-sm text-gray-500 truncate">${item.email}</div>
       </div>
-      ${selected ? '<svg class="w-5 h-5 text-blue-600">...</svg>' : ''}
     </div>
   `,
+  },
   items: users,
   selection: { mode: 'single' }
 });
@@ -326,11 +329,14 @@ const list = createVList({
 The template function receives useful state:
 
 ```typescript
-template: (item, index, context) => {
-  const { selected, focused } = context;
-  // selected: boolean - Is this item selected?
-  // focused: boolean - Is this item keyboard-focused?
-  return `...`;
+item: {
+  height: 48,
+  template: (item, index, context) => {
+    const { selected, focused } = context;
+    // selected: boolean - Is this item selected?
+    // focused: boolean - Is this item keyboard-focused?
+    return `...`;
+  },
 }
 ```
 
@@ -488,18 +494,24 @@ For best performance, keep template CSS minimal:
 
 ```typescript
 // ✅ Good - uses existing classes
-template: (item) => `
-  <div class="flex items-center gap-2">
-    <span>${item.name}</span>
-  </div>
-`
+item: {
+  height: 48,
+  template: (item) => `
+    <div class="flex items-center gap-2">
+      <span>${item.name}</span>
+    </div>
+  `,
+}
 
 // ❌ Avoid - complex inline styles
-template: (item) => `
-  <div style="display:flex;align-items:center;gap:8px;padding:12px;">
-    <span>${item.name}</span>
-  </div>
-`
+item: {
+  height: 48,
+  template: (item) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:12px;">
+      <span>${item.name}</span>
+    </div>
+  `,
+}
 ```
 
 ### 4. Test Dark Mode

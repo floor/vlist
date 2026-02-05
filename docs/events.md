@@ -286,9 +286,11 @@ import { createVList } from 'vlist';
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: myItems,
-  template: (item) => `<div>${item.name}</div>`,
   selection: { mode: 'multiple' }
 });
 

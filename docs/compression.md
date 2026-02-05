@@ -241,7 +241,10 @@ interface ScrollbarConfig {
 // Usage
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div class="item">${item.name}</div>`,
+  },
   items: largeDataset,
   scrollbar: {
     enabled: true,
@@ -324,9 +327,11 @@ console.log(getCompressionInfo(items.length, 48));
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div class="item">${item.name}</div>`,
+  },
   items,
-  template: (item) => `<div class="item">${item.name}</div>`,
 });
 
 // Scroll to middle

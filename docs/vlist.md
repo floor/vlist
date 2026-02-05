@@ -108,18 +108,20 @@ import 'vlist/styles';
 
 const list = createVList({
   container: '#my-list',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `
+      <div class="item">
+        ${item.name}
+      </div>
+    `,
+  },
   items: [
     { id: 1, name: 'Alice' },
     { id: 2, name: 'Bob' },
     { id: 3, name: 'Charlie' },
     // ... thousands more items
   ],
-  template: (item) => `
-    <div class="item">
-      <span>${item.name}</span>
-    </div>
-  `,
 });
 ```
 
@@ -141,8 +143,10 @@ The container must have a defined height for virtual scrolling to work.
 interface VListConfig<T extends VListItem> {
   // Required
   container: HTMLElement | string;  // Container element or CSS selector
-  itemHeight: number;               // Fixed height of each item in pixels
-  template: ItemTemplate<T>;        // Function to render each item
+  item: {
+    height: number;                 // Fixed height of each item in pixels
+    template: ItemTemplate<T>;      // Function to render each item
+  };
 
   // Optional
   items?: T[];                      // Static items array
@@ -186,12 +190,15 @@ interface ItemState {
 **Example with state:**
 
 ```typescript
-template: (item, index, { selected, focused }) => `
-  <div class="item ${selected ? 'selected' : ''} ${focused ? 'focused' : ''}">
-    <input type="checkbox" ${selected ? 'checked' : ''} />
-    <span>${item.name}</span>
-  </div>
-`
+item: {
+  height: 48,
+  template: (item, index, { selected, focused }) => `
+    <div class="item ${selected ? 'selected' : ''} ${focused ? 'focused' : ''}">
+      <input type="checkbox" ${selected ? 'checked' : ''} />
+      <span>${item.name}</span>
+    </div>
+  `,
+}
 ```
 
 **⚠️ Important**: The `state` object is **reused** for performance. Templates should read from it immediately and not store the reference.
@@ -440,8 +447,10 @@ interface AdapterResponse<T> {
 ```typescript
 const list = createVList({
   container: '#list',
-  itemHeight: 64,
-  template: (item) => `<div>${item.title}</div>`,
+  item: {
+    height: 64,
+    template: (item) => `<div>${item.title}</div>`,
+  },
   adapter: {
     read: async ({ offset, limit }) => {
       const response = await fetch(
@@ -505,20 +514,23 @@ list.on('error', ({ error, context }) => {
 When items haven't loaded yet, vlist generates placeholder items with a `_isPlaceholder` flag:
 
 ```typescript
-template: (item, index) => {
-  if (item._isPlaceholder) {
+item: {
+  height: 64,
+  template: (item, index) => {
+    if (item._isPlaceholder) {
+      return `
+        <div class="item placeholder">
+          <div class="skeleton-text"></div>
+        </div>
+      `;
+    }
+    
     return `
-      <div class="item placeholder">
-        <div class="skeleton-text"></div>
+      <div class="item">
+        <span>${item.name}</span>
       </div>
     `;
-  }
-  
-  return `
-    <div class="item">
-      <span>${item.name}</span>
-    </div>
-  `;
+  },
 }
 ```
 
@@ -669,17 +681,19 @@ interface User {
 
 const list = createVList<User>({
   container: '#users',
-  itemHeight: 64,
-  items: users,
-  template: (user) => `
-    <div class="user">
-      <img src="${user.avatar}" alt="${user.name}" />
-      <div>
-        <strong>${user.name}</strong>
-        <span>${user.email}</span>
+  item: {
+    height: 64,
+    template: (user) => `
+      <div class="user">
+        <img src="${user.avatar}" alt="${user.name}" />
+        <div>
+          <strong>${user.name}</strong>
+          <span>${user.email}</span>
+        </div>
       </div>
-    </div>
-  `,
+    `,
+  },
+  items: users,
 });
 
 // Fully typed
@@ -726,17 +740,19 @@ const users = Array.from({ length: 10000 }, (_, i) => ({
 
 const list = createVList({
   container: '#user-list',
-  itemHeight: 56,
-  items: users,
-  template: (user) => `
-    <div style="display: flex; align-items: center; padding: 8px 16px;">
-      <div style="width: 40px; height: 40px; border-radius: 50%; background: #ddd;"></div>
-      <div style="margin-left: 12px;">
-        <div style="font-weight: 500;">${user.name}</div>
-        <div style="font-size: 14px; color: #666;">${user.email}</div>
+  item: {
+    height: 56,
+    template: (user) => `
+      <div style="display: flex; align-items: center; padding: 8px 16px;">
+        <div style="width: 40px; height: 40px; border-radius: 50%; background: #ddd;"></div>
+        <div style="margin-left: 12px;">
+          <div style="font-weight: 500;">${user.name}</div>
+          <div style="font-size: 14px; color: #666;">${user.email}</div>
+        </div>
       </div>
-    </div>
-  `,
+    `,
+  },
+  items: users,
 });
 ```
 
@@ -745,17 +761,19 @@ const list = createVList({
 ```typescript
 const list = createVList({
   container: '#selectable-list',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item, index, { selected }) => `
+      <div style="display: flex; align-items: center; padding: 12px;">
+        <input type="checkbox" ${selected ? 'checked' : ''} />
+        <span style="margin-left: 8px;">${item.name}</span>
+      </div>
+    `,
+  },
   items: items,
   selection: {
     mode: 'multiple',
   },
-  template: (item, index, { selected }) => `
-    <div style="display: flex; align-items: center; padding: 12px;">
-      <input type="checkbox" ${selected ? 'checked' : ''} />
-      <span style="margin-left: 8px;">${item.name}</span>
-    </div>
-  `,
 });
 
 list.on('selection:change', ({ selected, items }) => {
@@ -768,17 +786,19 @@ list.on('selection:change', ({ selected, items }) => {
 ```typescript
 const list = createVList({
   container: '#api-list',
-  itemHeight: 72,
-  template: (item) => {
-    if (item._isPlaceholder) {
-      return `<div class="skeleton"></div>`;
-    }
-    return `
-      <div class="post">
-        <h3>${item.title}</h3>
-        <p>${item.body}</p>
-      </div>
-    `;
+  item: {
+    height: 72,
+    template: (item) => {
+      if (item._isPlaceholder) {
+        return `<div class="skeleton"></div>`;
+      }
+      return `
+        <div class="post">
+          <h3>${item.title}</h3>
+          <p>${item.body}</p>
+        </div>
+      `;
+    },
   },
   adapter: {
     read: async ({ offset, limit }) => {
@@ -865,9 +885,11 @@ No configuration required - compression activates automatically:
 // This just works, even with 1 million items!
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: millionItems, // 1,000,000 items
-  template: (item) => `<div>${item.name}</div>`,
 });
 
 // Navigate anywhere in the list

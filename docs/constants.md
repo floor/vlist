@@ -274,9 +274,11 @@ Most constants have corresponding config options:
 ```typescript
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: myItems,
-  template: (item) => `<div>${item.name}</div>`,
   
   // Override defaults
   overscan: 5,                    // DEFAULT_OVERSCAN

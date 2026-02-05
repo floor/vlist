@@ -146,9 +146,11 @@ const items = Array.from({ length: 10000 }, (_, i) => ({
 
 const list = createVList({
   container: "#list-container",
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: items,
-  template: (item) => `<div>${item.name}</div>`,
 });
 ```
 

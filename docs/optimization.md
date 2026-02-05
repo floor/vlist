@@ -39,8 +39,10 @@ Control velocity-based loading and preloading via the `loading` config:
 ```typescript
 const list = createVList({
   container: '#list',
-  itemHeight: 50,
-  template: myTemplate,
+  item: {
+    height: 50,
+    template: myTemplate,
+  },
   adapter: myAdapter,
   loading: {
     // Velocity above which loading is skipped entirely (px/ms)

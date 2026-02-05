@@ -42,11 +42,15 @@ interface User extends VListItem {
 
 // vlist infers types throughout
 const list = createVList<User>({
+  container: '#app',
+  item: {
+    height: 48,
+    template: (item) => {
+      // item is typed as User
+      return `<div>${item.name}</div>`;
+    },
+  },
   items: users,
-  template: (item) => {
-    // item is typed as User
-    return `<div>${item.name}</div>`;
-  }
 });
 ```
 
@@ -94,11 +98,8 @@ interface VListConfig<T extends VListItem = VListItem> {
   /** Container element or selector */
   container: HTMLElement | string;
   
-  /** Fixed item height in pixels (required for virtual scrolling) */
-  itemHeight: number;
-  
-  /** Template function to render each item */
-  template: ItemTemplate<T>;
+  /** Item configuration (height and template) */
+  item: ItemConfig<T>;
   
   /** Static items array (optional if using adapter) */
   items?: T[];
@@ -143,19 +144,25 @@ interface ItemState {
 **Usage**:
 ```typescript
 // String template
-template: (item, index, { selected, focused }) => `
-  <div class="item ${selected ? 'selected' : ''}">
-    <span>${index + 1}.</span>
-    <span>${item.name}</span>
-  </div>
-`
+item: {
+  height: 48,
+  template: (item, index, { selected, focused }) => `
+    <div class="item ${selected ? 'selected' : ''}">
+      <span>${index + 1}.</span>
+      <span>${item.name}</span>
+    </div>
+  `,
+}
 
 // HTMLElement template
-template: (item, index, state) => {
-  const div = document.createElement('div');
-  div.className = 'item';
-  div.textContent = item.name;
-  return div;
+item: {
+  height: 48,
+  template: (item, index, state) => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.textContent = item.name;
+    return div;
+  },
 }
 ```
 
@@ -231,8 +238,10 @@ interface LoadingConfig {
 ```typescript
 const list = createVList({
   container: '#list',
-  itemHeight: 50,
-  template: myTemplate,
+  item: {
+    height: 50,
+    template: myTemplate,
+  },
   adapter: myAdapter,
   loading: {
     cancelThreshold: 30,    // Skip loading above 30 px/ms
@@ -526,15 +535,17 @@ interface Product extends VListItem {
 // Create typed list
 const productList: VList<Product> = createVList<Product>({
   container: '#products',
-  itemHeight: 60,
+  item: {
+    height: 60,
+    template: (product, index, { selected }) => `
+      <div class="product ${selected ? 'selected' : ''}">
+        <strong>${product.name}</strong>
+        <span class="price">$${product.price.toFixed(2)}</span>
+        <span class="stock">${product.inStock ? 'In Stock' : 'Out of Stock'}</span>
+      </div>
+    `,
+  },
   items: products,
-  template: (product, index, { selected }) => `
-    <div class="product ${selected ? 'selected' : ''}">
-      <strong>${product.name}</strong>
-      <span class="price">$${product.price.toFixed(2)}</span>
-      <span class="stock">${product.inStock ? 'In Stock' : 'Out of Stock'}</span>
-    </div>
-  `
 });
 
 // Methods are typed
@@ -604,11 +615,14 @@ function isPlaceholder(item: VListItem): boolean {
 }
 
 // In template
-template: (item, index, state) => {
-  if (isPlaceholder(item)) {
-    return `<div class="loading">${item.name}</div>`;
-  }
-  return `<div class="item">${item.name}</div>`;
+item: {
+  height: 48,
+  template: (item, index, state) => {
+    if (isPlaceholder(item)) {
+      return `<div class="loading">${item.name}</div>`;
+    }
+    return `<div class="item">${item.name}</div>`;
+  },
 }
 ```
 

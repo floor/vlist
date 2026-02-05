@@ -155,8 +155,10 @@ Emit 'load:end' event
 const list = createVList({
   // Required
   container: '#app',           // HTMLElement or selector
-  itemHeight: 48,              // Fixed height in pixels
-  template: (item) => `...`,   // Render function
+  item: {
+    height: 48,                // Fixed height in pixels
+    template: (item) => `...`, // Render function
+  },
   
   // Data source (one of)
   items: [],                   // Static array

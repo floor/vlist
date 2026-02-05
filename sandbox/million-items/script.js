@@ -226,10 +226,12 @@ const createMillionItemsExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
-      itemHeight: ITEM_HEIGHT,
+      item: {
+        height: ITEM_HEIGHT,
+        template: (item, index) => createItemElement(item, index),
+      },
       items: items,
       overscan: 5,
-      template: (item, index) => createItemElement(item, index),
     });
 
     perf.init = performance.now() - initStart;

@@ -473,11 +473,14 @@ if (isPlaceholderItem(item)) {
 }
 
 // In template
-template: (item, index, state) => {
-  if (isPlaceholderItem(item)) {
-    return `<div class="item loading">${item.name}</div>`;
-  }
-  return `<div class="item">${item.name}</div>`;
+item: {
+  height: 48,
+  template: (item, index, state) => {
+    if (isPlaceholderItem(item)) {
+      return `<div class="item loading">${item.name}</div>`;
+    }
+    return `<div class="item">${item.name}</div>`;
+  },
 }
 ```
 
@@ -488,7 +491,17 @@ import { createVList } from 'vlist';
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item, index, state) => {
+      const isLoading = item._isPlaceholder;
+      return `
+        <div class="item ${isLoading ? 'loading' : ''}">
+          ${isLoading ? 'Loading...' : item.name}
+        </div>
+      `;
+    },
+  },
   adapter: {
     read: async ({ offset, limit, cursor }) => {
       const url = cursor 
@@ -506,15 +519,6 @@ const list = createVList({
       };
     }
   },
-  template: (item, index, state) => {
-    const isLoading = item._isPlaceholder;
-    return `
-      <div class="item ${isLoading ? 'loading' : ''}">
-        <span class="name">${item.name}</span>
-        <span class="email">${item.email}</span>
-      </div>
-    `;
-  }
 });
 
 // Events

@@ -172,14 +172,16 @@ const createSelectionExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
-      itemHeight: 56,
+      item: {
+        height: 56,
+        template: (item, index, { selected }) =>
+          createItemElement(item, selected),
+      },
       items: items,
       selection: {
         mode: mode,
         initial: [],
       },
-      template: (item, index, { selected }) =>
-        createItemElement(item, selected),
     });
 
     // Handle selection changes

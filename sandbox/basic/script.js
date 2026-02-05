@@ -14,18 +14,20 @@ const items = Array.from({ length: 10000 }, (_, i) => ({
 // Create the virtual list
 const list = createVList({
   container: "#list-container",
-  itemHeight: 64,
-  items: items,
-  template: (item, index) => `
-    <div class="item-content">
-      <div class="item-avatar">${item.initials}</div>
-      <div class="item-details">
-        <div class="item-name">${item.name}</div>
-        <div class="item-email">${item.email}</div>
+  item: {
+    height: 64,
+    template: (item, index) => `
+      <div class="item-content">
+        <div class="item-avatar">${item.initials}</div>
+        <div class="item-details">
+          <div class="item-name">${item.name}</div>
+          <div class="item-email">${item.email}</div>
+        </div>
+        <div class="item-index">#${index + 1}</div>
       </div>
-      <div class="item-index">#${index + 1}</div>
-    </div>
-  `,
+    `,
+  },
+  items: items,
 });
 
 // Update stats display

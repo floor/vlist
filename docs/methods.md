@@ -309,9 +309,11 @@ import { createVList } from 'vlist';
 
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   items: initialItems,
-  template: (item) => `<div>${item.name}</div>`
 });
 
 // Replace all items
@@ -356,14 +358,16 @@ list.scrollToIndex(Math.floor(position / 48));  // Approximate restore
 ```typescript
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item, index, { selected }) => `
+      <div class="${selected ? 'selected' : ''}">
+        ${item.name}
+      </div>
+    `,
+  },
   items: users,
   selection: { mode: 'multiple' },
-  template: (item, index, { selected }) => `
-    <div class="${selected ? 'selected' : ''}">
-      ${item.name}
-    </div>
-  `
 });
 
 // Programmatic selection
@@ -399,7 +403,10 @@ selectAllCheckbox.onchange = (e) => {
 ```typescript
 const list = createVList({
   container: '#app',
-  itemHeight: 48,
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
   adapter: {
     read: async ({ offset, limit }) => {
       const response = await api.getItems(offset, limit);
@@ -410,7 +417,6 @@ const list = createVList({
       };
     }
   },
-  template: (item) => `<div>${item.name}</div>`
 });
 
 // Reload data (e.g., after filter change)
