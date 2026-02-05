@@ -59,10 +59,10 @@ function getFileIcon(filename: string): string {
   return iconMap[ext] || ICONS.default;
 }
 
-// File extensions that should be rendered with syntax highlighting
+// File extensions that should be rendered with syntax highlighting (not served raw)
 const CODE_EXTENSIONS = new Set([
-  ".ts", ".js", ".mjs", ".jsx", ".tsx", ".json",
-  ".css", ".scss", ".html", ".xml", ".yaml", ".yml",
+  ".ts", ".tsx", ".jsx", ".json",
+  ".scss", ".xml", ".yaml", ".yml",
   ".sh", ".bash", ".zsh", ".txt",
 ]);
 
