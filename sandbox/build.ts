@@ -1,8 +1,10 @@
-// build-examples.ts - Auto-discover and build all examples in parallel
-import { readdirSync, existsSync } from "fs";
+// build.ts - Auto-discover and build all sandbox examples in parallel
+import { readdirSync, existsSync, watch } from "fs";
 import { join } from "path";
 
-const EXAMPLES_DIR = "./examples";
+const isWatch = process.argv.includes("--watch");
+
+const SANDBOX_DIR = "./sandbox";
 const BUILD_OPTIONS = {
   minify: true,
   format: "esm" as const,
@@ -18,12 +20,12 @@ interface BuildResult {
 }
 
 async function discoverExamples(): Promise<string[]> {
-  const entries = readdirSync(EXAMPLES_DIR, { withFileTypes: true });
+  const entries = readdirSync(SANDBOX_DIR, { withFileTypes: true });
   const examples: string[] = [];
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      const scriptPath = join(EXAMPLES_DIR, entry.name, "script.js");
+      const scriptPath = join(SANDBOX_DIR, entry.name, "script.js");
       if (existsSync(scriptPath)) {
         examples.push(entry.name);
       }
@@ -35,8 +37,8 @@ async function discoverExamples(): Promise<string[]> {
 
 async function buildExample(name: string): Promise<BuildResult> {
   const start = performance.now();
-  const entrypoint = join(EXAMPLES_DIR, name, "script.js");
-  const outdir = join(EXAMPLES_DIR, name, "dist");
+  const entrypoint = join(SANDBOX_DIR, name, "script.js");
+  const outdir = join(SANDBOX_DIR, name, "dist");
 
   try {
     const result = await Bun.build({
@@ -73,13 +75,13 @@ async function buildExample(name: string): Promise<BuildResult> {
 async function main() {
   const totalStart = performance.now();
 
-  console.log("🔨 Building examples...\n");
+  console.log("🔨 Building sandbox...\n");
 
   // Discover all examples
   const examples = await discoverExamples();
 
   if (examples.length === 0) {
-    console.log("⚠️  No examples found in", EXAMPLES_DIR);
+    console.log("⚠️  No examples found in", SANDBOX_DIR);
     process.exit(0);
   }
 
@@ -114,7 +116,38 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("❌ Build failed:", err);
-  process.exit(1);
-});
+async function watchMode() {
+  console.log("👀 Watching sandbox for changes...\n");
+
+  // Initial build
+  await main();
+
+  // Watch each sandbox directory
+  const examples = await discoverExamples();
+  for (const name of examples) {
+    const dir = join(SANDBOX_DIR, name);
+    watch(dir, { recursive: true }, async (event, filename) => {
+      if (filename && !filename.includes("dist") && !filename.includes("node_modules")) {
+        console.log(`\n📝 ${name}/${filename} changed`);
+        const result = await buildExample(name);
+        const icon = result.success ? "✅" : "❌";
+        console.log(`${icon} Rebuilt ${name} in ${result.time.toFixed(0)}ms`);
+        if (result.error) {
+          console.log(`   └─ ${result.error}`);
+        }
+      }
+    });
+  }
+}
+
+if (isWatch) {
+  watchMode().catch((err) => {
+    console.error("❌ Watch failed:", err);
+    process.exit(1);
+  });
+} else {
+  main().catch((err) => {
+    console.error("❌ Build failed:", err);
+    process.exit(1);
+  });
+}

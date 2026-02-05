@@ -1,5 +1,24 @@
+/* Back link */
+.back-link {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    color: var(--mtrl-sys-color-primary, #667eea);
+    text-decoration: none;
+    font-size: 14px;
+    z-index: 100;
+    padding: 8px 16px;
+    background: var(--mtrl-sys-color-surface, #fff);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
 /**
- * vlist - Basic Example Styles
+ * vlist - Velocity-Based Loading Example Styles
  * Layout styles based on mtrl-app content.scss + custom panel styles
  * Note: mtrl-addons layout system adds "mtrl-" prefix to all class names
  */
@@ -216,76 +235,108 @@
     color: #43e97b;
 }
 
+.mtrl-stat-card__value--loading {
+    color: var(--mtrl-sys-color-primary);
+}
+
+.mtrl-stat-card__value--idle {
+    color: var(--mtrl-sys-color-on-surface-variant);
+}
+
 .mtrl-stat-card__value--small {
     font-size: 16px;
     height: 28.5px;
 }
 
 /* ============================================================================
-   Visible Range Display
+   Velocity Display
    ============================================================================ */
 
-.mtrl-range-display {
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--mtrl-sys-color-on-surface);
-    margin-bottom: 8px;
-}
-
-.mtrl-range-display__value {
+.mtrl-velocity-display {
+    font-size: 32px;
     font-weight: 700;
-    color: var(--mtrl-sys-color-primary);
+    margin-bottom: 12px;
 }
 
-.mtrl-range-bar {
-    position: relative;
-    height: 24px;
-    background-color: var(--mtrl-sys-color-surface-container-highest);
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 8px;
+.mtrl-velocity-display--fast {
+    color: #fa709a;
 }
 
-.mtrl-range-bar__fill {
-    position: absolute;
-    height: 100%;
-    border-radius: 12px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    transition: left 0.15s ease-out, width 0.15s ease-out;
+.mtrl-velocity-display--slow {
+    color: #43e97b;
 }
 
-.mtrl-range-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
+.mtrl-velocity-display__unit {
+    font-size: 14px;
+    font-weight: 400;
     color: var(--mtrl-sys-color-on-surface-variant);
 }
 
 /* ============================================================================
-   Memory Efficiency Display
+   Velocity Bar
    ============================================================================ */
 
-.mtrl-efficiency-display {
-    text-align: center;
-    padding: 16px;
-    background-color: var(--mtrl-sys-color-surface);
-    border-radius: 12px;
-    margin-top: 8px;
+.mtrl-velocity-bar {
+    position: relative;
+    height: 16px;
+    background-color: var(--mtrl-sys-color-surface-container-highest);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
-.mtrl-efficiency-display__value {
-    font-size: 48px;
-    font-weight: 700;
-    color: #43e97b;
-    line-height: 1;
+.mtrl-velocity-bar__fill {
+    position: absolute;
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.4s ease-out;
 }
 
-.mtrl-efficiency-display__label {
-    font-size: 12px;
+.mtrl-velocity-bar__fill--slow {
+    background: linear-gradient(90deg, #43e97b, #667eea);
+}
+
+.mtrl-velocity-bar__fill--fast {
+    background: linear-gradient(90deg, #667eea, #fa709a);
+}
+
+.mtrl-velocity-bar__marker {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background-color: var(--mtrl-sys-color-on-surface);
+}
+
+.mtrl-velocity-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
     color: var(--mtrl-sys-color-on-surface-variant);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 8px;
+    margin-top: 6px;
+}
+
+.mtrl-velocity-labels__threshold {
+    color: var(--mtrl-sys-color-on-surface);
+}
+
+.mtrl-velocity-labels__threshold--fast {
+    color: #fa709a;
+}
+
+.mtrl-velocity-status {
+    margin-top: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.mtrl-velocity-status--allowed {
+    color: #43e97b;
+}
+
+.mtrl-velocity-status--skipped {
+    color: #fa709a;
 }
 
 /* ============================================================================
@@ -308,7 +359,7 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--mtrl-sys-color-primary-container);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -316,6 +367,11 @@
     font-weight: 600;
     font-size: 16px;
     flex-shrink: 0;
+}
+
+.mtrl-item-avatar--placeholder {
+    background-color: var(--mtrl-sys-color-surface-container-highest);
+    animation: pulse 1.5s ease-in-out infinite;
 }
 
 .mtrl-item-details {
@@ -333,6 +389,15 @@
     text-overflow: ellipsis;
 }
 
+.mtrl-item-name--placeholder {
+    background-color: var(--mtrl-sys-color-surface-container-highest);
+    color: transparent;
+    border-radius: 4px;
+    width: 150px;
+    height: 16px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
 .mtrl-item-email {
     font-size: 13px;
     color: var(--mtrl-sys-color-on-surface-variant);
@@ -341,33 +406,28 @@
     text-overflow: ellipsis;
 }
 
-.mtrl-item-index {
+.mtrl-item-email--placeholder {
+    background-color: var(--mtrl-sys-color-surface-container-highest);
+    color: transparent;
+    border-radius: 4px;
+    width: 200px;
+    height: 14px;
+    margin-top: 4px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mtrl-item-role {
     font-size: 12px;
     color: var(--mtrl-sys-color-on-surface-variant);
-    min-width: 50px;
-    text-align: right;
+    margin-top: 2px;
 }
 
-/* ============================================================================
-   Selected Item Highlight
-   ============================================================================ */
-
-.vlist-item--selected .mtrl-item-content {
-    background-color: var(--mtrl-sys-color-primary-container);
-    border-radius: 8px;
-    margin: 0 4px;
-    padding: 0 12px;
-}
-
-.vlist-item--selected .mtrl-item-avatar {
-    background: var(--mtrl-sys-color-primary);
-}
-
-.vlist-item--selected .mtrl-item-name {
-    color: var(--mtrl-sys-color-on-primary-container);
-}
-
-.vlist-item--selected .mtrl-item-email {
-    color: var(--mtrl-sys-color-on-primary-container);
-    opacity: 0.8;
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }

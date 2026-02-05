@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>vlist - Basic Example</title>
+        <link rel="stylesheet" href="/dist/vlist.css" />
+        <link rel="stylesheet" href="/sandbox/basic/styles.css" />
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <a href="/sandbox/" class="back-link">← Back to Sandbox</a>
+                <h1>Basic Example</h1>
+                <p class="description">
+                    Pure vanilla JavaScript - no frameworks, no dependencies.
+                    Just vlist with 10,000 items.
+                </p>
+            </header>
+
+            <div class="stats" id="stats">Loading...</div>
+
+            <div id="list-container"></div>
+
+            <footer>
+                <p>
+                    Only visible items are rendered in the DOM. Scroll to see
+                    the magic! ✨
+                </p>
+            </footer>
+        </div>
+
+        <script type="module" src="/sandbox/basic/dist/script.js"></script>
+    </body>
+</html>

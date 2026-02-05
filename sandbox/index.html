@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>vlist - Examples</title>
+        <title>vlist - Sandbox</title>
         <style>
             * {
                 box-sizing: border-box;
@@ -36,6 +36,13 @@
                 font-weight: 700;
                 margin-bottom: 10px;
                 text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+                cursor: pointer;
+                text-decoration: none;
+                color: inherit;
+            }
+
+            h1:hover {
+                opacity: 0.9;
             }
 
             .tagline {
@@ -59,12 +66,12 @@
                 color: white;
             }
 
-            .examples {
+            .sandbox-grid {
                 display: grid;
                 gap: 20px;
             }
 
-            .example-card {
+            .sandbox-card {
                 background: white;
                 border-radius: 16px;
                 padding: 24px;
@@ -77,12 +84,12 @@
                 gap: 20px;
             }
 
-            .example-card:hover {
+            .sandbox-card:hover {
                 transform: translateY(-4px);
                 box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
             }
 
-            .example-icon {
+            .sandbox-icon {
                 width: 60px;
                 height: 60px;
                 border-radius: 14px;
@@ -109,24 +116,24 @@
                 background: linear-gradient(135deg, #667eea 0%, #43e97b 100%);
             }
 
-            .example-content {
+            .sandbox-content {
                 flex: 1;
             }
 
-            .example-title {
+            .sandbox-title {
                 font-size: 20px;
                 font-weight: 600;
                 color: #333;
                 margin-bottom: 6px;
             }
 
-            .example-description {
+            .sandbox-description {
                 font-size: 14px;
                 color: #666;
                 line-height: 1.5;
             }
 
-            .example-arrow {
+            .sandbox-arrow {
                 font-size: 24px;
                 color: #ccc;
                 transition:
@@ -134,7 +141,7 @@
                     color 0.2s;
             }
 
-            .example-card:hover .example-arrow {
+            .sandbox-card:hover .sandbox-arrow {
                 transform: translateX(4px);
                 color: #667eea;
             }
@@ -176,7 +183,7 @@
     <body>
         <div class="container">
             <header>
-                <h1>📋 vlist</h1>
+                <a href="/sandbox/" style="text-decoration: none;"><h1>📋 vlist</h1></a>
                 <p class="tagline">
                     Lightweight, high-performance virtual list with zero
                     dependencies
@@ -190,70 +197,69 @@
                 </div>
             </header>
 
-            <div class="examples">
-                <a href="/examples/basic/" class="example-card">
-                    <div class="example-icon icon-basic">📋</div>
-                    <div class="example-content">
-                        <div class="example-title">Basic Example</div>
-                        <div class="example-description">
-                            Simple virtual list with 10,000 static items.
-                            Demonstrates basic setup, item templates, and DOM
-                            recycling.
+            <div class="sandbox-grid">
+                <a href="/sandbox/basic/" class="sandbox-card">
+                    <div class="sandbox-icon icon-basic">📋</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Basic (Vanilla JS)</div>
+                        <div class="sandbox-description">
+                            Pure vanilla JavaScript - no dependencies. The
+                            simplest way to use vlist with just HTML, CSS, and
+                            JS.
                         </div>
                     </div>
-                    <div class="example-arrow">→</div>
+                    <div class="sandbox-arrow">→</div>
                 </a>
 
-                <a href="/examples/selection/" class="example-card">
-                    <div class="example-icon icon-selection">✅</div>
-                    <div class="example-content">
-                        <div class="example-title">Selection Example</div>
-                        <div class="example-description">
+                <a href="/sandbox/selection/" class="sandbox-card">
+                    <div class="sandbox-icon icon-selection">✅</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Selection</div>
+                        <div class="sandbox-description">
                             Single and multiple selection modes with keyboard
                             navigation. Click items or use arrow keys to
                             navigate.
                         </div>
                     </div>
-                    <div class="example-arrow">→</div>
+                    <div class="sandbox-arrow">→</div>
                 </a>
 
-                <a href="/examples/infinite-scroll/" class="example-card">
-                    <div class="example-icon icon-infinite">♾️</div>
-                    <div class="example-content">
-                        <div class="example-title">Infinite Scroll</div>
-                        <div class="example-description">
+                <a href="/sandbox/infinite-scroll/" class="sandbox-card">
+                    <div class="sandbox-icon icon-infinite">♾️</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Infinite Scroll</div>
+                        <div class="sandbox-description">
                             Async data loading with simulated API calls. Scroll
                             to automatically load more items with customizable
                             delay.
                         </div>
                     </div>
-                    <div class="example-arrow">→</div>
+                    <div class="sandbox-arrow">→</div>
                 </a>
 
-                <a href="/examples/million-items/" class="example-card">
-                    <div class="example-icon icon-million">🚀</div>
-                    <div class="example-content">
-                        <div class="example-title">Million Items</div>
-                        <div class="example-description">
+                <a href="/sandbox/million-items/" class="sandbox-card">
+                    <div class="sandbox-icon icon-million">🚀</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Million Items</div>
+                        <div class="sandbox-description">
                             Push vlist to the limit with 1-5 million items.
                             Monitor FPS, DOM nodes, and compression in
                             real-time.
                         </div>
                     </div>
-                    <div class="example-arrow">→</div>
+                    <div class="sandbox-arrow">→</div>
                 </a>
 
-                <a href="/examples/velocity-loading/" class="example-card">
-                    <div class="example-icon icon-velocity">⚡</div>
-                    <div class="example-content">
-                        <div class="example-title">Velocity-Based Loading</div>
-                        <div class="example-description">
+                <a href="/sandbox/velocity-loading/" class="sandbox-card">
+                    <div class="sandbox-icon icon-velocity">⚡</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Velocity-Based Loading</div>
+                        <div class="sandbox-description">
                             Smart loading that skips requests when scrolling
                             fast and loads immediately when velocity drops.
-                            Built with mtrl components.
                         </div>
                     </div>
-                    <div class="example-arrow">→</div>
+                    <div class="sandbox-arrow">→</div>
                 </a>
             </div>
 
