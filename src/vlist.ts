@@ -150,18 +150,19 @@ export const createVList = <T extends VListItem = VListItem>(
   // Get container dimensions
   const dimensions = getContainerDimensions(dom.viewport);
 
-  // Create initial viewport state
+  // Get initial compression state (must be before createViewportState which uses it)
+  const initialCompression = getCompression(
+    dataManager.getState().total,
+    itemHeight,
+  );
+
+  // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
     dimensions.height,
     itemHeight,
     dataManager.getState().total,
     overscan,
-  );
-
-  // Get initial compression state
-  const initialCompression = getCompression(
-    dataManager.getState().total,
-    itemHeight,
+    initialCompression,
   );
 
   // Mutable reference to scroll handler (needed for idle callback)
@@ -174,11 +175,17 @@ export const createVList = <T extends VListItem = VListItem>(
       ? { compression: initialCompression }
       : {}),
     onScroll: (data) => {
+      // M3: Suppress CSS transitions during active scroll
+      if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
+        dom.root.classList.add(`${classPrefix}--scrolling`);
+      }
       if (handleScrollRef) {
         handleScrollRef(data.scrollTop, data.direction);
       }
     },
     onIdle: () => {
+      // M3: Re-enable CSS transitions when scrolling stops
+      dom.root.classList.remove(`${classPrefix}--scrolling`);
       // When scrolling stops, load any pending ranges that were skipped
       // due to high velocity scrolling
       if (handleScrollRef?.loadPendingRange) {
@@ -300,11 +307,13 @@ export const createVList = <T extends VListItem = VListItem>(
     updateCompressionMode();
 
     // Update viewport state with new item count
+    // Pass cached compression to avoid allocating a new CompressionState
     ctx.state.viewportState = updateViewportItems(
       ctx.state.viewportState,
       itemHeight,
       dataState.total,
       overscan,
+      ctx.getCachedCompression(),
     );
 
     // Update content height
@@ -438,6 +447,7 @@ export const createVList = <T extends VListItem = VListItem>(
           itemHeight,
           dataManager.getTotal(),
           overscan,
+          ctx.getCachedCompression(),
         );
 
         // Update content height and scrollbar bounds

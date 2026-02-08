@@ -110,12 +110,14 @@ export const createScrollHandler = <T extends VListItem>(
     const total = ctx.dataManager.getTotal();
 
     // Update viewport state with current scroll position
+    // Pass cached compression to avoid allocating a new CompressionState per frame
     ctx.state.viewportState = updateViewportState(
       ctx.state.viewportState,
       scrollTop,
       ctx.config.itemHeight,
       total,
       ctx.config.overscan,
+      ctx.getCachedCompression(),
     );
 
     // Update custom scrollbar position

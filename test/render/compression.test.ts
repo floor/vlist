@@ -88,12 +88,14 @@ describe("calculateCompressedVisibleRange", () => {
   describe("without compression", () => {
     it("should calculate correct range at scroll position 0", () => {
       const compression = getCompressionState(1000, 40);
+      const out = { start: 0, end: 0 };
       const range = calculateCompressedVisibleRange(
         0,
         400,
         40,
         1000,
         compression,
+        out,
       );
 
       expect(range.start).toBe(0);
@@ -102,12 +104,14 @@ describe("calculateCompressedVisibleRange", () => {
 
     it("should calculate correct range when scrolled", () => {
       const compression = getCompressionState(1000, 40);
+      const out = { start: 0, end: 0 };
       const range = calculateCompressedVisibleRange(
         400,
         400,
         40,
         1000,
         compression,
+        out,
       );
 
       expect(range.start).toBe(10); // 400/40 = 10
@@ -120,6 +124,7 @@ describe("calculateCompressedVisibleRange", () => {
       // 1M items, compression ratio = 0.4
       const compression = getCompressionState(1_000_000, 40);
       const containerHeight = 600;
+      const out = { start: 0, end: 0 };
 
       // Scroll to middle (8M virtual = 50% of 16M)
       const scrollTop = 8_000_000;
@@ -129,6 +134,7 @@ describe("calculateCompressedVisibleRange", () => {
         40,
         1_000_000,
         compression,
+        out,
       );
 
       // At 50% scroll, should be around item 500,000
@@ -139,6 +145,7 @@ describe("calculateCompressedVisibleRange", () => {
     it("should handle near-bottom interpolation", () => {
       const compression = getCompressionState(1_000_000, 40);
       const containerHeight = 600;
+      const out = { start: 0, end: 0 };
 
       // Scroll to very end
       const maxScroll = compression.virtualHeight - containerHeight;
@@ -148,6 +155,7 @@ describe("calculateCompressedVisibleRange", () => {
         40,
         1_000_000,
         compression,
+        out,
       );
 
       // Should include the last item
@@ -157,6 +165,7 @@ describe("calculateCompressedVisibleRange", () => {
     it("should never exceed totalItems - 1", () => {
       const compression = getCompressionState(1_000_000, 40);
       const containerHeight = 600;
+      const out = { start: 0, end: 0 };
 
       // Scroll past the end (shouldn't happen but test safety)
       const range = calculateCompressedVisibleRange(
@@ -165,6 +174,7 @@ describe("calculateCompressedVisibleRange", () => {
         40,
         1_000_000,
         compression,
+        out,
       );
 
       expect(range.end).toBeLessThanOrEqual(999_999);
@@ -174,7 +184,15 @@ describe("calculateCompressedVisibleRange", () => {
 
   it("should handle empty list", () => {
     const compression = getCompressionState(0, 40);
-    const range = calculateCompressedVisibleRange(0, 400, 40, 0, compression);
+    const out = { start: 0, end: 0 };
+    const range = calculateCompressedVisibleRange(
+      0,
+      400,
+      40,
+      0,
+      compression,
+      out,
+    );
 
     expect(range.start).toBe(0);
     expect(range.end).toBe(0);
@@ -188,7 +206,8 @@ describe("calculateCompressedVisibleRange", () => {
 describe("calculateCompressedRenderRange", () => {
   it("should add overscan to visible range", () => {
     const visibleRange = { start: 10, end: 20 };
-    const range = calculateCompressedRenderRange(visibleRange, 3, 100);
+    const out = { start: 0, end: 0 };
+    const range = calculateCompressedRenderRange(visibleRange, 3, 100, out);
 
     expect(range.start).toBe(7); // 10 - 3
     expect(range.end).toBe(23); // 20 + 3
@@ -196,21 +215,24 @@ describe("calculateCompressedRenderRange", () => {
 
   it("should clamp start to 0", () => {
     const visibleRange = { start: 1, end: 10 };
-    const range = calculateCompressedRenderRange(visibleRange, 5, 100);
+    const out = { start: 0, end: 0 };
+    const range = calculateCompressedRenderRange(visibleRange, 5, 100, out);
 
     expect(range.start).toBe(0);
   });
 
   it("should clamp end to totalItems - 1", () => {
     const visibleRange = { start: 90, end: 99 };
-    const range = calculateCompressedRenderRange(visibleRange, 5, 100);
+    const out = { start: 0, end: 0 };
+    const range = calculateCompressedRenderRange(visibleRange, 5, 100, out);
 
     expect(range.end).toBe(99);
   });
 
   it("should handle empty list", () => {
     const visibleRange = { start: 0, end: 0 };
-    const range = calculateCompressedRenderRange(visibleRange, 3, 0);
+    const out = { start: 0, end: 0 };
+    const range = calculateCompressedRenderRange(visibleRange, 3, 0, out);
 
     expect(range.start).toBe(0);
     expect(range.end).toBe(0);
@@ -609,12 +631,14 @@ describe("Compression Integration", () => {
 
     // Get visible range at middle scroll
     const scrollTop = 8_000_000;
+    const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
       scrollTop,
       containerHeight,
       itemHeight,
       totalItems,
       compression,
+      out,
     );
 
     // First visible item should be positioned near top of viewport
@@ -640,12 +664,14 @@ describe("Compression Integration", () => {
 
     // Scroll to maximum
     const maxScroll = compression.virtualHeight - containerHeight;
+    const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
       maxScroll,
       containerHeight,
       itemHeight,
       totalItems,
       compression,
+      out,
     );
 
     // Should be able to see the last item

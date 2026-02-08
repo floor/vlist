@@ -161,6 +161,7 @@ export const createScrollMethods = <T extends VListItem>(
       ctx.state.viewportState.containerHeight,
       dataState.total,
       align,
+      ctx.getCachedCompression(),
     );
 
     ctx.scrollController.scrollTo(position);

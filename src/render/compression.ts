@@ -75,6 +75,7 @@ export const getCompressionState = (
  * @param itemHeight - Height of each item
  * @param totalItems - Total number of items
  * @param compression - Compression state
+ * @param out - Output range to mutate (avoids allocation on hot path)
  */
 export const calculateCompressedVisibleRange = (
   scrollTop: number,
@@ -82,9 +83,12 @@ export const calculateCompressedVisibleRange = (
   itemHeight: number,
   totalItems: number,
   compression: CompressionState,
+  out: Range,
 ): Range => {
   if (totalItems === 0 || itemHeight === 0) {
-    return { start: 0, end: 0 };
+    out.start = 0;
+    out.end = 0;
+    return out;
   }
 
   const visibleCount = Math.ceil(containerHeight / itemHeight);
@@ -93,10 +97,9 @@ export const calculateCompressedVisibleRange = (
     // Normal calculation
     const start = Math.floor(scrollTop / itemHeight);
     const end = Math.min(start + visibleCount, totalItems - 1);
-    return {
-      start: Math.max(0, start),
-      end: Math.max(0, end),
-    };
+    out.start = Math.max(0, start);
+    out.end = Math.max(0, end);
+    return out;
   }
 
   // Compressed calculation
@@ -132,29 +135,32 @@ export const calculateCompressedVisibleRange = (
         : Math.min(totalItems - 1, start + visibleCount);
   }
 
-  return {
-    start: Math.max(0, start),
-    end: Math.min(totalItems - 1, Math.max(0, end)),
-  };
+  out.start = Math.max(0, start);
+  out.end = Math.min(totalItems - 1, Math.max(0, end));
+  return out;
 };
 
 /**
  * Calculate render range with compression support (adds overscan)
  * Pure function - no side effects
+ *
+ * @param out - Output range to mutate (avoids allocation on hot path)
  */
 export const calculateCompressedRenderRange = (
   visibleRange: Range,
   overscan: number,
   totalItems: number,
+  out: Range,
 ): Range => {
   if (totalItems === 0) {
-    return { start: 0, end: 0 };
+    out.start = 0;
+    out.end = 0;
+    return out;
   }
 
-  return {
-    start: Math.max(0, visibleRange.start - overscan),
-    end: Math.min(totalItems - 1, visibleRange.end + overscan),
-  };
+  out.start = Math.max(0, visibleRange.start - overscan);
+  out.end = Math.min(totalItems - 1, visibleRange.end + overscan);
+  return out;
 };
 
 // =============================================================================
