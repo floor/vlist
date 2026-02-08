@@ -15,6 +15,7 @@ import {
   createViewportState,
   updateViewportState,
   updateViewportItems,
+  getCompressionState,
   rangesEqual,
   isInRange,
   getRangeCount,
@@ -23,19 +24,43 @@ import {
 
 describe("calculateVisibleRange", () => {
   it("should return empty range when totalItems is 0", () => {
-    const result = calculateVisibleRange(0, 500, 50, 0);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      0,
+      500,
+      50,
+      0,
+      getCompressionState(0, 50),
+      out,
+    );
     expect(result).toEqual({ start: 0, end: 0 });
   });
 
   it("should return empty range when itemHeight is 0", () => {
-    const result = calculateVisibleRange(0, 500, 0, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      0,
+      500,
+      0,
+      100,
+      getCompressionState(100, 0),
+      out,
+    );
     expect(result).toEqual({ start: 0, end: 0 });
   });
 
   it("should calculate correct range at scroll position 0", () => {
     // Container: 500px, Item: 50px = ceil(500/50) = 10 visible items
     // Range is 0 to 10 (inclusive, so 11 items to ensure full coverage)
-    const result = calculateVisibleRange(0, 500, 50, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      0,
+      500,
+      50,
+      100,
+      getCompressionState(100, 50),
+      out,
+    );
     expect(result.start).toBe(0);
     expect(result.end).toBe(10);
   });
@@ -44,26 +69,58 @@ describe("calculateVisibleRange", () => {
     // Scrolled 250px = 5 items down
     // Container: 500px, Item: 50px = ceil(500/50) = 10 visible items
     // Range is 5 to 15 (start + visibleCount)
-    const result = calculateVisibleRange(250, 500, 50, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      250,
+      500,
+      50,
+      100,
+      getCompressionState(100, 50),
+      out,
+    );
     expect(result.start).toBe(5);
     expect(result.end).toBe(15);
   });
 
   it("should clamp end to totalItems - 1", () => {
     // Scrolled near end, only 5 items left
-    const result = calculateVisibleRange(4750, 500, 50, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      4750,
+      500,
+      50,
+      100,
+      getCompressionState(100, 50),
+      out,
+    );
     expect(result.end).toBe(99);
   });
 
   it("should handle partial items", () => {
     // Container: 520px, Item: 50px = ceil(520/50) = 11 visible items
     // Range is 0 to 11 (start + visibleCount)
-    const result = calculateVisibleRange(0, 520, 50, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      0,
+      520,
+      50,
+      100,
+      getCompressionState(100, 50),
+      out,
+    );
     expect(result.end).toBe(11);
   });
 
   it("should never return negative start", () => {
-    const result = calculateVisibleRange(-100, 500, 50, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateVisibleRange(
+      -100,
+      500,
+      50,
+      100,
+      getCompressionState(100, 50),
+      out,
+    );
     expect(result.start).toBeGreaterThanOrEqual(0);
   });
 });
@@ -71,32 +128,37 @@ describe("calculateVisibleRange", () => {
 describe("calculateRenderRange", () => {
   it("should return empty range when totalItems is 0", () => {
     const visibleRange = { start: 0, end: 0 };
-    const result = calculateRenderRange(visibleRange, 3, 0);
+    const out = { start: 0, end: 0 };
+    const result = calculateRenderRange(visibleRange, 3, 0, out);
     expect(result).toEqual({ start: 0, end: 0 });
   });
 
   it("should add overscan to visible range", () => {
     const visibleRange = { start: 5, end: 14 };
-    const result = calculateRenderRange(visibleRange, 3, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateRenderRange(visibleRange, 3, 100, out);
     expect(result.start).toBe(2); // 5 - 3
     expect(result.end).toBe(17); // 14 + 3
   });
 
   it("should clamp start to 0", () => {
     const visibleRange = { start: 1, end: 10 };
-    const result = calculateRenderRange(visibleRange, 5, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateRenderRange(visibleRange, 5, 100, out);
     expect(result.start).toBe(0);
   });
 
   it("should clamp end to totalItems - 1", () => {
     const visibleRange = { start: 90, end: 99 };
-    const result = calculateRenderRange(visibleRange, 5, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateRenderRange(visibleRange, 5, 100, out);
     expect(result.end).toBe(99);
   });
 
   it("should handle zero overscan", () => {
     const visibleRange = { start: 5, end: 14 };
-    const result = calculateRenderRange(visibleRange, 0, 100);
+    const out = { start: 0, end: 0 };
+    const result = calculateRenderRange(visibleRange, 0, 100, out);
     expect(result).toEqual(visibleRange);
   });
 });
@@ -134,24 +196,52 @@ describe("calculateScrollToIndex", () => {
   // For small lists (no compression), result = index * itemHeight adjusted for alignment
 
   it("should scroll to start alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, 100, "start");
+    const result = calculateScrollToIndex(
+      10,
+      50,
+      500,
+      100,
+      "start",
+      getCompressionState(100, 50),
+    );
     expect(result).toBe(500); // 10 * 50
   });
 
   it("should scroll to center alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, 100, "center");
+    const result = calculateScrollToIndex(
+      10,
+      50,
+      500,
+      100,
+      "center",
+      getCompressionState(100, 50),
+    );
     // itemTop = 500, center = 500 - (500 - 50) / 2 = 500 - 225 = 275
     expect(result).toBe(275);
   });
 
   it("should scroll to end alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, 100, "end");
+    const result = calculateScrollToIndex(
+      10,
+      50,
+      500,
+      100,
+      "end",
+      getCompressionState(100, 50),
+    );
     // itemTop = 500, end = 500 - (500 - 50) = 50
     expect(result).toBe(50);
   });
 
   it("should default to start alignment", () => {
-    const result = calculateScrollToIndex(10, 50, 500, 100);
+    const result = calculateScrollToIndex(
+      10,
+      50,
+      500,
+      100,
+      "start",
+      getCompressionState(100, 50),
+    );
     expect(result).toBe(500);
   });
 
@@ -169,6 +259,7 @@ describe("calculateScrollToIndex", () => {
       containerHeight,
       totalItems,
       "start",
+      getCompressionState(totalItems, itemHeight),
     );
 
     // Should map to compressed position
@@ -212,7 +303,13 @@ describe("getScrollDirection", () => {
 
 describe("createViewportState", () => {
   it("should create initial viewport state", () => {
-    const state = createViewportState(500, 50, 100, 3);
+    const state = createViewportState(
+      500,
+      50,
+      100,
+      3,
+      getCompressionState(100, 50),
+    );
 
     expect(state.scrollTop).toBe(0);
     expect(state.containerHeight).toBe(500);
@@ -222,14 +319,26 @@ describe("createViewportState", () => {
   });
 
   it("should include overscan in render range", () => {
-    const state = createViewportState(500, 50, 100, 3);
+    const state = createViewportState(
+      500,
+      50,
+      100,
+      3,
+      getCompressionState(100, 50),
+    );
 
     // Visible: 0-10, Render with overscan: 0-13
     expect(state.renderRange.end).toBe(13);
   });
 
   it("should handle empty list", () => {
-    const state = createViewportState(500, 50, 0, 3);
+    const state = createViewportState(
+      500,
+      50,
+      0,
+      3,
+      getCompressionState(0, 50),
+    );
 
     expect(state.totalHeight).toBe(0);
     expect(state.visibleRange).toEqual({ start: 0, end: 0 });
@@ -238,16 +347,18 @@ describe("createViewportState", () => {
 
 describe("updateViewportState", () => {
   it("should update state after scroll", () => {
-    const initial = createViewportState(500, 50, 100, 3);
-    const updated = updateViewportState(initial, 250, 50, 100, 3);
+    const compression = getCompressionState(100, 50);
+    const initial = createViewportState(500, 50, 100, 3, compression);
+    const updated = updateViewportState(initial, 250, 50, 100, 3, compression);
 
     expect(updated.scrollTop).toBe(250);
     expect(updated.visibleRange.start).toBe(5);
   });
 
   it("should preserve containerHeight", () => {
-    const initial = createViewportState(500, 50, 100, 3);
-    const updated = updateViewportState(initial, 250, 50, 100, 3);
+    const compression = getCompressionState(100, 50);
+    const initial = createViewportState(500, 50, 100, 3, compression);
+    const updated = updateViewportState(initial, 250, 50, 100, 3, compression);
 
     expect(updated.containerHeight).toBe(500);
   });
@@ -255,15 +366,39 @@ describe("updateViewportState", () => {
 
 describe("updateViewportItems", () => {
   it("should update total height when items change", () => {
-    const initial = createViewportState(500, 50, 100, 3);
-    const updated = updateViewportItems(initial, 50, 200, 3);
+    const initial = createViewportState(
+      500,
+      50,
+      100,
+      3,
+      getCompressionState(100, 50),
+    );
+    const updated = updateViewportItems(
+      initial,
+      50,
+      200,
+      3,
+      getCompressionState(200, 50),
+    );
 
     expect(updated.totalHeight).toBe(10000);
   });
 
   it("should recalculate visible range", () => {
-    const initial = createViewportState(500, 50, 100, 3);
-    const updated = updateViewportItems(initial, 50, 50, 3);
+    const initial = createViewportState(
+      500,
+      50,
+      100,
+      3,
+      getCompressionState(100, 50),
+    );
+    const updated = updateViewportItems(
+      initial,
+      50,
+      50,
+      3,
+      getCompressionState(50, 50),
+    );
 
     // With only 50 items, end should be clamped
     expect(updated.visibleRange.end).toBeLessThanOrEqual(49);
