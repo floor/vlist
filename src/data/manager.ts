@@ -277,7 +277,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     total: storage.getTotal(),
     cached: storage.getCachedCount(),
     isLoading,
-    pendingRanges: [...pendingRanges],
+    pendingRanges,
     error,
     hasMore,
     cursor,
