@@ -330,6 +330,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
     let loadedCount = 0;
     let placeholderCount = 0;
 
+    // S2: Batch LRU timestamp update — single Date.now() for all chunks
+    // instead of per-item in storage.get()
+    storage.touchChunksForRange(start, Math.min(end, total - 1));
+
     for (let i = start; i <= end && i < total; i++) {
       const item = storage.get(i);
       if (item !== undefined) {

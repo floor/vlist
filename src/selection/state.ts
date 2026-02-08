@@ -129,19 +129,19 @@ export const clearSelection = (state: SelectionState): SelectionState => ({
 
 /**
  * Set focused index
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const setFocusedIndex = (
   state: SelectionState,
   index: number,
-): SelectionState => ({
-  ...state,
-  focusedIndex: index,
-});
+): SelectionState => {
+  state.focusedIndex = index;
+  return state;
+};
 
 /**
  * Move focus up
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const moveFocusUp = (
   state: SelectionState,
@@ -156,15 +156,13 @@ export const moveFocusUp = (
     newIndex = wrap ? totalItems - 1 : 0;
   }
 
-  return {
-    ...state,
-    focusedIndex: newIndex,
-  };
+  state.focusedIndex = newIndex;
+  return state;
 };
 
 /**
  * Move focus down
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const moveFocusDown = (
   state: SelectionState,
@@ -179,15 +177,13 @@ export const moveFocusDown = (
     newIndex = wrap ? 0 : totalItems - 1;
   }
 
-  return {
-    ...state,
-    focusedIndex: newIndex,
-  };
+  state.focusedIndex = newIndex;
+  return state;
 };
 
 /**
  * Move focus to first item
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const moveFocusToFirst = (
   state: SelectionState,
@@ -195,15 +191,13 @@ export const moveFocusToFirst = (
 ): SelectionState => {
   if (totalItems === 0) return state;
 
-  return {
-    ...state,
-    focusedIndex: 0,
-  };
+  state.focusedIndex = 0;
+  return state;
 };
 
 /**
  * Move focus to last item
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const moveFocusToLast = (
   state: SelectionState,
@@ -211,15 +205,13 @@ export const moveFocusToLast = (
 ): SelectionState => {
   if (totalItems === 0) return state;
 
-  return {
-    ...state,
-    focusedIndex: totalItems - 1,
-  };
+  state.focusedIndex = totalItems - 1;
+  return state;
 };
 
 /**
  * Move focus by page (for Page Up/Down)
- * Pure function - returns new state
+ * Mutates state in-place to avoid allocation on hot path
  */
 export const moveFocusByPage = (
   state: SelectionState,
@@ -237,10 +229,8 @@ export const moveFocusByPage = (
   // Clamp to valid range
   newIndex = Math.max(0, Math.min(totalItems - 1, newIndex));
 
-  return {
-    ...state,
-    focusedIndex: newIndex,
-  };
+  state.focusedIndex = newIndex;
+  return state;
 };
 
 // =============================================================================
