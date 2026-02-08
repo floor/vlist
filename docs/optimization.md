@@ -1,6 +1,6 @@
 # vlist - Performance Optimization Guide
 
-This document outlines performance optimizations for the vlist virtual scrolling component. Many optimizations are already implemented, with a few remaining opportunities for specific use cases.
+This document outlines performance optimizations for the vlist virtual scrolling component. Many optimizations are already implemented, with concrete remaining opportunities organized by category.
 
 ---
 
@@ -13,13 +13,15 @@ The following optimizations are already implemented in vlist:
 - **Element Pooling** - DOM elements are recycled via `createElementPool()`
 - **Compression** - Large lists (1M+ items) use virtual scroll space compression
 - **Event Delegation** - Single click listener on items container
-- **Reusable Compression Context** - Avoids object allocation per frame
-- **Cached Compression State** - Only recalculates when `totalItems` changes
+- **Reusable Compression Context** - Avoids object allocation per frame (`reusableCompressionCtx` in context)
+- **Cached Compression State** - Only recalculates when `totalItems` changes (`getCachedCompression`)
+- **Zero-Allocation Scroll Hot Path** - Cached compression passed to `updateViewportState` and range functions; no `CompressionState` or `Range` objects allocated per frame
+- **In-Place Range Mutation** - `calculateCompressedVisibleRange` and `calculateCompressedRenderRange` accept optional `out` parameter to mutate existing range objects
+- **RAF-Throttled Native Scroll** - `handleNativeScroll` wrapped with `rafThrottle` to guarantee at most one processing per animation frame
+- **CSS Containment** - `contain: layout style` on items container, `contain: content` + `will-change: transform` on items for optimized compositing
+- **Scroll Transition Suppression** - `.vlist--scrolling` class toggled during active scroll to disable CSS transitions, re-enabled on idle
 - **Sparse Storage with LRU Eviction** - Efficient memory management for large datasets
 - **Idle Detection** - Defers non-critical operations until scroll stops
-
-### Recently Implemented (v1.1+)
-
 - **DocumentFragment Batching** - New elements are batched and appended in a single DOM operation
 - **Direct Property Assignment** - Uses `dataset` and `ariaSelected` instead of `setAttribute`
 - **Static Role Attribute** - `role="option"` set once in element pool, not per render
@@ -48,11 +50,11 @@ const list = createVList({
     // Velocity above which loading is skipped entirely (px/ms)
     // Default: 25
     cancelThreshold: 25,
-    
+
     // Velocity above which preloading kicks in (px/ms)
     // Default: 2
     preloadThreshold: 2,
-    
+
     // Number of items to preload ahead of scroll direction
     // Default: 50
     preloadAhead: 50,
@@ -111,7 +113,7 @@ For best performance:
 
 ```typescript
 // ✅ Simple string templates (fastest)
-const template = (item, index, state) => 
+const template = (item, index, state) =>
   `<div class="item ${state.selected ? 'selected' : ''}">${item.name}</div>`;
 
 // ✅ HTMLElement templates (good for complex layouts)
@@ -135,14 +137,241 @@ const template = (item, index, state) => {
 
 ## Remaining Optimization Opportunities
 
-These optimizations are **not implemented** and only beneficial in specific scenarios:
+Concrete improvements organized by category and priority.
 
-### 1. Template Result Caching 🟢
+### 🚀 Speed (Hot Path Allocations)
 
-For templates with very expensive computations:
+#### S1. Remove `innerHTML = ""` from element pool release 🟠 Medium Impact
+
+**Problem:** `innerHTML = ""` in pool `release()` triggers HTML parsing internally. The content is immediately overwritten on the next `acquire()` → `applyTemplate()`, making this cleanup wasted work.
+
+**File:** `src/render/renderer.ts` — `createElementPool.release`
+
+**Fix:** Replace with `element.textContent = ""` (much cheaper, no parser invocation) or remove entirely since `applyTemplate` overwrites content on next use.
+
+#### S2. Batch `Date.now()` in sparse storage access 🟡 Low Impact
+
+**Problem:** Every `storage.get(i)` call updates `chunk.lastAccess = Date.now()`. In `getItemsInRange`, this executes for every visible item (20-50+) per render. Items in the same chunk redundantly get the same timestamp.
+
+**File:** `src/data/sparse.ts` — `get()`
+
+**Fix:** Add a `touchChunksForRange(start, end)` method that calls `Date.now()` once and applies it to all affected chunks, or defer LRU timestamps to eviction time.
+
+#### S3. Avoid `SelectionState` allocation on every arrow key 🟡 Low Impact
+
+**Problem:** `moveFocusUp` / `moveFocusDown` return new objects via `{ ...state, focusedIndex: newIndex }`. Each `ArrowUp`/`ArrowDown` creates a new state object + copies the `selected` Set reference.
+
+**File:** `src/selection/state.ts` — `moveFocusUp`, `moveFocusDown`, `moveFocusToFirst`, `moveFocusToLast`
+
+**Fix:** For focus-only changes (no selection mutation), mutate `focusedIndex` directly:
 
 ```typescript
-// Only implement if templates are measurably slow (>1ms per item)
+export const moveFocusUp = (state, totalItems, wrap = true) => {
+  let newIndex = state.focusedIndex - 1;
+  if (newIndex < 0) newIndex = wrap ? totalItems - 1 : 0;
+  state.focusedIndex = newIndex;
+  return state;
+};
+```
+
+#### S4. Lazy-build `getState()` in data manager 🟡 Low Impact
+
+**Problem:** `getState()` creates a new object and spreads `[...pendingRanges]` on every call. Called frequently from `notifyStateChange()`.
+
+**File:** `src/data/manager.ts` — `getState`, `notifyStateChange`
+
+**Fix:** Pass a dirty flag to `notifyStateChange` and only build the full state object when the consumer explicitly calls `getState()`. Internal hot paths should use the direct getters (`getTotal()`, `getCached()`, etc.) which already exist.
+
+---
+
+### 🎬 Smoothness (Rendering & Scroll Feel)
+
+#### M1. Targeted re-render on keyboard focus change 🟠 Medium Impact
+
+**Problem:** Pressing `ArrowUp`/`ArrowDown` triggers a full `renderer.render()` for all visible items (~20-50), even though only 2 items changed (old focus → remove class, new focus → add class).
+
+**File:** `src/handlers.ts` — `createKeyboardHandler`
+
+**Fix:** Use `renderer.updateItem()` on just the two affected items:
+
+```typescript
+if (handled) {
+  event.preventDefault();
+  const previousFocusIndex = ctx.state.selectionState.focusedIndex;
+  ctx.state.selectionState = newState;
+
+  // Update only the two affected items
+  if (previousFocusIndex >= 0) {
+    const prevItem = ctx.dataManager.getItem(previousFocusIndex);
+    if (prevItem) {
+      ctx.renderer.updateItem(previousFocusIndex, prevItem,
+        ctx.state.selectionState.selected.has(prevItem.id), false);
+    }
+  }
+  const newFocusIndex = ctx.state.selectionState.focusedIndex;
+  if (newFocusIndex >= 0) {
+    const newItem = ctx.dataManager.getItem(newFocusIndex);
+    if (newItem) {
+      ctx.renderer.updateItem(newFocusIndex, newItem,
+        ctx.state.selectionState.selected.has(newItem.id), true);
+    }
+  }
+
+  // Scroll focused item into view
+  if (newFocusIndex >= 0) {
+    scrollToIndex(newFocusIndex, "center");
+  }
+  // ...
+}
+```
+
+#### M2. Make idle timeout configurable 🟡 Low Impact
+
+**Problem:** `SCROLL_IDLE_TIMEOUT` is hardcoded at 150ms. This works on desktop but may be too aggressive on mobile/slower devices where scroll event gaps are naturally longer.
+
+**File:** `src/constants.ts`, `src/types.ts`, `src/scroll/controller.ts`
+
+**Fix:** Expose via `VListConfig` or `ScrollControllerConfig`:
+
+```typescript
+interface VListConfig {
+  // ...
+  /** Scroll idle detection timeout in ms (default: 150) */
+  idleTimeout?: number;
+}
+```
+
+---
+
+### 📦 Size (Bundle & CSS Weight)
+
+#### Z1. Deduplicate dark mode CSS 🟠 Medium Impact
+
+**Problem:** Dark mode custom properties are defined identically in both `@media (prefers-color-scheme: dark)` and `.dark {}` — that's ~700 bytes of exact duplication (12 properties × 2).
+
+**File:** `src/styles/vlist.css`
+
+**Fix:** Consolidate using a single definition block:
+
+```css
+@media (prefers-color-scheme: dark) {
+    :root {
+        --vlist-bg: #111827;
+        /* ... */
+    }
+}
+
+/* Class override reuses same values — define once */
+.dark {
+    --vlist-bg: #111827;
+    /* ... */
+}
+```
+
+**Option A:** Keep both but accept the duplication (current, ~700 bytes gzipped is negligible).
+
+**Option B:** Remove the `.dark` class block and document that consumers should use `@media` or define their own `.dark` override. This halves the dark mode CSS.
+
+**Option C:** Use a CSS custom property layer approach so both selectors share one declaration block. Browser support may be a concern.
+
+#### Z2. Split unused CSS into a separate file 🟠 Medium Impact
+
+**Problem:** The following CSS classes are defined but never created by the vlist component itself:
+
+- `.vlist-loading`, `.vlist-loading-spinner` — loading overlay
+- `.vlist-empty`, `.vlist-empty-icon`, `.vlist-empty-text`, `.vlist-empty-subtext` — empty state
+- `.vlist--compact`, `.vlist--comfortable` — density variants
+- `.vlist--borderless`, `.vlist--striped` — visual variants
+- `.vlist-item--enter`, `.vlist--animate` — animations
+- `@keyframes vlist-spin`, `@keyframes vlist-fade-in` — animation keyframes
+
+These are "convenience" classes for consumers but bloat the core CSS (~2.5-3 KB).
+
+**File:** `src/styles/vlist.css`
+
+**Fix:** Split into two files:
+
+```
+dist/vlist.css         ← Core styles only (~6-7 KB, ~1.5 KB gzipped)
+dist/vlist-extras.css  ← Presets, variants, loading/empty states
+```
+
+Update `package.json` exports:
+
+```json
+"exports": {
+  ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
+  "./styles": "./dist/vlist.css",
+  "./styles/extras": "./dist/vlist-extras.css"
+}
+```
+
+#### Z3. Lazy-initialize placeholder manager 🟡 Low Impact
+
+**Problem:** `createPlaceholderManager()` is always instantiated in the data manager, even for static lists with `items: [...]` that never need placeholders. The placeholder module includes structure analysis, field detection, and masked text generation (~300 lines).
+
+**File:** `src/data/manager.ts` — `createDataManager`
+
+**Fix:** Create the placeholder manager lazily, only when the first unloaded item is requested:
+
+```typescript
+// Before
+const placeholders = createPlaceholderManager<T>(placeholderConfig);
+
+// After
+let placeholders: PlaceholderManager<T> | null = null;
+const getPlaceholders = () => {
+  if (!placeholders) {
+    placeholders = createPlaceholderManager<T>(placeholderConfig);
+  }
+  return placeholders;
+};
+```
+
+This keeps the code tree-shakeable for bundlers and avoids initialization cost for static lists.
+
+#### Z4. Use CSS class instead of inline `style.cssText` for static styles 🟡 Low Impact
+
+**Problem:** Every pooled element gets `style.cssText = "position:absolute;top:0;left:0;right:0;height:${itemHeight}px"` applied. The first four properties are already defined in `.vlist-item` CSS. This duplicates styles and requires string parsing per element.
+
+**File:** `src/render/renderer.ts` — `applyStaticStyles`
+
+**Fix:** Rely on the existing `.vlist-item` class for static positioning. Only set the dynamic height:
+
+```typescript
+// Before
+const staticStyles = `position:absolute;top:0;left:0;right:0;height:${itemHeight}px`;
+const applyStaticStyles = (element) => {
+  element.style.cssText = staticStyles;
+};
+
+// After — only set what CSS doesn't know
+const applyStaticStyles = (element) => {
+  element.style.height = `${itemHeight}px`;
+};
+```
+
+This reduces per-element work and avoids overriding the CSS class with equivalent inline styles.
+
+#### Z5. Eliminate thin pass-through wrappers in virtual.ts 🟡 Low Impact
+
+**Problem:** Several functions in `virtual.ts` are 1-2 line wrappers that call `getCompressionState` + delegate to `compression.ts`. These add ~20-30 lines of code + JSDoc duplication.
+
+**File:** `src/render/virtual.ts` — `calculateVisibleRange`, `calculateRenderRange`, `calculateTotalHeight`
+
+**Fix:** If S1 is implemented (compression passed as parameter), these wrappers become pure pass-throughs and can be replaced by direct re-exports from `compression.ts`.
+
+---
+
+### 🟢 Situational Optimizations (Consumer-Side)
+
+These optimizations are **not implemented in vlist** and only beneficial in specific scenarios:
+
+#### Template Result Caching
+
+For templates with very expensive computations (>1ms per item):
+
+```typescript
 const templateCache = new WeakMap<T, HTMLElement>();
 
 const cachedTemplate = (item, index, state) => {
@@ -160,7 +389,7 @@ const cachedTemplate = (item, index, state) => {
 
 **When to use:** Only if your template involves heavy computation (parsing, complex calculations). Most templates don't need this.
 
-### 2. Web Worker for Data Processing 🟢
+#### Web Worker for Data Processing
 
 For adapters that transform large amounts of data:
 
@@ -168,7 +397,6 @@ For adapters that transform large amounts of data:
 // worker.ts
 self.onmessage = (e) => {
   const { items } = e.data;
-  // Heavy transformation off main thread
   const transformed = items.map(item => ({
     ...item,
     computedField: expensiveComputation(item),
@@ -182,7 +410,7 @@ const worker = new Worker('./transform-worker.ts');
 const adapter = {
   read: async (params) => {
     const raw = await fetchItems(params);
-    
+
     return new Promise(resolve => {
       worker.postMessage({ items: raw.items });
       worker.onmessage = (e) => {
@@ -244,19 +472,46 @@ With all optimizations enabled:
 
 ## Summary
 
-| Optimization | Status | Impact |
-|--------------|--------|--------|
-| Element pooling | ✅ Implemented | High |
-| DocumentFragment batching | ✅ Implemented | High |
-| Direct property assignment | ✅ Implemented | Medium |
-| Reusable ItemState | ✅ Implemented | Medium |
-| ResizeObserver | ✅ Implemented | Medium |
-| Circular buffer velocity | ✅ Implemented | Medium |
-| Configurable preloading | ✅ Implemented | Medium |
-| Compression for large lists | ✅ Implemented | High |
-| Sparse storage + LRU | ✅ Implemented | High |
-| Template caching | ❌ Not implemented | Situational |
-| Web Worker for data | ❌ Not implemented | Situational |
+### Implemented
+
+| Optimization | Impact |
+|--------------|--------|
+| Element pooling | High |
+| DocumentFragment batching | High |
+| Compression for large lists | High |
+| Sparse storage + LRU | High |
+| Zero-allocation scroll hot path (S1→S2 done) | High |
+| RAF-throttled native scroll (M1 done) | High |
+| Reusable Compression Context | Medium |
+| Cached Compression State | Medium |
+| CSS containment + `will-change` (M2 done) | Medium |
+| Scroll transition suppression (M3 done) | Medium |
+| Direct property assignment | Medium |
+| Reusable ItemState | Medium |
+| ResizeObserver | Medium |
+| Circular buffer velocity | Medium |
+| Configurable preloading | Medium |
+| Idle detection | Medium |
+| Event delegation | Medium |
+| Static role attribute | Low |
+
+### Pending — Priority Matrix
+
+| # | Optimization | Impact | Effort | Category |
+|---|-------------|--------|--------|----------|
+| M1 | Targeted re-render on focus change | 🟠 Medium | Medium | Smoothness |
+| S1 | Remove `innerHTML=""` from pool release | 🟠 Medium | Low | Speed |
+| Z1 | Deduplicate dark mode CSS | 🟠 Medium | Low | Size |
+| Z2 | Split unused CSS to extras file | 🟠 Medium | Low | Size |
+| S2 | Batch `Date.now()` in sparse storage | 🟡 Low | Low | Speed |
+| S3 | Mutate focusedIndex directly | 🟡 Low | Low | Speed |
+| S4 | Lazy state object in data manager | 🟡 Low | Low | Speed |
+| Z3 | Lazy-init placeholder manager | 🟡 Low | Medium | Size |
+| Z4 | CSS class instead of inline styles | 🟡 Low | Low | Size/Speed |
+| Z5 | Eliminate thin virtual.ts wrappers | 🟡 Low | Low | Size |
+| M2 | Configurable idle timeout | 🟡 Low | Low | Smoothness |
+
+**Next quick wins:** S1 (pool release), Z1 (CSS dedup), M1 (targeted focus render)
 
 ---
 
