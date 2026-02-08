@@ -2,7 +2,7 @@
 // Demonstrates single and multiple selection modes with keyboard navigation
 
 // Direct imports for optimal tree-shaking
-import createButton from "mtrl/components/button";
+import { createButton } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList } from "vlist";
 

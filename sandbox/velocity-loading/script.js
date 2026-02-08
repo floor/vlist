@@ -2,9 +2,7 @@
 // Demonstrates how vlist skips loading when scrolling fast and loads when velocity drops
 
 // Direct imports for optimal tree-shaking
-import createButton from "mtrl/components/button";
-import createSlider from "mtrl/components/slider";
-import { addClass, removeClass } from "mtrl/core/dom";
+import { createButton, createSlider, addClass, removeClass } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList } from "vlist";
 
