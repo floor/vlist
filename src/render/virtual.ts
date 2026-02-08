@@ -23,53 +23,10 @@ export {
   MAX_VIRTUAL_HEIGHT,
   getCompressionState,
   needsCompression,
+  calculateCompressedVisibleRange as calculateVisibleRange,
+  calculateCompressedRenderRange as calculateRenderRange,
 } from "./compression";
 export type { CompressionState } from "./compression";
-
-// =============================================================================
-// Range Calculations
-// =============================================================================
-
-/**
- * Calculate the visible range of items based on scroll position
- * Automatically handles compression for large lists
- * Pure function - no side effects
- */
-export const calculateVisibleRange = (
-  scrollTop: number,
-  containerHeight: number,
-  itemHeight: number,
-  totalItems: number,
-  compression: CompressionState,
-  out: Range,
-): Range => {
-  return calculateCompressedVisibleRange(
-    scrollTop,
-    containerHeight,
-    itemHeight,
-    totalItems,
-    compression,
-    out,
-  );
-};
-
-/**
- * Calculate the render range (visible + overscan buffer)
- * Pure function - no side effects
- */
-export const calculateRenderRange = (
-  visibleRange: Range,
-  overscan: number,
-  totalItems: number,
-  out: Range,
-): Range => {
-  return calculateCompressedRenderRange(
-    visibleRange,
-    overscan,
-    totalItems,
-    out,
-  );
-};
 
 /**
  * Calculate total content height (capped for compression)

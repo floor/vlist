@@ -215,14 +215,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
     }
   };
 
-  // Pre-computed static style string (set once per element)
-  const staticStyles = `position:absolute;top:0;left:0;right:0;height:${itemHeight}px`;
-
   /**
    * Apply static styles to an element (called once when element is created)
+   * Only sets height — position/top/left/right are already in .vlist-item CSS
    */
   const applyStaticStyles = (element: HTMLElement): void => {
-    element.style.cssText = staticStyles;
+    element.style.height = `${itemHeight}px`;
   };
 
   /**
