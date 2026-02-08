@@ -33,6 +33,11 @@ The following optimizations are already implemented in vlist:
 - **Batched LRU Timestamps** - Single `Date.now()` call per render via `touchChunksForRange()` instead of per-item in `storage.get()`
 - **In-Place Focus Mutation** - `moveFocusUp/Down/ToFirst/ToLast/ByPage` mutate `focusedIndex` directly, zero object allocations
 - **Targeted Keyboard Focus Render** - Arrow keys update only 2 affected items via `updateItemClasses()` instead of full-rendering all ~20-50 visible items
+- **Direct State Getters** - Hot paths use `getTotal()`, `getCached()` etc. instead of allocating state objects via `getState()`
+- **CSS-Only Static Positioning** - Items use `.vlist-item` CSS for `position:absolute;top:0;left:0;right:0`; only dynamic `height` set via JS
+- **Split Core/Extras CSS** - Core styles (6.7 KB) separated from optional variants, loading/empty states, and animations (3.4 KB extras)
+- **Re-exported Range Functions** - `calculateVisibleRange` and `calculateRenderRange` are direct re-exports from compression, eliminating pass-through wrappers
+- **Configurable Idle Timeout** - `idleTimeout` option on `VListConfig` (default: 150ms) for tuning scroll idle detection per device
 
 ---
 
@@ -78,6 +83,29 @@ const list = createVList({
 - **Slow API?** Increase `preloadAhead` (e.g., 100-200)
 - **Heavy templates?** Decrease `preloadAhead` (e.g., 20-30)
 - **Disable preloading:** Set `preloadThreshold: Infinity`
+
+### Idle Timeout
+
+Control how long after the last scroll event before the list is considered "idle":
+
+```typescript
+const list = createVList({
+  container: '#list',
+  item: { height: 50, template: myTemplate },
+  adapter: myAdapter,
+  idleTimeout: 200, // ms (default: 150)
+});
+```
+
+When idle is detected, vlist:
+- Loads any pending data ranges that were skipped during fast scrolling
+- Re-enables CSS transitions (removes `.vlist--scrolling` class)
+- Resets the velocity tracker
+
+**Tuning tips:**
+- **Mobile/touch devices:** Increase to 200-300ms (scroll events have larger gaps)
+- **Desktop with smooth scroll:** Default 150ms works well
+- **Aggressive loading:** Decrease to 100ms (loads data sooner after scroll stops)
 
 ### Resize Handling
 
@@ -157,13 +185,9 @@ Added `touchChunksForRange(start, end)` that calls `Date.now()` once per render 
 
 Focus movement functions (`moveFocusUp/Down/ToFirst/ToLast/ByPage`) now mutate `state.focusedIndex` in-place instead of spreading new objects.
 
-#### S4. Lazy-build `getState()` in data manager 🟡 Low Impact
+#### ~~S4. Lazy-build `getState()` in data manager~~ ✅ Implemented
 
-**Problem:** `getState()` creates a new object and spreads `[...pendingRanges]` on every call. Called frequently from `notifyStateChange()`.
-
-**File:** `src/data/manager.ts` — `getState`, `notifyStateChange`
-
-**Fix:** Pass a dirty flag to `notifyStateChange` and only build the full state object when the consumer explicitly calls `getState()`. Internal hot paths should use the direct getters (`getTotal()`, `getCached()`, etc.) which already exist.
+All hot paths (`vlist.ts`) now use direct getters (`getTotal()`, `getCached()`) instead of `getState()`. Removed `[...pendingRanges]` array copy — `getState()` passes direct reference since callers don't mutate it.
 
 ---
 
@@ -173,86 +197,21 @@ Focus movement functions (`moveFocusUp/Down/ToFirst/ToLast/ByPage`) now mutate `
 
 Arrow key navigation now uses `renderer.updateItemClasses()` on just the 2 affected items (old focus → remove class, new focus → add class) instead of full-rendering all ~20-50 visible items. Space/Enter (selection changes) still trigger full render.
 
-#### M2. Make idle timeout configurable 🟡 Low Impact
+#### ~~M2. Make idle timeout configurable~~ ✅ Implemented
 
-**Problem:** `SCROLL_IDLE_TIMEOUT` is hardcoded at 150ms. This works on desktop but may be too aggressive on mobile/slower devices where scroll event gaps are naturally longer.
-
-**File:** `src/constants.ts`, `src/types.ts`, `src/scroll/controller.ts`
-
-**Fix:** Expose via `VListConfig` or `ScrollControllerConfig`:
-
-```typescript
-interface VListConfig {
-  // ...
-  /** Scroll idle detection timeout in ms (default: 150) */
-  idleTimeout?: number;
-}
-```
+Added `idleTimeout` option to both `VListConfig` and `ScrollControllerConfig`. Defaults to 150ms. Consumers can tune for mobile/slower devices.
 
 ---
 
 ### 📦 Size (Bundle & CSS Weight)
 
-#### Z1. Deduplicate dark mode CSS 🟠 Medium Impact
+#### Z1. Deduplicate dark mode CSS — ⏸️ Deferred
 
-**Problem:** Dark mode custom properties are defined identically in both `@media (prefers-color-scheme: dark)` and `.dark {}` — that's ~700 bytes of exact duplication (12 properties × 2).
+**Status:** Deferred. The ~400 bytes of raw duplication between `@media (prefers-color-scheme: dark)` and `.dark {}` compresses to near-zero with gzip (identical repeated patterns). Pure CSS has no mechanism to share declarations between media query and non-media-query contexts without a preprocessor. The duplication supports both auto dark mode and class-based dark mode (Tailwind), which consumers expect.
 
-**File:** `src/styles/vlist.css`
+#### ~~Z2. Split unused CSS into a separate file~~ ✅ Implemented
 
-**Fix:** Consolidate using a single definition block:
-
-```css
-@media (prefers-color-scheme: dark) {
-    :root {
-        --vlist-bg: #111827;
-        /* ... */
-    }
-}
-
-/* Class override reuses same values — define once */
-.dark {
-    --vlist-bg: #111827;
-    /* ... */
-}
-```
-
-**Option A:** Keep both but accept the duplication (current, ~700 bytes gzipped is negligible).
-
-**Option B:** Remove the `.dark` class block and document that consumers should use `@media` or define their own `.dark` override. This halves the dark mode CSS.
-
-**Option C:** Use a CSS custom property layer approach so both selectors share one declaration block. Browser support may be a concern.
-
-#### Z2. Split unused CSS into a separate file 🟠 Medium Impact
-
-**Problem:** The following CSS classes are defined but never created by the vlist component itself:
-
-- `.vlist-loading`, `.vlist-loading-spinner` — loading overlay
-- `.vlist-empty`, `.vlist-empty-icon`, `.vlist-empty-text`, `.vlist-empty-subtext` — empty state
-- `.vlist--compact`, `.vlist--comfortable` — density variants
-- `.vlist--borderless`, `.vlist--striped` — visual variants
-- `.vlist-item--enter`, `.vlist--animate` — animations
-- `@keyframes vlist-spin`, `@keyframes vlist-fade-in` — animation keyframes
-
-These are "convenience" classes for consumers but bloat the core CSS (~2.5-3 KB).
-
-**File:** `src/styles/vlist.css`
-
-**Fix:** Split into two files:
-
-```
-dist/vlist.css         ← Core styles only (~6-7 KB, ~1.5 KB gzipped)
-dist/vlist-extras.css  ← Presets, variants, loading/empty states
-```
-
-Update `package.json` exports:
-
-```json
-"exports": {
-  ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
-  "./styles": "./dist/vlist.css",
-  "./styles/extras": "./dist/vlist-extras.css"
-}
-```
+Core styles split from optional presets. `dist/vlist.css` (6.7 KB) contains tokens, base layout, item states, and custom scrollbar. `dist/vlist-extras.css` (3.4 KB) contains variants, loading/empty states, utilities, and animations. Available via `import 'vlist/styles/extras'`.
 
 #### Z3. Lazy-initialize placeholder manager 🟡 Low Impact
 
@@ -278,36 +237,13 @@ const getPlaceholders = () => {
 
 This keeps the code tree-shakeable for bundlers and avoids initialization cost for static lists.
 
-#### Z4. Use CSS class instead of inline `style.cssText` for static styles 🟡 Low Impact
+#### ~~Z4. Use CSS class instead of inline `style.cssText` for static styles~~ ✅ Implemented
 
-**Problem:** Every pooled element gets `style.cssText = "position:absolute;top:0;left:0;right:0;height:${itemHeight}px"` applied. The first four properties are already defined in `.vlist-item` CSS. This duplicates styles and requires string parsing per element.
+`applyStaticStyles` now only sets `element.style.height` — `position:absolute;top:0;left:0;right:0` are already defined in the `.vlist-item` CSS class. Removes per-element `cssText` string parsing.
 
-**File:** `src/render/renderer.ts` — `applyStaticStyles`
+#### ~~Z5. Eliminate thin pass-through wrappers in virtual.ts~~ ✅ Implemented
 
-**Fix:** Rely on the existing `.vlist-item` class for static positioning. Only set the dynamic height:
-
-```typescript
-// Before
-const staticStyles = `position:absolute;top:0;left:0;right:0;height:${itemHeight}px`;
-const applyStaticStyles = (element) => {
-  element.style.cssText = staticStyles;
-};
-
-// After — only set what CSS doesn't know
-const applyStaticStyles = (element) => {
-  element.style.height = `${itemHeight}px`;
-};
-```
-
-This reduces per-element work and avoids overriding the CSS class with equivalent inline styles.
-
-#### Z5. Eliminate thin pass-through wrappers in virtual.ts 🟡 Low Impact
-
-**Problem:** Several functions in `virtual.ts` are 1-2 line wrappers that call `getCompressionState` + delegate to `compression.ts`. These add ~20-30 lines of code + JSDoc duplication.
-
-**File:** `src/render/virtual.ts` — `calculateVisibleRange`, `calculateRenderRange`, `calculateTotalHeight`
-
-**Fix:** If S1 is implemented (compression passed as parameter), these wrappers become pure pass-throughs and can be replaced by direct re-exports from `compression.ts`.
+`calculateVisibleRange` and `calculateRenderRange` replaced with direct re-exports from `compression.ts` (`calculateCompressedVisibleRange as calculateVisibleRange`). Removed ~40 lines of wrapper code + JSDoc duplication.
 
 ---
 
@@ -428,12 +364,12 @@ With all optimizations enabled:
 | DocumentFragment batching | High |
 | Compression for large lists | High |
 | Sparse storage + LRU | High |
-| Zero-allocation scroll hot path (S1→S2 done) | High |
-| RAF-throttled native scroll (M1 done) | High |
+| Zero-allocation scroll hot path | High |
+| RAF-throttled native scroll | High |
 | Reusable Compression Context | Medium |
 | Cached Compression State | Medium |
-| CSS containment + `will-change` (M2 done) | Medium |
-| Scroll transition suppression (M3 done) | Medium |
+| CSS containment + `will-change` | Medium |
+| Scroll transition suppression | Medium |
 | Direct property assignment | Medium |
 | Reusable ItemState | Medium |
 | ResizeObserver | Medium |
@@ -442,21 +378,26 @@ With all optimizations enabled:
 | Idle detection | Medium |
 | Event delegation | Medium |
 | Static role attribute | Low |
+| Cheap pool release (`textContent`) | Low |
+| Batched LRU timestamps | Low |
+| In-place focus mutation | Low |
+| Targeted keyboard focus render | Medium |
+| Direct state getters | Low |
+| CSS-only static positioning | Low |
+| Split core/extras CSS | Medium |
+| Re-exported range functions | Low |
+| Configurable idle timeout | Low |
 
 ### Pending — Priority Matrix
 
 | # | Optimization | Impact | Effort | Category |
 |---|-------------|--------|--------|----------|
-| Z1 | Deduplicate dark mode CSS | 🟠 Medium | Low | Size |
-| Z2 | Split unused CSS to extras file | 🟠 Medium | Low | Size |
-| S4 | Lazy state object in data manager | 🟡 Low | Low | Speed |
+| Z1 | Deduplicate dark mode CSS | 🟡 Low | N/A | Size (deferred — gzip handles it) |
 | Z3 | Lazy-init placeholder manager | 🟡 Low | Medium | Size |
-| Z4 | CSS class instead of inline styles | 🟡 Low | Low | Size/Speed |
-| Z5 | Eliminate thin virtual.ts wrappers | 🟡 Low | Low | Size |
-| M2 | Configurable idle timeout | 🟡 Low | Low | Smoothness |
 
-**Completed:** S1 ✅, S2 ✅, S3 ✅, M1 ✅
-**Next quick wins:** Z1 (CSS dedup), Z2 (CSS split), S4 (lazy state)
+**Completed:** S1 ✅, S2 ✅, S3 ✅, S4 ✅, M1 ✅, M2 ✅, Z2 ✅, Z4 ✅, Z5 ✅
+**Deferred:** Z1 (gzip makes duplication negligible)
+**Remaining:** Z3 (lazy placeholders — medium effort, low impact)
 
 ---
 
