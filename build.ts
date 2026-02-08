@@ -29,7 +29,9 @@ async function build() {
   const bundleTime = performance.now() - bundleStart;
   const jsFile = Bun.file("./dist/index.js");
   const jsSize = (jsFile.size / 1024).toFixed(1);
-  console.log(`  JS          ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${jsSize} KB)`);
+  console.log(
+    `  JS          ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${jsSize} KB)`,
+  );
 
   // Generate type declarations (optional)
   if (withTypes) {
@@ -41,16 +43,23 @@ async function build() {
       process.exit(1);
     }
     const dtsTime = performance.now() - dtsStart;
-    console.log(`  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/*.d.ts`);
+    console.log(
+      `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/*.d.ts`,
+    );
   }
 
   // Copy CSS
   const cssStart = performance.now();
   await $`cp ./src/styles/vlist.css ./dist/vlist.css`.quiet();
+  await $`cp ./src/styles/vlist-extras.css ./dist/vlist-extras.css`.quiet();
   const cssTime = performance.now() - cssStart;
   const cssFile = Bun.file("./dist/vlist.css");
   const cssSize = (cssFile.size / 1024).toFixed(1);
-  console.log(`  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB)`);
+  const extrasFile = Bun.file("./dist/vlist-extras.css");
+  const extrasSize = (extrasFile.size / 1024).toFixed(1);
+  console.log(
+    `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + vlist-extras.css (${extrasSize} KB)`,
+  );
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
