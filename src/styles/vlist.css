@@ -138,6 +138,7 @@
 .vlist-items {
     position: relative;
     width: 100%;
+    contain: layout style;
 }
 
 /* Individual item */
@@ -155,6 +156,13 @@
     user-select: none;
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
+    contain: content;
+    will-change: transform;
+}
+
+/* Suppress transitions during active scroll for better performance */
+.vlist--scrolling .vlist-item {
+    transition: none;
 }
 
 /* Item hover state */
