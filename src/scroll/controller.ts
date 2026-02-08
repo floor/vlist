@@ -205,7 +205,7 @@ export const createScrollController = (
   // Native Scroll Handling
   // =============================================================================
 
-  const handleNativeScroll = (): void => {
+  const handleNativeScrollRaw = (): void => {
     const newPosition = viewport.scrollTop;
     const direction: ScrollDirection =
       newPosition >= scrollPosition ? "down" : "up";
@@ -224,6 +224,9 @@ export const createScrollController = (
     // Idle detection
     scheduleIdleCheck();
   };
+
+  // M1: RAF-throttle native scroll to guarantee at most one processing per frame
+  const handleNativeScroll = rafThrottle(handleNativeScrollRaw);
 
   // =============================================================================
   // Compressed (Manual) Scroll Handling
@@ -302,7 +305,8 @@ export const createScrollController = (
     compression = newCompression;
     maxScroll = newCompression.virtualHeight - viewport.clientHeight;
 
-    // Remove native scroll listener
+    // Remove native scroll listener and cancel pending RAF
+    handleNativeScroll.cancel();
     viewport.removeEventListener("scroll", handleNativeScroll);
 
     // Switch to overflow hidden
@@ -423,6 +427,7 @@ export const createScrollController = (
       clearTimeout(idleTimeout);
     }
 
+    handleNativeScroll.cancel();
     viewport.removeEventListener("scroll", handleNativeScroll);
     viewport.removeEventListener("wheel", handleWheel);
   };
