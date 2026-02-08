@@ -109,6 +109,9 @@ export interface SparseStorage<T extends VListItem = VListItem> {
   /** Mark chunk as accessed (for LRU) */
   touchChunk: (chunkIndex: number) => void;
 
+  /** Mark all chunks in a range as accessed with a single Date.now() call */
+  touchChunksForRange: (start: number, end: number) => void;
+
   // Eviction
   /** Evict chunks far from visible range */
   evictDistant: (visibleStart: number, visibleEnd: number) => number;
@@ -225,9 +228,6 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
       // log(`get: index=${index}, chunkIndex=${chunkIndex} - chunk not found`);
       return undefined;
     }
-
-    // Update access time for LRU
-    chunk.lastAccess = Date.now();
 
     return chunk.items[getIndexInChunk(index)];
   };
@@ -413,6 +413,25 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     }
   };
 
+  /**
+   * Mark all chunks covering a range as accessed with a single timestamp.
+   * Batches Date.now() to one call instead of per-item in get().
+   */
+  const touchChunksForRange = (start: number, end: number): void => {
+    if (start > end || chunks.size === 0) return;
+
+    const now = Date.now();
+    const startChunk = getChunkIndex(Math.max(0, start));
+    const endChunk = getChunkIndex(Math.min(totalItems - 1, end));
+
+    for (let ci = startChunk; ci <= endChunk; ci++) {
+      const chunk = chunks.get(ci);
+      if (chunk) {
+        chunk.lastAccess = now;
+      }
+    }
+  };
+
   // ==========================================================================
   // Eviction
   // ==========================================================================
@@ -546,6 +565,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     getChunkIndex,
     isChunkLoaded,
     touchChunk,
+    touchChunksForRange,
 
     evictDistant,
     evictToLimit,
