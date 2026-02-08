@@ -29,6 +29,10 @@ The following optimizations are already implemented in vlist:
 - **ResizeObserver** - Automatic viewport recalculation on container resize
 - **Circular Buffer Velocity Tracker** - Pre-allocated buffer, zero allocations during scroll
 - **Configurable Chunk Preloading** - Preloads items ahead based on scroll direction and velocity
+- **Cheap Pool Release** - `textContent=""` instead of `innerHTML=""` in element pool release (no HTML parser invocation)
+- **Batched LRU Timestamps** - Single `Date.now()` call per render via `touchChunksForRange()` instead of per-item in `storage.get()`
+- **In-Place Focus Mutation** - `moveFocusUp/Down/ToFirst/ToLast/ByPage` mutate `focusedIndex` directly, zero object allocations
+- **Targeted Keyboard Focus Render** - Arrow keys update only 2 affected items via `updateItemClasses()` instead of full-rendering all ~20-50 visible items
 
 ---
 
@@ -141,38 +145,17 @@ Concrete improvements organized by category and priority.
 
 ### 🚀 Speed (Hot Path Allocations)
 
-#### S1. Remove `innerHTML = ""` from element pool release 🟠 Medium Impact
+#### ~~S1. Remove `innerHTML = ""` from element pool release~~ ✅ Implemented
 
-**Problem:** `innerHTML = ""` in pool `release()` triggers HTML parsing internally. The content is immediately overwritten on the next `acquire()` → `applyTemplate()`, making this cleanup wasted work.
+Replaced with `textContent = ""` (no HTML parser invocation). Content is overwritten on next `acquire()` → `applyTemplate()`.
 
-**File:** `src/render/renderer.ts` — `createElementPool.release`
+#### ~~S2. Batch `Date.now()` in sparse storage access~~ ✅ Implemented
 
-**Fix:** Replace with `element.textContent = ""` (much cheaper, no parser invocation) or remove entirely since `applyTemplate` overwrites content on next use.
+Added `touchChunksForRange(start, end)` that calls `Date.now()` once per render cycle. Removed per-item `Date.now()` from `storage.get()`.
 
-#### S2. Batch `Date.now()` in sparse storage access 🟡 Low Impact
+#### ~~S3. Avoid `SelectionState` allocation on every arrow key~~ ✅ Implemented
 
-**Problem:** Every `storage.get(i)` call updates `chunk.lastAccess = Date.now()`. In `getItemsInRange`, this executes for every visible item (20-50+) per render. Items in the same chunk redundantly get the same timestamp.
-
-**File:** `src/data/sparse.ts` — `get()`
-
-**Fix:** Add a `touchChunksForRange(start, end)` method that calls `Date.now()` once and applies it to all affected chunks, or defer LRU timestamps to eviction time.
-
-#### S3. Avoid `SelectionState` allocation on every arrow key 🟡 Low Impact
-
-**Problem:** `moveFocusUp` / `moveFocusDown` return new objects via `{ ...state, focusedIndex: newIndex }`. Each `ArrowUp`/`ArrowDown` creates a new state object + copies the `selected` Set reference.
-
-**File:** `src/selection/state.ts` — `moveFocusUp`, `moveFocusDown`, `moveFocusToFirst`, `moveFocusToLast`
-
-**Fix:** For focus-only changes (no selection mutation), mutate `focusedIndex` directly:
-
-```typescript
-export const moveFocusUp = (state, totalItems, wrap = true) => {
-  let newIndex = state.focusedIndex - 1;
-  if (newIndex < 0) newIndex = wrap ? totalItems - 1 : 0;
-  state.focusedIndex = newIndex;
-  return state;
-};
-```
+Focus movement functions (`moveFocusUp/Down/ToFirst/ToLast/ByPage`) now mutate `state.focusedIndex` in-place instead of spreading new objects.
 
 #### S4. Lazy-build `getState()` in data manager 🟡 Low Impact
 
@@ -186,44 +169,9 @@ export const moveFocusUp = (state, totalItems, wrap = true) => {
 
 ### 🎬 Smoothness (Rendering & Scroll Feel)
 
-#### M1. Targeted re-render on keyboard focus change 🟠 Medium Impact
+#### ~~M1. Targeted re-render on keyboard focus change~~ ✅ Implemented
 
-**Problem:** Pressing `ArrowUp`/`ArrowDown` triggers a full `renderer.render()` for all visible items (~20-50), even though only 2 items changed (old focus → remove class, new focus → add class).
-
-**File:** `src/handlers.ts` — `createKeyboardHandler`
-
-**Fix:** Use `renderer.updateItem()` on just the two affected items:
-
-```typescript
-if (handled) {
-  event.preventDefault();
-  const previousFocusIndex = ctx.state.selectionState.focusedIndex;
-  ctx.state.selectionState = newState;
-
-  // Update only the two affected items
-  if (previousFocusIndex >= 0) {
-    const prevItem = ctx.dataManager.getItem(previousFocusIndex);
-    if (prevItem) {
-      ctx.renderer.updateItem(previousFocusIndex, prevItem,
-        ctx.state.selectionState.selected.has(prevItem.id), false);
-    }
-  }
-  const newFocusIndex = ctx.state.selectionState.focusedIndex;
-  if (newFocusIndex >= 0) {
-    const newItem = ctx.dataManager.getItem(newFocusIndex);
-    if (newItem) {
-      ctx.renderer.updateItem(newFocusIndex, newItem,
-        ctx.state.selectionState.selected.has(newItem.id), true);
-    }
-  }
-
-  // Scroll focused item into view
-  if (newFocusIndex >= 0) {
-    scrollToIndex(newFocusIndex, "center");
-  }
-  // ...
-}
-```
+Arrow key navigation now uses `renderer.updateItemClasses()` on just the 2 affected items (old focus → remove class, new focus → add class) instead of full-rendering all ~20-50 visible items. Space/Enter (selection changes) still trigger full render.
 
 #### M2. Make idle timeout configurable 🟡 Low Impact
 
@@ -499,19 +447,16 @@ With all optimizations enabled:
 
 | # | Optimization | Impact | Effort | Category |
 |---|-------------|--------|--------|----------|
-| M1 | Targeted re-render on focus change | 🟠 Medium | Medium | Smoothness |
-| S1 | Remove `innerHTML=""` from pool release | 🟠 Medium | Low | Speed |
 | Z1 | Deduplicate dark mode CSS | 🟠 Medium | Low | Size |
 | Z2 | Split unused CSS to extras file | 🟠 Medium | Low | Size |
-| S2 | Batch `Date.now()` in sparse storage | 🟡 Low | Low | Speed |
-| S3 | Mutate focusedIndex directly | 🟡 Low | Low | Speed |
 | S4 | Lazy state object in data manager | 🟡 Low | Low | Speed |
 | Z3 | Lazy-init placeholder manager | 🟡 Low | Medium | Size |
 | Z4 | CSS class instead of inline styles | 🟡 Low | Low | Size/Speed |
 | Z5 | Eliminate thin virtual.ts wrappers | 🟡 Low | Low | Size |
 | M2 | Configurable idle timeout | 🟡 Low | Low | Smoothness |
 
-**Next quick wins:** S1 (pool release), Z1 (CSS dedup), M1 (targeted focus render)
+**Completed:** S1 ✅, S2 ✅, S3 ✅, M1 ✅
+**Next quick wins:** Z1 (CSS dedup), Z2 (CSS split), S4 (lazy state)
 
 ---
 
