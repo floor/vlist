@@ -2,7 +2,7 @@
 // Demonstrates compression for handling millions of items
 
 // Direct imports for optimal tree-shaking
-import createButton from "mtrl/components/button";
+import { createButton } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList, getCompressionState, getCompressionInfo } from "vlist";
 
@@ -94,10 +94,18 @@ const createComponentSection = (info) => [
       { class: "components__section-body" },
       [
         "showcase",
-        { class: "components__section-showcase", style: { position: "relative" } },
-        ["loadingOverlay", { class: "loading-overlay loading-overlay--hidden" },
+        {
+          class: "components__section-showcase",
+          style: { position: "relative" },
+        },
+        [
+          "loadingOverlay",
+          { class: "loading-overlay loading-overlay--hidden" },
           [{ class: "loading-spinner" }],
-          ["loadingText", { class: "loading-text", text: "Generating items..." }],
+          [
+            "loadingText",
+            { class: "loading-text", text: "Generating items..." },
+          ],
         ],
       ],
       ["info", { class: "components__section-info" }],
@@ -112,7 +120,12 @@ const createItemElement = (item, index) => {
     [{ class: "item-index", text: `#${(index + 1).toLocaleString()}` }],
     [
       { class: "item-bar" },
-      [{ class: "item-bar__fill", style: { width: `${item.value}%`, background: item.color } }],
+      [
+        {
+          class: "item-bar__fill",
+          style: { width: `${item.value}%`, background: item.color },
+        },
+      ],
     ],
     [{ class: "item-value", text: `${item.value}%` }],
     [{ class: "item-hash", text: item.hash }],
@@ -147,7 +160,8 @@ const createMillionItemsExample = (container) => {
   ).component;
 
   const showcaseElement = section.showcase.element || section.showcase;
-  const loadingOverlay = section.loadingOverlay.element || section.loadingOverlay;
+  const loadingOverlay =
+    section.loadingOverlay.element || section.loadingOverlay;
   const loadingText = section.loadingText.element || section.loadingText;
 
   let list = null;
@@ -289,9 +303,22 @@ const createMillionItemsExample = (container) => {
         [{ class: "panel__title", text: "List Size" }],
         [
           { class: "size-toggle" },
-          ["size1m", { tag: "button", class: "size-toggle__button size-toggle__button--active", text: "1M" }],
-          ["size2m", { tag: "button", class: "size-toggle__button", text: "2M" }],
-          ["size5m", { tag: "button", class: "size-toggle__button", text: "5M" }],
+          [
+            "size1m",
+            {
+              tag: "button",
+              class: "size-toggle__button size-toggle__button--active",
+              text: "1M",
+            },
+          ],
+          [
+            "size2m",
+            { tag: "button", class: "size-toggle__button", text: "2M" },
+          ],
+          [
+            "size5m",
+            { tag: "button", class: "size-toggle__button", text: "5M" },
+          ],
         ],
       ],
 
@@ -309,7 +336,13 @@ const createMillionItemsExample = (container) => {
           ],
           [
             { class: "stat-card" },
-            ["domNodes", { class: "stat-card__value stat-card__value--highlight", text: "0" }],
+            [
+              "domNodes",
+              {
+                class: "stat-card__value stat-card__value--highlight",
+                text: "0",
+              },
+            ],
             [{ class: "stat-card__label", text: "DOM" }],
           ],
           [
@@ -319,10 +352,19 @@ const createMillionItemsExample = (container) => {
           ],
         ],
         [
-          { class: "stats-grid stats-grid--2col", style: { marginTop: "12px" } },
+          {
+            class: "stats-grid stats-grid--2col",
+            style: { marginTop: "12px" },
+          },
           [
             { class: "stat-card" },
-            ["memorySaved", { class: "stat-card__value stat-card__value--highlight", text: "0%" }],
+            [
+              "memorySaved",
+              {
+                class: "stat-card__value stat-card__value--highlight",
+                text: "0%",
+              },
+            ],
             [{ class: "stat-card__label", text: "Memory Saved" }],
           ],
           [
@@ -348,7 +390,10 @@ const createMillionItemsExample = (container) => {
           [
             { class: "compression-info__row" },
             [{ tag: "span", text: "Ratio:" }],
-            ["compressionRatio", { class: "compression-info__value", text: "--" }],
+            [
+              "compressionRatio",
+              { class: "compression-info__value", text: "--" },
+            ],
           ],
           [
             { class: "compression-info__row" },
@@ -367,10 +412,26 @@ const createMillionItemsExample = (container) => {
           { class: "performance-bar" },
           [
             { class: "performance-bar__times" },
-            [{ class: "performance-bar__time" }, [{ tag: "span", text: "Init: " }], ["perfInit", { tag: "span", text: "--" }]],
-            [{ class: "performance-bar__time" }, [{ tag: "span", text: "Generate: " }], ["perfGenerate", { tag: "span", text: "--" }]],
-            [{ class: "performance-bar__time" }, [{ tag: "span", text: "Render: " }], ["perfRender", { tag: "span", text: "--" }]],
-            [{ class: "performance-bar__time" }, [{ tag: "span", text: "Scroll: " }], ["perfScroll", { tag: "span", text: "--" }]],
+            [
+              { class: "performance-bar__time" },
+              [{ tag: "span", text: "Init: " }],
+              ["perfInit", { tag: "span", text: "--" }],
+            ],
+            [
+              { class: "performance-bar__time" },
+              [{ tag: "span", text: "Generate: " }],
+              ["perfGenerate", { tag: "span", text: "--" }],
+            ],
+            [
+              { class: "performance-bar__time" },
+              [{ tag: "span", text: "Render: " }],
+              ["perfRender", { tag: "span", text: "--" }],
+            ],
+            [
+              { class: "performance-bar__time" },
+              [{ tag: "span", text: "Scroll: " }],
+              ["perfScroll", { tag: "span", text: "--" }],
+            ],
           ],
         ],
       ],
@@ -386,7 +447,16 @@ const createMillionItemsExample = (container) => {
       // Jump to input
       [
         { class: "jump-input" },
-        ["jumpInput", { tag: "input", class: "jump-input__field", type: "number", placeholder: "Jump to index...", min: "0" }],
+        [
+          "jumpInput",
+          {
+            tag: "input",
+            class: "jump-input__field",
+            type: "number",
+            placeholder: "Jump to index...",
+            min: "0",
+          },
+        ],
         [createButton, "jumpGo", { text: "Go", variant: "tonal" }],
       ],
     ],
@@ -412,7 +482,10 @@ const createMillionItemsExample = (container) => {
 
     if (prevState.fps !== stats.fps) {
       controls.fps.textContent = stats.fps;
-      controls.fps.className = stats.fps < 30 ? "stat-card__value stat-card__value--warning" : "stat-card__value stat-card__value--highlight";
+      controls.fps.className =
+        stats.fps < 30
+          ? "stat-card__value stat-card__value--warning"
+          : "stat-card__value stat-card__value--highlight";
       prevState.fps = stats.fps;
     }
 
@@ -441,9 +514,18 @@ const createMillionItemsExample = (container) => {
 
   // Size toggle handlers
   const setActiveSize = (size) => {
-    controls.size1m.classList.toggle("size-toggle__button--active", size === "1m");
-    controls.size2m.classList.toggle("size-toggle__button--active", size === "2m");
-    controls.size5m.classList.toggle("size-toggle__button--active", size === "5m");
+    controls.size1m.classList.toggle(
+      "size-toggle__button--active",
+      size === "1m",
+    );
+    controls.size2m.classList.toggle(
+      "size-toggle__button--active",
+      size === "2m",
+    );
+    controls.size5m.classList.toggle(
+      "size-toggle__button--active",
+      size === "5m",
+    );
   };
 
   controls.size1m.addEventListener("click", () => {

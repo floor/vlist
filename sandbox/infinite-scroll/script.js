@@ -2,8 +2,7 @@
 // Demonstrates async data loading with simulated API calls
 
 // Direct imports for optimal tree-shaking
-import createButton from "mtrl/components/button";
-import createSlider from "mtrl/components/slider";
+import { createButton, createSlider } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList } from "vlist";
 
@@ -102,10 +101,7 @@ const PLACEHOLDER_SCHEMA = [
     [{ class: "item-title item-title--placeholder" }],
     [{ class: "item-subtitle item-subtitle--placeholder" }],
   ],
-  [
-    { class: "item-meta" },
-    [{ class: "item-date item-date--placeholder" }],
-  ],
+  [{ class: "item-meta" }, [{ class: "item-date item-date--placeholder" }]],
 ];
 
 let cachedPlaceholderElement = null;
