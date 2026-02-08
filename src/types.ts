@@ -59,6 +59,9 @@ export interface VListConfig<T extends VListItem = VListItem> {
   /** Loading behavior configuration */
   loading?: LoadingConfig;
 
+  /** Scroll idle detection timeout in ms (default: 150) */
+  idleTimeout?: number;
+
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
 }
