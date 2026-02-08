@@ -75,6 +75,13 @@ export interface Renderer<T extends VListItem = VListItem> {
     isFocused: boolean,
   ) => void;
 
+  /** Update only CSS classes on a rendered item (no template re-evaluation) */
+  updateItemClasses: (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ) => void;
+
   /** Get rendered item element by index */
   getElement: (index: number) => HTMLElement | undefined;
 
@@ -120,7 +127,7 @@ export const createElementPool = (
     if (pool.length < maxSize) {
       // Reset element state
       element.className = "";
-      element.innerHTML = "";
+      element.textContent = "";
       element.removeAttribute("style");
       element.removeAttribute("data-index");
       element.removeAttribute("data-id");
@@ -436,6 +443,21 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
+   * Update only CSS classes on a rendered item (no template re-evaluation)
+   * Used for focus-only changes where template content hasn't changed
+   */
+  const updateItemClasses = (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ): void => {
+    const existing = rendered.get(index);
+    if (existing) {
+      applyClasses(existing.element, isSelected, isFocused);
+    }
+  };
+
+  /**
    * Get element by index
    */
   const getElement = (index: number): HTMLElement | undefined => {
@@ -465,6 +487,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     render,
     updatePositions,
     updateItem,
+    updateItemClasses,
     getElement,
     clear,
     destroy,

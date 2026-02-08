@@ -193,6 +193,7 @@ const createMockScrollController = (): ScrollController => ({
 const createMockRenderer = <T extends VListItem>(): Renderer<T> => ({
   render: mock(() => {}),
   updateItem: mock(() => {}),
+  updateItemClasses: mock(() => {}),
   updatePositions: mock(() => {}),
   getElement: mock(() => undefined),
   clear: mock(() => {}),
@@ -849,12 +850,24 @@ describe("createKeyboardHandler", () => {
       expect(scrollToIndex).not.toHaveBeenCalled();
     });
 
-    it("should re-render after keyboard navigation", () => {
+    it("should use targeted class update for arrow key navigation", () => {
       const handler = createKeyboardHandler(ctx, scrollToIndex);
 
       const event = new KeyboardEvent("keydown", { key: "ArrowDown" });
       handler(event);
 
+      // M1: Arrow keys use updateItemClasses on 2 items instead of full render
+      expect(ctx.renderer.updateItemClasses).toHaveBeenCalled();
+      expect(ctx.renderer.render).not.toHaveBeenCalled();
+    });
+
+    it("should use full render for selection changes", () => {
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: " " });
+      handler(event);
+
+      // Space/Enter trigger selection change → full render
       expect(ctx.renderer.render).toHaveBeenCalled();
     });
   });
