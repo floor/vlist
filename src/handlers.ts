@@ -294,28 +294,36 @@ export const createKeyboardHandler = <T extends VListItem>(
     // Use direct getter to avoid object allocation
     const totalItems = ctx.dataManager.getTotal();
 
+    // Capture previous focus index before any state mutation (S3 mutates in-place)
+    const previousFocusIndex = ctx.state.selectionState.focusedIndex;
+
     let handled = false;
+    let focusOnly = false;
     let newState = ctx.state.selectionState;
 
     switch (event.key) {
       case "ArrowUp":
         newState = moveFocusUp(ctx.state.selectionState, totalItems);
         handled = true;
+        focusOnly = true;
         break;
 
       case "ArrowDown":
         newState = moveFocusDown(ctx.state.selectionState, totalItems);
         handled = true;
+        focusOnly = true;
         break;
 
       case "Home":
         newState = moveFocusToFirst(ctx.state.selectionState, totalItems);
         handled = true;
+        focusOnly = true;
         break;
 
       case "End":
         newState = moveFocusToLast(ctx.state.selectionState, totalItems);
         handled = true;
+        focusOnly = true;
         break;
 
       case " ":
@@ -340,24 +348,54 @@ export const createKeyboardHandler = <T extends VListItem>(
       event.preventDefault();
       ctx.state.selectionState = newState;
 
+      const newFocusIndex = ctx.state.selectionState.focusedIndex;
+
       // Scroll focused item into view
-      if (ctx.state.selectionState.focusedIndex >= 0) {
-        scrollToIndex(ctx.state.selectionState.focusedIndex, "center");
+      if (newFocusIndex >= 0) {
+        scrollToIndex(newFocusIndex, "center");
       }
 
-      // Re-render
-      const items = ctx.getItemsForRange(ctx.state.viewportState.renderRange);
-      const compressionCtx = ctx.state.viewportState.isCompressed
-        ? ctx.getCompressionContext()
-        : undefined;
+      if (focusOnly) {
+        // M1: Targeted update — only touch the two affected items
+        // instead of re-rendering all ~20-50 visible items
+        const { selected } = ctx.state.selectionState;
 
-      ctx.renderer.render(
-        items,
-        ctx.state.viewportState.renderRange,
-        ctx.state.selectionState.selected,
-        ctx.state.selectionState.focusedIndex,
-        compressionCtx,
-      );
+        if (previousFocusIndex >= 0 && previousFocusIndex !== newFocusIndex) {
+          const prevItem = ctx.dataManager.getItem(previousFocusIndex);
+          if (prevItem) {
+            ctx.renderer.updateItemClasses(
+              previousFocusIndex,
+              selected.has(prevItem.id),
+              false,
+            );
+          }
+        }
+
+        if (newFocusIndex >= 0) {
+          const newItem = ctx.dataManager.getItem(newFocusIndex);
+          if (newItem) {
+            ctx.renderer.updateItemClasses(
+              newFocusIndex,
+              selected.has(newItem.id),
+              true,
+            );
+          }
+        }
+      } else {
+        // Full re-render for selection changes (Space/Enter)
+        const items = ctx.getItemsForRange(ctx.state.viewportState.renderRange);
+        const compressionCtx = ctx.state.viewportState.isCompressed
+          ? ctx.getCompressionContext()
+          : undefined;
+
+        ctx.renderer.render(
+          items,
+          ctx.state.viewportState.renderRange,
+          ctx.state.selectionState.selected,
+          ctx.state.selectionState.focusedIndex,
+          compressionCtx,
+        );
+      }
 
       // Emit selection change if selection changed
       if (event.key === " " || event.key === "Enter") {
