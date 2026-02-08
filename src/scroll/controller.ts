@@ -37,6 +37,9 @@ export interface ScrollControllerConfig {
   /** Enable smooth scrolling interpolation */
   smoothing?: boolean;
 
+  /** Scroll idle detection timeout in ms (default: 150) */
+  idleTimeout?: number;
+
   /** Callback when scroll position changes */
   onScroll?: (data: ScrollEventData) => void;
 
@@ -190,7 +193,13 @@ export const createScrollController = (
   viewport: HTMLElement,
   config: ScrollControllerConfig = {},
 ): ScrollController => {
-  const { sensitivity = 1, smoothing = false, onScroll, onIdle } = config;
+  const {
+    sensitivity = 1,
+    smoothing = false,
+    idleTimeout: idleMs = 150,
+    onScroll,
+    onIdle,
+  } = config;
 
   // State
   let scrollPosition = 0;
@@ -291,7 +300,7 @@ export const createScrollController = (
       if (onIdle) {
         onIdle();
       }
-    }, 150);
+    }, idleMs);
   };
 
   // =============================================================================
