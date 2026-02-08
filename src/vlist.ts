@@ -99,6 +99,7 @@ export const createVList = <T extends VListItem = VListItem>(
     selection: selectionConfig,
     scrollbar: scrollbarConfig,
     loading: loadingConfig,
+    idleTimeout: scrollIdleTimeout,
     classPrefix = DEFAULT_CLASS_PREFIX,
   } = config;
 
@@ -151,16 +152,13 @@ export const createVList = <T extends VListItem = VListItem>(
   const dimensions = getContainerDimensions(dom.viewport);
 
   // Get initial compression state (must be before createViewportState which uses it)
-  const initialCompression = getCompression(
-    dataManager.getState().total,
-    itemHeight,
-  );
+  const initialCompression = getCompression(dataManager.getTotal(), itemHeight);
 
   // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
     dimensions.height,
     itemHeight,
-    dataManager.getState().total,
+    dataManager.getTotal(),
     overscan,
     initialCompression,
   );
@@ -173,6 +171,9 @@ export const createVList = <T extends VListItem = VListItem>(
     compressed: initialCompression.isCompressed,
     ...(initialCompression.isCompressed
       ? { compression: initialCompression }
+      : {}),
+    ...(scrollIdleTimeout !== undefined
+      ? { idleTimeout: scrollIdleTimeout }
       : {}),
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
@@ -200,7 +201,7 @@ export const createVList = <T extends VListItem = VListItem>(
     template,
     itemHeight,
     classPrefix,
-    () => dataManager.getState().total,
+    () => dataManager.getTotal(),
   );
 
   // Create scrollbar (auto-enable when compressed)
@@ -249,7 +250,7 @@ export const createVList = <T extends VListItem = VListItem>(
       isDestroyed: false,
       cachedCompression: {
         state: initialCompression,
-        totalItems: dataManager.getState().total,
+        totalItems: dataManager.getTotal(),
       },
     },
   ));
@@ -262,7 +263,7 @@ export const createVList = <T extends VListItem = VListItem>(
    * Update compression mode when total items changes
    */
   const updateCompressionMode = (): void => {
-    const total = dataManager.getState().total;
+    const total = dataManager.getTotal();
     const compression = getCompression(total, itemHeight);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
@@ -301,8 +302,6 @@ export const createVList = <T extends VListItem = VListItem>(
   const updateViewport = (): void => {
     if (ctx.state.isDestroyed) return;
 
-    const dataState = dataManager.getState();
-
     // Update compression mode if needed
     updateCompressionMode();
 
@@ -311,7 +310,7 @@ export const createVList = <T extends VListItem = VListItem>(
     ctx.state.viewportState = updateViewportItems(
       ctx.state.viewportState,
       itemHeight,
-      dataState.total,
+      dataManager.getTotal(),
       overscan,
       ctx.getCachedCompression(),
     );
@@ -541,7 +540,7 @@ export const createVList = <T extends VListItem = VListItem>(
     },
 
     get total() {
-      return dataManager.getState().total;
+      return dataManager.getTotal();
     },
 
     // Data methods
