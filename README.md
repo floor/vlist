@@ -11,8 +11,12 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🪶 **Zero dependencies** - No external libraries required
 - ⚡ **Blazing fast** - Only renders visible items with element pooling
 - 🎯 **Simple API** - Easy to use with TypeScript support
+- 📐 **Grid layout** - 2D virtualized grid with configurable columns and gap
+- 📏 **Variable heights** - Fixed or per-item height via `(index) => number`
 - 📜 **Infinite scroll** - Built-in async adapter support
 - ✅ **Selection** - Single and multiple selection modes
+- 📌 **Sticky headers** - Grouped lists with sticky section headers
+- 🪟 **Window scrolling** - Document-level scrolling with `scrollElement: window`
 - 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
@@ -41,11 +45,16 @@ bun run dev:sandbox
 
 | Example | Description |
 |---------|-------------|
-| [Basic](sandbox/basic/) | Pure vanilla JS - no frameworks, no dependencies |
+| [Basic](sandbox/basic/) | Pure vanilla JS — no frameworks, no dependencies |
+| [Core](sandbox/core/) | Lightweight `vlist/core` — 7.3 KB, 83% smaller |
+| [Grid](sandbox/grid/) | 2D photo gallery with real photos from Lorem Picsum |
+| [Variable Heights](sandbox/variable-heights/) | Chat-style messages with 4 different item heights |
 | [Selection](sandbox/selection/) | Single/multiple selection with keyboard navigation |
 | [Infinite Scroll](sandbox/infinite-scroll/) | Async data loading with simulated API |
-| [Million Items](sandbox/million-items/) | Stress test with 1,000,000 items |
+| [Million Items](sandbox/million-items/) | Stress test with 1–5 million items |
 | [Velocity Loading](sandbox/velocity-loading/) | Velocity-based load skipping demo |
+| [Sticky Headers](sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
+| [Window Scroll](sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
 
 ## Installation
 
@@ -58,12 +67,26 @@ npm install vlist
 For smaller bundles, import only what you need:
 
 ```typescript
-import { createVList } from 'vlist'                    // full library
+import { createVList } from 'vlist'                    // full library (46.6 KB / 15.6 KB gzip)
+import { createVList } from 'vlist/core'               // lightweight core (7.3 KB / 3.0 KB gzip)
+import { createGridLayout } from 'vlist/grid'          // grid layout utilities only
 import { createSparseStorage } from 'vlist/data'       // data utilities only
 import { getCompressionInfo } from 'vlist/compression'  // compression utilities only
 import { createSelectionState } from 'vlist/selection'  // selection utilities only
 import { createScrollController } from 'vlist/scroll'   // scroll utilities only
+import { createGroupLayout } from 'vlist/groups'        // group/sticky header utilities only
 ```
+
+| Import | Minified | Gzipped | Description |
+|--------|----------|---------|-------------|
+| `vlist` | 46.6 KB | 15.6 KB | All features |
+| **`vlist/core`** | **7.3 KB** | **3.0 KB** | **Lightweight — 83% smaller** |
+| `vlist/data` | 9.2 KB | 3.8 KB | Sparse storage, placeholders, data manager |
+| `vlist/scroll` | 6.0 KB | 2.3 KB | Scroll controller + custom scrollbar |
+| `vlist/grid` | 4.1 KB | 1.9 KB | Grid layout + 2D renderer |
+| `vlist/groups` | 3.6 KB | 1.4 KB | Group layout + sticky headers |
+| `vlist/compression` | 2.6 KB | 1.1 KB | Large-list compression utilities |
+| `vlist/selection` | 1.9 KB | 0.7 KB | Selection state management |
 
 ## Quick Start
 
@@ -71,7 +94,6 @@ import { createScrollController } from 'vlist/scroll'   // scroll utilities only
 import { createVList } from 'vlist';
 import 'vlist/styles';
 
-// Simple usage with static data
 const list = createVList({
   container: '#my-list',
   item: {
@@ -91,6 +113,30 @@ const list = createVList({
 });
 ```
 
+### Lightweight Core (7.3 KB)
+
+If you don't need selection, groups, grid, compression, custom scrollbar, or async data adapters, use the lightweight core for an **83% smaller bundle**:
+
+```typescript
+import { createVList } from 'vlist/core';
+import 'vlist/styles';
+
+const list = createVList({
+  container: '#my-list',
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
+  items: myItems,
+});
+
+// Same core API: setItems, appendItems, scrollToIndex, events, etc.
+list.on('item:click', ({ item }) => console.log(item));
+list.scrollToIndex(50, { behavior: 'smooth' });
+```
+
+The core entry supports fixed/variable heights, smooth `scrollToIndex`, all data methods (`setItems`, `appendItems`, `prependItems`, `updateItem`, `removeItem`), events, window scrolling, and ResizeObserver — everything you need for most use cases.
+
 ## Configuration
 
 ```typescript
@@ -98,20 +144,112 @@ interface VListConfig<T> {
   // Required
   container: HTMLElement | string;  // Container element or selector
   item: {
-    height: number;                 // Fixed item height in pixels
+    height: number | ((index: number) => number);  // Fixed or variable height
     template: ItemTemplate<T>;      // Render function for each item
   };
 
-  // Optional
+  // Layout
+  layout?: 'list' | 'grid';        // Layout mode (default: 'list')
+  grid?: {                          // Grid config (required when layout: 'grid')
+    columns: number;                //   Number of columns
+    gap?: number;                   //   Gap between items in px (default: 0)
+  };
+
+  // Data
   items?: T[];                      // Static items array
   adapter?: VListAdapter<T>;        // Async data adapter
+
+  // Scrolling
+  scrollElement?: Window;           // Window scrolling mode
   overscan?: number;                // Extra items to render (default: 3)
+  idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
+  scrollbar?: ScrollbarConfig;      // Custom scrollbar (auto in compressed mode)
+
+  // Features
   selection?: SelectionConfig;      // Selection configuration
+  groups?: GroupsConfig;            // Sticky headers / grouped lists
+  loading?: LoadingConfig;          // Velocity-based loading thresholds
+
+  // Appearance
   classPrefix?: string;             // CSS class prefix (default: 'vlist')
+  ariaLabel?: string;               // Accessible label for the listbox
 }
 ```
 
 ## Examples
+
+### Grid Layout
+
+```typescript
+const grid = createVList({
+  container: '#gallery',
+  layout: 'grid',
+  grid: {
+    columns: 4,
+    gap: 8,           // 8px gap between columns AND rows
+  },
+  item: {
+    height: 200,
+    template: (item) => `
+      <div class="card">
+        <img src="${item.thumbnail}" />
+        <span>${item.title}</span>
+      </div>
+    `,
+  },
+  items: photos,
+});
+```
+
+Grid mode virtualizes by **rows** — only visible rows are in the DOM. Each item is positioned with `translate(x, y)` for GPU-accelerated rendering. Compression applies to row count, not item count.
+
+### Variable Heights
+
+```typescript
+const list = createVList({
+  container: '#messages',
+  item: {
+    height: (index) => messages[index].type === 'header' ? 32 : 64,
+    template: (item) => `<div class="message">${item.text}</div>`,
+  },
+  items: messages,
+});
+```
+
+Variable heights use a prefix-sum array for O(1) offset lookups and O(log n) binary search for index-at-offset.
+
+### Sticky Headers
+
+```typescript
+const list = createVList({
+  container: '#contacts',
+  item: {
+    height: 56,
+    template: (item) => `<div>${item.name}</div>`,
+  },
+  items: contacts,   // Must be pre-sorted by group
+  groups: {
+    getGroupForIndex: (index) => contacts[index].lastName[0],
+    headerHeight: 36,
+    headerTemplate: (group) => `<div class="section-header">${group}</div>`,
+    sticky: true,     // Headers stick to the top (default: true)
+  },
+});
+```
+
+### Window Scrolling
+
+```typescript
+const list = createVList({
+  container: '#my-list',
+  scrollElement: window,   // Use the browser's native scrollbar
+  item: {
+    height: 48,
+    template: (item) => `<div>${item.name}</div>`,
+  },
+  items: myItems,
+});
+```
 
 ### With Selection
 
@@ -277,6 +415,7 @@ list.total                          // Total item count
 | `selection:change` | `{ selected, items }` | Selection changed |
 | `scroll` | `{ scrollTop, direction }` | Scroll position changed |
 | `range:change` | `{ range }` | Visible range changed |
+| `resize` | `{ height, width }` | Container was resized |
 | `load:start` | `{ offset, limit }` | Data loading started |
 | `load:end` | `{ items, total }` | Data loading completed |
 | `error` | `{ error, context }` | Error occurred |
@@ -302,6 +441,12 @@ Import the default styles:
 import 'vlist/styles';
 ```
 
+Optional extras (variants, loading states, animations):
+
+```typescript
+import 'vlist/styles/extras';
+```
+
 ### CSS Classes
 
 The component uses these CSS class names:
@@ -313,8 +458,15 @@ The component uses these CSS class names:
 - `.vlist-item` - Individual item
 - `.vlist-item--selected` - Selected item
 - `.vlist-item--focused` - Focused item (keyboard nav)
+- `.vlist--grid` - Grid layout modifier
+- `.vlist-grid-item` - Grid item (positioned with `translate(x, y)`)
+- `.vlist--grouped` - Grouped list modifier
+- `.vlist-sticky-header` - Sticky header overlay
+- `.vlist--scrolling` - Applied during active scroll (disables transitions)
 
 ### Variants
+
+Import `vlist/styles/extras` for these variant classes:
 
 ```html
 <!-- Compact spacing -->
@@ -329,6 +481,27 @@ The component uses these CSS class names:
 <!-- Striped rows -->
 <div class="vlist vlist--striped">...</div>
 ```
+
+### CSS Custom Properties
+
+All visual aspects can be customized via CSS custom properties:
+
+```css
+:root {
+  --vlist-bg: #ffffff;
+  --vlist-bg-hover: #f9fafb;
+  --vlist-bg-selected: #eff6ff;
+  --vlist-border: #e5e7eb;
+  --vlist-text: #111827;
+  --vlist-focus-ring: #3b82f6;
+  --vlist-item-padding-x: 1rem;
+  --vlist-item-padding-y: 0.75rem;
+  --vlist-border-radius: 0.5rem;
+  --vlist-transition-duration: 150ms;
+}
+```
+
+Dark mode is supported automatically via `prefers-color-scheme: dark` or the `.dark` class.
 
 ## TypeScript
 
@@ -370,8 +543,9 @@ vlist is designed for maximum performance with extensive built-in optimizations:
 - **Targeted keyboard focus render** - Arrow keys update only 2 affected items instead of all visible items
 - **Batched LRU timestamps** - Single `Date.now()` per render cycle instead of per-item
 - **DocumentFragment batching** - New elements appended in a single DOM operation
-- **Split CSS** - Core styles (6.7 KB) separated from optional extras (3.4 KB)
+- **Split CSS** - Core styles (5.6 KB) separated from optional extras (1.8 KB)
 - **Configurable velocity-based loading** - Skip, preload, or defer loading based on scroll speed
+- **Compression for 1M+ items** - Automatic scroll space compression when content exceeds browser height limits
 
 Benchmarks (10,000 items):
 - Initial render: ~5ms
@@ -401,8 +575,14 @@ bun run dev
 # Run tests
 bun test
 
+# Type check
+bun run typecheck
+
 # Build for production
 bun run build
+
+# Build and serve sandbox
+bun run sandbox
 ```
 
 ## License
