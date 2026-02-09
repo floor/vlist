@@ -21,6 +21,7 @@ import type {
 
 // Domain imports
 import {
+  createHeightCache,
   createViewportState,
   updateViewportSize,
   updateViewportItems,
@@ -80,8 +81,19 @@ export const createVList = <T extends VListItem = VListItem>(
   if (!config.item) {
     throw new Error("[vlist] item configuration is required");
   }
-  if (!config.item.height || config.item.height <= 0) {
+  if (config.item.height == null) {
+    throw new Error("[vlist] item.height is required");
+  }
+  if (typeof config.item.height === "number" && config.item.height <= 0) {
     throw new Error("[vlist] item.height must be a positive number");
+  }
+  if (
+    typeof config.item.height !== "number" &&
+    typeof config.item.height !== "function"
+  ) {
+    throw new Error(
+      "[vlist] item.height must be a number or a function (index) => number",
+    );
   }
   if (!config.item.template) {
     throw new Error("[vlist] item.template is required");
@@ -103,7 +115,7 @@ export const createVList = <T extends VListItem = VListItem>(
     classPrefix = DEFAULT_CLASS_PREFIX,
   } = config;
 
-  const { height: itemHeight, template } = itemConfig;
+  const { height: itemHeightConfig, template } = itemConfig;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
@@ -125,6 +137,12 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
+  // Create height cache (fixed or variable based on config)
+  const heightCache = createHeightCache(
+    itemHeightConfig,
+    initialItems?.length ?? 0,
+  );
+
   // Mutable reference to context (needed for callbacks that run after ctx is created)
   let ctxRef: VListContext<T> | null = null;
 
@@ -136,11 +154,15 @@ export const createVList = <T extends VListItem = VListItem>(
     pageSize: INITIAL_LOAD_SIZE,
     onStateChange: () => {
       if (ctxRef?.state.isInitialized) {
+        // Rebuild height cache when items change
+        heightCache.rebuild(ctxRef.dataManager.getTotal());
         updateViewport();
       }
     },
     onItemsLoaded: (loadedItems, _offset, total) => {
       if (ctxRef?.state.isInitialized) {
+        // Rebuild height cache when items are loaded
+        heightCache.rebuild(ctxRef.dataManager.getTotal());
         // Always re-render when items load - the current range may have placeholders
         forceRender();
         emitter.emit("load:end", { items: loadedItems, total });
@@ -152,12 +174,15 @@ export const createVList = <T extends VListItem = VListItem>(
   const dimensions = getContainerDimensions(dom.viewport);
 
   // Get initial compression state (must be before createViewportState which uses it)
-  const initialCompression = getCompression(dataManager.getTotal(), itemHeight);
+  const initialCompression = getCompression(
+    dataManager.getTotal(),
+    heightCache,
+  );
 
   // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
     dimensions.height,
-    itemHeight,
+    heightCache,
     dataManager.getTotal(),
     overscan,
     initialCompression,
@@ -199,7 +224,7 @@ export const createVList = <T extends VListItem = VListItem>(
   const renderer = createRenderer<T>(
     dom.items,
     template,
-    itemHeight,
+    heightCache,
     classPrefix,
     () => dataManager.getTotal(),
   );
@@ -227,7 +252,7 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const ctx: VListContext<T> = (ctxRef = createContext(
     {
-      itemHeight,
+      itemHeight: itemHeightConfig,
       overscan,
       classPrefix,
       selectionMode,
@@ -237,6 +262,7 @@ export const createVList = <T extends VListItem = VListItem>(
       preloadAhead,
     },
     dom,
+    heightCache,
     dataManager,
     scrollController,
     renderer,
@@ -264,7 +290,7 @@ export const createVList = <T extends VListItem = VListItem>(
    */
   const updateCompressionMode = (): void => {
     const total = dataManager.getTotal();
-    const compression = getCompression(total, itemHeight);
+    const compression = getCompression(total, heightCache);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
       scrollController.enableCompression(compression);
@@ -309,7 +335,7 @@ export const createVList = <T extends VListItem = VListItem>(
     // Pass cached compression to avoid allocating a new CompressionState
     ctx.state.viewportState = updateViewportItems(
       ctx.state.viewportState,
-      itemHeight,
+      heightCache,
       dataManager.getTotal(),
       overscan,
       ctx.getCachedCompression(),
@@ -443,7 +469,7 @@ export const createVList = <T extends VListItem = VListItem>(
         ctx.state.viewportState = updateViewportSize(
           ctx.state.viewportState,
           newHeight,
-          itemHeight,
+          heightCache,
           dataManager.getTotal(),
           overscan,
           ctx.getCachedCompression(),

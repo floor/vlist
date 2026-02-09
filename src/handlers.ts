@@ -114,7 +114,7 @@ export const createScrollHandler = <T extends VListItem>(
     ctx.state.viewportState = updateViewportState(
       ctx.state.viewportState,
       scrollTop,
-      ctx.config.itemHeight,
+      ctx.heightCache,
       total,
       ctx.config.overscan,
       ctx.getCachedCompression(),

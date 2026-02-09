@@ -32,23 +32,41 @@ vlist is a well-optimized, batteries-included virtual list with zero dependencie
 
 ## Phase 1 — Remove Dealbreakers
 
-### 1. Variable Item Heights 🚨
+### 1. ✅ Variable Item Heights — Mode A (Function-Based Known Heights)
 
-**Priority:** Critical — the single most important missing feature.
+**Status:** ✅ **Shipped** — Mode A (function-based known heights) is implemented.
 
-**Problem:** Every function in the rendering pipeline assumes `index × itemHeight`. This blocks: chat messages, cards with descriptions, expandable rows, mixed content lists, rich text items — essentially most real-world UIs.
+**What shipped:**
 
-**Approach:**
-
-Support two modes:
+`ItemConfig.height` now accepts `number | ((index: number) => number)`:
 
 ```typescript
-// Mode A: Known heights (function-based, cheapest)
+// Fixed height (existing, zero-overhead fast path)
 item: {
-  height: (index) => items[index].type === 'header' ? 64 : 48,
+  height: 48,
   template: myTemplate,
 }
 
+// Variable height via function (NEW)
+item: {
+  height: (index: number) => items[index].type === 'header' ? 64 : 48,
+  template: myTemplate,
+}
+```
+
+**Architecture:**
+
+A new `HeightCache` abstraction (`src/render/heights.ts`) encapsulates height lookups:
+- **Fixed implementation:** O(1) via multiplication — zero overhead, matches previous behavior
+- **Variable implementation:** O(1) offset lookup via prefix-sum array, O(log n) binary search for index-at-offset
+
+All rendering, compression, and scroll functions (`virtual.ts`, `compression.ts`, `renderer.ts`, `handlers.ts`, `methods.ts`) accept `HeightCache` instead of `itemHeight: number`. The fixed-height `HeightCache` uses pure multiplication internally, so there is **zero performance regression** for fixed-height lists.
+
+Compression works with variable heights: the compression ratio uses actual total height from the cache, and near-bottom interpolation counts items fitting from bottom using actual heights.
+
+**What remains (Mode B — follow-up):**
+
+```typescript
 // Mode B: Estimated + measured (most flexible, what tanstack does)
 item: {
   estimatedHeight: 48,  // Initial guess for scroll math
@@ -56,32 +74,7 @@ item: {
 }
 ```
 
-**Architecture impact:**
-
-| Module | Change Required |
-|--------|-----------------|
-| `virtual.ts` | Replace `index * itemHeight` with offset lookups from height cache |
-| `compression.ts` | Adapt compression ratio to work with variable total height |
-| `renderer.ts` | Position items using cumulative offsets, not `index * height` |
-| `scroll/controller.ts` | Scroll-to-index needs offset lookup instead of multiplication |
-| `handlers.ts` | Page up/down needs height-aware page size |
-
-**Data structure:** A prefix-sum array or Fenwick tree for O(log n) offset lookups:
-
-```
-heights:    [48, 64, 48, 48, 96, 48, ...]
-prefixSums: [0, 48, 112, 160, 208, 304, 352, ...]
-
-// O(log n) binary search: scroll position → item index
-// O(1) lookup: item index → scroll position
-```
-
-**Key decisions to make:**
-- Do we support Mode B (auto-measurement) from the start, or ship Mode A first?
-- How does compression interact with variable heights? (May need weighted compression ratio)
-- Do we keep backward compatibility with `height: number` (fixed) as a fast path?
-
-**Estimated effort:** Large — touches core architecture. Suggest Mode A first (function-based known heights), then Mode B (measured) as a follow-up.
+Mode B (auto-measurement with `estimatedHeight`) is a separate follow-up. It requires DOM measurement after render and dynamic cache updates, which is a different complexity level.
 
 ---
 

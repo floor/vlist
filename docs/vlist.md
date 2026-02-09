@@ -29,6 +29,7 @@ vlist is a high-performance virtual list library designed to handle massive data
 
 - **Zero Dependencies** - Pure TypeScript, no external libraries
 - **Blazing Fast** - Only renders visible items with element pooling
+- **Variable Heights** - Fixed or per-item height via function, with prefix-sum based lookups
 - **Infinite Scroll** - Built-in async adapter support for lazy loading
 - **Selection** - Single and multiple selection modes with keyboard navigation
 - **Sparse Storage** - Chunk-based memory management for huge datasets

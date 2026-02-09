@@ -46,8 +46,11 @@ export type {
   Unsubscribe,
 } from "./types";
 
-// Render domain (virtual scrolling, compression)
+// Render domain (virtual scrolling, compression, height cache)
 export {
+  // Height cache (variable item heights)
+  createHeightCache,
+  type HeightCache,
   // Virtual scrolling calculations
   calculateVisibleRange,
   calculateRenderRange,

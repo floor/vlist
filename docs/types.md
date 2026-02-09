@@ -89,6 +89,48 @@ interface VListItem {
 
 ### Configuration Types
 
+#### `ItemConfig`
+
+Item-specific configuration for height and rendering.
+
+```typescript
+interface ItemConfig<T extends VListItem = VListItem> {
+  /**
+   * Item height in pixels.
+   *
+   * - `number` — Fixed height for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   */
+  height: number | ((index: number) => number);
+
+  /** Template function to render each item */
+  template: ItemTemplate<T>;
+}
+```
+
+**Fixed height** (number): All items have the same height. This is the fastest path — internally uses simple multiplication for O(1) offset calculations with zero overhead.
+
+**Variable height** (function): Each item can have a different height. The function receives the item index and returns the height in pixels. Internally, vlist builds a prefix-sum array for O(1) offset lookups and O(log n) binary search for scroll-position-to-index mapping.
+
+```typescript
+// Fixed height — all items 48px
+item: { height: 48, template: myTemplate }
+
+// Variable height — headers are taller
+item: {
+  height: (index: number) => items[index].type === 'header' ? 64 : 48,
+  template: myTemplate,
+}
+
+// Variable height — based on content
+item: {
+  height: (index: number) => items[index].expanded ? 120 : 48,
+  template: myTemplate,
+}
+```
+
+> **Note:** The height function must be deterministic — given the same index, it must always return the same value. If heights change (e.g., an item expands), call `setItems()` to trigger a rebuild of the internal height cache.
+
 #### `VListConfig`
 
 Main configuration for createVList.
