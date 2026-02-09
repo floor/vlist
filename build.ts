@@ -1,5 +1,6 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
+import { readFileSync, writeFileSync } from "fs";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -92,10 +93,20 @@ async function build() {
     );
   }
 
-  // Copy CSS
+  // Minify and copy CSS
   const cssStart = performance.now();
-  await $`cp ./src/styles/vlist.css ./dist/vlist.css`.quiet();
-  await $`cp ./src/styles/vlist-extras.css ./dist/vlist-extras.css`.quiet();
+  const minifyCss = (src: string, dest: string) => {
+    const raw = readFileSync(src, "utf-8");
+    const minified = raw
+      .replace(/\/\*[\s\S]*?\*\//g, "") // strip comments
+      .replace(/\s*([{}:;,>~+])\s*/g, "$1") // collapse around symbols
+      .replace(/;\}/g, "}") // drop trailing semicolons
+      .replace(/\s+/g, " ") // collapse whitespace
+      .trim();
+    writeFileSync(dest, minified);
+  };
+  minifyCss("./src/styles/vlist.css", "./dist/vlist.css");
+  minifyCss("./src/styles/vlist-extras.css", "./dist/vlist-extras.css");
   const cssTime = performance.now() - cssStart;
   const cssFile = Bun.file("./dist/vlist.css");
   const cssSize = (cssFile.size / 1024).toFixed(1);

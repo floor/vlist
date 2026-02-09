@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="vlist sticky headers example — grouped contact list with sticky section headers that transition smoothly like iOS Contacts."
+        />
+        <title>vlist - Sticky Headers Example</title>
+        <link rel="stylesheet" href="/dist/vlist.css" />
+        <link rel="stylesheet" href="/sandbox/sticky-headers/dist/styles.css" />
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <a href="/sandbox/" class="back-link">← Back to Sandbox</a>
+                <h1>Sticky Headers</h1>
+                <p class="description">
+                    Grouped contact list with sticky section headers. Items are
+                    grouped by the first letter of the last name using
+                    <code>groups.getGroupForIndex</code>. Headers stick to the
+                    top of the viewport and are pushed out by the next group's
+                    header — just like iOS Contacts.
+                </p>
+            </header>
+
+            <div class="stats" id="stats">Loading...</div>
+
+            <div class="controls">
+                <button id="jump-top" class="control-btn">⬆ Top</button>
+                <button id="jump-middle" class="control-btn">◆ Middle</button>
+                <button id="jump-bottom" class="control-btn">⬇ Bottom</button>
+                <button id="jump-random" class="control-btn">
+                    🎲 Random Group
+                </button>
+                <button
+                    id="toggle-sticky"
+                    class="control-btn control-btn--active"
+                >
+                    📌 Sticky
+                </button>
+            </div>
+
+            <div id="list-container"></div>
+
+            <div class="group-distribution" id="group-distribution"></div>
+
+            <footer>
+                <p>
+                    Groups are derived automatically from a
+                    <code>getGroupForIndex</code> function — no need to manually
+                    insert headers into your data. The sticky header is a
+                    lightweight overlay element updated on scroll. Works with
+                    fixed and variable heights, compression, and all other vlist
+                    features.
+                </p>
+            </footer>
+        </div>
+
+        <script
+            type="module"
+            src="/sandbox/sticky-headers/dist/script.js"
+        ></script>
+    </body>
+</html>

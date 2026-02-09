@@ -249,7 +249,7 @@ export const createScrollMethods = <T extends VListItem>(
     const dataState = ctx.dataManager.getState();
     const position = calculateScrollToIndex(
       index,
-      ctx.config.itemHeight,
+      ctx.heightCache,
       ctx.state.viewportState.containerHeight,
       dataState.total,
       align,

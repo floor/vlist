@@ -25,6 +25,7 @@ import type { DataManager } from "../src/data";
 import type { ScrollController } from "../src/scroll";
 import type { Emitter } from "../src/events";
 import type { Renderer, DOMStructure, CompressionContext } from "../src/render";
+import { createHeightCache, type HeightCache } from "../src/render/heights";
 
 // =============================================================================
 // JSDOM Setup
@@ -165,6 +166,9 @@ const createMockScrollController = (): ScrollController => ({
   isAtTop: mock(() => true),
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
+  getVelocity: mock(() => 0),
+  isTracking: mock(() => true),
+  isScrolling: mock(() => false),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
@@ -200,6 +204,7 @@ describe("createContext", () => {
   let items: TestItem[];
   let config: VListContextConfig;
   let dom: DOMStructure;
+  let heightCache: HeightCache;
   let dataManager: DataManager<TestItem>;
   let scrollController: ScrollController;
   let renderer: Renderer<TestItem>;
@@ -210,6 +215,7 @@ describe("createContext", () => {
     items = createTestItems(100);
     config = createMockConfig();
     dom = createMockDOM();
+    heightCache = createHeightCache(config.itemHeight, items.length);
     dataManager = createMockDataManager(items);
     scrollController = createMockScrollController();
     renderer = createMockRenderer();
@@ -222,6 +228,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -254,6 +261,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -269,6 +277,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -290,6 +299,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -310,6 +320,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         emptyDataManager,
         scrollController,
         renderer,
@@ -330,6 +341,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -356,6 +368,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         emptyDataManager,
         scrollController,
         renderer,
@@ -383,6 +396,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -411,6 +425,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         smallDataManager,
         scrollController,
         renderer,
@@ -430,6 +445,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -448,6 +464,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -471,6 +488,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -490,6 +508,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -508,6 +527,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -530,6 +550,7 @@ describe("createContext", () => {
       const singleCtx = createContext(
         singleConfig,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -541,6 +562,7 @@ describe("createContext", () => {
       const multiCtx = createContext(
         multiConfig,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -559,6 +581,7 @@ describe("createContext", () => {
       const ctx = createContext(
         adapterConfig,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -576,6 +599,7 @@ describe("createContext", () => {
       const ctx = createContext(
         customConfig,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -590,9 +614,14 @@ describe("createContext", () => {
     it("should handle different item heights", () => {
       const tallConfig = createMockConfig({ itemHeight: 80 });
 
+      const tallHeightCache = createHeightCache(
+        tallConfig.itemHeight,
+        items.length,
+      );
       const ctx = createContext(
         tallConfig,
         dom,
+        tallHeightCache,
         dataManager,
         scrollController,
         renderer,
@@ -610,6 +639,7 @@ describe("createContext", () => {
       const ctx = createContext(
         largeOverscanConfig,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,
@@ -636,6 +666,7 @@ describe("createContext", () => {
       const ctx = createContext(
         config,
         dom,
+        heightCache,
         dataManager,
         scrollController,
         renderer,

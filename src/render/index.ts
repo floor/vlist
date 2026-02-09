@@ -3,6 +3,15 @@
  * Rendering, virtualization, and compression
  */
 
+// Height Cache
+export {
+  createHeightCache,
+  countVisibleItems,
+  countItemsFittingFromBottom,
+  getOffsetForVirtualIndex,
+  type HeightCache,
+} from "./heights";
+
 // Renderer
 export {
   createRenderer,

@@ -3,6 +3,8 @@
  * Minimal, clean interfaces for the virtual list
  */
 
+import type { GroupsConfig } from "./groups/types";
+
 // =============================================================================
 // Event Map Base Type
 // =============================================================================
@@ -26,8 +28,13 @@ export interface VListItem {
 
 /** Item-specific configuration */
 export interface ItemConfig<T extends VListItem = VListItem> {
-  /** Fixed item height in pixels (required for virtual scrolling) */
-  height: number;
+  /**
+   * Item height in pixels (required for virtual scrolling)
+   *
+   * - `number` — Fixed height for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   */
+  height: number | ((index: number) => number);
 
   /** Template function to render each item */
   template: ItemTemplate<T>;
@@ -53,6 +60,19 @@ export interface VListConfig<T extends VListItem = VListItem> {
   /** Selection configuration */
   selection?: SelectionConfig;
 
+  /**
+   * External scroll element for document/window scrolling.
+   * When set, the list scrolls with this element instead of its own container.
+   * Pass `window` for document scrolling (most common use case).
+   *
+   * In window mode:
+   * - The list participates in the normal page flow (no inner scrollbar)
+   * - The browser's native scrollbar controls scrolling
+   * - Compression still works (content height is capped, scroll math is remapped)
+   * - Custom scrollbar is disabled (the browser scrollbar is used)
+   */
+  scrollElement?: Window;
+
   /** Custom scrollbar configuration (for compressed mode) */
   scrollbar?: ScrollbarConfig;
 
@@ -64,6 +84,19 @@ export interface VListConfig<T extends VListItem = VListItem> {
 
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
+
+  /** Accessible label for the listbox (sets aria-label on the root element) */
+  ariaLabel?: string;
+
+  /**
+   * Groups configuration for sticky headers / grouped lists.
+   * When set, items are automatically grouped and section headers
+   * are inserted at group boundaries.
+   *
+   * Items MUST be pre-sorted by group — a new header is inserted
+   * whenever `getGroupForIndex` returns a different value.
+   */
+  groups?: GroupsConfig;
 }
 
 // =============================================================================

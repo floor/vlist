@@ -14,6 +14,7 @@ const items = Array.from({ length: 10000 }, (_, i) => ({
 // Create the virtual list
 const list = createVList({
   container: "#list-container",
+  ariaLabel: "User list",
   item: {
     height: 64,
     template: (item, index) => `

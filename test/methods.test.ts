@@ -29,6 +29,7 @@ import type { DataManager } from "../src/data";
 import type { ScrollController } from "../src/scroll";
 import type { Emitter } from "../src/events";
 import type { Renderer, DOMStructure } from "../src/render";
+import { createHeightCache } from "../src/render/heights";
 
 // =============================================================================
 // JSDOM Setup
@@ -205,6 +206,9 @@ const createMockScrollController = (): ScrollController => ({
   isAtTop: mock(() => true),
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
+  getVelocity: mock(() => 0),
+  isTracking: mock(() => true),
+  isScrolling: mock(() => false),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
@@ -252,10 +256,14 @@ const createMockContext = <T extends VListItem>(
   const emitter = createMockEmitter();
   const scrollbar = createMockScrollbar();
   const state = createMockState(stateOverrides);
+  const itemHeight =
+    typeof config.itemHeight === "number" ? config.itemHeight : 40;
+  const heightCache = createHeightCache(config.itemHeight, items.length);
 
   return {
     config,
     dom,
+    heightCache,
     dataManager,
     scrollController,
     renderer,
@@ -274,8 +282,8 @@ const createMockContext = <T extends VListItem>(
     })),
     getCachedCompression: mock(() => ({
       isCompressed: false,
-      actualHeight: items.length * config.itemHeight,
-      virtualHeight: items.length * config.itemHeight,
+      actualHeight: items.length * itemHeight,
+      virtualHeight: items.length * itemHeight,
       ratio: 1,
     })),
   };

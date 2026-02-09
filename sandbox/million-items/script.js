@@ -2,9 +2,9 @@
 // Demonstrates compression for handling millions of items
 
 // Direct imports for optimal tree-shaking
-import { createButton } from "mtrl";
+import { createButton, createChips, createProgress } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
-import { createVList, getCompressionState, getCompressionInfo } from "vlist";
+import { createVList, MAX_VIRTUAL_HEIGHT } from "vlist";
 
 // Constants
 const ITEM_HEIGHT = 48;
@@ -27,7 +27,7 @@ const COLORS = [
 
 // Simple hash function for consistent values
 const hash = (n) => {
-  let h = n * 2654435761;
+  let h = (n + 1) * 2654435761;
   h ^= h >>> 16;
   return Math.abs(h);
 };
@@ -98,15 +98,6 @@ const createComponentSection = (info) => [
           class: "components__section-showcase",
           style: { position: "relative" },
         },
-        [
-          "loadingOverlay",
-          { class: "loading-overlay loading-overlay--hidden" },
-          [{ class: "loading-spinner" }],
-          [
-            "loadingText",
-            { class: "loading-text", text: "Generating items..." },
-          ],
-        ],
       ],
       ["info", { class: "components__section-info" }],
     ],
@@ -160,9 +151,6 @@ const createMillionItemsExample = (container) => {
   ).component;
 
   const showcaseElement = section.showcase.element || section.showcase;
-  const loadingOverlay =
-    section.loadingOverlay.element || section.loadingOverlay;
-  const loadingText = section.loadingText.element || section.loadingText;
 
   let list = null;
   let currentSize = "1m";
@@ -203,13 +191,68 @@ const createMillionItemsExample = (container) => {
   };
   requestAnimationFrame(updateFps);
 
-  const showLoading = (text) => {
-    loadingText.textContent = text;
-    loadingOverlay.classList.remove("loading-overlay--hidden");
+  // Create a circular determinate progress overlaid on the list
+  const spinner = createProgress({
+    variant: "circular",
+    value: 0,
+    max: 100,
+    size: 96,
+    shape: "wavy",
+    showLabel: true,
+  });
+
+  const overlay = createLayout([
+    {
+      class: "list-overlay",
+      style: {
+        position: "absolute",
+        inset: "0",
+        display: "none",
+        zIndex: "10",
+        justifyContent: "center",
+        alignItems: "center",
+        background:
+          "color-mix(in srgb, var(--mtrl-sys-color-surface-container, #fff) 60%, transparent)",
+        borderRadius: "2px",
+      },
+    },
+  ]).element;
+
+  overlay.appendChild(spinner.element);
+  showcaseElement.appendChild(overlay);
+
+  const showSpinner = () => {
+    spinner.setValue(0, false);
+    overlay.style.display = "flex";
   };
 
-  const hideLoading = () => {
-    loadingOverlay.classList.add("loading-overlay--hidden");
+  const hideSpinner = () => {
+    overlay.style.display = "none";
+  };
+
+  const BATCH_SIZE = 50_000;
+
+  /**
+   * Generate items in batches, yielding between each so the
+   * spinner can animate smoothly.
+   */
+  const generateItemsBatched = async (total) => {
+    const result = new Array(total);
+    let generated = 0;
+
+    while (generated < total) {
+      const end = Math.min(generated + BATCH_SIZE, total);
+      for (let i = generated; i < end; i++) {
+        result[i] = generateItem(i);
+      }
+      generated = end;
+      spinner.setValue(Math.round((generated / total) * 100), false);
+
+      // Yield to let the browser repaint the spinner
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return result;
   };
 
   const createList = async (size) => {
@@ -217,20 +260,28 @@ const createMillionItemsExample = (container) => {
     currentSize = size;
     currentTotal = total;
 
-    showLoading(`Generating ${(total / 1_000_000).toFixed(0)}M items...`);
+    // Empty the current list and show spinner overlay
+    if (list) {
+      list.setItems([]);
+    }
+    showSpinner();
 
-    // Wait a frame to let the UI update
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Yield to let the chip animation and spinner render
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Destroy existing list
+    // Generate items in batches
+    const generateStart = performance.now();
+    items = await generateItemsBatched(total);
+    perf.generate = performance.now() - generateStart;
+
+    // Wait for the 100% state to be painted to screen
+    await spinner.painted();
+
+    // Destroy existing list right before creating the new one
     if (list) {
       list.destroy();
     }
-
-    // Generate items
-    const generateStart = performance.now();
-    items = Array.from({ length: total }, (_, i) => generateItem(i));
-    perf.generate = performance.now() - generateStart;
 
     // Update compression info
     updateCompressionInfo(total);
@@ -240,6 +291,7 @@ const createMillionItemsExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Million items list",
       item: {
         height: ITEM_HEIGHT,
         template: (item, index) => createItemElement(item, index),
@@ -274,17 +326,21 @@ const createMillionItemsExample = (container) => {
       });
     });
 
-    hideLoading();
+    hideSpinner();
     scheduleUpdate();
   };
 
   const updateCompressionInfo = (total) => {
-    const compression = getCompressionState(total, ITEM_HEIGHT);
+    const actualHeight = total * ITEM_HEIGHT;
+    const isCompressed = actualHeight > MAX_VIRTUAL_HEIGHT;
+    const virtualHeight = isCompressed ? MAX_VIRTUAL_HEIGHT : actualHeight;
+    const ratio = actualHeight > 0 ? virtualHeight / actualHeight : 1;
+
     if (controls.compressionRatio) {
-      controls.compressionRatio.textContent = `${(compression.ratio * 100).toFixed(1)}%`;
+      controls.compressionRatio.textContent = `${(ratio * 100).toFixed(1)}%`;
     }
     if (controls.virtualHeight) {
-      controls.virtualHeight.textContent = `${(compression.virtualHeight / 1_000_000).toFixed(1)}M px`;
+      controls.virtualHeight.textContent = `${(virtualHeight / 1_000_000).toFixed(1)}M px`;
     }
   };
 
@@ -296,29 +352,21 @@ const createMillionItemsExample = (container) => {
     [
       { layout: { type: "column", gap: 16 } },
 
-      // Size toggle panel
+      // Size toggle using filter chips
       [
         "sizePanel",
         { tag: "div", class: "mtrl-panel" },
         [{ class: "panel__title", text: "List Size" }],
         [
-          { class: "size-toggle" },
-          [
-            "size1m",
-            {
-              tag: "button",
-              class: "size-toggle__button size-toggle__button--active",
-              text: "1M",
-            },
-          ],
-          [
-            "size2m",
-            { tag: "button", class: "size-toggle__button", text: "2M" },
-          ],
-          [
-            "size5m",
-            { tag: "button", class: "size-toggle__button", text: "5M" },
-          ],
+          createChips,
+          "sizeChips",
+          {
+            chips: [
+              { text: "1M", value: "1m", variant: "filter", selected: true },
+              { text: "2M", value: "2m", variant: "filter" },
+              { text: "5M", value: "5m", variant: "filter" },
+            ],
+          },
         ],
       ],
 
@@ -512,38 +560,11 @@ const createMillionItemsExample = (container) => {
     });
   };
 
-  // Size toggle handlers
-  const setActiveSize = (size) => {
-    controls.size1m.classList.toggle(
-      "size-toggle__button--active",
-      size === "1m",
-    );
-    controls.size2m.classList.toggle(
-      "size-toggle__button--active",
-      size === "2m",
-    );
-    controls.size5m.classList.toggle(
-      "size-toggle__button--active",
-      size === "5m",
-    );
-  };
-
-  controls.size1m.addEventListener("click", () => {
-    if (currentSize === "1m") return;
-    setActiveSize("1m");
-    createList("1m");
-  });
-
-  controls.size2m.addEventListener("click", () => {
-    if (currentSize === "2m") return;
-    setActiveSize("2m");
-    createList("2m");
-  });
-
-  controls.size5m.addEventListener("click", () => {
-    if (currentSize === "5m") return;
-    setActiveSize("5m");
-    createList("5m");
+  // Size chip change handler
+  controls.sizeChips.on("change", (selectedValues) => {
+    const newSize = selectedValues.find((v) => SIZES[v]);
+    if (!newSize || newSize === currentSize) return;
+    createList(newSize);
   });
 
   // Navigation handlers

@@ -86,8 +86,13 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Get current velocity for threshold checks
     const currentVelocity = ctx.scrollController.getVelocity();
+    const velocityReliable = ctx.scrollController.isTracking();
     const { cancelLoadThreshold, preloadThreshold, preloadAhead } = ctx.config;
-    const canLoad = currentVelocity <= cancelLoadThreshold;
+
+    // Only allow loading when:
+    // 1. The velocity tracker has enough samples to be reliable (not during ramp-up)
+    // 2. The measured velocity is below the cancellation threshold
+    const canLoad = velocityReliable && currentVelocity <= cancelLoadThreshold;
 
     // Check if velocity just dropped below threshold - load pending range immediately
     // This creates smoother transitions vs waiting for idle
@@ -114,7 +119,7 @@ export const createScrollHandler = <T extends VListItem>(
     ctx.state.viewportState = updateViewportState(
       ctx.state.viewportState,
       scrollTop,
-      ctx.config.itemHeight,
+      ctx.heightCache,
       total,
       ctx.config.overscan,
       ctx.getCachedCompression(),
@@ -134,7 +139,12 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Check for infinite scroll (use virtual height for distance calculation)
     // Use direct getters to avoid object allocation
+    // Protected by canLoad: during fast scrolling (high velocity or ramp-up),
+    // skip loadMore to avoid fetching the next sequential chunk when the user
+    // has already scrolled far past it (e.g. scrollbar drag to bottom would
+    // request offset=100 when the visible range is near offset=999900).
     if (
+      canLoad &&
       ctx.config.hasAdapter &&
       !ctx.dataManager.getIsLoading() &&
       ctx.dataManager.getHasMore()

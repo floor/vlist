@@ -21,6 +21,7 @@ import type {
 
 // Domain imports
 import {
+  createHeightCache,
   createViewportState,
   updateViewportSize,
   updateViewportItems,
@@ -49,6 +50,18 @@ import {
   createScrollMethods,
   createSelectionMethods,
 } from "./methods";
+
+// Groups domain
+import {
+  createGroupLayout,
+  buildLayoutItems,
+  createGroupedHeightFn,
+  createStickyHeader,
+  isGroupHeader,
+  type GroupLayout,
+  type StickyHeader as StickyHeaderInstance,
+  type GroupHeaderItem,
+} from "./groups";
 
 // Constants
 import {
@@ -80,8 +93,19 @@ export const createVList = <T extends VListItem = VListItem>(
   if (!config.item) {
     throw new Error("[vlist] item configuration is required");
   }
-  if (!config.item.height || config.item.height <= 0) {
+  if (config.item.height == null) {
+    throw new Error("[vlist] item.height is required");
+  }
+  if (typeof config.item.height === "number" && config.item.height <= 0) {
     throw new Error("[vlist] item.height must be a positive number");
+  }
+  if (
+    typeof config.item.height !== "number" &&
+    typeof config.item.height !== "function"
+  ) {
+    throw new Error(
+      "[vlist] item.height must be a number or a function (index) => number",
+    );
   }
   if (!config.item.template) {
     throw new Error("[vlist] item.template is required");
@@ -101,9 +125,15 @@ export const createVList = <T extends VListItem = VListItem>(
     loading: loadingConfig,
     idleTimeout: scrollIdleTimeout,
     classPrefix = DEFAULT_CLASS_PREFIX,
+    scrollElement,
+    ariaLabel,
+    groups: groupsConfig,
   } = config;
 
-  const { height: itemHeight, template } = itemConfig;
+  const isWindowMode = !!scrollElement;
+  const hasGroups = !!groupsConfig;
+
+  const { height: itemHeightConfig, template: userTemplate } = itemConfig;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
@@ -115,32 +145,118 @@ export const createVList = <T extends VListItem = VListItem>(
   const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
 
   // ===========================================================================
+  // Groups Setup (when config.groups is present)
+  // ===========================================================================
+
+  // Group layout maps between data indices and layout indices.
+  // When groups are active, the data manager sees "layout items" (items + headers)
+  // and the height cache uses a grouped height function.
+  let groupLayout: GroupLayout | null = null;
+  let stickyHeader: StickyHeaderInstance | null = null;
+
+  // Original items are stored separately so public API can return them
+  let originalItems: T[] = initialItems ? [...initialItems] : [];
+
+  // Transform items and height function when groups are active
+  let layoutItems: T[] | Array<T | GroupHeaderItem> = initialItems ?? [];
+  let effectiveHeightConfig: number | ((index: number) => number) =
+    itemHeightConfig;
+
+  // Unified template: dispatches to headerTemplate or user template
+  let template = userTemplate;
+
+  if (hasGroups && groupsConfig) {
+    groupLayout = createGroupLayout(originalItems.length, groupsConfig);
+
+    // Build layout items with headers inserted at group boundaries
+    layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+
+    // Create a grouped height function
+    effectiveHeightConfig = createGroupedHeightFn(
+      groupLayout,
+      itemHeightConfig,
+    );
+
+    // Create a unified template that renders headers or items
+    const headerTemplate = groupsConfig.headerTemplate;
+    template = ((item: T | GroupHeaderItem, index: number, state: any) => {
+      if (isGroupHeader(item)) {
+        return headerTemplate(
+          (item as GroupHeaderItem).groupKey,
+          (item as GroupHeaderItem).groupIndex,
+        );
+      }
+      return userTemplate(item as T, index, state);
+    }) as typeof userTemplate;
+  }
+
+  // ===========================================================================
   // Create Domain Components
   // ===========================================================================
 
   // Resolve container and create DOM structure
   const containerElement = resolveContainer(config.container);
-  const dom = createDOMStructure(containerElement, classPrefix);
+  const dom = createDOMStructure(containerElement, classPrefix, ariaLabel);
 
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
+  // Create height cache (uses grouped height function when groups are active)
+  const heightCache = createHeightCache(
+    effectiveHeightConfig,
+    hasGroups ? (layoutItems?.length ?? 0) : (initialItems?.length ?? 0),
+  );
+
   // Mutable reference to context (needed for callbacks that run after ctx is created)
   let ctxRef: VListContext<T> | null = null;
 
-  // Create data manager
+  /**
+   * Rebuild group layout and re-transform items.
+   * Called when the underlying data changes (setItems, append, etc.)
+   */
+  const rebuildGroups = (): void => {
+    if (!groupLayout || !groupsConfig) return;
+
+    // Rebuild group boundaries from current original items
+    groupLayout.rebuild(originalItems.length);
+
+    // Rebuild layout items
+    layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+
+    // Rebuild height function (the closure captures the updated groupLayout)
+    effectiveHeightConfig = createGroupedHeightFn(
+      groupLayout,
+      itemHeightConfig,
+    );
+
+    // Refresh sticky header content
+    if (stickyHeader) {
+      stickyHeader.refresh();
+    }
+  };
+
+  // Create data manager (uses layout items when groups are active)
+  const effectiveItems = hasGroups ? layoutItems : initialItems;
   const dataManager = createDataManager<T>({
     ...(adapter ? { adapter } : {}),
-    ...(initialItems ? { initialItems } : {}),
-    ...(initialItems?.length ? { initialTotal: initialItems.length } : {}),
+    ...(effectiveItems && effectiveItems.length > 0
+      ? { initialItems: effectiveItems as T[] }
+      : {}),
+    ...(effectiveItems && effectiveItems.length > 0
+      ? { initialTotal: effectiveItems.length }
+      : {}),
     pageSize: INITIAL_LOAD_SIZE,
     onStateChange: () => {
       if (ctxRef?.state.isInitialized) {
+        // Rebuild height cache when items change
+        heightCache.rebuild(ctxRef.dataManager.getTotal());
         updateViewport();
       }
     },
     onItemsLoaded: (loadedItems, _offset, total) => {
       if (ctxRef?.state.isInitialized) {
+        // Rebuild height cache when items are loaded
+        heightCache.rebuild(ctxRef.dataManager.getTotal());
         // Always re-render when items load - the current range may have placeholders
         forceRender();
         emitter.emit("load:end", { items: loadedItems, total });
@@ -148,16 +264,32 @@ export const createVList = <T extends VListItem = VListItem>(
     },
   });
 
-  // Get container dimensions
-  const dimensions = getContainerDimensions(dom.viewport);
+  // In window mode, the list sits in the page flow — no inner scrollbar,
+  // no clipping. Override the CSS defaults on both root and viewport so the
+  // content div's height (totalHeight or virtualHeight) flows through to
+  // the document, giving the browser scrollbar the correct page length.
+  if (isWindowMode) {
+    dom.root.style.overflow = "visible";
+    dom.root.style.height = "auto";
+    dom.viewport.style.overflow = "visible";
+    dom.viewport.style.height = "auto";
+  }
+
+  // Get container dimensions (use window.innerHeight in window mode)
+  const dimensions = isWindowMode
+    ? { height: window.innerHeight, width: dom.viewport.clientWidth }
+    : getContainerDimensions(dom.viewport);
 
   // Get initial compression state (must be before createViewportState which uses it)
-  const initialCompression = getCompression(dataManager.getTotal(), itemHeight);
+  const initialCompression = getCompression(
+    dataManager.getTotal(),
+    heightCache,
+  );
 
   // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
     dimensions.height,
-    itemHeight,
+    heightCache,
     dataManager.getTotal(),
     overscan,
     initialCompression,
@@ -175,6 +307,7 @@ export const createVList = <T extends VListItem = VListItem>(
     ...(scrollIdleTimeout !== undefined
       ? { idleTimeout: scrollIdleTimeout }
       : {}),
+    ...(isWindowMode ? { scrollElement } : {}),
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
@@ -196,17 +329,24 @@ export const createVList = <T extends VListItem = VListItem>(
   });
 
   // Create renderer
+  // Add group-header CSS class to root when groups are active
+  if (hasGroups) {
+    dom.root.classList.add(`${classPrefix}--grouped`);
+  }
+
   const renderer = createRenderer<T>(
     dom.items,
     template,
-    itemHeight,
+    heightCache,
     classPrefix,
     () => dataManager.getTotal(),
   );
 
-  // Create scrollbar (auto-enable when compressed)
+  // Create scrollbar (auto-enable when compressed, but never in window mode
+  // where the browser's native scrollbar is used)
   const shouldEnableScrollbar =
-    scrollbarConfig?.enabled ?? initialCompression.isCompressed;
+    !isWindowMode &&
+    (scrollbarConfig?.enabled ?? initialCompression.isCompressed);
   let scrollbar = shouldEnableScrollbar
     ? createScrollbar(
         dom.viewport,
@@ -225,9 +365,32 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create Context
   // ===========================================================================
 
+  // ===========================================================================
+  // Create Sticky Header (when groups.sticky is enabled)
+  // ===========================================================================
+
+  if (
+    hasGroups &&
+    groupsConfig &&
+    groupLayout &&
+    groupsConfig.sticky !== false
+  ) {
+    stickyHeader = createStickyHeader(
+      dom.root,
+      groupLayout,
+      heightCache,
+      groupsConfig,
+      classPrefix,
+    );
+  }
+
+  // ===========================================================================
+  // Create Context
+  // ===========================================================================
+
   const ctx: VListContext<T> = (ctxRef = createContext(
     {
-      itemHeight,
+      itemHeight: effectiveHeightConfig,
       overscan,
       classPrefix,
       selectionMode,
@@ -237,6 +400,7 @@ export const createVList = <T extends VListItem = VListItem>(
       preloadAhead,
     },
     dom,
+    heightCache,
     dataManager,
     scrollController,
     renderer,
@@ -264,13 +428,14 @@ export const createVList = <T extends VListItem = VListItem>(
    */
   const updateCompressionMode = (): void => {
     const total = dataManager.getTotal();
-    const compression = getCompression(total, itemHeight);
+    const compression = getCompression(total, heightCache);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
       scrollController.enableCompression(compression);
 
       // Create scrollbar if not exists and auto-enable is on
-      if (!scrollbar && scrollbarConfig?.enabled !== false) {
+      // (never in window mode — the browser's native scrollbar is used)
+      if (!isWindowMode && !scrollbar && scrollbarConfig?.enabled !== false) {
         scrollbar = createScrollbar(
           dom.viewport,
           (position) => scrollController.scrollTo(position),
@@ -284,6 +449,13 @@ export const createVList = <T extends VListItem = VListItem>(
     } else if (!compression.isCompressed && scrollController.isCompressed()) {
       scrollController.disableCompression();
     } else if (compression.isCompressed) {
+      scrollController.updateConfig({ compression });
+    }
+
+    // In window mode, always keep maxScroll in sync — even without compression,
+    // the controller needs totalHeight to compute isAtBottom/getScrollPercentage.
+    // (The compression state for non-compressed lists has virtualHeight = actualHeight.)
+    if (isWindowMode && !compression.isCompressed) {
       scrollController.updateConfig({ compression });
     }
 
@@ -309,7 +481,7 @@ export const createVList = <T extends VListItem = VListItem>(
     // Pass cached compression to avoid allocating a new CompressionState
     ctx.state.viewportState = updateViewportItems(
       ctx.state.viewportState,
-      itemHeight,
+      heightCache,
       dataManager.getTotal(),
       overscan,
       ctx.getCachedCompression(),
@@ -392,6 +564,21 @@ export const createVList = <T extends VListItem = VListItem>(
   // Wire up the scroll handler reference for the scroll controller callbacks
   handleScrollRef = handleScroll;
 
+  // Wrap the scroll handler to also update the sticky header
+  if (stickyHeader) {
+    const originalHandleScroll = handleScroll;
+    const stickyRef = stickyHeader;
+    const wrappedHandleScroll = (
+      scrollTop: number,
+      direction: "up" | "down",
+    ): void => {
+      originalHandleScroll(scrollTop, direction);
+      stickyRef.update(scrollTop);
+    };
+    wrappedHandleScroll.loadPendingRange = handleScroll.loadPendingRange;
+    handleScrollRef = wrappedHandleScroll as typeof handleScroll;
+  }
+
   const handleClick = createClickHandler(ctx, forceRender);
 
   // Create scroll methods first (needed by keyboard handler)
@@ -402,7 +589,37 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create API Methods
   // ===========================================================================
 
-  const dataMethods = createDataMethods(ctx);
+  const rawDataMethods = createDataMethods(ctx);
+
+  // Wrap data methods when groups are active to maintain group layout
+  const dataMethods = hasGroups
+    ? {
+        setItems: (items: T[]): void => {
+          originalItems = [...items];
+          rebuildGroups();
+          // Set the layout items (with headers) into the data manager
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        appendItems: (items: T[]): void => {
+          originalItems = [...originalItems, ...items];
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        prependItems: (items: T[]): void => {
+          originalItems = [...items, ...originalItems];
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        updateItem: rawDataMethods.updateItem,
+        removeItem: (id: string | number): void => {
+          // Remove from original items
+          originalItems = originalItems.filter((item) => item.id !== id);
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        reload: rawDataMethods.reload,
+      }
+    : rawDataMethods;
   const selectionMethods = createSelectionMethods(ctx);
 
   // ===========================================================================
@@ -434,6 +651,13 @@ export const createVList = <T extends VListItem = VListItem>(
   const resizeObserver = new ResizeObserver((entries) => {
     if (ctx.state.isDestroyed) return;
 
+    // In window mode, the viewport has height:auto so its size reflects the
+    // *content* height (e.g. 880,000 px for 10K items), NOT the visible area.
+    // Using that value as containerHeight would make vlist think the entire
+    // content is visible and render ALL items, destroying performance.
+    // The window resize listener (below) handles containerHeight instead.
+    if (isWindowMode) return;
+
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
       const currentHeight = ctx.state.viewportState.containerHeight;
@@ -443,7 +667,7 @@ export const createVList = <T extends VListItem = VListItem>(
         ctx.state.viewportState = updateViewportSize(
           ctx.state.viewportState,
           newHeight,
-          itemHeight,
+          heightCache,
           dataManager.getTotal(),
           overscan,
           ctx.getCachedCompression(),
@@ -470,6 +694,42 @@ export const createVList = <T extends VListItem = VListItem>(
     }
   });
 
+  // In window mode, listen for window resize to update containerHeight
+  // (the ResizeObserver above watches the viewport element, which in window mode
+  // reflects the content size, not the visible area — we need window.innerHeight)
+  let handleWindowResize: (() => void) | null = null;
+  if (isWindowMode) {
+    handleWindowResize = () => {
+      if (ctx.state.isDestroyed) return;
+
+      const newHeight = window.innerHeight;
+      const currentHeight = ctx.state.viewportState.containerHeight;
+
+      if (Math.abs(newHeight - currentHeight) > 1) {
+        // Update scroll controller's knowledge of container height
+        scrollController.updateContainerHeight(newHeight);
+
+        ctx.state.viewportState = updateViewportSize(
+          ctx.state.viewportState,
+          newHeight,
+          heightCache,
+          dataManager.getTotal(),
+          overscan,
+          ctx.getCachedCompression(),
+        );
+
+        updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+        renderIfNeeded();
+
+        emitter.emit("resize", {
+          height: newHeight,
+          width: window.innerWidth,
+        });
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
+  }
+
   // ===========================================================================
   // Destroy
   // ===========================================================================
@@ -483,13 +743,19 @@ export const createVList = <T extends VListItem = VListItem>(
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
 
-    // Disconnect ResizeObserver
+    // Disconnect ResizeObserver and window resize listener
     resizeObserver.disconnect();
+    if (handleWindowResize) {
+      window.removeEventListener("resize", handleWindowResize);
+    }
 
     // Cleanup components
     scrollController.destroy();
     if (scrollbar) {
       scrollbar.destroy();
+    }
+    if (stickyHeader) {
+      stickyHeader.destroy();
     }
     renderer.destroy();
     emitter.clear();
@@ -516,6 +782,11 @@ export const createVList = <T extends VListItem = VListItem>(
   updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
   renderIfNeeded();
 
+  // Initialize sticky header with current scroll position
+  if (stickyHeader) {
+    stickyHeader.update(ctx.scrollController.getScrollTop());
+  }
+
   // Load initial data if using adapter
   if (adapter && (!initialItems || initialItems.length === 0)) {
     emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
@@ -536,18 +807,42 @@ export const createVList = <T extends VListItem = VListItem>(
     },
 
     get items() {
+      // When groups are active, return the original items (without headers)
+      if (hasGroups) {
+        return originalItems as readonly T[];
+      }
       return ctx.getAllLoadedItems() as readonly T[];
     },
 
     get total() {
+      // When groups are active, return the original item count (without headers)
+      if (hasGroups) {
+        return originalItems.length;
+      }
       return dataManager.getTotal();
     },
 
     // Data methods
     ...dataMethods,
 
-    // Scroll methods
-    ...scrollMethods,
+    // Scroll methods (wrapped for groups: data index → layout index)
+    ...(hasGroups && groupLayout
+      ? {
+          ...scrollMethods,
+          scrollToIndex: (
+            index: number,
+            alignOrOptions?:
+              | "start"
+              | "center"
+              | "end"
+              | import("./types").ScrollToOptions,
+          ): void => {
+            // Convert data index to layout index
+            const layoutIndex = groupLayout!.dataToLayoutIndex(index);
+            scrollMethods.scrollToIndex(layoutIndex, alignOrOptions);
+          },
+        }
+      : scrollMethods),
 
     // Selection methods
     select: selectionMethods.select,

@@ -49,6 +49,10 @@
       "import": "./dist/scroll/index.js",
       "types": "./dist/scroll/index.d.ts"
     },
+    "./groups": {
+      "import": "./dist/groups/index.js",
+      "types": "./dist/groups/index.d.ts"
+    },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css"
   },
