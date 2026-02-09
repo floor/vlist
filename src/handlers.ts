@@ -111,8 +111,8 @@ export const createScrollHandler = <T extends VListItem>(
     // Update previous velocity for next tick
     previousVelocity = currentVelocity;
 
-    // Use direct getters to avoid object allocation on every scroll tick
-    const total = ctx.dataManager.getTotal();
+    // Use virtual total for viewport calculations (row count in grid mode, item count otherwise)
+    const total = ctx.getVirtualTotal();
 
     // Update viewport state with current scroll position
     // Pass cached compression to avoid allocating a new CompressionState per frame

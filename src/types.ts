@@ -4,6 +4,7 @@
  */
 
 import type { GroupsConfig } from "./groups/types";
+import type { GridConfig } from "./grid/types";
 
 // =============================================================================
 // Event Map Base Type
@@ -97,6 +98,37 @@ export interface VListConfig<T extends VListItem = VListItem> {
    * whenever `getGroupForIndex` returns a different value.
    */
   groups?: GroupsConfig;
+
+  /**
+   * Layout mode (default: 'list').
+   * - `'list'` — Standard vertical list (one item per row)
+   * - `'grid'` — 2D grid layout (multiple items per row, requires `grid` config)
+   *
+   * In grid mode:
+   * - Virtualization operates on ROWS, not individual items
+   * - Each row contains `grid.columns` items side by side
+   * - Item width is automatically calculated: (containerWidth - gaps) / columns
+   * - Compression applies to row count, not item count
+   */
+  layout?: "list" | "grid";
+
+  /**
+   * Grid configuration (required when `layout: 'grid'`).
+   *
+   * ```ts
+   * createVList({
+   *   container: '#gallery',
+   *   layout: 'grid',
+   *   grid: { columns: 4, gap: 8 },
+   *   item: {
+   *     height: 200,
+   *     template: (item) => `<img src="${item.thumbnail}" />`,
+   *   },
+   *   items: photos,
+   * });
+   * ```
+   */
+  grid?: GridConfig;
 }
 
 // =============================================================================

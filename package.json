@@ -33,6 +33,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./core": {
+      "import": "./dist/core/index.js",
+      "types": "./dist/core.d.ts"
+    },
     "./data": {
       "import": "./dist/data/index.js",
       "types": "./dist/data/index.d.ts"
@@ -52,6 +56,10 @@
     "./groups": {
       "import": "./dist/groups/index.js",
       "types": "./dist/groups/index.d.ts"
+    },
+    "./grid": {
+      "import": "./dist/grid/index.js",
+      "types": "./dist/grid/index.d.ts"
     },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css"

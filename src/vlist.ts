@@ -63,6 +63,14 @@ import {
   type GroupHeaderItem,
 } from "./groups";
 
+// Grid domain
+import {
+  createGridLayout,
+  createGridRenderer,
+  type GridLayout,
+  type GridRenderer,
+} from "./grid";
+
 // Constants
 import {
   DEFAULT_OVERSCAN,
@@ -111,6 +119,21 @@ export const createVList = <T extends VListItem = VListItem>(
     throw new Error("[vlist] item.template is required");
   }
 
+  // Grid-specific validation
+  if (config.layout === "grid") {
+    if (!config.grid) {
+      throw new Error(
+        "[vlist] grid configuration is required when layout is 'grid'",
+      );
+    }
+    if (!config.grid.columns || config.grid.columns < 1) {
+      throw new Error("[vlist] grid.columns must be a positive integer >= 1");
+    }
+    if (config.groups) {
+      throw new Error("[vlist] grid layout cannot be combined with groups");
+    }
+  }
+
   // ===========================================================================
   // Configuration
   // ===========================================================================
@@ -128,10 +151,13 @@ export const createVList = <T extends VListItem = VListItem>(
     scrollElement,
     ariaLabel,
     groups: groupsConfig,
+    layout: layoutMode = "list",
+    grid: gridConfig,
   } = config;
 
   const isWindowMode = !!scrollElement;
   const hasGroups = !!groupsConfig;
+  const isGrid = layoutMode === "grid" && !!gridConfig;
 
   const { height: itemHeightConfig, template: userTemplate } = itemConfig;
 
@@ -143,6 +169,30 @@ export const createVList = <T extends VListItem = VListItem>(
   const preloadThreshold =
     loadingConfig?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
   const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
+
+  // ===========================================================================
+  // Grid Setup (when layout: 'grid')
+  // ===========================================================================
+
+  let gridLayout: GridLayout | null = null;
+  let gridRenderer: GridRenderer<T> | null = null;
+
+  if (isGrid && gridConfig) {
+    gridLayout = createGridLayout(gridConfig);
+  }
+
+  /**
+   * Get the "virtual total" used for all viewport/height calculations.
+   * In grid mode, this is the total number of ROWS (not items).
+   * In list/groups mode, this is the total from the data manager.
+   */
+  const getVirtualTotal = (): number => {
+    const rawTotal = dataManager?.getTotal() ?? 0;
+    if (isGrid && gridLayout) {
+      return gridLayout.getTotalRows(rawTotal);
+    }
+    return rawTotal;
+  };
 
   // ===========================================================================
   // Groups Setup (when config.groups is present)
@@ -201,10 +251,19 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
-  // Create height cache (uses grouped height function when groups are active)
+  // Create height cache
+  // - Grid mode: height cache operates on ROWS, not items
+  // - Groups mode: uses grouped height function
+  // - Normal mode: uses item height directly
+  const initialTotal = hasGroups
+    ? (layoutItems?.length ?? 0)
+    : (initialItems?.length ?? 0);
+  const heightCacheTotal =
+    isGrid && gridLayout ? gridLayout.getTotalRows(initialTotal) : initialTotal;
+
   const heightCache = createHeightCache(
     effectiveHeightConfig,
-    hasGroups ? (layoutItems?.length ?? 0) : (initialItems?.length ?? 0),
+    heightCacheTotal,
   );
 
   // Mutable reference to context (needed for callbacks that run after ctx is created)
@@ -249,14 +308,15 @@ export const createVList = <T extends VListItem = VListItem>(
     onStateChange: () => {
       if (ctxRef?.state.isInitialized) {
         // Rebuild height cache when items change
-        heightCache.rebuild(ctxRef.dataManager.getTotal());
+        // In grid mode, rebuild with row count instead of item count
+        heightCache.rebuild(getVirtualTotal());
         updateViewport();
       }
     },
     onItemsLoaded: (loadedItems, _offset, total) => {
       if (ctxRef?.state.isInitialized) {
         // Rebuild height cache when items are loaded
-        heightCache.rebuild(ctxRef.dataManager.getTotal());
+        heightCache.rebuild(getVirtualTotal());
         // Always re-render when items load - the current range may have placeholders
         forceRender();
         emitter.emit("load:end", { items: loadedItems, total });
@@ -281,16 +341,15 @@ export const createVList = <T extends VListItem = VListItem>(
     : getContainerDimensions(dom.viewport);
 
   // Get initial compression state (must be before createViewportState which uses it)
-  const initialCompression = getCompression(
-    dataManager.getTotal(),
-    heightCache,
-  );
+  // In grid mode, use row count for compression (rows are what the virtualizer sees)
+  const initialVirtualTotal = getVirtualTotal();
+  const initialCompression = getCompression(initialVirtualTotal, heightCache);
 
   // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
     dimensions.height,
     heightCache,
-    dataManager.getTotal(),
+    initialVirtualTotal,
     overscan,
     initialCompression,
   );
@@ -334,13 +393,34 @@ export const createVList = <T extends VListItem = VListItem>(
     dom.root.classList.add(`${classPrefix}--grouped`);
   }
 
-  const renderer = createRenderer<T>(
-    dom.items,
-    template,
-    heightCache,
-    classPrefix,
-    () => dataManager.getTotal(),
-  );
+  // Create renderer (grid mode uses a specialised 2D renderer)
+  let renderer: ReturnType<typeof createRenderer<T>>;
+
+  if (isGrid && gridLayout) {
+    // Add grid CSS class to root
+    dom.root.classList.add(`${classPrefix}--grid`);
+
+    gridRenderer = createGridRenderer<T>(
+      dom.items,
+      template,
+      heightCache,
+      gridLayout,
+      classPrefix,
+      dimensions.width,
+    );
+
+    // The grid renderer satisfies the same interface as the list renderer
+    // (render, updatePositions, updateItem, updateItemClasses, getElement, clear, destroy)
+    renderer = gridRenderer as unknown as ReturnType<typeof createRenderer<T>>;
+  } else {
+    renderer = createRenderer<T>(
+      dom.items,
+      template,
+      heightCache,
+      classPrefix,
+      () => dataManager.getTotal(),
+    );
+  }
 
   // Create scrollbar (auto-enable when compressed, but never in window mode
   // where the browser's native scrollbar is used)
@@ -417,6 +497,8 @@ export const createVList = <T extends VListItem = VListItem>(
         totalItems: dataManager.getTotal(),
       },
     },
+    // In grid mode, the virtual total is the row count (not item count)
+    isGrid ? getVirtualTotal : undefined,
   ));
 
   // ===========================================================================
@@ -427,7 +509,7 @@ export const createVList = <T extends VListItem = VListItem>(
    * Update compression mode when total items changes
    */
   const updateCompressionMode = (): void => {
-    const total = dataManager.getTotal();
+    const total = getVirtualTotal();
     const compression = getCompression(total, heightCache);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
@@ -479,10 +561,11 @@ export const createVList = <T extends VListItem = VListItem>(
 
     // Update viewport state with new item count
     // Pass cached compression to avoid allocating a new CompressionState
+    // In grid mode, use virtual total (row count)
     ctx.state.viewportState = updateViewportItems(
       ctx.state.viewportState,
       heightCache,
-      dataManager.getTotal(),
+      getVirtualTotal(),
       overscan,
       ctx.getCachedCompression(),
     );
@@ -492,6 +575,38 @@ export const createVList = <T extends VListItem = VListItem>(
 
     // Re-render
     renderIfNeeded();
+  };
+
+  /**
+   * Get items for rendering.
+   * In grid mode, the renderRange is in ROW indices, so we convert to flat item indices.
+   * In list mode, the renderRange IS the flat item range.
+   */
+  const getItemsForRendering = (renderRange: {
+    start: number;
+    end: number;
+  }): {
+    items: T[];
+    itemRange: { start: number; end: number };
+  } => {
+    if (isGrid && gridLayout) {
+      // Convert row range to flat item range
+      const totalItems = dataManager.getTotal();
+      const itemRange = gridLayout.getItemRange(
+        renderRange.start,
+        renderRange.end,
+        totalItems,
+      );
+      const items = dataManager.getItemsInRange(
+        itemRange.start,
+        itemRange.end,
+      ) as T[];
+      return { items, itemRange };
+    }
+
+    // Normal list/groups mode: range is already flat item indices
+    const items = ctx.getItemsForRange(renderRange);
+    return { items, itemRange: renderRange };
   };
 
   /**
@@ -515,15 +630,19 @@ export const createVList = <T extends VListItem = VListItem>(
       return;
     }
 
-    // Render new range
-    const items = ctx.getItemsForRange(renderRange);
+    // Get items for rendering (grid converts row range → item range)
+    const { items, itemRange } = getItemsForRendering(renderRange);
     const compressionCtx = isCompressed
       ? ctx.getCompressionContext()
       : undefined;
 
+    // In grid mode, pass the ITEM range to the renderer (it positions by item index)
+    // In list mode, pass the row/render range as-is
+    const rendererRange = isGrid ? itemRange : renderRange;
+
     renderer.render(
       items,
-      renderRange,
+      rendererRange,
       ctx.state.selectionState.selected,
       ctx.state.selectionState.focusedIndex,
       compressionCtx,
@@ -542,14 +661,16 @@ export const createVList = <T extends VListItem = VListItem>(
     if (ctx.state.isDestroyed) return;
 
     const { renderRange, isCompressed } = ctx.state.viewportState;
-    const items = ctx.getItemsForRange(renderRange);
+    const { items, itemRange } = getItemsForRendering(renderRange);
     const compressionCtx = isCompressed
       ? ctx.getCompressionContext()
       : undefined;
 
+    const rendererRange = isGrid ? itemRange : renderRange;
+
     renderer.render(
       items,
-      renderRange,
+      rendererRange,
       ctx.state.selectionState.selected,
       ctx.state.selectionState.focusedIndex,
       compressionCtx,
@@ -660,6 +781,7 @@ export const createVList = <T extends VListItem = VListItem>(
 
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
+      const newWidth = entry.contentRect.width;
       const currentHeight = ctx.state.viewportState.containerHeight;
 
       // Only update if height changed significantly (>1px to avoid float precision issues)
@@ -668,7 +790,7 @@ export const createVList = <T extends VListItem = VListItem>(
           ctx.state.viewportState,
           newHeight,
           heightCache,
-          dataManager.getTotal(),
+          getVirtualTotal(),
           overscan,
           ctx.getCachedCompression(),
         );
@@ -688,8 +810,13 @@ export const createVList = <T extends VListItem = VListItem>(
         // Emit resize event
         emitter.emit("resize", {
           height: newHeight,
-          width: entry.contentRect.width,
+          width: newWidth,
         });
+      }
+
+      // In grid mode, update column widths when container width changes
+      if (isGrid && gridRenderer) {
+        gridRenderer.updateContainerWidth(newWidth);
       }
     }
   });
@@ -713,7 +840,7 @@ export const createVList = <T extends VListItem = VListItem>(
           ctx.state.viewportState,
           newHeight,
           heightCache,
-          dataManager.getTotal(),
+          getVirtualTotal(),
           overscan,
           ctx.getCachedCompression(),
         );
@@ -757,7 +884,11 @@ export const createVList = <T extends VListItem = VListItem>(
     if (stickyHeader) {
       stickyHeader.destroy();
     }
-    renderer.destroy();
+    if (gridRenderer) {
+      gridRenderer.destroy();
+    } else {
+      renderer.destroy();
+    }
     emitter.clear();
 
     // Remove DOM
@@ -819,6 +950,7 @@ export const createVList = <T extends VListItem = VListItem>(
       if (hasGroups) {
         return originalItems.length;
       }
+      // In grid mode, return the flat item count (not row count)
       return dataManager.getTotal();
     },
 

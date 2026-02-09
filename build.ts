@@ -38,10 +38,13 @@ async function build() {
   const subStart = performance.now();
 
   const subModules = [
+    { entry: "./src/core.ts", out: "core" },
     { entry: "./src/data/index.ts", out: "data" },
     { entry: "./src/compression.ts", out: "compression" },
     { entry: "./src/selection/index.ts", out: "selection" },
     { entry: "./src/scroll/index.ts", out: "scroll" },
+    { entry: "./src/groups/index.ts", out: "groups" },
+    { entry: "./src/grid/index.ts", out: "grid" },
   ];
 
   const subResults: { name: string; size: string }[] = [];
