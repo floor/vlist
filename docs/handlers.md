@@ -97,12 +97,14 @@ const canLoad = velocityReliable && currentVelocity <= cancelLoadThreshold;
 
 During the **ramp-up phase** (first few frames of a new scroll gesture), `isTracking()` returns `false` and loading is deferred to idle. This prevents spurious API requests caused by the velocity tracker not yet having enough samples to give reliable readings — a problem that was especially visible during fast scrollbar drags.
 
+The `canLoad` flag gates **both** `ensureRange` (sparse data loading) **and** `loadMore` (infinite scroll). Without this, a fast scrollbar drag to the bottom of a million-item list would trigger `loadMore` for offset=100 (the next sequential chunk after the initial load) even though the visible range is near offset=999900.
+
 | State | Behavior |
 |-------|----------|
-| Ramp-up (`isTracking() === false`) | Defer loading to idle |
+| Ramp-up (`isTracking() === false`) | Defer all loading to idle |
 | Slow (< `preloadThreshold`) | Load visible range only |
 | Medium (`preloadThreshold` to `cancelThreshold`) | Preload items ahead in scroll direction |
-| Fast (> `cancelThreshold`) | Skip loading, defer to idle |
+| Fast (> `cancelThreshold`) | Skip all loading, defer to idle |
 
 The thresholds are configurable via `LoadingConfig`:
 
@@ -227,14 +229,18 @@ function handleScrollInternal(scrollTop: number, direction: 'up' | 'down') {
   // 5. Emit scroll event
   ctx.emitter.emit('scroll', { scrollTop, direction });
   
-  // 6. Check for infinite scroll
-  if (shouldLoadMore()) {
+  // 6. Check for infinite scroll (velocity-gated)
+  if (canLoad && shouldLoadMore()) {
     ctx.emitter.emit('load:start', { offset, limit });
     ctx.dataManager.loadMore();
   }
   
-  // 7. Ensure visible data is loaded
-  ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+  // 7. Ensure visible data is loaded (velocity-gated)
+  if (canLoad) {
+    ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+  } else {
+    pendingRange = renderRange;  // defer to idle
+  }
 }
 ```
 
@@ -447,20 +453,25 @@ Focus movement functions (`moveFocusUp`, `moveFocusDown`, `moveFocusToFirst`, `m
 
 ### Infinite Scroll Trigger
 
-The scroll handler triggers data loading when near the bottom:
+The scroll handler triggers data loading when near the bottom. Like `ensureRange`, this is gated by `canLoad` to prevent spurious requests during fast scrolling (e.g. a scrollbar drag from top to bottom would otherwise fire `loadMore` for offset=100 when the user is already viewing the end of a million-item list):
 
 ```typescript
 const LOAD_MORE_THRESHOLD = 200;  // pixels from bottom
 
-const distanceFromBottom = 
-  totalHeight - scrollTop - containerHeight;
+// Only when velocity allows loading
+if (canLoad) {
+  const distanceFromBottom = 
+    totalHeight - scrollTop - containerHeight;
 
-if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
-  if (!ctx.dataManager.getIsLoading() && ctx.dataManager.getHasMore()) {
-    ctx.emitter.emit('load:start', { offset, limit });
-    ctx.dataManager.loadMore();
+  if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
+    if (!ctx.dataManager.getIsLoading() && ctx.dataManager.getHasMore()) {
+      ctx.emitter.emit('load:start', { offset, limit });
+      ctx.dataManager.loadMore();
+    }
   }
 }
+// When scrolling fast, loadMore is skipped entirely.
+// The idle handler loads the correct visible range via ensureRange.
 ```
 
 ## Handler Registration

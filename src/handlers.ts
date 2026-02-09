@@ -139,7 +139,12 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Check for infinite scroll (use virtual height for distance calculation)
     // Use direct getters to avoid object allocation
+    // Protected by canLoad: during fast scrolling (high velocity or ramp-up),
+    // skip loadMore to avoid fetching the next sequential chunk when the user
+    // has already scrolled far past it (e.g. scrollbar drag to bottom would
+    // request offset=100 when the visible range is near offset=999900).
     if (
+      canLoad &&
       ctx.config.hasAdapter &&
       !ctx.dataManager.getIsLoading() &&
       ctx.dataManager.getHasMore()
