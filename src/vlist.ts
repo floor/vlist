@@ -173,9 +173,13 @@ export const createVList = <T extends VListItem = VListItem>(
     },
   });
 
-  // In window mode, the viewport doesn't scroll — it sits in the page flow.
-  // Remove the fixed height and overflow so the content div drives the page height.
+  // In window mode, the list sits in the page flow — no inner scrollbar,
+  // no clipping. Override the CSS defaults on both root and viewport so the
+  // content div's height (totalHeight or virtualHeight) flows through to
+  // the document, giving the browser scrollbar the correct page length.
   if (isWindowMode) {
+    dom.root.style.overflow = "visible";
+    dom.root.style.height = "auto";
     dom.viewport.style.overflow = "visible";
     dom.viewport.style.height = "auto";
   }
@@ -482,6 +486,13 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const resizeObserver = new ResizeObserver((entries) => {
     if (ctx.state.isDestroyed) return;
+
+    // In window mode, the viewport has height:auto so its size reflects the
+    // *content* height (e.g. 880,000 px for 10K items), NOT the visible area.
+    // Using that value as containerHeight would make vlist think the entire
+    // content is visible and render ALL items, destroying performance.
+    // The window resize listener (below) handles containerHeight instead.
+    if (isWindowMode) return;
 
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;

@@ -118,6 +118,9 @@
             .icon-velocity {
                 background: linear-gradient(135deg, #667eea 0%, #43e97b 100%);
             }
+            .icon-window {
+                background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            }
 
             .sandbox-content {
                 flex: 1;
@@ -276,6 +279,20 @@
                         <div class="sandbox-description">
                             Smart loading that skips requests when scrolling
                             fast and loads immediately when velocity drops.
+                        </div>
+                    </div>
+                    <div class="sandbox-arrow">→</div>
+                </a>
+
+                <a href="/sandbox/window-scroll/" class="sandbox-card">
+                    <div class="sandbox-icon icon-window">🌍</div>
+                    <div class="sandbox-content">
+                        <div class="sandbox-title">Window Scroll</div>
+                        <div class="sandbox-description">
+                            Document-level scrolling with
+                            <code>scrollElement: window</code>. The list sits in
+                            the normal page flow — no inner scrollbar, just the
+                            browser's native scrollbar.
                         </div>
                     </div>
                     <div class="sandbox-arrow">→</div>
