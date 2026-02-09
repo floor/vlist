@@ -86,8 +86,13 @@ export const createScrollHandler = <T extends VListItem>(
 
     // Get current velocity for threshold checks
     const currentVelocity = ctx.scrollController.getVelocity();
+    const velocityReliable = ctx.scrollController.isTracking();
     const { cancelLoadThreshold, preloadThreshold, preloadAhead } = ctx.config;
-    const canLoad = currentVelocity <= cancelLoadThreshold;
+
+    // Only allow loading when:
+    // 1. The velocity tracker has enough samples to be reliable (not during ramp-up)
+    // 2. The measured velocity is below the cancellation threshold
+    const canLoad = velocityReliable && currentVelocity <= cancelLoadThreshold;
 
     // Check if velocity just dropped below threshold - load pending range immediately
     // This creates smoother transitions vs waiting for idle

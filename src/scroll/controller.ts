@@ -70,6 +70,13 @@ export interface ScrollController {
   /** Get current scroll velocity (px/ms, absolute value) */
   getVelocity: () => number;
 
+  /**
+   * Check if the velocity tracker is actively tracking with enough samples.
+   * Returns false during ramp-up (first few frames of a new scroll gesture)
+   * when the tracker doesn't have enough samples yet.
+   */
+  isTracking: () => boolean;
+
   /** Check if currently scrolling */
   isScrolling: () => boolean;
 
@@ -94,7 +101,18 @@ export interface ScrollController {
 // =============================================================================
 
 /** Number of samples in circular buffer (avoids array allocation on every update) */
-const VELOCITY_SAMPLE_COUNT = 5;
+const VELOCITY_SAMPLE_COUNT = 8;
+
+/** Minimum samples needed before velocity readings are considered reliable */
+const MIN_RELIABLE_SAMPLES = 3;
+
+/**
+ * Maximum time gap (ms) between samples before the buffer is considered stale.
+ * After a pause longer than this, previous samples no longer represent the
+ * current scroll gesture — we reset and start measuring fresh.
+ * Set below the idle timeout (150ms) so stale detection triggers before idle.
+ */
+const STALE_GAP_MS = 100;
 
 interface VelocitySample {
   position: number;
@@ -139,6 +157,25 @@ const updateVelocityTracker = (
 
   if (timeDelta === 0) return tracker;
 
+  // Stale gap detection: if too much time has passed since the last sample,
+  // the previous measurements belong to a different scroll gesture.
+  // Reset the buffer and record this position as the new baseline.
+  // Velocity stays at 0 (unreliable) until MIN_RELIABLE_SAMPLES accumulate.
+  if (timeDelta > STALE_GAP_MS) {
+    tracker.sampleCount = 0;
+    tracker.sampleIndex = 0;
+    tracker.velocity = 0;
+    // Record baseline — first real velocity will be computed on the next update
+    const baseline = tracker.samples[0]!;
+    baseline.position = newPosition;
+    baseline.time = now;
+    tracker.sampleIndex = 1;
+    tracker.sampleCount = 1;
+    tracker.lastPosition = newPosition;
+    tracker.lastTime = now;
+    return tracker;
+  }
+
   // Write to current slot in circular buffer (no allocation)
   const currentSample = tracker.samples[tracker.sampleIndex]!;
   currentSample.position = newPosition;
@@ -151,32 +188,28 @@ const updateVelocityTracker = (
     VELOCITY_SAMPLE_COUNT,
   );
 
-  // Calculate average velocity from samples
-  let avgVelocity: number;
-
-  if (tracker.sampleCount > 1) {
-    // Find oldest valid sample (circular buffer)
+  // Calculate average velocity from samples (only when we have enough data)
+  if (tracker.sampleCount >= 2) {
     const oldestIndex =
       (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
       VELOCITY_SAMPLE_COUNT;
     const oldest = tracker.samples[oldestIndex]!;
     const totalDistance = newPosition - oldest.position;
     const totalTime = now - oldest.time;
-    avgVelocity =
-      totalTime > 0
-        ? totalDistance / totalTime
-        : (newPosition - tracker.lastPosition) / timeDelta;
-  } else {
-    avgVelocity = (newPosition - tracker.lastPosition) / timeDelta;
+    tracker.velocity = totalTime > 0 ? totalDistance / totalTime : 0;
   }
+  // sampleCount < 2: keep velocity at 0 (not enough data yet)
 
-  // Update tracker state (mutate in place to avoid allocation)
-  tracker.velocity = avgVelocity;
+  // Update position/time baseline (mutate in place to avoid allocation)
   tracker.lastPosition = newPosition;
   tracker.lastTime = now;
 
   return tracker;
 };
+
+/** Check if the velocity tracker has accumulated enough samples for reliable readings */
+const isVelocityTrackerReliable = (tracker: VelocityTracker): boolean =>
+  tracker.sampleCount >= MIN_RELIABLE_SAMPLES;
 
 // =============================================================================
 // Scroll Controller Factory
@@ -375,16 +408,28 @@ export const createScrollController = (
     );
 
     if (compressed) {
+      if (clampedPosition === scrollPosition) return;
+
       const previousPosition = scrollPosition;
+      const direction: ScrollDirection =
+        clampedPosition >= previousPosition ? "down" : "up";
+
+      velocityTracker = updateVelocityTracker(velocityTracker, clampedPosition);
       scrollPosition = clampedPosition;
+
+      if (!isScrolling) {
+        isScrolling = true;
+      }
 
       if (onScroll) {
         onScroll({
           scrollTop: scrollPosition,
-          direction: scrollPosition >= previousPosition ? "down" : "up",
-          velocity: 0,
+          direction,
+          velocity: velocityTracker.velocity,
         });
       }
+
+      scheduleIdleCheck();
     } else {
       viewport.scrollTo({
         top: clampedPosition,
@@ -429,6 +474,9 @@ export const createScrollController = (
 
   const getVelocityValue = (): number => Math.abs(velocityTracker.velocity);
 
+  const getIsTracking = (): boolean =>
+    isVelocityTrackerReliable(velocityTracker);
+
   const getIsScrolling = (): boolean => isScrolling;
 
   const destroy = (): void => {
@@ -464,6 +512,7 @@ export const createScrollController = (
     isAtBottom,
     getScrollPercentage,
     getVelocity: getVelocityValue,
+    isTracking: getIsTracking,
     isScrolling: getIsScrolling,
     updateConfig,
     enableCompression,
