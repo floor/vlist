@@ -3,6 +3,8 @@
  * Minimal, clean interfaces for the virtual list
  */
 
+import type { GroupsConfig } from "./groups/types";
+
 // =============================================================================
 // Event Map Base Type
 // =============================================================================
@@ -85,6 +87,16 @@ export interface VListConfig<T extends VListItem = VListItem> {
 
   /** Accessible label for the listbox (sets aria-label on the root element) */
   ariaLabel?: string;
+
+  /**
+   * Groups configuration for sticky headers / grouped lists.
+   * When set, items are automatically grouped and section headers
+   * are inserted at group boundaries.
+   *
+   * Items MUST be pre-sorted by group — a new header is inserted
+   * whenever `getGroupForIndex` returns a different value.
+   */
+  groups?: GroupsConfig;
 }
 
 // =============================================================================
