@@ -257,13 +257,13 @@ VList wiring:
 
 ## Phase 3 — Advanced Patterns
 
-### 7. Sticky Headers / Grouped Lists
+### 7. ✅ Sticky Headers / Grouped Lists
 
-**Priority:** Medium.
+**Priority:** Medium. **Status: DONE**
 
 **Problem:** Grouped lists with sticky section headers (like iOS Contacts: A, B, C...) are a ubiquitous UI pattern. No vanilla library does this cleanly.
 
-**Approach:**
+**Solution:** Added a `groups` configuration option to `createVList` that automatically derives group boundaries from a user-provided function, inserts header pseudo-items into the layout, and manages a sticky header overlay element.
 
 ```typescript
 const list = createVList({
@@ -279,13 +279,16 @@ const list = createVList({
 });
 ```
 
-**Architecture impact:**
-- Group headers are virtual items with special positioning
-- Sticky headers need `position: sticky` or manual positioning outside the virtual container
-- Scroll calculations must account for header heights interspersed with items
-- Builds naturally on variable height support (Phase 1)
-
-**Estimated effort:** Medium — depends on variable heights being done first.
+**Implementation details:**
+- New `src/groups/` module: `layout.ts` (group boundary computation, O(log g) index mapping), `sticky.ts` (floating header overlay with push-out transition), `types.ts`
+- Group headers are virtual pseudo-items interleaved with data items via `buildLayoutItems()`
+- `createGroupedHeightFn()` wraps the item height config to return header heights at group boundaries
+- Sticky header is an absolutely-positioned overlay element updated on scroll — classic iOS Contacts-style push-out effect when the next group's header approaches
+- Public API (`items`, `total`, `scrollToIndex`, data methods) transparently maps between data indices and layout indices
+- Works with fixed and variable item heights, compression, and all existing features
+- 45 new tests for group layout computation, index mapping round-trips, and edge cases
+- Sandbox example: `sandbox/sticky-headers/` — 2,000 contacts grouped A–Z
+- CSS: `.vlist--grouped` modifier, `.vlist-sticky-header` overlay, `--vlist-group-header-bg` custom property
 
 ---
 
@@ -486,8 +489,8 @@ list.restoreScroll(saved);
 | 3 | Shrink bundle size | 🟠 High | Medium | 1 | ✅ Done |
 | 4 | Horizontal scrolling | 🟡 Medium | Medium | 2 | 🟡 Pending |
 | 5 | Grid layout | 🟡 Medium | Medium-Large | 2 | 🟡 Pending |
-| 6 | Window scrolling | 🟡 Medium | Medium | 2 | 🟡 Pending |
-| 7 | Sticky headers | 🟡 Medium | Medium | 3 | 🟡 Pending |
+| 6 | Window scrolling | 🟡 Medium | Medium | 2 | ✅ Done |
+| 7 | Sticky headers | 🟡 Medium | Medium | 3 | ✅ Done |
 | 8 | Reverse mode (chat) | 🟡 Medium | Medium-Large | 3 | 🟡 Pending |
 | 9 | Framework adapters | 🟡 Medium | Small each | 3 | 🟡 Pending |
 | 10 | Public benchmarks | 🟠 High | Medium | 4 | 🟡 Pending |

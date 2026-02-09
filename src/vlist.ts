@@ -51,6 +51,18 @@ import {
   createSelectionMethods,
 } from "./methods";
 
+// Groups domain
+import {
+  createGroupLayout,
+  buildLayoutItems,
+  createGroupedHeightFn,
+  createStickyHeader,
+  isGroupHeader,
+  type GroupLayout,
+  type StickyHeader as StickyHeaderInstance,
+  type GroupHeaderItem,
+} from "./groups";
+
 // Constants
 import {
   DEFAULT_OVERSCAN,
@@ -115,11 +127,13 @@ export const createVList = <T extends VListItem = VListItem>(
     classPrefix = DEFAULT_CLASS_PREFIX,
     scrollElement,
     ariaLabel,
+    groups: groupsConfig,
   } = config;
 
   const isWindowMode = !!scrollElement;
+  const hasGroups = !!groupsConfig;
 
-  const { height: itemHeightConfig, template } = itemConfig;
+  const { height: itemHeightConfig, template: userTemplate } = itemConfig;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
@@ -129,6 +143,52 @@ export const createVList = <T extends VListItem = VListItem>(
   const preloadThreshold =
     loadingConfig?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
   const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
+
+  // ===========================================================================
+  // Groups Setup (when config.groups is present)
+  // ===========================================================================
+
+  // Group layout maps between data indices and layout indices.
+  // When groups are active, the data manager sees "layout items" (items + headers)
+  // and the height cache uses a grouped height function.
+  let groupLayout: GroupLayout | null = null;
+  let stickyHeader: StickyHeaderInstance | null = null;
+
+  // Original items are stored separately so public API can return them
+  let originalItems: T[] = initialItems ? [...initialItems] : [];
+
+  // Transform items and height function when groups are active
+  let layoutItems: T[] | Array<T | GroupHeaderItem> = initialItems ?? [];
+  let effectiveHeightConfig: number | ((index: number) => number) =
+    itemHeightConfig;
+
+  // Unified template: dispatches to headerTemplate or user template
+  let template = userTemplate;
+
+  if (hasGroups && groupsConfig) {
+    groupLayout = createGroupLayout(originalItems.length, groupsConfig);
+
+    // Build layout items with headers inserted at group boundaries
+    layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+
+    // Create a grouped height function
+    effectiveHeightConfig = createGroupedHeightFn(
+      groupLayout,
+      itemHeightConfig,
+    );
+
+    // Create a unified template that renders headers or items
+    const headerTemplate = groupsConfig.headerTemplate;
+    template = ((item: T | GroupHeaderItem, index: number, state: any) => {
+      if (isGroupHeader(item)) {
+        return headerTemplate(
+          (item as GroupHeaderItem).groupKey,
+          (item as GroupHeaderItem).groupIndex,
+        );
+      }
+      return userTemplate(item as T, index, state);
+    }) as typeof userTemplate;
+  }
 
   // ===========================================================================
   // Create Domain Components
@@ -141,20 +201,50 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
 
-  // Create height cache (fixed or variable based on config)
+  // Create height cache (uses grouped height function when groups are active)
   const heightCache = createHeightCache(
-    itemHeightConfig,
-    initialItems?.length ?? 0,
+    effectiveHeightConfig,
+    hasGroups ? (layoutItems?.length ?? 0) : (initialItems?.length ?? 0),
   );
 
   // Mutable reference to context (needed for callbacks that run after ctx is created)
   let ctxRef: VListContext<T> | null = null;
 
-  // Create data manager
+  /**
+   * Rebuild group layout and re-transform items.
+   * Called when the underlying data changes (setItems, append, etc.)
+   */
+  const rebuildGroups = (): void => {
+    if (!groupLayout || !groupsConfig) return;
+
+    // Rebuild group boundaries from current original items
+    groupLayout.rebuild(originalItems.length);
+
+    // Rebuild layout items
+    layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+
+    // Rebuild height function (the closure captures the updated groupLayout)
+    effectiveHeightConfig = createGroupedHeightFn(
+      groupLayout,
+      itemHeightConfig,
+    );
+
+    // Refresh sticky header content
+    if (stickyHeader) {
+      stickyHeader.refresh();
+    }
+  };
+
+  // Create data manager (uses layout items when groups are active)
+  const effectiveItems = hasGroups ? layoutItems : initialItems;
   const dataManager = createDataManager<T>({
     ...(adapter ? { adapter } : {}),
-    ...(initialItems ? { initialItems } : {}),
-    ...(initialItems?.length ? { initialTotal: initialItems.length } : {}),
+    ...(effectiveItems && effectiveItems.length > 0
+      ? { initialItems: effectiveItems as T[] }
+      : {}),
+    ...(effectiveItems && effectiveItems.length > 0
+      ? { initialTotal: effectiveItems.length }
+      : {}),
     pageSize: INITIAL_LOAD_SIZE,
     onStateChange: () => {
       if (ctxRef?.state.isInitialized) {
@@ -239,6 +329,11 @@ export const createVList = <T extends VListItem = VListItem>(
   });
 
   // Create renderer
+  // Add group-header CSS class to root when groups are active
+  if (hasGroups) {
+    dom.root.classList.add(`${classPrefix}--grouped`);
+  }
+
   const renderer = createRenderer<T>(
     dom.items,
     template,
@@ -270,9 +365,32 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create Context
   // ===========================================================================
 
+  // ===========================================================================
+  // Create Sticky Header (when groups.sticky is enabled)
+  // ===========================================================================
+
+  if (
+    hasGroups &&
+    groupsConfig &&
+    groupLayout &&
+    groupsConfig.sticky !== false
+  ) {
+    stickyHeader = createStickyHeader(
+      dom.root,
+      groupLayout,
+      heightCache,
+      groupsConfig,
+      classPrefix,
+    );
+  }
+
+  // ===========================================================================
+  // Create Context
+  // ===========================================================================
+
   const ctx: VListContext<T> = (ctxRef = createContext(
     {
-      itemHeight: itemHeightConfig,
+      itemHeight: effectiveHeightConfig,
       overscan,
       classPrefix,
       selectionMode,
@@ -446,6 +564,21 @@ export const createVList = <T extends VListItem = VListItem>(
   // Wire up the scroll handler reference for the scroll controller callbacks
   handleScrollRef = handleScroll;
 
+  // Wrap the scroll handler to also update the sticky header
+  if (stickyHeader) {
+    const originalHandleScroll = handleScroll;
+    const stickyRef = stickyHeader;
+    const wrappedHandleScroll = (
+      scrollTop: number,
+      direction: "up" | "down",
+    ): void => {
+      originalHandleScroll(scrollTop, direction);
+      stickyRef.update(scrollTop);
+    };
+    wrappedHandleScroll.loadPendingRange = handleScroll.loadPendingRange;
+    handleScrollRef = wrappedHandleScroll as typeof handleScroll;
+  }
+
   const handleClick = createClickHandler(ctx, forceRender);
 
   // Create scroll methods first (needed by keyboard handler)
@@ -456,7 +589,37 @@ export const createVList = <T extends VListItem = VListItem>(
   // Create API Methods
   // ===========================================================================
 
-  const dataMethods = createDataMethods(ctx);
+  const rawDataMethods = createDataMethods(ctx);
+
+  // Wrap data methods when groups are active to maintain group layout
+  const dataMethods = hasGroups
+    ? {
+        setItems: (items: T[]): void => {
+          originalItems = [...items];
+          rebuildGroups();
+          // Set the layout items (with headers) into the data manager
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        appendItems: (items: T[]): void => {
+          originalItems = [...originalItems, ...items];
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        prependItems: (items: T[]): void => {
+          originalItems = [...items, ...originalItems];
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        updateItem: rawDataMethods.updateItem,
+        removeItem: (id: string | number): void => {
+          // Remove from original items
+          originalItems = originalItems.filter((item) => item.id !== id);
+          rebuildGroups();
+          rawDataMethods.setItems(layoutItems as T[]);
+        },
+        reload: rawDataMethods.reload,
+      }
+    : rawDataMethods;
   const selectionMethods = createSelectionMethods(ctx);
 
   // ===========================================================================
@@ -591,6 +754,9 @@ export const createVList = <T extends VListItem = VListItem>(
     if (scrollbar) {
       scrollbar.destroy();
     }
+    if (stickyHeader) {
+      stickyHeader.destroy();
+    }
     renderer.destroy();
     emitter.clear();
 
@@ -616,6 +782,11 @@ export const createVList = <T extends VListItem = VListItem>(
   updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
   renderIfNeeded();
 
+  // Initialize sticky header with current scroll position
+  if (stickyHeader) {
+    stickyHeader.update(ctx.scrollController.getScrollTop());
+  }
+
   // Load initial data if using adapter
   if (adapter && (!initialItems || initialItems.length === 0)) {
     emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
@@ -636,18 +807,42 @@ export const createVList = <T extends VListItem = VListItem>(
     },
 
     get items() {
+      // When groups are active, return the original items (without headers)
+      if (hasGroups) {
+        return originalItems as readonly T[];
+      }
       return ctx.getAllLoadedItems() as readonly T[];
     },
 
     get total() {
+      // When groups are active, return the original item count (without headers)
+      if (hasGroups) {
+        return originalItems.length;
+      }
       return dataManager.getTotal();
     },
 
     // Data methods
     ...dataMethods,
 
-    // Scroll methods
-    ...scrollMethods,
+    // Scroll methods (wrapped for groups: data index → layout index)
+    ...(hasGroups && groupLayout
+      ? {
+          ...scrollMethods,
+          scrollToIndex: (
+            index: number,
+            alignOrOptions?:
+              | "start"
+              | "center"
+              | "end"
+              | import("./types").ScrollToOptions,
+          ): void => {
+            // Convert data index to layout index
+            const layoutIndex = groupLayout!.dataToLayoutIndex(index);
+            scrollMethods.scrollToIndex(layoutIndex, alignOrOptions);
+          },
+        }
+      : scrollMethods),
 
     // Selection methods
     select: selectionMethods.select,
