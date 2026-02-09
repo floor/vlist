@@ -86,9 +86,9 @@ interface VelocityTracker {
   velocity: number;      // Current velocity (px/ms)
   lastPosition: number;  // Previous scroll position
   lastTime: number;      // Timestamp of last update
-  samples: VelocitySample[];  // Pre-allocated circular buffer (5 samples)
+  samples: VelocitySample[];  // Pre-allocated circular buffer (8 samples)
   sampleIndex: number;   // Current write index
-  sampleCount: number;   // Number of valid samples (0-5)
+  sampleCount: number;   // Number of valid samples (0-8)
 }
 
 interface VelocitySample {
@@ -97,7 +97,19 @@ interface VelocitySample {
 }
 ```
 
-The circular buffer pre-allocates 5 sample slots and overwrites the oldest sample on each update, avoiding array allocation/spread operations during scrolling.
+The circular buffer pre-allocates 8 sample slots and overwrites the oldest sample on each update, avoiding array allocation/spread operations during scrolling.
+
+**Key constants:**
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `VELOCITY_SAMPLE_COUNT` | 8 | Buffer size (~133ms window at 60fps) for smooth averaging |
+| `MIN_RELIABLE_SAMPLES` | 3 | Minimum samples before `isTracking()` returns true |
+| `STALE_GAP_MS` | 100 | Max gap (ms) before buffer is considered stale |
+
+**Stale gap detection:** When more than 100ms passes between samples (e.g., after idle resets the tracker), the buffer is cleared and the current position becomes the new baseline. This prevents computing bogus low velocity from `small_delta / huge_time_gap` — a problem that caused spurious API requests at the start of scrollbar drags.
+
+**Reliability tracking:** `isTracking()` returns `false` until at least 3 samples have accumulated. The scroll handler uses this to defer loading during the ramp-up phase of a new scroll gesture, rather than trusting near-zero velocity readings.
 
 ## API Reference
 
@@ -161,6 +173,13 @@ interface ScrollController {
   
   /** Get current scroll velocity (px/ms, absolute value) */
   getVelocity: () => number;
+  
+  /**
+   * Check if the velocity tracker is actively tracking with enough samples.
+   * Returns false during ramp-up (first few frames of a new scroll gesture)
+   * when the tracker doesn't have enough samples yet.
+   */
+  isTracking: () => boolean;
   
   /** Check if currently scrolling */
   isScrolling: () => boolean;
@@ -598,25 +617,59 @@ viewport.addEventListener('scroll', throttledScroll, { passive: true });
 
 ### Velocity Sampling (Circular Buffer)
 
-Velocity is calculated using a pre-allocated circular buffer of 5 samples:
+Velocity is calculated using a pre-allocated circular buffer of 8 samples:
 
 ```typescript
-// Write to current slot (no allocation)
-const currentSample = tracker.samples[tracker.sampleIndex]!;
-currentSample.position = newPosition;
-currentSample.time = now;
+const SAMPLE_COUNT = 8;
+const STALE_GAP_MS = 100;
+const MIN_RELIABLE_SAMPLES = 3;
 
-// Advance index (wrap around)
-tracker.sampleIndex = (tracker.sampleIndex + 1) % SAMPLE_COUNT;
-tracker.sampleCount = Math.min(tracker.sampleCount + 1, SAMPLE_COUNT);
+function updateVelocityTracker(tracker, newPosition) {
+  const now = performance.now();
+  const timeDelta = now - tracker.lastTime;
 
-// Find oldest sample and calculate average velocity
-const oldestIndex = (tracker.sampleIndex - tracker.sampleCount + SAMPLE_COUNT) % SAMPLE_COUNT;
-const oldest = tracker.samples[oldestIndex]!;
-const avgVelocity = (newPosition - oldest.position) / (now - oldest.time);
+  // Stale gap detection: reset buffer after a pause (>100ms)
+  // Prevents bogus low velocity from small_delta / huge_time_gap
+  if (timeDelta > STALE_GAP_MS) {
+    tracker.sampleCount = 0;
+    tracker.sampleIndex = 0;
+    tracker.velocity = 0;
+    // Record baseline — real velocity computed on next update
+    tracker.samples[0] = { position: newPosition, time: now };
+    tracker.sampleIndex = 1;
+    tracker.sampleCount = 1;
+    return tracker;
+  }
+
+  // Write to current slot (no allocation)
+  const currentSample = tracker.samples[tracker.sampleIndex]!;
+  currentSample.position = newPosition;
+  currentSample.time = now;
+
+  // Advance index (wrap around)
+  tracker.sampleIndex = (tracker.sampleIndex + 1) % SAMPLE_COUNT;
+  tracker.sampleCount = Math.min(tracker.sampleCount + 1, SAMPLE_COUNT);
+
+  // Calculate average velocity (only with enough data)
+  if (tracker.sampleCount >= 2) {
+    const oldestIndex = (tracker.sampleIndex - tracker.sampleCount + SAMPLE_COUNT) % SAMPLE_COUNT;
+    const oldest = tracker.samples[oldestIndex]!;
+    tracker.velocity = (newPosition - oldest.position) / (now - oldest.time);
+  }
+
+  return tracker;
+}
+
+// Reliability check — used by scroll handler to defer loading during ramp-up
+function isTrackerReliable(tracker) {
+  return tracker.sampleCount >= MIN_RELIABLE_SAMPLES;
+}
 ```
 
-This approach eliminates array allocation and garbage collection during scrolling.
+This approach:
+- Eliminates array allocation and garbage collection during scrolling
+- Detects stale gaps after idle to prevent misleading velocity readings
+- Provides explicit reliability signaling via `isTracking()`
 
 ## Scrollbar Interactions
 

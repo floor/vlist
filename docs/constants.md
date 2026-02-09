@@ -217,7 +217,37 @@ const DEFAULT_EVICTION_BUFFER = 500;
 
 **Purpose**: Keeps recently viewed items in memory for quick scroll-back.
 
-### Scroll
+### Scroll & Velocity Tracking
+
+#### `VELOCITY_SAMPLE_COUNT`
+
+Number of samples in the velocity tracker's circular buffer.
+
+```typescript
+const VELOCITY_SAMPLE_COUNT = 8;
+```
+
+**Purpose**: Provides a ~133ms averaging window at 60fps for smooth, stable velocity readings. The circular buffer is pre-allocated to avoid garbage collection during scrolling.
+
+#### `MIN_RELIABLE_SAMPLES`
+
+Minimum samples needed before velocity readings are considered reliable.
+
+```typescript
+const MIN_RELIABLE_SAMPLES = 3;
+```
+
+**Purpose**: After idle resets the velocity tracker, the first few frames compute near-zero velocity (small position delta ÷ large stale time gap). `ScrollController.isTracking()` returns `false` until this threshold is met, preventing spurious API requests at the start of scrollbar drags.
+
+#### `STALE_GAP_MS`
+
+Maximum time gap (ms) between samples before the buffer is considered stale.
+
+```typescript
+const STALE_GAP_MS = 100;
+```
+
+**Purpose**: After a pause longer than 100ms, previous samples no longer represent the current scroll gesture. The velocity tracker resets its buffer and starts measuring fresh, rather than computing misleading velocity from outdated baselines. Set below the idle timeout (150ms) so stale detection triggers before idle.
 
 #### `SCROLL_IDLE_TIMEOUT`
 

@@ -84,10 +84,22 @@ handleScroll(scrollTop, 'down');
 
 **Velocity-Based Loading:**
 
-The scroll handler implements intelligent loading based on scroll velocity:
+The scroll handler implements intelligent loading based on scroll velocity. This works for both wheel scrolling and custom scrollbar drag (compressed mode).
 
-| Velocity | Behavior |
-|----------|----------|
+Loading decisions depend on two checks:
+1. **`isTracking()`** — Has the velocity tracker accumulated enough samples? (≥3 needed)
+2. **`getVelocity()`** — Is the measured velocity below the cancellation threshold?
+
+```typescript
+const velocityReliable = ctx.scrollController.isTracking();
+const canLoad = velocityReliable && currentVelocity <= cancelLoadThreshold;
+```
+
+During the **ramp-up phase** (first few frames of a new scroll gesture), `isTracking()` returns `false` and loading is deferred to idle. This prevents spurious API requests caused by the velocity tracker not yet having enough samples to give reliable readings — a problem that was especially visible during fast scrollbar drags.
+
+| State | Behavior |
+|-------|----------|
+| Ramp-up (`isTracking() === false`) | Defer loading to idle |
 | Slow (< `preloadThreshold`) | Load visible range only |
 | Medium (`preloadThreshold` to `cancelThreshold`) | Preload items ahead in scroll direction |
 | Fast (> `cancelThreshold`) | Skip loading, defer to idle |
