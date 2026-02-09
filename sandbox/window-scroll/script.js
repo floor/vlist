@@ -88,6 +88,7 @@ const itemTemplate = (item, index) => {
 // Create the virtual list with window scrolling + adapter
 const list = createVList({
   container: "#list-container",
+  ariaLabel: "User directory",
   scrollElement: window,
   item: {
     height: 88,

@@ -322,7 +322,7 @@ h1 {
 
 .dist-value {
     font-size: 12px;
-    color: #999;
+    color: #737373;
     width: 100px;
     text-align: right;
     flex-shrink: 0;
@@ -347,7 +347,7 @@ h1 {
     }
 
     .dist-value {
-        color: #707888;
+        color: #8890a0;
     }
 }
 
@@ -358,13 +358,13 @@ h1 {
 footer {
     margin-top: 20px;
     text-align: center;
-    color: #888;
+    color: #6b6b6b;
     font-size: 14px;
     line-height: 1.6;
 }
 
 @media (prefers-color-scheme: dark) {
     footer {
-        color: #607080;
+        color: #8890a0;
     }
 }
