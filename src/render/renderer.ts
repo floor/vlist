@@ -17,6 +17,7 @@ import {
   calculateCompressedItemPosition,
   type CompressionState,
 } from "./compression";
+import type { HeightCache } from "./heights";
 
 // =============================================================================
 // Types
@@ -160,7 +161,7 @@ export const createElementPool = (
 export const createRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
   template: ItemTemplate<T>,
-  itemHeight: number,
+  heightCache: HeightCache,
   classPrefix: string,
   _totalItemsGetter?: () => number,
 ): Renderer<T> => {
@@ -178,7 +179,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     if (cachedCompression && cachedTotalItems === totalItems) {
       return cachedCompression;
     }
-    cachedCompression = getCompressionState(totalItems, itemHeight);
+    cachedCompression = getCompressionState(totalItems, heightCache);
     cachedTotalItems = totalItems;
     return cachedCompression;
   };
@@ -216,11 +217,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Apply static styles to an element (called once when element is created)
+   * Apply static styles to an element (called once when element is created/recycled)
    * Only sets height — position/top/left/right are already in .vlist-item CSS
+   * For variable heights, the height depends on the item index.
    */
-  const applyStaticStyles = (element: HTMLElement): void => {
-    element.style.height = `${itemHeight}px`;
+  const applyStaticStyles = (element: HTMLElement, index: number): void => {
+    element.style.height = `${heightCache.getHeight(index)}px`;
   };
 
   /**
@@ -239,7 +241,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
         return calculateCompressedItemPosition(
           index,
           compressionCtx.scrollTop,
-          itemHeight,
+          heightCache,
           compressionCtx.totalItems,
           compressionCtx.containerHeight,
           compression,
@@ -248,7 +250,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
       }
     }
     // Normal positioning (non-compressed or no context)
-    return index * itemHeight;
+    return heightCache.getOffset(index);
   };
 
   /**
@@ -303,7 +305,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     const state = getItemState(isSelected, isFocused);
 
     // Apply static styles once (position, dimensions)
-    applyStaticStyles(element);
+    applyStaticStyles(element, index);
 
     // Apply base class once
     applyBaseClass(element);
@@ -378,6 +380,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
           const result = template(item, i, state);
           applyTemplate(existing.element, result);
           existing.element.dataset.id = newId;
+          // Update height in case variable heights differ for the new item
+          applyStaticStyles(existing.element, i);
         }
 
         // Always update classes, selection state, and position

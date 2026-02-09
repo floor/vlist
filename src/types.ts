@@ -26,8 +26,13 @@ export interface VListItem {
 
 /** Item-specific configuration */
 export interface ItemConfig<T extends VListItem = VListItem> {
-  /** Fixed item height in pixels (required for virtual scrolling) */
-  height: number;
+  /**
+   * Item height in pixels (required for virtual scrolling)
+   *
+   * - `number` — Fixed height for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   */
+  height: number | ((index: number) => number);
 
   /** Template function to render each item */
   template: ItemTemplate<T>;
