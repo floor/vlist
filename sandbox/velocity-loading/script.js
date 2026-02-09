@@ -213,6 +213,7 @@ const createVelocityExample = (container) => {
   const createList = () => {
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Virtual user list",
       item: {
         height: 72,
         template: (item, index) => {
