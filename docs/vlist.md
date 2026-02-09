@@ -268,14 +268,45 @@ list.reload(): Promise<void>
 #### Scrolling
 
 ```typescript
-// Scroll to a specific index
+// Scroll to a specific index (instant)
 list.scrollToIndex(index: number, align?: 'start' | 'center' | 'end'): void
 
-// Scroll to a specific item by ID
+// Scroll to a specific index (with options — supports smooth scrolling)
+list.scrollToIndex(index: number, options?: ScrollToOptions): void
+
+// Scroll to a specific item by ID (instant)
 list.scrollToItem(id: string | number, align?: 'start' | 'center' | 'end'): void
+
+// Scroll to a specific item by ID (with options)
+list.scrollToItem(id: string | number, options?: ScrollToOptions): void
+
+// Cancel any in-progress smooth scroll animation
+list.cancelScroll(): void
 
 // Get current scroll position
 list.getScrollPosition(): number
+
+interface ScrollToOptions {
+  align?: 'start' | 'center' | 'end';   // default: 'start'
+  behavior?: 'auto' | 'smooth';          // default: 'auto' (instant)
+  duration?: number;                      // default: 300 (ms, smooth only)
+}
+```
+
+**Smooth scrolling examples:**
+
+```typescript
+// Smooth scroll to center
+list.scrollToIndex(500, { align: 'center', behavior: 'smooth' });
+
+// Smooth scroll with custom duration
+list.scrollToIndex(500, { behavior: 'smooth', duration: 500 });
+
+// Smooth scroll to item by ID
+list.scrollToItem('user-123', { align: 'center', behavior: 'smooth' });
+
+// Cancel in-progress animation
+list.cancelScroll();
 ```
 
 #### Selection
@@ -916,8 +947,9 @@ const list = createVList({
 });
 
 // Navigate anywhere in the list
-list.scrollToIndex(500_000, 'center'); // Jump to middle
-list.scrollToIndex(999_999, 'end');    // Jump to end
+list.scrollToIndex(500_000, 'center');                          // Jump to middle (instant)
+list.scrollToIndex(999_999, 'end');                             // Jump to end (instant)
+list.scrollToIndex(500_000, { align: 'center', behavior: 'smooth' }); // Smooth scroll
 ```
 
 ### Compression Utilities

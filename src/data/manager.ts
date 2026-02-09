@@ -196,8 +196,17 @@ export const createDataManager = <T extends VListItem = VListItem>(
     },
   });
 
-  // Create placeholder manager
-  const placeholders = createPlaceholderManager<T>(placeholderConfig);
+  // Lazy-init placeholder manager — only created when first needed
+  // Static lists (no adapter) never request unloaded items, so this avoids
+  // instantiating ~300 lines of placeholder logic for the common case.
+  let placeholders: PlaceholderManager<T> | null = null;
+
+  const getOrCreatePlaceholders = (): PlaceholderManager<T> => {
+    if (!placeholders) {
+      placeholders = createPlaceholderManager<T>(placeholderConfig);
+    }
+    return placeholders;
+  };
 
   // ID to index mapping (only for loaded items)
   const idToIndex = new Map<string | number, number>();
@@ -285,7 +294,8 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const getStorage = (): SparseStorage<T> => storage;
 
-  const getPlaceholders = (): PlaceholderManager<T> => placeholders;
+  const getPlaceholders = (): PlaceholderManager<T> =>
+    getOrCreatePlaceholders();
 
   // ==========================================================================
   // Item Access
@@ -301,7 +311,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
     // Return placeholder for unloaded within total
     if (index >= 0 && index < storage.getTotal()) {
-      return placeholders.generate(index);
+      return getOrCreatePlaceholders().generate(index);
     }
 
     return undefined;
@@ -341,7 +351,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
         loadedCount++;
       } else {
         // Generate placeholder for unloaded
-        items.push(placeholders.generate(i));
+        items.push(getOrCreatePlaceholders().generate(i));
         placeholderCount++;
       }
     }
@@ -360,8 +370,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
   };
 
   const setItems = (items: T[], offset: number = 0, total?: number): void => {
-    // Analyze structure for placeholders from first batch
-    if (!placeholders.hasAnalyzedStructure() && items.length > 0) {
+    // Analyze structure for placeholders from first batch (only if placeholders already created)
+    if (
+      placeholders &&
+      !placeholders.hasAnalyzedStructure() &&
+      items.length > 0
+    ) {
       placeholders.analyzeStructure(items);
     }
 
@@ -617,7 +631,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     // Clear everything
     storage.clear();
     idToIndex.clear();
-    placeholders.clear();
+    if (placeholders) placeholders.clear();
     cursor = undefined;
     hasMore = true;
     error = undefined;
@@ -658,7 +672,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
   const reset = (): void => {
     storage.reset();
     idToIndex.clear();
-    placeholders.clear();
+    if (placeholders) placeholders.clear();
     cursor = undefined;
     hasMore = true;
     error = undefined;

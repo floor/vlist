@@ -156,42 +156,82 @@ function createScrollMethods<T extends VListItem>(
 
 interface ScrollMethods {
   /** Scroll to specific index */
-  scrollToIndex: (index: number, align?: 'start' | 'center' | 'end') => void;
+  scrollToIndex: (
+    index: number,
+    alignOrOptions?: 'start' | 'center' | 'end' | ScrollToOptions,
+  ) => void;
   
   /** Scroll to specific item by ID */
-  scrollToItem: (id: string | number, align?: 'start' | 'center' | 'end') => void;
+  scrollToItem: (
+    id: string | number,
+    alignOrOptions?: 'start' | 'center' | 'end' | ScrollToOptions,
+  ) => void;
+  
+  /** Cancel any in-progress smooth scroll animation */
+  cancelScroll: () => void;
   
   /** Get current scroll position */
   getScrollPosition: () => number;
+}
+
+interface ScrollToOptions {
+  /** Alignment within the viewport (default: 'start') */
+  align?: 'start' | 'center' | 'end';
+  
+  /** Scroll behavior (default: 'auto' = instant) */
+  behavior?: 'auto' | 'smooth';
+  
+  /** Animation duration in ms (default: 300, only used with behavior: 'smooth') */
+  duration?: number;
 }
 ```
 
 #### Method Details
 
-**`scrollToIndex(index, align?)`**
-Scrolls to bring an item index into view.
+**`scrollToIndex(index, alignOrOptions?)`**
+Scrolls to bring an item index into view. Accepts either a string alignment (backward-compatible) or a `ScrollToOptions` object for smooth scrolling.
 
 ```typescript
-// Scroll to item at top
+// Scroll to item at top (instant)
 list.scrollToIndex(100);
 list.scrollToIndex(100, 'start');
 
-// Scroll to item at center
+// Scroll to item at center (instant)
 list.scrollToIndex(100, 'center');
 
-// Scroll to item at bottom
+// Scroll to item at bottom (instant)
 list.scrollToIndex(100, 'end');
+
+// Smooth scroll with options object
+list.scrollToIndex(100, { align: 'center', behavior: 'smooth' });
+
+// Smooth scroll with custom duration (ms)
+list.scrollToIndex(100, { behavior: 'smooth', duration: 500 });
 ```
 
-**`scrollToItem(id, align?)`**
-Scrolls to a specific item by ID.
+**`scrollToItem(id, alignOrOptions?)`**
+Scrolls to a specific item by ID. Accepts the same arguments as `scrollToIndex`.
 
 ```typescript
 list.scrollToItem('user-123', 'center');
 // Finds item index by ID
 // Scrolls to that index
 // No-op if ID not found
+
+// Smooth scroll to item
+list.scrollToItem('user-123', { align: 'center', behavior: 'smooth' });
 ```
+
+**`cancelScroll()`**
+Cancels any in-progress smooth scroll animation. Safe to call when no animation is running.
+
+```typescript
+list.cancelScroll();
+// Stops the animation at its current position
+// No-op if no smooth scroll is in progress
+```
+
+Note: Starting a new `scrollToIndex` / `scrollToItem` call (even with instant behavior) automatically cancels any in-progress smooth scroll.
 
 **`getScrollPosition()`**
 Returns current scroll position in pixels.
@@ -339,13 +379,20 @@ console.log(list.total);  // total count
 ### Scroll Navigation
 
 ```typescript
-// Scroll to specific index
+// Scroll to specific index (instant)
 list.scrollToIndex(0);      // Go to top
 list.scrollToIndex(list.total - 1, 'end');  // Go to bottom
 
-// Scroll to specific item
+// Scroll to specific item (instant)
 const targetId = getTargetItemId();
 list.scrollToItem(targetId, 'center');
+
+// Smooth scroll (animated, 300ms default)
+list.scrollToIndex(500, { align: 'center', behavior: 'smooth' });
+list.scrollToItem(targetId, { behavior: 'smooth', duration: 500 });
+
+// Cancel in-progress smooth scroll
+list.cancelScroll();
 
 // Save and restore scroll position
 const position = list.getScrollPosition();
@@ -507,10 +554,14 @@ updateItem: (id: string | number, updates: Partial<T>): void => {
 
 ### Scroll Position Calculation
 
-`scrollToIndex` uses compression-aware calculations:
+`scrollToIndex` uses compression-aware calculations and supports smooth animation:
 
 ```typescript
-scrollToIndex: (index: number, align: 'start' | 'center' | 'end' = 'start'): void => {
+scrollToIndex: (
+  index: number,
+  alignOrOptions?: 'start' | 'center' | 'end' | ScrollToOptions,
+): void => {
+  const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
   const dataState = ctx.dataManager.getState();
   
   // calculateScrollToIndex handles compression automatically
@@ -519,10 +570,17 @@ scrollToIndex: (index: number, align: 'start' | 'center' | 'end' = 'start'): voi
     ctx.config.itemHeight,
     ctx.state.viewportState.containerHeight,
     dataState.total,
-    align
+    align,
+    ctx.getCachedCompression()
   );
   
-  ctx.scrollController.scrollTo(position);
+  if (behavior === 'smooth') {
+    const from = ctx.scrollController.getScrollTop();
+    animateScroll(from, position, duration);  // easeInOutQuad RAF loop
+  } else {
+    cancelScroll();
+    ctx.scrollController.scrollTo(position);
+  }
 }
 ```
 

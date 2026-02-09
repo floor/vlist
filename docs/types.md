@@ -187,6 +187,38 @@ interface SelectionConfig {
 type SelectionMode = 'none' | 'single' | 'multiple';
 ```
 
+#### `ScrollToOptions`
+
+Options for `scrollToIndex` and `scrollToItem` smooth scrolling.
+
+```typescript
+interface ScrollToOptions {
+  /** Alignment within the viewport (default: 'start') */
+  align?: 'start' | 'center' | 'end';
+  
+  /** Scroll behavior (default: 'auto' = instant) */
+  behavior?: 'auto' | 'smooth';
+  
+  /** Animation duration in ms (default: 300, only used with behavior: 'smooth') */
+  duration?: number;
+}
+```
+
+**Usage**:
+```typescript
+// Instant scroll (default)
+list.scrollToIndex(100, 'center');
+
+// Smooth scroll with options object
+list.scrollToIndex(100, { align: 'center', behavior: 'smooth' });
+
+// Custom duration
+list.scrollToIndex(100, { behavior: 'smooth', duration: 500 });
+
+// Cancel in-progress animation
+list.cancelScroll();
+```
+
 #### `ScrollbarConfig`
 
 Custom scrollbar configuration.
@@ -489,8 +521,15 @@ interface VList<T extends VListItem = VListItem> {
   reload: () => Promise<void>;
   
   // Scroll methods
-  scrollToIndex: (index: number, align?: 'start' | 'center' | 'end') => void;
-  scrollToItem: (id: string | number, align?: 'start' | 'center' | 'end') => void;
+  scrollToIndex: (
+    index: number,
+    alignOrOptions?: 'start' | 'center' | 'end' | ScrollToOptions,
+  ) => void;
+  scrollToItem: (
+    id: string | number,
+    alignOrOptions?: 'start' | 'center' | 'end' | ScrollToOptions,
+  ) => void;
+  cancelScroll: () => void;
   getScrollPosition: () => number;
   
   // Selection methods

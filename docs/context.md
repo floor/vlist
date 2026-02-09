@@ -205,26 +205,60 @@ export const createScrollHandler = <T extends VListItem>(
 export const createScrollMethods = <T extends VListItem>(
   ctx: VListContext<T>
 ): ScrollMethods => {
-  return {
-    scrollToIndex: (index, align = 'start') => {
-      const dataState = ctx.dataManager.getState();
-      const position = calculateScrollToIndex(
-        index,
-        ctx.config.itemHeight,
-        ctx.state.viewportState.containerHeight,
-        dataState.total,
-        align
-      );
-      
-      ctx.scrollController.scrollTo(position);
-    },
+  let animationFrameId: number | null = null;
+
+  const cancelScroll = (): void => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+  };
+
+  const animateScroll = (from: number, to: number, duration: number): void => {
+    cancelScroll();
+    if (Math.abs(to - from) < 1) { ctx.scrollController.scrollTo(to); return; }
+    const start = performance.now();
+    const tick = (now: number): void => {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      ctx.scrollController.scrollTo(from + (to - from) * eased);
+      if (t < 1) animationFrameId = requestAnimationFrame(tick);
+      else animationFrameId = null;
+    };
+    animationFrameId = requestAnimationFrame(tick);
+  };
+
+  const scrollToIndex = (index, alignOrOptions?) => {
+    const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
+    const dataState = ctx.dataManager.getState();
+    const position = calculateScrollToIndex(
+      index,
+      ctx.config.itemHeight,
+      ctx.state.viewportState.containerHeight,
+      dataState.total,
+      align,
+      ctx.getCachedCompression()
+    );
     
-    scrollToItem: (id, align = 'start') => {
+    if (behavior === 'smooth') {
+      animateScroll(ctx.scrollController.getScrollTop(), position, duration);
+    } else {
+      cancelScroll();
+      ctx.scrollController.scrollTo(position);
+    }
+  };
+
+  return {
+    scrollToIndex,
+    
+    scrollToItem: (id, alignOrOptions?) => {
       const index = ctx.dataManager.getIndexById(id);
       if (index >= 0) {
-        scrollMethods.scrollToIndex(index, align);
+        scrollToIndex(index, alignOrOptions);
       }
     },
+
+    cancelScroll,
     
     getScrollPosition: () => {
       return ctx.scrollController.getScrollTop();

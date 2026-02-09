@@ -33,6 +33,22 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./data": {
+      "import": "./dist/data/index.js",
+      "types": "./dist/data/index.d.ts"
+    },
+    "./compression": {
+      "import": "./dist/compression/index.js",
+      "types": "./dist/compression.d.ts"
+    },
+    "./selection": {
+      "import": "./dist/selection/index.js",
+      "types": "./dist/selection/index.d.ts"
+    },
+    "./scroll": {
+      "import": "./dist/scroll/index.js",
+      "types": "./dist/scroll/index.d.ts"
+    },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css"
   },

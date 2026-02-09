@@ -15,6 +15,8 @@ Lightweight, high-performance virtual list with zero dependencies.
 - ✅ **Selection** - Single and multiple selection modes
 - 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
+- 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
+- 🌲 **Tree-shakeable** - Sub-module imports for smaller bundles
 
 ## Sandbox
 
@@ -49,6 +51,18 @@ bun run dev:sandbox
 
 ```bash
 npm install vlist
+```
+
+### Sub-module Imports
+
+For smaller bundles, import only what you need:
+
+```typescript
+import { createVList } from 'vlist'                    // full library
+import { createSparseStorage } from 'vlist/data'       // data utilities only
+import { getCompressionInfo } from 'vlist/compression'  // compression utilities only
+import { createSelectionState } from 'vlist/selection'  // selection utilities only
+import { createScrollController } from 'vlist/scroll'   // scroll utilities only
 ```
 
 ## Quick Start
@@ -212,8 +226,14 @@ list.reload()                       // Reload from adapter
 
 ```typescript
 list.scrollToIndex(index, align?)   // Scroll to index ('start' | 'center' | 'end')
+list.scrollToIndex(index, options?) // Scroll with options (smooth scrolling)
 list.scrollToItem(id, align?)       // Scroll to item by ID
+list.scrollToItem(id, options?)     // Scroll to item with options
+list.cancelScroll()                 // Cancel in-progress smooth scroll
 list.getScrollPosition()            // Get current scroll position
+
+// ScrollToOptions: { align?, behavior?: 'auto' | 'smooth', duration? }
+// Example: list.scrollToIndex(500, { align: 'center', behavior: 'smooth' })
 ```
 
 #### Selection

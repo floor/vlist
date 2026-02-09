@@ -96,6 +96,22 @@ export interface LoadingConfig {
 }
 
 // =============================================================================
+// Scroll Options
+// =============================================================================
+
+/** Options for scrollToIndex / scrollToItem */
+export interface ScrollToOptions {
+  /** Alignment within the viewport (default: 'start') */
+  align?: "start" | "center" | "end";
+
+  /** Scroll behavior (default: 'auto' = instant) */
+  behavior?: "auto" | "smooth";
+
+  /** Animation duration in ms (default: 300, only used with behavior: 'smooth') */
+  duration?: number;
+}
+
+// =============================================================================
 // Scrollbar
 // =============================================================================
 
@@ -299,13 +315,19 @@ export interface VList<T extends VListItem = VListItem> {
 
   // Scroll methods
   /** Scroll to specific index */
-  scrollToIndex: (index: number, align?: "start" | "center" | "end") => void;
+  scrollToIndex: (
+    index: number,
+    alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
+  ) => void;
 
   /** Scroll to specific item by ID */
   scrollToItem: (
     id: string | number,
-    align?: "start" | "center" | "end",
+    alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
   ) => void;
+
+  /** Cancel any in-progress smooth scroll animation */
+  cancelScroll: () => void;
 
   /** Get current scroll position */
   getScrollPosition: () => number;
