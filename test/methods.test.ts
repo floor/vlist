@@ -474,6 +474,253 @@ describe("createScrollMethods", () => {
       expect(position).toBe(500);
     });
   });
+
+  describe("scrollToIndex with ScrollToOptions", () => {
+    it("should accept options object with align", () => {
+      const methods = createScrollMethods(ctx);
+
+      methods.scrollToIndex(50, { align: "center" });
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+    });
+
+    it("should accept options object with align and behavior auto", () => {
+      const methods = createScrollMethods(ctx);
+
+      methods.scrollToIndex(50, { align: "end", behavior: "auto" });
+
+      // behavior: 'auto' should call scrollTo immediately (no animation)
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+    });
+
+    it("should schedule animation frame for smooth behavior", () => {
+      const rafCalls: Function[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToIndex(50, { behavior: "smooth" });
+
+        // Should NOT have called scrollTo synchronously
+        expect(ctx.scrollController.scrollTo).not.toHaveBeenCalled();
+        // Should have scheduled an animation frame
+        expect(rafCalls.length).toBe(1);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+      }
+    });
+
+    it("should call scrollTo on each animation frame during smooth scroll", () => {
+      const rafCalls: Function[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      const originalCAF = globalThis.cancelAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+      globalThis.cancelAnimationFrame = (() => {}) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToIndex(50, { behavior: "smooth", duration: 300 });
+
+        // Simulate first frame (partway through)
+        expect(rafCalls.length).toBe(1);
+        rafCalls[0](performance.now() + 150); // halfway
+
+        // Should have called scrollTo with an intermediate position
+        expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+        // Should have scheduled another frame (animation not done)
+        expect(rafCalls.length).toBe(2);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.cancelAnimationFrame = originalCAF;
+      }
+    });
+
+    it("should complete animation when time exceeds duration", () => {
+      const rafCalls: Function[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      const originalCAF = globalThis.cancelAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+      globalThis.cancelAnimationFrame = (() => {}) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToIndex(50, { behavior: "smooth", duration: 300 });
+
+        // Simulate frame past the duration
+        rafCalls[0](performance.now() + 500);
+
+        // Should have called scrollTo with final position
+        expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+        // Should NOT have scheduled another frame (animation complete)
+        expect(rafCalls.length).toBe(1);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.cancelAnimationFrame = originalCAF;
+      }
+    });
+
+    it("should skip animation when already at target position", () => {
+      const rafCalls: Function[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        // Mock: current position is already at the target
+        // index 0, start alignment, height 48 → target = 0
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToIndex(0, { behavior: "smooth" });
+
+        // Should call scrollTo directly (no animation needed)
+        expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+        // Should NOT have scheduled an animation frame
+        expect(rafCalls.length).toBe(0);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+      }
+    });
+
+    it("should default to align start and behavior auto for empty options", () => {
+      const methods = createScrollMethods(ctx);
+
+      methods.scrollToIndex(50, {});
+
+      // behavior 'auto' → immediate scrollTo
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+    });
+  });
+
+  describe("cancelScroll", () => {
+    it("should cancel an in-progress smooth scroll", () => {
+      let lastFrameId = 0;
+      const cancelledIds: number[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      const originalCAF = globalThis.cancelAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        return ++lastFrameId;
+      }) as any;
+      globalThis.cancelAnimationFrame = ((id: number) => {
+        cancelledIds.push(id);
+      }) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToIndex(50, { behavior: "smooth" });
+        methods.cancelScroll();
+
+        expect(cancelledIds.length).toBe(1);
+        expect(cancelledIds[0]).toBe(1);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.cancelAnimationFrame = originalCAF;
+      }
+    });
+
+    it("should be a no-op when no animation is running", () => {
+      const cancelledIds: number[] = [];
+      const originalCAF = globalThis.cancelAnimationFrame;
+      globalThis.cancelAnimationFrame = ((id: number) => {
+        cancelledIds.push(id);
+      }) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+
+        // No smooth scroll started, cancelScroll should be safe
+        methods.cancelScroll();
+
+        expect(cancelledIds.length).toBe(0);
+      } finally {
+        globalThis.cancelAnimationFrame = originalCAF;
+      }
+    });
+
+    it("should cancel previous animation when a new instant scroll is requested", () => {
+      let lastFrameId = 0;
+      const cancelledIds: number[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      const originalCAF = globalThis.cancelAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        return ++lastFrameId;
+      }) as any;
+      globalThis.cancelAnimationFrame = ((id: number) => {
+        cancelledIds.push(id);
+      }) as any;
+
+      try {
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        // Start a smooth scroll
+        methods.scrollToIndex(50, { behavior: "smooth" });
+
+        // Now do an instant scroll — should cancel the smooth one
+        methods.scrollToIndex(10, "start");
+
+        expect(cancelledIds.length).toBe(1);
+        // The instant scroll should have called scrollTo
+        expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.cancelAnimationFrame = originalCAF;
+      }
+    });
+  });
+
+  describe("scrollToItem with ScrollToOptions", () => {
+    it("should pass options through to scrollToIndex", () => {
+      const rafCalls: Function[] = [];
+      const originalRAF = globalThis.requestAnimationFrame;
+      globalThis.requestAnimationFrame = ((cb: Function) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+
+      try {
+        (ctx.dataManager.getIndexById as any).mockReturnValue(25);
+        const methods = createScrollMethods(ctx);
+        (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+
+        methods.scrollToItem(26, { align: "center", behavior: "smooth" });
+
+        // Smooth behavior → should schedule animation frame
+        expect(rafCalls.length).toBe(1);
+      } finally {
+        globalThis.requestAnimationFrame = originalRAF;
+      }
+    });
+
+    it("should accept string alignment (backward compat)", () => {
+      (ctx.dataManager.getIndexById as any).mockReturnValue(25);
+      const methods = createScrollMethods(ctx);
+
+      methods.scrollToItem(26, "center");
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+    });
+  });
 });
 
 // =============================================================================

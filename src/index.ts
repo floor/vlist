@@ -29,6 +29,9 @@ export type {
   // Scrollbar
   ScrollbarConfig,
 
+  // Scroll
+  ScrollToOptions,
+
   // Data adapter
   VListAdapter,
   AdapterParams,

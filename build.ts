@@ -8,7 +8,7 @@ async function build() {
   const totalStart = performance.now();
   console.log("Building vlist...\n");
 
-  // Bundle TypeScript
+  // Build main bundle (full library)
   const bundleStart = performance.now();
   const result = await Bun.build({
     entrypoints: ["./src/index.ts"],
@@ -31,6 +31,50 @@ async function build() {
   const jsSize = (jsFile.size / 1024).toFixed(1);
   console.log(
     `  JS          ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${jsSize} KB)`,
+  );
+
+  // Build sub-module bundles for tree-shaking
+  const subStart = performance.now();
+
+  const subModules = [
+    { entry: "./src/data/index.ts", out: "data" },
+    { entry: "./src/compression.ts", out: "compression" },
+    { entry: "./src/selection/index.ts", out: "selection" },
+    { entry: "./src/scroll/index.ts", out: "scroll" },
+  ];
+
+  const subResults: { name: string; size: string }[] = [];
+
+  for (const sub of subModules) {
+    const subResult = await Bun.build({
+      entrypoints: [sub.entry],
+      outdir: `./dist/${sub.out}`,
+      format: "esm",
+      target: "browser",
+      minify: !isDev,
+      sourcemap: isDev ? "inline" : "none",
+      naming: "index.js",
+    });
+
+    if (!subResult.success) {
+      console.error(`\nSub-module build failed (${sub.out}):\n`);
+      for (const log of subResult.logs) {
+        console.error(log);
+      }
+      process.exit(1);
+    }
+
+    const subFile = Bun.file(`./dist/${sub.out}/index.js`);
+    const subSize = (subFile.size / 1024).toFixed(1);
+    subResults.push({ name: sub.out, size: subSize });
+  }
+
+  const subTime = performance.now() - subStart;
+  const subSummary = subResults
+    .map((s) => `${s.name} (${s.size} KB)`)
+    .join(", ");
+  console.log(
+    `  Sub-modules ${subTime.toFixed(0).padStart(6)}ms  ${subSummary}`,
   );
 
   // Generate type declarations (optional)
@@ -60,6 +104,23 @@ async function build() {
   console.log(
     `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + vlist-extras.css (${extrasSize} KB)`,
   );
+
+  // Size summary
+  const gzipBytes = async (path: string): Promise<string> => {
+    const raw = await $`gzip -c ${path} | wc -c`.quiet().text();
+    return (parseInt(raw.trim(), 10) / 1024).toFixed(1);
+  };
+
+  console.log("");
+  const gzipSize = await gzipBytes("dist/index.js");
+  console.log(`  Full bundle: ${jsSize} KB minified, ${gzipSize} KB gzipped`);
+
+  for (const sub of subResults) {
+    const gzipSubSize = await gzipBytes(`dist/${sub.name}/index.js`);
+    console.log(
+      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSubSize} KB gzipped`,
+    );
+  }
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
