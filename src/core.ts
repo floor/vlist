@@ -61,6 +61,14 @@ export interface ScrollToOptions {
   duration?: number;
 }
 
+/** Scroll position snapshot for save/restore */
+export interface CoreScrollSnapshot {
+  /** First visible item index */
+  index: number;
+  /** Pixel offset within the first visible item (how far it's scrolled off) */
+  offsetInItem: number;
+}
+
 /** Event handler / unsubscribe */
 export type EventHandler<T> = (payload: T) => void;
 export type Unsubscribe = () => void;
@@ -112,6 +120,11 @@ export interface VListCore<T extends VListItem = VListItem> {
   ): void;
   cancelScroll(): void;
   getScrollPosition(): number;
+
+  /** Get a snapshot of the current scroll position for save/restore */
+  getScrollSnapshot(): CoreScrollSnapshot;
+  /** Restore scroll position from a snapshot */
+  restoreScroll(snapshot: CoreScrollSnapshot): void;
 
   on<K extends keyof CoreEvents<T>>(
     event: K,
@@ -662,9 +675,7 @@ export const createVList = <T extends VListItem = VListItem>(
     }, SCROLL_IDLE_TIMEOUT);
   };
 
-  const scrollTarget = isWindowMode
-    ? (scrollElement as Window)
-    : dom.viewport;
+  const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
   scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
 
   // ---------------------------------------------------------------------------
@@ -742,7 +753,11 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const resolveScrollArgs = (
     alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
-  ): { align: "start" | "center" | "end"; behavior: "auto" | "smooth"; duration: number } => {
+  ): {
+    align: "start" | "center" | "end";
+    behavior: "auto" | "smooth";
+    duration: number;
+  } => {
     if (typeof alignOrOptions === "string")
       return {
         align: alignOrOptions,
@@ -922,6 +937,44 @@ export const createVList = <T extends VListItem = VListItem>(
     },
     cancelScroll,
     getScrollPosition: () => lastScrollTop,
+
+    getScrollSnapshot: (): CoreScrollSnapshot => {
+      if (items.length === 0) {
+        return { index: 0, offsetInItem: 0 };
+      }
+      const index = heightCache.indexAtOffset(lastScrollTop);
+      const offsetInItem = Math.max(
+        0,
+        lastScrollTop - heightCache.getOffset(index),
+      );
+      return { index, offsetInItem };
+    },
+
+    restoreScroll: (snapshot: CoreScrollSnapshot): void => {
+      if (items.length === 0) return;
+      const safeIndex = Math.max(0, Math.min(snapshot.index, items.length - 1));
+      const maxScroll = Math.max(
+        0,
+        heightCache.getTotalHeight() - containerHeight,
+      );
+      const position = Math.max(
+        0,
+        Math.min(
+          heightCache.getOffset(safeIndex) + snapshot.offsetInItem,
+          maxScroll,
+        ),
+      );
+
+      if (isWindowMode) {
+        const rect = dom.viewport.getBoundingClientRect();
+        const listDocumentTop = rect.top + window.scrollY;
+        window.scrollTo({ top: listDocumentTop + position, behavior: "auto" });
+      } else {
+        dom.viewport.scrollTo({ top: position, behavior: "auto" });
+      }
+      lastScrollTop = position;
+      renderIfNeeded();
+    },
 
     on: <K extends keyof CoreEvents<T>>(
       event: K,

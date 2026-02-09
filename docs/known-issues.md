@@ -482,13 +482,13 @@ liveRegion.setAttribute('aria-atomic', 'true');
 
 ---
 
-### 13. Scroll Position Save/Restore
+### 13. ✅ Scroll Position Save/Restore
 
 **Priority:** Low.
 
 **Problem:** When navigating away and returning (SPA route change, browser back), scroll position is lost.
 
-**Approach:**
+**Solution:** Implemented `getScrollSnapshot()` and `restoreScroll(snapshot)` on both `VList` (full) and `VListCore` (standalone).
 
 ```typescript
 // Save
@@ -501,7 +501,15 @@ const saved = JSON.parse(sessionStorage.getItem('list-scroll'));
 list.restoreScroll(saved);
 ```
 
-**Estimated effort:** Small.
+**Key details:**
+- `getScrollSnapshot()` captures the first visible item index, sub-pixel offset within that item, and optionally selected IDs
+- `restoreScroll(snapshot)` scrolls to the exact position and optionally restores selection
+- Works with fixed and variable item heights
+- Works with compressed mode (1M+ items) — uses linear ratio mapping
+- Groups mode: automatically converts between data indices and layout indices
+- Grid mode: automatically converts between item indices and row indices
+- Snapshots are plain objects — JSON-serializable for `sessionStorage` usage
+- Round-trips perfectly (save → serialize → deserialize → restore)
 
 ---
 
@@ -521,7 +529,7 @@ list.restoreScroll(saved);
 | 10 | Public benchmarks | 🟠 High | Medium | 4 | 🟡 Pending |
 | 11 | Auto-height measurement | 🟢 Low | Medium | 4 | 🟡 Pending |
 | 12 | Enhanced accessibility | 🟡 Medium | Small-Medium | 4 | 🟡 Pending |
-| 13 | Scroll save/restore | 🟢 Low | Small | 4 | 🟡 Pending |
+| 13 | Scroll save/restore | 🟢 Low | Small | 4 | ✅ Done |
 
 ---
 
