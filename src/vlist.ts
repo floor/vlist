@@ -113,7 +113,10 @@ export const createVList = <T extends VListItem = VListItem>(
     loading: loadingConfig,
     idleTimeout: scrollIdleTimeout,
     classPrefix = DEFAULT_CLASS_PREFIX,
+    scrollElement,
   } = config;
+
+  const isWindowMode = !!scrollElement;
 
   const { height: itemHeightConfig, template } = itemConfig;
 
@@ -170,8 +173,17 @@ export const createVList = <T extends VListItem = VListItem>(
     },
   });
 
-  // Get container dimensions
-  const dimensions = getContainerDimensions(dom.viewport);
+  // In window mode, the viewport doesn't scroll — it sits in the page flow.
+  // Remove the fixed height and overflow so the content div drives the page height.
+  if (isWindowMode) {
+    dom.viewport.style.overflow = "visible";
+    dom.viewport.style.height = "auto";
+  }
+
+  // Get container dimensions (use window.innerHeight in window mode)
+  const dimensions = isWindowMode
+    ? { height: window.innerHeight, width: dom.viewport.clientWidth }
+    : getContainerDimensions(dom.viewport);
 
   // Get initial compression state (must be before createViewportState which uses it)
   const initialCompression = getCompression(
@@ -200,6 +212,7 @@ export const createVList = <T extends VListItem = VListItem>(
     ...(scrollIdleTimeout !== undefined
       ? { idleTimeout: scrollIdleTimeout }
       : {}),
+    ...(isWindowMode ? { scrollElement } : {}),
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
@@ -229,9 +242,11 @@ export const createVList = <T extends VListItem = VListItem>(
     () => dataManager.getTotal(),
   );
 
-  // Create scrollbar (auto-enable when compressed)
+  // Create scrollbar (auto-enable when compressed, but never in window mode
+  // where the browser's native scrollbar is used)
   const shouldEnableScrollbar =
-    scrollbarConfig?.enabled ?? initialCompression.isCompressed;
+    !isWindowMode &&
+    (scrollbarConfig?.enabled ?? initialCompression.isCompressed);
   let scrollbar = shouldEnableScrollbar
     ? createScrollbar(
         dom.viewport,
@@ -296,7 +311,8 @@ export const createVList = <T extends VListItem = VListItem>(
       scrollController.enableCompression(compression);
 
       // Create scrollbar if not exists and auto-enable is on
-      if (!scrollbar && scrollbarConfig?.enabled !== false) {
+      // (never in window mode — the browser's native scrollbar is used)
+      if (!isWindowMode && !scrollbar && scrollbarConfig?.enabled !== false) {
         scrollbar = createScrollbar(
           dom.viewport,
           (position) => scrollController.scrollTo(position),
@@ -310,6 +326,13 @@ export const createVList = <T extends VListItem = VListItem>(
     } else if (!compression.isCompressed && scrollController.isCompressed()) {
       scrollController.disableCompression();
     } else if (compression.isCompressed) {
+      scrollController.updateConfig({ compression });
+    }
+
+    // In window mode, always keep maxScroll in sync — even without compression,
+    // the controller needs totalHeight to compute isAtBottom/getScrollPercentage.
+    // (The compression state for non-compressed lists has virtualHeight = actualHeight.)
+    if (isWindowMode && !compression.isCompressed) {
       scrollController.updateConfig({ compression });
     }
 
@@ -496,6 +519,42 @@ export const createVList = <T extends VListItem = VListItem>(
     }
   });
 
+  // In window mode, listen for window resize to update containerHeight
+  // (the ResizeObserver above watches the viewport element, which in window mode
+  // reflects the content size, not the visible area — we need window.innerHeight)
+  let handleWindowResize: (() => void) | null = null;
+  if (isWindowMode) {
+    handleWindowResize = () => {
+      if (ctx.state.isDestroyed) return;
+
+      const newHeight = window.innerHeight;
+      const currentHeight = ctx.state.viewportState.containerHeight;
+
+      if (Math.abs(newHeight - currentHeight) > 1) {
+        // Update scroll controller's knowledge of container height
+        scrollController.updateContainerHeight(newHeight);
+
+        ctx.state.viewportState = updateViewportSize(
+          ctx.state.viewportState,
+          newHeight,
+          heightCache,
+          dataManager.getTotal(),
+          overscan,
+          ctx.getCachedCompression(),
+        );
+
+        updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+        renderIfNeeded();
+
+        emitter.emit("resize", {
+          height: newHeight,
+          width: window.innerWidth,
+        });
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
+  }
+
   // ===========================================================================
   // Destroy
   // ===========================================================================
@@ -509,8 +568,11 @@ export const createVList = <T extends VListItem = VListItem>(
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
 
-    // Disconnect ResizeObserver
+    // Disconnect ResizeObserver and window resize listener
     resizeObserver.disconnect();
+    if (handleWindowResize) {
+      window.removeEventListener("resize", handleWindowResize);
+    }
 
     // Cleanup components
     scrollController.destroy();
