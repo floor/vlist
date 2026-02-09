@@ -4,7 +4,7 @@
 // Direct imports for optimal tree-shaking
 import { createButton } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
-import { createVList, getCompressionState, getCompressionInfo } from "vlist";
+import { createVList, MAX_VIRTUAL_HEIGHT } from "vlist";
 
 // Constants
 const ITEM_HEIGHT = 48;
@@ -280,12 +280,16 @@ const createMillionItemsExample = (container) => {
   };
 
   const updateCompressionInfo = (total) => {
-    const compression = getCompressionState(total, ITEM_HEIGHT);
+    const actualHeight = total * ITEM_HEIGHT;
+    const isCompressed = actualHeight > MAX_VIRTUAL_HEIGHT;
+    const virtualHeight = isCompressed ? MAX_VIRTUAL_HEIGHT : actualHeight;
+    const ratio = actualHeight > 0 ? virtualHeight / actualHeight : 1;
+
     if (controls.compressionRatio) {
-      controls.compressionRatio.textContent = `${(compression.ratio * 100).toFixed(1)}%`;
+      controls.compressionRatio.textContent = `${(ratio * 100).toFixed(1)}%`;
     }
     if (controls.virtualHeight) {
-      controls.virtualHeight.textContent = `${(compression.virtualHeight / 1_000_000).toFixed(1)}M px`;
+      controls.virtualHeight.textContent = `${(virtualHeight / 1_000_000).toFixed(1)}M px`;
     }
   };
 

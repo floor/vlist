@@ -10,7 +10,7 @@
     padding: 8px 16px;
     background: var(--mtrl-sys-color-surface, #fff);
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .back-link:hover {
@@ -258,40 +258,6 @@
 }
 
 /* ============================================================================
-   Mode Toggle
-   ============================================================================ */
-
-.mtrl-mode-toggle {
-    display: flex;
-    gap: 8px;
-    background-color: var(--mtrl-sys-color-surface);
-    padding: 4px;
-    border-radius: 12px;
-}
-
-.mtrl-mode-toggle__button {
-    flex: 1;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--mtrl-sys-color-on-surface-variant);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.mtrl-mode-toggle__button:hover:not(.mtrl-mode-toggle__button--active) {
-    background-color: var(--mtrl-sys-color-surface-container-highest);
-}
-
-.mtrl-mode-toggle__button--active {
-    background-color: var(--mtrl-sys-color-primary);
-    color: var(--mtrl-sys-color-on-primary);
-}
-
-/* ============================================================================
    Keyboard Hints
    ============================================================================ */
 
@@ -339,10 +305,6 @@
     transition: background-color 0.15s ease;
     border-radius: 8px;
     margin: 0 4px;
-}
-
-.mtrl-item-content:hover {
-    background-color: var(--mtrl-sys-color-surface-container-highest);
 }
 
 .mtrl-item-checkbox {
@@ -405,14 +367,6 @@
    Selected Item Styles
    ============================================================================ */
 
-.vlist-item--selected .mtrl-item-content {
-    background-color: var(--mtrl-sys-color-primary-container);
-}
-
-.vlist-item--selected .mtrl-item-content:hover {
-    background-color: var(--mtrl-sys-color-primary-container);
-}
-
 .vlist-item--selected .mtrl-item-name {
     color: var(--mtrl-sys-color-on-primary-container);
 }
@@ -423,10 +377,11 @@
 }
 
 /* ============================================================================
-   Focused Item Styles
+   Focused Item Styles — only show outline on keyboard navigation
    ============================================================================ */
 
-.vlist-item--focused .mtrl-item-content {
+.vlist:focus-visible .vlist-item--focused {
     outline: 2px solid var(--mtrl-sys-color-primary);
     outline-offset: -2px;
+    z-index: 1;
 }
