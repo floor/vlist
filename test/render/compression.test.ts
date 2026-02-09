@@ -210,7 +210,7 @@ describe("calculateCompressedVisibleRange", () => {
     );
 
     expect(range.start).toBe(0);
-    expect(range.end).toBe(0);
+    expect(range.end).toBe(-1);
   });
 });
 
@@ -250,7 +250,7 @@ describe("calculateCompressedRenderRange", () => {
     const range = calculateCompressedRenderRange(visibleRange, 3, 0, out);
 
     expect(range.start).toBe(0);
-    expect(range.end).toBe(0);
+    expect(range.end).toBe(-1);
   });
 });
 

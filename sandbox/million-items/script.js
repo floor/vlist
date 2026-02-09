@@ -27,7 +27,7 @@ const COLORS = [
 
 // Simple hash function for consistent values
 const hash = (n) => {
-  let h = n * 2654435761;
+  let h = (n + 1) * 2654435761;
   h ^= h >>> 16;
   return Math.abs(h);
 };
@@ -191,30 +191,50 @@ const createMillionItemsExample = (container) => {
   };
   requestAnimationFrame(updateFps);
 
-  // Create a linear determinate progress bar for loading feedback
-  const progress = createProgress({
-    variant: "linear",
+  // Create a circular determinate progress overlaid on the list
+  const spinner = createProgress({
+    variant: "circular",
     value: 0,
     max: 100,
+    size: 96,
+    shape: "wavy",
+    showLabel: true,
   });
-  progress.element.style.cssText =
-    "position:absolute;top:0;left:0;right:0;z-index:10;display:none;";
-  showcaseElement.appendChild(progress.element);
 
-  const showProgress = () => {
-    progress.setValue(0);
-    progress.element.style.display = "";
+  const overlay = createLayout([
+    {
+      class: "list-overlay",
+      style: {
+        position: "absolute",
+        inset: "0",
+        display: "none",
+        zIndex: "10",
+        justifyContent: "center",
+        alignItems: "center",
+        background:
+          "color-mix(in srgb, var(--mtrl-sys-color-surface-container, #fff) 60%, transparent)",
+        borderRadius: "2px",
+      },
+    },
+  ]).element;
+
+  overlay.appendChild(spinner.element);
+  showcaseElement.appendChild(overlay);
+
+  const showSpinner = () => {
+    spinner.setValue(0, false);
+    overlay.style.display = "flex";
   };
 
-  const hideProgress = () => {
-    progress.element.style.display = "none";
+  const hideSpinner = () => {
+    overlay.style.display = "none";
   };
 
   const BATCH_SIZE = 50_000;
 
   /**
    * Generate items in batches, yielding between each so the
-   * progress bar can repaint.
+   * spinner can animate smoothly.
    */
   const generateItemsBatched = async (total) => {
     const result = new Array(total);
@@ -226,9 +246,9 @@ const createMillionItemsExample = (container) => {
         result[i] = generateItem(i);
       }
       generated = end;
-      progress.setValue(Math.round((generated / total) * 100));
+      spinner.setValue(Math.round((generated / total) * 100), false);
 
-      // Yield to let the browser repaint the progress bar
+      // Yield to let the browser repaint the spinner
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
@@ -240,21 +260,28 @@ const createMillionItemsExample = (container) => {
     currentSize = size;
     currentTotal = total;
 
-    showProgress();
+    // Empty the current list and show spinner overlay
+    if (list) {
+      list.setItems([]);
+    }
+    showSpinner();
 
-    // Yield to let the chip animation and progress bar render
+    // Yield to let the chip animation and spinner render
     await new Promise((resolve) => requestAnimationFrame(resolve));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Destroy existing list
-    if (list) {
-      list.destroy();
-    }
-
-    // Generate items in batches with progress updates
+    // Generate items in batches
     const generateStart = performance.now();
     items = await generateItemsBatched(total);
     perf.generate = performance.now() - generateStart;
+
+    // Wait for the 100% state to be painted to screen
+    await spinner.painted();
+
+    // Destroy existing list right before creating the new one
+    if (list) {
+      list.destroy();
+    }
 
     // Update compression info
     updateCompressionInfo(total);
@@ -299,7 +326,7 @@ const createMillionItemsExample = (container) => {
       });
     });
 
-    hideProgress();
+    hideSpinner();
     scheduleUpdate();
   };
 

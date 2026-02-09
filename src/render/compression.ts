@@ -93,7 +93,7 @@ export const calculateCompressedVisibleRange = (
 ): Range => {
   if (totalItems === 0 || containerHeight === 0) {
     out.start = 0;
-    out.end = 0;
+    out.end = -1;
     return out;
   }
 
@@ -173,7 +173,7 @@ export const calculateCompressedRenderRange = (
 ): Range => {
   if (totalItems === 0) {
     out.start = 0;
-    out.end = 0;
+    out.end = -1;
     return out;
   }
 

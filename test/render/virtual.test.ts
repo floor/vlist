@@ -35,7 +35,7 @@ describe("calculateVisibleRange", () => {
       getCompressionState(0, cache),
       out,
     );
-    expect(result).toEqual({ start: 0, end: 0 });
+    expect(result).toEqual({ start: 0, end: -1 });
   });
 
   it("should return empty range when containerHeight is 0", () => {
@@ -49,7 +49,7 @@ describe("calculateVisibleRange", () => {
       getCompressionState(100, cache),
       out,
     );
-    expect(result).toEqual({ start: 0, end: 0 });
+    expect(result).toEqual({ start: 0, end: -1 });
   });
 
   it("should calculate correct range at scroll position 0", () => {
@@ -140,7 +140,7 @@ describe("calculateRenderRange", () => {
     const visibleRange = { start: 0, end: 0 };
     const out = { start: 0, end: 0 };
     const result = calculateRenderRange(visibleRange, 3, 0, out);
-    expect(result).toEqual({ start: 0, end: 0 });
+    expect(result).toEqual({ start: 0, end: -1 });
   });
 
   it("should add overscan to visible range", () => {
@@ -359,7 +359,7 @@ describe("createViewportState", () => {
     );
 
     expect(state.totalHeight).toBe(0);
-    expect(state.visibleRange).toEqual({ start: 0, end: 0 });
+    expect(state.visibleRange).toEqual({ start: 0, end: -1 });
   });
 });
 
