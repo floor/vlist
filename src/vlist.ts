@@ -252,7 +252,9 @@ export const createVList = <T extends VListItem = VListItem>(
   const emitter = createEmitter<VListEvents<T>>();
 
   // Create height cache
-  // - Grid mode: height cache operates on ROWS, not items
+  // - Grid mode: height cache operates on ROWS, not items.
+  //   Row height = itemHeight + gap so that rows are spaced apart vertically.
+  //   The grid renderer subtracts the gap when sizing the DOM element.
   // - Groups mode: uses grouped height function
   // - Normal mode: uses item height directly
   const initialTotal = hasGroups
@@ -260,6 +262,19 @@ export const createVList = <T extends VListItem = VListItem>(
     : (initialItems?.length ?? 0);
   const heightCacheTotal =
     isGrid && gridLayout ? gridLayout.getTotalRows(initialTotal) : initialTotal;
+
+  // In grid mode, inflate each row's height by the gap so the height cache
+  // naturally spaces rows apart (the renderer will set element height to the
+  // real item height, i.e. heightCache.getHeight(row) - gap).
+  const gridGap = isGrid && gridLayout ? gridLayout.gap : 0;
+  if (isGrid && gridGap > 0) {
+    if (typeof effectiveHeightConfig === "number") {
+      effectiveHeightConfig = effectiveHeightConfig + gridGap;
+    } else {
+      const baseFn = effectiveHeightConfig;
+      effectiveHeightConfig = (index: number) => baseFn(index) + gridGap;
+    }
+  }
 
   const heightCache = createHeightCache(
     effectiveHeightConfig,
