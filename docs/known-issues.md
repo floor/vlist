@@ -4,28 +4,29 @@
 
 ## Current State
 
-vlist is a well-optimized, batteries-included virtual list with zero dependencies. It excels at fixed-height lists with built-in selection, keyboard navigation, infinite scroll, and 1M+ item compression.
+vlist is a well-optimized, batteries-included virtual list with zero dependencies. It supports both fixed and variable item heights, built-in selection, keyboard navigation, infinite scroll, and 1M+ item compression.
 
 **Where vlist wins today:**
 - ✅ Zero dependencies
 - ✅ Automatic compression for 1M+ items (no competitor does this)
 - ✅ Built-in selection (single/multi/keyboard) — competitors say "BYO"
 - ✅ Built-in infinite scroll with adapter, placeholders, velocity-based loading
+- ✅ Variable item heights via `height: (index) => number` (Mode A)
+- ✅ Smooth `scrollToIndex` animation with easing
 - ✅ Extensive scroll hot-path optimizations (zero-allocation, RAF-throttled, circular buffer velocity)
-- ✅ 431 tests, comprehensive documentation
+- ✅ 543 tests, comprehensive documentation
 
 **Where vlist falls short:**
 
 | Gap | Impact | Competitors |
 |-----|--------|-------------|
-| No variable item heights | 🚨 Blocks ~80% of real-world use cases | @tanstack/virtual ✅ |
+| No auto-height measurement (Mode B) | ⚠️ Mode A covers known heights; Mode B needed for dynamic content | @tanstack/virtual ✅ |
 | No horizontal / grid layout | ❌ Major | @tanstack/virtual ✅ |
 | No window (document) scrolling | ❌ Major | @tanstack/virtual ✅ |
-| No smooth scroll-to animation | ❌ UX gap | @tanstack/virtual ✅ |
 | No sticky headers / grouped lists | ❌ Common pattern | react-virtuoso ✅ |
 | No reverse mode (chat UI) | ❌ Common pattern | react-virtuoso ✅ |
 | No framework adapters | ❌ Adoption barrier | @tanstack/virtual ✅ |
-| Bundle ~11.5 KB gzip | ⚠️ 2× larger than tanstack (~5.5 KB) | @tanstack/virtual ✅ |
+| Bundle ~12.2 KB gzip | ⚠️ 2× larger than tanstack (~5.5 KB) | @tanstack/virtual ✅ |
 | Basic accessibility | ⚠️ Missing aria-setsize/posinset | — |
 
 ---
@@ -464,7 +465,7 @@ list.restoreScroll(saved);
 
 | # | Feature | Impact | Effort | Phase | Status |
 |---|---------|--------|--------|-------|--------|
-| 1 | Variable item heights | 🔴 Critical | Large | 1 | 🟡 Pending |
+| 1 | Variable item heights (Mode A) | 🔴 Critical | Large | 1 | ✅ Done |
 | 2 | Smooth scrollToIndex | 🟠 High | Small | 1 | ✅ Done |
 | 3 | Shrink bundle size | 🟠 High | Medium | 1 | ✅ Done |
 | 4 | Horizontal scrolling | 🟡 Medium | Medium | 2 | 🟡 Pending |
@@ -499,4 +500,4 @@ list.restoreScroll(saved);
 ---
 
 *Last updated: February 2025*
-*Status: Phase 1 in progress — #2 and #3 done, variable heights is the critical path*
+*Status: Phase 1 complete — variable heights (Mode A), smooth scrollToIndex, and bundle split all shipped. Phase 2+ pending.*
