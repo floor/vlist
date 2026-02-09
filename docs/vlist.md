@@ -11,6 +11,7 @@
 - [API Reference](#api-reference)
 - [Events](#events)
 - [Selection](#selection)
+- [Scroll Save/Restore](#scroll-saverestore)
 - [Infinite Scroll](#infinite-scroll)
 - [Compression (1M+ Items)](#compression-1m-items)
 - [Styling](#styling)
@@ -34,6 +35,7 @@ vlist is a high-performance virtual list library designed to handle massive data
 - **Selection** - Single and multiple selection modes with keyboard navigation
 - **Sparse Storage** - Chunk-based memory management for huge datasets
 - **Accessible** - Full keyboard navigation and ARIA support
+- **Scroll Save/Restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
 - **TypeScript First** - Complete type definitions included
 
 ### Browser Limitations & Compression
@@ -288,10 +290,22 @@ list.cancelScroll(): void
 // Get current scroll position
 list.getScrollPosition(): number
 
+// Save scroll position as a JSON-serializable snapshot
+list.getScrollSnapshot(): ScrollSnapshot
+
+// Restore scroll position (and optionally selection) from a snapshot
+list.restoreScroll(snapshot: ScrollSnapshot): void
+
 interface ScrollToOptions {
   align?: 'start' | 'center' | 'end';   // default: 'start'
   behavior?: 'auto' | 'smooth';          // default: 'auto' (instant)
   duration?: number;                      // default: 300 (ms, smooth only)
+}
+
+interface ScrollSnapshot {
+  index: number;              // First visible item index
+  offsetInItem: number;       // Pixel offset within that item
+  selectedIds?: Array<string | number>;  // Optional selected IDs
 }
 ```
 
@@ -309,6 +323,20 @@ list.scrollToItem('user-123', { align: 'center', behavior: 'smooth' });
 
 // Cancel in-progress animation
 list.cancelScroll();
+```
+
+**Scroll save/restore examples:**
+
+```typescript
+// Save — e.g. before SPA navigation
+const snapshot = list.getScrollSnapshot();
+// { index: 523, offsetInItem: 12, selectedIds: [3, 7, 42] }
+sessionStorage.setItem('list-scroll', JSON.stringify(snapshot));
+
+// Restore — e.g. after navigating back and recreating the list
+const saved = JSON.parse(sessionStorage.getItem('list-scroll'));
+list.restoreScroll(saved);
+// Scroll position AND selection are perfectly restored
 ```
 
 #### Selection
@@ -853,6 +881,59 @@ list.on<'item:click'>('item:click', ({ item, index, event }) => {
   // event: MouseEvent
 });
 ```
+
+---
+
+## Scroll Save/Restore
+
+When users navigate away from a page (SPA route change, browser back) and return, the scroll position is normally lost because the list is destroyed and recreated. The snapshot API solves this.
+
+### How It Works
+
+1. **Before navigating away**, call `getScrollSnapshot()` to capture the current position
+2. **Save** the snapshot (it's a plain JSON object — perfect for `sessionStorage`)
+3. **After navigating back**, recreate the list and call `restoreScroll(snapshot)`
+
+The snapshot captures:
+- **`index`** — The first visible item index
+- **`offsetInItem`** — Sub-pixel offset within that item (for exact positioning)
+- **`selectedIds`** — Currently selected item IDs (optional, only included if any)
+
+### Usage
+
+```typescript
+const STORAGE_KEY = 'my-list-scroll';
+
+// Save before navigating away
+function onNavigateAway() {
+  const snapshot = list.getScrollSnapshot();
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  list.destroy();
+}
+
+// Restore after navigating back
+function onNavigateBack() {
+  const list = createVList({ /* same config */ });
+
+  const raw = sessionStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    list.restoreScroll(JSON.parse(raw));
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+}
+```
+
+### Works With All Modes
+
+- **Fixed and variable item heights** — Uses height cache for precise offset calculation
+- **Compressed mode (1M+ items)** — Uses linear ratio mapping for the scroll position
+- **Groups / sticky headers** — Automatically converts between data and layout indices
+- **Grid layout** — Automatically converts between item and row indices
+- **Selection** — Restores selected items when `selectedIds` is present and selection is enabled
+
+### VListCore Support
+
+The lightweight `vlist/core` module also supports snapshots via `getScrollSnapshot()` and `restoreScroll()`, with the same API (without `selectedIds`, since core has no selection).
 
 ---
 

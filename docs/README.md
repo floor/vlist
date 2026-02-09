@@ -9,6 +9,7 @@
 - **[Styles Guide](./styles.md)** - CSS tokens, variants, dark mode, split core/extras CSS, and customization
 - **[Compression Guide](./compression.md)** - Handling large lists (1M+ items)
 - **[Window Scrolling](./vlist.md#window-scrolling)** - Document-level scrolling with `scrollElement: window`
+- **[Scroll Save/Restore](./vlist.md#scroll-saverestore)** - Save and restore scroll position for SPA navigation
 
 ## Module Documentation
 

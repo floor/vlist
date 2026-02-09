@@ -11,6 +11,7 @@ The scroll module handles all scrolling functionality in vlist, including:
 - **Window Scrolling**: Document-level scrolling where the list participates in the page flow
 - **Custom Scrollbar**: Visual scrollbar for compressed mode
 - **Velocity Tracking**: Smooth scroll momentum detection
+- **Scroll Save/Restore**: `getScrollSnapshot()` / `restoreScroll()` for SPA navigation (see [methods.md](./methods.md#snapshot-methods))
 
 ## Module Structure
 
@@ -822,13 +823,14 @@ function handleMouseMove(event: MouseEvent) {
 
 ## Related Modules
 
+- [methods.md](./methods.md#snapshot-methods) - Scroll save/restore (`getScrollSnapshot` / `restoreScroll`)
 - [compression.md](./compression.md) - Compression state for large lists
 - [render.md](./render.md) - Viewport state management
 - [handlers.md](./handlers.md) - Scroll event handler
 - [context.md](./context.md) - Context holds scroll controller
 - [optimization.md](./optimization.md) - Full list of scroll-related optimizations
 - [styles.md](./styles.md) - `.vlist--scrolling` class and CSS containment
-- [vlist.md](./vlist.md) - Main vlist documentation (window scrolling usage)
+- [vlist.md](./vlist.md) - Main vlist documentation (window scrolling, scroll save/restore)
 
 ---
 

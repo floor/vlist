@@ -26,9 +26,13 @@ sandbox/
 │   ├── script.js
 │   ├── styles.css
 │   └── dist/             # Built output (gitignored)
+├── core/                 # Lightweight vlist/core (7.3 KB)
+├── grid/                 # 2D photo gallery with Lorem Picsum
 ├── selection/            # Selection modes example
 ├── infinite-scroll/      # Async data loading example
 ├── million-items/        # Stress test example
+├── scroll-restore/       # Scroll save/restore for SPA navigation
+├── sticky-headers/       # Grouped list with sticky section headers
 ├── variable-heights/     # Variable item heights example
 ├── velocity-loading/     # Velocity-based loading example
 └── window-scroll/        # Document-level scrolling (scrollElement: window)
@@ -68,7 +72,7 @@ bun run build:sandbox
 
 # Output:
 # Building sandbox...
-# Found 7 examples: basic, infinite-scroll, million-items, selection, variable-heights, velocity-loading, window-scroll
+# Found 11 examples: basic, core, grid, infinite-scroll, million-items, scroll-restore, selection, sticky-headers, variable-heights, velocity-loading, window-scroll
 #   basic                 3ms
 #   infinite-scroll      12ms
 #   million-items        15ms

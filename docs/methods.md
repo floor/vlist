@@ -8,6 +8,7 @@ The methods module provides factory functions that create the public API methods
 
 - **Data Methods**: Item manipulation (setItems, updateItem, removeItem, etc.)
 - **Scroll Methods**: Navigation (scrollToIndex, scrollToItem, getScrollPosition)
+- **Snapshot Methods**: Scroll save/restore (getScrollSnapshot, restoreScroll)
 - **Selection Methods**: Selection management (select, deselect, selectAll, etc.)
 
 ## Module Structure
@@ -27,12 +28,15 @@ Methods are created using factory functions that receive the context:
 // Factory pattern
 const dataMethods = createDataMethods(ctx);
 const scrollMethods = createScrollMethods(ctx);
+const snapshotMethods = createSnapshotMethods(ctx);
 const selectionMethods = createSelectionMethods(ctx);
 
 // Methods are spread into public API
 return {
   ...dataMethods,
   ...scrollMethods,
+  getScrollSnapshot: snapshotMethods.getScrollSnapshot,
+  restoreScroll: snapshotMethods.restoreScroll,
   select: selectionMethods.select,
   deselect: selectionMethods.deselect,
   // ...
@@ -242,6 +246,92 @@ const position = list.getScrollPosition();
 // Works in both native and compressed modes
 ```
 
+### Snapshot Methods
+
+#### `createSnapshotMethods`
+
+Creates scroll save/restore methods.
+
+```typescript
+function createSnapshotMethods<T extends VListItem>(
+  ctx: VListContext<T>
+): SnapshotMethods;
+
+interface SnapshotMethods {
+  /** Get a snapshot of the current scroll position for save/restore */
+  getScrollSnapshot: () => ScrollSnapshot;
+  
+  /** Restore scroll position (and optionally selection) from a snapshot */
+  restoreScroll: (snapshot: ScrollSnapshot) => void;
+}
+
+interface ScrollSnapshot {
+  /** First visible item index */
+  index: number;
+  
+  /** Pixel offset within the first visible item */
+  offsetInItem: number;
+  
+  /** Selected item IDs (optional, only included when items are selected) */
+  selectedIds?: Array<string | number>;
+}
+```
+
+#### Method Details
+
+**`getScrollSnapshot()`**
+Captures the current scroll position as a JSON-serializable snapshot. The snapshot stores the first visible item index and the sub-pixel offset within that item — enough to perfectly restore the position later.
+
+```typescript
+const snapshot = list.getScrollSnapshot();
+// { index: 523, offsetInItem: 12, selectedIds: [3, 7, 42] }
+
+// Save to sessionStorage
+sessionStorage.setItem('list-scroll', JSON.stringify(snapshot));
+```
+
+- Returns `{ index: 0, offsetInItem: 0 }` for empty lists
+- Includes `selectedIds` only when items are selected
+- Works with both normal and compressed (1M+ items) modes
+- In compressed mode, uses linear ratio mapping for the index
+
+**`restoreScroll(snapshot)`**
+Restores scroll position (and optionally selection) from a previously saved snapshot.
+
+```typescript
+const raw = sessionStorage.getItem('list-scroll');
+if (raw) {
+  list.restoreScroll(JSON.parse(raw));
+}
+```
+
+- Clamps index to valid range (safe even if item count changed)
+- Clamps scroll position to max scroll (can't scroll past the end)
+- No-op for empty lists
+- Restores selection only when `selectedIds` is present and selection mode is not `'none'`
+
+#### Mode-Aware Wrappers
+
+In `vlist.ts`, snapshot methods are wrapped to handle layout modes:
+
+- **Groups mode**: Converts between data indices (user-facing) and layout indices (internal, includes headers)
+- **Grid mode**: Converts between item indices (user-facing) and row indices (internal, used by height cache)
+
+```typescript
+// Groups mode wrapper
+getScrollSnapshot: () => {
+  const snapshot = rawSnapshotMethods.getScrollSnapshot();
+  const dataIndex = groupLayout.layoutToDataIndex(snapshot.index);
+  return { ...snapshot, index: dataIndex };
+},
+
+// Grid mode wrapper
+getScrollSnapshot: () => {
+  const snapshot = rawSnapshotMethods.getScrollSnapshot();
+  return { ...snapshot, index: snapshot.index * columns };
+},
+```
+
 ### Selection Methods
 
 #### `createSelectionMethods`
@@ -393,11 +483,26 @@ list.scrollToItem(targetId, { behavior: 'smooth', duration: 500 });
 
 // Cancel in-progress smooth scroll
 list.cancelScroll();
+```
 
-// Save and restore scroll position
-const position = list.getScrollPosition();
-// ... later ...
-list.scrollToIndex(Math.floor(position / 48));  // Approximate restore
+### Scroll Save/Restore
+
+```typescript
+const STORAGE_KEY = 'my-list-scroll';
+
+// Before navigating away — save snapshot
+const snapshot = list.getScrollSnapshot();
+sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+list.destroy();
+
+// After navigating back — recreate and restore
+const list = createVList({ /* same config */ });
+const saved = sessionStorage.getItem(STORAGE_KEY);
+if (saved) {
+  list.restoreScroll(JSON.parse(saved));
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+// Scroll position AND selection perfectly restored
 ```
 
 ### Selection Management

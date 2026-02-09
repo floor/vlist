@@ -274,6 +274,43 @@ list.scrollToIndex(100, { behavior: 'smooth', duration: 500 });
 list.cancelScroll();
 ```
 
+#### `ScrollSnapshot`
+
+Scroll position snapshot for save/restore. Returned by `getScrollSnapshot()` and accepted by `restoreScroll()`.
+
+```typescript
+interface ScrollSnapshot {
+  /** First visible item index */
+  index: number;
+  
+  /** Pixel offset within the first visible item (how far it's scrolled off) */
+  offsetInItem: number;
+  
+  /** Selected item IDs (optional, only included when items are selected) */
+  selectedIds?: Array<string | number>;
+}
+```
+
+**Usage**:
+```typescript
+// Save scroll position
+const snapshot = list.getScrollSnapshot();
+// { index: 523, offsetInItem: 12, selectedIds: [3, 7, 42] }
+sessionStorage.setItem('list-scroll', JSON.stringify(snapshot));
+
+// Restore scroll position
+const saved = JSON.parse(sessionStorage.getItem('list-scroll'));
+list.restoreScroll(saved);
+```
+
+**Details**:
+- Plain JSON object — serializable with `JSON.stringify()` for `sessionStorage`
+- `index` is always the user-facing item index (not a layout or row index)
+- `offsetInItem` is the number of pixels scrolled past the top of the first visible item
+- `selectedIds` is only present when at least one item is selected
+- Works with normal and compressed (1M+ items) modes
+- Round-trips perfectly: `restoreScroll(getScrollSnapshot())` is a no-op
+
 #### `ScrollbarConfig`
 
 Custom scrollbar configuration.
@@ -586,6 +623,10 @@ interface VList<T extends VListItem = VListItem> {
   ) => void;
   cancelScroll: () => void;
   getScrollPosition: () => number;
+  
+  // Snapshot methods (scroll save/restore)
+  getScrollSnapshot: () => ScrollSnapshot;
+  restoreScroll: (snapshot: ScrollSnapshot) => void;
   
   // Selection methods
   select: (...ids: Array<string | number>) => void;
