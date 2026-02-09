@@ -2,7 +2,7 @@
 // Demonstrates compression for handling millions of items
 
 // Direct imports for optimal tree-shaking
-import { createButton } from "mtrl";
+import { createButton, createChips, createProgress } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList, MAX_VIRTUAL_HEIGHT } from "vlist";
 
@@ -98,15 +98,6 @@ const createComponentSection = (info) => [
           class: "components__section-showcase",
           style: { position: "relative" },
         },
-        [
-          "loadingOverlay",
-          { class: "loading-overlay loading-overlay--hidden" },
-          [{ class: "loading-spinner" }],
-          [
-            "loadingText",
-            { class: "loading-text", text: "Generating items..." },
-          ],
-        ],
       ],
       ["info", { class: "components__section-info" }],
     ],
@@ -160,9 +151,6 @@ const createMillionItemsExample = (container) => {
   ).component;
 
   const showcaseElement = section.showcase.element || section.showcase;
-  const loadingOverlay =
-    section.loadingOverlay.element || section.loadingOverlay;
-  const loadingText = section.loadingText.element || section.loadingText;
 
   let list = null;
   let currentSize = "1m";
@@ -203,13 +191,48 @@ const createMillionItemsExample = (container) => {
   };
   requestAnimationFrame(updateFps);
 
-  const showLoading = (text) => {
-    loadingText.textContent = text;
-    loadingOverlay.classList.remove("loading-overlay--hidden");
+  // Create a linear determinate progress bar for loading feedback
+  const progress = createProgress({
+    variant: "linear",
+    value: 0,
+    max: 100,
+  });
+  progress.element.style.cssText =
+    "position:absolute;top:0;left:0;right:0;z-index:10;display:none;";
+  showcaseElement.appendChild(progress.element);
+
+  const showProgress = () => {
+    progress.setValue(0);
+    progress.element.style.display = "";
   };
 
-  const hideLoading = () => {
-    loadingOverlay.classList.add("loading-overlay--hidden");
+  const hideProgress = () => {
+    progress.element.style.display = "none";
+  };
+
+  const BATCH_SIZE = 50_000;
+
+  /**
+   * Generate items in batches, yielding between each so the
+   * progress bar can repaint.
+   */
+  const generateItemsBatched = async (total) => {
+    const result = new Array(total);
+    let generated = 0;
+
+    while (generated < total) {
+      const end = Math.min(generated + BATCH_SIZE, total);
+      for (let i = generated; i < end; i++) {
+        result[i] = generateItem(i);
+      }
+      generated = end;
+      progress.setValue(Math.round((generated / total) * 100));
+
+      // Yield to let the browser repaint the progress bar
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return result;
   };
 
   const createList = async (size) => {
@@ -217,19 +240,20 @@ const createMillionItemsExample = (container) => {
     currentSize = size;
     currentTotal = total;
 
-    showLoading(`Generating ${(total / 1_000_000).toFixed(0)}M items...`);
+    showProgress();
 
-    // Wait a frame to let the UI update
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Yield to let the chip animation and progress bar render
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Destroy existing list
     if (list) {
       list.destroy();
     }
 
-    // Generate items
+    // Generate items in batches with progress updates
     const generateStart = performance.now();
-    items = Array.from({ length: total }, (_, i) => generateItem(i));
+    items = await generateItemsBatched(total);
     perf.generate = performance.now() - generateStart;
 
     // Update compression info
@@ -275,7 +299,7 @@ const createMillionItemsExample = (container) => {
       });
     });
 
-    hideLoading();
+    hideProgress();
     scheduleUpdate();
   };
 
@@ -301,29 +325,21 @@ const createMillionItemsExample = (container) => {
     [
       { layout: { type: "column", gap: 16 } },
 
-      // Size toggle panel
+      // Size toggle using filter chips
       [
         "sizePanel",
         { tag: "div", class: "mtrl-panel" },
         [{ class: "panel__title", text: "List Size" }],
         [
-          { class: "size-toggle" },
-          [
-            "size1m",
-            {
-              tag: "button",
-              class: "size-toggle__button size-toggle__button--active",
-              text: "1M",
-            },
-          ],
-          [
-            "size2m",
-            { tag: "button", class: "size-toggle__button", text: "2M" },
-          ],
-          [
-            "size5m",
-            { tag: "button", class: "size-toggle__button", text: "5M" },
-          ],
+          createChips,
+          "sizeChips",
+          {
+            chips: [
+              { text: "1M", value: "1m", variant: "filter", selected: true },
+              { text: "2M", value: "2m", variant: "filter" },
+              { text: "5M", value: "5m", variant: "filter" },
+            ],
+          },
         ],
       ],
 
@@ -517,38 +533,11 @@ const createMillionItemsExample = (container) => {
     });
   };
 
-  // Size toggle handlers
-  const setActiveSize = (size) => {
-    controls.size1m.classList.toggle(
-      "size-toggle__button--active",
-      size === "1m",
-    );
-    controls.size2m.classList.toggle(
-      "size-toggle__button--active",
-      size === "2m",
-    );
-    controls.size5m.classList.toggle(
-      "size-toggle__button--active",
-      size === "5m",
-    );
-  };
-
-  controls.size1m.addEventListener("click", () => {
-    if (currentSize === "1m") return;
-    setActiveSize("1m");
-    createList("1m");
-  });
-
-  controls.size2m.addEventListener("click", () => {
-    if (currentSize === "2m") return;
-    setActiveSize("2m");
-    createList("2m");
-  });
-
-  controls.size5m.addEventListener("click", () => {
-    if (currentSize === "5m") return;
-    setActiveSize("5m");
-    createList("5m");
+  // Size chip change handler
+  controls.sizeChips.on("change", (selectedValues) => {
+    const newSize = selectedValues.find((v) => SIZES[v]);
+    if (!newSize || newSize === currentSize) return;
+    createList(newSize);
   });
 
   // Navigation handlers

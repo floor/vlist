@@ -10,7 +10,7 @@
     padding: 8px 16px;
     background: var(--mtrl-sys-color-surface, #fff);
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .back-link:hover {
@@ -249,41 +249,6 @@
 }
 
 /* ============================================================================
-   Size Toggle
-   ============================================================================ */
-
-.mtrl-size-toggle {
-    display: flex;
-    gap: 8px;
-    background-color: var(--mtrl-sys-color-surface);
-    padding: 4px;
-    border-radius: 12px;
-}
-
-.mtrl-size-toggle__button {
-    flex: 1;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--mtrl-sys-color-on-surface-variant);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.mtrl-size-toggle__button:hover:not(.mtrl-size-toggle__button--active) {
-    background-color: var(--mtrl-sys-color-surface-container-highest);
-}
-
-.mtrl-size-toggle__button--active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-}
-
-/* ============================================================================
    Compression Info
    ============================================================================ */
 
@@ -357,50 +322,6 @@
 
 .mtrl-performance-bar__time span {
     color: #43e97b;
-}
-
-/* ============================================================================
-   Loading Overlay
-   ============================================================================ */
-
-.mtrl-loading-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 15px;
-    border-radius: 12px;
-    z-index: 10;
-}
-
-.mtrl-loading-overlay--hidden {
-    display: none;
-}
-
-.mtrl-loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(102, 126, 234, 0.3);
-    border-top-color: #667eea;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-.mtrl-loading-text {
-    color: var(--mtrl-sys-color-on-surface-variant);
-    font-size: 14px;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 /* ============================================================================
