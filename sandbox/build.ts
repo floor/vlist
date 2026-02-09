@@ -27,11 +27,27 @@ function minifyCss(css: string): string {
     .trim();
 }
 
+function formatKB(bytes: number): string {
+  return (bytes / 1024).toFixed(1);
+}
+
+function gzipSize(path: string): number {
+  const raw = readFileSync(path);
+  return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+}
+
+interface SizeInfo {
+  jsMin: number;
+  jsGzip: number;
+  css: number;
+}
+
 interface BuildResult {
   name: string;
   success: boolean;
   time: number;
   error?: string;
+  size?: SizeInfo;
 }
 
 async function discoverExamples(): Promise<string[]> {
@@ -74,15 +90,24 @@ async function buildExample(name: string): Promise<BuildResult> {
 
     // Minify CSS if styles.css exists
     const cssPath = join(SANDBOX_DIR, name, "styles.css");
+    let cssSize = 0;
     if (existsSync(cssPath)) {
       const raw = readFileSync(cssPath, "utf-8");
-      writeFileSync(join(outdir, "styles.css"), minifyCss(raw));
+      const minified = minifyCss(raw);
+      writeFileSync(join(outdir, "styles.css"), minified);
+      cssSize = Buffer.byteLength(minified, "utf-8");
     }
+
+    // Measure JS bundle size
+    const jsPath = join(outdir, "script.js");
+    const jsMin = Bun.file(jsPath).size;
+    const jsGzip = gzipSize(jsPath);
 
     return {
       name,
       success: true,
       time: performance.now() - start,
+      size: { jsMin, jsGzip, css: cssSize },
     };
   } catch (err) {
     return {
@@ -92,6 +117,58 @@ async function buildExample(name: string): Promise<BuildResult> {
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function printResult(result: BuildResult): void {
+  const icon = result.success ? "✅" : "❌";
+  const time = `${result.time.toFixed(0)}ms`;
+
+  if (result.success && result.size) {
+    const { jsMin, jsGzip, css } = result.size;
+    const sizeStr = `${formatKB(jsMin)} KB → ${formatKB(jsGzip)} KB gzip`;
+    const cssStr = css > 0 ? `  css ${formatKB(css)} KB` : "";
+    console.log(
+      `${icon} ${result.name.padEnd(20)} ${time.padStart(5)}   ${sizeStr}${cssStr}`,
+    );
+  } else {
+    console.log(`${icon} ${result.name.padEnd(20)} ${time.padStart(5)}`);
+    if (result.error) {
+      console.log(`   └─ ${result.error}`);
+    }
+  }
+}
+
+function printSizeTable(results: BuildResult[]): void {
+  const successful = results.filter((r) => r.success && r.size);
+  if (successful.length === 0) return;
+
+  console.log("");
+  console.log(
+    `${"  Example".padEnd(24)} ${"JS min".padStart(9)} ${"JS gzip".padStart(9)} ${"CSS".padStart(9)} ${"Total".padStart(9)}`,
+  );
+  console.log(`  ${"─".repeat(58)}`);
+
+  let totalJsMin = 0;
+  let totalJsGzip = 0;
+  let totalCss = 0;
+
+  for (const r of successful) {
+    const s = r.size!;
+    const total = s.jsGzip + s.css;
+    totalJsMin += s.jsMin;
+    totalJsGzip += s.jsGzip;
+    totalCss += s.css;
+
+    console.log(
+      `  ${r.name.padEnd(22)} ${(formatKB(s.jsMin) + " KB").padStart(9)} ${(formatKB(s.jsGzip) + " KB").padStart(9)} ${s.css > 0 ? (formatKB(s.css) + " KB").padStart(9) : "—".padStart(9)} ${(formatKB(total) + " KB").padStart(9)}`,
+    );
+  }
+
+  const grandTotal = totalJsGzip + totalCss;
+  console.log(`  ${"─".repeat(58)}`);
+  console.log(
+    `  ${"Total".padEnd(22)} ${(formatKB(totalJsMin) + " KB").padStart(9)} ${(formatKB(totalJsGzip) + " KB").padStart(9)} ${(formatKB(totalCss) + " KB").padStart(9)} ${(formatKB(grandTotal) + " KB").padStart(9)}`,
+  );
 }
 
 async function main() {
@@ -117,13 +194,11 @@ async function main() {
   const failed = results.filter((r) => !r.success);
 
   for (const result of results) {
-    const icon = result.success ? "✅" : "❌";
-    const time = result.time.toFixed(0);
-    console.log(`${icon} ${result.name.padEnd(20)} ${time}ms`);
-    if (result.error) {
-      console.log(`   └─ ${result.error}`);
-    }
+    printResult(result);
   }
+
+  // Size summary table
+  printSizeTable(results);
 
   const totalTime = (performance.now() - totalStart).toFixed(0);
 
@@ -156,11 +231,7 @@ async function watchMode() {
       ) {
         console.log(`\n📝 ${name}/${filename} changed`);
         const result = await buildExample(name);
-        const icon = result.success ? "✅" : "❌";
-        console.log(`${icon} Rebuilt ${name} in ${result.time.toFixed(0)}ms`);
-        if (result.error) {
-          console.log(`   └─ ${result.error}`);
-        }
+        printResult(result);
       }
     });
   }

@@ -116,37 +116,62 @@ interface ScrollToOptions {
 
 ### 3. ✅ Shrink Bundle Size
 
-**Status:** Done (sub-module split + lazy-init placeholder)
+**Status:** Done (sub-module split + lazy-init placeholder + lightweight core entry)
 
 **a) Split entry points for tree-shaking — Done:**
 
-Consumers can now import individual sub-modules instead of the full bundle:
+Consumers can import individual sub-modules instead of the full bundle:
 
 ```typescript
 import { createVList } from 'vlist'                    // full bundle
+import { createVList } from 'vlist/core'               // 7.3 KB / 3.0 KB gzip (83% smaller!)
 import { createSparseStorage } from 'vlist/data'       // 9.2 KB / 3.8 KB gzip
-import { getCompressionInfo } from 'vlist/compression'  // 2.0 KB / 0.9 KB gzip
+import { getCompressionInfo } from 'vlist/compression'  // 2.6 KB / 1.1 KB gzip
 import { createSelectionState } from 'vlist/selection'  // 1.9 KB / 0.7 KB gzip
-import { createScrollController } from 'vlist/scroll'   // 5.2 KB / 2.1 KB gzip
+import { createScrollController } from 'vlist/scroll'   // 6.0 KB / 2.3 KB gzip
+import { createGroupLayout } from 'vlist/groups'        // 3.6 KB / 1.4 KB gzip
 ```
 
 Bundle sizes after split:
 
-| Import | Minified | Gzipped |
-|--------|----------|---------|
-| `vlist` (full) | 34.4 KB | 11.6 KB |
-| `vlist/data` | 9.2 KB | 3.8 KB |
-| `vlist/scroll` | 5.2 KB | 2.1 KB |
-| `vlist/compression` | 2.0 KB | 0.9 KB |
-| `vlist/selection` | 1.9 KB | 0.7 KB |
+| Import | Minified | Gzipped | Description |
+|--------|----------|---------|-------------|
+| `vlist` (full) | 42.3 KB | 13.9 KB | All features |
+| **`vlist/core`** | **7.3 KB** | **3.0 KB** | **Lightweight — no selection, groups, compression, scrollbar, or adapter** |
+| `vlist/data` | 9.2 KB | 3.8 KB | Sparse storage, placeholders, data manager |
+| `vlist/scroll` | 6.0 KB | 2.3 KB | Scroll controller + custom scrollbar |
+| `vlist/groups` | 3.6 KB | 1.4 KB | Group layout + sticky headers |
+| `vlist/compression` | 2.6 KB | 1.1 KB | Large-list compression utilities |
+| `vlist/selection` | 1.9 KB | 0.7 KB | Selection state management |
 
 **b) Lazy-init placeholder manager — Done (Z3):**
 
 The placeholder manager (~400 lines) is now only instantiated when first needed (i.e., when an unloaded item is requested). Static `items: [...]` lists never create it.
 
-**c) Remaining:** The full bundle size hasn't shrunk because `createVList` internally depends on all modules. Further reduction would require making features like selection, scrollbar, and placeholders conditionally loaded inside `createVList` itself — a larger architectural change deferred for later.
+**c) Lightweight core entry (`vlist/core`) — Done:**
 
-**Changes:** `build.ts`, `package.json`, `src/compression.ts` (new), `src/data/manager.ts`
+A self-contained, minimal `createVList` factory at **7.3 KB minified / 3.0 KB gzipped** — an **83% reduction** vs the full bundle. It covers the most common use case (static or streaming lists) and supports:
+
+- ✅ Fixed and variable item heights
+- ✅ `scrollToIndex` / `scrollToItem` with smooth animation
+- ✅ `setItems` / `appendItems` / `prependItems` / `updateItem` / `removeItem`
+- ✅ Events (`scroll`, `item:click`, `range:change`, `resize`)
+- ✅ Window (document) scrolling
+- ✅ ResizeObserver for container resize
+- ✅ DOM element pooling & DocumentFragment batching
+
+It deliberately omits (use full `vlist` if needed):
+
+- ❌ Selection / keyboard navigation
+- ❌ Groups / sticky headers
+- ❌ Compression (lists > ~100K items)
+- ❌ Custom scrollbar
+- ❌ Async data adapter / placeholders
+- ❌ Velocity tracking / load cancellation
+
+The core module is fully self-contained — zero imports from the full bundle's internal modules — so bundlers pull in only the ~7 KB file with no hidden transitive dependencies.
+
+**Changes:** `build.ts`, `package.json`, `src/core.ts` (new), `src/compression.ts`, `src/data/manager.ts`
 
 ---
 
