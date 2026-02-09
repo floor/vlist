@@ -1,5 +1,11 @@
 // build.ts - Auto-discover and build all sandbox examples in parallel
-import { readdirSync, existsSync, watch } from "fs";
+import {
+  readdirSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  watch,
+} from "fs";
 import { join } from "path";
 
 const isWatch = process.argv.includes("--watch");
@@ -11,6 +17,15 @@ const BUILD_OPTIONS = {
   target: "browser" as const,
   sourcemap: "none" as const,
 };
+
+function minifyCss(css: string): string {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, "") // strip comments
+    .replace(/\s*([{}:;,>~+])\s*/g, "$1") // collapse around symbols
+    .replace(/;\}/g, "}") // drop trailing semicolons
+    .replace(/\s+/g, " ") // collapse whitespace
+    .trim();
+}
 
 interface BuildResult {
   name: string;
@@ -55,6 +70,13 @@ async function buildExample(name: string): Promise<BuildResult> {
         time: performance.now() - start,
         error: errors,
       };
+    }
+
+    // Minify CSS if styles.css exists
+    const cssPath = join(SANDBOX_DIR, name, "styles.css");
+    if (existsSync(cssPath)) {
+      const raw = readFileSync(cssPath, "utf-8");
+      writeFileSync(join(outdir, "styles.css"), minifyCss(raw));
     }
 
     return {
@@ -127,7 +149,11 @@ async function watchMode() {
   for (const name of examples) {
     const dir = join(SANDBOX_DIR, name);
     watch(dir, { recursive: true }, async (event, filename) => {
-      if (filename && !filename.includes("dist") && !filename.includes("node_modules")) {
+      if (
+        filename &&
+        !filename.includes("dist") &&
+        !filename.includes("node_modules")
+      ) {
         console.log(`\n📝 ${name}/${filename} changed`);
         const result = await buildExample(name);
         const icon = result.success ? "✅" : "❌";
