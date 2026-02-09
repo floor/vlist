@@ -195,6 +195,7 @@ const createInfiniteScrollExample = (container) => {
   const createList = () => {
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Infinite scroll user list",
       item: {
         height: 72,
         template: (item, index) => {

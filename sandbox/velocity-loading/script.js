@@ -11,8 +11,31 @@ const CANCEL_LOAD_VELOCITY_THRESHOLD = 25; // px/ms
 const TOTAL_ITEMS = 1000000;
 const UPDATE_THROTTLE_MS = 50; // Throttle UI updates
 
-// Simulated API
-let simulatedDelay = 0;
+// API configuration
+const API_BASE = "http://localhost:3338";
+let apiDelay = 0;
+let useRealApi = true;
+
+// --------------------------------------------------------------------------
+// Real API — fetches from vlist.dev backend
+// --------------------------------------------------------------------------
+
+const fetchFromApi = async (offset, limit) => {
+  const params = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+    total: String(TOTAL_ITEMS),
+  });
+  if (apiDelay > 0) params.set("delay", String(apiDelay));
+
+  const res = await fetch(`${API_BASE}/api/users?${params}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+};
+
+// --------------------------------------------------------------------------
+// Simulated API — deterministic in-memory fallback (zero network)
+// --------------------------------------------------------------------------
 
 const generateItem = (id) => ({
   id,
@@ -22,15 +45,20 @@ const generateItem = (id) => ({
   avatar: String.fromCharCode(65 + (id % 26)),
 });
 
-const fetchItems = async (offset, limit) => {
-  await new Promise((resolve) => setTimeout(resolve, simulatedDelay));
+const fetchSimulated = async (offset, limit) => {
+  if (apiDelay > 0) await new Promise((r) => setTimeout(r, apiDelay));
   const items = [];
   const end = Math.min(offset + limit, TOTAL_ITEMS);
-  for (let i = offset; i < end; i++) {
-    items.push(generateItem(i + 1));
-  }
+  for (let i = offset; i < end; i++) items.push(generateItem(i + 1));
   return { items, total: TOTAL_ITEMS, hasMore: end < TOTAL_ITEMS };
 };
+
+// --------------------------------------------------------------------------
+// Unified fetch — delegates to real or simulated based on toggle
+// --------------------------------------------------------------------------
+
+const fetchItems = (offset, limit) =>
+  useRealApi ? fetchFromApi(offset, limit) : fetchSimulated(offset, limit);
 
 // Stats tracking (simplified)
 const createStatsTracker = () => {
@@ -129,14 +157,22 @@ const getPlaceholderElement = () => {
 };
 
 const createItemElement = (item, index) => {
+  // Real API returns firstName/lastName; simulated returns name
+  const displayName = item.firstName
+    ? `${item.firstName} ${item.lastName}`
+    : item.name;
+  const avatarText = item.avatar || displayName[0];
+  const role = item.role || "";
+  const email = item.email || "";
+
   const schema = [
     { class: "item-content" },
-    [{ class: "item-avatar", text: item.avatar }],
+    [{ class: "item-avatar", text: avatarText }],
     [
       { class: "item-details" },
-      [{ class: "item-name", text: `${item.name} (${index})` }],
-      [{ class: "item-email", text: item.email }],
-      [{ class: "item-role", text: item.role }],
+      [{ class: "item-name", text: `${displayName} (${index})` }],
+      [{ class: "item-email", text: email }],
+      [{ class: "item-role", text: role }],
     ],
   ];
   return createLayout(schema).element;
@@ -177,6 +213,7 @@ const createVelocityExample = (container) => {
   const createList = () => {
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Virtual user list",
       item: {
         height: 72,
         template: (item, index) => {
@@ -293,6 +330,16 @@ const createVelocityExample = (container) => {
         ],
       ],
 
+      // Data source toggle
+      [
+        createButton,
+        "toggleApi",
+        {
+          text: "⚡ Live API",
+          variant: "tonal",
+        },
+      ],
+
       // Sliders
       [
         createSlider,
@@ -301,7 +348,7 @@ const createVelocityExample = (container) => {
           label: "API Delay (ms)",
           min: 0,
           max: 1000,
-          value: simulatedDelay,
+          value: apiDelay,
           step: 20,
         },
       ],
@@ -443,8 +490,20 @@ const createVelocityExample = (container) => {
   };
 
   // Wire up controls
+  const updateToggleButton = () => {
+    controls.toggleApi.textContent = useRealApi
+      ? "⚡ Live API"
+      : "🧪 Simulated";
+  };
+
+  controls.toggleApi.on("click", () => {
+    useRealApi = !useRealApi;
+    updateToggleButton();
+    if (list) list.reload();
+  });
+
   controls.delay.on("change", (e) => {
-    simulatedDelay = e.value;
+    apiDelay = e.value;
   });
 
   controls.scrollTo.on("change", (e) => {

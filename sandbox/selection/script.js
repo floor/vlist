@@ -2,7 +2,7 @@
 // Demonstrates single and multiple selection modes with keyboard navigation
 
 // Direct imports for optimal tree-shaking
-import { createButton } from "mtrl";
+import { createButton, createChips } from "mtrl";
 import { createLayout } from "mtrl-addons/layout";
 import { createVList } from "vlist";
 
@@ -103,7 +103,7 @@ const createComponentSection = (info) => [
 ];
 
 // Item element creator
-const createItemElement = (item, selected) => {
+const createItemElement = (item) => {
   const schema = [
     { class: "item-content" },
     [
@@ -172,6 +172,7 @@ const createSelectionExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Selectable user list",
       item: {
         height: 56,
         template: (item, index, { selected }) =>
@@ -191,10 +192,6 @@ const createSelectionExample = (container) => {
       scheduleUpdate();
     });
 
-    // Focus the list for keyboard navigation
-    list.element.setAttribute("tabindex", "0");
-    list.element.focus();
-
     // Reset stats
     stats.selectedCount = 0;
     stats.selectedNames = [];
@@ -209,29 +206,25 @@ const createSelectionExample = (container) => {
     [
       { layout: { type: "column", gap: 16 } },
 
-      // Mode toggle panel
+      // Mode toggle using filter chips
       [
         "modePanel",
         { tag: "div", class: "mtrl-panel" },
         [{ class: "panel__title", text: "Selection Mode" }],
         [
-          { class: "mode-toggle" },
-          [
-            "modeSingle",
-            {
-              tag: "button",
-              class: "mode-toggle__button",
-              text: "Single",
-            },
-          ],
-          [
-            "modeMultiple",
-            {
-              tag: "button",
-              class: "mode-toggle__button mode-toggle__button--active",
-              text: "Multiple",
-            },
-          ],
+          createChips,
+          "modeChips",
+          {
+            chips: [
+              { text: "Single", value: "single", variant: "filter" },
+              {
+                text: "Multiple",
+                value: "multiple",
+                variant: "filter",
+                selected: true,
+              },
+            ],
+          },
         ],
       ],
 
@@ -369,21 +362,15 @@ const createSelectionExample = (container) => {
     });
   };
 
-  // Mode toggle handlers
-  controls.modeSingle.addEventListener("click", () => {
-    if (currentMode === "single") return;
-    controls.modeSingle.classList.add("mode-toggle__button--active");
-    controls.modeMultiple.classList.remove("mode-toggle__button--active");
-    controls.selectAll.disabled = true;
-    createList("single");
-  });
+  // Mode chip change handler
+  controls.modeChips.on("change", (selectedValues) => {
+    // selectedValues is an array of selected chip values
+    const newMode = selectedValues.includes("single") ? "single" : "multiple";
+    if (newMode === currentMode) return;
 
-  controls.modeMultiple.addEventListener("click", () => {
-    if (currentMode === "multiple") return;
-    controls.modeMultiple.classList.add("mode-toggle__button--active");
-    controls.modeSingle.classList.remove("mode-toggle__button--active");
-    controls.selectAll.disabled = false;
-    createList("multiple");
+    // Disable "Select All" in single mode
+    controls.selectAll.disabled = newMode === "single";
+    createList(newMode);
   });
 
   // Button handlers

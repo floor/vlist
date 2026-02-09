@@ -89,6 +89,48 @@ interface VListItem {
 
 ### Configuration Types
 
+#### `ItemConfig`
+
+Item-specific configuration for height and rendering.
+
+```typescript
+interface ItemConfig<T extends VListItem = VListItem> {
+  /**
+   * Item height in pixels.
+   *
+   * - `number` — Fixed height for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   */
+  height: number | ((index: number) => number);
+
+  /** Template function to render each item */
+  template: ItemTemplate<T>;
+}
+```
+
+**Fixed height** (number): All items have the same height. This is the fastest path — internally uses simple multiplication for O(1) offset calculations with zero overhead.
+
+**Variable height** (function): Each item can have a different height. The function receives the item index and returns the height in pixels. Internally, vlist builds a prefix-sum array for O(1) offset lookups and O(log n) binary search for scroll-position-to-index mapping.
+
+```typescript
+// Fixed height — all items 48px
+item: { height: 48, template: myTemplate }
+
+// Variable height — headers are taller
+item: {
+  height: (index: number) => items[index].type === 'header' ? 64 : 48,
+  template: myTemplate,
+}
+
+// Variable height — based on content
+item: {
+  height: (index: number) => items[index].expanded ? 120 : 48,
+  template: myTemplate,
+}
+```
+
+> **Note:** The height function must be deterministic — given the same index, it must always return the same value. If heights change (e.g., an item expands), call `setItems()` to trigger a rebuild of the internal height cache.
+
 #### `VListConfig`
 
 Main configuration for createVList.
@@ -112,6 +154,19 @@ interface VListConfig<T extends VListItem = VListItem> {
   
   /** Selection configuration */
   selection?: SelectionConfig;
+  
+  /**
+   * External scroll element for document/window scrolling.
+   * When set, the list scrolls with this element instead of its own container.
+   * Pass `window` for document scrolling (most common use case).
+   *
+   * In window mode:
+   * - The list participates in the normal page flow (no inner scrollbar)
+   * - The browser's native scrollbar controls scrolling
+   * - Compression still works (content height is capped, scroll math is remapped)
+   * - Custom scrollbar is disabled (the browser scrollbar is used)
+   */
+  scrollElement?: Window;
   
   /** Custom scrollbar configuration (for compressed mode) */
   scrollbar?: ScrollbarConfig;

@@ -1,6 +1,7 @@
 // serve.ts - Static file server with Markdown rendering and syntax highlighting
 import { readFileSync, existsSync, statSync, readdirSync } from "fs";
 import { join, extname, resolve, basename } from "path";
+import { gzipSync } from "bun";
 
 const PORT = 3337;
 const ROOT = resolve(".");
@@ -15,7 +16,12 @@ const HIDDEN_FILES = new Set([
 ]);
 
 // Files that should be rendered as code (no extension)
-const DOTFILES = new Set([".gitignore", ".npmignore", ".editorconfig", ".prettierrc"]);
+const DOTFILES = new Set([
+  ".gitignore",
+  ".npmignore",
+  ".editorconfig",
+  ".prettierrc",
+]);
 
 // File type icons (SVG) - Zed-style
 const ICONS: Record<string, string> = {
@@ -39,7 +45,8 @@ function getFileIcon(filename: string): string {
   const name = filename.toLowerCase();
 
   if (name === ".gitignore") return ICONS.gitignore;
-  if (name === "license" || name === "license.md" || name === "license.txt") return ICONS.license;
+  if (name === "license" || name === "license.md" || name === "license.txt")
+    return ICONS.license;
 
   const iconMap: Record<string, string> = {
     ".ts": ICONS.ts,
@@ -61,13 +68,28 @@ function getFileIcon(filename: string): string {
 
 // File extensions that should be rendered with syntax highlighting (not served raw)
 const CODE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".jsx", ".json",
-  ".scss", ".xml", ".yaml", ".yml",
-  ".sh", ".bash", ".zsh", ".txt",
+  ".ts",
+  ".tsx",
+  ".jsx",
+  ".json",
+  ".scss",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".txt",
 ]);
 
 // Files that should be rendered as plain text (no extension)
-const TEXT_FILES = new Set(["license", "readme", "changelog", "authors", "contributors"]);
+const TEXT_FILES = new Set([
+  "license",
+  "readme",
+  "changelog",
+  "authors",
+  "contributors",
+]);
 
 // MIME types for raw file serving
 const MIME_TYPES: Record<string, string> = {
@@ -88,6 +110,44 @@ const MIME_TYPES: Record<string, string> = {
   ".map": "application/json",
 };
 
+// Extensions eligible for gzip compression
+const COMPRESSIBLE = new Set([
+  ".html",
+  ".css",
+  ".js",
+  ".mjs",
+  ".json",
+  ".svg",
+  ".map",
+]);
+
+/**
+ * Wrap a Response body with gzip if the client supports it and the
+ * content type is compressible.
+ */
+function compressResponse(
+  req: Request,
+  body: string | Uint8Array,
+  headers: Record<string, string>,
+  status = 200,
+): Response {
+  const accept = req.headers.get("accept-encoding") || "";
+  if (accept.includes("gzip")) {
+    const raw =
+      typeof body === "string" ? new TextEncoder().encode(body) : body;
+    const compressed = gzipSync(raw);
+    return new Response(compressed, {
+      status,
+      headers: {
+        ...headers,
+        "Content-Encoding": "gzip",
+        Vary: "Accept-Encoding",
+      },
+    });
+  }
+  return new Response(body, { status, headers });
+}
+
 function getMimeType(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
   return MIME_TYPES[ext] || "application/octet-stream";
@@ -104,10 +164,22 @@ function escapeHtml(text: string): string {
 
 function getLanguageFromExt(ext: string): string {
   const langMap: Record<string, string> = {
-    ".ts": "typescript", ".tsx": "tsx", ".js": "javascript", ".jsx": "jsx",
-    ".mjs": "javascript", ".json": "json", ".css": "css", ".scss": "scss",
-    ".html": "html", ".xml": "xml", ".yaml": "yaml", ".yml": "yaml",
-    ".sh": "bash", ".bash": "bash", ".zsh": "bash", ".md": "markdown",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".js": "javascript",
+    ".jsx": "jsx",
+    ".mjs": "javascript",
+    ".json": "json",
+    ".css": "css",
+    ".scss": "scss",
+    ".html": "html",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".md": "markdown",
   };
   return langMap[ext] || "plaintext";
 }
@@ -137,7 +209,8 @@ function renderMarkdown(content: string): string {
   // Code blocks
   html = html.replace(
     /```(\w*)\n([\s\S]*?)```/g,
-    (_, lang, code) => `<pre><code class="language-${lang || "plaintext"}">${code.trim()}</code></pre>`,
+    (_, lang, code) =>
+      `<pre><code class="language-${lang || "plaintext"}">${code.trim()}</code></pre>`,
   );
 
   // Inline code
@@ -167,10 +240,13 @@ function renderMarkdown(content: string): string {
   html = html.replace(/^---+$/gm, "<hr>");
 
   // Paragraphs
-  html = html.replace(/^(?!<[hluop]|<hr|<pre|<code)(.+)$/gm, (match, content) => {
-    if (content.trim()) return `<p>${content}</p>`;
-    return match;
-  });
+  html = html.replace(
+    /^(?!<[hluop]|<hr|<pre|<code)(.+)$/gm,
+    (match, content) => {
+      if (content.trim()) return `<p>${content}</p>`;
+      return match;
+    },
+  );
 
   return html;
 }
@@ -299,11 +375,17 @@ function generateDirectoryListing(dirPath: string, urlPath: string): string {
   files.sort();
 
   const folderLinks = folders
-    .map((f) => `<a href="${urlPath}${urlPath.endsWith("/") ? "" : "/"}${f}/" class="item"><span class="icon">${ICONS.folder}</span>${f}</a>`)
+    .map(
+      (f) =>
+        `<a href="${urlPath}${urlPath.endsWith("/") ? "" : "/"}${f}/" class="item"><span class="icon">${ICONS.folder}</span>${f}</a>`,
+    )
     .join("\n");
 
   const fileLinks = files
-    .map((f) => `<a href="${urlPath}${urlPath.endsWith("/") ? "" : "/"}${f}" class="item"><span class="icon">${getFileIcon(f)}</span>${f}</a>`)
+    .map(
+      (f) =>
+        `<a href="${urlPath}${urlPath.endsWith("/") ? "" : "/"}${f}" class="item"><span class="icon">${getFileIcon(f)}</span>${f}</a>`,
+    )
     .join("\n");
 
   const breadcrumb = generateBreadcrumb(urlPath);
@@ -349,8 +431,12 @@ async function handleRequest(req: Request): Promise<Response> {
   try {
     const ext = extname(filePath).toLowerCase();
 
-    // If raw requested or binary file, serve as-is
-    if (wantsRaw || MIME_TYPES[ext]?.startsWith("image/") || MIME_TYPES[ext]?.startsWith("font/")) {
+    // If raw requested or binary file, serve as-is (no compression)
+    if (
+      wantsRaw ||
+      MIME_TYPES[ext]?.startsWith("image/") ||
+      MIME_TYPES[ext]?.startsWith("font/")
+    ) {
       const rawContent = readFileSync(filePath);
       return new Response(rawContent, {
         headers: {
@@ -362,38 +448,45 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const content = readFileSync(filePath, "utf-8");
     const breadcrumb = generateBreadcrumb(pathname);
+    const htmlHeaders = { "Content-Type": "text/html; charset=utf-8" };
 
     // Render Markdown files
     if (ext === ".md") {
       const html = wrapInPage(breadcrumb, renderMarkdown(content));
-      return new Response(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
+      return compressResponse(req, html, htmlHeaders);
     }
 
     // Render code files with syntax highlighting
     if (CODE_EXTENSIONS.has(ext)) {
       const html = wrapInPage(breadcrumb, renderCodeFile(content, ext));
-      return new Response(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
+      return compressResponse(req, html, htmlHeaders);
     }
 
     // Render dotfiles (.gitignore, etc.)
     const filename = basename(filePath);
     if (DOTFILES.has(filename)) {
-      const html = wrapInPage(breadcrumb, `<pre><code>${escapeHtml(content)}</code></pre>`);
-      return new Response(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
+      const html = wrapInPage(
+        breadcrumb,
+        `<pre><code>${escapeHtml(content)}</code></pre>`,
+      );
+      return compressResponse(req, html, htmlHeaders);
     }
 
     // Render text files without extension (LICENSE, README, etc.)
     const filenameNoExt = basename(filePath).toLowerCase();
     if (TEXT_FILES.has(filenameNoExt)) {
-      const html = wrapInPage(breadcrumb, `<pre><code>${escapeHtml(content)}</code></pre>`);
-      return new Response(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+      const html = wrapInPage(
+        breadcrumb,
+        `<pre><code>${escapeHtml(content)}</code></pre>`,
+      );
+      return compressResponse(req, html, htmlHeaders);
+    }
+
+    // Compressible static files (JS, CSS, JSON, SVG, etc.)
+    if (COMPRESSIBLE.has(ext)) {
+      return compressResponse(req, content, {
+        "Content-Type": getMimeType(filePath),
+        "Cache-Control": "no-cache",
       });
     }
 

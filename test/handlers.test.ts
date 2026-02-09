@@ -29,6 +29,7 @@ import type { DataManager } from "../src/data";
 import type { ScrollController } from "../src/scroll";
 import type { Emitter } from "../src/events";
 import type { Renderer, DOMStructure, CompressionContext } from "../src/render";
+import { createHeightCache } from "../src/render/heights";
 
 // =============================================================================
 // JSDOM Setup
@@ -182,6 +183,7 @@ const createMockScrollController = (): ScrollController => ({
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
   getVelocity: mock(() => 0),
+  isTracking: mock(() => true),
   isScrolling: mock(() => false),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
@@ -231,10 +233,14 @@ const createMockContext = <T extends VListItem>(
   const emitter = createMockEmitter();
   const scrollbar = createMockScrollbar();
   const state = createMockState(stateOverrides);
+  const itemHeight =
+    typeof config.itemHeight === "number" ? config.itemHeight : 40;
+  const heightCache = createHeightCache(config.itemHeight, items.length);
 
   return {
     config,
     dom,
+    heightCache,
     dataManager,
     scrollController,
     renderer,
@@ -253,8 +259,8 @@ const createMockContext = <T extends VListItem>(
     })),
     getCachedCompression: mock(() => ({
       isCompressed: false,
-      actualHeight: items.length * config.itemHeight,
-      virtualHeight: items.length * config.itemHeight,
+      actualHeight: items.length * itemHeight,
+      virtualHeight: items.length * itemHeight,
       ratio: 1,
     })),
   };
@@ -392,6 +398,66 @@ describe("createScrollHandler", () => {
 
       expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
     });
+
+    it("should not trigger load more when velocity is high (scrollbar drag)", () => {
+      ctx = createMockContext(items, { hasAdapter: true });
+      // Mock direct getters for infinite scroll check
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      // Simulate high velocity scrollbar drag (above 25 px/ms threshold)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      // Set viewport near bottom (where loadMore would normally trigger)
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 3400,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(3400, "down");
+
+      // loadMore should NOT fire — velocity is too high
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
+
+    it("should not trigger load more during velocity ramp-up", () => {
+      ctx = createMockContext(items, { hasAdapter: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      // Velocity is 0 but tracker is not yet reliable (ramp-up phase)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 0);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => false);
+
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 3400,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(3400, "down");
+
+      // loadMore should NOT fire — velocity tracker not reliable yet
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
   });
 
   describe("ensure range", () => {
@@ -408,6 +474,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -439,6 +508,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -459,6 +531,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -480,6 +555,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -548,6 +626,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -562,6 +643,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 

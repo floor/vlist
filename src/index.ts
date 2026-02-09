@@ -46,8 +46,26 @@ export type {
   Unsubscribe,
 } from "./types";
 
-// Render domain (virtual scrolling, compression)
+// Groups domain (sticky headers / grouped lists)
 export {
+  createGroupLayout,
+  buildLayoutItems,
+  createGroupedHeightFn,
+  createStickyHeader,
+  isGroupHeader,
+  type GroupsConfig,
+  type GroupBoundary,
+  type LayoutEntry,
+  type GroupHeaderItem,
+  type GroupLayout,
+  type StickyHeader,
+} from "./groups";
+
+// Render domain (virtual scrolling, compression, height cache)
+export {
+  // Height cache (variable item heights)
+  createHeightCache,
+  type HeightCache,
   // Virtual scrolling calculations
   calculateVisibleRange,
   calculateRenderRange,

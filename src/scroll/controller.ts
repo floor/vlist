@@ -31,6 +31,13 @@ export interface ScrollControllerConfig {
   /** Compression state for calculating bounds */
   compression?: CompressionState;
 
+  /**
+   * External scroll element for window/document scrolling.
+   * When set, the controller listens to this element's scroll events
+   * and computes list-relative positions from the viewport's bounding rect.
+   */
+  scrollElement?: Window;
+
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
 
@@ -70,6 +77,13 @@ export interface ScrollController {
   /** Get current scroll velocity (px/ms, absolute value) */
   getVelocity: () => number;
 
+  /**
+   * Check if the velocity tracker is actively tracking with enough samples.
+   * Returns false during ramp-up (first few frames of a new scroll gesture)
+   * when the tracker doesn't have enough samples yet.
+   */
+  isTracking: () => boolean;
+
   /** Check if currently scrolling */
   isScrolling: () => boolean;
 
@@ -85,6 +99,15 @@ export interface ScrollController {
   /** Check if compressed mode is active */
   isCompressed: () => boolean;
 
+  /** Check if in window scroll mode */
+  isWindowMode: () => boolean;
+
+  /**
+   * Update the container height used for scroll calculations.
+   * In window mode, call this when the window resizes.
+   */
+  updateContainerHeight: (height: number) => void;
+
   /** Destroy and cleanup */
   destroy: () => void;
 }
@@ -94,7 +117,18 @@ export interface ScrollController {
 // =============================================================================
 
 /** Number of samples in circular buffer (avoids array allocation on every update) */
-const VELOCITY_SAMPLE_COUNT = 5;
+const VELOCITY_SAMPLE_COUNT = 8;
+
+/** Minimum samples needed before velocity readings are considered reliable */
+const MIN_RELIABLE_SAMPLES = 3;
+
+/**
+ * Maximum time gap (ms) between samples before the buffer is considered stale.
+ * After a pause longer than this, previous samples no longer represent the
+ * current scroll gesture — we reset and start measuring fresh.
+ * Set below the idle timeout (150ms) so stale detection triggers before idle.
+ */
+const STALE_GAP_MS = 100;
 
 interface VelocitySample {
   position: number;
@@ -139,6 +173,25 @@ const updateVelocityTracker = (
 
   if (timeDelta === 0) return tracker;
 
+  // Stale gap detection: if too much time has passed since the last sample,
+  // the previous measurements belong to a different scroll gesture.
+  // Reset the buffer and record this position as the new baseline.
+  // Velocity stays at 0 (unreliable) until MIN_RELIABLE_SAMPLES accumulate.
+  if (timeDelta > STALE_GAP_MS) {
+    tracker.sampleCount = 0;
+    tracker.sampleIndex = 0;
+    tracker.velocity = 0;
+    // Record baseline — first real velocity will be computed on the next update
+    const baseline = tracker.samples[0]!;
+    baseline.position = newPosition;
+    baseline.time = now;
+    tracker.sampleIndex = 1;
+    tracker.sampleCount = 1;
+    tracker.lastPosition = newPosition;
+    tracker.lastTime = now;
+    return tracker;
+  }
+
   // Write to current slot in circular buffer (no allocation)
   const currentSample = tracker.samples[tracker.sampleIndex]!;
   currentSample.position = newPosition;
@@ -151,32 +204,28 @@ const updateVelocityTracker = (
     VELOCITY_SAMPLE_COUNT,
   );
 
-  // Calculate average velocity from samples
-  let avgVelocity: number;
-
-  if (tracker.sampleCount > 1) {
-    // Find oldest valid sample (circular buffer)
+  // Calculate average velocity from samples (only when we have enough data)
+  if (tracker.sampleCount >= 2) {
     const oldestIndex =
       (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
       VELOCITY_SAMPLE_COUNT;
     const oldest = tracker.samples[oldestIndex]!;
     const totalDistance = newPosition - oldest.position;
     const totalTime = now - oldest.time;
-    avgVelocity =
-      totalTime > 0
-        ? totalDistance / totalTime
-        : (newPosition - tracker.lastPosition) / timeDelta;
-  } else {
-    avgVelocity = (newPosition - tracker.lastPosition) / timeDelta;
+    tracker.velocity = totalTime > 0 ? totalDistance / totalTime : 0;
   }
+  // sampleCount < 2: keep velocity at 0 (not enough data yet)
 
-  // Update tracker state (mutate in place to avoid allocation)
-  tracker.velocity = avgVelocity;
+  // Update position/time baseline (mutate in place to avoid allocation)
   tracker.lastPosition = newPosition;
   tracker.lastTime = now;
 
   return tracker;
 };
+
+/** Check if the velocity tracker has accumulated enough samples for reliable readings */
+const isVelocityTrackerReliable = (tracker: VelocityTracker): boolean =>
+  tracker.sampleCount >= MIN_RELIABLE_SAMPLES;
 
 // =============================================================================
 // Scroll Controller Factory
@@ -199,11 +248,15 @@ export const createScrollController = (
     idleTimeout: idleMs = 150,
     onScroll,
     onIdle,
+    scrollElement,
   } = config;
+
+  const windowMode = !!scrollElement;
 
   // State
   let scrollPosition = 0;
   let maxScroll = 0;
+  let containerHeight = windowMode ? window.innerHeight : viewport.clientHeight;
   let compressed = config.compressed ?? false;
   let compression = config.compression;
   let velocityTracker = createVelocityTracker();
@@ -236,6 +289,40 @@ export const createScrollController = (
 
   // M1: RAF-throttle native scroll to guarantee at most one processing per frame
   const handleNativeScroll = rafThrottle(handleNativeScrollRaw);
+
+  // =============================================================================
+  // Window Scroll Handling
+  // =============================================================================
+
+  const handleWindowScrollRaw = (): void => {
+    // Compute list-relative scroll position from the viewport's bounding rect.
+    // When the list's top edge is at the window's top, rect.top = 0, scrollTop = 0.
+    // When the list has scrolled 500px past, rect.top = -500, scrollTop = 500.
+    const rect = viewport.getBoundingClientRect();
+    const newPosition = Math.max(0, -rect.top);
+    const direction: ScrollDirection =
+      newPosition >= scrollPosition ? "down" : "up";
+
+    velocityTracker = updateVelocityTracker(velocityTracker, newPosition);
+    scrollPosition = newPosition;
+
+    if (!isScrolling) {
+      isScrolling = true;
+    }
+
+    if (onScroll) {
+      onScroll({
+        scrollTop: scrollPosition,
+        direction,
+        velocity: velocityTracker.velocity,
+      });
+    }
+
+    // Idle detection
+    scheduleIdleCheck();
+  };
+
+  const handleWindowScroll = rafThrottle(handleWindowScrollRaw);
 
   // =============================================================================
   // Compressed (Manual) Scroll Handling
@@ -312,7 +399,12 @@ export const createScrollController = (
 
     compressed = true;
     compression = newCompression;
-    maxScroll = newCompression.virtualHeight - viewport.clientHeight;
+    maxScroll = newCompression.virtualHeight - containerHeight;
+
+    // In window mode, compression is purely mathematical — the content div
+    // height is set to the virtual height by vlist.ts, and the browser scrolls
+    // natively. No overflow changes or wheel interception needed.
+    if (windowMode) return;
 
     // Remove native scroll listener and cancel pending RAF
     handleNativeScroll.cancel();
@@ -341,6 +433,12 @@ export const createScrollController = (
 
     compressed = false;
 
+    // In window mode, nothing to revert — compression was purely mathematical
+    if (windowMode) {
+      compression = undefined;
+      return;
+    }
+
     // Remove wheel listener
     viewport.removeEventListener("wheel", handleWheel);
 
@@ -353,8 +451,7 @@ export const createScrollController = (
     // Restore scroll position
     if (compression && scrollPosition > 0) {
       const ratio = scrollPosition / maxScroll;
-      viewport.scrollTop =
-        ratio * (compression.actualHeight - viewport.clientHeight);
+      viewport.scrollTop = ratio * (compression.actualHeight - containerHeight);
     }
 
     compression = undefined;
@@ -365,7 +462,11 @@ export const createScrollController = (
   // =============================================================================
 
   const getScrollTop = (): number => {
-    return compressed ? scrollPosition : viewport.scrollTop;
+    // In window mode, scrollPosition is always the source of truth
+    // (viewport.scrollTop is 0 because overflow is visible).
+    // In compressed mode, scrollPosition is manually tracked.
+    // In native container mode, read from the DOM.
+    return windowMode || compressed ? scrollPosition : viewport.scrollTop;
   };
 
   const scrollTo = (position: number, smooth = false): void => {
@@ -374,17 +475,39 @@ export const createScrollController = (
       Math.min(position, maxScroll || Infinity),
     );
 
-    if (compressed) {
+    if (windowMode) {
+      // Scroll the window so the desired list position is at the top of the viewport.
+      // listDocumentTop = the list's absolute position in the document.
+      const rect = viewport.getBoundingClientRect();
+      const listDocumentTop = rect.top + window.scrollY;
+      window.scrollTo({
+        top: listDocumentTop + clampedPosition,
+        behavior: smooth ? "smooth" : "auto",
+      });
+      // The window scroll event will fire and update scrollPosition via handleWindowScroll
+    } else if (compressed) {
+      if (clampedPosition === scrollPosition) return;
+
       const previousPosition = scrollPosition;
+      const direction: ScrollDirection =
+        clampedPosition >= previousPosition ? "down" : "up";
+
+      velocityTracker = updateVelocityTracker(velocityTracker, clampedPosition);
       scrollPosition = clampedPosition;
+
+      if (!isScrolling) {
+        isScrolling = true;
+      }
 
       if (onScroll) {
         onScroll({
           scrollTop: scrollPosition,
-          direction: scrollPosition >= previousPosition ? "down" : "up",
-          velocity: 0,
+          direction,
+          velocity: velocityTracker.velocity,
         });
       }
+
+      scheduleIdleCheck();
     } else {
       viewport.scrollTo({
         top: clampedPosition,
@@ -403,17 +526,21 @@ export const createScrollController = (
 
   const isAtBottom = (threshold = 0): boolean => {
     const scrollTop = getScrollTop();
-    const max = compressed
-      ? maxScroll
-      : viewport.scrollHeight - viewport.clientHeight;
+    // In window mode or compressed mode, use maxScroll (explicitly tracked).
+    // In native container mode, derive from the viewport's scroll geometry.
+    const max =
+      windowMode || compressed
+        ? maxScroll
+        : viewport.scrollHeight - viewport.clientHeight;
     return scrollTop >= max - threshold;
   };
 
   const getScrollPercentage = (): number => {
     const scrollTop = getScrollTop();
-    const max = compressed
-      ? maxScroll
-      : viewport.scrollHeight - viewport.clientHeight;
+    const max =
+      windowMode || compressed
+        ? maxScroll
+        : viewport.scrollHeight - viewport.clientHeight;
     if (max <= 0) return 0;
     return Math.min(1, Math.max(0, scrollTop / max));
   };
@@ -421,7 +548,7 @@ export const createScrollController = (
   const updateConfig = (newConfig: Partial<ScrollControllerConfig>): void => {
     if (newConfig.compression) {
       compression = newConfig.compression;
-      maxScroll = compression.virtualHeight - viewport.clientHeight;
+      maxScroll = compression.virtualHeight - containerHeight;
     }
   };
 
@@ -429,25 +556,55 @@ export const createScrollController = (
 
   const getVelocityValue = (): number => Math.abs(velocityTracker.velocity);
 
+  const getIsTracking = (): boolean =>
+    isVelocityTrackerReliable(velocityTracker);
+
   const getIsScrolling = (): boolean => isScrolling;
+
+  const getIsWindowMode = (): boolean => windowMode;
+
+  const updateContainerHeightFn = (height: number): void => {
+    containerHeight = height;
+    // Recompute maxScroll if we have compression or are in window mode
+    if (compression) {
+      maxScroll = compression.virtualHeight - containerHeight;
+    } else if (windowMode) {
+      // In window mode without compression, maxScroll is derived from
+      // the content div height. vlist.ts calls updateConfig with compression
+      // when totalHeight changes, so this path handles the non-compressed case.
+      // We can't compute it here without knowing totalHeight, so leave it
+      // and let updateConfig handle it when compression state is updated.
+    }
+  };
 
   const destroy = (): void => {
     if (idleTimeout) {
       clearTimeout(idleTimeout);
     }
 
-    handleNativeScroll.cancel();
-    viewport.removeEventListener("scroll", handleNativeScroll);
-    viewport.removeEventListener("wheel", handleWheel);
+    if (windowMode) {
+      handleWindowScroll.cancel();
+      window.removeEventListener("scroll", handleWindowScroll);
+    } else {
+      handleNativeScroll.cancel();
+      viewport.removeEventListener("scroll", handleNativeScroll);
+      viewport.removeEventListener("wheel", handleWheel);
+    }
   };
 
   // =============================================================================
   // Initialization
   // =============================================================================
 
-  if (compressed && compression) {
+  if (windowMode) {
+    // Window scroll mode — listen to window, don't manage viewport overflow
+    if (compressed && compression) {
+      maxScroll = compression.virtualHeight - containerHeight;
+    }
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
+  } else if (compressed && compression) {
     // Start in compressed mode
-    maxScroll = compression.virtualHeight - viewport.clientHeight;
+    maxScroll = compression.virtualHeight - containerHeight;
     viewport.style.overflow = "hidden";
     viewport.addEventListener("wheel", handleWheel, { passive: false });
   } else {
@@ -464,11 +621,14 @@ export const createScrollController = (
     isAtBottom,
     getScrollPercentage,
     getVelocity: getVelocityValue,
+    isTracking: getIsTracking,
     isScrolling: getIsScrolling,
     updateConfig,
     enableCompression,
     disableCompression,
     isCompressed: isCompressedMode,
+    isWindowMode: getIsWindowMode,
+    updateContainerHeight: updateContainerHeightFn,
     destroy,
   };
 };

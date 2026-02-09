@@ -22,6 +22,7 @@ import type {
   DOMStructure,
   CompressionContext,
   CompressionState,
+  HeightCache,
 } from "./render";
 import type { SelectionState } from "./selection";
 
@@ -33,7 +34,7 @@ import { getCompressionState } from "./render";
 
 /** Immutable configuration extracted from VListConfig */
 export interface VListContextConfig {
-  readonly itemHeight: number;
+  readonly itemHeight: number | ((index: number) => number);
   readonly overscan: number;
   readonly classPrefix: string;
   readonly selectionMode: SelectionMode;
@@ -76,6 +77,9 @@ export interface VListContext<T extends VListItem = VListItem> {
   // DOM structure
   readonly dom: DOMStructure;
 
+  // Height cache for efficient offset/index lookups
+  readonly heightCache: HeightCache;
+
   // Stateful managers
   readonly dataManager: DataManager<T>;
   readonly scrollController: ScrollController;
@@ -107,6 +111,7 @@ export interface VListContext<T extends VListItem = VListItem> {
 export const createContext = <T extends VListItem = VListItem>(
   config: VListContextConfig,
   dom: DOMStructure,
+  heightCache: HeightCache,
   dataManager: DataManager<T>,
   scrollController: ScrollController,
   renderer: Renderer<T>,
@@ -156,7 +161,7 @@ export const createContext = <T extends VListItem = VListItem>(
     }
 
     // Recalculate and cache
-    const compression = getCompressionState(totalItems, config.itemHeight);
+    const compression = getCompressionState(totalItems, heightCache);
     state.cachedCompression = { state: compression, totalItems };
     return compression;
   };
@@ -177,6 +182,7 @@ export const createContext = <T extends VListItem = VListItem>(
   return {
     config,
     dom,
+    heightCache,
     dataManager,
     scrollController,
     renderer,

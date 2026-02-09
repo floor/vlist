@@ -6,6 +6,7 @@
 
 The render module is responsible for all DOM-related operations in vlist. It handles:
 
+- **Height Cache**: Efficient height management for fixed and variable item heights
 - **DOM Structure**: Creating and managing the vlist DOM hierarchy
 - **Element Rendering**: Efficiently rendering items using an element pool
 - **Virtual Scrolling**: Calculating visible ranges and viewport state
@@ -16,12 +17,64 @@ The render module is responsible for all DOM-related operations in vlist. It han
 ```
 src/render/
 ├── index.ts        # Module exports
+├── heights.ts      # Height cache for fixed and variable item heights
 ├── renderer.ts     # DOM rendering with element pooling
 ├── virtual.ts      # Virtual scrolling calculations
 └── compression.ts  # Large list compression logic
 ```
 
 ## Key Concepts
+
+### Height Cache (`heights.ts`)
+
+The `HeightCache` abstraction enables both fixed and variable item heights throughout the rendering pipeline. All virtual scrolling and compression functions accept a `HeightCache` instead of a raw `itemHeight: number`.
+
+**Two implementations:**
+
+| Implementation | When | Offset Lookup | Index Search | Overhead |
+|----------------|------|---------------|--------------|----------|
+| **Fixed** | `height: number` | O(1) multiplication | O(1) division | Zero — identical to pre-variable-height code |
+| **Variable** | `height: (index) => number` | O(1) prefix-sum lookup | O(log n) binary search | Prefix-sum array rebuilt on data changes |
+
+```typescript
+import { createHeightCache, type HeightCache } from 'vlist';
+
+// Fixed — zero overhead fast path
+const fixed = createHeightCache(48, totalItems);
+fixed.getOffset(10);      // 480  (10 × 48)
+fixed.indexAtOffset(480);  // 10   (480 / 48)
+fixed.getTotalHeight();    // totalItems × 48
+
+// Variable — prefix-sum based
+const variable = createHeightCache(
+  (index) => index % 2 === 0 ? 40 : 80,
+  totalItems
+);
+variable.getOffset(2);      // 120  (40 + 80)
+variable.indexAtOffset(100); // 1   (binary search)
+variable.getTotalHeight();   // sum of all heights
+```
+
+**HeightCache interface:**
+
+```typescript
+interface HeightCache {
+  getOffset(index: number): number;      // Y position of item
+  getHeight(index: number): number;      // Height of specific item
+  indexAtOffset(offset: number): number;  // Item at scroll position
+  getTotalHeight(): number;              // Total content height
+  getTotal(): number;                    // Current item count
+  rebuild(totalItems: number): void;     // Rebuild after data changes
+  isVariable(): boolean;                 // Fixed vs variable
+}
+```
+
+**Helper functions** (used internally by compression):
+
+- `countVisibleItems(cache, startIndex, containerHeight, totalItems)` — How many items fit in a viewport
+- `countItemsFittingFromBottom(cache, containerHeight, totalItems)` — How many items fit from list end
+- `getOffsetForVirtualIndex(cache, virtualIndex, totalItems)` — Pixel offset for fractional index (compressed mode)
+
 
 ### DOM Structure
 

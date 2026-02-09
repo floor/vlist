@@ -4,51 +4,71 @@
 
 ## Current State
 
-vlist is a well-optimized, batteries-included virtual list with zero dependencies. It excels at fixed-height lists with built-in selection, keyboard navigation, infinite scroll, and 1M+ item compression.
+vlist is a well-optimized, batteries-included virtual list with zero dependencies. It supports both fixed and variable item heights, built-in selection, keyboard navigation, infinite scroll, and 1M+ item compression.
 
 **Where vlist wins today:**
 - ✅ Zero dependencies
 - ✅ Automatic compression for 1M+ items (no competitor does this)
 - ✅ Built-in selection (single/multi/keyboard) — competitors say "BYO"
 - ✅ Built-in infinite scroll with adapter, placeholders, velocity-based loading
+- ✅ Variable item heights via `height: (index) => number` (Mode A)
+- ✅ Window/document scrolling via `scrollElement: window`
+- ✅ Smooth `scrollToIndex` animation with easing
 - ✅ Extensive scroll hot-path optimizations (zero-allocation, RAF-throttled, circular buffer velocity)
-- ✅ 431 tests, comprehensive documentation
+- ✅ 561 tests, comprehensive documentation
 
 **Where vlist falls short:**
 
 | Gap | Impact | Competitors |
 |-----|--------|-------------|
-| No variable item heights | 🚨 Blocks ~80% of real-world use cases | @tanstack/virtual ✅ |
+| No auto-height measurement (Mode B) | ⚠️ Mode A covers known heights; Mode B needed for dynamic content | @tanstack/virtual ✅ |
 | No horizontal / grid layout | ❌ Major | @tanstack/virtual ✅ |
-| No window (document) scrolling | ❌ Major | @tanstack/virtual ✅ |
-| No smooth scroll-to animation | ❌ UX gap | @tanstack/virtual ✅ |
+| ~~No window (document) scrolling~~ | ✅ Shipped | @tanstack/virtual ✅ |
 | No sticky headers / grouped lists | ❌ Common pattern | react-virtuoso ✅ |
 | No reverse mode (chat UI) | ❌ Common pattern | react-virtuoso ✅ |
 | No framework adapters | ❌ Adoption barrier | @tanstack/virtual ✅ |
-| Bundle ~11.5 KB gzip | ⚠️ 2× larger than tanstack (~5.5 KB) | @tanstack/virtual ✅ |
+| Bundle ~12.2 KB gzip | ⚠️ 2× larger than tanstack (~5.5 KB) | @tanstack/virtual ✅ |
 | Basic accessibility | ⚠️ Missing aria-setsize/posinset | — |
 
 ---
 
 ## Phase 1 — Remove Dealbreakers
 
-### 1. Variable Item Heights 🚨
+### 1. ✅ Variable Item Heights — Mode A (Function-Based Known Heights)
 
-**Priority:** Critical — the single most important missing feature.
+**Status:** ✅ **Shipped** — Mode A (function-based known heights) is implemented.
 
-**Problem:** Every function in the rendering pipeline assumes `index × itemHeight`. This blocks: chat messages, cards with descriptions, expandable rows, mixed content lists, rich text items — essentially most real-world UIs.
+**What shipped:**
 
-**Approach:**
-
-Support two modes:
+`ItemConfig.height` now accepts `number | ((index: number) => number)`:
 
 ```typescript
-// Mode A: Known heights (function-based, cheapest)
+// Fixed height (existing, zero-overhead fast path)
 item: {
-  height: (index) => items[index].type === 'header' ? 64 : 48,
+  height: 48,
   template: myTemplate,
 }
 
+// Variable height via function (NEW)
+item: {
+  height: (index: number) => items[index].type === 'header' ? 64 : 48,
+  template: myTemplate,
+}
+```
+
+**Architecture:**
+
+A new `HeightCache` abstraction (`src/render/heights.ts`) encapsulates height lookups:
+- **Fixed implementation:** O(1) via multiplication — zero overhead, matches previous behavior
+- **Variable implementation:** O(1) offset lookup via prefix-sum array, O(log n) binary search for index-at-offset
+
+All rendering, compression, and scroll functions (`virtual.ts`, `compression.ts`, `renderer.ts`, `handlers.ts`, `methods.ts`) accept `HeightCache` instead of `itemHeight: number`. The fixed-height `HeightCache` uses pure multiplication internally, so there is **zero performance regression** for fixed-height lists.
+
+Compression works with variable heights: the compression ratio uses actual total height from the cache, and near-bottom interpolation counts items fitting from bottom using actual heights.
+
+**What remains (Mode B — follow-up):**
+
+```typescript
 // Mode B: Estimated + measured (most flexible, what tanstack does)
 item: {
   estimatedHeight: 48,  // Initial guess for scroll math
@@ -56,32 +76,7 @@ item: {
 }
 ```
 
-**Architecture impact:**
-
-| Module | Change Required |
-|--------|-----------------|
-| `virtual.ts` | Replace `index * itemHeight` with offset lookups from height cache |
-| `compression.ts` | Adapt compression ratio to work with variable total height |
-| `renderer.ts` | Position items using cumulative offsets, not `index * height` |
-| `scroll/controller.ts` | Scroll-to-index needs offset lookup instead of multiplication |
-| `handlers.ts` | Page up/down needs height-aware page size |
-
-**Data structure:** A prefix-sum array or Fenwick tree for O(log n) offset lookups:
-
-```
-heights:    [48, 64, 48, 48, 96, 48, ...]
-prefixSums: [0, 48, 112, 160, 208, 304, 352, ...]
-
-// O(log n) binary search: scroll position → item index
-// O(1) lookup: item index → scroll position
-```
-
-**Key decisions to make:**
-- Do we support Mode B (auto-measurement) from the start, or ship Mode A first?
-- How does compression interact with variable heights? (May need weighted compression ratio)
-- Do we keep backward compatibility with `height: number` (fixed) as a fast path?
-
-**Estimated effort:** Large — touches core architecture. Suggest Mode A first (function-based known heights), then Mode B (measured) as a follow-up.
+Mode B (auto-measurement with `estimatedHeight`) is a separate follow-up. It requires DOM measurement after render and dynamic cache updates, which is a different complexity level.
 
 ---
 
@@ -217,43 +212,58 @@ const grid = createVList({
 
 ---
 
-### 6. Window (Document) Scrolling
+### 6. ✅ Window (Document) Scrolling
 
-**Priority:** Medium.
+**Status:** ✅ **Shipped** — `scrollElement: window` option implemented.
 
-**Problem:** Currently vlist only works inside a contained `overflow: auto` div. Many pages need the list to scroll with the page itself (search results, feeds, landing pages).
+**What shipped:**
 
-**Approach:**
+Pass `scrollElement: window` to make the list participate in normal page flow instead of scrolling inside its own container:
 
 ```typescript
 const list = createVList({
   container: '#results',
-  scrollElement: window,  // new option (default: own viewport)
+  scrollElement: window,  // list scrolls with the page
   item: { height: 48, template: myTemplate },
   items: searchResults,
 });
 ```
 
-**Architecture impact:**
-- Listen on `window.scroll` instead of viewport scroll
-- Calculate list offset from page top: `getBoundingClientRect().top`
-- Visible range = items within `(windowScrollY - listTop)` to `(windowScrollY - listTop + windowHeight)`
-- No custom scrollbar needed (browser handles it)
-- Compressed mode may not apply (window scroll has different height limits)
+**How it works:**
 
-**Estimated effort:** Medium.
+- **Viewport**: Set to `overflow: visible`, `height: auto` — the list sits in the page flow
+- **Scroll tracking**: RAF-throttled `window.scroll` listener computes list-relative position from `viewport.getBoundingClientRect()`
+- **Container height**: Derived from `window.innerHeight`, updated on resize
+- **scrollTo()**: Delegates to `window.scrollTo()` with the list's document offset
+- **Compression**: Still works — content height is capped, scroll math is remapped, but the browser scrolls natively (no wheel interception)
+- **Custom scrollbar**: Automatically disabled (the browser's native scrollbar is used)
+- **Cleanup**: Window scroll and resize listeners are properly removed on `destroy()`
+
+**Architecture details:**
+
+Scroll controller changes:
+- `getScrollTop()` returns tracked `scrollPosition` (viewport.scrollTop is 0 in window mode)
+- `enableCompression` / `disableCompression` skip overflow and wheel interception (browser scrolls natively)
+- `isAtBottom` / `getScrollPercentage` use `maxScroll` in window mode
+- New `isWindowMode()` and `updateContainerHeight()` methods on the interface
+
+VList wiring:
+- Window resize listener updates `containerHeight` and re-renders
+- ResizeObserver still watches the viewport element for content-driven changes
+
+**Changes:** `src/types.ts`, `src/scroll/controller.ts`, `src/vlist.ts`, `test/scroll/controller.test.ts` (+18 tests, 561 total)
 
 ---
 
 ## Phase 3 — Advanced Patterns
 
-### 7. Sticky Headers / Grouped Lists
+### 7. ✅ Sticky Headers / Grouped Lists
 
-**Priority:** Medium.
+**Priority:** Medium. **Status: DONE**
 
 **Problem:** Grouped lists with sticky section headers (like iOS Contacts: A, B, C...) are a ubiquitous UI pattern. No vanilla library does this cleanly.
 
-**Approach:**
+**Solution:** Added a `groups` configuration option to `createVList` that automatically derives group boundaries from a user-provided function, inserts header pseudo-items into the layout, and manages a sticky header overlay element.
 
 ```typescript
 const list = createVList({
@@ -269,13 +279,16 @@ const list = createVList({
 });
 ```
 
-**Architecture impact:**
-- Group headers are virtual items with special positioning
-- Sticky headers need `position: sticky` or manual positioning outside the virtual container
-- Scroll calculations must account for header heights interspersed with items
-- Builds naturally on variable height support (Phase 1)
-
-**Estimated effort:** Medium — depends on variable heights being done first.
+**Implementation details:**
+- New `src/groups/` module: `layout.ts` (group boundary computation, O(log g) index mapping), `sticky.ts` (floating header overlay with push-out transition), `types.ts`
+- Group headers are virtual pseudo-items interleaved with data items via `buildLayoutItems()`
+- `createGroupedHeightFn()` wraps the item height config to return header heights at group boundaries
+- Sticky header is an absolutely-positioned overlay element updated on scroll — classic iOS Contacts-style push-out effect when the next group's header approaches
+- Public API (`items`, `total`, `scrollToIndex`, data methods) transparently maps between data indices and layout indices
+- Works with fixed and variable item heights, compression, and all existing features
+- 45 new tests for group layout computation, index mapping round-trips, and edge cases
+- Sandbox example: `sandbox/sticky-headers/` — 2,000 contacts grouped A–Z
+- CSS: `.vlist--grouped` modifier, `.vlist-sticky-header` overlay, `--vlist-group-header-bg` custom property
 
 ---
 
@@ -471,13 +484,13 @@ list.restoreScroll(saved);
 
 | # | Feature | Impact | Effort | Phase | Status |
 |---|---------|--------|--------|-------|--------|
-| 1 | Variable item heights | 🔴 Critical | Large | 1 | 🟡 Pending |
+| 1 | Variable item heights (Mode A) | 🔴 Critical | Large | 1 | ✅ Done |
 | 2 | Smooth scrollToIndex | 🟠 High | Small | 1 | ✅ Done |
 | 3 | Shrink bundle size | 🟠 High | Medium | 1 | ✅ Done |
 | 4 | Horizontal scrolling | 🟡 Medium | Medium | 2 | 🟡 Pending |
 | 5 | Grid layout | 🟡 Medium | Medium-Large | 2 | 🟡 Pending |
-| 6 | Window scrolling | 🟡 Medium | Medium | 2 | 🟡 Pending |
-| 7 | Sticky headers | 🟡 Medium | Medium | 3 | 🟡 Pending |
+| 6 | Window scrolling | 🟡 Medium | Medium | 2 | ✅ Done |
+| 7 | Sticky headers | 🟡 Medium | Medium | 3 | ✅ Done |
 | 8 | Reverse mode (chat) | 🟡 Medium | Medium-Large | 3 | 🟡 Pending |
 | 9 | Framework adapters | 🟡 Medium | Small each | 3 | 🟡 Pending |
 | 10 | Public benchmarks | 🟠 High | Medium | 4 | 🟡 Pending |
@@ -506,4 +519,4 @@ list.restoreScroll(saved);
 ---
 
 *Last updated: February 2025*
-*Status: Phase 1 in progress — #2 and #3 done, variable heights is the critical path*
+*Status: Phase 1 complete — variable heights (Mode A), smooth scrollToIndex, and bundle split all shipped. Phase 2+ pending.*

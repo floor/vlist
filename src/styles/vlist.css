@@ -244,6 +244,49 @@
     background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
 }
 
+/* =============================================================================
+   Group Headers & Sticky Headers
+   ============================================================================= */
+
+/* Grouped list modifier */
+.vlist--grouped .vlist-item[data-id^="__group_header_"] {
+    cursor: default;
+    background-color: var(--vlist-group-header-bg, #f3f4f6);
+    border-bottom: 1px solid var(--vlist-border);
+    z-index: 1;
+}
+
+.vlist--grouped .vlist-item[data-id^="__group_header_"]:hover {
+    background-color: var(--vlist-group-header-bg, #f3f4f6);
+}
+
+/* Sticky header overlay */
+.vlist-sticky-header {
+    background-color: var(--vlist-group-header-bg, #f3f4f6);
+    border-bottom: 1px solid var(--vlist-border);
+    contain: content;
+}
+
+/* Dark mode group header colors */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --vlist-group-header-bg: #1e2433;
+    }
+}
+
+.dark {
+    --vlist-group-header-bg: #1e2433;
+}
+
+/* Suppress transitions on sticky header during scroll */
+.vlist--scrolling .vlist-sticky-header {
+    transition: none;
+}
+
+/* =============================================================================
+   Custom Scrollbar (for compressed mode)
+   ============================================================================= */
+
 /* Hide native scrollbar when custom scrollbar is active */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;

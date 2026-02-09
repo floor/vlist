@@ -8,6 +8,7 @@ The scroll module handles all scrolling functionality in vlist, including:
 
 - **Native Scrolling**: Standard browser scrolling for smaller lists
 - **Compressed Scrolling**: Manual wheel-based scrolling for large lists (1M+ items)
+- **Window Scrolling**: Document-level scrolling where the list participates in the page flow
 - **Custom Scrollbar**: Visual scrollbar for compressed mode
 - **Velocity Tracking**: Smooth scroll momentum detection
 
@@ -34,24 +35,60 @@ Scrolling active...
 Scroll stops (idle detected) → remove .vlist--scrolling (transitions re-enabled)
 ```
 
-### Dual Mode Scrolling
+### Scroll Modes
 
-The scroll controller operates in two modes:
+The scroll controller operates in three modes:
 
 | Mode | Trigger | Behavior |
 |------|---------|----------|
 | **Native** | Small lists (< ~333K items @ 48px) | `overflow: auto`, browser handles scrolling |
 | **Compressed** | Large lists (> browser limit) | `overflow: hidden`, manual wheel handling |
+| **Window** | `scrollElement: window` config option | `overflow: visible`, browser scrolls the page |
 
 ### Mode Switching
 
 ```
 List Created
     ↓
-Check: totalItems × itemHeight > 16M?
+scrollElement: window?
     ↓
-Yes → Compressed Mode (wheel events)
-No  → Native Mode (scroll events)
+Yes → Window Mode (window scroll events)
+No  → Check: totalItems × itemHeight > 16M?
+        ↓
+      Yes → Compressed Mode (wheel events)
+      No  → Native Mode (scroll events)
+```
+
+### Window Scrolling
+
+When `scrollElement: window` is set, the list participates in the normal page flow instead of scrolling inside its own container. This is ideal for search results, feeds, landing pages, and any UI where the list should scroll with the document.
+
+**How it works:**
+
+1. The viewport is set to `overflow: visible` and `height: auto` — no inner scrollbar
+2. The scroll controller listens to `window.scroll` (RAF-throttled, passive)
+3. The list-relative scroll position is computed from `viewport.getBoundingClientRect().top`
+4. Container height is derived from `window.innerHeight` and updated on window resize
+5. The browser's native scrollbar is used (custom scrollbar is disabled)
+
+**Compression in window mode:** Compression still works — the content div height is set to the virtual height, and the browser scrolls natively. The compression math (ratio-based position mapping) is purely mathematical; no overflow changes or wheel interception are needed.
+
+```
+Page Layout (Window Mode)
+┌──────────────────────────┐
+│  Page header / nav       │
+├──────────────────────────┤
+│  VList viewport          │  ← overflow: visible, height: auto
+│  ┌────────────────────┐  │
+│  │ content div         │  │  ← height = totalHeight (or virtualHeight)
+│  │  ┌──────────────┐  │  │
+│  │  │ visible items │  │  │  ← positioned within content
+│  │  └──────────────┘  │  │
+│  └────────────────────┘  │
+├──────────────────────────┤
+│  Page footer             │
+└──────────────────────────┘
+     ↕ browser scrollbar scrolls the whole page
 ```
 
 ### Configurable Idle Timeout
@@ -86,9 +123,9 @@ interface VelocityTracker {
   velocity: number;      // Current velocity (px/ms)
   lastPosition: number;  // Previous scroll position
   lastTime: number;      // Timestamp of last update
-  samples: VelocitySample[];  // Pre-allocated circular buffer (5 samples)
+  samples: VelocitySample[];  // Pre-allocated circular buffer (8 samples)
   sampleIndex: number;   // Current write index
-  sampleCount: number;   // Number of valid samples (0-5)
+  sampleCount: number;   // Number of valid samples (0-8)
 }
 
 interface VelocitySample {
@@ -97,7 +134,19 @@ interface VelocitySample {
 }
 ```
 
-The circular buffer pre-allocates 5 sample slots and overwrites the oldest sample on each update, avoiding array allocation/spread operations during scrolling.
+The circular buffer pre-allocates 8 sample slots and overwrites the oldest sample on each update, avoiding array allocation/spread operations during scrolling.
+
+**Key constants:**
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `VELOCITY_SAMPLE_COUNT` | 8 | Buffer size (~133ms window at 60fps) for smooth averaging |
+| `MIN_RELIABLE_SAMPLES` | 3 | Minimum samples before `isTracking()` returns true |
+| `STALE_GAP_MS` | 100 | Max gap (ms) before buffer is considered stale |
+
+**Stale gap detection:** When more than 100ms passes between samples (e.g., after idle resets the tracker), the buffer is cleared and the current position becomes the new baseline. This prevents computing bogus low velocity from `small_delta / huge_time_gap` — a problem that caused spurious API requests at the start of scrollbar drags.
+
+**Reliability tracking:** `isTracking()` returns `false` until at least 3 samples have accumulated. The scroll handler uses this to defer loading during the ramp-up phase of a new scroll gesture, rather than trusting near-zero velocity readings.
 
 ## API Reference
 
@@ -119,6 +168,13 @@ interface ScrollControllerConfig {
   
   /** Compression state for calculating bounds */
   compression?: CompressionState;
+  
+  /**
+   * External scroll element for window/document scrolling.
+   * When set, the controller listens to this element's scroll events
+   * and computes list-relative positions from the viewport's bounding rect.
+   */
+  scrollElement?: Window;
   
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
@@ -162,6 +218,13 @@ interface ScrollController {
   /** Get current scroll velocity (px/ms, absolute value) */
   getVelocity: () => number;
   
+  /**
+   * Check if the velocity tracker is actively tracking with enough samples.
+   * Returns false during ramp-up (first few frames of a new scroll gesture)
+   * when the tracker doesn't have enough samples yet.
+   */
+  isTracking: () => boolean;
+  
   /** Check if currently scrolling */
   isScrolling: () => boolean;
   
@@ -176,6 +239,15 @@ interface ScrollController {
   
   /** Check if compressed mode is active */
   isCompressed: () => boolean;
+  
+  /** Check if in window scroll mode */
+  isWindowMode: () => boolean;
+  
+  /**
+   * Update the container height used for scroll calculations.
+   * In window mode, call this when the window resizes.
+   */
+  updateContainerHeight: (height: number) => void;
   
   /** Destroy and cleanup */
   destroy: () => void;
@@ -382,6 +454,38 @@ scrollbar.hide();
 scrollbar.destroy();
 ```
 
+### Window Scrolling
+
+```typescript
+import { createScrollController } from './scroll';
+
+// The list scrolls with the page instead of inside its own container
+const controller = createScrollController(viewport, {
+  scrollElement: window,
+  onScroll: ({ scrollTop, direction, velocity }) => {
+    console.log(`Page scrolled ${direction}, list at ${scrollTop}px`);
+  },
+  onIdle: () => {
+    console.log('Page scrolling stopped');
+  }
+});
+
+// scrollTo delegates to window.scrollTo with the correct document offset
+controller.scrollTo(5000);
+
+// isAtBottom / getScrollPercentage work using tracked maxScroll
+const atBottom = controller.isAtBottom();
+const pct = controller.getScrollPercentage();
+
+// Update container height when window resizes
+window.addEventListener('resize', () => {
+  controller.updateContainerHeight(window.innerHeight);
+});
+
+// Cleanup removes the window scroll listener
+controller.destroy();
+```
+
 ### Complete Integration
 
 ```typescript
@@ -514,6 +618,34 @@ function handleNativeScroll() {
 }
 ```
 
+### Window Mode
+
+In window mode, the controller listens to `window.scroll` and computes the list-relative position from the viewport's bounding rect:
+
+```typescript
+// Window mode setup — no overflow changes, no wheel interception
+window.addEventListener('scroll', handleWindowScroll, { passive: true });
+
+function handleWindowScroll() {
+  // The viewport's bounding rect tells us how far the list has scrolled
+  // relative to the window. When rect.top = 0, scrollTop = 0.
+  // When rect.top = -500, the list has scrolled 500px past the window top.
+  const rect = viewport.getBoundingClientRect();
+  const scrollTop = Math.max(0, -rect.top);
+  // Update state, trigger callbacks
+}
+```
+
+**Key differences from native/compressed modes:**
+
+| Aspect | Native/Compressed | Window |
+|--------|-------------------|--------|
+| Scroll listener | `viewport.scroll` / `viewport.wheel` | `window.scroll` |
+| `getScrollTop()` | `viewport.scrollTop` / tracked position | tracked `scrollPosition` (viewport has no scrollTop) |
+| `scrollTo(pos)` | `viewport.scrollTop = pos` / tracked | `window.scrollTo(listDocumentTop + pos)` |
+| Compression | Changes overflow, intercepts wheel | Purely mathematical (no overflow/wheel changes) |
+| Custom scrollbar | Enabled when compressed | Disabled (browser scrollbar used) |
+
 ### Compressed Mode
 
 In compressed mode, the controller intercepts wheel events:
@@ -546,6 +678,8 @@ scrollPosition = ratio * maxScroll;
 const ratio = scrollPosition / maxScroll;
 viewport.scrollTop = ratio * (actualHeight - viewport.clientHeight);
 ```
+
+> **Note:** In window mode, `enableCompression` and `disableCompression` skip overflow and wheel changes entirely — compression is purely mathematical. The content div height is set to the virtual height by `vlist.ts`, and the browser scrolls natively.
 
 ### Idle Detection
 
@@ -598,25 +732,59 @@ viewport.addEventListener('scroll', throttledScroll, { passive: true });
 
 ### Velocity Sampling (Circular Buffer)
 
-Velocity is calculated using a pre-allocated circular buffer of 5 samples:
+Velocity is calculated using a pre-allocated circular buffer of 8 samples:
 
 ```typescript
-// Write to current slot (no allocation)
-const currentSample = tracker.samples[tracker.sampleIndex]!;
-currentSample.position = newPosition;
-currentSample.time = now;
+const SAMPLE_COUNT = 8;
+const STALE_GAP_MS = 100;
+const MIN_RELIABLE_SAMPLES = 3;
 
-// Advance index (wrap around)
-tracker.sampleIndex = (tracker.sampleIndex + 1) % SAMPLE_COUNT;
-tracker.sampleCount = Math.min(tracker.sampleCount + 1, SAMPLE_COUNT);
+function updateVelocityTracker(tracker, newPosition) {
+  const now = performance.now();
+  const timeDelta = now - tracker.lastTime;
 
-// Find oldest sample and calculate average velocity
-const oldestIndex = (tracker.sampleIndex - tracker.sampleCount + SAMPLE_COUNT) % SAMPLE_COUNT;
-const oldest = tracker.samples[oldestIndex]!;
-const avgVelocity = (newPosition - oldest.position) / (now - oldest.time);
+  // Stale gap detection: reset buffer after a pause (>100ms)
+  // Prevents bogus low velocity from small_delta / huge_time_gap
+  if (timeDelta > STALE_GAP_MS) {
+    tracker.sampleCount = 0;
+    tracker.sampleIndex = 0;
+    tracker.velocity = 0;
+    // Record baseline — real velocity computed on next update
+    tracker.samples[0] = { position: newPosition, time: now };
+    tracker.sampleIndex = 1;
+    tracker.sampleCount = 1;
+    return tracker;
+  }
+
+  // Write to current slot (no allocation)
+  const currentSample = tracker.samples[tracker.sampleIndex]!;
+  currentSample.position = newPosition;
+  currentSample.time = now;
+
+  // Advance index (wrap around)
+  tracker.sampleIndex = (tracker.sampleIndex + 1) % SAMPLE_COUNT;
+  tracker.sampleCount = Math.min(tracker.sampleCount + 1, SAMPLE_COUNT);
+
+  // Calculate average velocity (only with enough data)
+  if (tracker.sampleCount >= 2) {
+    const oldestIndex = (tracker.sampleIndex - tracker.sampleCount + SAMPLE_COUNT) % SAMPLE_COUNT;
+    const oldest = tracker.samples[oldestIndex]!;
+    tracker.velocity = (newPosition - oldest.position) / (now - oldest.time);
+  }
+
+  return tracker;
+}
+
+// Reliability check — used by scroll handler to defer loading during ramp-up
+function isTrackerReliable(tracker) {
+  return tracker.sampleCount >= MIN_RELIABLE_SAMPLES;
+}
 ```
 
-This approach eliminates array allocation and garbage collection during scrolling.
+This approach:
+- Eliminates array allocation and garbage collection during scrolling
+- Detects stale gaps after idle to prevent misleading velocity readings
+- Provides explicit reliability signaling via `isTracking()`
 
 ## Scrollbar Interactions
 
@@ -660,7 +828,8 @@ function handleMouseMove(event: MouseEvent) {
 - [context.md](./context.md) - Context holds scroll controller
 - [optimization.md](./optimization.md) - Full list of scroll-related optimizations
 - [styles.md](./styles.md) - `.vlist--scrolling` class and CSS containment
+- [vlist.md](./vlist.md) - Main vlist documentation (window scrolling usage)
 
 ---
 
-*The scroll module provides seamless scrolling for lists of any size.*
+*The scroll module provides seamless scrolling for lists of any size — inside a container or with the page.*
