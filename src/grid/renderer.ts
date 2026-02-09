@@ -259,7 +259,9 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   const applySizeStyles = (element: HTMLElement, itemIndex: number): void => {
     const colWidth = gridLayout.getColumnWidth(containerWidth);
     const row = gridLayout.getRow(itemIndex);
-    const rowHeight = heightCache.getHeight(row);
+    // The height cache includes the gap for row spacing; subtract it
+    // so the DOM element is the real item height (gap = visual space between rows).
+    const rowHeight = heightCache.getHeight(row) - gridLayout.gap;
 
     element.style.width = `${colWidth}px`;
     element.style.height = `${rowHeight}px`;
@@ -360,7 +362,13 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         positionElement(existing.element, i, compressionCtx);
       } else {
         // Render new element and add to fragment
-        const element = renderItem(i, item, isSelected, isFocused, compressionCtx);
+        const element = renderItem(
+          i,
+          item,
+          isSelected,
+          isFocused,
+          compressionCtx,
+        );
         fragment.appendChild(element);
         newElements.push({ index: i, element });
       }

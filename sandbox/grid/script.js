@@ -24,25 +24,10 @@ const categories = [
   "Space",
 ];
 
-// Soft gradient fallbacks (shown while image loads)
-const palettes = [
-  ["#667eea", "#764ba2"],
-  ["#f093fb", "#f5576c"],
-  ["#4facfe", "#00f2fe"],
-  ["#43e97b", "#38f9d7"],
-  ["#fa709a", "#fee140"],
-  ["#a18cd1", "#fbc2eb"],
-  ["#fccb90", "#d57eeb"],
-  ["#e0c3fc", "#8ec5fc"],
-  ["#f5576c", "#ff9a9e"],
-  ["#667eea", "#43e97b"],
-];
-
 const ITEM_COUNT = 1_000;
 
 const items = Array.from({ length: ITEM_COUNT }, (_, i) => {
   const picId = i % PHOTO_COUNT;
-  const palette = palettes[i % palettes.length];
   const category = categories[i % categories.length];
   return {
     id: i + 1,
@@ -50,7 +35,6 @@ const items = Array.from({ length: ITEM_COUNT }, (_, i) => {
     category,
     likes: Math.floor(Math.random() * 500),
     picId,
-    gradient: `linear-gradient(135deg, ${palette[0]} 0%, ${palette[1]} 100%)`,
   };
 });
 
@@ -77,6 +61,11 @@ const createGrid = (columns, gap) => {
   const container = document.getElementById("grid-container");
   container.innerHTML = "";
 
+  // Calculate row height from column width to maintain 4:3 aspect ratio
+  const innerWidth = container.clientWidth - 2; // account for 1px border each side
+  const colWidth = (innerWidth - (columns - 1) * gap) / columns;
+  const height = Math.round(colWidth * 0.75);
+
   listInstance = createVList({
     container: "#grid-container",
     ariaLabel: "Photo gallery",
@@ -86,9 +75,9 @@ const createGrid = (columns, gap) => {
       gap,
     },
     item: {
-      height: 200,
+      height,
       template: (item) => `
-        <div class="card" style="background: ${item.gradient};">
+        <div class="card">
           <img
             class="card-img"
             src="https://picsum.photos/id/${item.picId}/400/300"
