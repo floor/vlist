@@ -338,17 +338,27 @@ list.on('item:click', ({ item }) => {
 
 ## Performance
 
-vlist is designed for maximum performance:
+vlist is designed for maximum performance with extensive built-in optimizations:
 
 - **Virtual rendering** - Only visible items + overscan buffer are in the DOM
-- **Element pooling** - DOM elements are recycled, reducing GC pressure
-- **RAF throttling** - Scroll handlers are optimized with requestAnimationFrame
-- **Minimal re-renders** - Only updates what changed
+- **Element pooling** - DOM elements are recycled via `createElementPool()`, reducing GC pressure
+- **Zero-allocation scroll hot path** - No object allocations per scroll frame; in-place range mutation
+- **RAF-throttled native scroll** - At most one scroll processing per animation frame
+- **CSS containment** - `contain: layout style` on items container, `contain: content` + `will-change: transform` on items
+- **Scroll transition suppression** - `.vlist--scrolling` class disables CSS transitions during active scroll
+- **Circular buffer velocity tracker** - Pre-allocated buffer, zero allocations during scroll
+- **Targeted keyboard focus render** - Arrow keys update only 2 affected items instead of all visible items
+- **Batched LRU timestamps** - Single `Date.now()` per render cycle instead of per-item
+- **DocumentFragment batching** - New elements appended in a single DOM operation
+- **Split CSS** - Core styles (6.7 KB) separated from optional extras (3.4 KB)
+- **Configurable velocity-based loading** - Skip, preload, or defer loading based on scroll speed
 
 Benchmarks (10,000 items):
 - Initial render: ~5ms
 - Scroll update: ~1ms
 - Memory: ~2MB (vs ~50MB without virtualization)
+
+For the full optimization guide, see [docs/optimization.md](docs/optimization.md).
 
 ## Browser Support
 
