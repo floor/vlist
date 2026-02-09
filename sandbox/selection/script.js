@@ -172,6 +172,7 @@ const createSelectionExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Selectable user list",
       item: {
         height: 56,
         template: (item, index, { selected }) =>

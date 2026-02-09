@@ -240,6 +240,7 @@ const createMillionItemsExample = (container) => {
 
     list = createVList({
       container: showcaseElement,
+      ariaLabel: "Million items list",
       item: {
         height: ITEM_HEIGHT,
         template: (item, index) => createItemElement(item, index),

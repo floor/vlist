@@ -218,6 +218,7 @@ const getItemHeight = (index) => items[index]?.height ?? 56;
 
 const list = createVList({
   container,
+  ariaLabel: "Chat messages",
   item: {
     height: getItemHeight,
     template: renderItem,
