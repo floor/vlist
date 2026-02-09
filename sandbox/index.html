@@ -15,111 +15,82 @@
                 font-family:
                     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                     Oxygen, Ubuntu, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #111;
+                color: #e0e0e0;
                 min-height: 100vh;
                 padding: 40px 20px;
             }
 
             .container {
-                max-width: 800px;
+                max-width: 720px;
                 margin: 0 auto;
             }
 
             header {
                 text-align: center;
-                margin-bottom: 40px;
-                color: white;
+                margin-bottom: 48px;
             }
 
             h1 {
-                font-size: 48px;
+                font-size: 40px;
                 font-weight: 700;
-                margin-bottom: 10px;
-                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-                cursor: pointer;
+                margin-bottom: 8px;
+                letter-spacing: -0.5px;
+                color: #fff;
+            }
+
+            h1 a {
                 text-decoration: none;
                 color: inherit;
             }
 
-            h1:hover {
-                opacity: 0.9;
+            h1 a:hover {
+                opacity: 0.85;
             }
 
             .tagline {
-                font-size: 18px;
-                opacity: 0.9;
+                font-size: 16px;
+                color: #888;
+                margin-bottom: 20px;
             }
 
             .features {
                 display: flex;
                 justify-content: center;
-                gap: 20px;
-                margin-top: 20px;
+                gap: 10px;
                 flex-wrap: wrap;
             }
 
             .feature {
-                background: rgba(255, 255, 255, 0.2);
-                padding: 6px 14px;
-                border-radius: 20px;
-                font-size: 13px;
-                color: white;
+                border: 1px solid #2a2a2a;
+                padding: 5px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                color: #999;
+                letter-spacing: 0.2px;
             }
 
             .sandbox-grid {
                 display: grid;
-                gap: 20px;
+                gap: 12px;
             }
 
             .sandbox-card {
-                background: white;
-                border-radius: 16px;
-                padding: 24px;
+                background: #1a1a1a;
+                border: 1px solid #222;
+                border-radius: 12px;
+                padding: 20px 24px;
                 text-decoration: none;
                 color: inherit;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+                transition: all 0.2s ease;
                 display: flex;
                 align-items: center;
                 gap: 20px;
             }
 
             .sandbox-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-            }
-
-            .sandbox-icon {
-                width: 60px;
-                height: 60px;
-                border-radius: 14px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 28px;
-                flex-shrink: 0;
-            }
-
-            .icon-basic {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            }
-            .icon-selection {
-                background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            }
-            .icon-infinite {
-                background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-            }
-            .icon-million {
-                background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            }
-            .icon-variable {
-                background: linear-gradient(135deg, #ff6b6b 0%, #feca57 100%);
-            }
-            .icon-velocity {
-                background: linear-gradient(135deg, #667eea 0%, #43e97b 100%);
-            }
-            .icon-window {
-                background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                background: #1e1e1e;
+                border-color: #333;
             }
 
             .sandbox-content {
@@ -127,46 +98,54 @@
             }
 
             .sandbox-title {
-                font-size: 20px;
+                font-size: 16px;
                 font-weight: 600;
-                color: #333;
-                margin-bottom: 6px;
+                color: #eee;
+                margin-bottom: 4px;
             }
 
             .sandbox-description {
-                font-size: 14px;
-                color: #666;
+                font-size: 13px;
+                color: #777;
                 line-height: 1.5;
             }
 
+            .sandbox-description code {
+                font-family: "SF Mono", Monaco, Menlo, monospace;
+                font-size: 12px;
+                background: #252525;
+                padding: 1px 5px;
+                border-radius: 4px;
+                color: #aaa;
+            }
+
             .sandbox-arrow {
-                font-size: 24px;
-                color: #ccc;
+                font-size: 18px;
+                color: #444;
                 transition:
                     transform 0.2s,
                     color 0.2s;
             }
 
             .sandbox-card:hover .sandbox-arrow {
-                transform: translateX(4px);
-                color: #667eea;
+                transform: translateX(3px);
+                color: #888;
             }
 
             footer {
                 text-align: center;
-                margin-top: 40px;
-                color: rgba(255, 255, 255, 0.8);
-                font-size: 14px;
+                margin-top: 48px;
+                color: #555;
+                font-size: 13px;
             }
 
             footer a {
-                color: white;
+                color: #999;
                 text-decoration: none;
-                font-weight: 500;
             }
 
             footer a:hover {
-                text-decoration: underline;
+                color: #ccc;
             }
 
             .github-link {
@@ -174,44 +153,46 @@
                 align-items: center;
                 gap: 8px;
                 margin-top: 10px;
-                background: rgba(255, 255, 255, 0.2);
-                padding: 8px 16px;
+                border: 1px solid #2a2a2a;
+                padding: 7px 14px;
                 border-radius: 8px;
-                transition: background 0.2s;
+                font-size: 13px;
+                transition: border-color 0.2s;
             }
 
             .github-link:hover {
-                background: rgba(255, 255, 255, 0.3);
+                border-color: #444;
                 text-decoration: none;
+            }
+
+            .github-link svg {
+                opacity: 0.7;
             }
         </style>
     </head>
     <body>
         <div class="container">
             <header>
-                <a href="/sandbox/" style="text-decoration: none"
-                    ><h1>📋 vlist</h1></a
-                >
+                <h1><a href="/sandbox/">vlist</a></h1>
                 <p class="tagline">
                     Lightweight, high-performance virtual list with zero
                     dependencies
                 </p>
                 <div class="features">
-                    <span class="feature">⚡ Blazing Fast</span>
-                    <span class="feature">🪶 Zero Dependencies</span>
-                    <span class="feature">📜 Infinite Scroll</span>
-                    <span class="feature">✅ Selection Support</span>
-                    <span class="feature">♿ Accessible</span>
+                    <span class="feature">Blazing Fast</span>
+                    <span class="feature">Zero Dependencies</span>
+                    <span class="feature">Infinite Scroll</span>
+                    <span class="feature">Selection Support</span>
+                    <span class="feature">Accessible</span>
                 </div>
             </header>
 
             <div class="sandbox-grid">
                 <a href="/sandbox/basic/" class="sandbox-card">
-                    <div class="sandbox-icon icon-basic">📋</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Basic (Vanilla JS)</div>
                         <div class="sandbox-description">
-                            Pure vanilla JavaScript - no dependencies. The
+                            Pure vanilla JavaScript — no dependencies. The
                             simplest way to use vlist with just HTML, CSS, and
                             JS.
                         </div>
@@ -220,7 +201,6 @@
                 </a>
 
                 <a href="/sandbox/variable-heights/" class="sandbox-card">
-                    <div class="sandbox-icon icon-variable">📐</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Variable Heights</div>
                         <div class="sandbox-description">
@@ -234,7 +214,6 @@
                 </a>
 
                 <a href="/sandbox/selection/" class="sandbox-card">
-                    <div class="sandbox-icon icon-selection">✅</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Selection</div>
                         <div class="sandbox-description">
@@ -247,7 +226,6 @@
                 </a>
 
                 <a href="/sandbox/infinite-scroll/" class="sandbox-card">
-                    <div class="sandbox-icon icon-infinite">♾️</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Infinite Scroll</div>
                         <div class="sandbox-description">
@@ -260,11 +238,10 @@
                 </a>
 
                 <a href="/sandbox/million-items/" class="sandbox-card">
-                    <div class="sandbox-icon icon-million">🚀</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Million Items</div>
                         <div class="sandbox-description">
-                            Push vlist to the limit with 1-5 million items.
+                            Push vlist to the limit with 1–5 million items.
                             Monitor FPS, DOM nodes, and compression in
                             real-time.
                         </div>
@@ -273,7 +250,6 @@
                 </a>
 
                 <a href="/sandbox/velocity-loading/" class="sandbox-card">
-                    <div class="sandbox-icon icon-velocity">⚡</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Velocity-Based Loading</div>
                         <div class="sandbox-description">
@@ -285,7 +261,6 @@
                 </a>
 
                 <a href="/sandbox/window-scroll/" class="sandbox-card">
-                    <div class="sandbox-icon icon-window">🌍</div>
                     <div class="sandbox-content">
                         <div class="sandbox-title">Window Scroll</div>
                         <div class="sandbox-description">
@@ -300,18 +275,13 @@
             </div>
 
             <footer>
-                <p>Built with ❤️ for performance</p>
+                <p>Built with care for performance</p>
                 <a
                     href="https://github.com/floor/vlist"
                     class="github-link"
                     target="_blank"
                 >
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="white"
-                    >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#999">
                         <path
                             d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
                         />
