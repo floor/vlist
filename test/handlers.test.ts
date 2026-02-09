@@ -183,6 +183,7 @@ const createMockScrollController = (): ScrollController => ({
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
   getVelocity: mock(() => 0),
+  isTracking: mock(() => true),
   isScrolling: mock(() => false),
   isCompressed: mock(() => false),
   enableCompression: mock(() => {}),
@@ -413,6 +414,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -444,6 +448,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -464,6 +471,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -485,6 +495,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -553,6 +566,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
@@ -567,6 +583,9 @@ describe("createScrollHandler", () => {
       (
         ctx.scrollController.getVelocity as ReturnType<typeof mock>
       ).mockImplementation(() => currentVelocity);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
 
       const handler = createScrollHandler(ctx, renderIfNeeded);
 
