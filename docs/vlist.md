@@ -154,6 +154,7 @@ interface VListConfig<T extends VListItem> {
   adapter?: VListAdapter<T>;        // Async data adapter for infinite scroll
   overscan?: number;                // Extra items to render (default: 3)
   selection?: SelectionConfig;      // Selection configuration
+  scrollElement?: Window;           // External scroll element for document scrolling
   scrollbar?: ScrollbarConfig;      // Custom scrollbar configuration
   loading?: LoadingConfig;          // Loading behavior configuration
   idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
@@ -587,6 +588,82 @@ Data is loaded in chunks (default: 100 items per chunk) aligned to chunk boundar
 
 ---
 
+## Window Scrolling
+
+By default, vlist scrolls inside its own container (`overflow: auto`). Pass `scrollElement: window` to make the list participate in the normal page flow — the browser's native scrollbar controls scrolling instead.
+
+### Basic Usage
+
+```javascript
+const list = createVList({
+  container: '#results',
+  scrollElement: window,  // list scrolls with the page
+  item: {
+    height: 48,
+    template: (item) => `<div class="result">${item.title}</div>`,
+  },
+  items: searchResults,
+});
+```
+
+### How It Works
+
+- The viewport is set to `overflow: visible` and `height: auto` — no inner scrollbar
+- A RAF-throttled `window.scroll` listener computes the list-relative position from `viewport.getBoundingClientRect()`
+- Container height is derived from `window.innerHeight` and updated on window resize
+- `scrollTo()` / `scrollToIndex()` delegate to `window.scrollTo()` with the list's document offset
+- The custom scrollbar is automatically disabled (the browser scrollbar is used)
+- Compression still works — the scroll math is purely mathematical, no wheel interception needed
+
+### When to Use
+
+| Use Case | Recommended Mode |
+|----------|-----------------|
+| Contained panel, sidebar, modal | Default (no `scrollElement`) |
+| Full-page search results, feeds | `scrollElement: window` |
+| Landing page with list section | `scrollElement: window` |
+| Dashboard with multiple lists | Default (no `scrollElement`) |
+
+### Page Layout Example
+
+```html
+<!-- The list sits in the normal page flow -->
+<header>My App</header>
+<main>
+  <h1>Search Results</h1>
+  <div id="results"></div>  <!-- vlist mounts here -->
+</main>
+<footer>Footer content</footer>
+```
+
+```javascript
+const list = createVList({
+  container: '#results',
+  scrollElement: window,
+  item: {
+    height: 64,
+    template: (item) => `
+      <div class="search-result">
+        <h3>${item.title}</h3>
+        <p>${item.description}</p>
+      </div>
+    `,
+  },
+  adapter: searchAdapter,
+});
+
+// Navigate to a result — scrolls the whole page
+list.scrollToIndex(50, { align: 'center', behavior: 'smooth' });
+```
+
+### Notes
+
+- **Resize handling**: vlist listens for `window.resize` to update the container height and re-render. The `resize` event is emitted as usual.
+- **Compression**: Works identically to container mode. For 1M+ items, the content div is capped at the virtual height and the browser scrolls natively.
+- **Destroy**: Calling `list.destroy()` properly removes the window scroll and resize listeners.
+
+---
+
 ## Styling
 
 ### Default CSS Classes
@@ -877,7 +954,7 @@ const list = createVList({
 
 ### Items not rendering
 
-1. **Check container height** - Container must have a defined height
+1. **Check container height** - Container must have a defined height (not required in window mode)
 2. **Check itemHeight** - Must be a positive number
 3. **Check items array** - Items must have unique `id` properties
 

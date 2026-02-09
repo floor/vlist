@@ -8,6 +8,7 @@
 - **[Optimization Guide](./optimization.md)** - Performance optimizations and tuning
 - **[Styles Guide](./styles.md)** - CSS tokens, variants, dark mode, split core/extras CSS, and customization
 - **[Compression Guide](./compression.md)** - Handling large lists (1M+ items)
+- **[Window Scrolling](./vlist.md#window-scrolling)** - Document-level scrolling with `scrollElement: window`
 
 ## Module Documentation
 
@@ -54,16 +55,17 @@ Each module has detailed documentation covering its API, usage examples, and imp
                               │
         ┌─────────────────────┼─────────────────────┐
         ▼                     ▼                     ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│  DataManager  │   │ ScrollController│   │   Renderer    │
-│ (sparse data) │   │ (native/manual)│   │ (DOM pooling) │
-└───────────────┘   └───────────────┘   └───────────────┘
+┌───────────────┐   ┌─────────────────┐   ┌───────────────┐
+│  DataManager  │   │ScrollController │   │   Renderer    │
+│ (sparse data) │   │(native/compress-│   │ (DOM pooling) │
+│               │   │ ed/window)      │   │               │
+└───────────────┘   └─────────────────┘   └───────────────┘
         │                     │                     │
         ▼                     ▼                     ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│    Adapter    │   │   Scrollbar   │   │  Compression  │
-│ (async fetch) │   │   (custom)    │   │ (large lists) │
-└───────────────┘   └───────────────┘   └───────────────┘
+┌───────────────┐   ┌─────────────────┐   ┌───────────────┐
+│    Adapter    │   │    Scrollbar    │   │  Compression  │
+│ (async fetch) │   │    (custom)     │   │ (large lists) │
+└───────────────┘   └─────────────────┘   └───────────────┘
 ```
 
 ## Data Flow
@@ -139,8 +141,8 @@ Emit 'load:end' event
 - Direct state getters (`getTotal()`, `getCached()`) for zero-allocation hot paths
 
 ### Scroll Module
-- Native and manual scrolling modes
-- Custom scrollbar for compressed mode
+- Native, compressed, and window scrolling modes
+- Custom scrollbar for compressed mode (auto-disabled in window mode)
 - Circular buffer velocity tracking (zero allocations during scroll)
 - RAF-throttled native scroll (at most one processing per animation frame)
 - Configurable idle detection (`idleTimeout` option, default: 150ms)
@@ -176,6 +178,7 @@ const list = createVList({
   
   // Optional
   overscan: 3,                 // Extra items to render
+  scrollElement: window,       // Document scrolling (list scrolls with page)
   classPrefix: 'vlist',        // CSS class prefix
   idleTimeout: 150,            // Scroll idle detection (ms)
   selection: {

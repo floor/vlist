@@ -29,7 +29,9 @@ sandbox/
 ├── selection/            # Selection modes example
 ├── infinite-scroll/      # Async data loading example
 ├── million-items/        # Stress test example
-└── velocity-loading/     # Velocity-based loading example
+├── variable-heights/     # Variable item heights example
+├── velocity-loading/     # Velocity-based loading example
+└── window-scroll/        # Document-level scrolling (scrollElement: window)
 ```
 
 ## Adding a New Example
@@ -47,7 +49,7 @@ sandbox/my-example/
 
 ```bash
 bun run build:sandbox
-# Output: Found 6 examples: basic, infinite-scroll, million-items, my-example, selection, velocity-loading
+# Output: Found 8 examples: basic, infinite-scroll, million-items, my-example, selection, variable-heights, velocity-loading, window-scroll
 ```
 
 That's it. No configuration needed.
@@ -66,13 +68,15 @@ bun run build:sandbox
 
 # Output:
 # Building sandbox...
-# Found 5 examples: basic, infinite-scroll, million-items, selection, velocity-loading
+# Found 7 examples: basic, infinite-scroll, million-items, selection, variable-heights, velocity-loading, window-scroll
 #   basic                 3ms
 #   infinite-scroll      12ms
 #   million-items        15ms
 #   selection            18ms
-#   velocity-loading     22ms
-# Done in 23ms
+#   variable-heights     22ms
+#   velocity-loading     25ms
+#   window-scroll        28ms
+# Done in 28ms
 ```
 
 ### Watch Mode

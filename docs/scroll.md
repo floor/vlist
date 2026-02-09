@@ -8,6 +8,7 @@ The scroll module handles all scrolling functionality in vlist, including:
 
 - **Native Scrolling**: Standard browser scrolling for smaller lists
 - **Compressed Scrolling**: Manual wheel-based scrolling for large lists (1M+ items)
+- **Window Scrolling**: Document-level scrolling where the list participates in the page flow
 - **Custom Scrollbar**: Visual scrollbar for compressed mode
 - **Velocity Tracking**: Smooth scroll momentum detection
 
@@ -34,24 +35,60 @@ Scrolling active...
 Scroll stops (idle detected) → remove .vlist--scrolling (transitions re-enabled)
 ```
 
-### Dual Mode Scrolling
+### Scroll Modes
 
-The scroll controller operates in two modes:
+The scroll controller operates in three modes:
 
 | Mode | Trigger | Behavior |
 |------|---------|----------|
 | **Native** | Small lists (< ~333K items @ 48px) | `overflow: auto`, browser handles scrolling |
 | **Compressed** | Large lists (> browser limit) | `overflow: hidden`, manual wheel handling |
+| **Window** | `scrollElement: window` config option | `overflow: visible`, browser scrolls the page |
 
 ### Mode Switching
 
 ```
 List Created
     ↓
-Check: totalItems × itemHeight > 16M?
+scrollElement: window?
     ↓
-Yes → Compressed Mode (wheel events)
-No  → Native Mode (scroll events)
+Yes → Window Mode (window scroll events)
+No  → Check: totalItems × itemHeight > 16M?
+        ↓
+      Yes → Compressed Mode (wheel events)
+      No  → Native Mode (scroll events)
+```
+
+### Window Scrolling
+
+When `scrollElement: window` is set, the list participates in the normal page flow instead of scrolling inside its own container. This is ideal for search results, feeds, landing pages, and any UI where the list should scroll with the document.
+
+**How it works:**
+
+1. The viewport is set to `overflow: visible` and `height: auto` — no inner scrollbar
+2. The scroll controller listens to `window.scroll` (RAF-throttled, passive)
+3. The list-relative scroll position is computed from `viewport.getBoundingClientRect().top`
+4. Container height is derived from `window.innerHeight` and updated on window resize
+5. The browser's native scrollbar is used (custom scrollbar is disabled)
+
+**Compression in window mode:** Compression still works — the content div height is set to the virtual height, and the browser scrolls natively. The compression math (ratio-based position mapping) is purely mathematical; no overflow changes or wheel interception are needed.
+
+```
+Page Layout (Window Mode)
+┌──────────────────────────┐
+│  Page header / nav       │
+├──────────────────────────┤
+│  VList viewport          │  ← overflow: visible, height: auto
+│  ┌────────────────────┐  │
+│  │ content div         │  │  ← height = totalHeight (or virtualHeight)
+│  │  ┌──────────────┐  │  │
+│  │  │ visible items │  │  │  ← positioned within content
+│  │  └──────────────┘  │  │
+│  └────────────────────┘  │
+├──────────────────────────┤
+│  Page footer             │
+└──────────────────────────┘
+     ↕ browser scrollbar scrolls the whole page
 ```
 
 ### Configurable Idle Timeout
@@ -132,6 +169,13 @@ interface ScrollControllerConfig {
   /** Compression state for calculating bounds */
   compression?: CompressionState;
   
+  /**
+   * External scroll element for window/document scrolling.
+   * When set, the controller listens to this element's scroll events
+   * and computes list-relative positions from the viewport's bounding rect.
+   */
+  scrollElement?: Window;
+  
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
   
@@ -195,6 +239,15 @@ interface ScrollController {
   
   /** Check if compressed mode is active */
   isCompressed: () => boolean;
+  
+  /** Check if in window scroll mode */
+  isWindowMode: () => boolean;
+  
+  /**
+   * Update the container height used for scroll calculations.
+   * In window mode, call this when the window resizes.
+   */
+  updateContainerHeight: (height: number) => void;
   
   /** Destroy and cleanup */
   destroy: () => void;
@@ -401,6 +454,38 @@ scrollbar.hide();
 scrollbar.destroy();
 ```
 
+### Window Scrolling
+
+```typescript
+import { createScrollController } from './scroll';
+
+// The list scrolls with the page instead of inside its own container
+const controller = createScrollController(viewport, {
+  scrollElement: window,
+  onScroll: ({ scrollTop, direction, velocity }) => {
+    console.log(`Page scrolled ${direction}, list at ${scrollTop}px`);
+  },
+  onIdle: () => {
+    console.log('Page scrolling stopped');
+  }
+});
+
+// scrollTo delegates to window.scrollTo with the correct document offset
+controller.scrollTo(5000);
+
+// isAtBottom / getScrollPercentage work using tracked maxScroll
+const atBottom = controller.isAtBottom();
+const pct = controller.getScrollPercentage();
+
+// Update container height when window resizes
+window.addEventListener('resize', () => {
+  controller.updateContainerHeight(window.innerHeight);
+});
+
+// Cleanup removes the window scroll listener
+controller.destroy();
+```
+
 ### Complete Integration
 
 ```typescript
@@ -533,6 +618,34 @@ function handleNativeScroll() {
 }
 ```
 
+### Window Mode
+
+In window mode, the controller listens to `window.scroll` and computes the list-relative position from the viewport's bounding rect:
+
+```typescript
+// Window mode setup — no overflow changes, no wheel interception
+window.addEventListener('scroll', handleWindowScroll, { passive: true });
+
+function handleWindowScroll() {
+  // The viewport's bounding rect tells us how far the list has scrolled
+  // relative to the window. When rect.top = 0, scrollTop = 0.
+  // When rect.top = -500, the list has scrolled 500px past the window top.
+  const rect = viewport.getBoundingClientRect();
+  const scrollTop = Math.max(0, -rect.top);
+  // Update state, trigger callbacks
+}
+```
+
+**Key differences from native/compressed modes:**
+
+| Aspect | Native/Compressed | Window |
+|--------|-------------------|--------|
+| Scroll listener | `viewport.scroll` / `viewport.wheel` | `window.scroll` |
+| `getScrollTop()` | `viewport.scrollTop` / tracked position | tracked `scrollPosition` (viewport has no scrollTop) |
+| `scrollTo(pos)` | `viewport.scrollTop = pos` / tracked | `window.scrollTo(listDocumentTop + pos)` |
+| Compression | Changes overflow, intercepts wheel | Purely mathematical (no overflow/wheel changes) |
+| Custom scrollbar | Enabled when compressed | Disabled (browser scrollbar used) |
+
 ### Compressed Mode
 
 In compressed mode, the controller intercepts wheel events:
@@ -565,6 +678,8 @@ scrollPosition = ratio * maxScroll;
 const ratio = scrollPosition / maxScroll;
 viewport.scrollTop = ratio * (actualHeight - viewport.clientHeight);
 ```
+
+> **Note:** In window mode, `enableCompression` and `disableCompression` skip overflow and wheel changes entirely — compression is purely mathematical. The content div height is set to the virtual height by `vlist.ts`, and the browser scrolls natively.
 
 ### Idle Detection
 
@@ -713,7 +828,8 @@ function handleMouseMove(event: MouseEvent) {
 - [context.md](./context.md) - Context holds scroll controller
 - [optimization.md](./optimization.md) - Full list of scroll-related optimizations
 - [styles.md](./styles.md) - `.vlist--scrolling` class and CSS containment
+- [vlist.md](./vlist.md) - Main vlist documentation (window scrolling usage)
 
 ---
 
-*The scroll module provides seamless scrolling for lists of any size.*
+*The scroll module provides seamless scrolling for lists of any size — inside a container or with the page.*

@@ -12,9 +12,10 @@ vlist is a well-optimized, batteries-included virtual list with zero dependencie
 - ✅ Built-in selection (single/multi/keyboard) — competitors say "BYO"
 - ✅ Built-in infinite scroll with adapter, placeholders, velocity-based loading
 - ✅ Variable item heights via `height: (index) => number` (Mode A)
+- ✅ Window/document scrolling via `scrollElement: window`
 - ✅ Smooth `scrollToIndex` animation with easing
 - ✅ Extensive scroll hot-path optimizations (zero-allocation, RAF-throttled, circular buffer velocity)
-- ✅ 543 tests, comprehensive documentation
+- ✅ 561 tests, comprehensive documentation
 
 **Where vlist falls short:**
 
@@ -22,7 +23,7 @@ vlist is a well-optimized, batteries-included virtual list with zero dependencie
 |-----|--------|-------------|
 | No auto-height measurement (Mode B) | ⚠️ Mode A covers known heights; Mode B needed for dynamic content | @tanstack/virtual ✅ |
 | No horizontal / grid layout | ❌ Major | @tanstack/virtual ✅ |
-| No window (document) scrolling | ❌ Major | @tanstack/virtual ✅ |
+| ~~No window (document) scrolling~~ | ✅ Shipped | @tanstack/virtual ✅ |
 | No sticky headers / grouped lists | ❌ Common pattern | react-virtuoso ✅ |
 | No reverse mode (chat UI) | ❌ Common pattern | react-virtuoso ✅ |
 | No framework adapters | ❌ Adoption barrier | @tanstack/virtual ✅ |
@@ -211,31 +212,46 @@ const grid = createVList({
 
 ---
 
-### 6. Window (Document) Scrolling
+### 6. ✅ Window (Document) Scrolling
 
-**Priority:** Medium.
+**Status:** ✅ **Shipped** — `scrollElement: window` option implemented.
 
-**Problem:** Currently vlist only works inside a contained `overflow: auto` div. Many pages need the list to scroll with the page itself (search results, feeds, landing pages).
+**What shipped:**
 
-**Approach:**
+Pass `scrollElement: window` to make the list participate in normal page flow instead of scrolling inside its own container:
 
 ```typescript
 const list = createVList({
   container: '#results',
-  scrollElement: window,  // new option (default: own viewport)
+  scrollElement: window,  // list scrolls with the page
   item: { height: 48, template: myTemplate },
   items: searchResults,
 });
 ```
 
-**Architecture impact:**
-- Listen on `window.scroll` instead of viewport scroll
-- Calculate list offset from page top: `getBoundingClientRect().top`
-- Visible range = items within `(windowScrollY - listTop)` to `(windowScrollY - listTop + windowHeight)`
-- No custom scrollbar needed (browser handles it)
-- Compressed mode may not apply (window scroll has different height limits)
+**How it works:**
 
-**Estimated effort:** Medium.
+- **Viewport**: Set to `overflow: visible`, `height: auto` — the list sits in the page flow
+- **Scroll tracking**: RAF-throttled `window.scroll` listener computes list-relative position from `viewport.getBoundingClientRect()`
+- **Container height**: Derived from `window.innerHeight`, updated on resize
+- **scrollTo()**: Delegates to `window.scrollTo()` with the list's document offset
+- **Compression**: Still works — content height is capped, scroll math is remapped, but the browser scrolls natively (no wheel interception)
+- **Custom scrollbar**: Automatically disabled (the browser's native scrollbar is used)
+- **Cleanup**: Window scroll and resize listeners are properly removed on `destroy()`
+
+**Architecture details:**
+
+Scroll controller changes:
+- `getScrollTop()` returns tracked `scrollPosition` (viewport.scrollTop is 0 in window mode)
+- `enableCompression` / `disableCompression` skip overflow and wheel interception (browser scrolls natively)
+- `isAtBottom` / `getScrollPercentage` use `maxScroll` in window mode
+- New `isWindowMode()` and `updateContainerHeight()` methods on the interface
+
+VList wiring:
+- Window resize listener updates `containerHeight` and re-renders
+- ResizeObserver still watches the viewport element for content-driven changes
+
+**Changes:** `src/types.ts`, `src/scroll/controller.ts`, `src/vlist.ts`, `test/scroll/controller.test.ts` (+18 tests, 561 total)
 
 ---
 

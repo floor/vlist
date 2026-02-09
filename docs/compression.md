@@ -80,7 +80,7 @@ if (distanceFromBottom <= containerHeight) {
 
 ### Scroll Controller
 
-The scroll controller (`src/core/scroll.ts`) handles both modes:
+The scroll controller (`src/scroll/controller.ts`) handles all three modes:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -96,8 +96,16 @@ The scroll controller (`src/core/scroll.ts`) handles both modes:
 │  - Intercept wheel events                           │
 │  - Track virtual scrollPosition                     │
 │  - Position items relative to viewport              │
+├─────────────────────────────────────────────────────┤
+│  Window Mode (document scrolling)                   │
+│  - overflow: visible (list sits in page flow)       │
+│  - Listen to window 'scroll' event                  │
+│  - Compression is purely mathematical               │
+│  - No wheel interception or overflow changes        │
 └─────────────────────────────────────────────────────┘
 ```
+
+> **Window mode + compression:** When `scrollElement: window` is set and the list exceeds browser height limits, compression activates but works differently — the content div height is set to the virtual height by `vlist.ts`, and the browser scrolls natively. There is no `overflow: hidden` or wheel interception. The compression ratio-based position mapping is purely mathematical.
 
 ### Mode Switching
 
@@ -155,6 +163,8 @@ interface ScrollController {
   enableCompression(compression: CompressionState): void;
   disableCompression(): void;
   isCompressed(): boolean;
+  isWindowMode(): boolean;
+  updateContainerHeight(height: number): void;
   destroy(): void;
 }
 ```
@@ -343,5 +353,5 @@ list.scrollToIndex(999_999, 'end');
 
 ---
 
-*Last updated: January  *
-*Status: Compression and custom scrollbar fully implemented*
+*Last updated: February 2026*
+*Status: Compression and custom scrollbar fully implemented. Window mode compression supported.*

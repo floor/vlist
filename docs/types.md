@@ -155,6 +155,19 @@ interface VListConfig<T extends VListItem = VListItem> {
   /** Selection configuration */
   selection?: SelectionConfig;
   
+  /**
+   * External scroll element for document/window scrolling.
+   * When set, the list scrolls with this element instead of its own container.
+   * Pass `window` for document scrolling (most common use case).
+   *
+   * In window mode:
+   * - The list participates in the normal page flow (no inner scrollbar)
+   * - The browser's native scrollbar controls scrolling
+   * - Compression still works (content height is capped, scroll math is remapped)
+   * - Custom scrollbar is disabled (the browser scrollbar is used)
+   */
+  scrollElement?: Window;
+  
   /** Custom scrollbar configuration (for compressed mode) */
   scrollbar?: ScrollbarConfig;
   
