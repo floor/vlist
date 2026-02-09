@@ -20,6 +20,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
+- 💾 **Scroll save/restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
 - 🌲 **Tree-shakeable** - Sub-module imports for smaller bundles
 
 ## Sandbox
@@ -55,6 +56,7 @@ bun run dev:sandbox
 | [Velocity Loading](sandbox/velocity-loading/) | Velocity-based load skipping demo |
 | [Sticky Headers](sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
 | [Window Scroll](sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
+| [Scroll Restore](sandbox/scroll-restore/) | Save/restore scroll position across SPA navigation |
 
 ## Installation
 
@@ -319,6 +321,30 @@ list.on('load:end', ({ items, total }) => {
 });
 ```
 
+### Scroll Save/Restore
+
+```typescript
+const list = createVList({
+  container: '#my-list',
+  item: {
+    height: 64,
+    template: (item) => `<div>${item.name}</div>`,
+  },
+  items: myItems,
+  selection: { mode: 'multiple' },
+});
+
+// Save — e.g. before navigating away
+const snapshot = list.getScrollSnapshot();
+// { index: 523, offsetInItem: 12, selectedIds: [3, 7, 42] }
+sessionStorage.setItem('list-scroll', JSON.stringify(snapshot));
+
+// Restore — e.g. after navigating back and recreating the list
+const saved = JSON.parse(sessionStorage.getItem('list-scroll'));
+list.restoreScroll(saved);
+// Scroll position AND selection are perfectly restored
+```
+
 ### With Custom Template
 
 ```typescript
@@ -369,9 +395,12 @@ list.scrollToItem(id, align?)       // Scroll to item by ID
 list.scrollToItem(id, options?)     // Scroll to item with options
 list.cancelScroll()                 // Cancel in-progress smooth scroll
 list.getScrollPosition()            // Get current scroll position
+list.getScrollSnapshot()            // Get snapshot for save/restore
+list.restoreScroll(snapshot)        // Restore position (and selection) from snapshot
 
 // ScrollToOptions: { align?, behavior?: 'auto' | 'smooth', duration? }
 // Example: list.scrollToIndex(500, { align: 'center', behavior: 'smooth' })
+// ScrollSnapshot: { index, offsetInItem, selectedIds? } — JSON-serializable
 ```
 
 #### Selection
