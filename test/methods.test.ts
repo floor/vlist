@@ -17,6 +17,7 @@ import {
   createDataMethods,
   createScrollMethods,
   createSelectionMethods,
+  createSnapshotMethods,
 } from "../src/methods";
 import { createSelectionState } from "../src/selection";
 import type {
@@ -286,6 +287,7 @@ const createMockContext = <T extends VListItem>(
       virtualHeight: items.length * itemHeight,
       ratio: 1,
     })),
+    getVirtualTotal: mock(() => items.length),
   };
 };
 
@@ -1011,5 +1013,449 @@ describe("Methods Integration", () => {
 
     // But getSelectedItems won't return it since item is gone
     // (This depends on implementation - our mock doesn't reflect removal in getAllLoadedItems)
+  });
+});
+
+// =============================================================================
+// Snapshot Methods Tests
+// =============================================================================
+
+describe("createSnapshotMethods", () => {
+  let items: TestItem[];
+  let ctx: VListContext<TestItem>;
+
+  beforeEach(() => {
+    items = createTestItems(100);
+    ctx = createMockContext(items);
+  });
+
+  // ---------------------------------------------------------------------------
+  // getScrollSnapshot
+  // ---------------------------------------------------------------------------
+
+  describe("getScrollSnapshot", () => {
+    it("should return index 0 and offset 0 when scrolled to top", () => {
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(0);
+      expect(snapshot.offsetInItem).toBe(0);
+    });
+
+    it("should return correct index when scrolled exactly to an item boundary", () => {
+      // Item height is 40, so scrollTop 200 = start of item 5
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(200);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(5);
+      expect(snapshot.offsetInItem).toBe(0);
+    });
+
+    it("should return correct index and sub-pixel offset within an item", () => {
+      // Item height is 40, scrollTop 215 = item 5 + 15px offset
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(215);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(5);
+      expect(snapshot.offsetInItem).toBeCloseTo(15, 5);
+    });
+
+    it("should return the last item when scrolled near the bottom", () => {
+      // 100 items × 40px = 4000px total, container 500px → max scroll = 3500
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(3500);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      // At scrollTop 3500, first visible = floor(3500 / 40) = 87
+      expect(snapshot.index).toBe(87);
+      expect(snapshot.offsetInItem).toBeCloseTo(20, 5);
+    });
+
+    it("should return index 0 and offset 0 for empty list", () => {
+      ctx = createMockContext([] as TestItem[]);
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(0);
+      expect(snapshot.offsetInItem).toBe(0);
+    });
+
+    it("should not include selectedIds when nothing is selected", () => {
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.selectedIds).toBeUndefined();
+    });
+
+    it("should include selectedIds when items are selected", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      // Manually set selection state
+      ctx.state.selectionState.selected = new Set([1, 5, 10]);
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.selectedIds).toBeDefined();
+      expect(snapshot.selectedIds).toHaveLength(3);
+      expect(snapshot.selectedIds).toContain(1);
+      expect(snapshot.selectedIds).toContain(5);
+      expect(snapshot.selectedIds).toContain(10);
+    });
+
+    it("should work with variable item heights", () => {
+      // Create context with variable heights: item i has height 20 + i
+      const variableHeightFn = (index: number) => 20 + index;
+      ctx = createMockContext(items, { itemHeight: variableHeightFn });
+      // Reconfigure getCachedCompression for the new height cache
+      const heightCache = createHeightCache(variableHeightFn, items.length);
+      (ctx as any).heightCache = heightCache;
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: false,
+        actualHeight: heightCache.getTotalHeight(),
+        virtualHeight: heightCache.getTotalHeight(),
+        ratio: 1,
+      });
+
+      // Offset of item 5 = sum(20+0, 20+1, 20+2, 20+3, 20+4) = 110
+      // scrollTop 120 = item 5 + 10px offset
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(120);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(5);
+      expect(snapshot.offsetInItem).toBeCloseTo(10, 5);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // restoreScroll
+  // ---------------------------------------------------------------------------
+
+  describe("restoreScroll", () => {
+    it("should scroll to the exact position from a snapshot", () => {
+      const methods = createSnapshotMethods(ctx);
+
+      // Restore to item 5 + 15px offset → scrollPosition = 5*40 + 15 = 215
+      methods.restoreScroll({ index: 5, offsetInItem: 15 });
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(215);
+    });
+
+    it("should scroll to exact item boundary when offsetInItem is 0", () => {
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({ index: 10, offsetInItem: 0 });
+
+      // Item 10 at offset 10*40 = 400
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(400);
+    });
+
+    it("should clamp index to valid range when index exceeds total", () => {
+      const methods = createSnapshotMethods(ctx);
+
+      // Index 200 is beyond 100 items → clamp to 99
+      methods.restoreScroll({ index: 200, offsetInItem: 0 });
+
+      // Item 99 at offset 99*40 = 3960, but max scroll = 4000 - 500 = 3500
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(3500);
+    });
+
+    it("should clamp scroll position to max scroll", () => {
+      const methods = createSnapshotMethods(ctx);
+
+      // Item 99 + large offset → should clamp to max scroll
+      methods.restoreScroll({ index: 99, offsetInItem: 999 });
+
+      // Max scroll = 4000 - 500 = 3500
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(3500);
+    });
+
+    it("should handle negative index gracefully", () => {
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({ index: -5, offsetInItem: 0 });
+
+      // Clamped to index 0 → offset 0
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(0);
+    });
+
+    it("should be a no-op for empty list", () => {
+      ctx = createMockContext([] as TestItem[]);
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({ index: 5, offsetInItem: 10 });
+
+      expect(ctx.scrollController.scrollTo).not.toHaveBeenCalled();
+    });
+
+    it("should restore selection when selectedIds are provided", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(0);
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({
+        index: 0,
+        offsetInItem: 0,
+        selectedIds: [1, 5, 10],
+      });
+
+      expect(ctx.state.selectionState.selected.has(1)).toBe(true);
+      expect(ctx.state.selectionState.selected.has(5)).toBe(true);
+      expect(ctx.state.selectionState.selected.has(10)).toBe(true);
+    });
+
+    it("should not restore selection when selection mode is none", () => {
+      ctx = createMockContext(items, { selectionMode: "none" });
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({
+        index: 0,
+        offsetInItem: 0,
+        selectedIds: [1, 5, 10],
+      });
+
+      expect(ctx.state.selectionState.selected.size).toBe(0);
+    });
+
+    it("should not restore selection when selectedIds is empty", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({
+        index: 0,
+        offsetInItem: 0,
+        selectedIds: [],
+      });
+
+      expect(ctx.state.selectionState.selected.size).toBe(0);
+    });
+
+    it("should not restore selection when selectedIds is undefined", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      const methods = createSnapshotMethods(ctx);
+
+      methods.restoreScroll({ index: 0, offsetInItem: 0 });
+
+      expect(ctx.state.selectionState.selected.size).toBe(0);
+    });
+
+    it("should work with variable item heights", () => {
+      const variableHeightFn = (index: number) => 20 + index;
+      ctx = createMockContext(items, { itemHeight: variableHeightFn });
+      const heightCache = createHeightCache(variableHeightFn, items.length);
+      (ctx as any).heightCache = heightCache;
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: false,
+        actualHeight: heightCache.getTotalHeight(),
+        virtualHeight: heightCache.getTotalHeight(),
+        ratio: 1,
+      });
+
+      const methods = createSnapshotMethods(ctx);
+
+      // Item 5 offset = sum(20,21,22,23,24) = 110, + 10px offset = 120
+      methods.restoreScroll({ index: 5, offsetInItem: 10 });
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(120);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Round-trip (save + restore)
+  // ---------------------------------------------------------------------------
+
+  describe("round-trip save/restore", () => {
+    it("should round-trip perfectly at an item boundary", () => {
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(200);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+      methods.restoreScroll(snapshot);
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(200);
+    });
+
+    it("should round-trip perfectly at a sub-pixel offset", () => {
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(215);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+      methods.restoreScroll(snapshot);
+
+      // index=5, offsetInItem=15 → restore to 5*40+15 = 215
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(215);
+    });
+
+    it("should round-trip with selection included", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      ctx.state.selectionState.selected = new Set([3, 7, 42]);
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(120);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      // Clear selection
+      ctx.state.selectionState.selected = new Set();
+
+      // Restore
+      methods.restoreScroll(snapshot);
+
+      // Scroll restored
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(120);
+      // Selection restored
+      expect(ctx.state.selectionState.selected.has(3)).toBe(true);
+      expect(ctx.state.selectionState.selected.has(7)).toBe(true);
+      expect(ctx.state.selectionState.selected.has(42)).toBe(true);
+    });
+
+    it("should round-trip with variable heights", () => {
+      const variableHeightFn = (index: number) => 20 + index;
+      ctx = createMockContext(items, { itemHeight: variableHeightFn });
+      const heightCache = createHeightCache(variableHeightFn, items.length);
+      (ctx as any).heightCache = heightCache;
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: false,
+        actualHeight: heightCache.getTotalHeight(),
+        virtualHeight: heightCache.getTotalHeight(),
+        ratio: 1,
+      });
+
+      // Item 5 starts at offset 110, height=25. scrollTop 120 → offset 10 into item 5
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(120);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+      methods.restoreScroll(snapshot);
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(120);
+    });
+
+    it("should be JSON-serializable for sessionStorage usage", () => {
+      ctx = createMockContext(items, { selectionMode: "multiple" });
+      ctx.state.selectionState.selected = new Set([1, 2, 3]);
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(215);
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+
+      // Serialize and deserialize (simulates sessionStorage round-trip)
+      const json = JSON.stringify(snapshot);
+      const restored = JSON.parse(json);
+
+      expect(restored.index).toBe(snapshot.index);
+      expect(restored.offsetInItem).toBe(snapshot.offsetInItem);
+      expect(restored.selectedIds).toEqual(snapshot.selectedIds);
+
+      // Restore from deserialized snapshot
+      methods.restoreScroll(restored);
+
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(215);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Compressed mode
+  // ---------------------------------------------------------------------------
+
+  describe("compressed mode", () => {
+    it("should compute snapshot using linear ratio in compressed mode", () => {
+      // Simulate a compressed list: 1M items × 40px = 40M actual, virtualHeight = 16M
+      const totalItems = 1_000_000;
+      const bigItems = createTestItems(10); // Mock only holds a few items
+      ctx = createMockContext(bigItems);
+
+      const virtualHeight = 16_000_000;
+      const actualHeight = totalItems * 40;
+
+      (ctx.getVirtualTotal as any).mockReturnValue(totalItems);
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: true,
+        actualHeight,
+        virtualHeight,
+        ratio: virtualHeight / actualHeight,
+      });
+
+      // scrollTop at 50% of virtualHeight → item at 50% of totalItems
+      const scrollTop = virtualHeight / 2;
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(scrollTop);
+
+      const methods = createSnapshotMethods(ctx);
+      const snapshot = methods.getScrollSnapshot();
+
+      // 50% of 1M = 500_000
+      expect(snapshot.index).toBe(500_000);
+      expect(snapshot.offsetInItem).toBe(0);
+    });
+
+    it("should restore scroll using linear ratio in compressed mode", () => {
+      const totalItems = 1_000_000;
+      const bigItems = createTestItems(10);
+      ctx = createMockContext(bigItems);
+
+      const virtualHeight = 16_000_000;
+      const actualHeight = totalItems * 40;
+
+      (ctx.getVirtualTotal as any).mockReturnValue(totalItems);
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: true,
+        actualHeight,
+        virtualHeight,
+        ratio: virtualHeight / actualHeight,
+      });
+
+      const methods = createSnapshotMethods(ctx);
+
+      // Restore to item 500_000 → 50% → scrollTop = virtualHeight / 2
+      methods.restoreScroll({ index: 500_000, offsetInItem: 0 });
+
+      const expectedScroll = (500_000 / totalItems) * virtualHeight;
+      expect(ctx.scrollController.scrollTo).toHaveBeenCalledWith(
+        expectedScroll,
+      );
+    });
+
+    it("should round-trip in compressed mode", () => {
+      const totalItems = 1_000_000;
+      const bigItems = createTestItems(10);
+      ctx = createMockContext(bigItems);
+
+      const virtualHeight = 16_000_000;
+      const actualHeight = totalItems * 40;
+
+      (ctx.getVirtualTotal as any).mockReturnValue(totalItems);
+      (ctx.getCachedCompression as any).mockReturnValue({
+        isCompressed: true,
+        actualHeight,
+        virtualHeight,
+        ratio: virtualHeight / actualHeight,
+      });
+
+      // scrollTop at 25% + some fractional offset
+      const scrollTop = virtualHeight * 0.25 + 4; // +4px into the virtual space
+      (ctx.scrollController.getScrollTop as any).mockReturnValue(scrollTop);
+
+      const methods = createSnapshotMethods(ctx);
+
+      const snapshot = methods.getScrollSnapshot();
+      methods.restoreScroll(snapshot);
+
+      // The restored scroll position should match the original
+      const calls = (ctx.scrollController.scrollTo as any).mock.calls;
+      const restoredPosition = calls[0][0];
+      expect(Math.abs(restoredPosition - scrollTop)).toBeLessThan(0.01);
+    });
   });
 });

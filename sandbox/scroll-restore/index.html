@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="vlist scroll save/restore example — navigate away and back without losing scroll position or selection."
+        />
+        <title>vlist - Scroll Save/Restore</title>
+        <link rel="stylesheet" href="/dist/vlist.css" />
+        <link rel="stylesheet" href="/sandbox/scroll-restore/dist/styles.css" />
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <a href="/sandbox/" class="back-link">← Back to Sandbox</a>
+                <h1>Scroll Save/Restore</h1>
+                <p class="description">
+                    Scroll and select items, then "navigate away". When you come
+                    back, the scroll position and selection are perfectly
+                    restored from a JSON snapshot — just like a real SPA.
+                </p>
+            </header>
+
+            <!-- List page -->
+            <div id="list-page">
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <div class="stats" id="stats">Scroll to see stats</div>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="btn btn--primary" id="navigate-away">
+                            Navigate Away →
+                        </button>
+                    </div>
+                </div>
+
+                <div id="list-container"></div>
+
+                <div class="snapshot-panel" id="snapshot-panel">
+                    <div class="snapshot-label">Live snapshot preview</div>
+                    <pre class="snapshot-code" id="snapshot-code">{ index: 0, offsetInItem: 0 }</pre>
+                </div>
+            </div>
+
+            <!-- Detail page (hidden initially) -->
+            <div id="detail-page" class="hidden">
+                <div class="detail-card">
+                    <div class="detail-icon">📄</div>
+                    <h2>You navigated away</h2>
+                    <p>
+                        The list has been <strong>destroyed</strong>. The scroll
+                        snapshot was saved to <code>sessionStorage</code>.
+                    </p>
+                    <div class="saved-snapshot">
+                        <div class="snapshot-label">Saved snapshot</div>
+                        <pre class="snapshot-code" id="saved-snapshot-code"></pre>
+                    </div>
+                    <button class="btn btn--primary" id="go-back">
+                        ← Go Back &amp; Restore
+                    </button>
+                    <p class="detail-hint">
+                        The list will be recreated and the scroll position +
+                        selection will be restored from the saved snapshot.
+                    </p>
+                </div>
+            </div>
+
+            <footer>
+                <p>
+                    Uses <code>getScrollSnapshot()</code> and
+                    <code>restoreScroll()</code> — snapshots are plain JSON,
+                    perfect for <code>sessionStorage</code>. ✨
+                </p>
+            </footer>
+        </div>
+
+        <script type="module" src="/sandbox/scroll-restore/dist/script.js"></script>
+    </body>
+</html>

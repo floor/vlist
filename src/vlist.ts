@@ -49,6 +49,7 @@ import {
   createDataMethods,
   createScrollMethods,
   createSelectionMethods,
+  createSnapshotMethods,
 } from "./methods";
 
 // Groups domain
@@ -757,6 +758,49 @@ export const createVList = <T extends VListItem = VListItem>(
       }
     : rawDataMethods;
   const selectionMethods = createSelectionMethods(ctx);
+  const rawSnapshotMethods = createSnapshotMethods(ctx);
+
+  // Wrap snapshot methods when groups or grid are active to convert indices
+  const snapshotMethods =
+    hasGroups && groupLayout
+      ? {
+          getScrollSnapshot: () => {
+            const snapshot = rawSnapshotMethods.getScrollSnapshot();
+            // Convert layout index → data index for groups mode
+            const dataIndex = groupLayout!.layoutToDataIndex(snapshot.index);
+            return {
+              ...snapshot,
+              index: dataIndex >= 0 ? dataIndex : snapshot.index,
+            };
+          },
+          restoreScroll: (snapshot: import("./types").ScrollSnapshot) => {
+            // Convert data index → layout index for groups mode
+            const layoutIndex = groupLayout!.dataToLayoutIndex(snapshot.index);
+            rawSnapshotMethods.restoreScroll({
+              ...snapshot,
+              index: layoutIndex,
+            });
+          },
+        }
+      : isGrid && gridLayout
+        ? {
+            getScrollSnapshot: () => {
+              const snapshot = rawSnapshotMethods.getScrollSnapshot();
+              // Convert row index → first item index in that row
+              const columns = gridLayout!.columns;
+              return { ...snapshot, index: snapshot.index * columns };
+            },
+            restoreScroll: (snapshot: import("./types").ScrollSnapshot) => {
+              // Convert item index → row index
+              const columns = gridLayout!.columns;
+              const rowIndex = Math.floor(snapshot.index / columns);
+              rawSnapshotMethods.restoreScroll({
+                ...snapshot,
+                index: rowIndex,
+              });
+            },
+          }
+        : rawSnapshotMethods;
 
   // ===========================================================================
   // Event Subscription
@@ -990,6 +1034,10 @@ export const createVList = <T extends VListItem = VListItem>(
           },
         }
       : scrollMethods),
+
+    // Snapshot methods (scroll save/restore)
+    getScrollSnapshot: snapshotMethods.getScrollSnapshot,
+    restoreScroll: snapshotMethods.restoreScroll,
 
     // Selection methods
     select: selectionMethods.select,

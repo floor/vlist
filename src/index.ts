@@ -31,6 +31,7 @@ export type {
 
   // Scroll
   ScrollToOptions,
+  ScrollSnapshot,
 
   // Data adapter
   VListAdapter,

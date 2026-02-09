@@ -164,6 +164,18 @@ export interface LoadingConfig {
 // Scroll Options
 // =============================================================================
 
+/** Scroll position snapshot for save/restore */
+export interface ScrollSnapshot {
+  /** First visible item index */
+  index: number;
+
+  /** Pixel offset within the first visible item (how far it's scrolled off) */
+  offsetInItem: number;
+
+  /** Selected item IDs (optional, included for convenience) */
+  selectedIds?: Array<string | number>;
+}
+
 /** Options for scrollToIndex / scrollToItem */
 export interface ScrollToOptions {
   /** Alignment within the viewport (default: 'start') */
@@ -396,6 +408,12 @@ export interface VList<T extends VListItem = VListItem> {
 
   /** Get current scroll position */
   getScrollPosition: () => number;
+
+  /** Get a snapshot of the current scroll position for save/restore */
+  getScrollSnapshot: () => ScrollSnapshot;
+
+  /** Restore scroll position (and optionally selection) from a snapshot */
+  restoreScroll: (snapshot: ScrollSnapshot) => void;
 
   // Selection methods
   /** Select item(s) by ID */

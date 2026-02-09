@@ -6,7 +6,7 @@
  * This keeps vlist.ts focused on orchestration.
  */
 
-import type { VListItem, ScrollToOptions } from "./types";
+import type { VListItem, ScrollToOptions, ScrollSnapshot } from "./types";
 import type { VListContext } from "./context";
 
 import { calculateScrollToIndex } from "./render";
@@ -47,6 +47,12 @@ export interface ScrollMethods {
   ) => void;
   cancelScroll: () => void;
   getScrollPosition: () => number;
+}
+
+/** Snapshot API methods */
+export interface SnapshotMethods {
+  getScrollSnapshot: () => ScrollSnapshot;
+  restoreScroll: (snapshot: ScrollSnapshot) => void;
 }
 
 /** Selection API methods */
@@ -294,6 +300,116 @@ export const createScrollMethods = <T extends VListItem>(
     },
   };
 };
+
+// =============================================================================
+// Snapshot Methods
+// =============================================================================
+
+/**
+ * Create snapshot methods for scroll save/restore
+ */
+export const createSnapshotMethods = <T extends VListItem>(
+  ctx: VListContext<T>,
+): SnapshotMethods => ({
+  /**
+   * Get a snapshot of the current scroll position for save/restore.
+   *
+   * Returns the first visible item index and the pixel offset within that item,
+   * plus any selected item IDs. This is enough to precisely restore the scroll
+   * position later, even if the list has been destroyed and recreated.
+   *
+   * Works correctly with both normal and compressed (1M+ items) modes.
+   */
+  getScrollSnapshot: (): ScrollSnapshot => {
+    const scrollTop = ctx.scrollController.getScrollTop();
+    const compression = ctx.getCachedCompression();
+    const totalItems = ctx.getVirtualTotal();
+    const selectedIds =
+      ctx.state.selectionState.selected.size > 0
+        ? Array.from(ctx.state.selectionState.selected)
+        : undefined;
+
+    if (totalItems === 0) {
+      const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0 };
+      if (selectedIds) snapshot.selectedIds = selectedIds;
+      return snapshot;
+    }
+
+    let index: number;
+    let offsetInItem: number;
+
+    if (compression.isCompressed) {
+      // Compressed: scroll position maps linearly to item index
+      const scrollRatio = scrollTop / compression.virtualHeight;
+      const exactIndex = scrollRatio * totalItems;
+      index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
+      const fraction = exactIndex - index;
+      offsetInItem = fraction * ctx.heightCache.getHeight(index);
+    } else {
+      // Normal: direct offset lookup
+      index = ctx.heightCache.indexAtOffset(scrollTop);
+      offsetInItem = scrollTop - ctx.heightCache.getOffset(index);
+    }
+
+    // Clamp offsetInItem to non-negative (floating point edge cases)
+    offsetInItem = Math.max(0, offsetInItem);
+
+    const snapshot: ScrollSnapshot = { index, offsetInItem };
+    if (selectedIds) snapshot.selectedIds = selectedIds;
+    return snapshot;
+  },
+
+  /**
+   * Restore scroll position (and optionally selection) from a snapshot.
+   *
+   * Scrolls to the exact sub-pixel position captured by getScrollSnapshot().
+   * If the snapshot contains selectedIds and the list has selection enabled,
+   * selection is also restored.
+   */
+  restoreScroll: (snapshot: ScrollSnapshot): void => {
+    const { index, offsetInItem, selectedIds } = snapshot;
+    const compression = ctx.getCachedCompression();
+    const totalItems = ctx.getVirtualTotal();
+
+    if (totalItems === 0) return;
+
+    const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
+    let scrollPosition: number;
+
+    if (compression.isCompressed) {
+      // Compressed: reverse the linear mapping
+      const itemHeight = ctx.heightCache.getHeight(safeIndex);
+      const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
+      scrollPosition =
+        ((safeIndex + fraction) / totalItems) * compression.virtualHeight;
+    } else {
+      // Normal: direct offset
+      scrollPosition = ctx.heightCache.getOffset(safeIndex) + offsetInItem;
+    }
+
+    // Clamp to valid range
+    const maxScroll = Math.max(
+      0,
+      compression.virtualHeight - ctx.state.viewportState.containerHeight,
+    );
+    scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
+
+    ctx.scrollController.scrollTo(scrollPosition);
+
+    // Restore selection if provided and selection is enabled
+    if (
+      selectedIds &&
+      selectedIds.length > 0 &&
+      ctx.config.selectionMode !== "none"
+    ) {
+      ctx.state.selectionState = selectItems(
+        ctx.state.selectionState,
+        selectedIds,
+        ctx.config.selectionMode,
+      );
+    }
+  },
+});
 
 // =============================================================================
 // Selection Methods
