@@ -263,6 +263,7 @@ const createMockContext = <T extends VListItem>(
       virtualHeight: items.length * itemHeight,
       ratio: 1,
     })),
+    getVirtualTotal: mock(() => items.length),
   };
 };
 

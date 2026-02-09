@@ -287,6 +287,71 @@
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
 
+/* =============================================================================
+   Grid Layout
+   ============================================================================= */
+
+/* Grid modifier on root */
+.vlist--grid .vlist-items {
+    contain: layout style;
+}
+
+/* Grid item — positioned absolutely with translate(x, y) */
+.vlist-grid-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
+    background-color: var(--vlist-bg);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--vlist-transition-duration)
+        var(--vlist-transition-timing);
+    contain: content;
+    will-change: transform;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Override the default list item styles — grid items do NOT stretch full width */
+.vlist--grid .vlist-item {
+    right: auto;
+    border-bottom: none;
+}
+
+/* Suppress transitions during active scroll for better performance */
+.vlist--scrolling .vlist-grid-item {
+    transition: none;
+}
+
+/* Grid item hover state */
+.vlist-grid-item:hover {
+    background-color: var(--vlist-bg-hover);
+}
+
+/* Grid item selected state */
+.vlist-grid-item.vlist-item--selected {
+    background-color: var(--vlist-bg-selected);
+}
+
+.vlist-grid-item.vlist-item--selected:hover {
+    background-color: var(--vlist-bg-selected-hover);
+}
+
+/* Grid item focused state */
+.vlist-grid-item.vlist-item--focused-visible {
+    outline: 2px solid var(--vlist-focus-ring);
+    outline-offset: -2px;
+    z-index: 1;
+}
+
+/* =============================================================================
+   Custom Scrollbar (for compressed mode)
+   ============================================================================= */
+
 /* Hide native scrollbar when custom scrollbar is active */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;

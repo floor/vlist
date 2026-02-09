@@ -61,6 +61,17 @@ export {
   type StickyHeader,
 } from "./groups";
 
+// Grid domain (2D grid/card layout)
+export {
+  createGridLayout,
+  createGridRenderer,
+  type GridConfig,
+  type GridLayout,
+  type GridPosition,
+  type GridRenderer,
+  type ItemRange,
+} from "./grid";
+
 // Render domain (virtual scrolling, compression, height cache)
 export {
   // Height cache (variable item heights)

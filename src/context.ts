@@ -96,6 +96,16 @@ export interface VListContext<T extends VListItem = VListItem> {
   getCompressionContext: () => CompressionContext;
   /** Get cached compression state (recalculates only when totalItems changes) */
   getCachedCompression: () => CompressionState;
+
+  /**
+   * Get the "virtual total" used for viewport/height/compression calculations.
+   * In grid mode this returns the total number of ROWS (not items).
+   * In list/groups mode this returns the raw item total from the data manager.
+   *
+   * Handlers and methods should use this instead of dataManager.getTotal()
+   * whenever the value feeds into viewport state, height cache, or compression.
+   */
+  getVirtualTotal: () => number;
 }
 
 // =============================================================================
@@ -118,6 +128,7 @@ export const createContext = <T extends VListItem = VListItem>(
   emitter: Emitter<VListEvents<T>>,
   scrollbar: Scrollbar | null,
   initialState: VListContextState,
+  virtualTotalFn?: () => number,
 ): VListContext<T> => {
   // State is mutable and will be updated by handlers
   const state = initialState;
@@ -146,11 +157,16 @@ export const createContext = <T extends VListItem = VListItem>(
   };
 
   /**
+   * Get the virtual total (row count in grid mode, item count otherwise)
+   */
+  const getVirtualTotal = virtualTotalFn ?? (() => dataManager.getTotal());
+
+  /**
    * Get cached compression state
    * Only recalculates when totalItems changes
    */
   const getCachedCompression = (): CompressionState => {
-    const totalItems = dataManager.getTotal();
+    const totalItems = getVirtualTotal();
 
     // Return cached if still valid
     if (
@@ -172,7 +188,7 @@ export const createContext = <T extends VListItem = VListItem>(
    */
   const getCompressionContext = (): CompressionContext => {
     reusableCompressionCtx.scrollTop = state.viewportState.scrollTop;
-    reusableCompressionCtx.totalItems = dataManager.getTotal();
+    reusableCompressionCtx.totalItems = getVirtualTotal();
     reusableCompressionCtx.containerHeight =
       state.viewportState.containerHeight;
     reusableCompressionCtx.rangeStart = state.viewportState.renderRange.start;
@@ -193,5 +209,6 @@ export const createContext = <T extends VListItem = VListItem>(
     getAllLoadedItems,
     getCompressionContext,
     getCachedCompression,
+    getVirtualTotal,
   };
 };

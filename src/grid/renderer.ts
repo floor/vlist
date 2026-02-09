@@ -1,0 +1,475 @@
+/**
+ * vlist - Grid Renderer
+ * Renders items in a 2D grid layout within the virtual scroll container.
+ *
+ * Extends the base renderer pattern but positions items using both
+ * row offsets (translateY from the height cache) and column offsets
+ * (translateX calculated from column index and container width).
+ *
+ * Key differences from the list renderer:
+ * - Items are positioned with translate(x, y) instead of just translateY(y)
+ * - Item width is set to columnWidth (containerWidth / columns - gaps)
+ * - The "index" in the rendered map is the FLAT ITEM INDEX (not row index)
+ * - Row offsets come from the height cache (which operates on row indices)
+ * - Column offsets are calculated from itemIndex % columns
+ */
+
+import type {
+  VListItem,
+  ItemTemplate,
+  ItemState,
+  Range,
+  RenderedItem,
+} from "../types";
+
+import {
+  getCompressionState,
+  calculateCompressedItemPosition,
+  type CompressionState,
+} from "../render/compression";
+import type { HeightCache } from "../render/heights";
+import type { CompressionContext } from "../render/renderer";
+import type { GridLayout } from "./types";
+
+// =============================================================================
+// Types
+// =============================================================================
+
+/** Grid renderer instance */
+export interface GridRenderer<T extends VListItem = VListItem> {
+  /** Render items for a flat item range, positioned in a 2D grid */
+  render: (
+    items: T[],
+    range: Range,
+    selectedIds: Set<string | number>,
+    focusedIndex: number,
+    compressionCtx?: CompressionContext,
+  ) => void;
+
+  /** Update item positions (for compressed scrolling) */
+  updatePositions: (compressionCtx: CompressionContext) => void;
+
+  /** Update a single item */
+  updateItem: (
+    index: number,
+    item: T,
+    isSelected: boolean,
+    isFocused: boolean,
+  ) => void;
+
+  /** Update only CSS classes on a rendered item (no template re-evaluation) */
+  updateItemClasses: (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ) => void;
+
+  /** Get rendered item element by flat item index */
+  getElement: (index: number) => HTMLElement | undefined;
+
+  /** Update container width (call on resize) */
+  updateContainerWidth: (width: number) => void;
+
+  /** Clear all rendered items */
+  clear: () => void;
+
+  /** Destroy renderer and cleanup */
+  destroy: () => void;
+}
+
+// =============================================================================
+// Element Pool (grid-specific: no left/right reset needed)
+// =============================================================================
+
+interface ElementPool {
+  acquire: () => HTMLElement;
+  release: (element: HTMLElement) => void;
+  clear: () => void;
+}
+
+const createElementPool = (maxSize: number = 200): ElementPool => {
+  const pool: HTMLElement[] = [];
+
+  const acquire = (): HTMLElement => {
+    const element = pool.pop();
+
+    if (element) {
+      return element;
+    }
+
+    const newElement = document.createElement("div");
+    newElement.setAttribute("role", "option");
+    return newElement;
+  };
+
+  const release = (element: HTMLElement): void => {
+    if (pool.length < maxSize) {
+      element.className = "";
+      element.textContent = "";
+      element.removeAttribute("style");
+      element.removeAttribute("data-index");
+      element.removeAttribute("data-id");
+      element.removeAttribute("data-row");
+      element.removeAttribute("data-col");
+
+      pool.push(element);
+    }
+  };
+
+  const clear = (): void => {
+    pool.length = 0;
+  };
+
+  return { acquire, release, clear };
+};
+
+// =============================================================================
+// Grid Renderer Factory
+// =============================================================================
+
+/**
+ * Create a grid renderer for managing DOM elements in a 2D layout.
+ *
+ * The grid renderer receives flat item ranges (not row ranges) and
+ * positions each item at the correct (row, col) coordinate.
+ *
+ * @param itemsContainer - The DOM element that holds rendered items
+ * @param template - Item template function
+ * @param heightCache - Height cache operating on ROW indices
+ * @param gridLayout - Grid layout for row/col calculations
+ * @param classPrefix - CSS class prefix
+ * @param initialContainerWidth - Initial container width for column sizing
+ */
+export const createGridRenderer = <T extends VListItem = VListItem>(
+  itemsContainer: HTMLElement,
+  template: ItemTemplate<T>,
+  heightCache: HeightCache,
+  gridLayout: GridLayout,
+  classPrefix: string,
+  initialContainerWidth: number,
+): GridRenderer<T> => {
+  const pool = createElementPool();
+  const rendered = new Map<number, RenderedItem>();
+
+  let containerWidth = initialContainerWidth;
+
+  // Cache compression state
+  let cachedCompression: CompressionState | null = null;
+  let cachedTotalRows = 0;
+
+  const getCompression = (totalRows: number): CompressionState => {
+    if (cachedCompression && cachedTotalRows === totalRows) {
+      return cachedCompression;
+    }
+    cachedCompression = getCompressionState(totalRows, heightCache);
+    cachedTotalRows = totalRows;
+    return cachedCompression;
+  };
+
+  // Reusable item state to avoid allocation per render
+  const reusableItemState: ItemState = { selected: false, focused: false };
+
+  const getItemState = (isSelected: boolean, isFocused: boolean): ItemState => {
+    reusableItemState.selected = isSelected;
+    reusableItemState.focused = isFocused;
+    return reusableItemState;
+  };
+
+  // Pre-computed class names
+  const baseClass = `${classPrefix}-item ${classPrefix}-grid-item`;
+  const selectedClass = `${classPrefix}-item--selected`;
+  const focusedClass = `${classPrefix}-item--focused`;
+
+  /**
+   * Apply template result to element
+   */
+  const applyTemplate = (
+    element: HTMLElement,
+    result: string | HTMLElement,
+  ): void => {
+    if (typeof result === "string") {
+      element.innerHTML = result;
+    } else {
+      element.replaceChildren(result);
+    }
+  };
+
+  /**
+   * Apply state-dependent classes
+   */
+  const applyClasses = (
+    element: HTMLElement,
+    isSelected: boolean,
+    isFocused: boolean,
+  ): void => {
+    element.classList.toggle(selectedClass, isSelected);
+    element.classList.toggle(focusedClass, isFocused);
+  };
+
+  /**
+   * Calculate the Y offset for an item (based on its row).
+   * Uses compression-aware positioning for large grids.
+   */
+  const calculateRowOffset = (
+    itemIndex: number,
+    compressionCtx?: CompressionContext,
+  ): number => {
+    const row = gridLayout.getRow(itemIndex);
+
+    if (compressionCtx) {
+      const totalRows = compressionCtx.totalItems; // In grid mode, totalItems = totalRows
+      const compression = getCompression(totalRows);
+
+      if (compression.isCompressed) {
+        return calculateCompressedItemPosition(
+          row,
+          compressionCtx.scrollTop,
+          heightCache,
+          totalRows,
+          compressionCtx.containerHeight,
+          compression,
+          compressionCtx.rangeStart,
+        );
+      }
+    }
+
+    // Normal positioning: row offset from height cache
+    return heightCache.getOffset(row);
+  };
+
+  /**
+   * Position an element at the correct (col, row) offset.
+   * Uses translate(x, y) for efficient GPU-accelerated positioning.
+   */
+  const positionElement = (
+    element: HTMLElement,
+    itemIndex: number,
+    compressionCtx?: CompressionContext,
+  ): void => {
+    const col = gridLayout.getCol(itemIndex);
+    const x = gridLayout.getColumnOffset(col, containerWidth);
+    const y = calculateRowOffset(itemIndex, compressionCtx);
+
+    element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
+
+  /**
+   * Apply size styles to an element (width from column, height from row height).
+   */
+  const applySizeStyles = (element: HTMLElement, itemIndex: number): void => {
+    const colWidth = gridLayout.getColumnWidth(containerWidth);
+    const row = gridLayout.getRow(itemIndex);
+    const rowHeight = heightCache.getHeight(row);
+
+    element.style.width = `${colWidth}px`;
+    element.style.height = `${rowHeight}px`;
+  };
+
+  /**
+   * Render a single grid item
+   */
+  const renderItem = (
+    itemIndex: number,
+    item: T,
+    isSelected: boolean,
+    isFocused: boolean,
+    compressionCtx?: CompressionContext,
+  ): HTMLElement => {
+    const element = pool.acquire();
+    const state = getItemState(isSelected, isFocused);
+
+    // Apply base class
+    element.className = baseClass;
+
+    // Set data attributes
+    element.dataset.index = String(itemIndex);
+    element.dataset.id = String(item.id);
+    element.dataset.row = String(gridLayout.getRow(itemIndex));
+    element.dataset.col = String(gridLayout.getCol(itemIndex));
+    element.ariaSelected = String(isSelected);
+
+    // Apply sizing
+    applySizeStyles(element, itemIndex);
+
+    // Apply template
+    const result = template(item, itemIndex, state);
+    applyTemplate(element, result);
+
+    // Apply state classes and position
+    applyClasses(element, isSelected, isFocused);
+    positionElement(element, itemIndex, compressionCtx);
+
+    return element;
+  };
+
+  /**
+   * Render items for a flat item range, positioned in a 2D grid.
+   *
+   * The range is in flat item indices (not row indices).
+   * Items are positioned using translate(colOffset, rowOffset).
+   */
+  const render = (
+    items: T[],
+    range: Range,
+    selectedIds: Set<string | number>,
+    focusedIndex: number,
+    compressionCtx?: CompressionContext,
+  ): void => {
+    // Remove items outside the new range
+    for (const [index, renderedItem] of rendered) {
+      if (index < range.start || index > range.end) {
+        renderedItem.element.remove();
+        pool.release(renderedItem.element);
+        rendered.delete(index);
+      }
+    }
+
+    // Collect new elements for batched DOM insertion
+    const fragment = document.createDocumentFragment();
+    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+
+    // Add/update items in range
+    for (let i = range.start; i <= range.end; i++) {
+      const itemIndex = i - range.start;
+      const item = items[itemIndex];
+      if (!item) continue;
+
+      const isSelected = selectedIds.has(item.id);
+      const isFocused = i === focusedIndex;
+      const existing = rendered.get(i);
+
+      if (existing) {
+        // Check if the item data changed
+        const existingId = existing.element.dataset.id;
+        const newId = String(item.id);
+        const itemChanged = existingId !== newId;
+
+        if (itemChanged) {
+          const state = getItemState(isSelected, isFocused);
+          const result = template(item, i, state);
+          applyTemplate(existing.element, result);
+          existing.element.dataset.id = newId;
+          existing.element.dataset.row = String(gridLayout.getRow(i));
+          existing.element.dataset.col = String(gridLayout.getCol(i));
+          applySizeStyles(existing.element, i);
+        }
+
+        // Always update classes, selection, and position
+        applyClasses(existing.element, isSelected, isFocused);
+        existing.element.ariaSelected = String(isSelected);
+        positionElement(existing.element, i, compressionCtx);
+      } else {
+        // Render new element and add to fragment
+        const element = renderItem(i, item, isSelected, isFocused, compressionCtx);
+        fragment.appendChild(element);
+        newElements.push({ index: i, element });
+      }
+    }
+
+    // Batch append all new elements
+    if (newElements.length > 0) {
+      itemsContainer.appendChild(fragment);
+      for (const { index, element } of newElements) {
+        rendered.set(index, { index, element });
+      }
+    }
+  };
+
+  /**
+   * Update positions of all rendered items (for compressed scrolling)
+   */
+  const updatePositions = (compressionCtx: CompressionContext): void => {
+    for (const [index, renderedItem] of rendered) {
+      positionElement(renderedItem.element, index, compressionCtx);
+    }
+  };
+
+  /**
+   * Update a single item
+   */
+  const updateItem = (
+    index: number,
+    item: T,
+    isSelected: boolean,
+    isFocused: boolean,
+  ): void => {
+    const existing = rendered.get(index);
+
+    if (existing) {
+      const state = getItemState(isSelected, isFocused);
+      const result = template(item, index, state);
+
+      applyTemplate(existing.element, result);
+      applyClasses(existing.element, isSelected, isFocused);
+      existing.element.dataset.id = String(item.id);
+      existing.element.ariaSelected = String(isSelected);
+      applySizeStyles(existing.element, index);
+    }
+  };
+
+  /**
+   * Update only CSS classes on a rendered item
+   */
+  const updateItemClasses = (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ): void => {
+    const existing = rendered.get(index);
+    if (existing) {
+      applyClasses(existing.element, isSelected, isFocused);
+    }
+  };
+
+  /**
+   * Get element by flat item index
+   */
+  const getElement = (index: number): HTMLElement | undefined => {
+    return rendered.get(index)?.element;
+  };
+
+  /**
+   * Update container width (call on resize).
+   * Re-sizes and repositions all rendered items.
+   */
+  const updateContainerWidth = (width: number): void => {
+    if (Math.abs(width - containerWidth) < 1) return;
+    containerWidth = width;
+
+    // Update size and position of all rendered elements
+    for (const [index, renderedItem] of rendered) {
+      applySizeStyles(renderedItem.element, index);
+      positionElement(renderedItem.element, index);
+    }
+  };
+
+  /**
+   * Clear all rendered items
+   */
+  const clear = (): void => {
+    for (const [, renderedItem] of rendered) {
+      renderedItem.element.remove();
+      pool.release(renderedItem.element);
+    }
+    rendered.clear();
+  };
+
+  /**
+   * Destroy renderer
+   */
+  const destroy = (): void => {
+    clear();
+    pool.clear();
+  };
+
+  return {
+    render,
+    updatePositions,
+    updateItem,
+    updateItemClasses,
+    getElement,
+    updateContainerWidth,
+    clear,
+    destroy,
+  };
+};
