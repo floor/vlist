@@ -506,12 +506,17 @@ export const createRenderer = <T extends VListItem = VListItem>(
 export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
+  ariaLabel?: string,
 ): DOMStructure => {
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
   root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
+
+  if (ariaLabel) {
+    root.setAttribute("aria-label", ariaLabel);
+  }
 
   // Viewport (scrollable container)
   const viewport = document.createElement("div");

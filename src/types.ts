@@ -82,6 +82,9 @@ export interface VListConfig<T extends VListItem = VListItem> {
 
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
+
+  /** Accessible label for the listbox (sets aria-label on the root element) */
+  ariaLabel?: string;
 }
 
 // =============================================================================

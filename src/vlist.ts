@@ -114,6 +114,7 @@ export const createVList = <T extends VListItem = VListItem>(
     idleTimeout: scrollIdleTimeout,
     classPrefix = DEFAULT_CLASS_PREFIX,
     scrollElement,
+    ariaLabel,
   } = config;
 
   const isWindowMode = !!scrollElement;
@@ -135,7 +136,7 @@ export const createVList = <T extends VListItem = VListItem>(
 
   // Resolve container and create DOM structure
   const containerElement = resolveContainer(config.container);
-  const dom = createDOMStructure(containerElement, classPrefix);
+  const dom = createDOMStructure(containerElement, classPrefix, ariaLabel);
 
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
