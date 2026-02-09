@@ -121,7 +121,9 @@ interface DataManager<T extends VListItem> {
   // State
   getState: () => DataState<T>;
   
-  // Direct getters (hot-path optimized, no object allocation)
+  // Direct getters (hot-path optimized, zero object allocation)
+  // These bypass getState() to avoid creating a DataState object on every call.
+  // Used by scroll handlers and renderers that run at ~60fps.
   getTotal: () => number;
   getCached: () => number;
   getIsLoading: () => boolean;
@@ -242,6 +244,9 @@ interface SparseStorage<T extends VListItem> {
   getChunkIndex: (itemIndex: number) => number;
   isChunkLoaded: (chunkIndex: number) => boolean;
   touchChunk: (chunkIndex: number) => void;
+  
+  // LRU timestamp management
+  touchChunksForRange: (start: number, end: number) => void;
   
   // Eviction
   evictDistant: (visibleStart: number, visibleEnd: number) => number;
@@ -484,6 +489,43 @@ item: {
 }
 ```
 
+### Batched LRU Timestamps
+
+When rendering a range of items, use `touchChunksForRange()` to update LRU timestamps with a single `Date.now()` call instead of per-item timestamps in `storage.get()`:
+
+```typescript
+import { createSparseStorage } from './data';
+
+const storage = createSparseStorage({ chunkSize: 100 });
+
+// During render cycle — single Date.now() call for the entire range
+storage.touchChunksForRange(renderRange.start, renderRange.end);
+
+// Then access items normally (no per-item Date.now())
+for (let i = renderRange.start; i <= renderRange.end; i++) {
+  const item = storage.get(i);
+  // ...
+}
+```
+
+This optimization reduces `Date.now()` calls from ~20-50 per frame (one per visible item) to exactly 1 per frame.
+
+### Direct State Getters
+
+For hot paths (scroll handlers, renderers), use direct getters instead of `getState()` to avoid allocating a `DataState` object on every call:
+
+```typescript
+// ✅ Hot path — zero allocation
+const total = dataManager.getTotal();
+const cached = dataManager.getCached();
+const isLoading = dataManager.getIsLoading();
+
+// ❌ Avoid on hot paths — allocates DataState object
+const { total, cached, isLoading } = dataManager.getState();
+```
+
+`getState()` is still useful for diagnostics, logging, or infrequent reads where the allocation cost is negligible.
+
 ### Complete Integration
 
 ```typescript
@@ -572,6 +614,27 @@ console.log({
   cachedChunks: stats.cachedChunks,      // 50
   memoryEfficiency: stats.memoryEfficiency  // 0.995 (99.5%)
 });
+```
+
+## Performance Optimizations
+
+### Batched LRU Timestamps
+
+Sparse storage uses LRU (Least Recently Used) eviction to manage memory. Each chunk tracks when it was last accessed. Rather than calling `Date.now()` on every `storage.get()` call during rendering, vlist batches timestamp updates via `touchChunksForRange(start, end)`:
+
+- **Before**: ~20-50 `Date.now()` calls per frame (one per visible item)
+- **After**: 1 `Date.now()` call per frame (batched for the entire render range)
+
+This is called automatically by the renderer before accessing items for a range.
+
+### Direct Getters vs getState()
+
+The data manager exposes both `getState()` (returns a full `DataState` object) and individual getters (`getTotal()`, `getCached()`, `getIsLoading()`, `getHasMore()`). The direct getters are used on hot paths to avoid object allocation:
+
+```
+Scroll event → handler calls getTotal() → returns number (no allocation)
+vs
+Scroll event → handler calls getState() → creates { total, cached, isLoading, ... } object (GC pressure)
 ```
 
 ## Chunk-Based Loading

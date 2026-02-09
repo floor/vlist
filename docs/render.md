@@ -93,6 +93,23 @@ element.ariaSelected = String(isSelected);
 // element.setAttribute("data-index", String(index));
 ```
 
+### CSS Containment
+
+The renderer applies CSS containment for optimized compositing:
+
+- **Items container**: `contain: layout style` — tells the browser that layout and style changes inside the container don't affect elements outside it
+- **Individual items**: `contain: content` + `will-change: transform` — enables the browser to treat each item as an independent compositing layer, improving scroll performance
+
+These are applied via the `.vlist-items` and `.vlist-item` CSS classes respectively.
+
+### CSS-Only Static Positioning
+
+Item static styles (`position: absolute; top: 0; left: 0; right: 0`) are defined purely in the `.vlist-item` CSS class rather than set via JavaScript `style.cssText`. Only the dynamic `height` property is set via JS. This eliminates per-element CSS string parsing during rendering.
+
+### Re-exported Range Functions
+
+`calculateVisibleRange` and `calculateRenderRange` in `virtual.ts` are direct re-exports from `compression.ts` (`calculateCompressedVisibleRange as calculateVisibleRange`), eliminating ~40 lines of pass-through wrapper code and JSDoc duplication.
+
 ### Reusable ItemState
 
 The `ItemState` object passed to templates is reused to reduce GC pressure:
@@ -519,6 +536,8 @@ console.log(getCompressionInfo(1_000_000, 48));
 - Elements are reused instead of created/destroyed
 - Reduces DOM operations and garbage collection
 - Pool size is capped to prevent memory issues
+- `role="option"` is set once per element lifetime in the pool, not per render
+- Pool release uses `textContent = ""` instead of `innerHTML = ""` (avoids HTML parser invocation)
 
 ### Viewport State Mutation
 
@@ -531,11 +550,22 @@ state.visibleRange = visibleRange;
 state.renderRange = renderRange;
 ```
 
+### In-Place Range Mutation
+
+`calculateCompressedVisibleRange` and `calculateCompressedRenderRange` accept an optional `out` parameter to mutate existing range objects, avoiding allocation of new `Range` objects on every scroll frame:
+
+```typescript
+// Zero-allocation: mutate existing range
+calculateCompressedVisibleRange(scrollTop, containerHeight, itemHeight, totalItems, compression, existingRange);
+```
+
 ### CSS Optimization
 
-- Static styles (position, height) applied once per element
+- **CSS containment**: `contain: layout style` on items container, `contain: content` + `will-change: transform` on items for optimized compositing
+- Static positioning (`position: absolute; top: 0; left: 0; right: 0`) defined in `.vlist-item` CSS class — only dynamic `height` set via JS
 - Only `transform` is updated on scroll (GPU-accelerated)
 - Class toggles use `classList.toggle()` for efficiency
+- **Scroll transition suppression**: `.vlist--scrolling` class is toggled during active scroll to disable CSS transitions, re-enabled on idle
 
 ## Related Modules
 

@@ -163,14 +163,16 @@ type ScrollToIndexFunction = (
 - Emit selection change events
 
 **Supported Keys:**
-| Key | Action |
-|-----|--------|
-| `↑` Arrow Up | Move focus up |
-| `↓` Arrow Down | Move focus down |
-| `Home` | Move focus to first item |
-| `End` | Move focus to last item |
-| `Space` | Toggle selection on focused item |
-| `Enter` | Toggle selection on focused item |
+| Key | Action | Render Strategy |
+|-----|--------|-----------------|
+| `↑` Arrow Up | Move focus up | Targeted (2 items) |
+| `↓` Arrow Down | Move focus down | Targeted (2 items) |
+| `Home` | Move focus to first item | Targeted (2 items) |
+| `End` | Move focus to last item | Targeted (2 items) |
+| `Space` | Toggle selection on focused item | Full render |
+| `Enter` | Toggle selection on focused item | Full render |
+
+**Render optimization:** Arrow key navigation uses `renderer.updateItemClasses()` to update only the 2 affected items (old focus → remove class, new focus → add class) instead of full-rendering all ~20-50 visible items. Space/Enter triggers a full render since selection state changes affect visual styling.
 
 **Usage:**
 ```typescript
@@ -367,6 +369,38 @@ if (!lastEnsuredRange ||
 }
 ```
 
+### Scroll Transition Suppression
+
+During active scrolling, the scroll handler toggles a `.vlist--scrolling` class on the root element. This disables CSS transitions on items to prevent visual artifacts and improve performance during fast scrolling:
+
+```typescript
+// When scrolling starts
+dom.root.classList.add('vlist--scrolling');
+
+// When idle is detected (after configurable idleTimeout, default 150ms)
+dom.root.classList.remove('vlist--scrolling');
+```
+
+The `.vlist--scrolling` class is removed on idle, re-enabling smooth CSS transitions for state changes (hover, selection, focus).
+
+### Targeted Keyboard Focus Render
+
+Arrow key handlers use a targeted update strategy instead of full re-rendering:
+
+```typescript
+// Arrow keys: only update 2 items (old focus, new focus)
+const oldIndex = ctx.state.selectionState.focusedIndex;
+ctx.state.selectionState.focusedIndex = newIndex;  // In-place mutation
+
+ctx.renderer.updateItemClasses(oldIndex, false);   // Remove focus class
+ctx.renderer.updateItemClasses(newIndex, true);    // Add focus class
+
+// Space/Enter: full render (selection changes visual state)
+ctx.renderer.render(items, range, selected, focusedIndex, compressionCtx);
+```
+
+This avoids re-rendering ~20-50 visible items when only 2 need class changes, significantly reducing DOM work during rapid keyboard navigation.
+
 ### Event Delegation
 
 Click handling uses event delegation on the items container:
@@ -394,6 +428,10 @@ Selection handlers also check mode:
 ```typescript
 if (ctx.config.selectionMode === 'none') return;
 ```
+
+### In-Place Focus Mutation
+
+Focus movement functions (`moveFocusUp`, `moveFocusDown`, `moveFocusToFirst`, `moveFocusToLast`, `moveFocusByPage`) mutate `state.focusedIndex` directly instead of creating new `SelectionState` objects. This eliminates object allocation on every arrow key press.
 
 ### Infinite Scroll Trigger
 

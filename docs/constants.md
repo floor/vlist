@@ -221,7 +221,7 @@ const DEFAULT_EVICTION_BUFFER = 500;
 
 #### `SCROLL_IDLE_TIMEOUT`
 
-Timeout for scroll idle detection in milliseconds.
+Default timeout for scroll idle detection in milliseconds.
 
 ```typescript
 const SCROLL_IDLE_TIMEOUT = 150;
@@ -231,6 +231,9 @@ const SCROLL_IDLE_TIMEOUT = 150;
 - Scrollbar auto-hide
 - Idle callbacks
 - Post-scroll cleanup
+- Re-enabling CSS transitions (removing `.vlist--scrolling` class)
+
+> **Note:** This value is now configurable via the `idleTimeout` option on `VListConfig`. The constant serves as the default. See [optimization.md](./optimization.md#configuration-options) for tuning tips (e.g., increase to 200-300ms on mobile/touch devices).
 
 #### `DEFAULT_WHEEL_SENSITIVITY`
 
@@ -241,6 +244,40 @@ const DEFAULT_WHEEL_SENSITIVITY = 1;
 ```
 
 **Purpose**: Allows adjusting scroll speed in compressed mode.
+
+### Loading Behavior
+
+#### `DEFAULT_CANCEL_THRESHOLD`
+
+Velocity threshold above which data loading is skipped entirely (px/ms).
+
+```typescript
+const DEFAULT_CANCEL_THRESHOLD = 25;
+```
+
+**Purpose**: During very fast scrolling, loading is deferred until scroll stops (idle). This avoids wasted network requests for ranges the user scrolls past.
+
+#### `DEFAULT_PRELOAD_THRESHOLD`
+
+Velocity threshold above which preloading kicks in (px/ms).
+
+```typescript
+const DEFAULT_PRELOAD_THRESHOLD = 2;
+```
+
+**Purpose**: At medium scroll speeds, extra items are preloaded ahead of the scroll direction to reduce visible placeholder flicker.
+
+#### `DEFAULT_PRELOAD_AHEAD`
+
+Number of items to preload ahead of the scroll direction.
+
+```typescript
+const DEFAULT_PRELOAD_AHEAD = 50;
+```
+
+**Purpose**: Controls how many extra items are fetched ahead during medium-velocity scrolling. Higher values help slow APIs; lower values suit heavy templates.
+
+> **Note:** All three loading constants are configurable via the `loading` option on `VListConfig`. See [optimization.md](./optimization.md#configuration-options) for the velocity-based loading strategy table.
 
 ## Usage Examples
 
@@ -320,6 +357,7 @@ const dataManager = createDataManager({
 | **Placeholder** | `DEFAULT_MASK_CHARACTER`, `PLACEHOLDER_*` | Loading state display |
 | **Sparse Storage** | `DEFAULT_CHUNK_SIZE`, `DEFAULT_MAX_CACHED_ITEMS`, `DEFAULT_EVICTION_BUFFER` | Memory management |
 | **Scroll** | `SCROLL_IDLE_TIMEOUT`, `DEFAULT_WHEEL_SENSITIVITY` | Scroll behavior |
+| **Loading** | `DEFAULT_CANCEL_THRESHOLD`, `DEFAULT_PRELOAD_THRESHOLD`, `DEFAULT_PRELOAD_AHEAD` | Velocity-based loading |
 
 ## Performance Tuning
 
@@ -329,8 +367,11 @@ const dataManager = createDataManager({
 // Increase overscan for smoother scrolling
 const TUNED_OVERSCAN = 5;  // vs default 3
 
-// Decrease idle timeout for faster response
+// Decrease idle timeout for faster response (configurable via idleTimeout option)
 const TUNED_IDLE_TIMEOUT = 100;  // vs default 150
+
+// Increase preload ahead for slow APIs
+const TUNED_PRELOAD_AHEAD = 100;  // vs default 50
 ```
 
 ### For Memory Efficiency
@@ -358,7 +399,8 @@ const TUNED_PAGE_SIZE = 100;  // vs default 50
 - [render.md](./render.md) - Uses `DEFAULT_OVERSCAN`, `MAX_VIRTUAL_HEIGHT`
 - [scroll.md](./scroll.md) - Uses `SCROLL_IDLE_TIMEOUT`, scrollbar constants
 - [data.md](./data.md) - Uses storage and placeholder constants
-- [handlers.md](./handlers.md) - Uses `LOAD_MORE_THRESHOLD`, `INITIAL_LOAD_SIZE`
+- [handlers.md](./handlers.md) - Uses `LOAD_MORE_THRESHOLD`, `INITIAL_LOAD_SIZE`, loading thresholds
+- [optimization.md](./optimization.md) - Full list of implemented optimizations and configuration options
 
 ---
 

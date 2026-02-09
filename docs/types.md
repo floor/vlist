@@ -119,6 +119,9 @@ interface VListConfig<T extends VListItem = VListItem> {
   /** Loading behavior configuration */
   loading?: LoadingConfig;
   
+  /** Idle timeout in milliseconds (default: 150) */
+  idleTimeout?: number;
+  
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
 }
@@ -250,6 +253,33 @@ const list = createVList({
   },
 });
 ```
+
+#### `idleTimeout`
+
+Time in milliseconds after the last scroll event before the list is considered "idle". When idle is detected, vlist loads any pending data ranges skipped during fast scrolling, re-enables CSS transitions (removes `.vlist--scrolling` class), and resets the velocity tracker.
+
+```typescript
+/**
+ * Idle timeout in milliseconds.
+ * Default: 150
+ */
+idleTimeout?: number;
+```
+
+**Usage Example**:
+```typescript
+const list = createVList({
+  container: '#list',
+  item: { height: 50, template: myTemplate },
+  adapter: myAdapter,
+  idleTimeout: 200, // ms (default: 150)
+});
+```
+
+**Tuning tips:**
+- **Mobile/touch devices:** Increase to 200–300ms (scroll events have larger gaps)
+- **Desktop with smooth scroll:** Default 150ms works well
+- **Aggressive loading:** Decrease to 100ms (loads data sooner after scroll stops)
 
 ### State Types
 

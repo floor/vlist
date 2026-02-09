@@ -155,6 +155,7 @@ interface VListConfig<T extends VListItem> {
   selection?: SelectionConfig;      // Selection configuration
   scrollbar?: ScrollbarConfig;      // Custom scrollbar configuration
   loading?: LoadingConfig;          // Loading behavior configuration
+  idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
   classPrefix?: string;             // CSS class prefix (default: 'vlist')
 }
 ```
@@ -642,17 +643,39 @@ maxItems = 16,777,216 / itemHeight
 
 > **Note:** While vlist can technically handle millions of items in memory, the browser's DOM height limit is the practical constraint for scrollable content.
 
+### Built-In Optimizations
+
+vlist includes many performance optimizations out of the box. For the complete list, see the [Optimization Guide](./optimization.md).
+
+**Key highlights:**
+
+- **Zero-allocation scroll hot path** — No `CompressionState` or `Range` objects allocated per frame; in-place range mutation via `out` parameters
+- **RAF-throttled native scroll** — At most one scroll processing per animation frame
+- **Element pooling** — DOM elements are recycled via `createElementPool()`, reducing GC pressure
+- **DocumentFragment batching** — New elements collected and appended in a single DOM operation
+- **CSS containment** — `contain: layout style` on items container, `contain: content` + `will-change: transform` on items for optimized compositing
+- **Scroll transition suppression** — `.vlist--scrolling` class disables CSS transitions during active scroll
+- **Circular buffer velocity tracker** — Pre-allocated buffer, zero allocations during scroll
+- **Batched LRU timestamps** — Single `Date.now()` call per render via `touchChunksForRange()` instead of per-item
+- **Targeted keyboard focus render** — Arrow keys update only 2 affected items instead of full-rendering all visible items
+- **In-place focus mutation** — Focus movement functions mutate `focusedIndex` directly, zero object allocations
+- **Direct state getters** — Hot paths use `getTotal()`, `getCached()` etc. instead of allocating state objects
+- **Split CSS** — Core styles (6.7 KB) separated from optional extras (3.4 KB)
+
 ### Optimization Tips
 
-1. **Use simple templates** - Complex DOM structures slow down rendering
-2. **Avoid inline styles** - Use CSS classes instead
-3. **Keep itemHeight fixed** - Variable heights require more calculations
-4. **Use appropriate overscan** - Default of 3 is usually sufficient
-5. **Debounce rapid updates** - Batch multiple data changes
+1. **Use simple templates** — Complex DOM structures slow down rendering
+2. **Avoid inline styles** — Use CSS classes instead (vlist uses CSS-only static positioning)
+3. **Keep itemHeight fixed** — Variable heights require more calculations
+4. **Use appropriate overscan** — Default of 3 is usually sufficient
+5. **Debounce rapid updates** — Batch multiple data changes
+6. **Tune `idleTimeout`** — Increase to 200-300ms on mobile/touch devices, decrease to 100ms for aggressive loading
+7. **Configure velocity-based loading** — Adjust `loading.cancelThreshold` and `loading.preloadAhead` for your API speed
+8. **Don't store the `state` reference** — The `ItemState` object passed to templates is reused; read from it immediately
 
 ### Memory Management
 
-vlist uses sparse storage with automatic eviction:
+vlist uses sparse storage with automatic LRU eviction:
 
 ```typescript
 // Configure sparse storage (advanced)

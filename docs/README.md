@@ -5,7 +5,8 @@
 ## Quick Links
 
 - **[Main Documentation](./vlist.md)** - Getting started, configuration, and usage
-- **[Styles Guide](./styles.md)** - CSS tokens, variants, dark mode, and customization
+- **[Optimization Guide](./optimization.md)** - Performance optimizations and tuning
+- **[Styles Guide](./styles.md)** - CSS tokens, variants, dark mode, split core/extras CSS, and customization
 - **[Compression Guide](./compression.md)** - Handling large lists (1M+ items)
 
 ## Module Documentation
@@ -121,25 +122,34 @@ Emit 'load:end' event
 
 ### Render Module
 - Element pooling for performance
+- DocumentFragment batching for bulk DOM operations
 - Viewport-relative positioning
 - Compression for 1M+ items
-- Efficient DOM updates
+- CSS containment (`contain: layout style` on items container, `contain: content` + `will-change: transform` on items)
+- CSS-only static positioning (only dynamic `height` set via JS)
+- Reusable ItemState object to reduce GC pressure
+- Targeted keyboard focus render (updates only 2 affected items on arrow keys)
 
 ### Data Module
-- Sparse storage (chunk-based)
+- Sparse storage (chunk-based) with LRU eviction
 - Memory-efficient (configurable limits)
 - Smart placeholder generation
 - Request deduplication
+- Batched LRU timestamps (`touchChunksForRange()` — single `Date.now()` per render)
+- Direct state getters (`getTotal()`, `getCached()`) for zero-allocation hot paths
 
 ### Scroll Module
 - Native and manual scrolling modes
 - Custom scrollbar for compressed mode
-- Velocity tracking
-- Idle detection
+- Circular buffer velocity tracking (zero allocations during scroll)
+- RAF-throttled native scroll (at most one processing per animation frame)
+- Configurable idle detection (`idleTimeout` option, default: 150ms)
+- Scroll transition suppression (`.vlist--scrolling` class during active scroll)
+- Velocity-based configurable chunk preloading
 
 ### Selection Module
 - Single/multiple selection modes
-- Keyboard navigation
+- Keyboard navigation with in-place focus mutation (zero allocations)
 - Range selection (shift+click)
 - Pure functional state management
 
@@ -167,9 +177,15 @@ const list = createVList({
   // Optional
   overscan: 3,                 // Extra items to render
   classPrefix: 'vlist',        // CSS class prefix
+  idleTimeout: 150,            // Scroll idle detection (ms)
   selection: {
     mode: 'multiple',          // 'none' | 'single' | 'multiple'
     initial: ['id-1']          // Pre-selected IDs
+  },
+  loading: {
+    cancelThreshold: 25,       // Skip loading above this velocity (px/ms)
+    preloadThreshold: 2,       // Start preloading above this velocity (px/ms)
+    preloadAhead: 50,          // Items to preload in scroll direction
   },
   scrollbar: {
     enabled: true,             // Auto-enabled in compressed mode

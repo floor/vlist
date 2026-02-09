@@ -21,15 +21,17 @@ src/selection/
 
 ## Key Concepts
 
-### Immutable State
+### Immutable State (with Focus Mutation Exception)
 
-All selection operations return a **new state object** rather than mutating:
+Selection operations (select, deselect, toggle, clear) return a **new state object** rather than mutating:
 
 ```typescript
-// State is never mutated
+// Selection state is never mutated
 const newState = selectItems(state, ['id1', 'id2'], 'multiple');
 // state !== newState (new object created)
 ```
+
+> **⚡ Performance exception:** Focus movement functions (`moveFocusUp`, `moveFocusDown`, `moveFocusToFirst`, `moveFocusToLast`, `moveFocusByPage`) mutate `state.focusedIndex` **in-place** and return the same object. This avoids object allocations during keyboard navigation, which is a hot path (arrow keys can fire rapidly). Selection-changing operations (Space/Enter) still create new state objects.
 
 ### Selection Modes
 
@@ -177,6 +179,8 @@ function moveFocusUp(
 // With wrap=false: 0 -> 0
 ```
 
+> **⚡ Performance note:** This function mutates `state.focusedIndex` **in-place** and returns the same object to avoid object allocations on keyboard navigation hot paths. See [optimization.md](./optimization.md) for details.
+
 #### `moveFocusDown`
 
 Move focus down one item.
@@ -192,6 +196,8 @@ function moveFocusDown(
 // With wrap=false: totalItems-1 -> totalItems-1
 ```
 
+> **⚡ Performance note:** Mutates `state.focusedIndex` in-place (same as `moveFocusUp`).
+
 #### `moveFocusToFirst`
 
 Move focus to first item.
@@ -203,6 +209,8 @@ function moveFocusToFirst(
 ): SelectionState;
 ```
 
+> **⚡ Performance note:** Mutates `state.focusedIndex` in-place (same as `moveFocusUp`).
+
 #### `moveFocusToLast`
 
 Move focus to last item.
@@ -213,6 +221,8 @@ function moveFocusToLast(
   totalItems: number
 ): SelectionState;
 ```
+
+> **⚡ Performance note:** Mutates `state.focusedIndex` in-place (same as `moveFocusUp`).
 
 #### `moveFocusByPage`
 
@@ -226,6 +236,8 @@ function moveFocusByPage(
   direction: 'up' | 'down'
 ): SelectionState;
 ```
+
+> **⚡ Performance note:** Mutates `state.focusedIndex` in-place (same as `moveFocusUp`).
 
 ### Queries
 
@@ -494,6 +506,8 @@ expect(output.selected.has('a')).toBe(true);
 expect(output.selected.has('b')).toBe(true);
 expect(input.selected.has('b')).toBe(false); // Original unchanged
 ```
+
+> **Note:** Focus movement functions are the exception — they mutate `focusedIndex` in-place for performance. This is safe because focus index is a simple number (no deep state) and the keyboard handler is the only caller on the hot path. Selection operations remain fully immutable.
 
 ### Set-Based Storage
 

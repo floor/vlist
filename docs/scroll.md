@@ -22,6 +22,18 @@ src/scroll/
 
 ## Key Concepts
 
+### Scroll Transition Suppression
+
+During active scrolling, vlist toggles a `.vlist--scrolling` class on the root element. This disables CSS transitions on items to prevent visual jank from transition animations fighting with rapid position updates. When scrolling becomes idle, the class is removed and transitions are re-enabled.
+
+```
+Scroll starts → add .vlist--scrolling (transitions disabled)
+    ↓
+Scrolling active...
+    ↓
+Scroll stops (idle detected) → remove .vlist--scrolling (transitions re-enabled)
+```
+
 ### Dual Mode Scrolling
 
 The scroll controller operates in two modes:
@@ -41,6 +53,29 @@ Check: totalItems × itemHeight > 16M?
 Yes → Compressed Mode (wheel events)
 No  → Native Mode (scroll events)
 ```
+
+### Configurable Idle Timeout
+
+The idle timeout controls how long after the last scroll event before the list is considered "idle". This is configurable via the `idleTimeout` option on both `VListConfig` and `ScrollControllerConfig`:
+
+```typescript
+const list = createVList({
+  container: '#list',
+  item: { height: 50, template: myTemplate },
+  adapter: myAdapter,
+  idleTimeout: 200, // ms (default: 150)
+});
+```
+
+When idle is detected, vlist:
+- Loads any pending data ranges skipped during fast scrolling
+- Re-enables CSS transitions (removes `.vlist--scrolling` class)
+- Resets the velocity tracker
+
+**Tuning tips:**
+- **Mobile/touch devices:** Increase to 200-300ms (scroll events have larger gaps)
+- **Desktop with smooth scroll:** Default 150ms works well
+- **Aggressive loading:** Decrease to 100ms (loads data sooner after scroll stops)
 
 ### Velocity Tracking
 
@@ -90,6 +125,9 @@ interface ScrollControllerConfig {
   
   /** Enable smooth scrolling interpolation */
   smoothing?: boolean;
+  
+  /** Idle timeout in milliseconds (default: 150) */
+  idleTimeout?: number;
   
   /** Callback when scroll position changes */
   onScroll?: (data: ScrollEventData) => void;
@@ -511,20 +549,22 @@ viewport.scrollTop = ratio * (actualHeight - viewport.clientHeight);
 
 ### Idle Detection
 
-The controller detects when scrolling stops:
+The controller detects when scrolling stops using a configurable timeout (default: 150ms):
 
 ```typescript
-let idleTimeout: number | null = null;
+let idleTimer: number | null = null;
 
 function scheduleIdleCheck() {
-  if (idleTimeout) clearTimeout(idleTimeout);
+  if (idleTimer) clearTimeout(idleTimer);
   
-  idleTimeout = setTimeout(() => {
+  idleTimer = setTimeout(() => {
     isScrolling = false;
-    onIdle?.();
-  }, 150);  // 150ms idle threshold
+    onIdle?.();  // Triggers pending loads, removes .vlist--scrolling, resets velocity
+  }, config.idleTimeout ?? 150);  // Configurable via idleTimeout option
 }
 ```
+
+The idle timeout can be tuned per device/use case via `VListConfig.idleTimeout` or `ScrollControllerConfig.idleTimeout`.
 
 ## Performance Considerations
 
@@ -545,6 +585,15 @@ const throttledCallback = rafThrottle((scrollTop) => {
   // Heavy operations
   updateViewport(scrollTop);
 });
+```
+
+### RAF-Throttled Native Scroll
+
+In native mode, `handleNativeScroll` is wrapped with `rafThrottle` to guarantee at most one scroll processing per animation frame, preventing redundant work:
+
+```typescript
+const throttledScroll = rafThrottle(handleNativeScroll);
+viewport.addEventListener('scroll', throttledScroll, { passive: true });
 ```
 
 ### Velocity Sampling (Circular Buffer)
@@ -609,6 +658,8 @@ function handleMouseMove(event: MouseEvent) {
 - [render.md](./render.md) - Viewport state management
 - [handlers.md](./handlers.md) - Scroll event handler
 - [context.md](./context.md) - Context holds scroll controller
+- [optimization.md](./optimization.md) - Full list of scroll-related optimizations
+- [styles.md](./styles.md) - `.vlist--scrolling` class and CSS containment
 
 ---
 

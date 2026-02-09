@@ -1,6 +1,6 @@
 # Styles
 
-> CSS styling system for vlist with design tokens, variants, and dark mode support.
+> CSS styling system for vlist with design tokens, variants, dark mode support, and performance-optimized CSS.
 
 ## Overview
 
@@ -11,6 +11,8 @@ vlist uses a CSS custom properties (design tokens) system that provides:
 - **Customizable** - Override tokens to match your design system
 - **Variants** - Pre-built compact, comfortable, borderless, and striped styles
 - **Tailwind compatible** - Works alongside Tailwind CSS v4+
+- **Performance-optimized** - CSS containment, `will-change`, and scroll transition suppression
+- **Split CSS** - Core styles (6.7 KB) separated from optional extras (3.4 KB)
 
 ## Quick Start
 
@@ -30,10 +32,31 @@ const list = createVList({
 });
 ```
 
+### Import Optional Extras
+
+The CSS is split into **core** and **extras** for minimal bundle size:
+
+| File | Size | Contents |
+|------|------|----------|
+| `dist/vlist.css` | 6.7 KB | Tokens, base layout, item states, custom scrollbar |
+| `dist/vlist-extras.css` | 3.4 KB | Variants, loading/empty states, utilities, animations |
+
+```typescript
+// Core styles only (recommended minimum)
+import 'vlist/styles';
+
+// Optional extras (variants, loading states, animations)
+import 'vlist/styles/extras';
+```
+
 ### Using a CDN
 
 ```html
+<!-- Core styles -->
 <link rel="stylesheet" href="https://unpkg.com/vlist/dist/vlist.css">
+
+<!-- Optional extras -->
+<link rel="stylesheet" href="https://unpkg.com/vlist/dist/vlist-extras.css">
 ```
 
 ## CSS Classes
@@ -55,6 +78,7 @@ const list = createVList({
 | `.vlist-item--selected` | Applied to selected items |
 | `.vlist-item--focused` | Applied to keyboard-focused item |
 | `.vlist-item--enter` | Applied briefly for fade-in animation |
+| `.vlist--scrolling` | Applied to root during active scroll (suppresses CSS transitions) |
 
 ### Custom Scrollbar Classes
 
@@ -66,6 +90,50 @@ Used in compressed mode (1M+ items):
 | `.vlist-scrollbar--visible` | Shows the scrollbar |
 | `.vlist-scrollbar--dragging` | Active during thumb drag |
 | `.vlist-scrollbar-thumb` | Draggable thumb element |
+
+## CSS Performance Optimizations
+
+vlist applies several CSS-level performance optimizations automatically:
+
+### CSS Containment
+
+The items container and individual items use CSS containment to help the browser optimize layout and paint:
+
+```css
+/* Items container - layout and style containment */
+.vlist-items {
+  contain: layout style;
+}
+
+/* Individual items - content containment + compositing hint */
+.vlist-item {
+  contain: content;
+  will-change: transform;
+}
+```
+
+- **`contain: layout style`** on the items container tells the browser that layout/style changes inside won't affect outside elements
+- **`contain: content`** on items is a stricter containment that enables more aggressive optimization
+- **`will-change: transform`** promotes items to their own compositing layer for smooth GPU-accelerated positioning
+
+### Static Positioning via CSS
+
+Item positioning uses CSS classes instead of inline `style.cssText`. The `.vlist-item` class sets `position: absolute; top: 0; left: 0; right: 0` — only the dynamic `height` and `transform` (for Y positioning) are set via JavaScript. This eliminates per-element CSS string parsing.
+
+### Scroll Transition Suppression
+
+During active scrolling, the `.vlist--scrolling` class is added to the root element. This disables CSS transitions on items to prevent visual jank:
+
+```css
+/* Transitions are suppressed during scroll */
+.vlist--scrolling .vlist-item {
+  transition: none !important;
+}
+```
+
+When scrolling stops (idle detected), the class is removed and transitions are re-enabled. This ensures smooth 60fps scrolling while preserving animations during interaction.
+
+---
 
 ## Design Tokens
 
