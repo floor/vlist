@@ -41,6 +41,8 @@ export interface VListContextConfig {
   readonly hasAdapter: boolean;
   /** Reverse mode (chat UI) — load more at top, auto-scroll on append */
   readonly reverse: boolean;
+  /** Wrap around when scrolling past boundaries (carousel/wizard) */
+  readonly wrap: boolean;
   /** Velocity threshold above which loading is skipped (px/ms) */
   readonly cancelLoadThreshold: number;
   /** Velocity threshold for preloading (px/ms) */

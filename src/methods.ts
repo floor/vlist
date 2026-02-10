@@ -253,6 +253,12 @@ export const createScrollMethods = <T extends VListItem>(
   ): void => {
     const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
     const dataState = ctx.dataManager.getState();
+
+    // Wrap around when scroll.wrap is enabled
+    if (ctx.config.wrap && dataState.total > 0) {
+      index = ((index % dataState.total) + dataState.total) % dataState.total;
+    }
+
     const position = calculateScrollToIndex(
       index,
       ctx.heightCache,

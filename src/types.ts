@@ -225,6 +225,17 @@ export interface ScrollConfig {
   wheel?: boolean;
 
   /**
+   * Wrap around when scrolling past boundaries (default: false).
+   *
+   * When `true`, `scrollToIndex` wraps around:
+   * - Index past the last item → wraps to the beginning
+   * - Negative index → wraps from the end
+   *
+   * Useful for carousels, wizards, and circular navigation.
+   */
+  wrap?: boolean;
+
+  /**
    * Scrollbar mode (default: custom scrollbar).
    *
    * - *omitted* — Custom scrollbar (default), native scrollbar hidden via CSS
