@@ -726,10 +726,21 @@ vlist is designed for maximum performance with extensive built-in optimizations:
 - **Configurable velocity-based loading** - Skip, preload, or defer loading based on scroll speed
 - **Compression for 1M+ items** - Automatic scroll space compression when content exceeds browser height limits
 
-Benchmarks (10,000 items):
-- Initial render: ~5ms
-- Scroll update: ~1ms
-- Memory: ~2MB (vs ~50MB without virtualization)
+### Benchmark Results
+
+Measured in Chrome (10-core Mac, 60Hz display) via the [live benchmark page](https://vlist.dev/benchmarks/):
+
+| Metric | 10K items | 1M items |
+|--------|-----------|----------|
+| Initial render | ~32ms | ~135ms |
+| Scroll FPS | 60fps | 61fps |
+| Frame budget (avg) | 2.1ms | 1.9ms |
+| Frame budget (p95) | 4.2ms | 8.7ms |
+| Dropped frames | 0% | 0% |
+| scrollToIndex | ~166ms | ~82ms |
+| Memory (scroll delta) | 0 MB | 0 MB |
+
+Zero dropped frames and zero memory growth during sustained scrolling — even at 1M items.
 
 For the full optimization guide, see [docs/optimization.md](docs/optimization.md).
 
