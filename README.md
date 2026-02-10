@@ -21,6 +21,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
 - 💾 **Scroll save/restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
+- 🔌 **Framework adapters** - Thin wrappers for React, Vue, and Svelte (<1 KB each)
 - 🌲 **Tree-shakeable** - Sub-module imports for smaller bundles
 
 ## Sandbox
@@ -69,8 +70,8 @@ npm install vlist
 For smaller bundles, import only what you need:
 
 ```typescript
-import { createVList } from 'vlist'                    // full library (46.6 KB / 15.6 KB gzip)
-import { createVList } from 'vlist/core'               // lightweight core (7.3 KB / 3.0 KB gzip)
+import { createVList } from 'vlist'                    // full library (48.2 KB / 16.0 KB gzip)
+import { createVList } from 'vlist/core'               // lightweight core (7.8 KB / 3.2 KB gzip)
 import { createGridLayout } from 'vlist/grid'          // grid layout utilities only
 import { createSparseStorage } from 'vlist/data'       // data utilities only
 import { getCompressionInfo } from 'vlist/compression'  // compression utilities only
@@ -81,14 +82,32 @@ import { createGroupLayout } from 'vlist/groups'        // group/sticky header u
 
 | Import | Minified | Gzipped | Description |
 |--------|----------|---------|-------------|
-| `vlist` | 46.6 KB | 15.6 KB | All features |
-| **`vlist/core`** | **7.3 KB** | **3.0 KB** | **Lightweight — 83% smaller** |
+| `vlist` | 48.2 KB | 16.0 KB | All features |
+| **`vlist/core`** | **7.8 KB** | **3.2 KB** | **Lightweight — 83% smaller** |
 | `vlist/data` | 9.2 KB | 3.8 KB | Sparse storage, placeholders, data manager |
 | `vlist/scroll` | 6.0 KB | 2.3 KB | Scroll controller + custom scrollbar |
 | `vlist/grid` | 4.1 KB | 1.9 KB | Grid layout + 2D renderer |
 | `vlist/groups` | 3.6 KB | 1.4 KB | Group layout + sticky headers |
 | `vlist/compression` | 2.6 KB | 1.1 KB | Large-list compression utilities |
 | `vlist/selection` | 1.9 KB | 0.7 KB | Selection state management |
+
+### Framework Adapters
+
+Thin wrappers for React, Vue, and Svelte — each under 1 KB:
+
+```typescript
+import { useVList } from 'vlist/react'       // React hook (0.7 KB / 0.4 KB gzip)
+import { useVList } from 'vlist/vue'         // Vue 3 composable (0.5 KB / 0.4 KB gzip)
+import { vlist } from 'vlist/svelte'         // Svelte action (0.3 KB / 0.2 KB gzip)
+```
+
+| Import | Minified | Gzipped | Description |
+|--------|----------|---------|-------------|
+| `vlist/react` | 0.7 KB | 0.4 KB | `useVList` hook + `useVListEvent` |
+| `vlist/vue` | 0.5 KB | 0.4 KB | `useVList` composable + `useVListEvent` |
+| `vlist/svelte` | 0.3 KB | 0.2 KB | `vlist` action + `onVListEvent` |
+
+Adapters manage the vlist lifecycle (create on mount, destroy on unmount) and sync items reactively. See [Framework Adapters](#framework-adapters) for full examples.
 
 ## Quick Start
 
@@ -344,6 +363,122 @@ const saved = JSON.parse(sessionStorage.getItem('list-scroll'));
 list.restoreScroll(saved);
 // Scroll position AND selection are perfectly restored
 ```
+
+### Framework Adapters
+
+vlist ships thin framework wrappers that handle lifecycle and reactive item syncing. The adapters are **mount-based** — vlist manages the DOM while the framework provides the container element.
+
+#### React
+
+```tsx
+import { useVList, useVListEvent } from 'vlist/react';
+
+function UserList({ users }) {
+  const { containerRef, instanceRef } = useVList({
+    item: {
+      height: 48,
+      template: (user) => `<div class="user">${user.name}</div>`,
+    },
+    items: users,
+    selection: { mode: 'single' },
+  });
+
+  // Optional: subscribe to events with automatic cleanup
+  useVListEvent(instanceRef, 'selection:change', ({ selected }) => {
+    console.log('Selected:', selected);
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height: 400 }}
+      onClick={() => instanceRef.current?.scrollToIndex(0)}
+    />
+  );
+}
+```
+
+`useVList` returns:
+- `containerRef` — attach to your container `<div>`
+- `instanceRef` — ref to the `VList` instance (populated after mount)
+- `getInstance()` — stable helper to access the instance
+
+Items auto-sync when `config.items` changes by reference.
+
+#### Vue
+
+```vue
+<template>
+  <div ref="containerRef" style="height: 400px" />
+</template>
+
+<script setup lang="ts">
+import { useVList, useVListEvent } from 'vlist/vue';
+import { ref } from 'vue';
+
+const users = ref([
+  { id: 1, name: 'Alice' },
+  { id: 2, name: 'Bob' },
+]);
+
+const { containerRef, instance } = useVList({
+  item: {
+    height: 48,
+    template: (user) => `<div class="user">${user.name}</div>`,
+  },
+  items: users.value,
+});
+
+// Optional: subscribe to events with automatic cleanup
+useVListEvent(instance, 'selection:change', ({ selected }) => {
+  console.log('Selected:', selected);
+});
+
+function jumpToTop() {
+  instance.value?.scrollToIndex(0);
+}
+</script>
+```
+
+`useVList` accepts a plain config or a reactive `Ref<Config>`. When using a ref, items are watched and synced automatically.
+
+#### Svelte
+
+```svelte
+<script>
+  import { vlist, onVListEvent } from 'vlist/svelte';
+
+  let instance;
+  let unsubs = [];
+
+  const options = {
+    config: {
+      item: {
+        height: 48,
+        template: (user) => `<div class="user">${user.name}</div>`,
+      },
+      items: users,
+      selection: { mode: 'single' },
+    },
+    onInstance: (inst) => {
+      instance = inst;
+      unsubs.push(
+        onVListEvent(inst, 'selection:change', ({ selected }) => {
+          console.log('Selected:', selected);
+        })
+      );
+    },
+  };
+
+  import { onDestroy } from 'svelte';
+  onDestroy(() => unsubs.forEach(fn => fn()));
+</script>
+
+<div use:vlist={options} style="height: 400px" />
+<button on:click={() => instance?.scrollToIndex(0)}>Jump to top</button>
+```
+
+The `vlist` action follows the standard Svelte `use:` directive contract. It works with both Svelte 4 and 5 with zero Svelte imports. Pass reactive options via `$:` to trigger updates automatically.
 
 ### With Custom Template
 
