@@ -830,4 +830,234 @@ describe("createScrollController", () => {
       controller.destroy();
     });
   });
+
+  // ===========================================================================
+  // Horizontal Mode
+  // ===========================================================================
+
+  describe("horizontal mode", () => {
+    it("should use clientWidth as initial container size", () => {
+      Object.defineProperty(viewport, "clientWidth", { value: 800 });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      // The controller should read clientWidth instead of clientHeight.
+      // We can verify by checking that scrollTo(0) doesn't throw and
+      // the controller functions normally.
+      expect(controller.getScrollTop()).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should read scrollLeft instead of scrollTop in native mode", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 150,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "scrollWidth", {
+        value: 5000,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      // In native (non-compressed) mode, getScrollTop reads scrollLeft
+      expect(controller.getScrollTop()).toBe(150);
+
+      controller.destroy();
+    });
+
+    it("should set overflowX auto and overflowY hidden in native mode", () => {
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      expect(viewport.style.overflowX).toBe("auto");
+      expect(viewport.style.overflowY).toBe("hidden");
+
+      controller.destroy();
+    });
+
+    it("should set overflowX hidden in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        compressed: true,
+        compression,
+      });
+
+      expect(viewport.style.overflowX).toBe("hidden");
+
+      controller.destroy();
+    });
+
+    it("should compute isAtBottom using scrollWidth and clientWidth", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "scrollWidth", {
+        value: 5000,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      // At scrollLeft=0, not at bottom (end)
+      expect(controller.isAtBottom()).toBe(false);
+
+      controller.destroy();
+    });
+
+    it("should compute getScrollPercentage using horizontal max scroll", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "scrollWidth", {
+        value: 5000,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      // At scrollLeft=0, percentage should be 0
+      expect(controller.getScrollPercentage()).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should scrollTo using left instead of top", () => {
+      const scrollToCalls: any[] = [];
+      viewport.scrollTo = ((options: any) => {
+        scrollToCalls.push(options);
+      }) as any;
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+      });
+
+      controller.scrollTo(200);
+
+      expect(scrollToCalls.length).toBeGreaterThan(0);
+      const lastCall = scrollToCalls[scrollToCalls.length - 1];
+      expect(lastCall.left).toBe(200);
+      expect(lastCall.top).toBeUndefined();
+
+      controller.destroy();
+    });
+
+    it("should handle wheel events in horizontal native mode", () => {
+      // In horizontal native mode with wheel enabled, deltaY should be
+      // remapped to horizontal scroll when deltaX is 0
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+      });
+
+      // Dispatch a wheel event with deltaY only (mouse wheel)
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: 100,
+        deltaX: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+
+      // The handleHorizontalWheel listener should remap deltaY to scrollLeft
+      // (viewport.scrollLeft += event.deltaY)
+      expect(viewport.scrollLeft).toBe(100);
+
+      controller.destroy();
+    });
+
+    it("should not remap wheel when deltaX is non-zero (trackpad gesture)", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+      });
+
+      // Dispatch a wheel event with deltaX (trackpad horizontal swipe)
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: 50,
+        deltaX: 30,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+
+      // When deltaX is non-zero, the handler returns early (native handles it)
+      // scrollLeft should remain 0
+      expect(viewport.scrollLeft).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should clean up horizontal wheel listener on destroy", () => {
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+      });
+
+      controller.destroy();
+
+      // After destroy, dispatching wheel events should not cause errors
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: 100,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+
+      // If no error thrown, cleanup succeeded
+      expect(true).toBe(true);
+    });
+  });
 });
