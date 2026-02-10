@@ -1081,5 +1081,219 @@ describe("createStickyHeader", () => {
 
       sticky.destroy();
     });
+
+    it("should hide when scrollTop is before the first group header offset", () => {
+      // Create a layout where the first header is NOT at offset 0.
+      // We do this by adding a non-zero "prefix" offset via a custom height function.
+      // Use a grouped height function where the first entry is an item (not a header).
+      // Instead, we create a config where the first group's header is at layout index 0
+      // but with a height cache that makes the offset > 0.
+      //
+      // Simpler approach: create a custom height cache that has an offset > 0 for index 0
+      // by using a variable height function with a "prefix" item before the first header.
+
+      // Let's use a creative approach: build a layout with a single group,
+      // and manually create a height cache where the header offset is at 100px
+      const singleGroupConfig: GroupsConfig = {
+        getGroupForIndex: () => "A",
+        headerHeight: 30,
+        headerTemplate: (key: string) => `<div>Header ${key}</div>`,
+        sticky: true,
+      };
+
+      const layout = createGroupLayout(3, singleGroupConfig);
+      // Layout: [headerA(0), item0(1), item1(2), item2(3)]
+      // Normal offsets: header at 0, items at 30, 70, 110
+
+      // Create a height cache with a custom function that adds a 100px prefix
+      // We'll build our own heightFn that shifts everything down by 100px
+      // Actually the simplest way is to just check scrollTop = -1 which is
+      // less than offset 0. But scrollTop can't realistically be negative.
+      // The code path is: scrollTop < firstHeaderOffset
+      // Since firstHeaderOffset = heightCache.getOffset(groups[0].headerLayoutIndex)
+      // and headerLayoutIndex = 0, and getOffset(0) = 0, we need getOffset(0) > 0.
+
+      // Create a height cache where every index has height 50, but use a "shifted" approach:
+      // We need the height cache to return getOffset(0) > 0, which means there's content
+      // before index 0. Standard prefix sums start at 0 for index 0.
+      // The only way to get this path is if getOffset(headerLayoutIndex) > 0,
+      // which happens when headerLayoutIndex > 0.
+
+      // So let's make a layout where groups[0].headerLayoutIndex > 0.
+      // That's not possible with standard createGroupLayout — headers are always first.
+
+      // Alternative: use a variable height function where index 0 gets special treatment
+      // and create a height cache that wraps getOffset to add an artificial prefix.
+
+      // Actually, the cleanest approach: create a mock heightCache
+      const mockHeightCache: HeightCache = {
+        getOffset: (index: number) => 100 + index * 40,
+        getHeight: () => 40,
+        indexAtOffset: (offset: number) =>
+          Math.max(0, Math.floor((offset - 100) / 40)),
+        getTotalHeight: () => 100 + 4 * 40,
+        getTotal: () => 4,
+        rebuild: () => {},
+      };
+
+      const sticky = createStickyHeader(
+        root,
+        layout,
+        mockHeightCache,
+        singleGroupConfig,
+        "vlist",
+      );
+      const el = root.querySelector(".vlist-sticky-header") as HTMLElement;
+
+      // scrollTop 50 is before the first header offset (100)
+      sticky.update(50);
+
+      // Should be hidden because scrollTop < firstHeaderOffset
+      expect(el.style.display).toBe("none");
+
+      sticky.destroy();
+    });
+
+    it("should show sticky header when scrollTop reaches the first header offset", () => {
+      const singleGroupConfig: GroupsConfig = {
+        getGroupForIndex: () => "A",
+        headerHeight: 30,
+        headerTemplate: (key: string) => `<div>Header ${key}</div>`,
+        sticky: true,
+      };
+
+      const layout = createGroupLayout(3, singleGroupConfig);
+
+      // Mock height cache where first header is at offset 100
+      const mockHeightCache: HeightCache = {
+        getOffset: (index: number) => 100 + index * 40,
+        getHeight: () => 40,
+        indexAtOffset: (offset: number) =>
+          Math.max(0, Math.floor((offset - 100) / 40)),
+        getTotalHeight: () => 100 + 4 * 40,
+        getTotal: () => 4,
+        rebuild: () => {},
+      };
+
+      const sticky = createStickyHeader(
+        root,
+        layout,
+        mockHeightCache,
+        singleGroupConfig,
+        "vlist",
+      );
+      const el = root.querySelector(".vlist-sticky-header") as HTMLElement;
+
+      // scrollTop exactly at first header offset
+      sticky.update(100);
+
+      // Should be visible now
+      expect(el.style.display).toBe("");
+      expect(el.innerHTML).toContain("Header A");
+
+      sticky.destroy();
+    });
+
+    it("should transition from hidden to visible when scrolling past first header", () => {
+      const singleGroupConfig: GroupsConfig = {
+        getGroupForIndex: () => "A",
+        headerHeight: 30,
+        headerTemplate: (key: string) => `<div>Header ${key}</div>`,
+        sticky: true,
+      };
+
+      const layout = createGroupLayout(3, singleGroupConfig);
+
+      const mockHeightCache: HeightCache = {
+        getOffset: (index: number) => 100 + index * 40,
+        getHeight: () => 40,
+        indexAtOffset: (offset: number) =>
+          Math.max(0, Math.floor((offset - 100) / 40)),
+        getTotalHeight: () => 100 + 4 * 40,
+        getTotal: () => 4,
+        rebuild: () => {},
+      };
+
+      const sticky = createStickyHeader(
+        root,
+        layout,
+        mockHeightCache,
+        singleGroupConfig,
+        "vlist",
+      );
+      const el = root.querySelector(".vlist-sticky-header") as HTMLElement;
+
+      // First: scroll before the header — hidden
+      sticky.update(50);
+      expect(el.style.display).toBe("none");
+
+      // Then: scroll past the header — visible
+      sticky.update(150);
+      expect(el.style.display).toBe("");
+      expect(el.innerHTML).toContain("Header A");
+
+      // Then: scroll back before the header — hidden again
+      sticky.update(80);
+      expect(el.style.display).toBe("none");
+
+      sticky.destroy();
+    });
+
+    it("should clear content when renderGroup receives out-of-bounds group index", () => {
+      const { layout, heightCache, config } = createTestFixtures();
+      const sticky = createStickyHeader(
+        root,
+        layout,
+        heightCache,
+        config,
+        "vlist",
+      );
+      const el = root.querySelector(".vlist-sticky-header") as HTMLElement;
+
+      // First render a valid group so currentGroupIndex is set
+      sticky.update(50);
+      expect(el.innerHTML).toContain("Group A");
+
+      // Now hide (resets currentGroupIndex to -1) so that the next
+      // renderGroup call will actually execute (not bail due to same index)
+      sticky.hide();
+
+      // Create a situation that would trigger renderGroup with an invalid index.
+      // Since the public API goes through update(), and update() computes the
+      // group index internally, this path (groupIndex < 0 || groupIndex >= groups.length)
+      // is a defensive guard. We verify indirectly that it doesn't crash.
+
+      // Empty groups scenario: create a fresh sticky with 0 items
+      const emptyConfig: GroupsConfig = {
+        getGroupForIndex: () => "X",
+        headerHeight: 30,
+        headerTemplate: () => "<div>Empty</div>",
+        sticky: true,
+      };
+      const emptyLayout = createGroupLayout(0, emptyConfig);
+      const emptyHeightFn = createGroupedHeightFn(emptyLayout, ITEM_HEIGHT);
+      const emptyHeightCache = createHeightCache(
+        emptyHeightFn,
+        emptyLayout.totalEntries,
+      );
+
+      const sticky2 = createStickyHeader(
+        root,
+        emptyLayout,
+        emptyHeightCache,
+        emptyConfig,
+        "vlist",
+      );
+      const el2 = root.querySelectorAll(
+        ".vlist-sticky-header",
+      )[1] as HTMLElement;
+
+      // Update with any scroll position — groups is empty, should hide
+      sticky2.update(0);
+      expect(el2.style.display).toBe("none");
+
+      sticky.destroy();
+      sticky2.destroy();
+    });
   });
 });

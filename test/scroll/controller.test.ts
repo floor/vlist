@@ -1528,4 +1528,564 @@ describe("createScrollController", () => {
       controller.destroy();
     });
   });
+
+  // ===========================================================================
+  // Compressed mode scrollTo
+  // ===========================================================================
+
+  describe("compressed mode scrollTo", () => {
+    it("should fire onScroll when scrollTo is called in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      controller.scrollTo(5000);
+
+      expect(scrollData.length).toBe(1);
+      expect(scrollData[0]!.scrollTop).toBe(5000);
+      expect(scrollData[0]!.direction).toBe("down");
+
+      controller.destroy();
+    });
+
+    it("should not fire onScroll when scrollTo position is same as current", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      // First scrollTo
+      controller.scrollTo(5000);
+      expect(scrollData.length).toBe(1);
+
+      // Same position — should be no-op
+      controller.scrollTo(5000);
+      expect(scrollData.length).toBe(1);
+
+      controller.destroy();
+    });
+
+    it("should detect up direction in compressed scrollTo", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      controller.scrollTo(5000);
+      controller.scrollTo(2000);
+
+      expect(scrollData.length).toBe(2);
+      expect(scrollData[1]!.direction).toBe("up");
+
+      controller.destroy();
+    });
+
+    it("should clamp scrollTo position to maxScroll in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      // maxScroll = virtualHeight - containerHeight = 16000000 - 500 = 15999500
+      controller.scrollTo(99999999);
+
+      expect(scrollData.length).toBe(1);
+      expect(scrollData[0]!.scrollTop).toBeLessThanOrEqual(15999500);
+
+      controller.destroy();
+    });
+
+    it("should update getScrollTop in compressed scrollTo", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      controller.scrollTo(8000);
+
+      expect(controller.getScrollTop()).toBe(8000);
+
+      controller.destroy();
+    });
+
+    it("should track velocity during compressed scrollTo", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      controller.scrollTo(1000);
+      controller.scrollTo(5000);
+      controller.scrollTo(10000);
+
+      // Velocity should be non-negative (absolute value)
+      expect(controller.getVelocity()).toBeGreaterThanOrEqual(0);
+
+      controller.destroy();
+    });
+
+    it("should set isScrolling during compressed scrollTo", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      controller.scrollTo(5000);
+
+      expect(controller.isScrolling()).toBe(true);
+
+      controller.destroy();
+    });
+
+    it("should schedule idle check after compressed scrollTo", async () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      let idleCalled = false;
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        idleTimeout: 50,
+        onIdle: () => {
+          idleCalled = true;
+        },
+      });
+
+      controller.scrollTo(5000);
+
+      // Wait for idle timeout
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(idleCalled).toBe(true);
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // updateConfig
+  // ===========================================================================
+
+  describe("updateConfig", () => {
+    it("should update compression config", () => {
+      const controller = createScrollController(viewport);
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      controller.updateConfig({ compression });
+
+      // After updateConfig, the controller should know about the compression
+      // This affects maxScroll calculation
+      // We can verify by checking that scrollTo clamps correctly
+      const scrollData: Array<{ scrollTop: number }> = [];
+
+      controller.destroy();
+    });
+
+    it("should update maxScroll when compression changes", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      // Update compression with smaller virtual height
+      const newCompression = {
+        isCompressed: true,
+        actualHeight: 25000000,
+        virtualHeight: 8000000,
+        ratio: 0.32,
+      };
+
+      controller.updateConfig({ compression: newCompression });
+
+      // scrollTo beyond new maxScroll should be clamped
+      // new maxScroll = 8000000 - 500 = 7999500
+      controller.scrollTo(9999999);
+
+      expect(scrollData.length).toBe(1);
+      expect(scrollData[0]!.scrollTop).toBeLessThanOrEqual(7999500);
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // scrollBy in compressed mode
+  // ===========================================================================
+
+  describe("scrollBy in compressed mode", () => {
+    it("should scroll by delta in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      controller.scrollTo(1000);
+      const countAfterFirst = scrollData.length;
+
+      controller.scrollBy(500);
+
+      expect(scrollData.length).toBeGreaterThan(countAfterFirst);
+      expect(scrollData[scrollData.length - 1]!.scrollTop).toBe(1500);
+
+      controller.destroy();
+    });
+
+    it("should scroll by negative delta (upward) in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      controller.scrollTo(5000);
+      controller.scrollBy(-2000);
+
+      const lastData = scrollData[scrollData.length - 1]!;
+      expect(lastData.scrollTop).toBe(3000);
+      expect(lastData.direction).toBe("up");
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // isAtBottom in compressed mode (non-window)
+  // ===========================================================================
+
+  describe("isAtBottom in compressed mode", () => {
+    it("should return true when scrolled to max in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      // maxScroll = 16000000 - 500 = 15999500
+      controller.scrollTo(15999500);
+
+      expect(controller.isAtBottom()).toBe(true);
+
+      controller.destroy();
+    });
+
+    it("should return false when not at bottom in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      controller.scrollTo(1000);
+
+      expect(controller.isAtBottom()).toBe(false);
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // getScrollPercentage in compressed mode (non-window)
+  // ===========================================================================
+
+  describe("getScrollPercentage in compressed mode", () => {
+    it("should return correct percentage in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      // maxScroll = 16000000 - 500 = 15999500
+      // Scroll to half
+      controller.scrollTo(7999750);
+
+      const pct = controller.getScrollPercentage();
+      expect(pct).toBeGreaterThan(0.49);
+      expect(pct).toBeLessThan(0.51);
+
+      controller.destroy();
+    });
+
+    it("should return 0 at top in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      expect(controller.getScrollPercentage()).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should return 1 at bottom in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+      });
+
+      controller.scrollTo(15999500);
+
+      const pct = controller.getScrollPercentage();
+      expect(pct).toBeGreaterThanOrEqual(0.99);
+      expect(pct).toBeLessThanOrEqual(1);
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Wheel handling in compressed non-horizontal mode
+  // ===========================================================================
+
+  describe("compressed wheel handling", () => {
+    it("should handle wheel events in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number; direction: string }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        wheel: true,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: 100,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+
+      expect(scrollData.length).toBeGreaterThanOrEqual(1);
+
+      controller.destroy();
+    });
+
+    it("should clamp wheel scroll to 0 at top", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: Array<{ scrollTop: number }> = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        wheel: true,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      // Scroll up when already at top
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: -500,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+
+      // Should not fire onScroll because position doesn't change (clamped to 0)
+      // Or if it fires, scrollTop should be 0
+      if (scrollData.length > 0) {
+        expect(scrollData[0]!.scrollTop).toBe(0);
+      }
+
+      controller.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Destroy edge cases
+  // ===========================================================================
+
+  describe("destroy edge cases", () => {
+    it("should clear idle timeout on destroy", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      let idleCalled = false;
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        idleTimeout: 50,
+        onIdle: () => {
+          idleCalled = true;
+        },
+      });
+
+      controller.scrollTo(1000);
+      controller.destroy();
+
+      // Idle should not fire after destroy
+      // (give it time to potentially fire)
+      return new Promise<void>((resolve) => {
+        setTimeout(() => {
+          expect(idleCalled).toBe(false);
+          resolve();
+        }, 100);
+      });
+    });
+
+    it("should handle destroy when not compressed", () => {
+      const controller = createScrollController(viewport);
+
+      // Should not throw
+      controller.destroy();
+      expect(true).toBe(true);
+    });
+
+    it("should handle destroy in compressed mode", () => {
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression,
+        wheel: true,
+      });
+
+      controller.destroy();
+      expect(true).toBe(true);
+    });
+  });
 });

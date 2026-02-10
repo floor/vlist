@@ -8,17 +8,20 @@ import {
   calculateVisibleRange,
   calculateRenderRange,
   calculateTotalHeight,
+  calculateActualHeight,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,
   getScrollDirection,
   createViewportState,
   updateViewportState,
+  updateViewportSize,
   updateViewportItems,
   getCompressionState,
   rangesEqual,
   isInRange,
   getRangeCount,
+  rangeToIndices,
   diffRanges,
 } from "../../src/render/virtual";
 import { createHeightCache } from "../../src/render/heights";
@@ -204,6 +207,42 @@ describe("calculateItemOffset", () => {
   it("should handle large indices", () => {
     const cache = createHeightCache(48, 1001);
     expect(calculateItemOffset(1000, cache)).toBe(48000);
+  });
+});
+
+describe("calculateActualHeight", () => {
+  it("should return the raw total height from height cache", () => {
+    const cache = createHeightCache(50, 100);
+    const height = calculateActualHeight(100, cache);
+    expect(height).toBe(5000); // 100 * 50
+  });
+
+  it("should return 0 for 0 items", () => {
+    const cache = createHeightCache(50, 0);
+    const height = calculateActualHeight(0, cache);
+    expect(height).toBe(0);
+  });
+
+  it("should return actual height even for very large lists", () => {
+    const cache = createHeightCache(50, 1_000_000);
+    const height = calculateActualHeight(1_000_000, cache);
+    // Actual height is 50M pixels — NOT capped by compression
+    expect(height).toBe(50_000_000);
+  });
+
+  it("should return actual height with variable heights", () => {
+    const heightFn = (index: number) => (index % 2 === 0 ? 40 : 80);
+    const cache = createHeightCache(heightFn, 10);
+    const height = calculateActualHeight(10, cache);
+    // 5×40 + 5×80 = 600
+    expect(height).toBe(600);
+  });
+
+  it("should ignore the totalItems parameter (uses cache only)", () => {
+    const cache = createHeightCache(50, 100);
+    // Even if we pass a different totalItems, the cache was built with 100
+    const height = calculateActualHeight(50, cache);
+    expect(height).toBe(5000); // Still 100 * 50 from the cache
   });
 });
 
@@ -398,6 +437,158 @@ describe("updateViewportState", () => {
   });
 });
 
+describe("updateViewportSize", () => {
+  it("should update container height in state", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    expect(initial.containerHeight).toBe(500);
+
+    const updated = updateViewportSize(
+      initial,
+      800,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    expect(updated.containerHeight).toBe(800);
+  });
+
+  it("should recalculate visible range for new container size", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(200, cache, 100, 3, compression);
+
+    // With 200px container, fewer items visible
+    const smallVisibleCount =
+      initial.visibleRange.end - initial.visibleRange.start + 1;
+
+    const updated = updateViewportSize(
+      initial,
+      600,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    // With 600px container, more items visible
+    const largeVisibleCount =
+      updated.visibleRange.end - updated.visibleRange.start + 1;
+    expect(largeVisibleCount).toBeGreaterThan(smallVisibleCount);
+  });
+
+  it("should update total height and compression fields", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    const updated = updateViewportSize(
+      initial,
+      800,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    expect(updated.totalHeight).toBe(compression.virtualHeight);
+    expect(updated.actualHeight).toBe(compression.actualHeight);
+    expect(updated.isCompressed).toBe(compression.isCompressed);
+    expect(updated.compressionRatio).toBe(compression.ratio);
+  });
+
+  it("should preserve scroll position when resizing", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    // Scroll down first
+    updateViewportState(initial, 1000, cache, 100, 3, compression);
+    expect(initial.scrollTop).toBe(1000);
+
+    // Resize container
+    const updated = updateViewportSize(
+      initial,
+      800,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    // Scroll position should be preserved
+    expect(updated.scrollTop).toBe(1000);
+  });
+
+  it("should handle resize to very small container", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    const updated = updateViewportSize(initial, 50, cache, 100, 3, compression);
+
+    expect(updated.containerHeight).toBe(50);
+    // Only 1 item visible in 50px with 50px item height
+    const visibleCount =
+      updated.visibleRange.end - updated.visibleRange.start + 1;
+    expect(visibleCount).toBeGreaterThanOrEqual(1);
+    expect(visibleCount).toBeLessThanOrEqual(3);
+  });
+
+  it("should handle resize with variable heights", () => {
+    const heightFn = (index: number) => (index % 2 === 0 ? 40 : 80);
+    const cache = createHeightCache(heightFn, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    const updated = updateViewportSize(
+      initial,
+      1000,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    expect(updated.containerHeight).toBe(1000);
+    // Total height = 50×40 + 50×80 = 6000
+    expect(updated.totalHeight).toBe(6000);
+  });
+
+  it("should mutate state in place for performance", () => {
+    const cache = createHeightCache(50, 100);
+    const compression = getCompressionState(100, cache);
+    const initial = createViewportState(500, cache, 100, 3, compression);
+
+    const updated = updateViewportSize(
+      initial,
+      800,
+      cache,
+      100,
+      3,
+      compression,
+    );
+
+    // Should be the same object reference (mutation in place)
+    expect(updated).toBe(initial);
+  });
+
+  it("should handle resize with empty list", () => {
+    const cache = createHeightCache(50, 0);
+    const compression = getCompressionState(0, cache);
+    const initial = createViewportState(500, cache, 0, 3, compression);
+
+    const updated = updateViewportSize(initial, 800, cache, 0, 3, compression);
+
+    expect(updated.containerHeight).toBe(800);
+    expect(updated.totalHeight).toBe(0);
+  });
+});
+
 describe("updateViewportItems", () => {
   it("should update total height when items change", () => {
     const cache100 = createHeightCache(50, 100);
@@ -496,6 +687,35 @@ describe("getRangeCount", () => {
 
   it("should return 0 for invalid range", () => {
     expect(getRangeCount({ start: 15, end: 5 })).toBe(0);
+  });
+});
+
+describe("rangeToIndices", () => {
+  it("should create array of indices for a range", () => {
+    const indices = rangeToIndices({ start: 3, end: 7 });
+    expect(indices).toEqual([3, 4, 5, 6, 7]);
+  });
+
+  it("should return single element for same start and end", () => {
+    const indices = rangeToIndices({ start: 5, end: 5 });
+    expect(indices).toEqual([5]);
+  });
+
+  it("should return empty array for invalid range", () => {
+    const indices = rangeToIndices({ start: 10, end: 5 });
+    expect(indices).toEqual([]);
+  });
+
+  it("should handle range starting at 0", () => {
+    const indices = rangeToIndices({ start: 0, end: 3 });
+    expect(indices).toEqual([0, 1, 2, 3]);
+  });
+
+  it("should handle large range", () => {
+    const indices = rangeToIndices({ start: 0, end: 999 });
+    expect(indices.length).toBe(1000);
+    expect(indices[0]).toBe(0);
+    expect(indices[999]).toBe(999);
   });
 });
 
