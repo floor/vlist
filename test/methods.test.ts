@@ -85,6 +85,11 @@ const createMockConfig = (
   classPrefix: "vlist",
   selectionMode: "none",
   hasAdapter: false,
+  reverse: false,
+  wrap: false,
+  cancelLoadThreshold: 25,
+  preloadThreshold: 5,
+  preloadAhead: 50,
   ...overrides,
 });
 
@@ -208,18 +213,21 @@ const createMockScrollController = (): ScrollController => ({
   isAtBottom: mock(() => false),
   getScrollPercentage: mock(() => 0),
   getVelocity: mock(() => 0),
-  isTracking: mock(() => true),
+  isTracking: mock(() => false),
   isScrolling: mock(() => false),
   isCompressed: mock(() => false),
+  isWindowMode: mock(() => false),
   enableCompression: mock(() => {}),
   disableCompression: mock(() => {}),
   updateConfig: mock(() => {}),
+  updateContainerHeight: mock(() => {}),
   destroy: mock(() => {}),
 });
 
 const createMockRenderer = <T extends VListItem>(): Renderer<T> => ({
   render: mock(() => {}),
   updateItem: mock(() => {}),
+  updateItemClasses: mock(() => {}),
   updatePositions: mock(() => {}),
   getElement: mock(() => undefined),
   clear: mock(() => {}),
@@ -442,6 +450,121 @@ describe("createScrollMethods", () => {
       methods.scrollToIndex(50);
 
       expect(ctx.scrollController.scrollTo).toHaveBeenCalled();
+    });
+  });
+
+  describe("scrollToIndex with wrap", () => {
+    // Helper: get the scroll position from the first scrollTo call
+    const getScrollPos = (context: VListContext<TestItem>): number =>
+      (context.scrollController.scrollTo as any).mock.calls[0][0];
+
+    // Helper: get the expected position for a direct (non-wrapped) index
+    const directPosition = (index: number): number => {
+      const directCtx = createMockContext(items, { wrap: false });
+      const directMethods = createScrollMethods(directCtx);
+      directMethods.scrollToIndex(index, "start");
+      return getScrollPos(directCtx);
+    };
+
+    it("should wrap positive index past total back to beginning", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(100, "start"); // total is 100, so 100 → 0
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(0));
+    });
+
+    it("should wrap negative index to end of list", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(-1, "start"); // -1 → 99
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(99));
+    });
+
+    it("should wrap large positive index via modulo", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(105, "start"); // 105 % 100 = 5
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(5));
+    });
+
+    it("should wrap large negative index via modulo", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(-3, "start"); // -3 → 97
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(97));
+    });
+
+    it("should not wrap when wrap is false (default)", () => {
+      const noWrapCtx = createMockContext(items, { wrap: false });
+      const methods = createScrollMethods(noWrapCtx);
+
+      methods.scrollToIndex(50, "start");
+
+      expect(getScrollPos(noWrapCtx)).toBe(directPosition(50));
+    });
+
+    it("should not alter valid indices when wrap is enabled", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(50, "start");
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(50));
+    });
+
+    it("should handle wrapping index 0 correctly", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(0, "start");
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(0));
+    });
+
+    it("should handle wrapping last valid index correctly", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(99, "start");
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(99));
+    });
+
+    it("should produce index 0 when wrapping exactly at total", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      methods.scrollToIndex(200, "start"); // 200 % 100 = 0
+
+      expect(getScrollPos(wrapCtx)).toBe(directPosition(0));
+    });
+
+    it("should wrap with smooth scrolling", () => {
+      const wrapCtx = createMockContext(items, { wrap: true });
+      const methods = createScrollMethods(wrapCtx);
+
+      // Mock RAF to capture the animation
+      const rafCalls: FrameRequestCallback[] = [];
+      const originalRAF = global.requestAnimationFrame;
+      global.requestAnimationFrame = mock((cb: FrameRequestCallback) => {
+        rafCalls.push(cb);
+        return rafCalls.length;
+      }) as any;
+
+      methods.scrollToIndex(-1, { align: "start", behavior: "smooth" });
+
+      // Should have scheduled an animation frame (wraps -1 → 99)
+      expect(rafCalls.length).toBe(1);
+
+      global.requestAnimationFrame = originalRAF;
     });
   });
 

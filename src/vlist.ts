@@ -175,6 +175,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // ---------------------------------------------------------------------------
 
   const wheelEnabled = scrollConfig?.wheel ?? true;
+  const wrapEnabled = scrollConfig?.wrap ?? false;
   const scrollElement = scrollConfig?.element ?? legacyScrollElement;
   const scrollIdleTimeout = scrollConfig?.idleTimeout ?? legacyIdleTimeout;
 
@@ -576,6 +577,7 @@ export const createVList = <T extends VListItem = VListItem>(
       selectionMode,
       hasAdapter: !!adapter,
       reverse: isReverse,
+      wrap: wrapEnabled,
       cancelLoadThreshold,
       preloadThreshold,
       preloadAhead,

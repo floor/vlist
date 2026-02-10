@@ -166,10 +166,15 @@ interface VListConfig<T> {
   adapter?: VListAdapter<T>;        // Async data adapter
 
   // Scrolling
-  scrollElement?: Window;           // Window scrolling mode
   overscan?: number;                // Extra items to render (default: 3)
-  idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
-  scrollbar?: ScrollbarConfig;      // Custom scrollbar (auto in compressed mode)
+  scroll?: {
+    wheel?: boolean;                //   Enable mouse wheel (default: true)
+    wrap?: boolean;                 //   Wrap around at boundaries (default: false)
+    scrollbar?: 'native' | 'none'  //   Scrollbar mode (default: custom)
+      | ScrollbarOptions;           //   or { autoHide, autoHideDelay, minThumbSize }
+    element?: Window;               //   Window scrolling mode
+    idleTimeout?: number;           //   Scroll idle detection in ms (default: 150)
+  };
 
   // Features
   selection?: SelectionConfig;      // Selection configuration
@@ -251,12 +256,39 @@ const list = createVList({
 ```typescript
 const list = createVList({
   container: '#my-list',
-  scrollElement: window,   // Use the browser's native scrollbar
+  scroll: { element: window },   // Use the browser's native scrollbar
   item: {
     height: 48,
     template: (item) => `<div>${item.name}</div>`,
   },
   items: myItems,
+});
+```
+
+### Wizard / Carousel (Wrap Navigation)
+
+```typescript
+const wizard = createVList({
+  container: '#wizard',
+  scroll: { wheel: false, scrollbar: 'none', wrap: true },
+  item: {
+    height: 400,
+    template: (step) => `<div class="step">${step.content}</div>`,
+  },
+  items: steps,
+});
+
+let current = 0;
+
+// No boundary checks needed — wrap handles it
+btnNext.addEventListener('click', () => {
+  current++;
+  wizard.scrollToIndex(current, { align: 'start', behavior: 'smooth' });
+});
+
+btnPrev.addEventListener('click', () => {
+  current--;
+  wizard.scrollToIndex(current, { align: 'start', behavior: 'smooth' });
 });
 ```
 
