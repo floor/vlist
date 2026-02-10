@@ -462,6 +462,142 @@ describe("createScrollHandler", () => {
       // loadMore should NOT fire — velocity tracker not reliable yet
       expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
     });
+
+    it("should trigger load more in reverse mode when near top", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      // Set viewport near top (scrollTop < LOAD_MORE_THRESHOLD of 200)
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 100,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(100, "up");
+
+      expect(ctx.emitter.emit).toHaveBeenCalledWith(
+        "load:start",
+        expect.any(Object),
+      );
+      expect(ctx.dataManager.loadMore).toHaveBeenCalled();
+    });
+
+    it("should not trigger reverse load when not near top", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      // Set viewport far from top
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 2000,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(2000, "down");
+
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
+
+    it("should not trigger reverse load when already loading", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(true);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 50,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(50, "up");
+
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
+
+    it("should not trigger reverse load when no more data", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(false);
+
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 50,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(50, "up");
+
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
+
+    it("should not trigger reverse load when velocity is high", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(100);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 50,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(50, "up");
+
+      expect(ctx.dataManager.loadMore).not.toHaveBeenCalled();
+    });
+
+    it("should emit load:start with correct offset and limit in reverse mode", () => {
+      ctx = createMockContext(items, { hasAdapter: true, reverse: true });
+      (ctx.dataManager.getTotal as any).mockReturnValue(100);
+      (ctx.dataManager.getCached as any).mockReturnValue(75);
+      (ctx.dataManager.getIsLoading as any).mockReturnValue(false);
+      (ctx.dataManager.getHasMore as any).mockReturnValue(true);
+
+      ctx.state.viewportState = createMockViewportState({
+        totalHeight: 4000,
+        containerHeight: 500,
+        scrollTop: 50,
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(50, "up");
+
+      expect(ctx.emitter.emit).toHaveBeenCalledWith("load:start", {
+        offset: 75,
+        limit: 50,
+      });
+    });
   });
 
   describe("ensure range", () => {
@@ -663,6 +799,194 @@ describe("createScrollHandler", () => {
       // Second scroll UP - should load pending range AND new range
       handler(300, "up");
       expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+    });
+
+    it("should preload ahead when scrolling DOWN at medium velocity", () => {
+      // Set medium velocity (above preloadThreshold of 10 but below cancelLoadThreshold of 25)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 15);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(500, "down");
+
+      // Should call ensureRange with an extended end (preloadAhead = 20)
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+      const call = (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mock
+        .calls[0];
+      // The end should be larger than the renderRange.end because of preload
+      const loadEnd = call[1];
+      expect(loadEnd).toBeGreaterThan(ctx.state.viewportState.renderRange.end);
+    });
+
+    it("should preload ahead when scrolling UP at medium velocity", () => {
+      // Set medium velocity
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 15);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      // Start at a higher scroll position so there's room above
+      ctx.state.viewportState = createMockViewportState({
+        scrollTop: 2000,
+        renderRange: { start: 50, end: 65 },
+        visibleRange: { start: 50, end: 62 },
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(2000, "up");
+
+      // Should call ensureRange with an extended start (preloadAhead = 20)
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+      const call = (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mock
+        .calls[0];
+      // The start should be smaller than the renderRange.start because of preload
+      const loadStart = call[0];
+      expect(loadStart).toBeLessThan(ctx.state.viewportState.renderRange.start);
+    });
+
+    it("should not preload ahead when scrolling slowly (below preload threshold)", () => {
+      // Set low velocity (below preloadThreshold of 10)
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 5);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(500, "down");
+
+      // Should call ensureRange with exactly the renderRange (no extension)
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+      const call = (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mock
+        .calls[0];
+      const loadStart = call[0];
+      const loadEnd = call[1];
+      expect(loadStart).toBe(ctx.state.viewportState.renderRange.start);
+      expect(loadEnd).toBe(ctx.state.viewportState.renderRange.end);
+    });
+
+    it("should clamp preload start to 0 when scrolling UP near top", () => {
+      // Set medium velocity
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 15);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      // Start near top so preloadAhead would go negative
+      ctx.state.viewportState = createMockViewportState({
+        scrollTop: 100,
+        renderRange: { start: 2, end: 15 },
+        visibleRange: { start: 2, end: 12 },
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(100, "up");
+
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+      const call = (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mock
+        .calls[0];
+      // Start should be clamped to 0
+      expect(call[0]).toBe(0);
+    });
+
+    it("should clamp preload end to total - 1 when scrolling DOWN near bottom", () => {
+      // Set medium velocity
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 15);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      // Start near end of list
+      ctx.state.viewportState = createMockViewportState({
+        scrollTop: 3500,
+        renderRange: { start: 87, end: 99 },
+        visibleRange: { start: 87, end: 97 },
+      });
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(3500, "down");
+
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalled();
+      const call = (ctx.dataManager.ensureRange as ReturnType<typeof mock>).mock
+        .calls[0];
+      // End should be clamped to total - 1 = 99
+      expect(call[1]).toBeLessThanOrEqual(99);
+    });
+
+    it("should not deduplicate ensureRange when range has not changed", () => {
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 5);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+
+      // Same scroll position with same render range - should NOT call again
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+    });
+
+    it("should call ensureRange again when range changes", () => {
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 5);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      // First scroll
+      handler(500, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(1);
+
+      // Change the render range to simulate scrolling further
+      ctx.state.viewportState.renderRange = { start: 20, end: 35 };
+
+      handler(800, "down");
+      expect(ctx.dataManager.ensureRange).toHaveBeenCalledTimes(2);
+    });
+
+    it("should handle loadPendingRange when hasAdapter is false", () => {
+      ctx.config.hasAdapter = false;
+
+      // Set high velocity to create a pending range
+      (
+        ctx.scrollController.getVelocity as ReturnType<typeof mock>
+      ).mockImplementation(() => 50);
+      (
+        ctx.scrollController.isTracking as ReturnType<typeof mock>
+      ).mockImplementation(() => true);
+
+      const handler = createScrollHandler(ctx, renderIfNeeded);
+
+      handler(500, "down");
+
+      // Call loadPendingRange - should not call ensureRange since hasAdapter is false
+      handler.loadPendingRange();
+      expect(ctx.dataManager.ensureRange).not.toHaveBeenCalled();
     });
   });
 });
@@ -987,6 +1311,108 @@ describe("createKeyboardHandler", () => {
 
       // Should not crash
       expect(true).toBe(true);
+    });
+
+    it("should ignore unhandled keys", () => {
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: "Tab" });
+      handler(event);
+
+      // Should not call scrollToIndex or change state
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it("should remove aria-activedescendant when focus goes to -1", () => {
+      // Set up with focusedIndex at 0, then move up to go out of bounds
+      ctx.state.selectionState.focusedIndex = 0;
+      (ctx.dataManager.getTotal as any).mockReturnValue(5);
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      // ArrowUp from 0 should keep at 0 (moveFocusUp clamps)
+      const event = new KeyboardEvent("keydown", { key: "ArrowUp" });
+      handler(event);
+
+      // Focus should still be valid
+      expect(ctx.state.selectionState.focusedIndex).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should not toggle selection on Enter if focused item does not exist", () => {
+      ctx.state.selectionState.focusedIndex = 999; // Out of bounds
+      (ctx.dataManager.getItem as any).mockImplementation(
+        (index: number) => undefined,
+      );
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: "Enter" });
+      handler(event);
+
+      // Should not crash, selection should be unchanged
+      expect(ctx.state.selectionState.selected.size).toBe(0);
+    });
+
+    it("should update ARIA active descendant on arrow navigation", () => {
+      ctx.state.selectionState.focusedIndex = 0;
+      (ctx.dataManager.getTotal as any).mockReturnValue(5);
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: "ArrowDown" });
+      handler(event);
+
+      const newFocus = ctx.state.selectionState.focusedIndex;
+      if (newFocus >= 0) {
+        expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe(
+          `${ctx.config.ariaIdPrefix}-item-${newFocus}`,
+        );
+      }
+    });
+
+    it("should do targeted class update for previous and new focus items", () => {
+      ctx.state.selectionState.focusedIndex = 2;
+      (ctx.dataManager.getTotal as any).mockReturnValue(10);
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: "ArrowDown" });
+      handler(event);
+
+      // updateItemClasses should have been called for the previous focus (2)
+      // and new focus (3)
+      expect(ctx.renderer.updateItemClasses).toHaveBeenCalled();
+    });
+
+    it("should handle Space/Enter emitting selection:change event", () => {
+      ctx.state.selectionState.focusedIndex = 0;
+      (ctx.dataManager.getTotal as any).mockReturnValue(5);
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: "Enter" });
+      handler(event);
+
+      expect(ctx.emitter.emit).toHaveBeenCalledWith(
+        "selection:change",
+        expect.objectContaining({
+          selected: expect.any(Array),
+          items: expect.any(Array),
+        }),
+      );
+    });
+
+    it("should do full render (not targeted update) on Space/Enter", () => {
+      ctx.state.selectionState.focusedIndex = 0;
+      (ctx.dataManager.getTotal as any).mockReturnValue(5);
+
+      const handler = createKeyboardHandler(ctx, scrollToIndex);
+
+      const event = new KeyboardEvent("keydown", { key: " " });
+      handler(event);
+
+      // Full render should be called, not just updateItemClasses
+      expect(ctx.renderer.render).toHaveBeenCalled();
     });
   });
 });

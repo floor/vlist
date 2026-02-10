@@ -47,9 +47,7 @@ const CONTACTS = makeContacts([
 
 const getGroup = (index: number): string => CONTACTS[index]!.lastName[0]!;
 
-const makeConfig = (
-  overrides: Partial<GroupsConfig> = {},
-): GroupsConfig => ({
+const makeConfig = (overrides: Partial<GroupsConfig> = {}): GroupsConfig => ({
   getGroupForIndex: getGroup,
   headerHeight: 32,
   headerTemplate: (group) => `<div>${group}</div>`,
@@ -111,9 +109,12 @@ describe("createGroupLayout", () => {
 
     it("should handle single item", () => {
       const singleContact = makeContacts([["Alice", "Adams"]]);
-      const layout = createGroupLayout(1, makeConfig({
-        getGroupForIndex: () => "A",
-      }));
+      const layout = createGroupLayout(
+        1,
+        makeConfig({
+          getGroupForIndex: () => "A",
+        }),
+      );
       expect(layout.groupCount).toBe(1);
       expect(layout.totalEntries).toBe(2); // 1 header + 1 item
       expect(layout.groups[0]!.key).toBe("A");
@@ -121,9 +122,12 @@ describe("createGroupLayout", () => {
     });
 
     it("should handle all items in one group", () => {
-      const layout = createGroupLayout(5, makeConfig({
-        getGroupForIndex: () => "ALL",
-      }));
+      const layout = createGroupLayout(
+        5,
+        makeConfig({
+          getGroupForIndex: () => "ALL",
+        }),
+      );
       expect(layout.groupCount).toBe(1);
       expect(layout.totalEntries).toBe(6); // 1 header + 5 items
       expect(layout.groups[0]!.key).toBe("ALL");
@@ -131,9 +135,12 @@ describe("createGroupLayout", () => {
     });
 
     it("should handle each item in its own group", () => {
-      const layout = createGroupLayout(4, makeConfig({
-        getGroupForIndex: (i) => String(i),
-      }));
+      const layout = createGroupLayout(
+        4,
+        makeConfig({
+          getGroupForIndex: (i) => String(i),
+        }),
+      );
       expect(layout.groupCount).toBe(4);
       expect(layout.totalEntries).toBe(8); // 4 headers + 4 items
       for (let i = 0; i < 4; i++) {
@@ -270,12 +277,12 @@ describe("createGroupLayout", () => {
       const layout = createGroupLayout(CONTACTS.length, makeConfig());
 
       // Layout:  [hdrA, item0, item1, hdrB, item2, item3, item4, hdrC, item5]
-      expect(layout.dataToLayoutIndex(0)).toBe(1);  // Adams
-      expect(layout.dataToLayoutIndex(1)).toBe(2);  // Allen
-      expect(layout.dataToLayoutIndex(2)).toBe(4);  // Baker
-      expect(layout.dataToLayoutIndex(3)).toBe(5);  // Brown
-      expect(layout.dataToLayoutIndex(4)).toBe(6);  // Burns
-      expect(layout.dataToLayoutIndex(5)).toBe(8);  // Clark
+      expect(layout.dataToLayoutIndex(0)).toBe(1); // Adams
+      expect(layout.dataToLayoutIndex(1)).toBe(2); // Allen
+      expect(layout.dataToLayoutIndex(2)).toBe(4); // Baker
+      expect(layout.dataToLayoutIndex(3)).toBe(5); // Brown
+      expect(layout.dataToLayoutIndex(4)).toBe(6); // Burns
+      expect(layout.dataToLayoutIndex(5)).toBe(8); // Clark
     });
 
     it("should be inverse of layoutToDataIndex for item indices", () => {
@@ -341,9 +348,12 @@ describe("createGroupLayout", () => {
 
   describe("getHeaderHeight", () => {
     it("should return fixed header height", () => {
-      const layout = createGroupLayout(CONTACTS.length, makeConfig({
-        headerHeight: 40,
-      }));
+      const layout = createGroupLayout(
+        CONTACTS.length,
+        makeConfig({
+          headerHeight: 40,
+        }),
+      );
 
       expect(layout.getHeaderHeight(0)).toBe(40);
       expect(layout.getHeaderHeight(1)).toBe(40);
@@ -351,9 +361,12 @@ describe("createGroupLayout", () => {
     });
 
     it("should return variable header height from function", () => {
-      const layout = createGroupLayout(CONTACTS.length, makeConfig({
-        headerHeight: (_group, groupIndex) => 30 + groupIndex * 10,
-      }));
+      const layout = createGroupLayout(
+        CONTACTS.length,
+        makeConfig({
+          headerHeight: (_group, groupIndex) => 30 + groupIndex * 10,
+        }),
+      );
 
       expect(layout.getHeaderHeight(0)).toBe(30);
       expect(layout.getHeaderHeight(1)).toBe(40);
@@ -373,9 +386,12 @@ describe("createGroupLayout", () => {
 
       // Simulate removing items so only A group remains (2 items)
       // We need a getGroupForIndex that works for the new count
-      const layout2 = createGroupLayout(2, makeConfig({
-        getGroupForIndex: (i) => "A",
-      }));
+      const layout2 = createGroupLayout(
+        2,
+        makeConfig({
+          getGroupForIndex: (i) => "A",
+        }),
+      );
 
       // Rebuild with fewer items
       layout2.rebuild(2);
@@ -459,7 +475,7 @@ describe("createGroupLayout", () => {
 
       // Spot-check some mappings
       expect(layout.layoutToDataIndex(0)).toBe(-1); // first header
-      expect(layout.layoutToDataIndex(1)).toBe(0);   // first item
+      expect(layout.layoutToDataIndex(1)).toBe(0); // first item
       expect(layout.dataToLayoutIndex(99)).toBe(100); // last item in first group
       expect(layout.layoutToDataIndex(101)).toBe(-1); // second header
       expect(layout.dataToLayoutIndex(100)).toBe(102); // first item of second group
@@ -474,6 +490,32 @@ describe("createGroupLayout", () => {
 
       const group2 = layout.getGroupAtDataIndex(0);
       expect(group2.key).toBe("");
+    });
+
+    it("should return fallback item entry from getEntry when groups are empty", () => {
+      const layout = createGroupLayout(0, makeConfig());
+
+      const entry = layout.getEntry(0);
+      expect(entry.type).toBe("item");
+      if (entry.type === "item") {
+        expect(entry.dataIndex).toBe(0);
+        expect(entry.group.key).toBe("");
+        expect(entry.group.groupIndex).toBe(0);
+        expect(entry.group.headerLayoutIndex).toBe(0);
+        expect(entry.group.firstDataIndex).toBe(0);
+        expect(entry.group.count).toBe(0);
+      }
+    });
+
+    it("should return fallback item entry from getEntry for any index when groups are empty", () => {
+      const layout = createGroupLayout(0, makeConfig());
+
+      const entry = layout.getEntry(5);
+      expect(entry.type).toBe("item");
+      if (entry.type === "item") {
+        expect(entry.dataIndex).toBe(5);
+        expect(entry.group.key).toBe("");
+      }
     });
   });
 });
@@ -543,7 +585,9 @@ describe("buildLayoutItems", () => {
     const layout = createGroupLayout(CONTACTS.length, makeConfig());
     const items = buildLayoutItems(CONTACTS, layout.groups);
 
-    const dataItems = items.filter((item) => !isGroupHeader(item)) as TestContact[];
+    const dataItems = items.filter(
+      (item) => !isGroupHeader(item),
+    ) as TestContact[];
     expect(dataItems).toHaveLength(6);
     expect(dataItems[0]!.id).toBe("contact-0"); // Adams
     expect(dataItems[1]!.id).toBe("contact-1"); // Allen
@@ -561,9 +605,12 @@ describe("buildLayoutItems", () => {
 
   it("should handle single item", () => {
     const single = makeContacts([["Alice", "Adams"]]);
-    const layout = createGroupLayout(1, makeConfig({
-      getGroupForIndex: () => "A",
-    }));
+    const layout = createGroupLayout(
+      1,
+      makeConfig({
+        getGroupForIndex: () => "A",
+      }),
+    );
     const items = buildLayoutItems(single, layout.groups);
 
     expect(items).toHaveLength(2);
@@ -579,9 +626,12 @@ describe("buildLayoutItems", () => {
 
 describe("createGroupedHeightFn", () => {
   it("should return header height for header layout indices", () => {
-    const layout = createGroupLayout(CONTACTS.length, makeConfig({
-      headerHeight: 32,
-    }));
+    const layout = createGroupLayout(
+      CONTACTS.length,
+      makeConfig({
+        headerHeight: 32,
+      }),
+    );
     const heightFn = createGroupedHeightFn(layout, 48);
 
     // Headers at layout indices 0, 3, 7
@@ -591,9 +641,12 @@ describe("createGroupedHeightFn", () => {
   });
 
   it("should return item height for item layout indices (fixed)", () => {
-    const layout = createGroupLayout(CONTACTS.length, makeConfig({
-      headerHeight: 32,
-    }));
+    const layout = createGroupLayout(
+      CONTACTS.length,
+      makeConfig({
+        headerHeight: 32,
+      }),
+    );
     const heightFn = createGroupedHeightFn(layout, 48);
 
     // Items at layout indices 1, 2, 4, 5, 6, 8
@@ -606,9 +659,12 @@ describe("createGroupedHeightFn", () => {
   });
 
   it("should return item height for item layout indices (variable)", () => {
-    const layout = createGroupLayout(CONTACTS.length, makeConfig({
-      headerHeight: 32,
-    }));
+    const layout = createGroupLayout(
+      CONTACTS.length,
+      makeConfig({
+        headerHeight: 32,
+      }),
+    );
     // Variable height: each item has height 40 + dataIndex * 5
     const itemHeightFn = (dataIndex: number) => 40 + dataIndex * 5;
     const heightFn = createGroupedHeightFn(layout, itemHeightFn);
@@ -627,9 +683,12 @@ describe("createGroupedHeightFn", () => {
   });
 
   it("should return variable header height from function", () => {
-    const layout = createGroupLayout(CONTACTS.length, makeConfig({
-      headerHeight: (_group, groupIndex) => 20 + groupIndex * 10,
-    }));
+    const layout = createGroupLayout(
+      CONTACTS.length,
+      makeConfig({
+        headerHeight: (_group, groupIndex) => 20 + groupIndex * 10,
+      }),
+    );
     const heightFn = createGroupedHeightFn(layout, 48);
 
     expect(heightFn(0)).toBe(20); // group 0 header
@@ -679,7 +738,11 @@ describe("isGroupHeader", () => {
 // =============================================================================
 
 describe("round-trip consistency", () => {
-  const testConfigs: Array<{ name: string; count: number; groupFn: (i: number) => string }> = [
+  const testConfigs: Array<{
+    name: string;
+    count: number;
+    groupFn: (i: number) => string;
+  }> = [
     {
       name: "3 equal groups of 2",
       count: 6,
@@ -709,9 +772,12 @@ describe("round-trip consistency", () => {
 
   for (const { name, count, groupFn } of testConfigs) {
     it(`layout ↔ data index round-trip: ${name}`, () => {
-      const layout = createGroupLayout(count, makeConfig({
-        getGroupForIndex: groupFn,
-      }));
+      const layout = createGroupLayout(
+        count,
+        makeConfig({
+          getGroupForIndex: groupFn,
+        }),
+      );
 
       // Every data index should round-trip through layout
       for (let di = 0; di < count; di++) {
