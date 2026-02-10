@@ -5,7 +5,9 @@
  * static or streaming lists that don't need selection, groups,
  * compression, custom scrollbar, or async data adapters.
  *
- * ~10 KB minified vs ~42 KB for the full bundle.
+ * Shares building blocks with the full `vlist` (height cache, emitter,
+ * DOM structure, element pool, animation) to eliminate duplication while
+ * keeping a small bundle footprint via tree-shaking.
  *
  * Supports:
  * - Fixed and variable item heights
@@ -25,34 +27,37 @@
  * - Velocity tracking / load cancellation
  */
 
+// Shared building blocks (also used by the full vlist)
+import { createHeightCache, type HeightCache } from "./render/heights";
+import { createEmitter } from "./events/emitter";
+import {
+  resolveContainer,
+  createDOMStructure,
+  updateContentHeight,
+} from "./render/dom";
+import { createElementPool } from "./render/pool";
+import {
+  easeInOutQuad,
+  resolveScrollArgs,
+  calculateScrollToPosition,
+} from "./animation";
+
+// Types — shared base types from the main types module.
+// These are type-only imports and are fully erased at runtime,
+// so they add zero bytes to the core bundle.
+import type {
+  VListItem,
+  ItemState,
+  ItemTemplate,
+  Range,
+  EventHandler,
+  Unsubscribe,
+  EventMap,
+} from "./types";
+
 // =============================================================================
-// Types
+// Core-Specific Types (not shared with full vlist)
 // =============================================================================
-
-/** Base item interface — must have an id */
-export interface VListItem {
-  id: string | number;
-  [key: string]: unknown;
-}
-
-/** State passed to template */
-export interface ItemState {
-  selected: boolean;
-  focused: boolean;
-}
-
-/** Item template function */
-export type ItemTemplate<T extends VListItem = VListItem> = (
-  item: T,
-  index: number,
-  state: ItemState,
-) => string | HTMLElement;
-
-/** Visible range */
-export interface Range {
-  start: number;
-  end: number;
-}
 
 /** Options for scrollToIndex */
 export interface ScrollToOptions {
@@ -61,12 +66,16 @@ export interface ScrollToOptions {
   duration?: number;
 }
 
-/** Event handler / unsubscribe */
-export type EventHandler<T> = (payload: T) => void;
-export type Unsubscribe = () => void;
+/** Scroll position snapshot for save/restore */
+export interface CoreScrollSnapshot {
+  /** First visible item index */
+  index: number;
+  /** Pixel offset within the first visible item (how far it's scrolled off) */
+  offsetInItem: number;
+}
 
 /** Core event map */
-export interface CoreEvents<T extends VListItem = VListItem> {
+export interface CoreEvents<T extends VListItem = VListItem> extends EventMap {
   "item:click": { item: T; index: number; event: MouseEvent };
   scroll: { scrollTop: number; direction: "up" | "down" };
   "range:change": { range: Range };
@@ -113,6 +122,11 @@ export interface VListCore<T extends VListItem = VListItem> {
   cancelScroll(): void;
   getScrollPosition(): number;
 
+  /** Get a snapshot of the current scroll position for save/restore */
+  getScrollSnapshot(): CoreScrollSnapshot;
+  /** Restore scroll position from a snapshot */
+  restoreScroll(snapshot: CoreScrollSnapshot): void;
+
   on<K extends keyof CoreEvents<T>>(
     event: K,
     handler: EventHandler<CoreEvents<T>[K]>,
@@ -125,218 +139,35 @@ export interface VListCore<T extends VListItem = VListItem> {
   destroy(): void;
 }
 
+// Re-export shared base types for consumers of `vlist/core`
+export type {
+  VListItem,
+  ItemState,
+  ItemTemplate,
+  Range,
+  EventHandler,
+  Unsubscribe,
+};
+
 // =============================================================================
 // Constants
 // =============================================================================
 
 const DEFAULT_OVERSCAN = 3;
 const DEFAULT_CLASS_PREFIX = "vlist";
-const DEFAULT_SMOOTH_DURATION = 300;
 const SCROLL_IDLE_TIMEOUT = 150;
 
 // =============================================================================
-// Height Cache (inlined — no compression dependency)
+// Range Calculation (non-compressed, core-specific)
 // =============================================================================
 
-interface HeightCache {
-  getOffset(index: number): number;
-  getHeight(index: number): number;
-  indexAtOffset(offset: number): number;
-  getTotalHeight(): number;
-  getTotal(): number;
-  rebuild(totalItems: number): void;
-}
-
-const createHeightCache = (
-  height: number | ((index: number) => number),
-  initialTotal: number,
-): HeightCache => {
-  if (typeof height === "number") {
-    let total = initialTotal;
-    return {
-      getOffset: (i) => i * height,
-      getHeight: () => height,
-      indexAtOffset: (offset) => {
-        if (total === 0 || height === 0) return 0;
-        return Math.max(0, Math.min(Math.floor(offset / height), total - 1));
-      },
-      getTotalHeight: () => total * height,
-      getTotal: () => total,
-      rebuild: (n) => {
-        total = n;
-      },
-    };
-  }
-
-  // Variable heights — prefix sums
-  let total = initialTotal;
-  let prefixSums = new Float64Array(0);
-
-  const build = (n: number): void => {
-    total = n;
-    prefixSums = new Float64Array(n + 1);
-    prefixSums[0] = 0;
-    for (let i = 0; i < n; i++) {
-      prefixSums[i + 1] = prefixSums[i]! + height(i);
-    }
-  };
-
-  build(initialTotal);
-
-  return {
-    getOffset: (index) => {
-      if (index <= 0) return 0;
-      if (index >= total) return prefixSums[total] as number;
-      return prefixSums[index] as number;
-    },
-    getHeight: (index) => height(index),
-    indexAtOffset: (offset) => {
-      if (total === 0) return 0;
-      if (offset <= 0) return 0;
-      if (offset >= prefixSums[total]!) return total - 1;
-      let lo = 0;
-      let hi = total - 1;
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >>> 1;
-        if (prefixSums[mid]! <= offset) lo = mid;
-        else hi = mid - 1;
-      }
-      return lo;
-    },
-    getTotalHeight: () => (prefixSums[total] as number) ?? 0,
-    getTotal: () => total,
-    rebuild: (n) => build(n),
-  };
-};
-
-// =============================================================================
-// Event Emitter (inlined — tiny)
-// =============================================================================
-
-type Listeners = Record<string, Set<EventHandler<any>> | undefined>;
-
-const createEmitter = () => {
-  const listeners: Listeners = {};
-
-  const on = (event: string, handler: EventHandler<any>): Unsubscribe => {
-    if (!listeners[event]) listeners[event] = new Set();
-    listeners[event]!.add(handler);
-    return () => off(event, handler);
-  };
-
-  const off = (event: string, handler: EventHandler<any>): void => {
-    listeners[event]?.delete(handler);
-  };
-
-  const emit = (event: string, payload: unknown): void => {
-    listeners[event]?.forEach((h) => {
-      try {
-        h(payload);
-      } catch (e) {
-        console.error(`[vlist] Error in "${event}" handler:`, e);
-      }
-    });
-  };
-
-  const clear = (): void => {
-    for (const key in listeners) delete listeners[key];
-  };
-
-  return { on, off, emit, clear };
-};
-
-// =============================================================================
-// DOM Structure
-// =============================================================================
-
-interface DOMStructure {
-  root: HTMLElement;
-  viewport: HTMLElement;
-  content: HTMLElement;
-  items: HTMLElement;
-}
-
-const resolveContainer = (container: HTMLElement | string): HTMLElement => {
-  if (typeof container === "string") {
-    const el = document.querySelector<HTMLElement>(container);
-    if (!el) throw new Error(`[vlist] Container not found: ${container}`);
-    return el;
-  }
-  return container;
-};
-
-const createDOMStructure = (
-  container: HTMLElement,
-  classPrefix: string,
-  ariaLabel?: string,
-): DOMStructure => {
-  const root = document.createElement("div");
-  root.className = classPrefix;
-  root.setAttribute("role", "listbox");
-  root.setAttribute("tabindex", "0");
-  if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
-
-  const viewport = document.createElement("div");
-  viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
-  viewport.style.height = "100%";
-  viewport.style.width = "100%";
-
-  const content = document.createElement("div");
-  content.className = `${classPrefix}-content`;
-  content.style.position = "relative";
-  content.style.width = "100%";
-
-  const items = document.createElement("div");
-  items.className = `${classPrefix}-items`;
-  items.style.position = "relative";
-  items.style.width = "100%";
-
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  container.appendChild(root);
-
-  return { root, viewport, content, items };
-};
-
-// =============================================================================
-// Element Pool
-// =============================================================================
-
-const createElementPool = (maxSize = 100) => {
-  const pool: HTMLElement[] = [];
-
-  const acquire = (): HTMLElement => {
-    const el = pool.pop();
-    if (el) return el;
-    const newEl = document.createElement("div");
-    newEl.setAttribute("role", "option");
-    return newEl;
-  };
-
-  const release = (el: HTMLElement): void => {
-    if (pool.length < maxSize) {
-      el.className = "";
-      el.textContent = "";
-      el.removeAttribute("style");
-      el.removeAttribute("data-index");
-      el.removeAttribute("data-id");
-      pool.push(el);
-    }
-  };
-
-  const clear = (): void => {
-    pool.length = 0;
-  };
-
-  return { acquire, release, clear };
-};
-
-// =============================================================================
-// Range Calculation (no compression)
-// =============================================================================
-
+/**
+ * Calculate the visible item range for a given scroll position.
+ * Writes into `out` to avoid allocation on the scroll hot path.
+ *
+ * This is the simple, non-compressed version. The full vlist uses
+ * compression-aware range calculation from `render/compression.ts`.
+ */
 const calculateVisibleRange = (
   scrollTop: number,
   containerHeight: number,
@@ -360,6 +191,10 @@ const calculateVisibleRange = (
   out.end = Math.min(end, totalItems - 1);
 };
 
+/**
+ * Apply overscan to a visible range, expanding it by `overscan` items
+ * on each side (clamped to valid indices).
+ */
 const applyOverscan = (
   visible: Range,
   overscan: number,
@@ -369,44 +204,6 @@ const applyOverscan = (
   out.start = Math.max(0, visible.start - overscan);
   out.end = Math.min(totalItems - 1, visible.end + overscan);
 };
-
-// =============================================================================
-// Scroll-to-index position calculation
-// =============================================================================
-
-const calculateScrollToPosition = (
-  index: number,
-  heightCache: HeightCache,
-  containerHeight: number,
-  totalItems: number,
-  align: "start" | "center" | "end",
-): number => {
-  if (totalItems === 0) return 0;
-  const clamped = Math.max(0, Math.min(index, totalItems - 1));
-  const offset = heightCache.getOffset(clamped);
-  const itemHeight = heightCache.getHeight(clamped);
-  const maxScroll = Math.max(0, heightCache.getTotalHeight() - containerHeight);
-
-  let position: number;
-  switch (align) {
-    case "center":
-      position = offset - (containerHeight - itemHeight) / 2;
-      break;
-    case "end":
-      position = offset - containerHeight + itemHeight;
-      break;
-    default:
-      position = offset;
-  }
-  return Math.max(0, Math.min(position, maxScroll));
-};
-
-// =============================================================================
-// Smooth Scroll Animation
-// =============================================================================
-
-const easeInOutQuad = (t: number): number =>
-  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
 // =============================================================================
 // Main Factory
@@ -468,12 +265,12 @@ export const createVList = <T extends VListItem = VListItem>(
   let lastScrollTop = 0;
 
   // ---------------------------------------------------------------------------
-  // Domain components
+  // Domain components (from shared modules)
   // ---------------------------------------------------------------------------
 
   const containerElement = resolveContainer(config.container);
   const dom = createDOMStructure(containerElement, classPrefix, ariaLabel);
-  const emitter = createEmitter();
+  const emitter = createEmitter<CoreEvents<T>>();
   const heightCache = createHeightCache(itemHeightConfig, items.length);
   const pool = createElementPool();
 
@@ -534,10 +331,6 @@ export const createVList = <T extends VListItem = VListItem>(
   // ---------------------------------------------------------------------------
   // Render pipeline
   // ---------------------------------------------------------------------------
-
-  const updateContentHeight = (): void => {
-    dom.content.style.height = `${heightCache.getTotalHeight()}px`;
-  };
 
   const renderIfNeeded = (): void => {
     if (isDestroyed) return;
@@ -662,9 +455,7 @@ export const createVList = <T extends VListItem = VListItem>(
     }, SCROLL_IDLE_TIMEOUT);
   };
 
-  const scrollTarget = isWindowMode
-    ? (scrollElement as Window)
-    : dom.viewport;
+  const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
   scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
 
   // ---------------------------------------------------------------------------
@@ -698,7 +489,7 @@ export const createVList = <T extends VListItem = VListItem>(
       const newHeight = entry.contentRect.height;
       if (Math.abs(newHeight - containerHeight) > 1) {
         containerHeight = newHeight;
-        updateContentHeight();
+        updateContentHeight(dom.content, heightCache.getTotalHeight());
         renderIfNeeded();
         emitter.emit("resize", {
           height: newHeight,
@@ -718,7 +509,7 @@ export const createVList = <T extends VListItem = VListItem>(
       const newHeight = window.innerHeight;
       if (Math.abs(newHeight - containerHeight) > 1) {
         containerHeight = newHeight;
-        updateContentHeight();
+        updateContentHeight(dom.content, heightCache.getTotalHeight());
         renderIfNeeded();
         emitter.emit("resize", {
           height: newHeight,
@@ -738,28 +529,6 @@ export const createVList = <T extends VListItem = VListItem>(
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
-  };
-
-  const resolveScrollArgs = (
-    alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
-  ): { align: "start" | "center" | "end"; behavior: "auto" | "smooth"; duration: number } => {
-    if (typeof alignOrOptions === "string")
-      return {
-        align: alignOrOptions,
-        behavior: "auto",
-        duration: DEFAULT_SMOOTH_DURATION,
-      };
-    if (alignOrOptions && typeof alignOrOptions === "object")
-      return {
-        align: alignOrOptions.align ?? "start",
-        behavior: alignOrOptions.behavior ?? "auto",
-        duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
-      };
-    return {
-      align: "start",
-      behavior: "auto",
-      duration: DEFAULT_SMOOTH_DURATION,
-    };
   };
 
   const doScrollTo = (position: number): void => {
@@ -815,7 +584,7 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const rebuildAndRender = (): void => {
     heightCache.rebuild(items.length);
-    updateContentHeight();
+    updateContentHeight(dom.content, heightCache.getTotalHeight());
     forceRender();
   };
 
@@ -886,7 +655,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // Initialization
   // ---------------------------------------------------------------------------
 
-  updateContentHeight();
+  updateContentHeight(dom.content, heightCache.getTotalHeight());
   renderIfNeeded();
 
   // ---------------------------------------------------------------------------
@@ -923,15 +692,53 @@ export const createVList = <T extends VListItem = VListItem>(
     cancelScroll,
     getScrollPosition: () => lastScrollTop,
 
+    getScrollSnapshot: (): CoreScrollSnapshot => {
+      if (items.length === 0) {
+        return { index: 0, offsetInItem: 0 };
+      }
+      const index = heightCache.indexAtOffset(lastScrollTop);
+      const offsetInItem = Math.max(
+        0,
+        lastScrollTop - heightCache.getOffset(index),
+      );
+      return { index, offsetInItem };
+    },
+
+    restoreScroll: (snapshot: CoreScrollSnapshot): void => {
+      if (items.length === 0) return;
+      const safeIndex = Math.max(0, Math.min(snapshot.index, items.length - 1));
+      const maxScroll = Math.max(
+        0,
+        heightCache.getTotalHeight() - containerHeight,
+      );
+      const position = Math.max(
+        0,
+        Math.min(
+          heightCache.getOffset(safeIndex) + snapshot.offsetInItem,
+          maxScroll,
+        ),
+      );
+
+      if (isWindowMode) {
+        const rect = dom.viewport.getBoundingClientRect();
+        const listDocumentTop = rect.top + window.scrollY;
+        window.scrollTo({ top: listDocumentTop + position, behavior: "auto" });
+      } else {
+        dom.viewport.scrollTo({ top: position, behavior: "auto" });
+      }
+      lastScrollTop = position;
+      renderIfNeeded();
+    },
+
     on: <K extends keyof CoreEvents<T>>(
       event: K,
       handler: EventHandler<CoreEvents<T>[K]>,
-    ): Unsubscribe => emitter.on(event as string, handler),
+    ): Unsubscribe => emitter.on(event, handler),
 
     off: <K extends keyof CoreEvents<T>>(
       event: K,
       handler: EventHandler<CoreEvents<T>[K]>,
-    ): void => emitter.off(event as string, handler),
+    ): void => emitter.off(event, handler),
 
     destroy,
   };

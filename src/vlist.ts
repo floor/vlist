@@ -16,8 +16,10 @@ import type {
   VListEvents,
   EventHandler,
   Unsubscribe,
-  SelectionMode,
 } from "./types";
+
+// Configuration (validation + defaults + derived flags)
+import { resolveConfig } from "./config";
 
 // Domain imports
 import {
@@ -72,14 +74,7 @@ import {
 } from "./grid";
 
 // Constants
-import {
-  DEFAULT_OVERSCAN,
-  DEFAULT_CLASS_PREFIX,
-  INITIAL_LOAD_SIZE,
-  CANCEL_LOAD_VELOCITY_THRESHOLD,
-  PRELOAD_VELOCITY_THRESHOLD,
-  PRELOAD_ITEMS_AHEAD,
-} from "./constants";
+import { INITIAL_LOAD_SIZE } from "./constants";
 
 // =============================================================================
 // Main Factory
@@ -92,83 +87,33 @@ export const createVList = <T extends VListItem = VListItem>(
   config: VListConfig<T>,
 ): VList<T> => {
   // ===========================================================================
-  // Validation
+  // Configuration (validate, apply defaults, compute derived flags)
   // ===========================================================================
 
-  if (!config.container) {
-    throw new Error("[vlist] Container is required");
-  }
-  if (!config.item) {
-    throw new Error("[vlist] item configuration is required");
-  }
-  if (config.item.height == null) {
-    throw new Error("[vlist] item.height is required");
-  }
-  if (typeof config.item.height === "number" && config.item.height <= 0) {
-    throw new Error("[vlist] item.height must be a positive number");
-  }
-  if (
-    typeof config.item.height !== "number" &&
-    typeof config.item.height !== "function"
-  ) {
-    throw new Error(
-      "[vlist] item.height must be a number or a function (index) => number",
-    );
-  }
-  if (!config.item.template) {
-    throw new Error("[vlist] item.template is required");
-  }
-
-  // Grid-specific validation
-  if (config.layout === "grid") {
-    if (!config.grid) {
-      throw new Error(
-        "[vlist] grid configuration is required when layout is 'grid'",
-      );
-    }
-    if (!config.grid.columns || config.grid.columns < 1) {
-      throw new Error("[vlist] grid.columns must be a positive integer >= 1");
-    }
-    if (config.groups) {
-      throw new Error("[vlist] grid layout cannot be combined with groups");
-    }
-  }
-
-  // ===========================================================================
-  // Configuration
-  // ===========================================================================
-
+  const cfg = resolveConfig(config);
   const {
-    item: itemConfig,
-    items: initialItems,
+    initialItems,
     adapter,
-    overscan = DEFAULT_OVERSCAN,
-    selection: selectionConfig,
-    scrollbar: scrollbarConfig,
-    loading: loadingConfig,
-    idleTimeout: scrollIdleTimeout,
-    classPrefix = DEFAULT_CLASS_PREFIX,
+    overscan,
+    selectionConfig,
+    scrollbarConfig,
+    scrollIdleTimeout,
+    classPrefix,
     scrollElement,
     ariaLabel,
-    groups: groupsConfig,
-    layout: layoutMode = "list",
-    grid: gridConfig,
-  } = config;
+    groupsConfig,
+    gridConfig,
+    isWindowMode,
+    hasGroups,
+    isGrid,
+    selectionMode,
+    cancelLoadThreshold,
+    preloadThreshold,
+    preloadAhead,
+  } = cfg;
 
-  const isWindowMode = !!scrollElement;
-  const hasGroups = !!groupsConfig;
-  const isGrid = layoutMode === "grid" && !!gridConfig;
-
-  const { height: itemHeightConfig, template: userTemplate } = itemConfig;
-
-  const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
-
-  // Loading thresholds (with defaults from constants)
-  const cancelLoadThreshold =
-    loadingConfig?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;
-  const preloadThreshold =
-    loadingConfig?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
-  const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
+  const { userTemplate } = cfg;
+  let { itemHeightConfig } = cfg;
 
   // ===========================================================================
   // Grid Setup (when layout: 'grid')
@@ -381,7 +326,7 @@ export const createVList = <T extends VListItem = VListItem>(
     ...(scrollIdleTimeout !== undefined
       ? { idleTimeout: scrollIdleTimeout }
       : {}),
-    ...(isWindowMode ? { scrollElement } : {}),
+    ...(isWindowMode ? { scrollElement: scrollElement! } : {}),
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {

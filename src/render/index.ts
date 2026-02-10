@@ -1,7 +1,19 @@
 /**
  * vlist - Render Domain
- * Rendering, virtualization, and compression
+ * Rendering, virtualization, compression, DOM utilities, and element pooling
  */
+
+// DOM Utilities (shared with core.ts)
+export {
+  createDOMStructure,
+  updateContentHeight,
+  resolveContainer,
+  getContainerDimensions,
+  type DOMStructure,
+} from "./dom";
+
+// Element Pool (shared with core.ts)
+export { createElementPool, type ElementPool } from "./pool";
 
 // Height Cache
 export {
@@ -15,12 +27,7 @@ export {
 // Renderer
 export {
   createRenderer,
-  createDOMStructure,
-  updateContentHeight,
-  resolveContainer,
-  getContainerDimensions,
   type Renderer,
-  type DOMStructure,
   type CompressionContext,
 } from "./renderer";
 
