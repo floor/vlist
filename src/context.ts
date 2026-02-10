@@ -39,6 +39,8 @@ export interface VListContextConfig {
   readonly classPrefix: string;
   readonly selectionMode: SelectionMode;
   readonly hasAdapter: boolean;
+  /** Reverse mode (chat UI) — load more at top, auto-scroll on append */
+  readonly reverse: boolean;
   /** Velocity threshold above which loading is skipped (px/ms) */
   readonly cancelLoadThreshold: number;
   /** Velocity threshold for preloading (px/ms) */

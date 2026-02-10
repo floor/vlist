@@ -317,43 +317,69 @@ const list = createVList({
 
 ---
 
-### 8. Reverse Mode (Chat UI)
+### 8. ✅ Reverse Mode (Chat UI)
 
 **Priority:** Medium.
 
 **Problem:** Chat and messaging UIs start scrolled to the bottom and prepend messages on top. This is a very common pattern that's surprisingly hard to get right with virtual scrolling.
 
-**Approach:**
+**Implementation:** Added `reverse: true` config option. Items stay in chronological order (oldest = index 0). The reverse behavior is handled entirely in the orchestration layer (`vlist.ts`) by wrapping data methods and adjusting scroll positioning — no changes to the renderer, height cache, or core virtualization math.
 
 ```typescript
 const chat = createVList({
   container: '#messages',
-  reverse: true,  // new option
+  reverse: true,
   item: {
-    estimatedHeight: 60,
+    height: 60,          // fixed or variable: (index) => number
+    template: messageTemplate,
+  },
+  items: messages,       // chronological order (oldest first)
+});
+
+// New message arrives — auto-scrolls to bottom if user was at bottom
+chat.appendItems([newMessage]);
+
+// Load older messages — scroll position preserved (no jump)
+chat.prependItems(olderMessages);
+```
+
+**What `reverse: true` does:**
+
+| Behavior | Normal mode | Reverse mode |
+|----------|------------|--------------|
+| Initial scroll position | Top (index 0) | Bottom (last item) |
+| `appendItems()` | No auto-scroll | Auto-scrolls to bottom if user was at bottom |
+| `prependItems()` | No scroll adjustment | Adjusts scrollTop to keep current content stable |
+| Adapter "load more" trigger | Near bottom | Near top |
+
+**Architecture details:**
+- **Initial scroll to bottom** — After first render (or after initial adapter load), calls `scrollToIndex(total - 1, 'end')`
+- **appendItems auto-scroll** — Checks `isAtBottom()` before appending; if true, scrolls to new bottom after append
+- **prependItems scroll preservation** — Records `scrollTop` and `totalHeight` before prepend, then adjusts `scrollTop += (newHeight - oldHeight)` so the same content stays visible
+- **Adapter load at top** — Scroll handler checks `scrollTop < LOAD_MORE_THRESHOLD` instead of `distanceFromBottom < LOAD_MORE_THRESHOLD`
+- **Validation** — Cannot be combined with `groups` or `grid` layout (throws at creation time)
+- Works with both fixed and variable `(index) => number` heights
+- All existing features (selection, events, scroll save/restore, compression) work unchanged
+
+**With adapter (infinite scroll for older messages):**
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: (index) => messages[index]?.type === 'image' ? 200 : 60,
     template: messageTemplate,
   },
   adapter: {
     read: async ({ offset, limit }) => {
-      // Loads older messages
-      return fetchMessages({ before: oldestId, limit });
+      // Load more triggers at the TOP in reverse mode
+      const messages = await api.getMessages({ skip: offset, take: limit });
+      return { items: messages, total: totalCount, hasMore: offset + limit < totalCount };
     },
   },
 });
-
-// Append new message at bottom
-chat.appendItems([newMessage]);
-// Auto-scrolls to bottom if user was at bottom
 ```
-
-**Architecture impact:**
-- Render order is reversed (newest at bottom, oldest at top)
-- Prepending items must maintain scroll position (not jump)
-- "Load more" triggers at the TOP, not bottom
-- `scrollToIndex(0)` means "go to newest", not oldest
-- Requires variable height support for realistic chat bubbles
-
-**Estimated effort:** Medium-Large — depends on variable heights.
 
 ---
 
@@ -599,7 +625,7 @@ list.restoreScroll(saved);
 | 5 | Grid layout | 🟡 Medium | Medium-Large | 2 | 🟡 Pending |
 | 6 | Window scrolling | 🟡 Medium | Medium | 2 | ✅ Done |
 | 7 | Sticky headers | 🟡 Medium | Medium | 3 | ✅ Done |
-| 8 | Reverse mode (chat) | 🟡 Medium | Medium-Large | 3 | 🟡 Pending |
+| 8 | Reverse mode (chat) | 🟡 Medium | Medium-Large | 3 | ✅ Done |
 | 9 | Framework adapters | 🟡 Medium | Small each | 3 | ✅ Done |
 | 10 | Public benchmarks | 🟠 High | Medium | 4 | 🟡 Pending |
 | 11 | Auto-height measurement | 🟢 Low | Medium | 4 | 🟡 Pending |
@@ -627,4 +653,4 @@ list.restoreScroll(saved);
 ---
 
 *Last updated: June 2025*
-*Status: Phase 1 complete. Phase 2 partially complete (window scrolling, grid). Phase 3 partially complete (sticky headers, framework adapters). Phase 4 pending.*
+*Status: Phase 1 complete. Phase 2 partially complete (window scrolling, grid). Phase 3 complete (sticky headers, reverse mode, framework adapters). Phase 4 pending.*

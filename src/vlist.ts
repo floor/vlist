@@ -135,6 +135,18 @@ export const createVList = <T extends VListItem = VListItem>(
     }
   }
 
+  // Reverse mode validation
+  if (config.reverse) {
+    if (config.groups) {
+      throw new Error("[vlist] reverse mode cannot be combined with groups");
+    }
+    if (config.layout === "grid") {
+      throw new Error(
+        "[vlist] reverse mode cannot be combined with grid layout",
+      );
+    }
+  }
+
   // ===========================================================================
   // Configuration
   // ===========================================================================
@@ -154,11 +166,13 @@ export const createVList = <T extends VListItem = VListItem>(
     groups: groupsConfig,
     layout: layoutMode = "list",
     grid: gridConfig,
+    reverse: reverseMode = false,
   } = config;
 
   const isWindowMode = !!scrollElement;
   const hasGroups = !!groupsConfig;
   const isGrid = layoutMode === "grid" && !!gridConfig;
+  const isReverse = reverseMode;
 
   const { height: itemHeightConfig, template: userTemplate } = itemConfig;
 
@@ -491,6 +505,7 @@ export const createVList = <T extends VListItem = VListItem>(
       classPrefix,
       selectionMode,
       hasAdapter: !!adapter,
+      reverse: isReverse,
       cancelLoadThreshold,
       preloadThreshold,
       preloadAhead,
@@ -728,7 +743,8 @@ export const createVList = <T extends VListItem = VListItem>(
 
   const rawDataMethods = createDataMethods(ctx);
 
-  // Wrap data methods when groups are active to maintain group layout
+  // Wrap data methods when groups are active to maintain group layout,
+  // or when reverse mode needs scroll-position-preserving prepend / auto-scroll append.
   const dataMethods = hasGroups
     ? {
         setItems: (items: T[]): void => {
@@ -756,7 +772,36 @@ export const createVList = <T extends VListItem = VListItem>(
         },
         reload: rawDataMethods.reload,
       }
-    : rawDataMethods;
+    : isReverse
+      ? {
+          ...rawDataMethods,
+          appendItems: (items: T[]): void => {
+            // In reverse mode, auto-scroll to bottom if user was already at bottom
+            const wasAtBottom = scrollController.isAtBottom(2);
+            rawDataMethods.appendItems(items);
+            if (wasAtBottom) {
+              // After items are appended and viewport updated, scroll to the very end
+              const total = dataManager.getTotal();
+              if (total > 0) {
+                scrollMethods.scrollToIndex(total - 1, "end");
+              }
+            }
+          },
+          prependItems: (items: T[]): void => {
+            // In reverse mode, preserve scroll position when prepending (older messages above)
+            const scrollTop = scrollController.getScrollTop();
+            const heightBefore = heightCache.getTotalHeight();
+            rawDataMethods.prependItems(items);
+            // After prepend, the total height increased — adjust scrollTop so the
+            // same content stays visible (the prepended items are above the viewport).
+            const heightAfter = heightCache.getTotalHeight();
+            const heightDelta = heightAfter - heightBefore;
+            if (heightDelta > 0) {
+              scrollController.scrollTo(scrollTop + heightDelta);
+            }
+          },
+        }
+      : rawDataMethods;
   const selectionMethods = createSelectionMethods(ctx);
   const rawSnapshotMethods = createSnapshotMethods(ctx);
 
@@ -984,6 +1029,24 @@ export const createVList = <T extends VListItem = VListItem>(
     dataManager.loadInitial().catch((error) => {
       emitter.emit("error", { error, context: "loadInitial" });
     });
+  }
+
+  // Reverse mode: scroll to the bottom after initial render / load
+  if (isReverse) {
+    const initialTotal = dataManager.getTotal();
+    if (initialTotal > 0) {
+      // Items provided statically — scroll immediately
+      scrollMethods.scrollToIndex(initialTotal - 1, "end");
+    } else if (adapter) {
+      // Adapter mode — scroll after initial data loads
+      const unsub = emitter.on("load:end", () => {
+        unsub();
+        const total = dataManager.getTotal();
+        if (total > 0) {
+          scrollMethods.scrollToIndex(total - 1, "end");
+        }
+      });
+    }
   }
 
   // ===========================================================================
