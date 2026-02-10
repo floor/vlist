@@ -163,7 +163,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
   template: ItemTemplate<T>,
   heightCache: HeightCache,
   classPrefix: string,
-  _totalItemsGetter?: () => number,
+  totalItemsGetter?: () => number,
+  ariaIdPrefix?: string,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, RenderedItem>();
@@ -171,6 +172,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
   // Cache compression state to avoid recalculating
   let cachedCompression: CompressionState | null = null;
   let cachedTotalItems = 0;
+
+  // Track aria-setsize to avoid redundant updates on existing items
+  let lastAriaSetSize = "";
 
   /**
    * Get or update compression state
@@ -316,6 +320,16 @@ export const createRenderer = <T extends VListItem = VListItem>(
     element.dataset.id = String(item.id);
     element.ariaSelected = String(isSelected);
 
+    // ARIA: positional context for screen readers ("item 5 of 10,000")
+    if (ariaIdPrefix) {
+      element.id = `${ariaIdPrefix}-item-${index}`;
+    }
+    if (totalItemsGetter) {
+      lastAriaSetSize = String(totalItemsGetter());
+      element.setAttribute("aria-setsize", lastAriaSetSize);
+      element.setAttribute("aria-posinset", String(index + 1));
+    }
+
     // Apply template
     const result = template(item, index, state);
     applyTemplate(element, result);
@@ -352,8 +366,19 @@ export const createRenderer = <T extends VListItem = VListItem>(
       }
     }
 
+    // Check if aria-setsize changed (total items mutated) — update existing items only when needed
+    let setSizeChanged = false;
+    if (totalItemsGetter) {
+      const currentSetSize = String(totalItemsGetter());
+      setSizeChanged = currentSetSize !== lastAriaSetSize;
+      lastAriaSetSize = currentSetSize;
+    }
+
     // Collect new elements for batched DOM insertion
-    // Using DocumentFragment reduces layout thrashing when adding multiple elements
+    // Using DocumentFragment batching to minimize DOM operations:
+    // - Collects all new elements in a fragment
+    // - Appends them in a single DOM operation
+    // - Reduces layout thrashing during fast scrolling
     const fragment = document.createDocumentFragment();
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
 
@@ -388,6 +413,11 @@ export const createRenderer = <T extends VListItem = VListItem>(
         applyClasses(existing.element, isSelected, isFocused);
         existing.element.ariaSelected = String(isSelected);
         positionElement(existing.element, i, compressionCtx);
+
+        // Update aria-setsize on existing items only when total changed (rare)
+        if (setSizeChanged) {
+          existing.element.setAttribute("aria-setsize", lastAriaSetSize);
+        }
       } else {
         // Render new element and add to fragment (not directly to DOM)
         const element = renderItem(

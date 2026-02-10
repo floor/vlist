@@ -139,6 +139,8 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
  * @param gridLayout - Grid layout for row/col calculations
  * @param classPrefix - CSS class prefix
  * @param initialContainerWidth - Initial container width for column sizing
+ * @param totalItemsGetter - Optional getter for total item count (for aria-setsize)
+ * @param ariaIdPrefix - Optional unique prefix for element IDs (for aria-activedescendant)
  */
 export const createGridRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
@@ -147,6 +149,8 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   gridLayout: GridLayout,
   classPrefix: string,
   initialContainerWidth: number,
+  totalItemsGetter?: () => number,
+  ariaIdPrefix?: string,
 ): GridRenderer<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, RenderedItem>();
@@ -156,6 +160,9 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   // Cache compression state
   let cachedCompression: CompressionState | null = null;
   let cachedTotalRows = 0;
+
+  // Track aria-setsize to avoid redundant updates on existing items
+  let lastAriaSetSize = "";
 
   const getCompression = (totalRows: number): CompressionState => {
     if (cachedCompression && cachedTotalRows === totalRows) {
@@ -290,6 +297,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     element.dataset.col = String(gridLayout.getCol(itemIndex));
     element.ariaSelected = String(isSelected);
 
+    // ARIA: positional context for screen readers ("item 5 of 10,000")
+    if (ariaIdPrefix) {
+      element.id = `${ariaIdPrefix}-item-${itemIndex}`;
+    }
+    if (totalItemsGetter) {
+      lastAriaSetSize = String(totalItemsGetter());
+      element.setAttribute("aria-setsize", lastAriaSetSize);
+      element.setAttribute("aria-posinset", String(itemIndex + 1));
+    }
+
     // Apply sizing
     applySizeStyles(element, itemIndex);
 
@@ -326,6 +343,14 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       }
     }
 
+    // Check if aria-setsize changed (total items mutated) — update existing items only when needed
+    let setSizeChanged = false;
+    if (totalItemsGetter) {
+      const currentSetSize = String(totalItemsGetter());
+      setSizeChanged = currentSetSize !== lastAriaSetSize;
+      lastAriaSetSize = currentSetSize;
+    }
+
     // Collect new elements for batched DOM insertion
     const fragment = document.createDocumentFragment();
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
@@ -360,6 +385,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         applyClasses(existing.element, isSelected, isFocused);
         existing.element.ariaSelected = String(isSelected);
         positionElement(existing.element, i, compressionCtx);
+
+        // Update aria-setsize on existing items only when total changed (rare)
+        if (setSizeChanged) {
+          existing.element.setAttribute("aria-setsize", lastAriaSetSize);
+        }
       } else {
         // Render new element and add to fragment
         const element = renderItem(

@@ -270,6 +270,12 @@ export const createClickHandler = <T extends VListItem>(
         index,
       );
 
+      // ARIA: update aria-activedescendant so screen readers track the clicked item
+      ctx.dom.root.setAttribute(
+        "aria-activedescendant",
+        `${ctx.config.ariaIdPrefix}-item-${index}`,
+      );
+
       // Toggle selection
       ctx.state.selectionState = toggleSelection(
         ctx.state.selectionState,
@@ -375,9 +381,15 @@ export const createKeyboardHandler = <T extends VListItem>(
 
       const newFocusIndex = ctx.state.selectionState.focusedIndex;
 
-      // Scroll focused item into view
+      // Scroll focused item into view + update ARIA active descendant
       if (newFocusIndex >= 0) {
         scrollToIndex(newFocusIndex, "center");
+        ctx.dom.root.setAttribute(
+          "aria-activedescendant",
+          `${ctx.config.ariaIdPrefix}-item-${newFocusIndex}`,
+        );
+      } else {
+        ctx.dom.root.removeAttribute("aria-activedescendant");
       }
 
       if (focusOnly) {

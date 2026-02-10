@@ -49,6 +49,8 @@ export interface VListContextConfig {
   readonly preloadThreshold: number;
   /** Number of items to preload ahead of scroll direction */
   readonly preloadAhead: number;
+  /** Unique ARIA ID prefix for element identification (e.g. "vlist-0") */
+  readonly ariaIdPrefix: string;
 }
 
 /** Cached compression state */
