@@ -825,3 +825,421 @@ describe("createVList edge cases", () => {
     expect(vlist.getSelected()).toHaveLength(0);
   });
 });
+
+// =============================================================================
+// Horizontal Direction Tests
+// =============================================================================
+
+describe("createVList horizontal direction", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  // ===========================================================================
+  // Validation
+  // ===========================================================================
+
+  describe("validation", () => {
+    it("should throw when direction is horizontal but item.width is missing", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { height: 40, template },
+          items: [],
+        });
+      }).toThrow(
+        "[vlist] item.width is required when direction is 'horizontal'",
+      );
+    });
+
+    it("should throw when item.width is zero in horizontal mode", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: 0, template },
+          items: [],
+        });
+      }).toThrow("[vlist] item.width must be a positive number");
+    });
+
+    it("should throw when item.width is negative in horizontal mode", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: -10, template },
+          items: [],
+        });
+      }).toThrow("[vlist] item.width must be a positive number");
+    });
+
+    it("should throw when item.width is invalid type in horizontal mode", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: "100px" as any, template },
+          items: [],
+        });
+      }).toThrow("[vlist] item.width must be a number or a function");
+    });
+
+    it("should throw when horizontal combined with groups", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: 100, template },
+          items: [],
+          groups: {
+            key: "group",
+            template: () => "",
+            height: 30,
+          },
+        });
+      }).toThrow("horizontal direction cannot be combined with groups");
+    });
+
+    it("should throw when horizontal combined with grid layout", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: 100, template },
+          items: [],
+          layout: "grid",
+          grid: { columns: 3 },
+        });
+      }).toThrow("horizontal direction cannot be combined with grid layout");
+    });
+
+    it("should throw when horizontal combined with reverse mode", () => {
+      expect(() => {
+        createVList({
+          container,
+          direction: "horizontal",
+          item: { width: 100, template },
+          items: [],
+          reverse: true,
+        });
+      }).toThrow("horizontal direction cannot be combined with reverse mode");
+    });
+  });
+
+  // ===========================================================================
+  // Initialization
+  // ===========================================================================
+
+  describe("initialization", () => {
+    it("should create a horizontal vlist instance", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items,
+      });
+
+      expect(vlist).toBeDefined();
+      expect(vlist.element).toBeInstanceOf(HTMLElement);
+      expect(vlist.total).toBe(20);
+      expect(vlist.items.length).toBe(20);
+    });
+
+    it("should accept item.width as a function", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: {
+          width: (index: number) => 80 + (index % 3) * 20,
+          template,
+        },
+        items,
+      });
+
+      expect(vlist).toBeDefined();
+      expect(vlist.total).toBe(20);
+    });
+  });
+
+  // ===========================================================================
+  // DOM Structure
+  // ===========================================================================
+
+  describe("DOM structure", () => {
+    it("should add --horizontal class to root", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+      });
+
+      expect(vlist.element.classList.contains("vlist--horizontal")).toBe(true);
+    });
+
+    it("should set aria-orientation to horizontal", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+      });
+
+      expect(vlist.element.getAttribute("aria-orientation")).toBe("horizontal");
+    });
+
+    it("should use custom class prefix with horizontal modifier", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+        classPrefix: "mylist",
+      });
+
+      expect(vlist.element.classList.contains("mylist--horizontal")).toBe(true);
+    });
+
+    it("should set overflowX on viewport instead of overflow", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(5),
+      });
+
+      const viewport = vlist.element.querySelector(
+        ".vlist-viewport",
+      ) as HTMLElement;
+      expect(viewport.style.overflowX).toBe("auto");
+      expect(viewport.style.overflowY).toBe("hidden");
+    });
+
+    it("should set content height to 100% and width to total scrollable width", () => {
+      // 20 items × 100px = 2000px total width
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(20),
+      });
+
+      const content = vlist.element.querySelector(
+        ".vlist-content",
+      ) as HTMLElement;
+      expect(content.style.height).toBe("100%");
+      expect(content.style.width).toBe("2000px");
+    });
+
+    it("should set items container height to 100%", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+      });
+
+      const itemsContainer = vlist.element.querySelector(
+        ".vlist-items",
+      ) as HTMLElement;
+      expect(itemsContainer.style.height).toBe("100%");
+    });
+  });
+
+  // ===========================================================================
+  // Rendering
+  // ===========================================================================
+
+  describe("rendering", () => {
+    it("should use translateX instead of translateY for item positioning", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+      });
+
+      const el0 = vlist.element.querySelector(
+        "[data-index='0']",
+      ) as HTMLElement;
+      const el1 = vlist.element.querySelector(
+        "[data-index='1']",
+      ) as HTMLElement;
+      const el2 = vlist.element.querySelector(
+        "[data-index='2']",
+      ) as HTMLElement;
+
+      expect(el0?.style.transform).toBe("translateX(0px)");
+      expect(el1?.style.transform).toBe("translateX(100px)");
+      expect(el2?.style.transform).toBe("translateX(200px)");
+    });
+
+    it("should set item width instead of height for main axis", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 120, template },
+        items: createTestItems(5),
+      });
+
+      const el0 = vlist.element.querySelector(
+        "[data-index='0']",
+      ) as HTMLElement;
+      expect(el0?.style.width).toBe("120px");
+    });
+
+    it("should set cross-axis height when item.height is provided", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 120, height: 80, template },
+        items: createTestItems(5),
+      });
+
+      const el0 = vlist.element.querySelector(
+        "[data-index='0']",
+      ) as HTMLElement;
+      expect(el0?.style.height).toBe("80px");
+    });
+
+    it("should render only visible items (virtualization)", () => {
+      // 100 items × 100px = 10000px total, container width = 300px
+      // Visible: ~3 items + overscan
+      const items = createTestItems(100);
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items,
+      });
+
+      const renderedItems = vlist.element.querySelectorAll("[data-index]");
+      expect(renderedItems.length).toBeLessThan(100);
+      expect(renderedItems.length).toBeGreaterThan(0);
+    });
+
+    it("should update content width when items change", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(20),
+      });
+
+      vlist.setItems(createTestItems(50));
+
+      const content = vlist.element.querySelector(
+        ".vlist-content",
+      ) as HTMLElement;
+      expect(content.style.width).toBe("5000px");
+    });
+
+    it("should handle variable widths with function", () => {
+      const widthFn = (index: number) => 80 + (index % 3) * 20;
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: widthFn, template },
+        items: createTestItems(5),
+      });
+
+      const el0 = vlist.element.querySelector(
+        "[data-index='0']",
+      ) as HTMLElement;
+      const el1 = vlist.element.querySelector(
+        "[data-index='1']",
+      ) as HTMLElement;
+      const el2 = vlist.element.querySelector(
+        "[data-index='2']",
+      ) as HTMLElement;
+
+      // widthFn(0) = 80, widthFn(1) = 100, widthFn(2) = 120
+      expect(el0?.style.width).toBe("80px");
+      expect(el1?.style.width).toBe("100px");
+      expect(el2?.style.width).toBe("120px");
+    });
+  });
+
+  // ===========================================================================
+  // Data Methods
+  // ===========================================================================
+
+  describe("data methods", () => {
+    it("should set items in horizontal mode", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(5),
+      });
+
+      const newItems = createTestItems(10);
+      vlist.setItems(newItems);
+      expect(vlist.total).toBe(10);
+    });
+
+    it("should append items in horizontal mode", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(5),
+      });
+
+      vlist.appendItems([
+        { id: 100, name: "Appended 1" },
+        { id: 101, name: "Appended 2" },
+      ]);
+      expect(vlist.total).toBe(7);
+    });
+
+    it("should handle empty items in horizontal mode", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: [],
+      });
+
+      expect(vlist.total).toBe(0);
+    });
+  });
+
+  // ===========================================================================
+  // Destroy
+  // ===========================================================================
+
+  describe("destroy", () => {
+    it("should clean up horizontal vlist on destroy", () => {
+      vlist = createVList({
+        container,
+        direction: "horizontal",
+        item: { width: 100, template },
+        items: createTestItems(10),
+      });
+
+      const element = vlist.element;
+      expect(element.parentNode).toBeTruthy();
+
+      vlist.destroy();
+      vlist = null;
+
+      expect(element.parentNode).toBeFalsy();
+    });
+  });
+});
