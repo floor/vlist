@@ -18,25 +18,22 @@ import {
   type CompressionState,
 } from "./compression";
 import type { HeightCache } from "./heights";
+import { createElementPool } from "./pool";
+
+// Re-export shared utilities so existing imports from "./renderer" still work
+export {
+  createDOMStructure,
+  updateContentHeight,
+  resolveContainer,
+  getContainerDimensions,
+} from "./dom";
+export type { DOMStructure } from "./dom";
+export { createElementPool } from "./pool";
+export type { ElementPool } from "./pool";
 
 // =============================================================================
 // Types
 // =============================================================================
-
-/** Element pool for recycling DOM elements */
-export interface ElementPool {
-  /** Get an element from the pool (or create new) */
-  acquire: () => HTMLElement;
-
-  /** Return an element to the pool */
-  release: (element: HTMLElement) => void;
-
-  /** Clear the pool */
-  clear: () => void;
-
-  /** Get pool statistics */
-  stats: () => { poolSize: number; created: number; reused: number };
-}
 
 /** Compression context for positioning */
 export interface CompressionContext {
@@ -44,14 +41,6 @@ export interface CompressionContext {
   totalItems: number;
   containerHeight: number;
   rangeStart: number;
-}
-
-/** DOM structure created by createDOMStructure */
-export interface DOMStructure {
-  root: HTMLElement;
-  viewport: HTMLElement;
-  content: HTMLElement;
-  items: HTMLElement;
 }
 
 /** Renderer instance */
@@ -92,63 +81,6 @@ export interface Renderer<T extends VListItem = VListItem> {
   /** Destroy renderer and cleanup */
   destroy: () => void;
 }
-
-// =============================================================================
-// Element Pool
-// =============================================================================
-
-/**
- * Create an element pool for recycling DOM elements
- * Reduces garbage collection and improves performance
- */
-export const createElementPool = (
-  tagName: string = "div",
-  maxSize: number = 100,
-): ElementPool => {
-  const pool: HTMLElement[] = [];
-  let created = 0;
-  let reused = 0;
-
-  const acquire = (): HTMLElement => {
-    const element = pool.pop();
-
-    if (element) {
-      reused++;
-      return element;
-    }
-
-    created++;
-    const newElement = document.createElement(tagName);
-    // Set static attributes once per element lifetime (never change)
-    newElement.setAttribute("role", "option");
-    return newElement;
-  };
-
-  const release = (element: HTMLElement): void => {
-    if (pool.length < maxSize) {
-      // Reset element state
-      element.className = "";
-      element.textContent = "";
-      element.removeAttribute("style");
-      element.removeAttribute("data-index");
-      element.removeAttribute("data-id");
-
-      pool.push(element);
-    }
-  };
-
-  const clear = (): void => {
-    pool.length = 0;
-  };
-
-  const stats = () => ({
-    poolSize: pool.length,
-    created,
-    reused,
-  });
-
-  return { acquire, release, clear, stats };
-};
 
 // =============================================================================
 // Renderer
@@ -494,90 +426,4 @@ export const createRenderer = <T extends VListItem = VListItem>(
     clear,
     destroy,
   };
-};
-
-// =============================================================================
-// DOM Helpers
-// =============================================================================
-
-/**
- * Create the vlist DOM structure
- */
-export const createDOMStructure = (
-  container: HTMLElement,
-  classPrefix: string,
-  ariaLabel?: string,
-): DOMStructure => {
-  // Root element
-  const root = document.createElement("div");
-  root.className = `${classPrefix}`;
-  root.setAttribute("role", "listbox");
-  root.setAttribute("tabindex", "0");
-
-  if (ariaLabel) {
-    root.setAttribute("aria-label", ariaLabel);
-  }
-
-  // Viewport (scrollable container)
-  const viewport = document.createElement("div");
-  viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
-  viewport.style.height = "100%";
-  viewport.style.width = "100%";
-
-  // Content (sets the total scrollable height)
-  const content = document.createElement("div");
-  content.className = `${classPrefix}-content`;
-  content.style.position = "relative";
-  content.style.width = "100%";
-
-  // Items container (holds rendered items)
-  const items = document.createElement("div");
-  items.className = `${classPrefix}-items`;
-  items.style.position = "relative";
-  items.style.width = "100%";
-
-  // Assemble structure
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  container.appendChild(root);
-
-  return { root, viewport, content, items };
-};
-
-/**
- * Update content height for virtual scrolling
- */
-export const updateContentHeight = (
-  content: HTMLElement,
-  totalHeight: number,
-): void => {
-  content.style.height = `${totalHeight}px`;
-};
-
-/**
- * Get container dimensions
- */
-export const getContainerDimensions = (
-  viewport: HTMLElement,
-): { width: number; height: number } => ({
-  width: viewport.clientWidth,
-  height: viewport.clientHeight,
-});
-
-/**
- * Resolve container from selector or element
- */
-export const resolveContainer = (
-  container: HTMLElement | string,
-): HTMLElement => {
-  if (typeof container === "string") {
-    const element = document.querySelector<HTMLElement>(container);
-    if (!element) {
-      throw new Error(`[vlist] Container not found: ${container}`);
-    }
-    return element;
-  }
-  return container;
 };
