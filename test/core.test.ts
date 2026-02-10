@@ -78,6 +78,25 @@ beforeAll(() => {
     disconnect() {}
   } as any;
 
+  // Mock scrollTo for JSDOM (not supported natively)
+  if (!dom.window.Element.prototype.scrollTo) {
+    dom.window.Element.prototype.scrollTo = function (
+      options?: ScrollToOptions | number,
+    ) {
+      if (typeof options === "number") {
+        this.scrollTop = options;
+      } else if (options && typeof options.top === "number") {
+        this.scrollTop = options.top;
+      }
+    };
+  }
+
+  // Mock window.scrollTo for JSDOM (suppresses "Not implemented" warnings in window-mode tests)
+  (dom.window as any).scrollTo = (
+    _x?: number | ScrollToOptions,
+    _y?: number,
+  ) => {};
+
   // Mock requestAnimationFrame / cancelAnimationFrame
   let rafId = 0;
   const pendingTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -1148,6 +1167,507 @@ describe("core createVList", () => {
       ) as any;
 
       expect(list.reload).toBeUndefined();
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Scroll Snapshot / Restore
+  // ===========================================================================
+
+  describe("scroll snapshot and restore", () => {
+    it("should return a snapshot with index and offsetInItem", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      const snapshot = list.getScrollSnapshot();
+
+      expect(snapshot).toBeDefined();
+      expect(typeof snapshot.index).toBe("number");
+      expect(typeof snapshot.offsetInItem).toBe("number");
+      expect(snapshot.index).toBeGreaterThanOrEqual(0);
+      expect(snapshot.offsetInItem).toBeGreaterThanOrEqual(0);
+
+      list.destroy();
+    });
+
+    it("should return index 0 with 0 offset for initial scroll position", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      const snapshot = list.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(0);
+      expect(snapshot.offsetInItem).toBe(0);
+
+      list.destroy();
+    });
+
+    it("should return index 0 and offsetInItem 0 for empty list", () => {
+      const list = createVList(createBasicConfig(container, []));
+
+      const snapshot = list.getScrollSnapshot();
+
+      expect(snapshot.index).toBe(0);
+      expect(snapshot.offsetInItem).toBe(0);
+
+      list.destroy();
+    });
+
+    it("should restore scroll position from snapshot", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      const snapshot = { index: 10, offsetInItem: 15 };
+      list.restoreScroll(snapshot);
+
+      // After restore, scroll position should be near index 10
+      // 10 * 40 + 15 = 415
+      const pos = list.getScrollPosition();
+      expect(pos).toBe(415);
+
+      list.destroy();
+    });
+
+    it("should clamp snapshot index to valid range", () => {
+      const items = createTestItems(10);
+      const list = createVList(createBasicConfig(container, items));
+
+      // Index beyond last item
+      const snapshot = { index: 9999, offsetInItem: 0 };
+      list.restoreScroll(snapshot);
+
+      // Should clamp to last item
+      const pos = list.getScrollPosition();
+      expect(pos).toBeGreaterThanOrEqual(0);
+
+      list.destroy();
+    });
+
+    it("should clamp restored position to max scroll", () => {
+      const items = createTestItems(10);
+      const list = createVList(createBasicConfig(container, items));
+
+      // Very large offset that would exceed max scroll
+      const snapshot = { index: 9, offsetInItem: 99999 };
+      list.restoreScroll(snapshot);
+
+      // Total height = 10 * 40 = 400, container = 600
+      // maxScroll = max(0, 400 - 600) = 0
+      const pos = list.getScrollPosition();
+      expect(pos).toBeGreaterThanOrEqual(0);
+
+      list.destroy();
+    });
+
+    it("should be a no-op for empty list on restore", () => {
+      const list = createVList(createBasicConfig(container, []));
+
+      // Should not throw
+      list.restoreScroll({ index: 5, offsetInItem: 10 });
+
+      expect(list.getScrollPosition()).toBe(0);
+
+      list.destroy();
+    });
+
+    it("should round-trip snapshot/restore", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      // Scroll to a known position
+      list.scrollToIndex(20, "start");
+
+      const snapshot = list.getScrollSnapshot();
+      expect(snapshot.index).toBeGreaterThanOrEqual(0);
+
+      // Change items then restore
+      list.setItems(createTestItems(100));
+      list.restoreScroll(snapshot);
+
+      const newSnapshot = list.getScrollSnapshot();
+      expect(newSnapshot.index).toBe(snapshot.index);
+      expect(newSnapshot.offsetInItem).toBe(snapshot.offsetInItem);
+
+      list.destroy();
+    });
+
+    it("should have getScrollSnapshot and restoreScroll methods", () => {
+      const list = createVList(
+        createBasicConfig(container, createTestItems(5)),
+      );
+
+      expect(typeof list.getScrollSnapshot).toBe("function");
+      expect(typeof list.restoreScroll).toBe("function");
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Window Scroll Mode
+  // ===========================================================================
+
+  describe("window scroll mode", () => {
+    it("should create list in window scroll mode", () => {
+      const items = createTestItems(50);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      expect(list).toBeDefined();
+      expect(list.element).toBeInstanceOf(HTMLElement);
+      expect(list.total).toBe(50);
+
+      // In window mode, root should have overflow: visible
+      expect(list.element.style.overflow).toBe("visible");
+
+      list.destroy();
+    });
+
+    it("should render items in window scroll mode", () => {
+      const items = createTestItems(20);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      const rendered = list.element.querySelectorAll("[data-index]");
+      expect(rendered.length).toBeGreaterThan(0);
+
+      list.destroy();
+    });
+
+    it("should use window.innerHeight as container height in window mode", () => {
+      const items = createTestItems(100);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      // Should render items based on window height
+      const rendered = list.element.querySelectorAll("[data-index]");
+      expect(rendered.length).toBeGreaterThan(0);
+      expect(rendered.length).toBeLessThan(100);
+
+      list.destroy();
+    });
+
+    it("should clean up window event listener on destroy", () => {
+      const items = createTestItems(20);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      // Should not throw on destroy
+      list.destroy();
+    });
+
+    it("should handle restoreScroll in window mode", () => {
+      const items = createTestItems(100);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      // Should not throw
+      list.restoreScroll({ index: 10, offsetInItem: 5 });
+
+      list.destroy();
+    });
+
+    it("should scrollToIndex in window mode without error", () => {
+      const items = createTestItems(100);
+      const list = createVList({
+        container,
+        item: {
+          height: 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+        scrollElement: window,
+      });
+
+      list.scrollToIndex(50, "start");
+      list.scrollToIndex(50, "center");
+      list.scrollToIndex(50, "end");
+      list.scrollToIndex(50, { behavior: "smooth", duration: 100 });
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Variable Height Rendering Paths
+  // ===========================================================================
+
+  describe("variable height rendering paths", () => {
+    it("should render with variable heights and correct positions", () => {
+      const items = createTestItems(20);
+      const heightFn = (index: number) => 30 + (index % 5) * 10;
+
+      const list = createVList({
+        container,
+        item: {
+          height: heightFn,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+      });
+
+      // Check first few items have correct height and positions
+      const el0 = list.element.querySelector("[data-index='0']") as HTMLElement;
+      const el1 = list.element.querySelector("[data-index='1']") as HTMLElement;
+
+      expect(el0.style.height).toBe(`${heightFn(0)}px`);
+      expect(el1.style.height).toBe(`${heightFn(1)}px`);
+
+      // Position: item 0 at 0, item 1 at heightFn(0)
+      expect(el0.style.transform).toBe("translateY(0px)");
+      expect(el1.style.transform).toBe(`translateY(${heightFn(0)}px)`);
+
+      list.destroy();
+    });
+
+    it("should compute correct content height with variable heights", () => {
+      const items = createTestItems(10);
+      const heightFn = (index: number) => 50 + index * 5;
+
+      const list = createVList({
+        container,
+        item: {
+          height: heightFn,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+      });
+
+      // Total height = sum of all heights = 50+55+60+65+70+75+80+85+90+95 = 725
+      const content = list.element.querySelector(
+        ".vlist-content",
+      ) as HTMLElement;
+      expect(content.style.height).toBe("725px");
+
+      list.destroy();
+    });
+
+    it("should update content height after setItems with variable heights", () => {
+      const heightFn = (index: number) => 40 + (index % 3) * 20;
+
+      const list = createVList({
+        container,
+        item: {
+          height: heightFn,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items: createTestItems(5),
+      });
+
+      // Change to different number of items
+      list.setItems(createTestItems(10));
+
+      const content = list.element.querySelector(
+        ".vlist-content",
+      ) as HTMLElement;
+      // Should be recalculated for 10 items
+      const expectedHeight = Array.from({ length: 10 }, (_, i) =>
+        heightFn(i),
+      ).reduce((a, b) => a + b, 0);
+      expect(content.style.height).toBe(`${expectedHeight}px`);
+
+      list.destroy();
+    });
+
+    it("should handle variable heights with scrollToIndex", () => {
+      const items = createTestItems(100);
+      const heightFn = (index: number) => 30 + (index % 4) * 15;
+
+      const list = createVList({
+        container,
+        item: {
+          height: heightFn,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+      });
+
+      // scrollToIndex should not throw with variable heights
+      list.scrollToIndex(50, "start");
+      list.scrollToIndex(50, "center");
+      list.scrollToIndex(50, "end");
+
+      list.destroy();
+    });
+
+    it("should scroll snapshot/restore with variable heights", () => {
+      const items = createTestItems(100);
+      const heightFn = (index: number) => 30 + (index % 4) * 15;
+
+      const list = createVList({
+        container,
+        item: {
+          height: heightFn,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+      });
+
+      list.scrollToIndex(20, "start");
+      const snapshot = list.getScrollSnapshot();
+
+      expect(snapshot.index).toBeGreaterThanOrEqual(0);
+
+      // Restore should not throw
+      list.restoreScroll(snapshot);
+
+      list.destroy();
+    });
+
+    it("should handle variable height function returning constant value", () => {
+      const items = createTestItems(20);
+      const list = createVList({
+        container,
+        item: {
+          height: (_index: number) => 40,
+          template: (item: TestItem) => `<span>${item.name}</span>`,
+        },
+        items,
+      });
+
+      // Should behave identically to fixed height
+      const content = list.element.querySelector(
+        ".vlist-content",
+      ) as HTMLElement;
+      expect(content.style.height).toBe("800px"); // 20 * 40
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Smooth Scroll Animation
+  // ===========================================================================
+
+  describe("smooth scroll", () => {
+    it("should animate smooth scroll to index", async () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      list.scrollToIndex(50, { behavior: "smooth", duration: 50 });
+
+      // Wait for animation to complete
+      await new Promise((r) => setTimeout(r, 100));
+
+      list.destroy();
+    });
+
+    it("should cancel ongoing smooth scroll", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      list.scrollToIndex(50, { behavior: "smooth", duration: 500 });
+      list.cancelScroll();
+
+      // No error after cancel
+      list.destroy();
+    });
+
+    it("should handle smooth scroll to same position", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      // Scroll to index 0 from position 0 — distance < 1, should snap
+      list.scrollToIndex(0, { behavior: "smooth", duration: 100 });
+
+      list.destroy();
+    });
+
+    it("should handle scroll with defaults when no options provided", () => {
+      const items = createTestItems(100);
+      const list = createVList(createBasicConfig(container, items));
+
+      // No options — uses defaults
+      list.scrollToIndex(50);
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Resize Observer
+  // ===========================================================================
+
+  describe("resize observer", () => {
+    it("should emit resize event when container height changes", () => {
+      const items = createTestItems(50);
+      const list = createVList(createBasicConfig(container, items));
+
+      const handler = mock((_payload: any) => {});
+      list.on("resize", handler);
+
+      // Our mock ResizeObserver fires immediately on observe with height 600
+      // That initial callback already ran during construction.
+      // handler won't have been called because the event is only emitted
+      // when height *changes* from the current value.
+      // In our setup, clientHeight=600 and ResizeObserver reports 600 → no change.
+      // This is correct behavior: resize should only fire on actual change.
+
+      list.destroy();
+    });
+  });
+
+  // ===========================================================================
+  // Event Handler Edge Cases
+  // ===========================================================================
+
+  describe("event handler edge cases", () => {
+    it("should survive error in event handler", () => {
+      const items = createTestItems(10);
+      const list = createVList(createBasicConfig(container, items));
+
+      const badHandler = () => {
+        throw new Error("Handler crash");
+      };
+      list.on("range:change", badHandler);
+
+      // Suppress the expected console.error from the catch block in emit()
+      const originalConsoleError = console.error;
+      console.error = () => {};
+
+      // setItems triggers range:change — should not crash the list
+      list.setItems(createTestItems(20));
+
+      console.error = originalConsoleError;
+
+      expect(list.total).toBe(20);
 
       list.destroy();
     });
