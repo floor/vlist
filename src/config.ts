@@ -16,6 +16,8 @@ import type {
   SelectionMode,
   SelectionConfig,
   ScrollbarConfig,
+  ScrollbarMode,
+  ScrollConfig,
   LoadingConfig,
   ItemConfig,
   ScrollAxis,
@@ -45,16 +47,21 @@ export interface ResolvedConfig<T extends VListItem = VListItem> {
   readonly adapter: VListConfig<T>["adapter"];
   readonly overscan: number;
   readonly selectionConfig: SelectionConfig | undefined;
-  readonly scrollbarConfig: ScrollbarConfig | undefined;
   readonly loadingConfig: LoadingConfig | undefined;
-  readonly scrollIdleTimeout: number | undefined;
   readonly classPrefix: string;
-  readonly scrollElement: Window | undefined;
   readonly ariaLabel: string | undefined;
   readonly groupsConfig: GroupsConfig | undefined;
   readonly layoutMode: "list" | "grid";
   readonly gridConfig: GridConfig | undefined;
   readonly direction: ScrollAxis;
+
+  // --- Scroll config (resolved from `scroll` domain) ---
+
+  readonly scrollElement: Window | undefined;
+  readonly scrollIdleTimeout: number | undefined;
+  readonly wheelScroll: boolean;
+  readonly scrollbarMode: ScrollbarMode;
+  readonly scrollbarOptions: ScrollbarConfig | undefined;
 
   // --- Derived flags (computed once) ---
 
@@ -147,7 +154,7 @@ export const validateConfig = <T extends VListItem>(
         "[vlist] horizontal direction cannot be combined with groups",
       );
     }
-    if (config.scrollElement) {
+    if (config.scroll?.element) {
       throw new Error(
         "[vlist] horizontal direction cannot be combined with window scrolling",
       );
@@ -181,6 +188,31 @@ export const validateConfig = <T extends VListItem>(
  * so that the factory function in vlist.ts can start wiring immediately
  * without any parsing / destructuring noise.
  */
+/**
+ * Resolve the scrollbar config shorthand into a mode + options pair.
+ *
+ * Accepts:
+ * - `undefined` → custom scrollbar, default options
+ * - `'native'` → browser's native scrollbar
+ * - `'none'` → no scrollbar
+ * - `{ autoHide?, ... }` → custom scrollbar with specific options
+ */
+const resolveScrollbar = (
+  value: ScrollConfig["scrollbar"],
+): {
+  scrollbarMode: ScrollbarMode;
+  scrollbarOptions: ScrollbarConfig | undefined;
+} => {
+  if (value == null) {
+    return { scrollbarMode: "custom", scrollbarOptions: undefined };
+  }
+  if (typeof value === "string") {
+    return { scrollbarMode: value, scrollbarOptions: undefined };
+  }
+  // Object form → custom scrollbar with options
+  return { scrollbarMode: "custom", scrollbarOptions: value };
+};
+
 export const resolveConfig = <T extends VListItem>(
   config: VListConfig<T>,
 ): ResolvedConfig<T> => {
@@ -194,17 +226,23 @@ export const resolveConfig = <T extends VListItem>(
     adapter,
     overscan = DEFAULT_OVERSCAN,
     selection: selectionConfig,
-    scrollbar: scrollbarConfig,
+    scroll: scrollConfig,
     loading: loadingConfig,
-    idleTimeout: scrollIdleTimeout,
     classPrefix = DEFAULT_CLASS_PREFIX,
-    scrollElement,
     ariaLabel,
     groups: groupsConfig,
     layout: layoutMode = "list",
     grid: gridConfig,
     direction = "vertical",
   } = config;
+
+  // Resolve scroll domain
+  const scrollElement = scrollConfig?.element;
+  const scrollIdleTimeout = scrollConfig?.idleTimeout;
+  const wheelScroll = scrollConfig?.wheel ?? true;
+  const { scrollbarMode, scrollbarOptions } = resolveScrollbar(
+    scrollConfig?.scrollbar,
+  );
 
   // Derived flags
   const isWindowMode = !!scrollElement;
@@ -234,16 +272,19 @@ export const resolveConfig = <T extends VListItem>(
     adapter,
     overscan,
     selectionConfig,
-    scrollbarConfig,
     loadingConfig,
-    scrollIdleTimeout,
     classPrefix,
-    scrollElement,
     ariaLabel,
     groupsConfig,
     layoutMode,
     gridConfig,
     direction,
+
+    scrollElement,
+    scrollIdleTimeout,
+    wheelScroll,
+    scrollbarMode,
+    scrollbarOptions,
 
     isWindowMode,
     hasGroups,

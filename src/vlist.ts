@@ -96,7 +96,6 @@ export const createVList = <T extends VListItem = VListItem>(
     adapter,
     overscan,
     selectionConfig,
-    scrollbarConfig,
     scrollIdleTimeout,
     classPrefix,
     scrollElement,
@@ -107,6 +106,9 @@ export const createVList = <T extends VListItem = VListItem>(
     hasGroups,
     isGrid,
     isHorizontal,
+    wheelScroll,
+    scrollbarMode,
+    scrollbarOptions,
     direction,
     selectionMode,
     cancelLoadThreshold,
@@ -346,6 +348,7 @@ export const createVList = <T extends VListItem = VListItem>(
       : {}),
     ...(isWindowMode ? { scrollElement: scrollElement! } : {}),
     ...(isHorizontal ? { horizontal: true } : {}),
+    ...(wheelScroll ? { wheelScroll: true } : {}),
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
@@ -402,23 +405,41 @@ export const createVList = <T extends VListItem = VListItem>(
     );
   }
 
-  // Create scrollbar (auto-enable when compressed, but never in window mode
-  // where the browser's native scrollbar is used)
+  // Create scrollbar based on resolved scrollbarMode:
+  // - 'custom' → always create custom scrollbar (default)
+  // - 'native' → native browser scrollbar (falls back to custom in compressed mode)
+  // - 'none'   → no scrollbar at all
+  // Never in window mode — the browser's native scrollbar is used.
   const shouldEnableScrollbar =
     !isWindowMode &&
-    (scrollbarConfig?.enabled ?? initialCompression.isCompressed);
+    (scrollbarMode === "custom" ||
+      (scrollbarMode === "native" && initialCompression.isCompressed));
   let scrollbar = shouldEnableScrollbar
     ? createScrollbar(
         dom.viewport,
         (position) => scrollController.scrollTo(position),
-        scrollbarConfig,
+        scrollbarOptions,
         classPrefix,
+        isHorizontal,
       )
     : null;
 
-  if (scrollbar) {
-    scrollbar.updateBounds(initialCompression.virtualHeight, dimensions.height);
+  // Hide native scrollbar when:
+  // - custom scrollbar is active (mode 'custom', or 'native' with compression)
+  // - scrollbar mode is 'none' (no scrollbar at all)
+  // - wheelScroll is false (prevent scrollbar-drag scrolling)
+  const hideNativeScrollbar =
+    !isWindowMode &&
+    (scrollbar != null || scrollbarMode === "none" || !wheelScroll);
+  if (hideNativeScrollbar) {
     dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+  }
+
+  if (scrollbar) {
+    scrollbar.updateBounds(
+      initialViewportState.totalHeight,
+      containerSizeAlongAxis,
+    );
   }
 
   // ===========================================================================
@@ -497,14 +518,15 @@ export const createVList = <T extends VListItem = VListItem>(
     if (compression.isCompressed && !scrollController.isCompressed()) {
       scrollController.enableCompression(compression);
 
-      // Create scrollbar if not exists and auto-enable is on
+      // Create scrollbar if not exists and mode allows it
       // (never in window mode — the browser's native scrollbar is used)
-      if (!isWindowMode && !scrollbar && scrollbarConfig?.enabled !== false) {
+      if (!isWindowMode && !scrollbar && scrollbarMode !== "none") {
         scrollbar = createScrollbar(
           dom.viewport,
           (position) => scrollController.scrollTo(position),
-          scrollbarConfig,
+          scrollbarOptions,
           classPrefix,
+          isHorizontal,
         );
         dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
         // Update context reference

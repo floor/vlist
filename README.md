@@ -17,7 +17,9 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 📜 **Infinite scroll** - Built-in async adapter support
 - ✅ **Selection** - Single and multiple selection modes
 - 📌 **Sticky headers** - Grouped lists with sticky section headers
-- 🪟 **Window scrolling** - Document-level scrolling with `scrollElement: window`
+- 🪟 **Window scrolling** - Document-level scrolling with `scroll: { element: window }`
+- 🎛️ **Custom scrollbar** - Cross-browser consistent scrollbar by default, native or none
+- 🖱️ **Wheel control** - Enable/disable mouse wheel scrolling independently
 - 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
@@ -163,13 +165,21 @@ interface VListConfig<T> {
   items?: T[];                      // Static items array
   adapter?: VListAdapter<T>;        // Async data adapter
 
-  // Scrolling
-  scrollElement?: Window;           // Window scrolling mode
-  overscan?: number;                // Extra items to render (default: 3)
-  idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
-  scrollbar?: ScrollbarConfig;      // Custom scrollbar (auto in compressed mode)
+  // Scroll
+  scroll?: {
+    wheel?: boolean;                // Enable mouse wheel (default: true)
+    scrollbar?:                     // Scrollbar mode (default: custom)
+      | 'native'                    //   Browser's native scrollbar
+      | 'none'                      //   No scrollbar at all
+      | { autoHide?: boolean;       //   Custom scrollbar with options
+         autoHideDelay?: number;
+         minThumbSize?: number; };
+    element?: Window;               // Window scrolling mode
+    idleTimeout?: number;           // Scroll idle detection in ms (default: 150)
+  };
 
   // Features
+  overscan?: number;                // Extra items to render (default: 3)
   selection?: SelectionConfig;      // Selection configuration
   groups?: GroupsConfig;            // Sticky headers / grouped lists
   loading?: LoadingConfig;          // Velocity-based loading thresholds
@@ -201,7 +211,7 @@ const carousel = createVList({
 });
 ```
 
-In horizontal mode, items flow left-to-right. Use `item.width` instead of `item.height`. Keyboard navigation uses Arrow Left / Arrow Right. Compression works identically on the horizontal axis. Cannot be combined with grid, groups, or window scrolling.
+In horizontal mode, items flow left-to-right. Use `item.width` instead of `item.height`. The mouse wheel (`deltaY`) is automatically translated to horizontal scroll. Keyboard navigation uses Arrow Left / Arrow Right. Compression works identically on the horizontal axis. Cannot be combined with grid, groups, or window scrolling.
 
 ### Grid Layout
 
@@ -267,12 +277,43 @@ const list = createVList({
 ```typescript
 const list = createVList({
   container: '#my-list',
-  scrollElement: window,   // Use the browser's native scrollbar
+  scroll: { element: window },  // Use the browser's native scrollbar
   item: {
     height: 48,
     template: (item) => `<div>${item.name}</div>`,
   },
   items: myItems,
+});
+```
+
+### Scroll Control
+
+```typescript
+// Button-only navigation — no wheel, no scrollbar
+const wizard = createVList({
+  container: '#wizard',
+  item: { height: 400, template: renderStep },
+  items: steps,
+  scroll: { wheel: false, scrollbar: 'none' },
+});
+
+// Navigate programmatically
+wizard.scrollToIndex(nextStep, { align: 'start', behavior: 'smooth' });
+
+// Native browser scrollbar instead of custom
+const list = createVList({
+  container: '#my-list',
+  item: { height: 48, template },
+  items: myItems,
+  scroll: { scrollbar: 'native' },
+});
+
+// Custom scrollbar always visible (no auto-hide)
+const list2 = createVList({
+  container: '#sidebar',
+  item: { height: 36, template },
+  items: menuItems,
+  scroll: { scrollbar: { autoHide: false } },
 });
 ```
 
