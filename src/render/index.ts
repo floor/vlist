@@ -17,6 +17,7 @@ export {
   createRenderer,
   createDOMStructure,
   updateContentHeight,
+  updateContentWidth,
   resolveContainer,
   getContainerDimensions,
   type Renderer,

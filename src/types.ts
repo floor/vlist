@@ -30,12 +30,26 @@ export interface VListItem {
 /** Item-specific configuration */
 export interface ItemConfig<T extends VListItem = VListItem> {
   /**
-   * Item height in pixels (required for virtual scrolling)
+   * Item height in pixels (required for vertical scrolling, cross-axis size for horizontal)
    *
    * - `number` — Fixed height for all items (fast path, zero overhead)
    * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   *
+   * Required when `direction` is `'vertical'` (default).
+   * Optional when `direction` is `'horizontal'` (used as cross-axis size).
    */
-  height: number | ((index: number) => number);
+  height?: number | ((index: number) => number);
+
+  /**
+   * Item width in pixels (required for horizontal scrolling)
+   *
+   * - `number` — Fixed width for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable width per item (prefix-sum based lookups)
+   *
+   * Required when `direction` is `'horizontal'`.
+   * Ignored when `direction` is `'vertical'` (default).
+   */
+  width?: number | ((index: number) => number);
 
   /** Template function to render each item */
   template: ItemTemplate<T>;
@@ -45,6 +59,22 @@ export interface ItemConfig<T extends VListItem = VListItem> {
 export interface VListConfig<T extends VListItem = VListItem> {
   /** Container element or selector */
   container: HTMLElement | string;
+
+  /**
+   * Scroll direction (default: 'vertical').
+   *
+   * - `'vertical'` — Standard top-to-bottom scrolling (default)
+   * - `'horizontal'` — Left-to-right scrolling (carousel, timeline, etc.)
+   *
+   * When `'horizontal'`:
+   * - `item.width` is required (main-axis size for virtualization)
+   * - `item.height` is optional (cross-axis size, can be set via CSS)
+   * - Items are positioned with `translateX` instead of `translateY`
+   * - The viewport scrolls on the X axis
+   *
+   * Cannot be combined with `groups`, `grid`, or `reverse`.
+   */
+  direction?: "vertical" | "horizontal";
 
   /** Item configuration (height and template) */
   item: ItemConfig<T>;
