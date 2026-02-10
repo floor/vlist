@@ -11,6 +11,7 @@
 - **[Window Scrolling](./vlist.md#window-scrolling)** - Document-level scrolling with `scrollElement: window`
 - **[Scroll Save/Restore](./vlist.md#scroll-saverestore)** - Save and restore scroll position for SPA navigation
 - **[Framework Adapters](#framework-adapters)** - React, Vue, and Svelte wrappers (<1 KB each)
+- **[Reverse Mode](./vlist.md#reverse-mode-chat-ui)** - Chat UI support with auto-scroll and scroll-preserving prepend
 
 ## Module Documentation
 
@@ -126,7 +127,7 @@ Emit 'item:click' and 'selection:change' events
 ### Data Loading Flow
 
 ```
-Adapter mode: scroll near bottom
+Adapter mode: scroll near bottom (or near top in reverse mode)
     ↓
 Scroll Handler detects threshold
     ↓
@@ -169,6 +170,7 @@ Emit 'load:end' event
 - Configurable idle detection (`idleTimeout` option, default: 150ms)
 - Scroll transition suppression (`.vlist--scrolling` class during active scroll)
 - Velocity-based configurable chunk preloading
+- Reverse mode (chat UI): initial scroll to bottom, auto-scroll on append, scroll-preserving prepend
 
 ### Selection Module
 - Single/multiple selection modes
@@ -199,6 +201,7 @@ const list = createVList({
   
   // Optional
   overscan: 3,                 // Extra items to render
+  reverse: false,              // Reverse mode for chat UIs
   scrollElement: window,       // Document scrolling (list scrolls with page)
   classPrefix: 'vlist',        // CSS class prefix
   idleTimeout: 150,            // Scroll idle detection (ms)

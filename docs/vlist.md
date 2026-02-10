@@ -11,6 +11,7 @@
 - [API Reference](#api-reference)
 - [Events](#events)
 - [Selection](#selection)
+- [Reverse Mode (Chat UI)](#reverse-mode-chat-ui)
 - [Scroll Save/Restore](#scroll-saverestore)
 - [Infinite Scroll](#infinite-scroll)
 - [Compression (1M+ Items)](#compression-1m-items)
@@ -33,6 +34,7 @@ vlist is a high-performance virtual list library designed to handle massive data
 - **Variable Heights** - Fixed or per-item height via function, with prefix-sum based lookups
 - **Infinite Scroll** - Built-in async adapter support for lazy loading
 - **Selection** - Single and multiple selection modes with keyboard navigation
+- **Reverse Mode** - Chat UI support with auto-scroll on append, scroll-preserving prepend
 - **Sparse Storage** - Chunk-based memory management for huge datasets
 - **Accessible** - Full keyboard navigation and ARIA support
 - **Scroll Save/Restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
@@ -161,6 +163,7 @@ interface VListConfig<T extends VListItem> {
   loading?: LoadingConfig;          // Loading behavior configuration
   idleTimeout?: number;             // Scroll idle detection in ms (default: 150)
   classPrefix?: string;             // CSS class prefix (default: 'vlist')
+  reverse?: boolean;                // Reverse mode for chat UIs (default: false)
 }
 ```
 
@@ -478,6 +481,116 @@ list.clearSelection();
 const selectedIds = list.getSelected();        // [1, 3]
 const selectedItems = list.getSelectedItems(); // [{ id: 1, ... }, { id: 3, ... }]
 ```
+
+---
+
+## Reverse Mode (Chat UI)
+
+Reverse mode (`reverse: true`) is designed for chat and messaging interfaces where the newest content is at the bottom and older content loads above.
+
+### Basic Usage
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: 60,
+    template: (msg) => `
+      <div class="bubble bubble--${msg.sender}">
+        <span class="sender">${msg.sender}</span>
+        <p>${msg.text}</p>
+      </div>
+    `,
+  },
+  items: messages,   // Chronological order (oldest first)
+});
+```
+
+### What Reverse Mode Does
+
+| Behavior | Normal mode | Reverse mode |
+|----------|------------|--------------|
+| Initial scroll position | Top (index 0) | Bottom (last item) |
+| `appendItems()` | No auto-scroll | Auto-scrolls to bottom if user was at bottom |
+| `prependItems()` | No scroll adjustment | Adjusts scrollTop to keep current content stable |
+| Adapter "load more" trigger | Near bottom | Near top |
+
+Items stay in **chronological order** (oldest = index 0, newest = last). The reverse behavior is handled entirely in the orchestration layer — no changes to the renderer, height cache, or core virtualization math.
+
+### New Messages (appendItems)
+
+When a new message arrives, `appendItems` auto-scrolls to the bottom if the user was already at the bottom. If the user has scrolled up (reading history), the view stays put.
+
+```typescript
+// New message arrives
+chat.appendItems([{
+  id: Date.now(),
+  text: 'Hello!',
+  sender: 'Alice',
+}]);
+// → auto-scrolls to bottom if user was at bottom
+// → no scroll change if user was reading history
+```
+
+### Older Messages (prependItems)
+
+When older messages are loaded, `prependItems` adjusts the scroll position by the height of the added items so the current view doesn't jump.
+
+```typescript
+// Load older messages (e.g., from "load more" button or scroll trigger)
+chat.prependItems(olderMessages);
+// → scroll position adjusted, same content stays visible
+// → older messages appear above without any visual disruption
+```
+
+### With Variable Heights
+
+Reverse mode works with both fixed and variable `(index) => number` heights:
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: (index) => messages[index].type === 'image' ? 200 : 60,
+    template: messageTemplate,
+  },
+  items: messages,
+});
+```
+
+### With Adapter (Infinite Scroll)
+
+In reverse mode, the adapter's "load more" triggers near the **top** of the viewport (when the user scrolls up to see older messages):
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: 60,
+    template: messageTemplate,
+  },
+  adapter: {
+    read: async ({ offset, limit }) => {
+      // Load more triggers at the TOP in reverse mode
+      const messages = await api.getMessages({ skip: offset, take: limit });
+      return { items: messages, total: totalCount, hasMore: offset + limit < totalCount };
+    },
+  },
+});
+```
+
+### Compatibility
+
+- ✅ Works with fixed and variable heights
+- ✅ Works with selection (`single` / `multiple`)
+- ✅ Works with scroll save/restore (`getScrollSnapshot` / `restoreScroll`)
+- ✅ Works with adapter (infinite scroll)
+- ✅ Works with compression (1M+ items)
+- ❌ Cannot combine with `groups` (sticky headers)
+- ❌ Cannot combine with `layout: 'grid'`
 
 ---
 
@@ -994,6 +1107,45 @@ list.on('selection:change', ({ selected, items }) => {
 });
 ```
 
+### Chat UI (Reverse Mode)
+
+```typescript
+interface ChatMessage extends VListItem {
+  id: number;
+  text: string;
+  sender: string;
+  timestamp: number;
+}
+
+const messages: ChatMessage[] = loadRecentMessages();
+
+const chat = createVList<ChatMessage>({
+  container: '#chat',
+  reverse: true,
+  item: {
+    height: (index) => messages[index].text.length > 100 ? 80 : 52,
+    template: (msg) => `
+      <div class="message message--${msg.sender === 'me' ? 'sent' : 'received'}">
+        <div class="message-text">${msg.text}</div>
+        <div class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</div>
+      </div>
+    `,
+  },
+  items: messages,
+});
+
+// New message arrives via WebSocket
+socket.on('message', (msg) => {
+  chat.appendItems([msg]);  // auto-scrolls to bottom
+});
+
+// "Load older" button
+document.getElementById('load-older').onclick = async () => {
+  const older = await api.getOlderMessages(messages[0].id);
+  chat.prependItems(older);  // scroll position preserved
+};
+```
+
 ### Infinite Scroll with API
 
 ```typescript
@@ -1043,6 +1195,7 @@ const list = createVList({
 
 1. **Ensure fixed itemHeight** - Variable heights cause jumps
 2. **Check for layout shifts** - Images or async content can cause shifts
+3. **Use reverse mode for chat UIs** - `reverse: true` automatically preserves scroll on `prependItems`
 
 ### Cannot scroll to end of large lists
 
