@@ -28,8 +28,10 @@ export type {
 
   // Scrollbar
   ScrollbarConfig,
+  ScrollbarOptions,
 
   // Scroll
+  ScrollConfig,
   ScrollToOptions,
   ScrollSnapshot,
 
