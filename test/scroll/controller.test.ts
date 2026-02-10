@@ -1059,5 +1059,473 @@ describe("createScrollController", () => {
       // If no error thrown, cleanup succeeded
       expect(true).toBe(true);
     });
+
+    it("should enable compression in horizontal mode (switch overflowX to hidden)", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const onScroll = mock(() => {});
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        onScroll,
+      });
+
+      // Starts in native mode
+      expect(viewport.style.overflowX).toBe("auto");
+      expect(controller.isCompressed()).toBe(false);
+
+      // Enable compression
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+      controller.enableCompression(compression);
+
+      expect(controller.isCompressed()).toBe(true);
+      expect(viewport.style.overflowX).toBe("hidden");
+
+      controller.destroy();
+    });
+
+    it("should convert scrollLeft position when enabling compression", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 400,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "scrollWidth", {
+        value: 5000,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const onScroll = mock(() => {});
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        onScroll,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 5000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+      controller.enableCompression(compression);
+
+      // scrollLeft was 400, actualHeight is 5000
+      // ratio = 400/5000 = 0.08
+      // maxScroll = 16000000 - 800 = 15999200
+      // new position = 0.08 * 15999200 = 1279936
+      const scrollTop = controller.getScrollTop();
+      expect(scrollTop).toBeGreaterThan(0);
+
+      // scrollLeft should be reset to 0
+      expect(viewport.scrollLeft).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should remove horizontal wheel listener when enabling compression", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+      });
+
+      // In native horizontal mode with wheel, the handleHorizontalWheel listener is active
+      // Dispatch a wheel with deltaY to verify it works
+      const wheelBefore = new dom.window.WheelEvent("wheel", {
+        deltaY: 50,
+        deltaX: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelBefore);
+      expect(viewport.scrollLeft).toBe(50);
+
+      // Reset scrollLeft
+      viewport.scrollLeft = 0;
+
+      // Enable compression — should remove horizontal wheel and add compressed wheel
+      const compression = {
+        isCompressed: true,
+        actualHeight: 5000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+      controller.enableCompression(compression);
+
+      // Now wheel events should go through handleWheel (compressed), not handleHorizontalWheel
+      // scrollLeft should stay 0 (overflow is hidden, compressed mode handles position manually)
+      const wheelAfter = new dom.window.WheelEvent("wheel", {
+        deltaY: 50,
+        deltaX: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelAfter);
+      expect(viewport.scrollLeft).toBe(0);
+
+      controller.destroy();
+    });
+
+    it("should disable compression in horizontal mode (restore overflowX to auto)", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+      });
+
+      expect(viewport.style.overflowX).toBe("hidden");
+      expect(controller.isCompressed()).toBe(true);
+
+      // Disable compression
+      controller.disableCompression();
+
+      expect(controller.isCompressed()).toBe(false);
+      expect(viewport.style.overflowX).toBe("auto");
+
+      controller.destroy();
+    });
+
+    it("should restore scrollLeft position when disabling compression", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const onScroll = mock(() => {});
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+        onScroll,
+      });
+
+      // Scroll to a position in compressed mode
+      controller.scrollTo(8000000);
+      expect(controller.getScrollTop()).toBe(8000000);
+
+      // Disable compression — should restore scrollLeft proportionally
+      controller.disableCompression();
+
+      // maxScroll was 16000000 - 800 = 15999200
+      // ratio = 8000000 / 15999200 ≈ 0.5
+      // restored = ratio * (actualHeight - containerHeight) = 0.5 * (50000 - 800) = 24600
+      expect(viewport.scrollLeft).toBeGreaterThan(0);
+      expect(viewport.scrollLeft).toBeCloseTo(24600, -2);
+
+      controller.destroy();
+    });
+
+    it("should re-add horizontal wheel listener when disabling compression", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+      });
+
+      // In compressed mode, scrollLeft should not be affected by wheel
+      // (handleWheel manages scrollPosition manually)
+      viewport.scrollLeft = 0;
+      const wheelCompressed = new dom.window.WheelEvent("wheel", {
+        deltaY: 50,
+        deltaX: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelCompressed);
+      // scrollLeft stays 0 in compressed mode (overflow is hidden)
+      expect(viewport.scrollLeft).toBe(0);
+
+      // Disable compression — should re-add handleHorizontalWheel
+      controller.disableCompression();
+
+      // disableCompression restores scrollLeft proportionally, capture the base
+      const restoredBase = viewport.scrollLeft;
+
+      // Now wheel deltaY should remap to scrollLeft again
+      const wheelNative = new dom.window.WheelEvent("wheel", {
+        deltaY: 75,
+        deltaX: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelNative);
+      expect(viewport.scrollLeft).toBeCloseTo(restoredBase + 75, 0);
+
+      controller.destroy();
+    });
+
+    it("should handle compressed wheel with deltaX in horizontal mode", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const onScroll = mock(() => {});
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+        onScroll,
+      });
+
+      expect(controller.getScrollTop()).toBe(0);
+
+      // In horizontal compressed mode, handleWheel uses deltaX || deltaY
+      // Send deltaX (trackpad horizontal swipe in compressed mode)
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaX: 200,
+        deltaY: 0,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+      flushRaf();
+
+      // scrollPosition should have moved by deltaX * sensitivity
+      expect(controller.getScrollTop()).toBe(200);
+
+      controller.destroy();
+    });
+
+    it("should handle compressed wheel falling back to deltaY in horizontal mode", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const onScroll = mock(() => {});
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+        onScroll,
+      });
+
+      // deltaX is 0, so handleWheel should fall back to deltaY
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaX: 0,
+        deltaY: 150,
+        bubbles: true,
+        cancelable: true,
+      });
+      viewport.dispatchEvent(wheelEvent);
+      flushRaf();
+
+      expect(controller.getScrollTop()).toBe(150);
+
+      controller.destroy();
+    });
+
+    it("should scrollTo in horizontal compressed mode and fire onScroll", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const compression = {
+        isCompressed: true,
+        actualHeight: 50000,
+        virtualHeight: 16000000,
+        ratio: 0.32,
+      };
+
+      const scrollData: any[] = [];
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: true,
+        compressed: true,
+        compression,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      controller.scrollTo(5000);
+
+      expect(controller.getScrollTop()).toBe(5000);
+      expect(scrollData.length).toBeGreaterThan(0);
+      expect(scrollData[scrollData.length - 1].scrollTop).toBe(5000);
+
+      controller.destroy();
+    });
+
+    it("should fire onScroll when native horizontal scroll occurs", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const scrollData: any[] = [];
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        onScroll: (data) => scrollData.push(data),
+      });
+
+      // Simulate native horizontal scroll
+      viewport.scrollLeft = 250;
+      const scrollEvent = new dom.window.Event("scroll", { bubbles: true });
+      viewport.dispatchEvent(scrollEvent);
+      flushRaf();
+
+      expect(scrollData.length).toBeGreaterThan(0);
+      expect(scrollData[scrollData.length - 1].scrollTop).toBe(250);
+
+      controller.destroy();
+    });
+
+    it("should block wheel in horizontal mode when wheel is disabled", () => {
+      Object.defineProperty(viewport, "scrollLeft", {
+        value: 0,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, "clientWidth", {
+        value: 800,
+        writable: true,
+        configurable: true,
+      });
+
+      const controller = createScrollController(viewport, {
+        horizontal: true,
+        wheel: false,
+      });
+
+      // With wheel disabled, blockWheel should preventDefault
+      let defaultPrevented = false;
+      const wheelEvent = new dom.window.WheelEvent("wheel", {
+        deltaY: 100,
+        bubbles: true,
+        cancelable: true,
+      });
+      wheelEvent.preventDefault = () => {
+        defaultPrevented = true;
+      };
+      viewport.dispatchEvent(wheelEvent);
+
+      expect(defaultPrevented).toBe(true);
+
+      controller.destroy();
+    });
   });
 });
