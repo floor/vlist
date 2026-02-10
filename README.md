@@ -25,40 +25,24 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🔌 **Framework adapters** - Thin wrappers for React, Vue, and Svelte (<1 KB each)
 - 🌲 **Tree-shakeable** - Sub-module imports for smaller bundles
 
-## Sandbox
+## Sandbox & Documentation
 
-Run the sandbox locally to explore examples:
-
-```bash
-# Install dependencies
-bun install
-
-# Build and serve sandbox
-bun run sandbox
-```
-
-Then open http://localhost:3337/sandbox in your browser.
-
-To stop the server, press `Ctrl+C` in the terminal.
-
-**Development mode** (auto-rebuilds on changes):
-```bash
-bun run dev:sandbox
-```
+Interactive examples and documentation are available at **[vlist.dev](https://vlist.dev)**.
 
 | Example | Description |
 |---------|-------------|
-| [Basic](sandbox/basic/) | Pure vanilla JS — no frameworks, no dependencies |
-| [Core](sandbox/core/) | Lightweight `vlist/core` — 7.3 KB, 83% smaller |
-| [Grid](sandbox/grid/) | 2D photo gallery with real photos from Lorem Picsum |
-| [Variable Heights](sandbox/variable-heights/) | Chat-style messages with 4 different item heights |
-| [Selection](sandbox/selection/) | Single/multiple selection with keyboard navigation |
-| [Infinite Scroll](sandbox/infinite-scroll/) | Async data loading with simulated API |
-| [Million Items](sandbox/million-items/) | Stress test with 1–5 million items |
-| [Velocity Loading](sandbox/velocity-loading/) | Velocity-based load skipping demo |
-| [Sticky Headers](sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
-| [Window Scroll](sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
-| [Scroll Restore](sandbox/scroll-restore/) | Save/restore scroll position across SPA navigation |
+| [Basic](https://vlist.dev/sandbox/basic/) | Pure vanilla JS — no frameworks, no dependencies |
+| [Core](https://vlist.dev/sandbox/core/) | Lightweight `vlist/core` — 7.3 KB, 83% smaller |
+| [Grid](https://vlist.dev/sandbox/grid/) | 2D photo gallery with real photos from Lorem Picsum |
+| [Variable Heights](https://vlist.dev/sandbox/variable-heights/) | Chat-style messages with 4 different item heights |
+| [Reverse Chat](https://vlist.dev/sandbox/reverse-chat/) | Chat UI with reverse mode, prepend history, auto-scroll |
+| [Selection](https://vlist.dev/sandbox/selection/) | Single/multiple selection with keyboard navigation |
+| [Infinite Scroll](https://vlist.dev/sandbox/infinite-scroll/) | Async data loading with simulated API |
+| [Million Items](https://vlist.dev/sandbox/million-items/) | Stress test with 1–5 million items |
+| [Velocity Loading](https://vlist.dev/sandbox/velocity-loading/) | Velocity-based load skipping demo |
+| [Sticky Headers](https://vlist.dev/sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
+| [Window Scroll](https://vlist.dev/sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
+| [Scroll Restore](https://vlist.dev/sandbox/scroll-restore/) | Save/restore scroll position across SPA navigation |
 
 ## Installation
 
@@ -775,9 +759,6 @@ bun run typecheck
 
 # Build for production
 bun run build
-
-# Build and serve sandbox
-bun run sandbox
 ```
 
 ## License
