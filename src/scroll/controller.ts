@@ -38,6 +38,9 @@ export interface ScrollControllerConfig {
    */
   scrollElement?: Window;
 
+  /** Allow mouse wheel to scroll (default: true) */
+  wheel?: boolean;
+
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
 
@@ -243,6 +246,7 @@ export const createScrollController = (
   config: ScrollControllerConfig = {},
 ): ScrollController => {
   const {
+    wheel = true,
     sensitivity = 1,
     smoothing = false,
     idleTimeout: idleMs = 150,
@@ -328,6 +332,11 @@ export const createScrollController = (
   // Compressed (Manual) Scroll Handling
   // =============================================================================
 
+  /** Block wheel events (used in native mode when wheel is disabled) */
+  const blockWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+  };
+
   const handleWheel = (event: WheelEvent): void => {
     if (!compressed) return;
 
@@ -410,11 +419,18 @@ export const createScrollController = (
     handleNativeScroll.cancel();
     viewport.removeEventListener("scroll", handleNativeScroll);
 
+    // Remove block-wheel listener (was active in native mode when wheel disabled)
+    if (!wheel) {
+      viewport.removeEventListener("wheel", blockWheel);
+    }
+
     // Switch to overflow hidden
     viewport.style.overflow = "hidden";
 
-    // Add wheel listener
-    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    // Add wheel listener (only if wheel is enabled)
+    if (wheel) {
+      viewport.addEventListener("wheel", handleWheel, { passive: false });
+    }
 
     // Convert current scroll position to compressed equivalent
     if (viewport.scrollTop > 0) {
@@ -447,6 +463,11 @@ export const createScrollController = (
 
     // Add native scroll listener
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
+
+    // Re-add block-wheel listener in native mode when wheel is disabled
+    if (!wheel) {
+      viewport.addEventListener("wheel", blockWheel, { passive: false });
+    }
 
     // Restore scroll position
     if (compression && scrollPosition > 0) {
@@ -589,6 +610,7 @@ export const createScrollController = (
       handleNativeScroll.cancel();
       viewport.removeEventListener("scroll", handleNativeScroll);
       viewport.removeEventListener("wheel", handleWheel);
+      viewport.removeEventListener("wheel", blockWheel);
     }
   };
 
@@ -606,11 +628,16 @@ export const createScrollController = (
     // Start in compressed mode
     maxScroll = compression.virtualHeight - containerHeight;
     viewport.style.overflow = "hidden";
-    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    if (wheel) {
+      viewport.addEventListener("wheel", handleWheel, { passive: false });
+    }
   } else {
     // Start in native scroll mode
     viewport.style.overflow = "auto";
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
+    if (!wheel) {
+      viewport.addEventListener("wheel", blockWheel, { passive: false });
+    }
   }
 
   return {
