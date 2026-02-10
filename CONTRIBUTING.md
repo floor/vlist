@@ -28,11 +28,9 @@ bun run typecheck
 # Build the library
 bun run build
 
-# Build and serve sandbox
-bun run sandbox
 ```
 
-The sandbox runs at http://localhost:3337/sandbox — use it to test changes visually.
+Interactive examples and documentation are available at **[vlist.dev](https://vlist.dev)** (source: [github.com/floor/vlist.dev](https://github.com/floor/vlist.dev)).
 
 ## Project Structure
 
@@ -65,15 +63,14 @@ vlist/
 │   ├── scroll/           # Scroll controller + custom scrollbar
 │   ├── selection/        # Selection state management
 │   ├── events/           # Event emitter
-│   └── styles/           # CSS files
+│   ├── styles/           # CSS files
 │       ├── vlist.css     #   Core styles
 │       └── vlist-extras.css # Optional variants and animations
 ├── test/                 # Tests (mirrors src/ structure)
-├── sandbox/              # Interactive examples
-├── docs/                 # Documentation
-├── build.ts              # Build script
-└── serve.ts              # Dev server
+└── build.ts              # Build script
 ```
+
+> **Note:** Sandbox examples and documentation live in the [vlist.dev](https://github.com/floor/vlist.dev) repository.
 
 ### Architecture
 
@@ -92,7 +89,7 @@ The composition root is `vlist.ts` — it creates all domain components and wire
 3. **Run tests** — `bun test` (runs all), `bun test test/grid/` (runs one folder)
 4. **Type check** — `bun run typecheck`
 5. **Build** — `bun run build`
-6. **Test visually** — `bun run sandbox` and check relevant examples
+6. **Test visually** — check relevant examples at [vlist.dev](https://vlist.dev/sandbox/)
 
 ### Running Tests
 
@@ -117,9 +114,6 @@ Tests use [Bun's test runner](https://bun.sh/docs/cli/test) with JSDOM for DOM t
 ```bash
 # Build library (main bundle + sub-modules + CSS)
 bun run build
-
-# Build sandbox examples
-bun run build:sandbox
 
 # Build with type declarations
 bun run build --types
@@ -184,15 +178,7 @@ If your feature is a new capability (like grid or groups were):
 4. Add exports to `src/index.ts`
 5. Add sub-module build entry to `build.ts`
 6. Add package.json export path
-7. Create a sandbox example in `sandbox/{domain}/`
-
-### New Sandbox Example
-
-1. Create `sandbox/{name}/` with `index.html`, `script.js`, and `styles.css`
-2. The build script auto-discovers examples — no config needed
-3. Import vlist with `import { createVList } from "vlist"`
-4. Add a link to `sandbox/index.html`
-5. Build with `bun run build:sandbox`
+7. Create a sandbox example in the [vlist.dev](https://github.com/floor/vlist.dev) repository
 
 ## Commit Messages
 
@@ -225,7 +211,7 @@ chore(deps): update dev dependencies
    bun run typecheck # No type errors
    bun run build     # Builds cleanly
    ```
-5. Open a PR against `staging`
+5. Open a PR against `main`
 6. Describe what changed and why
 
 ### PR Checklist
@@ -234,7 +220,7 @@ chore(deps): update dev dependencies
 - [ ] All tests pass (`bun test`)
 - [ ] Type check passes (`bun run typecheck`)
 - [ ] Build succeeds (`bun run build`)
-- [ ] Sandbox example updated or added (if user-facing)
+- [ ] Sandbox example updated or added at [vlist.dev](https://github.com/floor/vlist.dev) (if user-facing)
 - [ ] No new dependencies added
 - [ ] Commit messages follow conventional commits
 
