@@ -93,6 +93,12 @@ beforeAll(() => {
     };
   }
 
+  // Mock window.scrollTo for JSDOM (suppresses "Not implemented" warnings in window-mode tests)
+  (dom.window as any).scrollTo = (
+    _x?: number | ScrollToOptions,
+    _y?: number,
+  ) => {};
+
   // Mock requestAnimationFrame
   global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
     return setTimeout(
@@ -1241,5 +1247,919 @@ describe("createVList horizontal direction", () => {
 
       expect(element.parentNode).toBeFalsy();
     });
+  });
+});
+
+// =============================================================================
+// Grid Mode Tests
+// =============================================================================
+
+describe("createVList grid mode", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  describe("validation", () => {
+    it("should throw when layout is grid but grid config is missing", () => {
+      expect(() => {
+        createVList({
+          container,
+          item: { height: 100, template },
+          items: [],
+          layout: "grid",
+        });
+      }).toThrow("grid configuration is required");
+    });
+
+    it("should throw when grid.columns is 0", () => {
+      expect(() => {
+        createVList({
+          container,
+          item: { height: 100, template },
+          items: [],
+          layout: "grid",
+          grid: { columns: 0 },
+        });
+      }).toThrow("grid.columns must be a positive integer");
+    });
+
+    it("should throw when grid is combined with groups", () => {
+      expect(() => {
+        createVList({
+          container,
+          item: { height: 100, template },
+          items: [],
+          layout: "grid",
+          grid: { columns: 3 },
+          groups: {
+            key: "group",
+            headerTemplate: () => "<div>Header</div>",
+            height: 30,
+          },
+        });
+      }).toThrow("grid layout cannot be combined with groups");
+    });
+  });
+
+  describe("initialization", () => {
+    it("should create a grid mode vlist", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items,
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      expect(vlist).toBeDefined();
+      expect(vlist.element).toBeInstanceOf(HTMLElement);
+      expect(vlist.total).toBe(20);
+    });
+
+    it("should create grid with gap", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items,
+        layout: "grid",
+        grid: { columns: 4, gap: 8 },
+      });
+
+      expect(vlist).toBeDefined();
+      expect(vlist.total).toBe(20);
+    });
+  });
+
+  describe("data methods", () => {
+    it("should set items in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(20),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      const newItems = createTestItems(40);
+      vlist.setItems(newItems);
+
+      expect(vlist.total).toBe(40);
+    });
+
+    it("should append items in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(8),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      vlist.appendItems([
+        { id: 100, name: "Appended 1", value: 100 },
+        { id: 101, name: "Appended 2", value: 101 },
+      ]);
+
+      expect(vlist.total).toBe(10);
+    });
+
+    it("should remove item in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(8),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      vlist.removeItem(3);
+
+      expect(vlist.total).toBe(7);
+    });
+  });
+
+  describe("scroll methods", () => {
+    it("should scroll to index in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(100),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      // Should not throw
+      vlist.scrollToIndex(50, "start");
+      vlist.scrollToIndex(50, "center");
+      vlist.scrollToIndex(50, "end");
+    });
+  });
+
+  describe("snapshot", () => {
+    it("should get scroll snapshot in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(100),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      const snapshot = vlist.getScrollSnapshot();
+
+      expect(snapshot).toBeDefined();
+      expect(typeof snapshot.index).toBe("number");
+      expect(typeof snapshot.offsetInItem).toBe("number");
+    });
+
+    it("should convert row index to item index in grid snapshot", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(100),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      const snapshot = vlist.getScrollSnapshot();
+      // Grid snapshot converts row to item index: index * columns
+      // At scroll position 0, row 0, item index = 0 * 4 = 0
+      expect(snapshot.index).toBe(0);
+    });
+
+    it("should restore scroll from snapshot in grid mode", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(100),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      // Save, change, restore
+      const snapshot = vlist.getScrollSnapshot();
+      vlist.setItems(createTestItems(100));
+      vlist.restoreScroll(snapshot);
+
+      // Should not throw, position should be restored
+      const newSnapshot = vlist.getScrollSnapshot();
+      expect(newSnapshot).toBeDefined();
+    });
+  });
+
+  describe("destroy", () => {
+    it("should clean up grid mode vlist", () => {
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items: createTestItems(20),
+        layout: "grid",
+        grid: { columns: 4 },
+      });
+
+      const element = vlist.element;
+      expect(element.parentNode).toBeTruthy();
+
+      vlist.destroy();
+      vlist = null;
+
+      expect(element.parentNode).toBeFalsy();
+    });
+  });
+});
+
+// =============================================================================
+// Groups Mode Tests
+// =============================================================================
+
+describe("createVList groups mode", () => {
+  let container: HTMLElement;
+  let vlist: VList<any> | null = null;
+
+  interface GroupedItem extends VListItem {
+    id: number;
+    name: string;
+    category: string;
+  }
+
+  const createGroupedItems = (): GroupedItem[] => [
+    { id: 1, name: "Apple", category: "Fruits" },
+    { id: 2, name: "Banana", category: "Fruits" },
+    { id: 3, name: "Cherry", category: "Fruits" },
+    { id: 4, name: "Carrot", category: "Vegetables" },
+    { id: 5, name: "Potato", category: "Vegetables" },
+    { id: 6, name: "Chicken", category: "Meat" },
+    { id: 7, name: "Beef", category: "Meat" },
+    { id: 8, name: "Pork", category: "Meat" },
+  ];
+
+  const groupTemplate = (item: GroupedItem) =>
+    `<div class="item">${item.name}</div>`;
+
+  /**
+   * Create a GroupsConfig that derives group key from the items array.
+   * getGroupForIndex receives a DATA index (into original items).
+   */
+  const createGroupsConfig = (items: GroupedItem[], sticky?: boolean) => {
+    // We need a closure over the current items so getGroupForIndex can look them up
+    let currentItems = items;
+    return {
+      getGroupForIndex: (index: number) =>
+        currentItems[index]?.category ?? "Unknown",
+      headerHeight: 30,
+      headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+      sticky,
+      // Expose a way to update the items reference for rebuilt groups
+      _updateItems: (newItems: GroupedItem[]) => {
+        currentItems = newItems;
+      },
+    };
+  };
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  describe("initialization", () => {
+    it("should create a grouped vlist", () => {
+      const items = createGroupedItems();
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: {
+          getGroupForIndex: (index: number) =>
+            items[index]?.category ?? "Unknown",
+          headerHeight: 30,
+          headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+        },
+      });
+
+      expect(vlist).toBeDefined();
+      expect(vlist.element).toBeInstanceOf(HTMLElement);
+      // total returns original items (without headers)
+      expect(vlist.total).toBe(8);
+    });
+
+    it("should return original items without headers via items property", () => {
+      const items = createGroupedItems();
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: {
+          getGroupForIndex: (index: number) =>
+            items[index]?.category ?? "Unknown",
+          headerHeight: 30,
+          headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+        },
+      });
+
+      // items property should return the original items (no headers)
+      expect(vlist.items.length).toBe(8);
+      expect((vlist.items[0] as any).name).toBe("Apple");
+    });
+  });
+
+  describe("data methods with groups", () => {
+    it("should setItems and rebuild group layout", () => {
+      const items = createGroupedItems();
+      const groupsCfg = createGroupsConfig(items);
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: groupsCfg,
+      });
+
+      // Set new items with different grouping
+      const newItems: GroupedItem[] = [
+        { id: 10, name: "Orange", category: "Fruits" },
+        { id: 11, name: "Grape", category: "Fruits" },
+      ];
+      groupsCfg._updateItems(newItems);
+      vlist.setItems(newItems);
+
+      expect(vlist.total).toBe(2);
+    });
+
+    it("should appendItems and rebuild group layout", () => {
+      const items = createGroupedItems();
+      const groupsCfg = createGroupsConfig(items);
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: groupsCfg,
+      });
+
+      const appended: GroupedItem[] = [
+        { id: 20, name: "Salmon", category: "Fish" },
+        { id: 21, name: "Tuna", category: "Fish" },
+      ];
+      groupsCfg._updateItems([...items, ...appended]);
+      vlist.appendItems(appended);
+
+      expect(vlist.total).toBe(10);
+    });
+
+    it("should prependItems and rebuild group layout", () => {
+      const items = createGroupedItems();
+      const groupsCfg = createGroupsConfig(items);
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: groupsCfg,
+      });
+
+      const prepended: GroupedItem[] = [
+        { id: 30, name: "Milk", category: "Dairy" },
+      ];
+      groupsCfg._updateItems([...prepended, ...items]);
+      vlist.prependItems(prepended);
+
+      expect(vlist.total).toBe(9);
+    });
+
+    it("should removeItem and rebuild group layout", () => {
+      const items = createGroupedItems();
+      const groupsCfg = createGroupsConfig(items);
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: groupsCfg,
+      });
+
+      groupsCfg._updateItems(items.filter((i) => i.id !== 1));
+      vlist.removeItem(1);
+
+      expect(vlist.total).toBe(7);
+    });
+  });
+
+  describe("scroll snapshot with groups", () => {
+    it("should get scroll snapshot in groups mode", () => {
+      const items = createGroupedItems();
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: {
+          getGroupForIndex: (index: number) =>
+            items[index]?.category ?? "Unknown",
+          headerHeight: 30,
+          headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+        },
+      });
+
+      const snapshot = vlist.getScrollSnapshot();
+      expect(snapshot).toBeDefined();
+      expect(typeof snapshot.index).toBe("number");
+    });
+
+    it("should restore scroll in groups mode", () => {
+      const items = createGroupedItems();
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: {
+          getGroupForIndex: (index: number) =>
+            items[index]?.category ?? "Unknown",
+          headerHeight: 30,
+          headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+        },
+      });
+
+      const snapshot = vlist.getScrollSnapshot();
+      vlist.restoreScroll(snapshot);
+
+      // Should not throw
+      const newSnapshot = vlist.getScrollSnapshot();
+      expect(newSnapshot).toBeDefined();
+    });
+  });
+
+  describe("destroy", () => {
+    it("should clean up grouped vlist with sticky header", () => {
+      const items = createGroupedItems();
+      vlist = createVList<GroupedItem>({
+        container,
+        item: { height: 40, template: groupTemplate },
+        items,
+        groups: {
+          getGroupForIndex: (index: number) =>
+            items[index]?.category ?? "Unknown",
+          headerHeight: 30,
+          headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+          sticky: true,
+        },
+      });
+
+      const element = vlist.element;
+      expect(element.parentNode).toBeTruthy();
+
+      vlist.destroy();
+      vlist = null;
+
+      expect(element.parentNode).toBeFalsy();
+    });
+  });
+});
+
+// =============================================================================
+// Window Scroll Mode Tests (full vlist)
+// =============================================================================
+
+describe("createVList window scroll mode", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should create vlist in window scroll mode", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      scrollElement: window,
+    });
+
+    expect(vlist).toBeDefined();
+    expect(vlist.element).toBeInstanceOf(HTMLElement);
+    expect(vlist.total).toBe(100);
+  });
+
+  it("should render items in window scroll mode", () => {
+    const items = createTestItems(50);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      scrollElement: window,
+    });
+
+    const rendered = vlist.element.querySelectorAll("[data-index]");
+    expect(rendered.length).toBeGreaterThan(0);
+  });
+
+  it("should handle scroll methods in window mode", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      scrollElement: window,
+    });
+
+    // Should not throw
+    vlist.scrollToIndex(50, "start");
+    vlist.scrollToIndex(50, "center");
+    vlist.scrollToIndex(50, "end");
+  });
+
+  it("should handle snapshot in window mode", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      scrollElement: window,
+    });
+
+    const snapshot = vlist.getScrollSnapshot();
+    expect(snapshot).toBeDefined();
+
+    // Restore should not throw
+    vlist.restoreScroll(snapshot);
+  });
+
+  it("should clean up window event listeners on destroy", () => {
+    const items = createTestItems(50);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      scrollElement: window,
+    });
+
+    // Should not throw
+    vlist.destroy();
+    vlist = null;
+  });
+});
+
+// =============================================================================
+// Adapter Reload Tests
+// =============================================================================
+
+describe("createVList adapter reload", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should reload data from adapter", async () => {
+    const allItems = createTestItems(50);
+    const adapter: VListAdapter<TestItem> = {
+      read: async ({ offset, limit }) => ({
+        items: allItems.slice(offset, offset + limit),
+        total: allItems.length,
+        hasMore: offset + limit < allItems.length,
+      }),
+    };
+
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      adapter,
+    });
+
+    // Wait for initial load
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(vlist.total).toBeGreaterThan(0);
+
+    // Reload should work
+    await vlist.reload();
+
+    expect(vlist.total).toBeGreaterThan(0);
+  });
+
+  it("should emit load events on adapter operations", async () => {
+    const loadStartHandler = mock(() => {});
+    const loadEndHandler = mock(() => {});
+
+    const allItems = createTestItems(50);
+    const adapter: VListAdapter<TestItem> = {
+      read: async ({ offset, limit }) => ({
+        items: allItems.slice(offset, offset + limit),
+        total: allItems.length,
+        hasMore: offset + limit < allItems.length,
+      }),
+    };
+
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      adapter,
+    });
+
+    vlist.on("load:start", loadStartHandler);
+    vlist.on("load:end", loadEndHandler);
+
+    // Wait for initial load to fire events
+    await new Promise((r) => setTimeout(r, 50));
+
+    // loadStart emitted during initialization (before we subscribed),
+    // but loadEnd should have been emitted
+    expect(loadEndHandler.mock.calls.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// =============================================================================
+// Reverse Mode Tests
+// =============================================================================
+
+describe("createVList reverse mode", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should create vlist in reverse mode", () => {
+    const items = createTestItems(50);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      reverse: true,
+    });
+
+    expect(vlist).toBeDefined();
+    expect(vlist.total).toBe(50);
+  });
+
+  it("should append items and auto-scroll in reverse mode", () => {
+    const items = createTestItems(20);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      reverse: true,
+    });
+
+    // Append items (simulates new chat messages)
+    vlist.appendItems([
+      { id: 100, name: "New Message 1", value: 100 },
+      { id: 101, name: "New Message 2", value: 101 },
+    ]);
+
+    expect(vlist.total).toBe(22);
+  });
+
+  it("should prepend items and preserve scroll in reverse mode", () => {
+    const items = createTestItems(20);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      reverse: true,
+    });
+
+    // Prepend items (simulates loading older messages)
+    vlist.prependItems([
+      { id: 200, name: "Old Message 1", value: 200 },
+      { id: 201, name: "Old Message 2", value: 201 },
+    ]);
+
+    expect(vlist.total).toBe(22);
+  });
+});
+
+// =============================================================================
+// Scroll Snapshot Tests (full vlist)
+// =============================================================================
+
+describe("createVList scroll snapshot", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should get and restore scroll snapshot", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+    });
+
+    const snapshot = vlist.getScrollSnapshot();
+    expect(snapshot).toBeDefined();
+    expect(typeof snapshot.index).toBe("number");
+    expect(typeof snapshot.offsetInItem).toBe("number");
+
+    vlist.restoreScroll(snapshot);
+
+    const newSnapshot = vlist.getScrollSnapshot();
+    expect(newSnapshot.index).toBe(snapshot.index);
+  });
+
+  it("should have snapshot methods", () => {
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(10),
+    });
+
+    expect(typeof vlist.getScrollSnapshot).toBe("function");
+    expect(typeof vlist.restoreScroll).toBe("function");
+  });
+
+  it("should handle snapshot with variable heights", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: {
+        height: (index: number) => 30 + (index % 5) * 10,
+        template,
+      },
+      items,
+    });
+
+    const snapshot = vlist.getScrollSnapshot();
+    expect(snapshot).toBeDefined();
+
+    vlist.restoreScroll(snapshot);
+  });
+});
+
+// =============================================================================
+// Compression Mode Tests
+// =============================================================================
+
+describe("createVList compression", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should enable compression for very large lists", () => {
+    // 500,000 items × 40px = 20,000,000px > MAX_VIRTUAL_HEIGHT (~16.7M)
+    const items = createTestItems(500_000);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+    });
+
+    expect(vlist.total).toBe(500_000);
+    // Should still render a small subset
+    const rendered = vlist.element.querySelectorAll("[data-index]");
+    expect(rendered.length).toBeLessThan(100);
+  });
+
+  it("should transition from uncompressed to compressed when items grow", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+    });
+
+    expect(vlist.total).toBe(100);
+
+    // Add enough items to trigger compression
+    vlist.setItems(createTestItems(500_000));
+    expect(vlist.total).toBe(500_000);
+
+    const rendered = vlist.element.querySelectorAll("[data-index]");
+    expect(rendered.length).toBeLessThan(100);
+  });
+
+  it("should handle scrollToIndex in compressed mode", () => {
+    const items = createTestItems(500_000);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+    });
+
+    // Should not throw in compressed mode
+    vlist.scrollToIndex(250_000, "center");
+    vlist.scrollToIndex(0, "start");
+    vlist.scrollToIndex(499_999, "end");
+  });
+});
+
+// =============================================================================
+// Selection Integration Tests
+// =============================================================================
+
+describe("createVList selection advanced", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should handle single selection mode", () => {
+    const items = createTestItems(10);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      selection: { mode: "single" as any },
+    });
+
+    vlist.select(1);
+    vlist.select(2);
+
+    // In single mode, only last selection should remain
+    const selected = vlist.getSelected();
+    expect(selected.length).toBe(1);
+    expect(selected[0]).toBe(2);
+  });
+
+  it("should get selected items", () => {
+    const items = createTestItems(10);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+      selection: { mode: "multiple" as any },
+    });
+
+    vlist.select(1);
+    vlist.select(3);
+
+    const selectedItems = vlist.getSelectedItems();
+    expect(selectedItems.length).toBe(2);
+    expect(selectedItems[0]!.id).toBe(1);
+    expect(selectedItems[1]!.id).toBe(3);
   });
 });

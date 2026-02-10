@@ -3,7 +3,7 @@
  * Tests for DataManager with sparse storage support
  */
 
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, mock, beforeEach } from "bun:test";
 import {
   createDataManager,
   mergeRanges,
@@ -541,6 +541,633 @@ describe("createDataManager", () => {
       expect(manager.getState().cached).toBe(0);
       expect(manager.getState().total).toBe(0);
       expect(manager.getState().hasMore).toBe(true);
+    });
+  });
+
+  // ===========================================================================
+  // Direct Getters
+  // ===========================================================================
+
+  describe("direct getters", () => {
+    it("should provide getTotal without allocation", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(10),
+      });
+
+      expect(manager.getTotal()).toBe(10);
+    });
+
+    it("should provide getCached without allocation", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(10),
+      });
+
+      expect(manager.getCached()).toBe(10);
+    });
+
+    it("should provide getIsLoading without allocation", () => {
+      const manager = createDataManager();
+
+      expect(manager.getIsLoading()).toBe(false);
+    });
+
+    it("should provide getHasMore without allocation", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(5),
+        initialTotal: 5,
+      });
+
+      expect(manager.getHasMore()).toBe(false);
+    });
+
+    it("should expose storage via getStorage", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(5),
+      });
+
+      const storage = manager.getStorage();
+      expect(storage).toBeDefined();
+      expect(storage.getTotal()).toBe(5);
+    });
+
+    it("should expose placeholders via getPlaceholders", () => {
+      const manager = createDataManager();
+
+      const placeholders = manager.getPlaceholders();
+      expect(placeholders).toBeDefined();
+    });
+  });
+
+  // ===========================================================================
+  // State Change Callbacks
+  // ===========================================================================
+
+  describe("state change callbacks", () => {
+    it("should call onItemsEvicted when items are evicted", async () => {
+      const onItemsEvicted = mock((_count: number) => {});
+      const items = createTestItems(200);
+      const adapter = createMockAdapter(items);
+
+      const manager = createDataManager({
+        adapter,
+        storage: { chunkSize: 10, maxCachedItems: 50, evictionBuffer: 0 },
+        onItemsEvicted,
+      });
+
+      // Load enough items to exceed the cache limit
+      await manager.loadRange(0, 99);
+
+      // Now trigger eviction by viewing a distant range
+      manager.evictDistant(80, 99);
+
+      // onItemsEvicted should have been called
+      expect(onItemsEvicted).toHaveBeenCalled();
+      const count = onItemsEvicted.mock.calls[0]![0] as number;
+      expect(count).toBeGreaterThan(0);
+    });
+
+    it("should call onStateChange on setTotal", () => {
+      const onStateChange = mock(() => {});
+      const manager = createDataManager({ onStateChange });
+
+      manager.setTotal(100);
+
+      expect(onStateChange).toHaveBeenCalled();
+    });
+
+    it("should call onStateChange on clear", () => {
+      const onStateChange = mock(() => {});
+      const manager = createDataManager({
+        initialItems: createTestItems(5),
+        onStateChange,
+      });
+
+      const callsBefore = onStateChange.mock.calls.length;
+      manager.clear();
+
+      expect(onStateChange.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+
+    it("should call onStateChange on reset", () => {
+      const onStateChange = mock(() => {});
+      const manager = createDataManager({
+        initialItems: createTestItems(5),
+        onStateChange,
+      });
+
+      const callsBefore = onStateChange.mock.calls.length;
+      manager.reset();
+
+      expect(onStateChange.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  // ===========================================================================
+  // Eviction
+  // ===========================================================================
+
+  describe("evictDistant", () => {
+    it("should evict items far from visible range", async () => {
+      const items = createTestItems(200);
+      const adapter = createMockAdapter(items);
+
+      const manager = createDataManager({
+        adapter,
+        storage: { chunkSize: 10, maxCachedItems: 50, evictionBuffer: 10 },
+      });
+
+      // Load many items
+      await manager.loadRange(0, 99);
+      const cachedBefore = manager.getCached();
+      expect(cachedBefore).toBe(100);
+
+      // Evict items far from the end
+      manager.evictDistant(80, 99);
+
+      expect(manager.getCached()).toBeLessThan(cachedBefore);
+    });
+
+    it("should rebuild ID index after eviction", async () => {
+      const items = createTestItems(200);
+      const adapter = createMockAdapter(items);
+
+      const manager = createDataManager({
+        adapter,
+        storage: { chunkSize: 10, maxCachedItems: 50, evictionBuffer: 0 },
+      });
+
+      await manager.loadRange(0, 99);
+
+      // Item 5 should be findable before eviction
+      expect(manager.getIndexById(5)).toBe(4);
+
+      // Evict by viewing far range
+      manager.evictDistant(80, 99);
+
+      // After eviction, ID index is rebuilt — evicted item IDs return -1
+      const idx = manager.getIndexById(5);
+      // If chunk 0 was evicted, index should be -1
+      if (!manager.isItemLoaded(4)) {
+        expect(idx).toBe(-1);
+      }
+    });
+
+    it("should not evict when under cache limit", async () => {
+      const items = createTestItems(30);
+      const adapter = createMockAdapter(items);
+
+      const manager = createDataManager({
+        adapter,
+        storage: { chunkSize: 10, maxCachedItems: 100 },
+      });
+
+      await manager.loadRange(0, 29);
+      const cachedBefore = manager.getCached();
+
+      manager.evictDistant(0, 29);
+
+      expect(manager.getCached()).toBe(cachedBefore);
+    });
+  });
+
+  // ===========================================================================
+  // updateItem — ID Change
+  // ===========================================================================
+
+  describe("updateItem advanced", () => {
+    it("should handle ID change in update", () => {
+      const items: VListItem[] = [
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+        { id: 3, name: "Charlie" },
+      ];
+      const manager = createDataManager({ initialItems: items });
+
+      // Change item 2's ID to 99
+      const result = manager.updateItem(2, {
+        id: 99,
+        name: "Bob Renamed",
+      } as any);
+
+      expect(result).toBe(true);
+
+      // Old ID should no longer resolve
+      expect(manager.getItemById(2)).toBeUndefined();
+      expect(manager.getIndexById(2)).toBe(-1);
+
+      // New ID should resolve
+      expect(manager.getItemById(99)).toBeDefined();
+      expect((manager.getItemById(99) as any).name).toBe("Bob Renamed");
+    });
+
+    it("should return false when underlying storage item is missing", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(5),
+      });
+
+      // Try updating non-existent ID
+      const result = manager.updateItem(999, { name: "Ghost" });
+      expect(result).toBe(false);
+    });
+  });
+
+  // ===========================================================================
+  // getItemsInRange
+  // ===========================================================================
+
+  describe("getItemsInRange advanced", () => {
+    it("should return placeholders for unloaded items with correct counts", () => {
+      const manager = createDataManager({ initialTotal: 100 });
+
+      const items = manager.getItemsInRange(0, 9);
+
+      expect(items.length).toBe(10);
+      // All should be placeholders
+      for (const item of items) {
+        expect(item).toBeDefined();
+        expect(item.id).toBeDefined();
+      }
+    });
+
+    it("should mix loaded and placeholder items", () => {
+      const manager = createDataManager({ initialTotal: 100 });
+
+      // Load first 5 items
+      manager.setItems(createTestItems(5), 0);
+
+      const items = manager.getItemsInRange(0, 9);
+
+      expect(items.length).toBe(10);
+      // First 5 are real items
+      for (let i = 0; i < 5; i++) {
+        expect(items[i]!.id).toBe(i + 1);
+      }
+    });
+  });
+
+  // ===========================================================================
+  // setItems — Advanced
+  // ===========================================================================
+
+  describe("setItems advanced", () => {
+    it("should update hasMore when cached matches total", () => {
+      const manager = createDataManager();
+
+      manager.setItems(createTestItems(10), 0, 10);
+
+      expect(manager.getHasMore()).toBe(false);
+    });
+
+    it("should auto-expand total when offset + items exceed current total", () => {
+      const manager = createDataManager();
+
+      manager.setItems(createTestItems(5), 0);
+
+      expect(manager.getTotal()).toBe(5);
+
+      // Set items beyond the current total
+      manager.setItems(createTestItems(5, 100), 20);
+
+      expect(manager.getTotal()).toBe(25);
+    });
+
+    it("should call onItemsLoaded callback", () => {
+      const onItemsLoaded = mock(() => {});
+      const manager = createDataManager({ onItemsLoaded });
+
+      manager.setItems(createTestItems(5), 0, 5);
+
+      expect(onItemsLoaded).toHaveBeenCalled();
+    });
+
+    it("should analyze placeholder structure from first batch", () => {
+      // Force placeholder creation first
+      const manager = createDataManager({ initialTotal: 100 });
+
+      // Access placeholders to trigger creation
+      manager.getPlaceholders();
+
+      // First setItems should analyze structure
+      const items: VListItem[] = [
+        { id: 1, name: "Item 1", type: "track" },
+        { id: 2, name: "Item 2", type: "track" },
+      ];
+      manager.setItems(items, 0, 100);
+
+      expect(manager.getCached()).toBe(2);
+    });
+  });
+
+  // ===========================================================================
+  // loadRange — Concurrent & Error
+  // ===========================================================================
+
+  describe("loadRange advanced", () => {
+    it("should handle adapter errors gracefully", async () => {
+      const adapter: VListAdapter = {
+        read: async () => {
+          throw new Error("Network failure");
+        },
+      };
+      const manager = createDataManager({ adapter });
+
+      await manager.loadRange(0, 19);
+
+      expect(manager.getState().error).toBeDefined();
+      expect(manager.getState().error!.message).toBe("Network failure");
+      expect(manager.getState().isLoading).toBe(false);
+    });
+
+    it("should handle non-Error exceptions", async () => {
+      const adapter: VListAdapter = {
+        read: async () => {
+          throw "string error";
+        },
+      };
+      const manager = createDataManager({ adapter });
+
+      await manager.loadRange(0, 19);
+
+      expect(manager.getState().error).toBeDefined();
+      expect(manager.getState().error!.message).toBe("string error");
+    });
+
+    it("should deduplicate concurrent loads of the same range", async () => {
+      const readMock = mock(
+        async ({ offset, limit }: { offset: number; limit: number }) => {
+          await new Promise((r) => setTimeout(r, 20));
+          const items = createTestItems(100);
+          return {
+            items: items.slice(offset, offset + limit),
+            total: 100,
+            hasMore: offset + limit < 100,
+          };
+        },
+      );
+      const adapter: VListAdapter = { read: readMock };
+      const manager = createDataManager({ adapter });
+
+      // Start two loads for the same range concurrently
+      const p1 = manager.loadRange(0, 49);
+      const p2 = manager.loadRange(0, 49);
+
+      await Promise.all([p1, p2]);
+
+      // Second call should be deduped (exact same rangeKey)
+      // Read mock should only be called once per chunk
+      const callCount = readMock.mock.calls.length;
+      expect(callCount).toBeLessThanOrEqual(1); // exactly one chunk covers 0-99
+    });
+
+    it("should update cursor from adapter response", async () => {
+      const adapter: VListAdapter = {
+        read: async ({ offset, limit }) => ({
+          items: createTestItems(limit, offset + 1),
+          total: 100,
+          hasMore: true,
+          cursor: "next_page_token",
+        }),
+      };
+      const manager = createDataManager({ adapter });
+
+      await manager.loadRange(0, 19);
+
+      expect(manager.getState().cursor).toBe("next_page_token");
+    });
+
+    it("should handle hasMore from adapter response", async () => {
+      const adapter: VListAdapter = {
+        read: async ({ offset, limit }) => ({
+          items: createTestItems(limit, offset + 1),
+          total: 10,
+          hasMore: false,
+        }),
+      };
+      const manager = createDataManager({ adapter });
+
+      await manager.loadRange(0, 9);
+
+      expect(manager.getHasMore()).toBe(false);
+    });
+
+    it("should skip already-loading chunk ranges", async () => {
+      let resolveFirst: (() => void) | null = null;
+      let callCount = 0;
+
+      const adapter: VListAdapter = {
+        read: async ({ offset, limit }) => {
+          callCount++;
+          if (callCount === 1) {
+            // First call blocks until we release it
+            await new Promise<void>((r) => {
+              resolveFirst = r;
+            });
+          }
+          const items = createTestItems(100);
+          return {
+            items: items.slice(offset, offset + limit),
+            total: 100,
+            hasMore: false,
+          };
+        },
+      };
+      const manager = createDataManager({
+        adapter,
+        storage: { chunkSize: 100 },
+      });
+
+      // Start first load
+      const p1 = manager.loadRange(0, 99);
+
+      // Start overlapping load while first is in progress
+      const p2 = manager.loadRange(0, 99);
+
+      // Release the first load
+      if (resolveFirst) resolveFirst();
+
+      await Promise.all([p1, p2]);
+
+      // Should only have called adapter once (second call was deduped)
+      expect(callCount).toBe(1);
+    });
+  });
+
+  // ===========================================================================
+  // loadMore — Advanced
+  // ===========================================================================
+
+  describe("loadMore advanced", () => {
+    it("should return false when isLoading is true", async () => {
+      const items = createTestItems(100);
+      const adapter = createMockAdapter(items, 50);
+      const manager = createDataManager({
+        adapter,
+        pageSize: 20,
+      });
+
+      // Start a load that takes time
+      const loadPromise = manager.loadInitial();
+
+      // Try loadMore while loading
+      const result = await manager.loadMore();
+      expect(result).toBe(false);
+
+      await loadPromise;
+    });
+
+    it("should return false when start >= total and total > 0", async () => {
+      const items = createTestItems(10);
+      const adapter = createMockAdapter(items);
+      const manager = createDataManager({
+        adapter,
+        pageSize: 50,
+      });
+
+      // Load everything
+      await manager.loadInitial();
+
+      // Now all items are loaded, loadMore should return false
+      const result = await manager.loadMore();
+      expect(result).toBe(false);
+      expect(manager.getHasMore()).toBe(false);
+    });
+
+    it("should calculate correct range for next page", async () => {
+      const readMock = mock(
+        async ({ offset, limit }: { offset: number; limit: number }) => {
+          const items = createTestItems(200);
+          return {
+            items: items.slice(offset, offset + limit),
+            total: 200,
+            hasMore: offset + limit < 200,
+          };
+        },
+      );
+      const adapter: VListAdapter = { read: readMock };
+      const manager = createDataManager({
+        adapter,
+        pageSize: 20,
+      });
+
+      await manager.loadInitial();
+      const cachedAfterInit = manager.getCached();
+
+      const result = await manager.loadMore();
+      expect(result).toBe(true);
+      expect(manager.getCached()).toBeGreaterThan(cachedAfterInit);
+    });
+  });
+
+  // ===========================================================================
+  // ensureRange — Additional Cases
+  // ===========================================================================
+
+  describe("ensureRange advanced", () => {
+    it("should load only missing parts of a partially loaded range", async () => {
+      const readMock = mock(
+        async ({ offset, limit }: { offset: number; limit: number }) => {
+          const items = createTestItems(200);
+          return {
+            items: items.slice(offset, offset + limit),
+            total: 200,
+            hasMore: true,
+          };
+        },
+      );
+      const adapter: VListAdapter = { read: readMock };
+      const manager = createDataManager({
+        adapter,
+        initialTotal: 200,
+        storage: { chunkSize: 25 },
+      });
+
+      // Load first two chunks (0-49)
+      await manager.ensureRange(0, 49);
+      const callsAfterFirst = readMock.mock.calls.length;
+
+      // Ensure range that starts in loaded area but extends into unloaded (50-99)
+      await manager.ensureRange(25, 99);
+
+      // Should have made additional calls for the unloaded chunks (50-74, 75-99)
+      expect(readMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    });
+  });
+
+  // ===========================================================================
+  // reload
+  // ===========================================================================
+
+  describe("reload advanced", () => {
+    it("should clear cursor and error on reload", async () => {
+      const adapter: VListAdapter = {
+        read: async ({ offset, limit }) => ({
+          items: createTestItems(limit, offset + 1),
+          total: 50,
+          hasMore: true,
+          cursor: "some_cursor",
+        }),
+      };
+      const manager = createDataManager({ adapter, pageSize: 20 });
+
+      await manager.loadInitial();
+      expect(manager.getState().cursor).toBe("some_cursor");
+
+      await manager.reload();
+
+      // Cursor should be refreshed from new load
+      expect(manager.getState().hasMore).toBe(true);
+    });
+
+    it("should clear placeholders on reload", async () => {
+      const adapter: VListAdapter = {
+        read: async ({ offset, limit }) => ({
+          items: createTestItems(limit, offset + 1),
+          total: 50,
+          hasMore: true,
+        }),
+      };
+      const manager = createDataManager({
+        adapter,
+        initialTotal: 100,
+        pageSize: 20,
+      });
+
+      // Access placeholders
+      manager.getPlaceholders();
+
+      await manager.loadInitial();
+      await manager.reload();
+
+      expect(manager.getCached()).toBeGreaterThan(0);
+    });
+  });
+
+  // ===========================================================================
+  // removeItem — advanced
+  // ===========================================================================
+
+  describe("removeItem advanced", () => {
+    it("should decrease total after removal", () => {
+      const manager = createDataManager({
+        initialItems: createTestItems(10),
+      });
+
+      expect(manager.getTotal()).toBe(10);
+
+      manager.removeItem(5);
+
+      expect(manager.getTotal()).toBe(9);
+    });
+
+    it("should handle removing last item", () => {
+      const manager = createDataManager({
+        initialItems: [{ id: 1, name: "Only" }],
+      });
+
+      const result = manager.removeItem(1);
+
+      expect(result).toBe(true);
+      expect(manager.getTotal()).toBe(0);
     });
   });
 });
