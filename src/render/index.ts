@@ -7,6 +7,7 @@
 export {
   createDOMStructure,
   updateContentHeight,
+  updateContentSize,
   resolveContainer,
   getContainerDimensions,
   type DOMStructure,

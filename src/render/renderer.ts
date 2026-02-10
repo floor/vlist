@@ -2,6 +2,7 @@
  * vlist - DOM Rendering
  * Efficient DOM rendering with element pooling
  * Supports compression for large lists (1M+ items)
+ * Axis-aware: supports both vertical and horizontal scrolling
  */
 
 import type {
@@ -24,6 +25,7 @@ import { createElementPool } from "./pool";
 export {
   createDOMStructure,
   updateContentHeight,
+  updateContentSize,
   resolveContainer,
   getContainerDimensions,
 } from "./dom";
@@ -96,8 +98,13 @@ export const createRenderer = <T extends VListItem = VListItem>(
   heightCache: HeightCache,
   classPrefix: string,
   _totalItemsGetter?: () => number,
+  horizontal?: boolean,
 ): Renderer<T> => {
   const pool = createElementPool("div");
+
+  // Pre-compute axis-dependent names once (avoids branching on every render)
+  const sizeProp = horizontal ? "width" : "height";
+  const translatePrefix = horizontal ? "translateX(" : "translateY(";
   const rendered = new Map<number, RenderedItem>();
 
   // Cache compression state to avoid recalculating
@@ -150,11 +157,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Apply static styles to an element (called once when element is created/recycled)
-   * Only sets height — position/top/left/right are already in .vlist-item CSS
-   * For variable heights, the height depends on the item index.
+   * Sets the scroll-axis dimension: height for vertical, width for horizontal.
+   * Position/top/left/right are already in .vlist-item CSS.
+   * For variable sizes, the dimension depends on the item index.
    */
   const applyStaticStyles = (element: HTMLElement, index: number): void => {
-    element.style.height = `${heightCache.getHeight(index)}px`;
+    element.style[sizeProp] = `${heightCache.getHeight(index)}px`;
   };
 
   /**
@@ -187,6 +195,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Position an element at the correct offset (transform only)
+   * Uses translateX for horizontal mode, translateY for vertical mode.
    * Static styles should already be applied via applyStaticStyles
    */
   const positionElement = (
@@ -195,7 +204,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): void => {
     const offset = calculateOffset(index, compressionCtx);
-    element.style.transform = `translateY(${Math.round(offset)}px)`;
+    element.style.transform = `${translatePrefix}${Math.round(offset)}px)`;
   };
 
   // Pre-computed class names for toggle operations

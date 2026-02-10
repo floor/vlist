@@ -38,6 +38,13 @@ export interface ScrollControllerConfig {
    */
   scrollElement?: Window;
 
+  /**
+   * Enable horizontal scrolling mode.
+   * When true, the controller reads scrollLeft instead of scrollTop,
+   * handles deltaX wheel events, and scrolls along the X axis.
+   */
+  horizontal?: boolean;
+
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
 
@@ -249,14 +256,36 @@ export const createScrollController = (
     onScroll,
     onIdle,
     scrollElement,
+    horizontal = false,
   } = config;
 
   const windowMode = !!scrollElement;
 
+  // Pre-compute axis-dependent property names once (avoids branching on hot paths)
+  const scrollProp: "scrollLeft" | "scrollTop" = horizontal
+    ? "scrollLeft"
+    : "scrollTop";
+  const scrollSizeProp: "scrollWidth" | "scrollHeight" = horizontal
+    ? "scrollWidth"
+    : "scrollHeight";
+  const clientSizeProp: "clientWidth" | "clientHeight" = horizontal
+    ? "clientWidth"
+    : "clientHeight";
+  const rectProp: "left" | "top" = horizontal ? "left" : "top";
+  const windowSizeProp: "innerWidth" | "innerHeight" = horizontal
+    ? "innerWidth"
+    : "innerHeight";
+  const windowScrollProp: "scrollX" | "scrollY" = horizontal
+    ? "scrollX"
+    : "scrollY";
+  const scrollToProp: "left" | "top" = horizontal ? "left" : "top";
+
   // State
   let scrollPosition = 0;
   let maxScroll = 0;
-  let containerHeight = windowMode ? window.innerHeight : viewport.clientHeight;
+  let containerHeight = windowMode
+    ? window[windowSizeProp]
+    : viewport[clientSizeProp];
   let compressed = config.compressed ?? false;
   let compression = config.compression;
   let velocityTracker = createVelocityTracker();
@@ -268,7 +297,7 @@ export const createScrollController = (
   // =============================================================================
 
   const handleNativeScrollRaw = (): void => {
-    const newPosition = viewport.scrollTop;
+    const newPosition = viewport[scrollProp];
     const direction: ScrollDirection =
       newPosition >= scrollPosition ? "down" : "up";
 
@@ -296,10 +325,10 @@ export const createScrollController = (
 
   const handleWindowScrollRaw = (): void => {
     // Compute list-relative scroll position from the viewport's bounding rect.
-    // When the list's top edge is at the window's top, rect.top = 0, scrollTop = 0.
-    // When the list has scrolled 500px past, rect.top = -500, scrollTop = 500.
+    // For vertical: When the list's top edge is at the window's top, rect.top = 0.
+    // For horizontal: When the list's left edge is at the window's left, rect.left = 0.
     const rect = viewport.getBoundingClientRect();
-    const newPosition = Math.max(0, -rect.top);
+    const newPosition = Math.max(0, -rect[rectProp]);
     const direction: ScrollDirection =
       newPosition >= scrollPosition ? "down" : "up";
 
@@ -333,7 +362,11 @@ export const createScrollController = (
 
     event.preventDefault();
 
-    const delta = event.deltaY * sensitivity;
+    // Use deltaX for horizontal mode (with deltaY fallback for vertical-only mice),
+    // deltaY for vertical mode.
+    const rawDelta =
+      horizontal && event.deltaX !== 0 ? event.deltaX : event.deltaY;
+    const delta = rawDelta * sensitivity;
     let newPosition = scrollPosition + delta;
 
     // Apply smoothing if enabled
@@ -402,7 +435,7 @@ export const createScrollController = (
     maxScroll = newCompression.virtualHeight - containerHeight;
 
     // In window mode, compression is purely mathematical — the content div
-    // height is set to the virtual height by vlist.ts, and the browser scrolls
+    // size is set to the virtual size by vlist.ts, and the browser scrolls
     // natively. No overflow changes or wheel interception needed.
     if (windowMode) return;
 
@@ -417,15 +450,16 @@ export const createScrollController = (
     viewport.addEventListener("wheel", handleWheel, { passive: false });
 
     // Convert current scroll position to compressed equivalent
-    if (viewport.scrollTop > 0) {
+    const currentNativePos = viewport[scrollProp];
+    if (currentNativePos > 0) {
       const ratio =
-        viewport.scrollTop /
-        (compression?.actualHeight ?? viewport.scrollHeight);
+        currentNativePos /
+        (compression?.actualHeight ?? viewport[scrollSizeProp]);
       scrollPosition = ratio * maxScroll;
     }
 
     // Reset native scroll
-    viewport.scrollTop = 0;
+    viewport[scrollProp] = 0;
   };
 
   const disableCompression = (): void => {
@@ -443,7 +477,11 @@ export const createScrollController = (
     viewport.removeEventListener("wheel", handleWheel);
 
     // Restore native scrolling
-    viewport.style.overflow = "auto";
+    viewport.style.overflow = horizontal ? "" : "auto";
+    if (horizontal) {
+      viewport.style.overflowX = "auto";
+      viewport.style.overflowY = "hidden";
+    }
 
     // Add native scroll listener
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
@@ -451,7 +489,8 @@ export const createScrollController = (
     // Restore scroll position
     if (compression && scrollPosition > 0) {
       const ratio = scrollPosition / maxScroll;
-      viewport.scrollTop = ratio * (compression.actualHeight - containerHeight);
+      viewport[scrollProp] =
+        ratio * (compression.actualHeight - containerHeight);
     }
 
     compression = undefined;
@@ -463,10 +502,11 @@ export const createScrollController = (
 
   const getScrollTop = (): number => {
     // In window mode, scrollPosition is always the source of truth
-    // (viewport.scrollTop is 0 because overflow is visible).
+    // (viewport.scrollTop/scrollLeft is 0 because overflow is visible).
     // In compressed mode, scrollPosition is manually tracked.
     // In native container mode, read from the DOM.
-    return windowMode || compressed ? scrollPosition : viewport.scrollTop;
+    if (windowMode || compressed) return scrollPosition;
+    return viewport[scrollProp];
   };
 
   const scrollTo = (position: number, smooth = false): void => {
@@ -476,12 +516,11 @@ export const createScrollController = (
     );
 
     if (windowMode) {
-      // Scroll the window so the desired list position is at the top of the viewport.
-      // listDocumentTop = the list's absolute position in the document.
+      // Scroll the window so the desired list position is visible.
       const rect = viewport.getBoundingClientRect();
-      const listDocumentTop = rect.top + window.scrollY;
+      const listDocumentOffset = rect[rectProp] + window[windowScrollProp];
       window.scrollTo({
-        top: listDocumentTop + clampedPosition,
+        [scrollToProp]: listDocumentOffset + clampedPosition,
         behavior: smooth ? "smooth" : "auto",
       });
       // The window scroll event will fire and update scrollPosition via handleWindowScroll
@@ -510,7 +549,7 @@ export const createScrollController = (
       scheduleIdleCheck();
     } else {
       viewport.scrollTo({
-        top: clampedPosition,
+        [scrollToProp]: clampedPosition,
         behavior: smooth ? "smooth" : "auto",
       });
     }
@@ -531,7 +570,7 @@ export const createScrollController = (
     const max =
       windowMode || compressed
         ? maxScroll
-        : viewport.scrollHeight - viewport.clientHeight;
+        : viewport[scrollSizeProp] - viewport[clientSizeProp];
     return scrollTop >= max - threshold;
   };
 
@@ -540,7 +579,7 @@ export const createScrollController = (
     const max =
       windowMode || compressed
         ? maxScroll
-        : viewport.scrollHeight - viewport.clientHeight;
+        : viewport[scrollSizeProp] - viewport[clientSizeProp];
     if (max <= 0) return 0;
     return Math.min(1, Math.max(0, scrollTop / max));
   };
@@ -609,7 +648,10 @@ export const createScrollController = (
     viewport.addEventListener("wheel", handleWheel, { passive: false });
   } else {
     // Start in native scroll mode
-    viewport.style.overflow = "auto";
+    viewport.style.overflow = horizontal ? "hidden" : "auto";
+    if (horizontal) {
+      viewport.style.overflowX = "auto";
+    }
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
   }
 
