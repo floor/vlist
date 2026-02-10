@@ -425,6 +425,9 @@ const easeInOutQuad = (t: number): number =>
 // Main Factory
 // =============================================================================
 
+/** Module-level instance counter for unique ARIA element IDs */
+let coreInstanceId = 0;
+
 /**
  * Create a lightweight virtual list (core).
  *
@@ -484,6 +487,9 @@ export const createVList = <T extends VListItem = VListItem>(
   // Domain components
   // ---------------------------------------------------------------------------
 
+  // Unique ARIA ID prefix for this instance (avoids collisions with multiple lists)
+  const ariaIdPrefix = `${classPrefix}-${coreInstanceId++}`;
+
   const containerElement = resolveContainer(config.container);
   const dom = createDOMStructure(containerElement, classPrefix, ariaLabel);
   const emitter = createEmitter();
@@ -515,6 +521,9 @@ export const createVList = <T extends VListItem = VListItem>(
   // Pre-computed class names
   const baseClass = `${classPrefix}-item`;
 
+  // Track aria-setsize to avoid redundant updates on existing items
+  let lastAriaSetSize = "";
+
   // ---------------------------------------------------------------------------
   // Rendering helpers
   // ---------------------------------------------------------------------------
@@ -538,6 +547,12 @@ export const createVList = <T extends VListItem = VListItem>(
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
     element.ariaSelected = "false";
+
+    // ARIA: positional context for screen readers ("item 5 of 10,000")
+    element.id = `${ariaIdPrefix}-item-${index}`;
+    lastAriaSetSize = String(items.length);
+    element.setAttribute("aria-setsize", lastAriaSetSize);
+    element.setAttribute("aria-posinset", String(index + 1));
 
     applyTemplate(element, template(item, index, itemState));
     positionElement(element, index);
@@ -572,6 +587,11 @@ export const createVList = <T extends VListItem = VListItem>(
       return;
     }
 
+    // Check if aria-setsize changed (total items mutated) — update existing items only when needed
+    const currentSetSize = String(items.length);
+    const setSizeChanged = currentSetSize !== lastAriaSetSize;
+    lastAriaSetSize = currentSetSize;
+
     // Remove items outside new range
     for (const [index, element] of rendered) {
       if (index < renderRange.start || index > renderRange.end) {
@@ -600,6 +620,11 @@ export const createVList = <T extends VListItem = VListItem>(
           existing.style.height = `${heightCache.getHeight(i)}px`;
         }
         positionElement(existing, i);
+
+        // Update aria-setsize on existing items only when total changed (rare)
+        if (setSizeChanged) {
+          existing.setAttribute("aria-setsize", lastAriaSetSize);
+        }
       } else {
         const element = renderItem(i, item);
         fragment.appendChild(element);

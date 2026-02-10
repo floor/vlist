@@ -79,6 +79,12 @@ const createMockConfig = (
   classPrefix: "vlist",
   selectionMode: "none",
   hasAdapter: false,
+  reverse: false,
+  wrap: false,
+  cancelLoadThreshold: 25,
+  preloadThreshold: 10,
+  preloadAhead: 20,
+  ariaIdPrefix: "vlist-0",
   ...overrides,
 });
 

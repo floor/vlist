@@ -90,6 +90,7 @@ const createMockConfig = (
   cancelLoadThreshold: 25,
   preloadThreshold: 5,
   preloadAhead: 50,
+  ariaIdPrefix: "vlist-0",
   ...overrides,
 });
 

@@ -86,6 +86,9 @@ import {
 // Main Factory
 // =============================================================================
 
+/** Module-level instance counter for unique ARIA element IDs */
+let vlistInstanceId = 0;
+
 /**
  * Create a virtual list instance
  */
@@ -228,6 +231,9 @@ export const createVList = <T extends VListItem = VListItem>(
   const preloadThreshold =
     loadingConfig?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
   const preloadAhead = loadingConfig?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
+
+  // Unique ARIA ID prefix for this instance (avoids collisions with multiple lists)
+  const ariaIdPrefix = `${classPrefix}-${vlistInstanceId++}`;
 
   // ===========================================================================
   // Grid Setup (when layout: 'grid')
@@ -482,6 +488,8 @@ export const createVList = <T extends VListItem = VListItem>(
       gridLayout,
       classPrefix,
       dimensions.width,
+      () => dataManager.getTotal(),
+      ariaIdPrefix,
     );
 
     // The grid renderer satisfies the same interface as the list renderer
@@ -494,6 +502,7 @@ export const createVList = <T extends VListItem = VListItem>(
       heightCache,
       classPrefix,
       () => dataManager.getTotal(),
+      ariaIdPrefix,
     );
   }
 
@@ -581,6 +590,7 @@ export const createVList = <T extends VListItem = VListItem>(
       cancelLoadThreshold,
       preloadThreshold,
       preloadAhead,
+      ariaIdPrefix,
     },
     dom,
     heightCache,
@@ -1047,6 +1057,44 @@ export const createVList = <T extends VListItem = VListItem>(
   }
 
   // ===========================================================================
+  // Accessibility: Live Region + aria-busy
+  // ===========================================================================
+
+  // Create a visually-hidden live region for screen reader announcements
+  // (e.g. "3 items selected" on selection change)
+  const liveRegion = document.createElement("div");
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.className = `${classPrefix}-live-region`;
+  liveRegion.style.cssText =
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+  dom.root.appendChild(liveRegion);
+
+  // Announce selection changes to screen readers
+  if (selectionMode !== "none") {
+    emitter.on("selection:change", ({ selected }) => {
+      const count = selected.length;
+      if (count === 0) {
+        liveRegion.textContent = "";
+      } else if (count === 1) {
+        liveRegion.textContent = "1 item selected";
+      } else {
+        liveRegion.textContent = `${count} items selected`;
+      }
+    });
+  }
+
+  // aria-busy: announce loading state to screen readers
+  if (adapter) {
+    emitter.on("load:start", () => {
+      dom.root.setAttribute("aria-busy", "true");
+    });
+    emitter.on("load:end", () => {
+      dom.root.removeAttribute("aria-busy");
+    });
+  }
+
+  // ===========================================================================
   // Destroy
   // ===========================================================================
 
@@ -1058,6 +1106,9 @@ export const createVList = <T extends VListItem = VListItem>(
     // Remove event listeners
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
+
+    // Remove ARIA live region
+    liveRegion.remove();
 
     // Disconnect ResizeObserver and window resize listener
     resizeObserver.disconnect();

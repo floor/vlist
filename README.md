@@ -18,7 +18,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 📌 **Sticky headers** - Grouped lists with sticky section headers
 - 🪟 **Window scrolling** - Document-level scrolling with `scrollElement: window`
 - 🎨 **Customizable** - Beautiful, customizable styles
-- ♿ **Accessible** - Full keyboard navigation and ARIA support
+- ♿ **Accessible** - WAI-ARIA listbox pattern, `aria-setsize`/`aria-posinset`, `aria-activedescendant`, live region, keyboard navigation
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
 - 💾 **Scroll save/restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
 - 💬 **Reverse mode** - Chat UI support with auto-scroll, scroll-preserving prepend
@@ -102,6 +102,7 @@ import 'vlist/styles';
 
 const list = createVList({
   container: '#my-list',
+  ariaLabel: 'Contact list',
   item: {
     height: 48,
     template: (item) => `
@@ -631,7 +632,11 @@ list.total                          // Total item count
 | `load:end` | `{ items, total }` | Data loading completed |
 | `error` | `{ error, context }` | Error occurred |
 
-## Keyboard Navigation
+## Keyboard Navigation & Accessibility
+
+vlist implements the [WAI-ARIA Listbox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/) for full screen reader and keyboard support.
+
+### Keyboard Shortcuts
 
 When selection is enabled, the list supports full keyboard navigation:
 
@@ -641,6 +646,26 @@ When selection is enabled, the list supports full keyboard navigation:
 | `Home` | Move focus to first item |
 | `End` | Move focus to last item |
 | `Space` / `Enter` | Toggle selection on focused item |
+| `Tab` | Move focus into / out of the list |
+
+### ARIA Attributes
+
+| Attribute | Element | Purpose |
+|-----------|---------|---------|
+| `role="listbox"` | Root | Identifies the widget as a list of selectable items |
+| `role="option"` | Each item | Identifies each item as a selectable option |
+| `aria-setsize` | Each item | Total item count — screen readers announce "item 5 of 10,000" |
+| `aria-posinset` | Each item | 1-based position within the list |
+| `aria-activedescendant` | Root | Points to the focused item's ID for screen reader tracking |
+| `aria-selected` | Each item | Reflects selection state |
+| `aria-busy` | Root | Present during async data loading |
+| `aria-label` | Root | Set via `ariaLabel` config option |
+
+A visually-hidden **live region** (`aria-live="polite"`) announces selection changes (e.g., "3 items selected").
+
+Each item receives a unique `id` (`vlist-{instance}-item-{index}`) safe for multiple lists per page.
+
+> 📖 Full documentation: [docs/accessibility.md](docs/accessibility.md)
 
 ## Styling
 
@@ -673,6 +698,7 @@ The component uses these CSS class names:
 - `.vlist-grid-item` - Grid item (positioned with `translate(x, y)`)
 - `.vlist--grouped` - Grouped list modifier
 - `.vlist-sticky-header` - Sticky header overlay
+- `.vlist-live-region` - Visually-hidden live region for screen reader announcements
 - `.vlist--scrolling` - Applied during active scroll (disables transitions)
 
 ### Variants
