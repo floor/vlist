@@ -50,6 +50,13 @@ export interface ScrollControllerConfig {
   /** Scroll idle detection timeout in ms (default: 150) */
   idleTimeout?: number;
 
+  /**
+   * Enable horizontal scrolling mode.
+   * When true, the controller reads scrollLeft instead of scrollTop,
+   * uses clientWidth instead of clientHeight, and maps wheel deltaX.
+   */
+  horizontal?: boolean;
+
   /** Callback when scroll position changes */
   onScroll?: (data: ScrollEventData) => void;
 
@@ -253,6 +260,7 @@ export const createScrollController = (
     onScroll,
     onIdle,
     scrollElement,
+    horizontal = false,
   } = config;
 
   const windowMode = !!scrollElement;
@@ -260,7 +268,13 @@ export const createScrollController = (
   // State
   let scrollPosition = 0;
   let maxScroll = 0;
-  let containerHeight = windowMode ? window.innerHeight : viewport.clientHeight;
+  let containerHeight = windowMode
+    ? horizontal
+      ? window.innerWidth
+      : window.innerHeight
+    : horizontal
+      ? viewport.clientWidth
+      : viewport.clientHeight;
   let compressed = config.compressed ?? false;
   let compression = config.compression;
   let velocityTracker = createVelocityTracker();
@@ -272,7 +286,7 @@ export const createScrollController = (
   // =============================================================================
 
   const handleNativeScrollRaw = (): void => {
-    const newPosition = viewport.scrollTop;
+    const newPosition = horizontal ? viewport.scrollLeft : viewport.scrollTop;
     const direction: ScrollDirection =
       newPosition >= scrollPosition ? "down" : "up";
 
@@ -303,7 +317,9 @@ export const createScrollController = (
     // When the list's top edge is at the window's top, rect.top = 0, scrollTop = 0.
     // When the list has scrolled 500px past, rect.top = -500, scrollTop = 500.
     const rect = viewport.getBoundingClientRect();
-    const newPosition = Math.max(0, -rect.top);
+    const newPosition = horizontal
+      ? Math.max(0, -rect.left)
+      : Math.max(0, -rect.top);
     const direction: ScrollDirection =
       newPosition >= scrollPosition ? "down" : "up";
 
@@ -337,12 +353,25 @@ export const createScrollController = (
     event.preventDefault();
   };
 
+  /**
+   * Translate vertical wheel (deltaY) into horizontal scroll in native mode.
+   * Trackpad deltaX already causes native horizontal scroll, so only remap
+   * deltaY when there is no deltaX. This keeps trackpad gestures natural
+   * while letting a regular mouse wheel drive horizontal scrolling.
+   */
+  const handleHorizontalWheel = (event: WheelEvent): void => {
+    if (event.deltaX) return; // native horizontal scroll handles it
+    event.preventDefault();
+    viewport.scrollLeft += event.deltaY;
+  };
+
   const handleWheel = (event: WheelEvent): void => {
     if (!compressed) return;
 
     event.preventDefault();
 
-    const delta = event.deltaY * sensitivity;
+    const delta =
+      (horizontal ? event.deltaX || event.deltaY : event.deltaY) * sensitivity;
     let newPosition = scrollPosition + delta;
 
     // Apply smoothing if enabled
@@ -419,13 +448,19 @@ export const createScrollController = (
     handleNativeScroll.cancel();
     viewport.removeEventListener("scroll", handleNativeScroll);
 
-    // Remove block-wheel listener (was active in native mode when wheel disabled)
+    // Remove native-mode wheel listeners
     if (!wheel) {
       viewport.removeEventListener("wheel", blockWheel);
+    } else if (horizontal) {
+      viewport.removeEventListener("wheel", handleHorizontalWheel);
     }
 
     // Switch to overflow hidden
-    viewport.style.overflow = "hidden";
+    if (horizontal) {
+      viewport.style.overflowX = "hidden";
+    } else {
+      viewport.style.overflow = "hidden";
+    }
 
     // Add wheel listener (only if wheel is enabled)
     if (wheel) {
@@ -433,15 +468,21 @@ export const createScrollController = (
     }
 
     // Convert current scroll position to compressed equivalent
-    if (viewport.scrollTop > 0) {
-      const ratio =
-        viewport.scrollTop /
-        (compression?.actualHeight ?? viewport.scrollHeight);
+    const nativePos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
+    if (nativePos > 0) {
+      const nativeMax = horizontal
+        ? (compression?.actualHeight ?? viewport.scrollWidth)
+        : (compression?.actualHeight ?? viewport.scrollHeight);
+      const ratio = nativePos / nativeMax;
       scrollPosition = ratio * maxScroll;
     }
 
     // Reset native scroll
-    viewport.scrollTop = 0;
+    if (horizontal) {
+      viewport.scrollLeft = 0;
+    } else {
+      viewport.scrollTop = 0;
+    }
   };
 
   const disableCompression = (): void => {
@@ -459,20 +500,33 @@ export const createScrollController = (
     viewport.removeEventListener("wheel", handleWheel);
 
     // Restore native scrolling
-    viewport.style.overflow = "auto";
+    if (horizontal) {
+      viewport.style.overflowX = "auto";
+    } else {
+      viewport.style.overflow = "auto";
+    }
 
     // Add native scroll listener
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
 
-    // Re-add block-wheel listener in native mode when wheel is disabled
+    // Re-add native-mode wheel listeners
     if (!wheel) {
       viewport.addEventListener("wheel", blockWheel, { passive: false });
+    } else if (horizontal) {
+      viewport.addEventListener("wheel", handleHorizontalWheel, {
+        passive: false,
+      });
     }
 
     // Restore scroll position
     if (compression && scrollPosition > 0) {
       const ratio = scrollPosition / maxScroll;
-      viewport.scrollTop = ratio * (compression.actualHeight - containerHeight);
+      const restoredPos = ratio * (compression.actualHeight - containerHeight);
+      if (horizontal) {
+        viewport.scrollLeft = restoredPos;
+      } else {
+        viewport.scrollTop = restoredPos;
+      }
     }
 
     compression = undefined;
@@ -487,7 +541,8 @@ export const createScrollController = (
     // (viewport.scrollTop is 0 because overflow is visible).
     // In compressed mode, scrollPosition is manually tracked.
     // In native container mode, read from the DOM.
-    return windowMode || compressed ? scrollPosition : viewport.scrollTop;
+    if (windowMode || compressed) return scrollPosition;
+    return horizontal ? viewport.scrollLeft : viewport.scrollTop;
   };
 
   const scrollTo = (position: number, smooth = false): void => {
@@ -500,11 +555,19 @@ export const createScrollController = (
       // Scroll the window so the desired list position is at the top of the viewport.
       // listDocumentTop = the list's absolute position in the document.
       const rect = viewport.getBoundingClientRect();
-      const listDocumentTop = rect.top + window.scrollY;
-      window.scrollTo({
-        top: listDocumentTop + clampedPosition,
-        behavior: smooth ? "smooth" : "auto",
-      });
+      if (horizontal) {
+        const listDocumentLeft = rect.left + window.scrollX;
+        window.scrollTo({
+          left: listDocumentLeft + clampedPosition,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      } else {
+        const listDocumentTop = rect.top + window.scrollY;
+        window.scrollTo({
+          top: listDocumentTop + clampedPosition,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      }
       // The window scroll event will fire and update scrollPosition via handleWindowScroll
     } else if (compressed) {
       if (clampedPosition === scrollPosition) return;
@@ -530,10 +593,17 @@ export const createScrollController = (
 
       scheduleIdleCheck();
     } else {
-      viewport.scrollTo({
-        top: clampedPosition,
-        behavior: smooth ? "smooth" : "auto",
-      });
+      if (horizontal) {
+        viewport.scrollTo({
+          left: clampedPosition,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      } else {
+        viewport.scrollTo({
+          top: clampedPosition,
+          behavior: smooth ? "smooth" : "auto",
+        });
+      }
     }
   };
 
@@ -552,7 +622,9 @@ export const createScrollController = (
     const max =
       windowMode || compressed
         ? maxScroll
-        : viewport.scrollHeight - viewport.clientHeight;
+        : horizontal
+          ? viewport.scrollWidth - viewport.clientWidth
+          : viewport.scrollHeight - viewport.clientHeight;
     return scrollTop >= max - threshold;
   };
 
@@ -561,7 +633,9 @@ export const createScrollController = (
     const max =
       windowMode || compressed
         ? maxScroll
-        : viewport.scrollHeight - viewport.clientHeight;
+        : horizontal
+          ? viewport.scrollWidth - viewport.clientWidth
+          : viewport.scrollHeight - viewport.clientHeight;
     if (max <= 0) return 0;
     return Math.min(1, Math.max(0, scrollTop / max));
   };
@@ -611,6 +685,7 @@ export const createScrollController = (
       viewport.removeEventListener("scroll", handleNativeScroll);
       viewport.removeEventListener("wheel", handleWheel);
       viewport.removeEventListener("wheel", blockWheel);
+      viewport.removeEventListener("wheel", handleHorizontalWheel);
     }
   };
 
@@ -627,16 +702,29 @@ export const createScrollController = (
   } else if (compressed && compression) {
     // Start in compressed mode
     maxScroll = compression.virtualHeight - containerHeight;
-    viewport.style.overflow = "hidden";
+    if (horizontal) {
+      viewport.style.overflowX = "hidden";
+    } else {
+      viewport.style.overflow = "hidden";
+    }
     if (wheel) {
       viewport.addEventListener("wheel", handleWheel, { passive: false });
     }
   } else {
     // Start in native scroll mode
-    viewport.style.overflow = "auto";
+    if (horizontal) {
+      viewport.style.overflowX = "auto";
+      viewport.style.overflowY = "hidden";
+    } else {
+      viewport.style.overflow = "auto";
+    }
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
     if (!wheel) {
       viewport.addEventListener("wheel", blockWheel, { passive: false });
+    } else if (horizontal) {
+      viewport.addEventListener("wheel", handleHorizontalWheel, {
+        passive: false,
+      });
     }
   }
 

@@ -352,6 +352,65 @@
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
 
+/* =============================================================================
+   Horizontal Mode
+   ============================================================================= */
+
+/* Root — same as default but orientation hint */
+.vlist--horizontal {
+    overflow: hidden;
+}
+
+/* Viewport scrolls on X axis only */
+.vlist--horizontal .vlist-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Content container — width is set dynamically, height fills parent */
+.vlist--horizontal .vlist-content {
+    height: 100%;
+    width: auto;
+}
+
+/* Items container */
+.vlist--horizontal .vlist-items {
+    height: 100%;
+    width: auto;
+}
+
+/* Individual item — positioned absolutely on the X axis */
+.vlist--horizontal .vlist-item {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: none;
+    border-right: 1px solid var(--vlist-border);
+    will-change: transform;
+}
+
+/* Horizontal custom scrollbar — track at bottom, thumb moves on X axis */
+.vlist-scrollbar--horizontal {
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: var(--vlist-scrollbar-width);
+}
+
+.vlist-scrollbar--horizontal .vlist-scrollbar-thumb {
+    top: 0;
+    left: 0;
+    width: auto;
+    height: 100%;
+}
+
 /* Hide native scrollbar when custom scrollbar is active */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;

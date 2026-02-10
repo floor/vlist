@@ -165,6 +165,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
   classPrefix: string,
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
+  horizontal?: boolean,
+  crossAxisSize?: number,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, RenderedItem>();
@@ -226,7 +228,14 @@ export const createRenderer = <T extends VListItem = VListItem>(
    * For variable heights, the height depends on the item index.
    */
   const applyStaticStyles = (element: HTMLElement, index: number): void => {
-    element.style.height = `${heightCache.getHeight(index)}px`;
+    if (horizontal) {
+      element.style.width = `${heightCache.getHeight(index)}px`;
+      if (crossAxisSize != null) {
+        element.style.height = `${crossAxisSize}px`;
+      }
+    } else {
+      element.style.height = `${heightCache.getHeight(index)}px`;
+    }
   };
 
   /**
@@ -267,7 +276,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): void => {
     const offset = calculateOffset(index, compressionCtx);
-    element.style.transform = `translateY(${Math.round(offset)}px)`;
+    element.style.transform = horizontal
+      ? `translateX(${Math.round(offset)}px)`
+      : `translateY(${Math.round(offset)}px)`;
   };
 
   // Pre-computed class names for toggle operations
@@ -537,6 +548,7 @@ export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
   ariaLabel?: string,
+  horizontal?: boolean,
 ): DOMStructure => {
   // Root element
   const root = document.createElement("div");
@@ -548,24 +560,47 @@ export const createDOMStructure = (
     root.setAttribute("aria-label", ariaLabel);
   }
 
+  if (horizontal) {
+    root.classList.add(`${classPrefix}--horizontal`);
+    root.setAttribute("aria-orientation", "horizontal");
+  }
+
   // Viewport (scrollable container)
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
-  // Content (sets the total scrollable height)
+  if (horizontal) {
+    viewport.style.overflowX = "auto";
+    viewport.style.overflowY = "hidden";
+  } else {
+    viewport.style.overflow = "auto";
+  }
+
+  // Content (sets the total scrollable size)
   const content = document.createElement("div");
   content.className = `${classPrefix}-content`;
   content.style.position = "relative";
-  content.style.width = "100%";
+
+  if (horizontal) {
+    content.style.height = "100%";
+    // Width will be set by updateContentWidth
+  } else {
+    content.style.width = "100%";
+    // Height will be set by updateContentHeight
+  }
 
   // Items container (holds rendered items)
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
   items.style.position = "relative";
-  items.style.width = "100%";
+
+  if (horizontal) {
+    items.style.height = "100%";
+  } else {
+    items.style.width = "100%";
+  }
 
   // Assemble structure
   content.appendChild(items);
@@ -584,6 +619,16 @@ export const updateContentHeight = (
   totalHeight: number,
 ): void => {
   content.style.height = `${totalHeight}px`;
+};
+
+/**
+ * Update content width for horizontal virtual scrolling
+ */
+export const updateContentWidth = (
+  content: HTMLElement,
+  totalWidth: number,
+): void => {
+  content.style.width = `${totalWidth}px`;
 };
 
 /**

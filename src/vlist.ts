@@ -29,6 +29,7 @@ import {
   createRenderer,
   createDOMStructure,
   updateContentHeight,
+  updateContentWidth,
   resolveContainer,
   getContainerDimensions,
 } from "./render";
@@ -105,22 +106,50 @@ export const createVList = <T extends VListItem = VListItem>(
   if (!config.item) {
     throw new Error("[vlist] item configuration is required");
   }
-  if (config.item.height == null) {
-    throw new Error("[vlist] item.height is required");
+
+  const isHorizontal = config.direction === "horizontal";
+
+  // Direction-aware main-axis size validation
+  const mainAxisProp = isHorizontal ? "width" : "height";
+  const mainAxisValue = isHorizontal ? config.item.width : config.item.height;
+
+  if (mainAxisValue == null) {
+    throw new Error(
+      `[vlist] item.${mainAxisProp} is required${isHorizontal ? " when direction is 'horizontal'" : ""}`,
+    );
   }
-  if (typeof config.item.height === "number" && config.item.height <= 0) {
-    throw new Error("[vlist] item.height must be a positive number");
+  if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
+    throw new Error(`[vlist] item.${mainAxisProp} must be a positive number`);
   }
   if (
-    typeof config.item.height !== "number" &&
-    typeof config.item.height !== "function"
+    typeof mainAxisValue !== "number" &&
+    typeof mainAxisValue !== "function"
   ) {
     throw new Error(
-      "[vlist] item.height must be a number or a function (index) => number",
+      `[vlist] item.${mainAxisProp} must be a number or a function (index) => number`,
     );
   }
   if (!config.item.template) {
     throw new Error("[vlist] item.template is required");
+  }
+
+  // Horizontal mode exclusions
+  if (isHorizontal) {
+    if (config.groups) {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with groups",
+      );
+    }
+    if (config.layout === "grid") {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with grid layout",
+      );
+    }
+    if (config.reverse) {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with reverse mode",
+      );
+    }
   }
 
   // Grid-specific validation
@@ -221,7 +250,20 @@ export const createVList = <T extends VListItem = VListItem>(
   const isGrid = layoutMode === "grid" && !!gridConfig;
   const isReverse = reverseMode;
 
-  const { height: itemHeightConfig, template: userTemplate } = itemConfig;
+  // The heightCache / viewport machinery is axis-agnostic — it tracks
+  // "main-axis size" regardless of which CSS property that maps to.
+  // In horizontal mode: width = main axis, height = cross axis.
+  const mainAxisSizeConfig = mainAxisValue as
+    | number
+    | ((index: number) => number);
+  const crossAxisSize: number | undefined = isHorizontal
+    ? typeof itemConfig.height === "number"
+      ? itemConfig.height
+      : undefined
+    : typeof itemConfig.width === "number"
+      ? itemConfig.width
+      : undefined;
+  const { template: userTemplate } = itemConfig;
 
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
@@ -275,7 +317,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // Transform items and height function when groups are active
   let layoutItems: T[] | Array<T | GroupHeaderItem> = initialItems ?? [];
   let effectiveHeightConfig: number | ((index: number) => number) =
-    itemHeightConfig;
+    mainAxisSizeConfig;
 
   // Unified template: dispatches to headerTemplate or user template
   let template = userTemplate;
@@ -289,7 +331,7 @@ export const createVList = <T extends VListItem = VListItem>(
     // Create a grouped height function
     effectiveHeightConfig = createGroupedHeightFn(
       groupLayout,
-      itemHeightConfig,
+      mainAxisSizeConfig,
     );
 
     // Create a unified template that renders headers or items
@@ -311,7 +353,12 @@ export const createVList = <T extends VListItem = VListItem>(
 
   // Resolve container and create DOM structure
   const containerElement = resolveContainer(config.container);
-  const dom = createDOMStructure(containerElement, classPrefix, ariaLabel);
+  const dom = createDOMStructure(
+    containerElement,
+    classPrefix,
+    ariaLabel,
+    isHorizontal,
+  );
 
   // Create event emitter
   const emitter = createEmitter<VListEvents<T>>();
@@ -365,7 +412,7 @@ export const createVList = <T extends VListItem = VListItem>(
     // Rebuild height function (the closure captures the updated groupLayout)
     effectiveHeightConfig = createGroupedHeightFn(
       groupLayout,
-      itemHeightConfig,
+      mainAxisSizeConfig,
     );
 
     // Refresh sticky header content
@@ -420,6 +467,20 @@ export const createVList = <T extends VListItem = VListItem>(
     ? { height: window.innerHeight, width: dom.viewport.clientWidth }
     : getContainerDimensions(dom.viewport);
 
+  // In horizontal mode, the main-axis container size is width, not height.
+  const mainAxisContainerSize = isHorizontal
+    ? dimensions.width
+    : dimensions.height;
+
+  // Single helper to set the content element's scrollable size on the correct axis
+  const updateContentSize = (totalSize: number): void => {
+    if (isHorizontal) {
+      updateContentWidth(dom.content, totalSize);
+    } else {
+      updateContentHeight(dom.content, totalSize);
+    }
+  };
+
   // Get initial compression state (must be before createViewportState which uses it)
   // In grid mode, use row count for compression (rows are what the virtualizer sees)
   const initialVirtualTotal = getVirtualTotal();
@@ -427,7 +488,7 @@ export const createVList = <T extends VListItem = VListItem>(
 
   // Create initial viewport state (pass compression to avoid redundant calculation)
   const initialViewportState = createViewportState(
-    dimensions.height,
+    mainAxisContainerSize,
     heightCache,
     initialVirtualTotal,
     overscan,
@@ -448,6 +509,7 @@ export const createVList = <T extends VListItem = VListItem>(
       : {}),
     ...(isWindowMode ? { scrollElement } : {}),
     wheel: wheelEnabled,
+    horizontal: isHorizontal,
     onScroll: (data) => {
       // M3: Suppress CSS transitions during active scroll
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
@@ -503,6 +565,8 @@ export const createVList = <T extends VListItem = VListItem>(
       classPrefix,
       () => dataManager.getTotal(),
       ariaIdPrefix,
+      isHorizontal,
+      isHorizontal ? crossAxisSize : undefined,
     );
   }
 
@@ -530,6 +594,7 @@ export const createVList = <T extends VListItem = VListItem>(
         (position) => scrollController.scrollTo(position),
         scrollbarOptions,
         classPrefix,
+        isHorizontal,
       )
     : null;
 
@@ -548,7 +613,10 @@ export const createVList = <T extends VListItem = VListItem>(
   }
 
   if (scrollbar) {
-    scrollbar.updateBounds(initialCompression.virtualHeight, dimensions.height);
+    scrollbar.updateBounds(
+      initialCompression.virtualHeight,
+      mainAxisContainerSize,
+    );
   }
 
   // ===========================================================================
@@ -639,6 +707,7 @@ export const createVList = <T extends VListItem = VListItem>(
           (position) => scrollController.scrollTo(position),
           scrollbarOptions,
           classPrefix,
+          isHorizontal,
         );
         // Ensure native scrollbar is hidden (may not have been hidden initially
         // if mode was 'native' and list wasn't compressed at init)
@@ -696,8 +765,8 @@ export const createVList = <T extends VListItem = VListItem>(
       ctx.getCachedCompression(),
     );
 
-    // Update content height
-    updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+    // Update content size on the main axis
+    updateContentSize(ctx.state.viewportState.totalHeight);
 
     // Re-render
     renderIfNeeded();
@@ -981,27 +1050,33 @@ export const createVList = <T extends VListItem = VListItem>(
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
       const newWidth = entry.contentRect.width;
-      const currentHeight = ctx.state.viewportState.containerHeight;
+      const currentContainerSize = ctx.state.viewportState.containerHeight;
 
-      // Only update if height changed significantly (>1px to avoid float precision issues)
-      if (Math.abs(newHeight - currentHeight) > 1) {
+      // In horizontal mode, track width as the main-axis container size
+      const newMainAxisSize = isHorizontal ? newWidth : newHeight;
+
+      // Only update if main-axis size changed significantly (>1px to avoid float precision issues)
+      if (Math.abs(newMainAxisSize - currentContainerSize) > 1) {
         ctx.state.viewportState = updateViewportSize(
           ctx.state.viewportState,
-          newHeight,
+          newMainAxisSize,
           heightCache,
           getVirtualTotal(),
           overscan,
           ctx.getCachedCompression(),
         );
 
-        // Update content height and scrollbar bounds
-        updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+        // Update content size and scrollbar bounds
+        updateContentSize(ctx.state.viewportState.totalHeight);
         if (scrollbar) {
           scrollbar.updateBounds(
             ctx.state.viewportState.totalHeight,
-            newHeight,
+            newMainAxisSize,
           );
         }
+
+        // Update scroll controller's knowledge of container size
+        scrollController.updateContainerHeight(newMainAxisSize);
 
         // Re-render with new visible range
         renderIfNeeded();
@@ -1044,7 +1119,7 @@ export const createVList = <T extends VListItem = VListItem>(
           ctx.getCachedCompression(),
         );
 
-        updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+        updateContentSize(ctx.state.viewportState.totalHeight);
         renderIfNeeded();
 
         emitter.emit("resize", {
@@ -1150,7 +1225,7 @@ export const createVList = <T extends VListItem = VListItem>(
   ctx.state.isInitialized = true;
 
   // Initial render
-  updateContentHeight(dom.content, ctx.state.viewportState.totalHeight);
+  updateContentSize(ctx.state.viewportState.totalHeight);
   renderIfNeeded();
 
   // Initialize sticky header with current scroll position
