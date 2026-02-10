@@ -21,6 +21,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - ♿ **Accessible** - Full keyboard navigation and ARIA support
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
 - 💾 **Scroll save/restore** - `getScrollSnapshot()` / `restoreScroll()` for SPA navigation
+- 💬 **Reverse mode** - Chat UI support with auto-scroll, scroll-preserving prepend
 - 🔌 **Framework adapters** - Thin wrappers for React, Vue, and Svelte (<1 KB each)
 - 🌲 **Tree-shakeable** - Sub-module imports for smaller bundles
 
@@ -191,6 +192,9 @@ interface VListConfig<T> {
   groups?: GroupsConfig;            // Sticky headers / grouped lists
   loading?: LoadingConfig;          // Velocity-based loading thresholds
 
+  // Chat UI
+  reverse?: boolean;                // Reverse mode (start at bottom, auto-scroll)
+
   // Appearance
   classPrefix?: string;             // CSS class prefix (default: 'vlist')
   ariaLabel?: string;               // Accessible label for the listbox
@@ -271,6 +275,33 @@ const list = createVList({
   items: myItems,
 });
 ```
+
+### Reverse Mode (Chat UI)
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: (index) => messages[index].type === 'image' ? 200 : 60,
+    template: (msg) => `
+      <div class="bubble bubble--${msg.sender}">
+        <span class="sender">${msg.sender}</span>
+        <p>${msg.text}</p>
+      </div>
+    `,
+  },
+  items: messages,   // Chronological order (oldest first)
+});
+
+// New message arrives — auto-scrolls to bottom if user was at bottom
+chat.appendItems([newMessage]);
+
+// Load older messages — scroll position preserved (no jump)
+chat.prependItems(olderMessages);
+```
+
+Reverse mode starts scrolled to the bottom. `appendItems` auto-scrolls to show new messages when the user is at the bottom. `prependItems` adjusts the scroll position so older messages appear above without disrupting the current view. Works with both fixed and variable heights. Cannot be combined with `groups` or `grid`.
 
 ### With Selection
 

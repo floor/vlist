@@ -129,6 +129,31 @@ export interface VListConfig<T extends VListItem = VListItem> {
    * ```
    */
   grid?: GridConfig;
+
+  /**
+   * Reverse mode for chat-style UIs.
+   * When enabled:
+   * - The list starts scrolled to the bottom (newest items visible)
+   * - `appendItems()` auto-scrolls to bottom if the user was already at bottom
+   * - `prependItems()` preserves scroll position (older messages load above without jumping)
+   * - With an adapter, "load more" triggers near the TOP (loading older content)
+   *
+   * Items stay in chronological order (oldest = index 0, newest = last).
+   * Cannot be combined with `groups` or `grid` layout.
+   *
+   * ```ts
+   * const chat = createVList({
+   *   container: '#messages',
+   *   reverse: true,
+   *   item: { height: 60, template: messageTemplate },
+   *   items: messages,
+   * });
+   *
+   * chat.appendItems([newMessage]);   // auto-scrolls to bottom
+   * chat.prependItems(olderMessages); // scroll position preserved
+   * ```
+   */
+  reverse?: boolean;
 }
 
 // =============================================================================

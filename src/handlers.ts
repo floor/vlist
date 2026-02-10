@@ -149,20 +149,35 @@ export const createScrollHandler = <T extends VListItem>(
       !ctx.dataManager.getIsLoading() &&
       ctx.dataManager.getHasMore()
     ) {
-      const distanceFromBottom =
-        ctx.state.viewportState.totalHeight -
-        scrollTop -
-        ctx.state.viewportState.containerHeight;
+      if (ctx.config.reverse) {
+        // Reverse mode: trigger "load more" near the TOP (older content above)
+        if (scrollTop < LOAD_MORE_THRESHOLD) {
+          ctx.emitter.emit("load:start", {
+            offset: ctx.dataManager.getCached(),
+            limit: INITIAL_LOAD_SIZE,
+          });
 
-      if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
-        ctx.emitter.emit("load:start", {
-          offset: ctx.dataManager.getCached(),
-          limit: INITIAL_LOAD_SIZE,
-        });
+          ctx.dataManager.loadMore().catch((error) => {
+            ctx.emitter.emit("error", { error, context: "loadMore" });
+          });
+        }
+      } else {
+        // Normal mode: trigger "load more" near the BOTTOM
+        const distanceFromBottom =
+          ctx.state.viewportState.totalHeight -
+          scrollTop -
+          ctx.state.viewportState.containerHeight;
 
-        ctx.dataManager.loadMore().catch((error) => {
-          ctx.emitter.emit("error", { error, context: "loadMore" });
-        });
+        if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
+          ctx.emitter.emit("load:start", {
+            offset: ctx.dataManager.getCached(),
+            limit: INITIAL_LOAD_SIZE,
+          });
+
+          ctx.dataManager.loadMore().catch((error) => {
+            ctx.emitter.emit("error", { error, context: "loadMore" });
+          });
+        }
       }
     }
 
