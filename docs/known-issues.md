@@ -357,46 +357,121 @@ chat.appendItems([newMessage]);
 
 ---
 
-### 9. Framework Adapters
+### 9. ✅ Framework Adapters
 
 **Priority:** Medium — for adoption, not for the core library.
 
 **Problem:** React/Vue/Svelte/Solid developers won't use a vanilla library directly if ergonomic framework wrappers exist elsewhere (tanstack).
 
-**Approach:** Keep vlist as the pure vanilla core. Ship optional thin wrappers (<1 KB each):
+**Approach:** Keep vlist as the pure vanilla core. Ship optional thin **mount-based** wrappers (<1 KB each). The framework manages the container element lifecycle, while vlist does all DOM rendering internally — preserving vlist's full performance model (direct DOM manipulation, no virtual DOM overhead).
 
-```typescript
-// vlist/react — thin wrapper
-import { useVList } from 'vlist/react';
+**Implementation:** Three adapters shipped as separate subpath exports with framework + vlist core externalized:
+
+| Adapter | Import | Minified | Gzipped | Exports |
+|---------|--------|----------|---------|---------|
+| React | `vlist/react` | 0.7 KB | 0.4 KB | `useVList` hook, `useVListEvent` |
+| Vue 3 | `vlist/vue` | 0.5 KB | 0.4 KB | `useVList` composable, `useVListEvent` |
+| Svelte | `vlist/svelte` | 0.3 KB | 0.2 KB | `vlist` action, `onVListEvent` |
+
+#### React — `useVList` hook
+
+```tsx
+import { useVList, useVListEvent } from 'vlist/react';
 
 function UserList({ users }) {
-  const { ref, virtualItems } = useVList({
-    count: users.length,
-    estimateSize: () => 48,
+  const { containerRef, instanceRef } = useVList({
+    item: {
+      height: 48,
+      template: (user) => `<div class="user">${user.name}</div>`,
+    },
+    items: users,
+    selection: { mode: 'single' },
+  });
+
+  // Subscribe to events with automatic cleanup
+  useVListEvent(instanceRef, 'selection:change', ({ selected }) => {
+    console.log('Selected:', selected);
   });
 
   return (
-    <div ref={ref} style={{ height: 400, overflow: 'auto' }}>
-      {virtualItems.map(({ index, style }) => (
-        <div key={users[index].id} style={style}>
-          {users[index].name}
-        </div>
-      ))}
-    </div>
+    <div
+      ref={containerRef}
+      style={{ height: 400 }}
+      onClick={() => instanceRef.current?.scrollToIndex(0)}
+    />
   );
 }
 ```
 
-```typescript
-// vlist/vue — thin wrapper
-import { VList } from 'vlist/vue';
+Returns `containerRef` (bind to div), `instanceRef` (access methods via `.current`), and `getInstance()` helper. Items auto-sync when `config.items` changes by reference.
 
-// <VList :items="users" :item-height="48" v-slot="{ item }">
-//   <div>{{ item.name }}</div>
-// </VList>
+#### Vue 3 — `useVList` composable
+
+```vue
+<template>
+  <div ref="containerRef" style="height: 400px" />
+</template>
+
+<script setup lang="ts">
+import { useVList, useVListEvent } from 'vlist/vue';
+
+const { containerRef, instance } = useVList({
+  item: {
+    height: 48,
+    template: (user) => `<div class="user">${user.name}</div>`,
+  },
+  items: users,
+});
+
+useVListEvent(instance, 'selection:change', ({ selected }) => {
+  console.log('Selected:', selected);
+});
+</script>
 ```
 
-**Estimated effort:** Small per adapter — they're thin wrappers around `createVList`. The real work is designing the ergonomic API for each framework.
+Accepts a plain config or a reactive `Ref<Config>`. When using a ref, items are watched and synced automatically.
+
+#### Svelte — `vlist` action
+
+```svelte
+<script>
+  import { vlist, onVListEvent } from 'vlist/svelte';
+  import { onDestroy } from 'svelte';
+
+  let instance;
+  let unsubs = [];
+
+  const options = {
+    config: {
+      item: {
+        height: 48,
+        template: (user) => `<div class="user">${user.name}</div>`,
+      },
+      items: users,
+    },
+    onInstance: (inst) => {
+      instance = inst;
+      unsubs.push(
+        onVListEvent(inst, 'selection:change', ({ selected }) => {
+          console.log('Selected:', selected);
+        })
+      );
+    },
+  };
+
+  onDestroy(() => unsubs.forEach(fn => fn()));
+</script>
+
+<div use:vlist={options} style="height: 400px" />
+```
+
+Follows the standard Svelte `use:` directive contract. Works with both Svelte 4 and 5 with zero Svelte imports. Instance access via `onInstance` callback. Pass reactive options via `$:` to trigger updates.
+
+**Design decisions:**
+- Mount-based (not virtual-items-based like TanStack Virtual) — keeps adapters trivially thin and preserves vlist's direct DOM rendering performance
+- Each adapter also ships a companion event helper (`useVListEvent` / `onVListEvent`) for ergonomic event subscription with automatic cleanup
+- Built with `external: ['react'|'vue', 'vlist']` so the adapter bundles contain only wrapper code
+- React/Vue listed as optional `peerDependencies`; Svelte needs no framework imports at all
 
 ---
 
@@ -525,7 +600,7 @@ list.restoreScroll(saved);
 | 6 | Window scrolling | 🟡 Medium | Medium | 2 | ✅ Done |
 | 7 | Sticky headers | 🟡 Medium | Medium | 3 | ✅ Done |
 | 8 | Reverse mode (chat) | 🟡 Medium | Medium-Large | 3 | 🟡 Pending |
-| 9 | Framework adapters | 🟡 Medium | Small each | 3 | 🟡 Pending |
+| 9 | Framework adapters | 🟡 Medium | Small each | 3 | ✅ Done |
 | 10 | Public benchmarks | 🟠 High | Medium | 4 | 🟡 Pending |
 | 11 | Auto-height measurement | 🟢 Low | Medium | 4 | 🟡 Pending |
 | 12 | Enhanced accessibility | 🟡 Medium | Small-Medium | 4 | 🟡 Pending |
@@ -551,5 +626,5 @@ list.restoreScroll(saved);
 
 ---
 
-*Last updated: February 2025*
-*Status: Phase 1 complete — variable heights (Mode A), smooth scrollToIndex, and bundle split all shipped. Phase 2+ pending.*
+*Last updated: June 2025*
+*Status: Phase 1 complete. Phase 2 partially complete (window scrolling, grid). Phase 3 partially complete (sticky headers, framework adapters). Phase 4 pending.*

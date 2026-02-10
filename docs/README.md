@@ -10,6 +10,7 @@
 - **[Compression Guide](./compression.md)** - Handling large lists (1M+ items)
 - **[Window Scrolling](./vlist.md#window-scrolling)** - Document-level scrolling with `scrollElement: window`
 - **[Scroll Save/Restore](./vlist.md#scroll-saverestore)** - Save and restore scroll position for SPA navigation
+- **[Framework Adapters](#framework-adapters)** - React, Vue, and Svelte wrappers (<1 KB each)
 
 ## Module Documentation
 
@@ -40,19 +41,38 @@ Each module has detailed documentation covering its API, usage examples, and imp
 | **[Handlers](./handlers.md)** | Scroll, click, and keyboard event handlers | `src/handlers.ts` |
 | **[Methods](./methods.md)** | Public API methods (data, scroll, selection) | `src/methods.ts` |
 
+### Framework Adapters
+
+Thin mount-based wrappers that handle lifecycle (create on mount, destroy on unmount) and reactive item syncing. Each adapter imports `createVList` from `vlist` as an external — the adapter bundles contain only wrapper code.
+
+| Adapter | Import | Size | Exports | Source |
+|---------|--------|------|---------|--------|
+| **React** | `vlist/react` | 0.7 KB | `useVList` hook, `useVListEvent` | `src/adapters/react.ts` |
+| **Vue 3** | `vlist/vue` | 0.5 KB | `useVList` composable, `useVListEvent` | `src/adapters/vue.ts` |
+| **Svelte** | `vlist/svelte` | 0.3 KB | `vlist` action, `onVListEvent` | `src/adapters/svelte.ts` |
+
+React and Vue are optional `peerDependencies`. Svelte needs zero framework imports (actions are plain functions).
+
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        createVList()                         │
-│                         (vlist.ts)                           │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                     Framework Adapters (optional)                     │
+│          vlist/react · vlist/vue · vlist/svelte                       │
+│     Thin mount-based wrappers that delegate to createVList()         │
+└──────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         Context                              │
-│  Wires together all components and manages mutable state     │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        createVList()                                  │
+│                         (vlist.ts)                                    │
+└──────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Context                                       │
+│  Wires together all components and manages mutable state              │
+└──────────────────────────────────────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
         ▼                     ▼                     ▼
