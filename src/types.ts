@@ -89,26 +89,26 @@ export interface VListConfig<T extends VListItem = VListItem> {
   selection?: SelectionConfig;
 
   /**
-   * External scroll element for document/window scrolling.
-   * When set, the list scrolls with this element instead of its own container.
-   * Pass `window` for document scrolling (most common use case).
+   * Scroll behavior configuration.
    *
-   * In window mode:
-   * - The list participates in the normal page flow (no inner scrollbar)
-   * - The browser's native scrollbar controls scrolling
-   * - Compression still works (content height is capped, scroll math is remapped)
-   * - Custom scrollbar is disabled (the browser scrollbar is used)
+   * Groups all scroll-related settings: wheel behavior, scrollbar mode,
+   * external scroll element (window scrolling), and idle detection.
+   *
+   * ```ts
+   * createVList({
+   *   container: '#app',
+   *   item: { height: 48, template: (item) => item.name },
+   *   scroll: {
+   *     wheel: false,
+   *     scrollbar: 'none',
+   *   },
+   * });
+   * ```
    */
-  scrollElement?: Window;
-
-  /** Custom scrollbar configuration (for compressed mode) */
-  scrollbar?: ScrollbarConfig;
+  scroll?: ScrollConfig;
 
   /** Loading behavior configuration */
   loading?: LoadingConfig;
-
-  /** Scroll idle detection timeout in ms (default: 150) */
-  idleTimeout?: number;
 
   /** Custom CSS class prefix (default: 'vlist') */
   classPrefix?: string;
@@ -204,12 +204,79 @@ export interface ScrollToOptions {
 }
 
 // =============================================================================
-// Scrollbar
+// Scroll Configuration
 // =============================================================================
 
-/** Scrollbar configuration */
+/** Scrollbar display mode */
+export type ScrollbarMode = "custom" | "native" | "none";
+
+/** Custom scrollbar options (fine-tune the custom scrollbar behavior) */
+export interface ScrollbarOptions {
+  /** Auto-hide scrollbar after idle (default: true) */
+  autoHide?: boolean;
+
+  /** Auto-hide delay in milliseconds (default: 1000) */
+  autoHideDelay?: number;
+
+  /** Minimum thumb size in pixels (default: 30) */
+  minThumbSize?: number;
+}
+
+/** Scroll behavior configuration */
+export interface ScrollConfig {
+  /**
+   * Enable mouse wheel scrolling (default: true).
+   *
+   * - **Horizontal mode**: vertical wheel events (deltaY) are translated to
+   *   horizontal scroll, so users can scroll with a standard mouse wheel.
+   * - **Vertical mode**: the browser's native wheel scrolling is active.
+   *
+   * Set to `false` to disable wheel scrolling entirely in either direction.
+   * Useful when the list is embedded inside another scrollable container,
+   * or when you want to restrict scrolling to a custom scrollbar or drag gesture.
+   */
+  wheel?: boolean;
+
+  /**
+   * Scrollbar mode (default: custom scrollbar).
+   *
+   * - *omitted / object* — Custom scrollbar with consistent cross-browser styling
+   *   (hides native). Pass an object to fine-tune: `{ autoHide: false }`.
+   * - `'native'` — Browser's native scrollbar (in compressed mode, falls back to
+   *   custom since `overflow: hidden` has no native scrollbar)
+   * - `'none'` — No scrollbar at all (hides native, no custom)
+   *
+   * ```ts
+   * scroll: { scrollbar: 'none' }                   // no scrollbar
+   * scroll: { scrollbar: 'native' }                 // browser native
+   * scroll: { scrollbar: { autoHide: false } }      // custom, always visible
+   * ```
+   */
+  scrollbar?: "native" | "none" | ScrollbarOptions;
+
+  /**
+   * External scroll element for document/window scrolling.
+   * When set, the list scrolls with this element instead of its own container.
+   * Pass `window` for document scrolling (most common use case).
+   *
+   * In window mode:
+   * - The list participates in the normal page flow (no inner scrollbar)
+   * - The browser's native scrollbar controls scrolling
+   * - Compression still works (content height is capped, scroll math is remapped)
+   * - Custom scrollbar is disabled (the browser scrollbar is used)
+   */
+  element?: Window;
+
+  /** Scroll idle detection timeout in ms (default: 150) */
+  idleTimeout?: number;
+}
+
+/**
+ * @deprecated Use `ScrollbarOptions` instead. Kept for internal scrollbar module compatibility.
+ * @internal
+ */
 export interface ScrollbarConfig {
-  /** Enable scrollbar (default: auto - enabled when compressed) */
+  /** @deprecated Use `scroll.scrollbar` mode instead */
   enabled?: boolean;
 
   /** Auto-hide scrollbar after idle (default: true) */

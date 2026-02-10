@@ -27,10 +27,11 @@ export type {
   SelectionConfig,
   SelectionState,
 
-  // Scrollbar
-  ScrollbarConfig,
-
   // Scroll
+  ScrollConfig,
+  ScrollbarMode,
+  ScrollbarOptions,
+  ScrollbarConfig,
   ScrollToOptions,
 
   // Data adapter

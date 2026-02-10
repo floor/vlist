@@ -1,6 +1,9 @@
 /**
  * vlist - Custom Scrollbar
- * Provides visual scroll indication for compressed mode where native scrollbar is hidden
+ * Provides visual scroll indication and drag interaction
+ *
+ * Works in both compressed mode (where native scrollbar is hidden) and
+ * native mode (when explicitly enabled via `scrollbar: { enabled: true }`).
  *
  * Features:
  * - Visual track and thumb
@@ -9,6 +12,7 @@
  * - Drag thumb to scroll
  * - Auto-hide after idle (optional)
  * - CSS variables for customization
+ * - Horizontal and vertical support
  */
 
 // =============================================================================
@@ -17,7 +21,7 @@
 
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
-  /** Enable scrollbar (default: true when compressed) */
+  /** Enable scrollbar (default: auto — enabled when compressed) */
   enabled?: boolean;
 
   /** Auto-hide scrollbar after idle (default: true) */
@@ -73,12 +77,14 @@ const DEFAULT_MIN_THUMB_SIZE = 30;
  * @param onScroll - Callback when scrollbar interaction causes scroll
  * @param config - Scrollbar configuration
  * @param classPrefix - CSS class prefix (default: 'vlist')
+ * @param horizontal - Whether the scrollbar is horizontal (default: false)
  */
 export const createScrollbar = (
   viewport: HTMLElement,
   onScroll: ScrollCallback,
   config: ScrollbarConfig = {},
   classPrefix = "vlist",
+  horizontal = false,
 ): Scrollbar => {
   const {
     autoHide = DEFAULT_AUTO_HIDE,
@@ -86,17 +92,27 @@ export const createScrollbar = (
     minThumbSize = DEFAULT_MIN_THUMB_SIZE,
   } = config;
 
+  // Pre-compute axis-dependent property names once
+  const clientPosProp: "clientX" | "clientY" = horizontal
+    ? "clientX"
+    : "clientY";
+  const rectPosProp: "left" | "top" = horizontal ? "left" : "top";
+  const sizeProp: "width" | "height" = horizontal ? "width" : "height";
+  const translateFn = horizontal
+    ? (px: number) => `translateX(${px}px)`
+    : (px: number) => `translateY(${px}px)`;
+
   // State
-  let totalHeight = 0;
-  let containerHeight = 0;
-  let thumbHeight = 0;
+  let totalSize = 0;
+  let containerSize = 0;
+  let thumbSize = 0;
   let maxThumbTravel = 0;
   let isDragging = false;
-  let dragStartY = 0;
+  let dragStartPos = 0;
   let dragStartScrollPosition = 0;
   let currentScrollPosition = 0;
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
-  let isVisible = false;
+  let visible = false;
   let animationFrameId: number | null = null;
   let lastRequestedPosition: number | null = null;
 
@@ -121,7 +137,7 @@ export const createScrollbar = (
   // =============================================================================
 
   const show = (): void => {
-    if (totalHeight <= containerHeight) return;
+    if (totalSize <= containerSize) return;
 
     // Clear any pending hide
     if (hideTimeout) {
@@ -129,9 +145,9 @@ export const createScrollbar = (
       hideTimeout = null;
     }
 
-    if (!isVisible) {
+    if (!visible) {
       track.classList.add(`${classPrefix}-scrollbar--visible`);
-      isVisible = true;
+      visible = true;
     }
 
     // Schedule auto-hide
@@ -144,19 +160,22 @@ export const createScrollbar = (
     if (isDragging) return;
 
     track.classList.remove(`${classPrefix}-scrollbar--visible`);
-    isVisible = false;
+    visible = false;
   };
 
   // =============================================================================
   // Size & Position Calculations
   // =============================================================================
 
-  const updateBounds = (newTotalHeight: number, newContainerHeight: number): void => {
-    totalHeight = newTotalHeight;
-    containerHeight = newContainerHeight;
+  const updateBounds = (
+    newTotalSize: number,
+    newContainerSize: number,
+  ): void => {
+    totalSize = newTotalSize;
+    containerSize = newContainerSize;
 
     // Check if scrollbar is needed
-    const needsScrollbar = totalHeight > containerHeight;
+    const needsScrollbar = totalSize > containerSize;
     track.style.display = needsScrollbar ? "" : "none";
 
     if (!needsScrollbar) {
@@ -165,12 +184,12 @@ export const createScrollbar = (
     }
 
     // Calculate thumb size (proportional to visible content)
-    const scrollRatio = containerHeight / totalHeight;
-    thumbHeight = Math.max(minThumbSize, scrollRatio * containerHeight);
-    thumb.style.height = `${thumbHeight}px`;
+    const scrollRatio = containerSize / totalSize;
+    thumbSize = Math.max(minThumbSize, scrollRatio * containerSize);
+    thumb.style[sizeProp] = `${thumbSize}px`;
 
     // Calculate max thumb travel distance
-    maxThumbTravel = containerHeight - thumbHeight;
+    maxThumbTravel = containerSize - thumbSize;
 
     // Update position with current scroll
     updatePosition(currentScrollPosition);
@@ -179,15 +198,15 @@ export const createScrollbar = (
   const updatePosition = (scrollTop: number): void => {
     currentScrollPosition = scrollTop;
 
-    if (totalHeight <= containerHeight || maxThumbTravel <= 0) return;
+    if (totalSize <= containerSize || maxThumbTravel <= 0) return;
 
     // Calculate scroll percentage
-    const maxScroll = totalHeight - containerHeight;
+    const maxScroll = totalSize - containerSize;
     const scrollRatio = Math.min(1, Math.max(0, scrollTop / maxScroll));
 
     // Position thumb
     const thumbPosition = scrollRatio * maxThumbTravel;
-    thumb.style.transform = `translateY(${thumbPosition}px)`;
+    thumb.style.transform = translateFn(thumbPosition);
   };
 
   // =============================================================================
@@ -199,18 +218,21 @@ export const createScrollbar = (
     if (e.target === thumb) return;
 
     const trackRect = track.getBoundingClientRect();
-    const clickY = e.clientY - trackRect.top;
+    const clickPos = e[clientPosProp] - trackRect[rectPosProp];
 
     // Center thumb at click position
-    const targetThumbCenter = clickY;
-    const targetThumbTop = targetThumbCenter - thumbHeight / 2;
+    const targetThumbCenter = clickPos;
+    const targetThumbTop = targetThumbCenter - thumbSize / 2;
 
     // Clamp to valid range
-    const clampedThumbTop = Math.max(0, Math.min(targetThumbTop, maxThumbTravel));
+    const clampedThumbPos = Math.max(
+      0,
+      Math.min(targetThumbTop, maxThumbTravel),
+    );
 
     // Convert to scroll position
-    const scrollRatio = clampedThumbTop / maxThumbTravel;
-    const maxScroll = totalHeight - containerHeight;
+    const scrollRatio = clampedThumbPos / maxThumbTravel;
+    const maxScroll = totalSize - containerSize;
     const targetScrollPosition = scrollRatio * maxScroll;
 
     onScroll(targetScrollPosition);
@@ -226,7 +248,7 @@ export const createScrollbar = (
     e.stopPropagation();
 
     isDragging = true;
-    dragStartY = e.clientY;
+    dragStartPos = e[clientPosProp];
     dragStartScrollPosition = currentScrollPosition;
 
     track.classList.add(`${classPrefix}-scrollbar--dragging`);
@@ -238,11 +260,11 @@ export const createScrollbar = (
   const handleMouseMove = (e: MouseEvent): void => {
     if (!isDragging) return;
 
-    const deltaY = e.clientY - dragStartY;
+    const delta = e[clientPosProp] - dragStartPos;
 
     // Convert thumb movement to scroll movement
-    const scrollRatio = maxThumbTravel > 0 ? deltaY / maxThumbTravel : 0;
-    const maxScroll = totalHeight - containerHeight;
+    const scrollRatio = maxThumbTravel > 0 ? delta / maxThumbTravel : 0;
+    const maxScroll = totalSize - containerSize;
     const deltaScroll = scrollRatio * maxScroll;
 
     const newPosition = Math.max(
@@ -253,7 +275,7 @@ export const createScrollbar = (
     // Update thumb immediately for responsive feel
     const thumbRatio = newPosition / maxScroll;
     const thumbPosition = thumbRatio * maxThumbTravel;
-    thumb.style.transform = `translateY(${thumbPosition}px)`;
+    thumb.style.transform = translateFn(thumbPosition);
 
     // Throttle scroll callback with RAF
     lastRequestedPosition = newPosition;
@@ -363,7 +385,7 @@ export const createScrollbar = (
     hide,
     updateBounds,
     updatePosition,
-    isVisible: () => isVisible,
+    isVisible: () => visible,
     destroy,
   };
 };

@@ -415,10 +415,10 @@
 }
 
 /* =============================================================================
-   Custom Scrollbar (for compressed mode)
+   Custom Scrollbar / Hidden Scrollbar
    ============================================================================= */
 
-/* Hide native scrollbar when custom scrollbar is active */
+/* Hide native scrollbar when custom scrollbar is active or wheelScroll is false */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -426,4 +426,10 @@
 
 .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
     display: none;
+}
+
+/* Override horizontal-specific webkit scrollbar when custom scrollbar is active */
+.vlist--horizontal .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
+    display: none;
+    height: 0;
 }

@@ -45,6 +45,17 @@ export interface ScrollControllerConfig {
    */
   horizontal?: boolean;
 
+  /**
+   * Enable mouse wheel scrolling (default: true).
+   *
+   * - **Horizontal mode**: vertical wheel (deltaY) is translated to horizontal scroll.
+   * - **Vertical mode**: the browser's native wheel scrolling is active.
+   *
+   * Set to `false` to disable wheel scrolling entirely — useful when the list
+   * is inside another scrollable container or uses drag/scrollbar-only interaction.
+   */
+  wheelScroll?: boolean;
+
   /** Wheel sensitivity multiplier (default: 1) */
   sensitivity?: number;
 
@@ -257,6 +268,7 @@ export const createScrollController = (
     onIdle,
     scrollElement,
     horizontal = false,
+    wheelScroll = true,
   } = config;
 
   const windowMode = !!scrollElement;
@@ -354,6 +366,33 @@ export const createScrollController = (
   const handleWindowScroll = rafThrottle(handleWindowScrollRaw);
 
   // =============================================================================
+  // Wheel Scroll (native mode — optional wheel interception)
+  // =============================================================================
+
+  const handleWheelScroll = (event: WheelEvent): void => {
+    if (horizontal && wheelScroll) {
+      // Horizontal + wheelScroll enabled: translate vertical wheel (deltaY) → scrollLeft.
+      // If the user is already producing deltaX (trackpad swipe), let the
+      // browser handle it natively — no translation needed.
+      if (event.deltaX !== 0 || event.deltaY === 0) return;
+
+      event.preventDefault();
+      viewport.scrollLeft += event.deltaY * sensitivity;
+    } else {
+      // wheelScroll disabled (either direction): block wheel entirely.
+      event.preventDefault();
+    }
+  };
+
+  /** Whether the wheel listener should be active in native (non-compressed) mode.
+   *  - horizontal + wheelScroll  → YES (translate deltaY → scrollLeft)
+   *  - horizontal + !wheelScroll → YES (block all wheel events)
+   *  - vertical   + !wheelScroll → YES (block all wheel events)
+   *  - vertical   + wheelScroll  → NO  (browser handles it natively)
+   */
+  const needsWheelListener = horizontal || !wheelScroll;
+
+  // =============================================================================
   // Compressed (Manual) Scroll Handling
   // =============================================================================
 
@@ -439,6 +478,11 @@ export const createScrollController = (
     // natively. No overflow changes or wheel interception needed.
     if (windowMode) return;
 
+    // Remove wheel-scroll listener (compressed mode has its own wheel handler)
+    if (needsWheelListener) {
+      viewport.removeEventListener("wheel", handleWheelScroll);
+    }
+
     // Remove native scroll listener and cancel pending RAF
     handleNativeScroll.cancel();
     viewport.removeEventListener("scroll", handleNativeScroll);
@@ -477,14 +521,22 @@ export const createScrollController = (
     viewport.removeEventListener("wheel", handleWheel);
 
     // Restore native scrolling
-    viewport.style.overflow = horizontal ? "" : "auto";
     if (horizontal) {
+      viewport.style.overflow = "hidden";
       viewport.style.overflowX = "auto";
-      viewport.style.overflowY = "hidden";
+    } else {
+      viewport.style.overflow = "auto";
     }
 
     // Add native scroll listener
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
+
+    // Re-attach wheel-scroll listener for native mode
+    if (needsWheelListener) {
+      viewport.addEventListener("wheel", handleWheelScroll, {
+        passive: false,
+      });
+    }
 
     // Restore scroll position
     if (compression && scrollPosition > 0) {
@@ -628,6 +680,7 @@ export const createScrollController = (
       handleNativeScroll.cancel();
       viewport.removeEventListener("scroll", handleNativeScroll);
       viewport.removeEventListener("wheel", handleWheel);
+      viewport.removeEventListener("wheel", handleWheelScroll);
     }
   };
 
@@ -648,11 +701,24 @@ export const createScrollController = (
     viewport.addEventListener("wheel", handleWheel, { passive: false });
   } else {
     // Start in native scroll mode
-    viewport.style.overflow = horizontal ? "hidden" : "auto";
+    // Native scrollbar visibility is controlled via CSS class
+    // (vlist-viewport--custom-scrollbar hides it when custom scrollbar or wheelScroll:false)
     if (horizontal) {
+      viewport.style.overflow = "hidden";
       viewport.style.overflowX = "auto";
+    } else {
+      viewport.style.overflow = "auto";
     }
     viewport.addEventListener("scroll", handleNativeScroll, { passive: true });
+
+    // Wheel interception for native mode:
+    // - Horizontal + wheelScroll: translate deltaY → scrollLeft
+    // - Vertical + !wheelScroll: block wheel events entirely
+    if (needsWheelListener) {
+      viewport.addEventListener("wheel", handleWheelScroll, {
+        passive: false,
+      });
+    }
   }
 
   return {
