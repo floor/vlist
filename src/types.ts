@@ -27,15 +27,30 @@ export interface VListItem {
 // Configuration
 // =============================================================================
 
+/** Scroll direction */
+export type ScrollAxis = "vertical" | "horizontal";
+
 /** Item-specific configuration */
 export interface ItemConfig<T extends VListItem = VListItem> {
   /**
-   * Item height in pixels (required for virtual scrolling)
+   * Item height in pixels (required for vertical scrolling)
    *
    * - `number` — Fixed height for all items (fast path, zero overhead)
    * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   *
+   * Required when `direction` is `'vertical'` (default). Ignored in horizontal mode.
    */
-  height: number | ((index: number) => number);
+  height?: number | ((index: number) => number);
+
+  /**
+   * Item width in pixels (required for horizontal scrolling)
+   *
+   * - `number` — Fixed width for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable width per item (prefix-sum based lookups)
+   *
+   * Required when `direction` is `'horizontal'`. Ignored in vertical mode.
+   */
+  width?: number | ((index: number) => number);
 
   /** Template function to render each item */
   template: ItemTemplate<T>;
@@ -46,7 +61,19 @@ export interface VListConfig<T extends VListItem = VListItem> {
   /** Container element or selector */
   container: HTMLElement | string;
 
-  /** Item configuration (height and template) */
+  /**
+   * Scroll direction (default: 'vertical').
+   * - `'vertical'` — Standard vertical list (scrolls top-to-bottom)
+   * - `'horizontal'` — Horizontal list (scrolls left-to-right, e.g. carousels, timelines)
+   *
+   * In horizontal mode:
+   * - Use `item.width` instead of `item.height`
+   * - `scrollTop` ↔ `scrollLeft`, `height` ↔ `width`, `translateY` ↔ `translateX`
+   * - Cannot be combined with grid layout, groups, or window scrolling
+   */
+  direction?: ScrollAxis;
+
+  /** Item configuration (height/width and template) */
   item: ItemConfig<T>;
 
   /** Static items array (optional if using adapter) */
@@ -282,16 +309,16 @@ export interface Range {
 
 /** Viewport state */
 export interface ViewportState {
-  /** Current scroll position */
+  /** Current scroll position (scrollTop for vertical, scrollLeft for horizontal) */
   scrollTop: number;
 
-  /** Container height */
+  /** Container size in the scroll axis (height for vertical, width for horizontal) */
   containerHeight: number;
 
-  /** Total content height (may be capped for compression) */
+  /** Total content size in the scroll axis (may be capped for compression) */
   totalHeight: number;
 
-  /** Actual total height without compression (totalItems × itemHeight) */
+  /** Actual total size without compression */
   actualHeight: number;
 
   /** Whether compression is active */
@@ -320,7 +347,7 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   "selection:change": { selected: Array<string | number>; items: T[] };
 
   /** Scroll position changed */
-  scroll: { scrollTop: number; direction: "up" | "down" };
+  scroll: { scrollTop: number; direction: "up" | "down" | "left" | "right" };
 
   /** Visible range changed */
   "range:change": { range: Range };

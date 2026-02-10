@@ -16,6 +16,7 @@ export type {
   VListConfig,
   VListItem,
   VListEvents,
+  ScrollAxis,
 
   // Template
   ItemTemplate,

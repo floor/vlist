@@ -1,6 +1,7 @@
 /**
  * vlist - Event Handlers
  * Scroll, click, and keyboard event handlers
+ * Axis-aware: keyboard navigation uses ArrowLeft/ArrowRight in horizontal mode
  */
 
 import type { VListItem, Range } from "./types";
@@ -311,14 +312,19 @@ export const createKeyboardHandler = <T extends VListItem>(
     let focusOnly = false;
     let newState = ctx.state.selectionState;
 
+    // In horizontal mode, ArrowLeft/ArrowRight replace ArrowUp/ArrowDown
+    const isHorizontal = ctx.config.isHorizontal;
+    const prevKey = isHorizontal ? "ArrowLeft" : "ArrowUp";
+    const nextKey = isHorizontal ? "ArrowRight" : "ArrowDown";
+
     switch (event.key) {
-      case "ArrowUp":
+      case prevKey:
         newState = moveFocusUp(ctx.state.selectionState, totalItems);
         handled = true;
         focusOnly = true;
         break;
 
-      case "ArrowDown":
+      case nextKey:
         newState = moveFocusDown(ctx.state.selectionState, totalItems);
         handled = true;
         focusOnly = true;

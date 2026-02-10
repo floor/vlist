@@ -352,6 +352,77 @@
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
 
+/* =============================================================================
+   Horizontal Scrolling
+   ============================================================================= */
+
+/* Horizontal root modifier */
+.vlist--horizontal {
+    /* Same as base .vlist — no changes needed on root */
+}
+
+/* Horizontal viewport — scroll left-to-right */
+.vlist--horizontal .vlist-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vlist-scrollbar-thumb) transparent;
+}
+
+/* Horizontal viewport — webkit scrollbar on X axis */
+.vlist--horizontal .vlist-viewport::-webkit-scrollbar {
+    width: 0;
+    height: 6px;
+}
+
+/* Horizontal content — width is set dynamically, height fills container */
+.vlist--horizontal .vlist-content {
+    height: 100%;
+    width: auto;
+}
+
+/* Horizontal items container */
+.vlist--horizontal .vlist-items {
+    height: 100%;
+    width: auto;
+}
+
+/* Horizontal item — positioned along X axis instead of Y */
+.vlist--horizontal .vlist-item {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    height: 100%;
+    border-bottom: none;
+    border-right: 1px solid var(--vlist-border);
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Horizontal custom scrollbar — along the bottom */
+.vlist--horizontal .vlist-scrollbar {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: var(--vlist-scrollbar-width);
+}
+
+.vlist--horizontal .vlist-scrollbar-thumb {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: auto;
+    width: auto;
+    height: 100%;
+}
+
+/* =============================================================================
+   Custom Scrollbar (for compressed mode)
+   ============================================================================= */
+
 /* Hide native scrollbar when custom scrollbar is active */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;

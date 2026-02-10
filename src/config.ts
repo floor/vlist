@@ -18,6 +18,7 @@ import type {
   ScrollbarConfig,
   LoadingConfig,
   ItemConfig,
+  ScrollAxis,
 } from "./types";
 
 import type { GroupsConfig } from "./groups";
@@ -53,12 +54,14 @@ export interface ResolvedConfig<T extends VListItem = VListItem> {
   readonly groupsConfig: GroupsConfig | undefined;
   readonly layoutMode: "list" | "grid";
   readonly gridConfig: GridConfig | undefined;
+  readonly direction: ScrollAxis;
 
   // --- Derived flags (computed once) ---
 
   readonly isWindowMode: boolean;
   readonly hasGroups: boolean;
   readonly isGrid: boolean;
+  readonly isHorizontal: boolean;
 
   // --- Shortcuts into nested config ---
 
@@ -90,22 +93,65 @@ export const validateConfig = <T extends VListItem>(
   if (!config.item) {
     throw new Error("[vlist] item configuration is required");
   }
-  if (config.item.height == null) {
-    throw new Error("[vlist] item.height is required");
+
+  const isHorizontal = config.direction === "horizontal";
+
+  // Validate scroll-axis dimension: height for vertical, width for horizontal
+  if (isHorizontal) {
+    if (config.item.width == null) {
+      throw new Error(
+        "[vlist] item.width is required when direction is 'horizontal'",
+      );
+    }
+    if (typeof config.item.width === "number" && config.item.width <= 0) {
+      throw new Error("[vlist] item.width must be a positive number");
+    }
+    if (
+      typeof config.item.width !== "number" &&
+      typeof config.item.width !== "function"
+    ) {
+      throw new Error(
+        "[vlist] item.width must be a number or a function (index) => number",
+      );
+    }
+  } else {
+    if (config.item.height == null) {
+      throw new Error("[vlist] item.height is required");
+    }
+    if (typeof config.item.height === "number" && config.item.height <= 0) {
+      throw new Error("[vlist] item.height must be a positive number");
+    }
+    if (
+      typeof config.item.height !== "number" &&
+      typeof config.item.height !== "function"
+    ) {
+      throw new Error(
+        "[vlist] item.height must be a number or a function (index) => number",
+      );
+    }
   }
-  if (typeof config.item.height === "number" && config.item.height <= 0) {
-    throw new Error("[vlist] item.height must be a positive number");
-  }
-  if (
-    typeof config.item.height !== "number" &&
-    typeof config.item.height !== "function"
-  ) {
-    throw new Error(
-      "[vlist] item.height must be a number or a function (index) => number",
-    );
-  }
+
   if (!config.item.template) {
     throw new Error("[vlist] item.template is required");
+  }
+
+  // Horizontal-specific restrictions
+  if (isHorizontal) {
+    if (config.layout === "grid") {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with grid layout",
+      );
+    }
+    if (config.groups) {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with groups",
+      );
+    }
+    if (config.scrollElement) {
+      throw new Error(
+        "[vlist] horizontal direction cannot be combined with window scrolling",
+      );
+    }
   }
 
   // Grid-specific validation
@@ -157,15 +203,22 @@ export const resolveConfig = <T extends VListItem>(
     groups: groupsConfig,
     layout: layoutMode = "list",
     grid: gridConfig,
+    direction = "vertical",
   } = config;
 
   // Derived flags
   const isWindowMode = !!scrollElement;
   const hasGroups = !!groupsConfig;
   const isGrid = layoutMode === "grid" && !!gridConfig;
+  const isHorizontal = direction === "horizontal";
 
   // Shortcuts into nested config
-  const { height: itemHeightConfig, template: userTemplate } = itemConfig;
+  // In horizontal mode, item.width is the scroll-axis dimension;
+  // in vertical mode, item.height is. Internally everything uses "itemHeightConfig".
+  const itemHeightConfig: number | ((index: number) => number) = isHorizontal
+    ? itemConfig.width!
+    : itemConfig.height!;
+  const { template: userTemplate } = itemConfig;
   const selectionMode: SelectionMode = selectionConfig?.mode ?? "none";
 
   // Loading thresholds with defaults from constants
@@ -190,10 +243,12 @@ export const resolveConfig = <T extends VListItem>(
     groupsConfig,
     layoutMode,
     gridConfig,
+    direction,
 
     isWindowMode,
     hasGroups,
     isGrid,
+    isHorizontal,
 
     itemHeightConfig,
     userTemplate,

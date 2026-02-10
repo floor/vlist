@@ -1,10 +1,14 @@
 /**
  * vlist - DOM Utilities
- * DOM structure creation, container resolution, and content height management
+ * DOM structure creation, container resolution, and content height/width management
  *
  * These are pure DOM utilities shared between the full vlist and the
  * lightweight core. They have zero dependencies on compression, heights,
  * or any other vlist internals.
+ *
+ * Axis-aware: supports both vertical (default) and horizontal scrolling.
+ * When horizontal, the scroll axis is swapped — content width replaces
+ * content height, and items flow left-to-right instead of top-to-bottom.
  */
 
 // =============================================================================
@@ -56,12 +60,18 @@ export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
   ariaLabel?: string,
+  horizontal?: boolean,
 ): DOMStructure => {
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
   root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
+
+  if (horizontal) {
+    root.classList.add(`${classPrefix}--horizontal`);
+    root.setAttribute("aria-orientation", "horizontal");
+  }
 
   if (ariaLabel) {
     root.setAttribute("aria-label", ariaLabel);
@@ -70,21 +80,39 @@ export const createDOMStructure = (
   // Viewport (scrollable container)
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
-  // Content (sets the total scrollable height)
+  if (horizontal) {
+    viewport.style.overflowX = "auto";
+    viewport.style.overflowY = "hidden";
+  } else {
+    viewport.style.overflow = "auto";
+  }
+
+  // Content (sets the total scrollable size along the scroll axis)
   const content = document.createElement("div");
   content.className = `${classPrefix}-content`;
   content.style.position = "relative";
-  content.style.width = "100%";
+
+  if (horizontal) {
+    content.style.height = "100%";
+    // width is set dynamically via updateContentSize
+  } else {
+    content.style.width = "100%";
+    // height is set dynamically via updateContentSize
+  }
 
   // Items container (holds rendered items)
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
   items.style.position = "relative";
-  items.style.width = "100%";
+
+  if (horizontal) {
+    items.style.height = "100%";
+  } else {
+    items.style.width = "100%";
+  }
 
   // Assemble structure
   content.appendChild(items);
@@ -96,17 +124,33 @@ export const createDOMStructure = (
 };
 
 // =============================================================================
-// Content Height
+// Content Size (scroll-axis dimension)
 // =============================================================================
 
 /**
- * Update content height for virtual scrolling
+ * Update content height for virtual scrolling (vertical mode)
  */
 export const updateContentHeight = (
   content: HTMLElement,
   totalHeight: number,
 ): void => {
   content.style.height = `${totalHeight}px`;
+};
+
+/**
+ * Update content size along the scroll axis.
+ * Sets height for vertical mode, width for horizontal mode.
+ */
+export const updateContentSize = (
+  content: HTMLElement,
+  totalSize: number,
+  horizontal?: boolean,
+): void => {
+  if (horizontal) {
+    content.style.width = `${totalSize}px`;
+  } else {
+    content.style.height = `${totalSize}px`;
+  }
 };
 
 // =============================================================================

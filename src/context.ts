@@ -12,6 +12,7 @@ import type {
   Range,
   ViewportState,
   SelectionMode,
+  ScrollAxis,
 } from "./types";
 
 import type { DataManager } from "./data";
@@ -39,6 +40,10 @@ export interface VListContextConfig {
   readonly classPrefix: string;
   readonly selectionMode: SelectionMode;
   readonly hasAdapter: boolean;
+  /** Scroll direction ('vertical' or 'horizontal') */
+  readonly direction: ScrollAxis;
+  /** Whether the list scrolls horizontally */
+  readonly isHorizontal: boolean;
   /** Velocity threshold above which loading is skipped (px/ms) */
   readonly cancelLoadThreshold: number;
   /** Velocity threshold for preloading (px/ms) */
