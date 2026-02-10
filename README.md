@@ -12,6 +12,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 - ⚡ **Blazing fast** - Only renders visible items with element pooling
 - 🎯 **Simple API** - Easy to use with TypeScript support
 - 📐 **Grid layout** - 2D virtualized grid with configurable columns and gap
+- ↔️ **Horizontal scrolling** - Carousels and timelines with `direction: 'horizontal'`
 - 📏 **Variable heights** - Fixed or per-item height via `(index) => number`
 - 📜 **Infinite scroll** - Built-in async adapter support
 - ✅ **Selection** - Single and multiple selection modes
@@ -54,6 +55,7 @@ bun run dev:sandbox
 | [Million Items](sandbox/million-items/) | Stress test with 1–5 million items |
 | [Velocity Loading](sandbox/velocity-loading/) | Velocity-based load skipping demo |
 | [Sticky Headers](sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
+| [Horizontal](sandbox/horizontal/) | Horizontal carousel with 10K cards using `direction: 'horizontal'` |
 | [Window Scroll](sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
 
 ## Installation
@@ -144,11 +146,13 @@ interface VListConfig<T> {
   // Required
   container: HTMLElement | string;  // Container element or selector
   item: {
-    height: number | ((index: number) => number);  // Fixed or variable height
+    height?: number | ((index: number) => number); // Item height (required for vertical)
+    width?: number | ((index: number) => number);   // Item width (required for horizontal)
     template: ItemTemplate<T>;      // Render function for each item
   };
 
   // Layout
+  direction?: 'vertical' | 'horizontal'; // Scroll direction (default: 'vertical')
   layout?: 'list' | 'grid';        // Layout mode (default: 'list')
   grid?: {                          // Grid config (required when layout: 'grid')
     columns: number;                //   Number of columns
@@ -177,6 +181,27 @@ interface VListConfig<T> {
 ```
 
 ## Examples
+
+### Horizontal Scrolling
+
+```typescript
+const carousel = createVList({
+  container: '#carousel',
+  direction: 'horizontal',
+  item: {
+    width: 200,
+    template: (item) => `
+      <div class="card">
+        <img src="${item.thumbnail}" />
+        <span>${item.title}</span>
+      </div>
+    `,
+  },
+  items: cards,
+});
+```
+
+In horizontal mode, items flow left-to-right. Use `item.width` instead of `item.height`. Keyboard navigation uses Arrow Left / Arrow Right. Compression works identically on the horizontal axis. Cannot be combined with grid, groups, or window scrolling.
 
 ### Grid Layout
 
@@ -426,7 +451,8 @@ When selection is enabled, the list supports full keyboard navigation:
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move focus up/down |
+| `↑` / `↓` | Move focus up/down (vertical mode) |
+| `←` / `→` | Move focus left/right (horizontal mode) |
 | `Home` | Move focus to first item |
 | `End` | Move focus to last item |
 | `Space` / `Enter` | Toggle selection on focused item |

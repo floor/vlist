@@ -356,11 +356,6 @@
    Horizontal Scrolling
    ============================================================================= */
 
-/* Horizontal root modifier */
-.vlist--horizontal {
-    /* Same as base .vlist — no changes needed on root */
-}
-
 /* Horizontal viewport — scroll left-to-right */
 .vlist--horizontal .vlist-viewport {
     overflow-x: auto;
