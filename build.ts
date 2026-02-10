@@ -47,6 +47,18 @@ async function build() {
     { entry: "./src/grid/index.ts", out: "grid" },
   ];
 
+  // Framework adapters — built with externals so framework imports
+  // are left as bare specifiers (resolved by the consumer's bundler).
+  const adapterModules = [
+    {
+      entry: "./src/adapters/react.ts",
+      out: "react",
+      externals: ["react", "vlist"],
+    },
+    { entry: "./src/adapters/vue.ts", out: "vue", externals: ["vue", "vlist"] },
+    { entry: "./src/adapters/svelte.ts", out: "svelte", externals: ["vlist"] },
+  ];
+
   const subResults: { name: string; size: string }[] = [];
 
   for (const sub of subModules) {
@@ -79,6 +91,43 @@ async function build() {
     .join(", ");
   console.log(
     `  Sub-modules ${subTime.toFixed(0).padStart(6)}ms  ${subSummary}`,
+  );
+
+  // Build framework adapters (with external framework imports)
+  const adapterStart = performance.now();
+  const adapterResults: { name: string; size: string }[] = [];
+
+  for (const adapter of adapterModules) {
+    const adapterResult = await Bun.build({
+      entrypoints: [adapter.entry],
+      outdir: `./dist/${adapter.out}`,
+      format: "esm",
+      target: "browser",
+      minify: !isDev,
+      sourcemap: isDev ? "inline" : "none",
+      naming: "index.js",
+      external: adapter.externals,
+    });
+
+    if (!adapterResult.success) {
+      console.error(`\nAdapter build failed (${adapter.out}):\n`);
+      for (const log of adapterResult.logs) {
+        console.error(log);
+      }
+      process.exit(1);
+    }
+
+    const adapterFile = Bun.file(`./dist/${adapter.out}/index.js`);
+    const adapterSize = (adapterFile.size / 1024).toFixed(1);
+    adapterResults.push({ name: adapter.out, size: adapterSize });
+  }
+
+  const adapterTime = performance.now() - adapterStart;
+  const adapterSummary = adapterResults
+    .map((a) => `${a.name} (${a.size} KB)`)
+    .join(", ");
+  console.log(
+    `  Adapters    ${adapterTime.toFixed(0).padStart(6)}ms  ${adapterSummary}`,
   );
 
   // Generate type declarations (optional)
@@ -133,6 +182,15 @@ async function build() {
     const gzipSubSize = await gzipBytes(`dist/${sub.name}/index.js`);
     console.log(
       `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSubSize} KB gzipped`,
+    );
+  }
+
+  console.log("");
+  console.log("  Adapters:");
+  for (const adapter of adapterResults) {
+    const gzipAdapterSize = await gzipBytes(`dist/${adapter.name}/index.js`);
+    console.log(
+      `  ${adapter.name.padEnd(13)} ${adapter.size} KB minified, ${gzipAdapterSize} KB gzipped`,
     );
   }
 
