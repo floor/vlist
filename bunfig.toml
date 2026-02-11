@@ -1,0 +1,5 @@
+[test]
+
+# Only report coverage for source files, not the bundled dist output
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = ["dist/**"]
