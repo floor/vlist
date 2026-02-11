@@ -527,15 +527,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
     for (const chunk of chunksToLoad) {
       const key = getRangeKey(chunk.start, chunk.end);
 
-      // Double-check it's not loading (could have been added by concurrent call)
-      if (activeLoads.has(key)) {
-        const existingPromise = activeLoads.get(key)!;
-        if (!loadPromises.includes(existingPromise)) {
-          loadPromises.push(existingPromise);
-        }
-        continue;
-      }
-
       // Create the load promise for this chunk
       const loadPromise = (async () => {
         pendingRanges.push(chunk);
