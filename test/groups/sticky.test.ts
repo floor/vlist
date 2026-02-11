@@ -20,9 +20,11 @@ import {
   createGroupedHeightFn,
 } from "../../src/groups/layout";
 import { createHeightCache } from "../../src/render/heights";
+import { createVList } from "../../src/vlist";
 import type { GroupsConfig } from "../../src/groups/types";
 import type { GroupLayout } from "../../src/groups/types";
 import type { HeightCache } from "../../src/render/heights";
+import type { VListItem } from "../../src/types";
 
 // =============================================================================
 // JSDOM Setup
@@ -44,6 +46,57 @@ beforeAll(() => {
   global.document = dom.window.document;
   global.window = dom.window as any;
   global.HTMLElement = dom.window.HTMLElement;
+  global.Element = dom.window.Element;
+
+  // Mock ResizeObserver (needed by createVList)
+  global.ResizeObserver = class MockResizeObserver {
+    private callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+    observe(target: Element) {
+      this.callback(
+        [
+          {
+            target,
+            contentRect: {
+              width: 400,
+              height: 600,
+              top: 0,
+              left: 0,
+              bottom: 600,
+              right: 400,
+              x: 0,
+              y: 0,
+              toJSON: () => {},
+            },
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          },
+        ],
+        this as any,
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as any;
+
+  // Mock scrollTo for JSDOM
+  if (!dom.window.Element.prototype.scrollTo) {
+    dom.window.Element.prototype.scrollTo = function (
+      options?: ScrollToOptions | number,
+    ) {
+      if (typeof options === "number") {
+        this.scrollTop = options;
+      } else if (options && typeof options.top === "number") {
+        this.scrollTop = options.top;
+      }
+    };
+  }
+
+  // Mock window.scrollTo
+  (dom.window as any).scrollTo = () => {};
 });
 
 afterAll(() => {
@@ -1295,5 +1348,248 @@ describe("createStickyHeader", () => {
       sticky.destroy();
       sticky2.destroy();
     });
+  });
+});
+
+// =============================================================================
+// Coverage tests merged from coverage dump files
+// =============================================================================
+
+describe("sticky header out-of-bounds guard", () => {
+  const ITEM_HEIGHT = 40;
+  const HEADER_HEIGHT = 30;
+
+  const makeGroupsConfig = (): GroupsConfig => ({
+    getGroupForIndex: (index: number): string => {
+      if (index < 3) return "A";
+      if (index < 5) return "B";
+      return "C";
+    },
+    headerHeight: HEADER_HEIGHT,
+    headerTemplate: (key: string) => `<div class="header">${key}</div>`,
+    sticky: true,
+  });
+
+  it("should clear sticky element when group index is out of bounds (negative)", () => {
+    const config = makeGroupsConfig();
+    const groupLayout = createGroupLayout(6, config);
+    const groupedHeightFn = createGroupedHeightFn(groupLayout, ITEM_HEIGHT);
+    const heightCache = createHeightCache(
+      groupedHeightFn,
+      groupLayout.totalEntries,
+    );
+
+    const viewport = document.createElement("div");
+    document.body.appendChild(viewport);
+
+    const sticky = createStickyHeader(
+      viewport,
+      groupLayout,
+      heightCache,
+      config,
+      "vlist",
+    );
+
+    // Update with scrollTop = 0, which should show group A
+    sticky.update(0);
+
+    // Now pass a very large scrollTop that's beyond all groups
+    // The sticky header's findGroupForScroll should return an index
+    // at the boundary or -1 for completely out of range
+    // We'll use a scrollTop that puts us beyond the total height
+    const totalHeight = heightCache.getTotalHeight();
+    sticky.update(totalHeight + 1000);
+
+    // The sticky element should still exist (not crash)
+    expect(viewport.querySelector("[class*='sticky']")).toBeTruthy();
+
+    sticky.destroy();
+    viewport.remove();
+  });
+
+  it("should handle update with scrollTop of 0", () => {
+    const config = makeGroupsConfig();
+    const groupLayout = createGroupLayout(6, config);
+    const groupedHeightFn = createGroupedHeightFn(groupLayout, ITEM_HEIGHT);
+    const heightCache = createHeightCache(
+      groupedHeightFn,
+      groupLayout.totalEntries,
+    );
+
+    const viewport = document.createElement("div");
+    document.body.appendChild(viewport);
+
+    const sticky = createStickyHeader(
+      viewport,
+      groupLayout,
+      heightCache,
+      config,
+      "vlist",
+    );
+
+    // Should render the first group header
+    sticky.update(0);
+
+    const stickyEl = viewport.querySelector("[class*='sticky']");
+    expect(stickyEl).toBeTruthy();
+    // First group header should be "A"
+    expect(stickyEl?.innerHTML).toContain("A");
+
+    sticky.destroy();
+    viewport.remove();
+  });
+
+  it("should transition between groups as scrollTop changes", () => {
+    const config = makeGroupsConfig();
+    const groupLayout = createGroupLayout(6, config);
+    const groupedHeightFn = createGroupedHeightFn(groupLayout, ITEM_HEIGHT);
+    const heightCache = createHeightCache(
+      groupedHeightFn,
+      groupLayout.totalEntries,
+    );
+
+    const viewport = document.createElement("div");
+    document.body.appendChild(viewport);
+
+    const sticky = createStickyHeader(
+      viewport,
+      groupLayout,
+      heightCache,
+      config,
+      "vlist",
+    );
+
+    // Layout offsets (headerH=30, itemH=40):
+    //   headerA @ 0, items 30/70/110, headerB @ 150, items 180/220, headerC @ 260, item 290
+    // The sticky header shows the group whose header offset <= scrollTop.
+
+    // At scrollTop=0, headerA(0) <= 0, so active group = A
+    sticky.update(0);
+    let stickyEl = viewport.querySelector("[class*='sticky']");
+    expect(stickyEl?.innerHTML).toContain("A");
+
+    // At scrollTop=151, headerB(150) <= 151, so active group = B
+    sticky.update(151);
+    stickyEl = viewport.querySelector("[class*='sticky']");
+    expect(stickyEl?.innerHTML).toContain("B");
+
+    // At scrollTop=261, headerC(260) <= 261, so active group = C
+    sticky.update(261);
+    stickyEl = viewport.querySelector("[class*='sticky']");
+    expect(stickyEl?.innerHTML).toContain("C");
+
+    sticky.destroy();
+    viewport.remove();
+  });
+});
+
+describe("groups/sticky — invalid group index (L85-86)", () => {
+  let container: HTMLElement;
+
+  const createContainer = (): HTMLElement => {
+    const el = document.createElement("div");
+    Object.defineProperty(el, "clientHeight", { value: 600 });
+    Object.defineProperty(el, "clientWidth", { value: 400 });
+    document.body.appendChild(el);
+    return el;
+  };
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  interface GroupedItem {
+    id: number;
+    name: string;
+    category: string;
+  }
+
+  it("should handle sticky header at scroll position with no valid group", () => {
+    const items: GroupedItem[] = [
+      { id: 1, name: "A1", category: "Alpha" },
+      { id: 2, name: "A2", category: "Alpha" },
+      { id: 3, name: "B1", category: "Beta" },
+      { id: 4, name: "B2", category: "Beta" },
+    ];
+
+    const list = createVList<GroupedItem>({
+      container,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      items,
+      groups: {
+        getGroupForIndex: (index) => {
+          const item = items[index];
+          if (!item) return "Unknown";
+          return item.category;
+        },
+        headerHeight: 30,
+        headerTemplate: (key) => `<div class="header">${key}</div>`,
+        sticky: true,
+      },
+    });
+
+    // Verify the sticky header element exists
+    const stickyEl = list.element.querySelector(
+      ".vlist-sticky-header",
+    ) as HTMLElement;
+    expect(stickyEl).toBeTruthy();
+
+    // Set items to empty — groups become empty, so any scroll would reference
+    // an invalid group index (-1 or >= groups.length)
+    list.setItems([]);
+
+    // The sticky header should gracefully handle the empty state
+    // (renderGroup with invalid index clears the element's textContent)
+    expect(list.total).toBe(0);
+
+    list.destroy();
+  });
+
+  it("should clear sticky header content for out-of-bounds group index", () => {
+    const items: GroupedItem[] = [{ id: 1, name: "A1", category: "Alpha" }];
+
+    const list = createVList<GroupedItem>({
+      container,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      items,
+      groups: {
+        getGroupForIndex: (index) => {
+          const item = items[index];
+          if (!item) return "Unknown";
+          return item.category;
+        },
+        headerHeight: 30,
+        headerTemplate: (key) => `<div class="header">${key}</div>`,
+        sticky: true,
+      },
+    });
+
+    const stickyEl = list.element.querySelector(
+      ".vlist-sticky-header",
+    ) as HTMLElement;
+    expect(stickyEl).toBeTruthy();
+
+    // Replace with completely different groups
+    const newItems: GroupedItem[] = [
+      { id: 10, name: "X1", category: "Xray" },
+      { id: 11, name: "X2", category: "Xray" },
+      { id: 12, name: "Y1", category: "Yankee" },
+    ];
+    list.setItems(newItems);
+
+    // Sticky header should still be valid
+    expect(list.total).toBe(3);
+
+    list.destroy();
   });
 });

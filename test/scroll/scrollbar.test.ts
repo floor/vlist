@@ -1118,3 +1118,79 @@ describe("createScrollbar", () => {
     });
   });
 });
+
+describe("scroll/scrollbar — destroy with pending animation frame (L348-349)", () => {
+
+
+  let viewport: HTMLElement;
+
+  const createViewport = (): HTMLElement => {
+    const el = document.createElement("div");
+    el.className = "vlist-viewport";
+    el.style.height = "400px";
+    el.style.width = "300px";
+    document.body.appendChild(el);
+    return el;
+  };
+
+  beforeEach(() => {
+    viewport = createViewport();
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should cancel pending animation frame on destroy during drag", () => {
+    const onScrollMock = mock(() => {});
+    const scrollbar = createScrollbar(viewport, onScrollMock, {
+      autoHide: false,
+    });
+
+    // Set up scrollbar bounds so thumb is visible and has size
+    scrollbar.updateBounds(2000, 400);
+    scrollbar.show();
+
+    const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+    const thumb = viewport.querySelector(
+      ".vlist-scrollbar-thumb",
+    ) as HTMLElement;
+
+    // We need to simulate a mousedown on the thumb to start drag,
+    // then a mousemove to trigger the RAF-throttled handleMouseMove,
+    // then destroy while the RAF is pending.
+    if (thumb) {
+      // Start drag — fires mousedown on thumb
+      const mousedown = new dom.window.MouseEvent("mousedown", {
+        bubbles: true,
+        clientX: 0,
+        clientY: 10,
+      });
+      thumb.dispatchEvent(mousedown);
+
+      // Simulate a mousemove — this schedules a RAF
+      const mousemove = new dom.window.MouseEvent("mousemove", {
+        bubbles: true,
+        clientX: 0,
+        clientY: 50,
+      });
+      document.dispatchEvent(mousemove);
+    }
+
+    // Destroy while RAF could be pending — exercises the animationFrameId !== null branch
+    scrollbar.destroy();
+
+    // Verify no errors and track is removed
+    expect(viewport.querySelector(".vlist-scrollbar")).toBeNull();
+  });
+
+  it("should handle destroy without pending animation frame", () => {
+    const onScrollMock = mock(() => {});
+    const scrollbar = createScrollbar(viewport, onScrollMock);
+
+    // Just destroy normally — animationFrameId is null
+    scrollbar.destroy();
+
+    expect(viewport.querySelector(".vlist-scrollbar")).toBeNull();
+  });
+});
