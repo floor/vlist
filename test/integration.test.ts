@@ -155,6 +155,9 @@ const template = (item: TestItem): string => {
   return `<div class="item">${item.name}</div>`;
 };
 
+const simpleTemplate = (item: TestItem): string =>
+  `<div class="item">${item.name}</div>`;
+
 // =============================================================================
 // Factory Tests
 // =============================================================================
@@ -2161,5 +2164,726 @@ describe("createVList selection advanced", () => {
     expect(selectedItems.length).toBe(2);
     expect(selectedItems[0]!.id).toBe(1);
     expect(selectedItems[1]!.id).toBe(3);
+  });
+});
+
+// =============================================================================
+// Coverage tests merged from coverage dump files
+// =============================================================================
+
+describe("horizontal vlist integration", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should handle horizontal mode with large item count", () => {
+    const items = createTestItems(500);
+    vlist = createVList({
+      container,
+      direction: "horizontal",
+      item: { width: 200, template: simpleTemplate },
+      items,
+    });
+
+    expect(vlist).toBeDefined();
+    expect(vlist.total).toBe(500);
+
+    // Scroll horizontally
+    vlist.scrollToIndex(250, "center");
+    vlist.scrollToIndex(0, "start");
+    vlist.scrollToIndex(499, "end");
+  });
+});
+
+describe("grid mode with compression integration", () => {
+  let container: HTMLElement;
+  let vlist: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (vlist) {
+      vlist.destroy();
+      vlist = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should handle compressed grid with scrollToIndex", () => {
+    // Create enough items for compression in grid mode
+    // 500000 items / 4 columns = 125000 rows * 40px = 5,000,000px (may compress)
+    // Need more: 2,000,000 items / 4 cols = 500,000 rows * 40px = 20,000,000px > 16M
+    const items = createTestItems(2_000_000);
+    vlist = createVList({
+      container,
+      item: { height: 40, template: simpleTemplate },
+      items,
+      layout: "grid",
+      grid: { columns: 4 },
+    });
+
+    expect(vlist).toBeDefined();
+    expect(vlist.total).toBe(2_000_000);
+
+    // Scroll to middle in compressed mode
+    vlist.scrollToIndex(1_000_000, "center");
+    vlist.scrollToIndex(0, "start");
+    vlist.scrollToIndex(1_999_999, "end");
+
+    const rendered = vlist.element.querySelectorAll("[data-index]");
+    expect(rendered.length).toBeGreaterThan(0);
+  });
+
+  it("should handle grid compression transitions", () => {
+    const items = createTestItems(100);
+    vlist = createVList({
+      container,
+      item: { height: 40, template: simpleTemplate },
+      items,
+      layout: "grid",
+      grid: { columns: 4 },
+    });
+
+    // Start small, grow to compression
+    vlist.setItems(createTestItems(2_000_000));
+    expect(vlist.total).toBe(2_000_000);
+
+    // Shrink back
+    vlist.setItems(createTestItems(100));
+    expect(vlist.total).toBe(100);
+  });
+});
+
+describe("vlist — horizontal mode", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should create horizontal list and render items", async () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>({
+      container,
+      items,
+      direction: "horizontal",
+      item: {
+        width: 100,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    expect(list.element).toBeDefined();
+    expect(list.total).toBe(50);
+  });
+
+  it("should handle horizontal mode with scrollToIndex", async () => {
+    const items = createTestItems(100);
+    list = createVList<TestItem>({
+      container,
+      items,
+      direction: "horizontal",
+      item: {
+        width: 80,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    // Should not throw
+    list.scrollToIndex(50, "center");
+    expect(list.total).toBe(100);
+  });
+});
+
+describe("vlist — grid scroll snapshot", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should get and restore scroll snapshot in grid mode", async () => {
+    const items = createTestItems(200);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 60,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      layout: "grid",
+      grid: { columns: 4 },
+    });
+
+    // Should not throw when taking snapshot in grid mode
+    const snapshot = list.getScrollSnapshot();
+    expect(snapshot).toBeDefined();
+
+    // Should not throw when restoring
+    list.restoreScroll(snapshot);
+  });
+
+  it("should get and restore snapshot in non-grid mode", async () => {
+    const items = createTestItems(100);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    const snapshot = list.getScrollSnapshot();
+    expect(snapshot).toBeDefined();
+
+    list.restoreScroll(snapshot);
+  });
+});
+
+describe("vlist — groups data mutation methods", () => {
+  interface GroupedItem {
+    id: number;
+    name: string;
+    category: string;
+  }
+
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should appendItems in group mode and rebuild layout", async () => {
+    const items: GroupedItem[] = [
+      { id: 1, name: "A1", category: "A" },
+      { id: 2, name: "A2", category: "A" },
+      { id: 3, name: "B1", category: "B" },
+    ];
+
+    list = createVList<GroupedItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      groups: {
+        getGroupForIndex: (index: number) =>
+          items[index]?.category ?? "Unknown",
+        headerHeight: 30,
+        headerTemplate: (group) => `<strong>${group}</strong>`,
+      },
+    });
+
+    // Append items — should trigger rebuildGroups
+    list.appendItems([
+      { id: 4, name: "B2", category: "B" },
+      { id: 5, name: "C1", category: "C" },
+    ]);
+
+    // Original items should now be 5 (without headers)
+    expect(list.items.length).toBe(5);
+  });
+
+  it("should prependItems in group mode and rebuild layout", async () => {
+    const items: GroupedItem[] = [
+      { id: 3, name: "B1", category: "B" },
+      { id: 4, name: "B2", category: "B" },
+    ];
+
+    list = createVList<GroupedItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      groups: {
+        getGroupForIndex: (index: number) =>
+          items[index]?.category ?? "Unknown",
+        headerHeight: 30,
+        headerTemplate: (group) => `<strong>${group}</strong>`,
+      },
+    });
+
+    list.prependItems([
+      { id: 1, name: "A1", category: "A" },
+      { id: 2, name: "A2", category: "A" },
+    ]);
+
+    expect(list.items.length).toBe(4);
+  });
+
+  it("should removeItem in group mode and rebuild layout", async () => {
+    const items: GroupedItem[] = [
+      { id: 1, name: "A1", category: "A" },
+      { id: 2, name: "A2", category: "A" },
+      { id: 3, name: "B1", category: "B" },
+    ];
+
+    list = createVList<GroupedItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      groups: {
+        getGroupForIndex: (index: number) =>
+          items[index]?.category ?? "Unknown",
+        headerHeight: 30,
+        headerTemplate: (group) => `<strong>${group}</strong>`,
+      },
+    });
+
+    list.removeItem(2);
+    expect(list.items.length).toBe(2);
+  });
+});
+
+describe("vlist — reverse mode data methods", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should auto-scroll on appendItems in reverse mode when at bottom", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      reverse: true,
+    });
+
+    // Append items — the reverse-mode appendItems wrapper should handle auto-scrolling
+    list.appendItems(createTestItems(5, 21));
+    expect(list.total).toBe(25);
+  });
+
+  it("should preserve scroll position on prependItems in reverse mode", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      reverse: true,
+    });
+
+    // Prepend items — should preserve scroll position
+    list.prependItems(createTestItems(5, 100));
+    expect(list.total).toBe(25);
+  });
+});
+
+describe("vlist — groups scrollToIndex with ScrollToOptions", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should accept ScrollToOptions object in group mode scrollToIndex", async () => {
+    interface GroupedItem {
+      id: number;
+      name: string;
+      category: string;
+    }
+
+    const items: GroupedItem[] = [
+      { id: 1, name: "A1", category: "A" },
+      { id: 2, name: "A2", category: "A" },
+      { id: 3, name: "B1", category: "B" },
+      { id: 4, name: "B2", category: "B" },
+      { id: 5, name: "C1", category: "C" },
+    ];
+
+    list = createVList<GroupedItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      groups: {
+        getGroupForIndex: (index: number) =>
+          items[index]?.category ?? "Unknown",
+        headerHeight: 30,
+        headerTemplate: (group) => `<strong>${group}</strong>`,
+      },
+    });
+
+    // Use string alignment
+    list.scrollToIndex(3, "start");
+
+    // Use options object
+    list.scrollToIndex(3, { align: "center", behavior: "auto" });
+
+    // Should not throw
+    expect(list.total).toBe(5);
+  });
+});
+
+describe("vlist — selection API methods", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should use all selection methods: select, deselect, toggleSelect, selectAll, clearSelection", async () => {
+    const items = createTestItems(10);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      selection: { mode: "multiple" },
+    });
+
+    // select
+    list.select(1);
+    let selected = list.getSelected();
+    expect(selected).toContain(1);
+
+    // deselect
+    list.deselect(1);
+    selected = list.getSelected();
+    expect(selected).not.toContain(1);
+
+    // toggleSelect
+    list.toggleSelect(3);
+    selected = list.getSelected();
+    expect(selected).toContain(3);
+
+    list.toggleSelect(3);
+    selected = list.getSelected();
+    expect(selected).not.toContain(3);
+
+    // selectAll
+    list.selectAll();
+    selected = list.getSelected();
+    expect(selected.length).toBe(10);
+
+    // clearSelection
+    list.clearSelection();
+    selected = list.getSelected();
+    expect(selected.length).toBe(0);
+
+    // getSelectedItems
+    list.select(1);
+    list.select(2);
+    const selectedItems = list.getSelectedItems();
+    expect(selectedItems.length).toBe(2);
+  });
+});
+
+describe("vlist — on/off event methods", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should subscribe and unsubscribe using on/off", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    const handler = mock(() => {});
+
+    // Subscribe using on()
+    const unsub = list.on("scroll", handler);
+    expect(typeof unsub).toBe("function");
+
+    // Unsubscribe using off()
+    list.off("scroll", handler);
+  });
+});
+
+describe("vlist — items and total getters in group mode", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should return original items (without headers) from .items getter", async () => {
+    interface GroupedItem {
+      id: number;
+      name: string;
+      category: string;
+    }
+
+    const items: GroupedItem[] = [
+      { id: 1, name: "A1", category: "A" },
+      { id: 2, name: "B1", category: "B" },
+    ];
+
+    list = createVList<GroupedItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      groups: {
+        getGroupForIndex: (index: number) =>
+          items[index]?.category ?? "Unknown",
+        headerHeight: 30,
+        headerTemplate: (group) => `<strong>${group}</strong>`,
+      },
+    });
+
+    // .items should return original items, not layout items with headers
+    expect(list.items.length).toBe(2);
+
+    // .total should return original count
+    expect(list.total).toBe(2);
+  });
+});
+
+describe("vlist — grid mode total getter", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should return flat item count from .total in grid mode", async () => {
+    const items = createTestItems(24);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 60,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      layout: "grid",
+      grid: { columns: 4 },
+    });
+
+    // .total should be 24 (not 6 rows)
+    expect(list.total).toBe(24);
+  });
+});
+
+describe("vlist — destroy idempotent", () => {
+  it("should not throw when destroy is called twice", async () => {
+    const container = createContainer();
+    const items = createTestItems(10);
+    const list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    list.destroy();
+    // Second destroy should be a no-op
+    expect(() => list.destroy()).not.toThrow();
+
+    cleanupContainer(container);
+  });
+});
+
+describe("vlist — validation", () => {
+  it("should throw when no container provided", async () => {
+    expect(() =>
+      createVList({
+        container: null as any,
+        item: { height: 40, template: () => "" },
+      }),
+    ).toThrow("[vlist] Container is required");
+  });
+
+  it("should throw when no item config provided", async () => {
+    const container = createContainer();
+    expect(() =>
+      createVList({
+        container,
+        item: undefined as any,
+      }),
+    ).toThrow("[vlist] item configuration is required");
+
+    cleanupContainer(container);
+  });
+});
+
+describe("vlist — wrap mode", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should create list with wrap mode enabled", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      scroll: {
+        wrap: true,
+      },
+    });
+
+    expect(list.element).toBeDefined();
+    expect(list.total).toBe(20);
+  });
+});
+
+describe("vlist — variable height function", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should handle function-based heights", async () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: (index: number) => (index % 2 === 0 ? 40 : 60),
+        template: (item) => `<span>${item.name}</span>`,
+      },
+    });
+
+    expect(list.total).toBe(50);
   });
 });

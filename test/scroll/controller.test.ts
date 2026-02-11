@@ -2089,3 +2089,894 @@ describe("createScrollController", () => {
     });
   });
 });
+
+// =============================================================================
+// Coverage tests merged from coverage dump files
+// =============================================================================
+
+describe("scroll controller stale velocity gap detection", () => {
+  let viewport: HTMLElement;
+  let rafCallbacks: Array<() => void>;
+  let rafId: number;
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+
+  const mockRaf = (callback: () => void): number => {
+    rafCallbacks.push(callback);
+    return ++rafId;
+  };
+  const mockCancelRaf = (_id: number): void => {};
+  const flushRaf = (): void => {
+    const callbacks = [...rafCallbacks];
+    rafCallbacks = [];
+    callbacks.forEach((cb) => cb());
+  };
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5000 });
+    document.body.appendChild(viewport);
+
+    rafCallbacks = [];
+    rafId = 0;
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = mockRaf as any;
+    globalThis.cancelAnimationFrame = mockCancelRaf as any;
+  });
+
+  afterEach(() => {
+    viewport.remove();
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  it("should reset velocity after stale gap (>100ms) between scroll events", async () => {
+    // Use compressed mode so we can directly control scroll position via scrollTo
+    const onScroll = mock((_data: any) => {});
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        ratio: 0.5,
+        virtualHeight: 16_000_000,
+        actualHeight: 32_000_000,
+      },
+      onScroll,
+    });
+
+    // First scroll gesture
+    controller.scrollTo(100);
+    controller.scrollTo(200);
+    controller.scrollTo(300);
+
+    // Velocity should be tracking
+    const velocityBefore = controller.getVelocity();
+
+    // Wait >100ms for stale gap
+    await new Promise((r) => setTimeout(r, 150));
+
+    // New scroll gesture after stale gap — velocity tracker should reset
+    controller.scrollTo(400);
+
+    // After stale gap reset, velocity should be 0 until enough samples
+    // (the first sample after reset is a baseline, velocity stays 0)
+    const velocityAfterReset = controller.getVelocity();
+    expect(velocityAfterReset).toBe(0);
+
+    controller.destroy();
+  });
+});
+
+describe("scroll controller horizontal mode", () => {
+  let viewport: HTMLElement;
+  let rafCallbacks: Array<() => void>;
+  let rafId: number;
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+
+  const mockRaf = (callback: () => void): number => {
+    rafCallbacks.push(callback);
+    return ++rafId;
+  };
+  const mockCancelRaf = (_id: number): void => {};
+  const flushRaf = (): void => {
+    const callbacks = [...rafCallbacks];
+    rafCallbacks = [];
+    callbacks.forEach((cb) => cb());
+  };
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "clientWidth", { value: 800 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000 });
+    viewport.scrollTo = ((options?: ScrollToOptions | number) => {
+      if (typeof options === "number") {
+        (viewport as any).scrollLeft = options;
+      } else if (options && typeof (options as any).left === "number") {
+        (viewport as any).scrollLeft = (options as any).left;
+      } else if (options && typeof (options as any).top === "number") {
+        (viewport as any).scrollTop = (options as any).top;
+      }
+    }) as any;
+    document.body.appendChild(viewport);
+
+    rafCallbacks = [];
+    rafId = 0;
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = mockRaf as any;
+    globalThis.cancelAnimationFrame = mockCancelRaf as any;
+  });
+
+  afterEach(() => {
+    viewport.remove();
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  it("should enable and disable compression in horizontal mode", () => {
+    const controller = createScrollController(viewport, {
+      horizontal: true,
+    });
+
+    const compression = {
+      isCompressed: true,
+      ratio: 0.5,
+      virtualHeight: 16_000_000,
+      actualHeight: 32_000_000,
+    };
+
+    // enableCompression should switch to overflow hidden on X axis
+    controller.enableCompression(compression);
+    expect(controller.isCompressed()).toBe(true);
+
+    // L505/L514: disableCompression should restore overflowX to auto (horizontal)
+    controller.disableCompression();
+    expect(controller.isCompressed()).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("should handle horizontal compression with wheel enabled", () => {
+    const controller = createScrollController(viewport, {
+      horizontal: true,
+      wheel: true,
+    });
+
+    const compression = {
+      isCompressed: true,
+      ratio: 0.5,
+      virtualHeight: 16_000_000,
+      actualHeight: 32_000_000,
+    };
+
+    controller.enableCompression(compression);
+    expect(controller.isCompressed()).toBe(true);
+
+    // L527: disableCompression should re-add horizontal wheel listener
+    controller.disableCompression();
+    expect(controller.isCompressed()).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("should handle horizontal compression with wheel disabled", () => {
+    const controller = createScrollController(viewport, {
+      horizontal: true,
+      wheel: false,
+    });
+
+    const compression = {
+      isCompressed: true,
+      ratio: 0.5,
+      virtualHeight: 16_000_000,
+      actualHeight: 32_000_000,
+    };
+
+    controller.enableCompression(compression);
+    controller.disableCompression();
+
+    expect(controller.isCompressed()).toBe(false);
+    controller.destroy();
+  });
+
+  it("should scrollTo in horizontal non-compressed mode (scrollLeft)", () => {
+    const controller = createScrollController(viewport, {
+      horizontal: true,
+    });
+
+    // Non-compressed scrollTo should set viewport.scrollLeft
+    controller.scrollTo(200);
+
+    controller.destroy();
+  });
+});
+
+describe("scroll controller window mode compression", () => {
+  let viewport: HTMLElement;
+  let rafCallbacks: Array<() => void>;
+  let rafId: number;
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+  let scrollListeners: Array<EventListener>;
+  let viewportTop: number;
+
+  const mockRaf = (callback: () => void): number => {
+    rafCallbacks.push(callback);
+    return ++rafId;
+  };
+  const mockCancelRaf = (_id: number): void => {};
+  const flushRaf = (): void => {
+    const callbacks = [...rafCallbacks];
+    rafCallbacks = [];
+    callbacks.forEach((cb) => cb());
+  };
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5000 });
+    document.body.appendChild(viewport);
+    viewportTop = 0;
+
+    // Track scroll listeners
+    scrollListeners = [];
+    const origAdd = window.addEventListener.bind(window);
+    const origRemove = window.removeEventListener.bind(window);
+    (window as any).addEventListener = (
+      type: string,
+      handler: any,
+      options?: any,
+    ) => {
+      if (type === "scroll") scrollListeners.push(handler);
+      origAdd(type, handler, options);
+    };
+    (window as any).removeEventListener = (
+      type: string,
+      handler: any,
+      options?: any,
+    ) => {
+      if (type === "scroll")
+        scrollListeners = scrollListeners.filter((h) => h !== handler);
+      origRemove(type, handler, options);
+    };
+
+    viewport.getBoundingClientRect = () =>
+      ({
+        top: viewportTop,
+        left: 0,
+        right: 800,
+        bottom: viewportTop + 500,
+        width: 800,
+        height: 500,
+        x: 0,
+        y: viewportTop,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    Object.defineProperty(window, "innerHeight", {
+      value: 800,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window, "scrollY", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    (window as any).scrollTo = mock(() => {});
+
+    rafCallbacks = [];
+    rafId = 0;
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = mockRaf as any;
+    globalThis.cancelAnimationFrame = mockCancelRaf as any;
+  });
+
+  afterEach(() => {
+    viewport.remove();
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  it("should early-return from enableCompression in window mode (L453)", () => {
+    const controller = createScrollController(viewport, {
+      scrollElement: window,
+    });
+
+    const compression = {
+      isCompressed: true,
+      ratio: 0.5,
+      virtualHeight: 16_000_000,
+      actualHeight: 32_000_000,
+    };
+
+    // In window mode, enableCompression should set compressed=true but
+    // skip overflow/wheel changes and return early at L453
+    controller.enableCompression(compression);
+    expect(controller.isCompressed()).toBe(true);
+
+    // Window mode disableCompression should also early-return
+    controller.disableCompression();
+    expect(controller.isCompressed()).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("should scrollTo in horizontal window mode (L559-563)", () => {
+    const scrollToSpy = mock(() => {});
+    (window as any).scrollTo = scrollToSpy;
+
+    const controller = createScrollController(viewport, {
+      scrollElement: window,
+      horizontal: true,
+    });
+
+    // L559-563: horizontal window-mode scrollTo uses window.scrollTo with left
+    controller.scrollTo(300);
+
+    expect(scrollToSpy).toHaveBeenCalled();
+    const callArgs = scrollToSpy.mock.calls[0]?.[0] as any;
+    if (callArgs && typeof callArgs === "object") {
+      expect(callArgs.left).toBeDefined();
+    }
+
+    controller.destroy();
+  });
+});
+
+describe("scroll controller wheel smoothing", () => {
+  let viewport: HTMLElement;
+  let rafCallbacks: Array<() => void>;
+  let rafId: number;
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+
+  const mockRaf = (callback: () => void): number => {
+    rafCallbacks.push(callback);
+    return ++rafId;
+  };
+  const mockCancelRaf = (_id: number): void => {};
+  const flushRaf = (): void => {
+    const callbacks = [...rafCallbacks];
+    rafCallbacks = [];
+    callbacks.forEach((cb) => cb());
+  };
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5000 });
+    document.body.appendChild(viewport);
+
+    rafCallbacks = [];
+    rafId = 0;
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = mockRaf as any;
+    globalThis.cancelAnimationFrame = mockCancelRaf as any;
+  });
+
+  afterEach(() => {
+    viewport.remove();
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  it("should apply wheel smoothing factor when smoothing is enabled", () => {
+    const onScroll = mock((_data: any) => {});
+    // Create compressed controller with wheel enabled — wheel handler uses smoothing
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        ratio: 0.5,
+        virtualHeight: 16_000_000,
+        actualHeight: 32_000_000,
+      },
+      wheel: true,
+      onScroll,
+    });
+
+    // Dispatch a wheel event on the viewport
+    // In compressed mode, the controller's handleWheel listener is active
+    const JSDOMEvent = (window as any).WheelEvent || (window as any).Event;
+    const wheelEvent = new JSDOMEvent("wheel", {
+      deltaY: 100,
+      cancelable: true,
+      bubbles: true,
+    });
+    viewport.dispatchEvent(wheelEvent);
+
+    // The wheel handler should have fired onScroll
+    expect(onScroll).toHaveBeenCalled();
+
+    controller.destroy();
+  });
+});
+
+describe("scroll/controller — stale velocity gap detection (L191-202)", () => {
+  // Lazy import so JSDOM globals are ready
+
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 10000 });
+    document.body.appendChild(viewport);
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should reset velocity tracker when gap > STALE_GAP_MS (100ms)", async () => {
+    const scrollData: any[] = [];
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+      wheel: true,
+      onScroll: (data) => scrollData.push({ ...data }),
+    });
+
+    // First scroll — establishes baseline
+    controller.scrollTo(100);
+
+    // Wait longer than STALE_GAP_MS (100ms) to trigger the stale gap branch
+    await new Promise((r) => setTimeout(r, 150));
+
+    // Second scroll after the gap — should reset the velocity buffer
+    controller.scrollTo(200);
+
+    // Velocity should be 0 or very low after a stale gap reset
+    // (only 1 sample after reset, not enough for reliable velocity)
+    expect(controller.getVelocity()).toBeLessThanOrEqual(0.5);
+
+    controller.destroy();
+  });
+
+  it("should keep velocity tracking when gap < STALE_GAP_MS", async () => {
+    const scrollData: any[] = [];
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+      wheel: true,
+      onScroll: (data) => scrollData.push({ ...data }),
+    });
+
+    // Rapid scrolls — no stale gap
+    controller.scrollTo(100);
+    await new Promise((r) => setTimeout(r, 10));
+    controller.scrollTo(200);
+    await new Promise((r) => setTimeout(r, 10));
+    controller.scrollTo(300);
+
+    // Velocity should be non-zero (samples are fresh)
+    // (may still be 0 if not enough samples yet, but at least no stale reset)
+    expect(scrollData.length).toBeGreaterThanOrEqual(2);
+
+    controller.destroy();
+  });
+
+  it("should fire multiple stale gap resets across pauses", async () => {
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+    });
+
+    controller.scrollTo(100);
+    await new Promise((r) => setTimeout(r, 150));
+    // First stale gap reset
+    controller.scrollTo(200);
+
+    await new Promise((r) => setTimeout(r, 150));
+    // Second stale gap reset
+    controller.scrollTo(300);
+
+    expect(controller.getVelocity()).toBeLessThanOrEqual(0.5);
+
+    controller.destroy();
+  });
+});
+
+describe("scroll/controller — smoothing in compressed wheel (L379)", () => {
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 10000 });
+    document.body.appendChild(viewport);
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should apply smoothing factor (0.3) when smoothing is enabled", () => {
+    const scrollData: any[] = [];
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+      wheel: true,
+      smoothing: true,
+      onScroll: (data) => scrollData.push({ ...data }),
+    });
+
+    // Dispatch a wheel event
+    const WheelEventCtor = (window as any).WheelEvent || (window as any).Event;
+    const wheelEvent = new WheelEventCtor("wheel", {
+      deltaY: 100,
+      bubbles: true,
+      cancelable: true,
+    });
+    viewport.dispatchEvent(wheelEvent);
+
+    // With smoothing, position = 0 + 100 * 1 (sensitivity) * 0.3 = 30
+    expect(scrollData.length).toBe(1);
+    expect(scrollData[0].scrollTop).toBe(30);
+
+    controller.destroy();
+  });
+
+  it("should move further without smoothing", () => {
+    const scrollData: any[] = [];
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+      wheel: true,
+      smoothing: false,
+      onScroll: (data) => scrollData.push({ ...data }),
+    });
+
+    const WheelEventCtor = (window as any).WheelEvent || (window as any).Event;
+    const wheelEvent = new WheelEventCtor("wheel", {
+      deltaY: 100,
+      bubbles: true,
+      cancelable: true,
+    });
+    viewport.dispatchEvent(wheelEvent);
+
+    // Without smoothing, position = 0 + 100 * 1 = 100
+    expect(scrollData.length).toBe(1);
+    expect(scrollData[0].scrollTop).toBe(100);
+
+    controller.destroy();
+  });
+});
+
+describe("scroll/controller — timeDelta === 0 guard", () => {
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 10000 });
+    document.body.appendChild(viewport);
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should handle extremely rapid scrollTo calls (potential timeDelta === 0)", () => {
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+    });
+
+    // Call scrollTo many times in a tight loop — may produce timeDelta === 0
+    for (let i = 0; i < 50; i++) {
+      controller.scrollTo(i * 10);
+    }
+
+    // Should not crash; velocity should be some value
+    expect(typeof controller.getVelocity()).toBe("number");
+
+    controller.destroy();
+  });
+});
+
+describe("scroll/controller — isTracking reliability", () => {
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    Object.defineProperty(viewport, "scrollHeight", { value: 10000 });
+    document.body.appendChild(viewport);
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should not be tracking initially (not enough samples)", () => {
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+    });
+
+    // Before any scroll, velocity tracker has 0 samples
+    expect(controller.isTracking()).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("should become tracking after enough scroll samples", async () => {
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+    });
+
+    // Fire several scrollTo calls with small delays to accumulate samples
+    // MIN_RELIABLE_SAMPLES = 3
+    controller.scrollTo(100);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(200);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(300);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(400);
+
+    expect(controller.isTracking()).toBe(true);
+
+    controller.destroy();
+  });
+
+  it("should lose tracking after stale gap and regain it", async () => {
+    const controller = createScrollController(viewport, {
+      compressed: true,
+      compression: {
+        isCompressed: true,
+        actualHeight: 10000,
+        virtualHeight: 50000,
+        ratio: 5,
+      },
+    });
+
+    // Build up reliable tracking
+    controller.scrollTo(100);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(200);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(300);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(400);
+
+    expect(controller.isTracking()).toBe(true);
+
+    // Wait for stale gap (>100ms)
+    await new Promise((r) => setTimeout(r, 150));
+
+    // Next scroll triggers stale reset — tracking should drop
+    controller.scrollTo(500);
+    expect(controller.isTracking()).toBe(false);
+
+    // Build back up
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(600);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(700);
+    await new Promise((r) => setTimeout(r, 5));
+    controller.scrollTo(800);
+
+    expect(controller.isTracking()).toBe(true);
+
+    controller.destroy();
+  });
+});
+
+describe("scroll/controller — stale velocity gap with mocked time", () => {
+  let viewport: HTMLElement;
+
+  beforeEach(() => {
+    viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", {
+      value: 500,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "scrollHeight", {
+      value: 10000,
+      configurable: true,
+    });
+    document.body.appendChild(viewport);
+  });
+
+  afterEach(() => {
+    viewport.remove();
+  });
+
+  it("should trigger stale gap reset when performance.now gap > 100ms (STALE_GAP_MS)", async () => {
+    // Dynamically import so JSDOM globals are ready
+    // Mock performance.now to control time precisely
+    let mockTime = 1000;
+    const originalPerfNow = performance.now;
+    performance.now = () => mockTime;
+
+    try {
+      const scrollData: any[] = [];
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression: {
+          isCompressed: true,
+          actualHeight: 10000,
+          virtualHeight: 50000,
+          ratio: 5,
+        },
+        wheel: true,
+        onScroll: (data) => scrollData.push({ ...data }),
+      });
+
+      // First scroll at t=1000ms
+      controller.scrollTo(100);
+      expect(scrollData.length).toBe(1);
+
+      // Rapid scroll at t=1010ms (within STALE_GAP_MS=100ms, normal)
+      mockTime = 1010;
+      controller.scrollTo(200);
+      expect(scrollData.length).toBe(2);
+
+      // Velocity should be non-zero after two close samples
+      const velocityBeforeGap = controller.getVelocity();
+
+      // Now advance time by 200ms (> STALE_GAP_MS=100ms) to trigger stale reset
+      mockTime = 1210;
+      controller.scrollTo(300);
+
+      // After stale gap, velocity should be 0 (only 1 sample after reset)
+      expect(controller.getVelocity()).toBe(0);
+
+      // isTracking should be false (not enough samples after reset)
+      expect(controller.isTracking()).toBe(false);
+
+      // Continue scrolling to accumulate samples again
+      mockTime = 1220;
+      controller.scrollTo(350);
+      mockTime = 1230;
+      controller.scrollTo(400);
+      mockTime = 1240;
+      controller.scrollTo(450);
+
+      // After enough samples, velocity should be non-zero again
+      expect(controller.getVelocity()).not.toBe(0);
+      expect(controller.isTracking()).toBe(true);
+
+      controller.destroy();
+    } finally {
+      performance.now = originalPerfNow;
+    }
+  });
+
+  it("should handle multiple stale gaps resetting tracker each time", async () => {
+    let mockTime = 2000;
+    const originalPerfNow = performance.now;
+    performance.now = () => mockTime;
+
+    try {
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression: {
+          isCompressed: true,
+          actualHeight: 10000,
+          virtualHeight: 50000,
+          ratio: 5,
+        },
+      });
+
+      // First gesture
+      controller.scrollTo(100);
+      mockTime = 2010;
+      controller.scrollTo(200);
+      mockTime = 2020;
+      controller.scrollTo(300);
+
+      // Pause > 100ms (stale gap)
+      mockTime = 2200;
+      controller.scrollTo(400);
+      expect(controller.getVelocity()).toBe(0); // Reset after stale gap
+
+      // Build up velocity again
+      mockTime = 2210;
+      controller.scrollTo(450);
+      mockTime = 2220;
+      controller.scrollTo(500);
+      mockTime = 2230;
+      controller.scrollTo(550);
+      expect(controller.getVelocity()).not.toBe(0);
+
+      // Another stale gap
+      mockTime = 2500;
+      controller.scrollTo(600);
+      expect(controller.getVelocity()).toBe(0); // Reset again
+
+      controller.destroy();
+    } finally {
+      performance.now = originalPerfNow;
+    }
+  });
+
+  it("should not reset when gap is exactly at STALE_GAP_MS boundary", async () => {
+    let mockTime = 3000;
+    const originalPerfNow = performance.now;
+    performance.now = () => mockTime;
+
+    try {
+      const controller = createScrollController(viewport, {
+        compressed: true,
+        compression: {
+          isCompressed: true,
+          actualHeight: 10000,
+          virtualHeight: 50000,
+          ratio: 5,
+        },
+      });
+
+      // Establish baseline
+      controller.scrollTo(100);
+
+      // Gap of exactly 100ms — should NOT trigger stale reset (condition is >)
+      mockTime = 3100;
+      controller.scrollTo(200);
+
+      // Build a few more samples
+      mockTime = 3110;
+      controller.scrollTo(300);
+      mockTime = 3120;
+      controller.scrollTo(400);
+
+      // Velocity should be non-zero (no stale reset occurred)
+      expect(controller.getVelocity()).not.toBe(0);
+
+      controller.destroy();
+    } finally {
+      performance.now = originalPerfNow;
+    }
+  });
+});

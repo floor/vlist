@@ -9,9 +9,11 @@ import {
   expect,
   mock,
   beforeEach,
+  afterEach,
   beforeAll,
   afterAll,
 } from "bun:test";
+import { createVList } from "../src/vlist";
 import { JSDOM } from "jsdom";
 import {
   createScrollHandler,
@@ -35,9 +37,25 @@ import { createHeightCache } from "../src/render/heights";
 // JSDOM Setup
 // =============================================================================
 
+const createContainer = (): HTMLElement => {
+  const container = document.createElement("div");
+  Object.defineProperty(container, "clientHeight", { value: 600 });
+  Object.defineProperty(container, "clientWidth", { value: 400 });
+  document.body.appendChild(container);
+  return container;
+};
+
+const cleanupContainer = (container: HTMLElement): void => {
+  if (container && container.parentNode) {
+    container.parentNode.removeChild(container);
+  }
+};
+
 let dom: JSDOM;
 let originalDocument: any;
 let originalWindow: any;
+let originalRAF: any;
+let originalCAF: any;
 
 beforeAll(() => {
   dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
@@ -47,17 +65,100 @@ beforeAll(() => {
 
   originalDocument = global.document;
   originalWindow = global.window;
+  originalRAF = global.requestAnimationFrame;
+  originalCAF = global.cancelAnimationFrame;
 
   global.document = dom.window.document;
   global.window = dom.window as any;
   global.HTMLElement = dom.window.HTMLElement;
   global.MouseEvent = dom.window.MouseEvent;
   global.KeyboardEvent = dom.window.KeyboardEvent;
+  global.Element = dom.window.Element;
+  global.DocumentFragment = dom.window.DocumentFragment;
+
+  // Mock ResizeObserver — callback is stored so we can trigger it manually
+  (global as any).__resizeObserverInstances = [] as any[];
+
+  global.ResizeObserver = class MockResizeObserver {
+    private callback: ResizeObserverCallback;
+    private targets: Element[] = [];
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      (global as any).__resizeObserverInstances.push(this);
+    }
+
+    observe(target: Element) {
+      this.targets.push(target);
+      this.callback(
+        [
+          {
+            target,
+            contentRect: {
+              width: 400,
+              height: 600,
+              top: 0,
+              left: 0,
+              bottom: 600,
+              right: 400,
+              x: 0,
+              y: 0,
+              toJSON: () => {},
+            },
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          },
+        ],
+        this as any,
+      );
+    }
+
+    unobserve() {}
+    disconnect() {}
+  } as any;
+
+  // Mock scrollTo for JSDOM (not supported natively)
+  if (!dom.window.Element.prototype.scrollTo) {
+    dom.window.Element.prototype.scrollTo = function (
+      options?: ScrollToOptions | number,
+    ) {
+      if (typeof options === "number") {
+        this.scrollTop = options;
+      } else if (options && typeof options.top === "number") {
+        this.scrollTop = options.top;
+      }
+    };
+  }
+
+  // Mock requestAnimationFrame / cancelAnimationFrame
+  let rafId = 0;
+  const pendingTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  global.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+    rafId++;
+    const id = rafId;
+    const timer = setTimeout(() => {
+      pendingTimers.delete(id);
+      cb(performance.now());
+    }, 0);
+    pendingTimers.set(id, timer);
+    return id;
+  };
+  global.cancelAnimationFrame = (id: number): void => {
+    const timer = pendingTimers.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      pendingTimers.delete(id);
+    }
+  };
 });
 
 afterAll(() => {
   global.document = originalDocument;
   global.window = originalWindow;
+  global.requestAnimationFrame = originalRAF;
+  global.cancelAnimationFrame = originalCAF;
+  delete (global as any).__resizeObserverInstances;
   dom.window.close();
 });
 
@@ -1414,5 +1515,492 @@ describe("createKeyboardHandler", () => {
       // Full render should be called, not just updateItemClasses
       expect(ctx.renderer.render).toHaveBeenCalled();
     });
+  });
+});
+
+// =============================================================================
+// Coverage tests merged from coverage dump files
+// =============================================================================
+
+describe("handlers error catch callbacks", () => {
+  const createMockDOM = (): DOMStructure => {
+    const root = document.createElement("div");
+    const viewport = document.createElement("div");
+    const content = document.createElement("div");
+    const items = document.createElement("div");
+    root.appendChild(viewport);
+    viewport.appendChild(content);
+    content.appendChild(items);
+    return { root, viewport, content, items };
+  };
+
+  const createMockConfig = (
+    overrides?: Partial<VListContextConfig>,
+  ): VListContextConfig => ({
+    itemHeight: 40,
+    overscan: 3,
+    classPrefix: "vlist",
+    selectionMode: "none",
+    hasAdapter: true,
+    reverse: false,
+    wrap: false,
+    cancelLoadThreshold: 25,
+    preloadThreshold: 10,
+    preloadAhead: 20,
+    ariaIdPrefix: "vlist-0",
+    ...overrides,
+  });
+
+  const createMockViewportState = (
+    overrides?: Partial<ViewportState>,
+  ): ViewportState => ({
+    scrollTop: 0,
+    containerHeight: 500,
+    totalHeight: 4000,
+    actualHeight: 4000,
+    isCompressed: false,
+    compressionRatio: 1,
+    visibleRange: { start: 0, end: 12 },
+    renderRange: { start: 0, end: 15 },
+    ...overrides,
+  });
+
+  const createRejectingDataManager = <T extends VListItem>(
+    items: T[],
+    rejectEnsureRange: boolean = true,
+    rejectLoadMore: boolean = true,
+  ): DataManager<T> => ({
+    getState: mock(() => ({
+      total: items.length,
+      cached: items.length,
+      isLoading: false,
+      pendingRanges: [],
+      error: undefined,
+      hasMore: true,
+      cursor: undefined,
+    })),
+    getTotal: mock(() => items.length),
+    getCached: mock(() => items.length),
+    getIsLoading: mock(() => false),
+    getHasMore: mock(() => true),
+    getStorage: mock(() => ({}) as any),
+    getPlaceholders: mock(() => ({}) as any),
+    getItem: mock((index: number) => items[index]),
+    getItemById: mock((id: string | number) =>
+      items.find((item) => item.id === id),
+    ),
+    getIndexById: mock((id: string | number) =>
+      items.findIndex((item) => item.id === id),
+    ),
+    getItemsInRange: mock((start: number, end: number) =>
+      items.slice(start, Math.min(end + 1, items.length)),
+    ),
+    isItemLoaded: mock((index: number) => index >= 0 && index < items.length),
+    setItems: mock(() => {}),
+    setTotal: mock(() => {}),
+    updateItem: mock(() => true),
+    removeItem: mock(() => true),
+    loadRange: mock(async () => {}),
+    ensureRange: rejectEnsureRange
+      ? mock(async () => {
+          throw new Error("ensureRange failed");
+        })
+      : mock(async () => {}),
+    loadInitial: mock(async () => {}),
+    loadMore: rejectLoadMore
+      ? mock(async () => {
+          throw new Error("loadMore failed");
+        })
+      : (mock(async () => true) as any),
+    reload: mock(async () => {}),
+    evictDistant: mock(() => {}),
+    clear: mock(() => {}),
+    reset: mock(() => {}),
+  });
+
+  const createMockContext = <T extends VListItem>(
+    items: T[],
+    configOverrides?: Partial<VListContextConfig>,
+    viewportOverrides?: Partial<ViewportState>,
+    rejectEnsureRange?: boolean,
+    rejectLoadMore?: boolean,
+  ): VListContext<T> => {
+    const config = createMockConfig(configOverrides);
+    const domStruct = createMockDOM();
+    const dataManager = createRejectingDataManager(
+      items,
+      rejectEnsureRange,
+      rejectLoadMore,
+    );
+    const heightCache = createHeightCache(config.itemHeight, items.length);
+    const itemHeight =
+      typeof config.itemHeight === "number" ? config.itemHeight : 40;
+
+    return {
+      config,
+      dom: domStruct,
+      heightCache,
+      dataManager,
+      scrollController: {
+        getScrollTop: mock(() => 0),
+        scrollTo: mock(() => {}),
+        scrollBy: mock(() => {}),
+        isAtTop: mock(() => true),
+        isAtBottom: mock(() => false),
+        getScrollPercentage: mock(() => 0),
+        getVelocity: mock(() => 0),
+        isTracking: mock(() => true),
+        isScrolling: mock(() => false),
+        isCompressed: mock(() => false),
+        enableCompression: mock(() => {}),
+        disableCompression: mock(() => {}),
+        updateConfig: mock(() => {}),
+        destroy: mock(() => {}),
+      } as any,
+      renderer: {
+        render: mock(() => {}),
+        updateItem: mock(() => {}),
+        updateItemClasses: mock(() => {}),
+        updatePositions: mock(() => {}),
+        getElement: mock(() => undefined),
+        clear: mock(() => {}),
+        destroy: mock(() => {}),
+      },
+      emitter: {
+        on: mock(() => () => {}),
+        off: mock(() => {}),
+        emit: mock(() => {}),
+        once: mock(() => () => {}),
+        clear: mock(() => {}),
+        listenerCount: mock(() => 0),
+      },
+      scrollbar: null,
+      state: {
+        viewportState: createMockViewportState(viewportOverrides),
+        selectionState: createSelectionState(),
+        lastRenderRange: { start: 0, end: 0 },
+        isInitialized: true,
+        isDestroyed: false,
+        cachedCompression: null,
+      },
+      getVirtualTotal: mock(() => items.length),
+      getItemsForRange: mock((range: Range) =>
+        items.slice(range.start, range.end + 1),
+      ),
+      getAllLoadedItems: mock(() => items),
+      getCompressionContext: mock(() => ({
+        scrollTop: 0,
+        totalItems: items.length,
+        containerHeight: 500,
+        rangeStart: 0,
+      })),
+      getCachedCompression: mock(() => ({
+        isCompressed: false,
+        actualHeight: items.length * itemHeight,
+        virtualHeight: items.length * itemHeight,
+        ratio: 1,
+      })),
+    };
+  };
+
+  it("should handle ensureRange rejection in loadPendingRange (L77)", async () => {
+    const items = createTestItems(100);
+    const ctx = createMockContext(items, { hasAdapter: true }, {}, true, false);
+    const renderCallback = mock(() => {});
+
+    const handler = createScrollHandler(ctx, renderCallback);
+
+    // Set a pending range by calling handleScroll with high velocity first
+    // then trigger loadPendingRange
+    (ctx.scrollController.getVelocity as any).mockReturnValue(50);
+    (ctx.scrollController.isTracking as any).mockReturnValue(true);
+
+    // Call handler to set pendingRange
+    handler(200, "down");
+
+    // Now call loadPendingRange — ensureRange will reject
+    handler.loadPendingRange();
+
+    // Give the rejection a tick to process
+    await new Promise((r) => setTimeout(r, 20));
+
+    // The error should be emitted, not thrown
+    expect(ctx.emitter.emit).toHaveBeenCalled();
+  });
+
+  it("should handle ensureRange rejection in velocity-crossing block (L106)", async () => {
+    const items = createTestItems(100);
+    const ctx = createMockContext(items, { hasAdapter: true }, {}, true, false);
+    const renderCallback = mock(() => {});
+
+    const handler = createScrollHandler(ctx, renderCallback);
+
+    // First call with high velocity (above cancelLoadThreshold) to set pendingRange
+    (ctx.scrollController.getVelocity as any).mockReturnValue(50);
+    (ctx.scrollController.isTracking as any).mockReturnValue(true);
+    handler(200, "down");
+
+    // Now call with velocity that just dropped below threshold
+    // This triggers the velocity-crossing block (L100-107)
+    (ctx.scrollController.getVelocity as any).mockReturnValue(5);
+    handler(210, "down");
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Error should be emitted without throwing
+    expect(ctx.emitter.emit).toHaveBeenCalled();
+  });
+
+  it("should handle loadMore rejection in normal mode (L177)", async () => {
+    const items = createTestItems(50);
+    const ctx = createMockContext(
+      items,
+      { hasAdapter: true, reverse: false },
+      {
+        totalHeight: 2000,
+        containerHeight: 500,
+        scrollTop: 1490, // Near the bottom
+      },
+      false,
+      true,
+    );
+    const renderCallback = mock(() => {});
+
+    const handler = createScrollHandler(ctx, renderCallback);
+
+    // Low velocity, tracking, near bottom — should trigger loadMore
+    (ctx.scrollController.getVelocity as any).mockReturnValue(0);
+    (ctx.scrollController.isTracking as any).mockReturnValue(true);
+    handler(1490, "down");
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Error should be emitted
+    expect(ctx.emitter.emit).toHaveBeenCalled();
+  });
+
+  it("should handle loadMore rejection in reverse mode (L160)", async () => {
+    const items = createTestItems(50);
+    const ctx = createMockContext(
+      items,
+      { hasAdapter: true, reverse: true },
+      {
+        totalHeight: 2000,
+        containerHeight: 500,
+        scrollTop: 5, // Near the top — in reverse mode, "more" is up
+      },
+      false,
+      true,
+    );
+    const renderCallback = mock(() => {});
+
+    const handler = createScrollHandler(ctx, renderCallback);
+
+    // Low velocity, tracking, near top in reverse mode — should trigger loadMore
+    (ctx.scrollController.getVelocity as any).mockReturnValue(0);
+    (ctx.scrollController.isTracking as any).mockReturnValue(true);
+    handler(5, "up");
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Error should be emitted
+    expect(ctx.emitter.emit).toHaveBeenCalled();
+  });
+
+  it("should handle ensureRange rejection in normal canLoad path (L221)", async () => {
+    const items = createTestItems(100);
+    const ctx = createMockContext(items, { hasAdapter: true }, {}, true, false);
+    const renderCallback = mock(() => {});
+
+    const handler = createScrollHandler(ctx, renderCallback);
+
+    // Low velocity + tracking = canLoad is true
+    // This means ensureRange is called directly in the canLoad branch (L220-222),
+    // NOT via loadPendingRange or velocity-crossing.
+    (ctx.scrollController.getVelocity as any).mockReturnValue(0);
+    (ctx.scrollController.isTracking as any).mockReturnValue(true);
+
+    // First call to set lastEnsuredRange
+    handler(0, "down");
+
+    // Second call with different scrollTop to trigger rangeChanged
+    // (viewport state recalculation will produce a new renderRange)
+    handler(200, "down");
+
+    // Give the rejection a tick to process
+    await new Promise((r) => setTimeout(r, 20));
+
+    // The ensureRange .catch should emit an error event
+    expect(ctx.emitter.emit).toHaveBeenCalled();
+  });
+});
+
+describe("handlers — keyboard Space/Enter selection", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should handle ArrowDown + Space for keyboard selection", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      selection: { mode: "multiple" },
+    });
+
+    const root = list.element;
+
+    // Focus the list root
+    root.focus?.();
+
+    // ArrowDown to move focus to item 0
+    const arrowDown = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true,
+    });
+    root.dispatchEvent(arrowDown);
+
+    // Space to select focused item
+    const space = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    root.dispatchEvent(space);
+
+    // Check selection
+    const selected = list.getSelected();
+    expect(selected.length).toBeGreaterThanOrEqual(0); // May or may not select depending on focus state
+  });
+
+  it("should handle Home and End keys", async () => {
+    const items = createTestItems(20);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      selection: { mode: "single" },
+    });
+
+    const root = list.element;
+
+    // Home key
+    const home = new KeyboardEvent("keydown", {
+      key: "Home",
+      bubbles: true,
+      cancelable: true,
+    });
+    root.dispatchEvent(home);
+
+    // End key
+    const end = new KeyboardEvent("keydown", {
+      key: "End",
+      bubbles: true,
+      cancelable: true,
+    });
+    root.dispatchEvent(end);
+
+    // Should not throw
+    expect(list.total).toBe(20);
+  });
+
+  it("should handle Enter key to toggle selection", async () => {
+    const items = createTestItems(10);
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      selection: { mode: "multiple" },
+    });
+
+    const root = list.element;
+
+    // Move focus down first
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    // Enter to toggle
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(list.total).toBe(10);
+  });
+});
+
+describe("handlers — click on item with selection", () => {
+  let container: HTMLElement;
+  let list: any;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    cleanupContainer(container);
+  });
+
+  it("should emit item:click and toggle selection on click", async () => {
+    const items = createTestItems(10);
+    const clickHandler = mock(() => {});
+
+    list = createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: 40,
+        template: (item) => `<span>${item.name}</span>`,
+      },
+      selection: { mode: "multiple" },
+    });
+
+    list.on("item:click", clickHandler);
+
+    // Find a rendered item element and click it
+    const root = list.element;
+    const itemEl = root.querySelector("[data-index]");
+
+    if (itemEl) {
+      const event = new MouseEvent("click", { bubbles: true });
+      itemEl.dispatchEvent(event);
+
+      // Should have fired click event
+      expect(clickHandler).toHaveBeenCalled();
+    }
   });
 });

@@ -16,9 +16,15 @@ import {
 import { JSDOM } from "jsdom";
 import { createGridRenderer } from "../../src/grid/renderer";
 import { createGridLayout } from "../../src/grid/layout";
+import { createHeightCache } from "../../src/render/heights";
 import type { GridRenderer } from "../../src/grid/renderer";
 import type { GridLayout } from "../../src/grid/types";
-import type { VListItem, ItemTemplate, ItemState, Range } from "../../src/types";
+import type {
+  VListItem,
+  ItemTemplate,
+  ItemState,
+  Range,
+} from "../../src/types";
 import type { HeightCache } from "../../src/render/heights";
 
 // =============================================================================
@@ -92,6 +98,8 @@ const defaultTemplate: ItemTemplate<TestItem> = (
 ): string => {
   return `<span>${item.name}</span>`;
 };
+
+const template: ItemTemplate<TestItem> = defaultTemplate;
 
 // =============================================================================
 // Factory & Initialization
@@ -1357,5 +1365,66 @@ describe("createGridRenderer", () => {
 
       renderer.destroy();
     });
+  });
+});
+
+describe("grid renderer compressed positioning", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should use compressed positioning for large grids", () => {
+    // Create grid layout and height cache for a very large grid
+    // that would trigger compression
+    const gridLayout = createGridLayout({ columns: 4, gap: 8 });
+    const totalItems = 2_000_000;
+    const totalRows = gridLayout.getTotalRows(totalItems);
+    const rowHeight = 50 + 8; // item height + gap
+
+    const heightCache = createHeightCache(rowHeight, totalRows);
+
+    const gridRenderer = createGridRenderer<TestItem>(
+      itemsContainer,
+      template,
+      heightCache,
+      gridLayout,
+      "vlist",
+      800, // containerWidth
+    );
+
+    // Create a small set of items for the visible range
+    const items = createTestItems(20);
+
+    // Render with compression context (simulating a compressed scroll state)
+    const compressionCtx = {
+      scrollTop: 5_000_000,
+      totalItems: totalRows,
+      containerHeight: 500,
+      rangeStart: 100000,
+    };
+
+    // L231-239: When compressionCtx is provided and compression is active,
+    // calculateRowOffset should use calculateCompressedItemPosition
+    gridRenderer.render(
+      items,
+      { start: 100000, end: 100019 },
+      new Set(),
+      -1,
+      compressionCtx,
+    );
+
+    // Verify items were rendered
+    const rendered = itemsContainer.querySelectorAll("[data-index]");
+    expect(rendered.length).toBe(20);
+
+    gridRenderer.destroy();
   });
 });
