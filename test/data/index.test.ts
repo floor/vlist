@@ -1528,7 +1528,7 @@ describe("data/manager — uncovered lines", () => {
     });
   });
 
-  describe("concurrent loadRange guard (L532-536)", () => {
+  describe("concurrent loadRange deduplication", () => {
     it("should wait for existing load and not duplicate requests", async () => {
       const allItems = Array.from({ length: 100 }, (_, i) => ({
         id: i + 1,
@@ -1823,8 +1823,8 @@ describe("data/manager — loadRange with fully loaded data (L477)", () => {
   });
 });
 
-describe("data/manager — concurrent loadRange dedup second loop (L532-536)", () => {
-  it("should join existing load promise for chunks that started between first and second loop", async () => {
+describe("data/manager — concurrent loadRange dedup overlapping chunks", () => {
+  it("should deduplicate shared chunks across overlapping concurrent loadRange calls", async () => {
     const items = createTestItems(100);
     let readCount = 0;
     const readPromises: Array<{ resolve: (v: any) => void }> = [];
@@ -1855,7 +1855,7 @@ describe("data/manager — concurrent loadRange dedup second loop (L532-536)", (
     const p1 = manager.loadRange(0, 49);
 
     // Start second load for overlapping range 25-74 (chunks 25-49 and 50-74)
-    // Chunk 25-49 is already loading from p1 — second loop (L532-536) should detect it
+    // Chunk 25-49 is already loading from p1 — first loop skips it via activeLoads check
     const p2 = manager.loadRange(25, 74);
 
     // Resolve all pending reads
@@ -1865,8 +1865,8 @@ describe("data/manager — concurrent loadRange dedup second loop (L532-536)", (
 
     await Promise.all([p1, p2]);
 
-    // Chunk 25-49 should have been loaded only once (deduplicated)
-    // Total reads: chunk 0-24 (from p1), chunk 25-49 (from p1, deduped by p2), chunk 50-74 (from p2)
+    // Chunk 25-49 should have been loaded only once (deduplicated by first-loop activeLoads check)
+    // Total reads: chunk 0-24 (from p1), chunk 25-49 (from p1, skipped by p2), chunk 50-74 (from p2)
     expect(readCount).toBe(3);
   });
 });
