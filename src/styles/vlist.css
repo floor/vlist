@@ -157,7 +157,6 @@
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
     contain: content;
-    will-change: transform;
 }
 
 /* Suppress transitions during active scroll for better performance */
@@ -209,6 +208,27 @@
     transition: opacity 0.2s ease-out;
     z-index: 10;
     pointer-events: none;
+}
+
+/* Hover zone — a real DOM element that's always pointer-events:auto so
+   mouseenter fires even when the track is hidden (opacity:0 / pointer-events:none).
+   Width/height is set via JS from the hoverZoneWidth config option. */
+.vlist-scrollbar-hover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    z-index: 9;
+    pointer-events: auto;
+}
+
+.vlist-scrollbar-hover--horizontal {
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
 }
 
 /* Visible state */
@@ -311,7 +331,6 @@
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
     contain: content;
-    will-change: transform;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -391,7 +410,6 @@
     justify-content: center;
     border-bottom: none;
     border-right: 1px solid var(--vlist-border);
-    will-change: transform;
 }
 
 /* Horizontal custom scrollbar — track at bottom, thumb moves on X axis */

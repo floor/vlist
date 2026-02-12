@@ -8,6 +8,7 @@
  * - Click on track to jump to position
  * - Drag thumb to scroll
  * - Auto-hide after idle (optional)
+ * - Show on hover with configurable hover zone (optional)
  * - CSS variables for customization
  * - Horizontal mode support (direction-aware axis)
  */
@@ -29,6 +30,29 @@ export interface ScrollbarConfig {
 
   /** Minimum thumb size in pixels (default: 30) */
   minThumbSize?: number;
+
+  /**
+   * Show scrollbar when hovering near the scrollbar edge (default: true).
+   * When true, an invisible hover zone is placed along the scrollbar edge.
+   * Moving the mouse into this zone reveals the scrollbar; it stays visible
+   * as long as the cursor remains over the zone or the track.
+   */
+  showOnHover?: boolean;
+
+  /**
+   * Width of the invisible hover zone in pixels (default: 16).
+   * Only used when `showOnHover` is true.
+   * A wider zone makes the scrollbar easier to discover;
+   * a narrower zone avoids interference with content near the edge.
+   */
+  hoverZoneWidth?: number;
+
+  /**
+   * Show scrollbar when the mouse enters the list viewport (default: true).
+   * When false, the scrollbar only appears on scroll or when hovering
+   * near the scrollbar edge (if `showOnHover` is true).
+   */
+  showOnViewportEnter?: boolean;
 }
 
 /** Scrollbar instance */
@@ -62,6 +86,9 @@ export type ScrollCallback = (position: number) => void;
 const DEFAULT_AUTO_HIDE = true;
 const DEFAULT_AUTO_HIDE_DELAY = 1000;
 const DEFAULT_MIN_THUMB_SIZE = 30;
+const DEFAULT_SHOW_ON_HOVER = true;
+const DEFAULT_HOVER_ZONE_WIDTH = 16;
+const DEFAULT_SHOW_ON_VIEWPORT_ENTER = true;
 
 // =============================================================================
 // Factory
@@ -87,6 +114,9 @@ export const createScrollbar = (
     autoHide = DEFAULT_AUTO_HIDE,
     autoHideDelay = DEFAULT_AUTO_HIDE_DELAY,
     minThumbSize = DEFAULT_MIN_THUMB_SIZE,
+    showOnHover = DEFAULT_SHOW_ON_HOVER,
+    hoverZoneWidth = DEFAULT_HOVER_ZONE_WIDTH,
+    showOnViewportEnter = DEFAULT_SHOW_ON_VIEWPORT_ENTER,
   } = config;
 
   // State
@@ -95,6 +125,7 @@ export const createScrollbar = (
   let thumbSize = 0;
   let maxThumbTravel = 0;
   let isDragging = false;
+  let isHovering = false;
   let dragStartPos = 0;
   let dragStartScrollPosition = 0;
   let currentScrollPosition = 0;
@@ -114,6 +145,7 @@ export const createScrollbar = (
   // DOM elements
   const track = document.createElement("div");
   const thumb = document.createElement("div");
+  const hoverZone = showOnHover ? document.createElement("div") : null;
 
   // =============================================================================
   // DOM Setup
@@ -129,34 +161,65 @@ export const createScrollbar = (
 
     track.appendChild(thumb);
     viewport.appendChild(track);
+
+    // Hover zone — always pointer-events:auto so mouseenter fires
+    // even when the track is hidden (opacity:0 / pointer-events:none)
+    if (hoverZone) {
+      hoverZone.className = `${classPrefix}-scrollbar-hover`;
+      if (horizontal) {
+        hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
+        hoverZone.style.height = `${hoverZoneWidth}px`;
+      } else {
+        hoverZone.style.width = `${hoverZoneWidth}px`;
+      }
+      viewport.appendChild(hoverZone);
+    }
+  };
+
+  // =============================================================================
+  // Hide timeout helpers
+  // =============================================================================
+
+  const clearHideTimeout = (): void => {
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+      hideTimeout = null;
+    }
+  };
+
+  const scheduleHide = (): void => {
+    if (!autoHide) return;
+    clearHideTimeout();
+    hideTimeout = setTimeout(hide, autoHideDelay);
   };
 
   // =============================================================================
   // Visibility
   // =============================================================================
 
+  /**
+   * Show the scrollbar.
+   * When called from scroll events, auto-hide is scheduled (unless hovering).
+   * When called from hover events, no auto-hide is scheduled.
+   */
   const show = (): void => {
     if (totalSize <= containerSize) return;
 
-    // Clear any pending hide
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
-      hideTimeout = null;
-    }
+    clearHideTimeout();
 
     if (!visible) {
       track.classList.add(`${classPrefix}-scrollbar--visible`);
       visible = true;
     }
 
-    // Schedule auto-hide
-    if (autoHide && !isDragging) {
-      hideTimeout = setTimeout(hide, autoHideDelay);
+    // Schedule auto-hide only if not hovering and not dragging
+    if (autoHide && !isDragging && !isHovering) {
+      scheduleHide();
     }
   };
 
   const hide = (): void => {
-    if (isDragging) return;
+    if (isDragging || isHovering) return;
 
     track.classList.remove(`${classPrefix}-scrollbar--visible`);
     visible = false;
@@ -250,6 +313,9 @@ export const createScrollbar = (
     dragStartPos = mousePos(e);
     dragStartScrollPosition = currentScrollPosition;
 
+    // Cancel any hide while dragging
+    clearHideTimeout();
+
     track.classList.add(`${classPrefix}-scrollbar--dragging`);
 
     document.addEventListener("mousemove", handleMouseMove);
@@ -306,9 +372,9 @@ export const createScrollbar = (
 
     track.classList.remove(`${classPrefix}-scrollbar--dragging`);
 
-    // Schedule auto-hide
-    if (autoHide) {
-      hideTimeout = setTimeout(hide, autoHideDelay);
+    // Schedule auto-hide only if not hovering
+    if (autoHide && !isHovering) {
+      scheduleHide();
     }
 
     document.removeEventListener("mousemove", handleMouseMove);
@@ -320,16 +386,38 @@ export const createScrollbar = (
   // =============================================================================
 
   const handleViewportEnter = (): void => {
-    show();
+    if (showOnViewportEnter) {
+      show();
+    }
   };
 
   const handleViewportLeave = (): void => {
     if (!isDragging) {
-      // Start hide timer
+      isHovering = false;
       if (autoHide) {
-        if (hideTimeout) clearTimeout(hideTimeout);
-        hideTimeout = setTimeout(hide, autoHideDelay);
+        scheduleHide();
       }
+    }
+  };
+
+  // =============================================================================
+  // Scrollbar Hover Handlers (keep visible while hovering over scrollbar area)
+  //
+  // Both the track and the hover zone set isHovering = true.
+  // While isHovering is true, show() will NOT schedule auto-hide,
+  // and hide() will refuse to run.
+  // =============================================================================
+
+  const handleScrollbarAreaEnter = (): void => {
+    isHovering = true;
+    clearHideTimeout();
+    show();
+  };
+
+  const handleScrollbarAreaLeave = (): void => {
+    isHovering = false;
+    if (!isDragging && autoHide) {
+      scheduleHide();
     }
   };
 
@@ -339,10 +427,7 @@ export const createScrollbar = (
 
   const destroy = (): void => {
     // Clear timers
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
-      hideTimeout = null;
-    }
+    clearHideTimeout();
 
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
@@ -351,11 +436,21 @@ export const createScrollbar = (
 
     // Remove event listeners
     track.removeEventListener("click", handleTrackClick);
+    track.removeEventListener("mouseenter", handleScrollbarAreaEnter);
+    track.removeEventListener("mouseleave", handleScrollbarAreaLeave);
     thumb.removeEventListener("mousedown", handleThumbMouseDown);
     viewport.removeEventListener("mouseenter", handleViewportEnter);
     viewport.removeEventListener("mouseleave", handleViewportLeave);
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
+
+    if (hoverZone) {
+      hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
+      hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
+      if (hoverZone.parentNode) {
+        hoverZone.parentNode.removeChild(hoverZone);
+      }
+    }
 
     // Remove DOM elements
     if (track.parentNode) {
@@ -371,9 +466,16 @@ export const createScrollbar = (
 
   // Attach event listeners
   track.addEventListener("click", handleTrackClick);
+  track.addEventListener("mouseenter", handleScrollbarAreaEnter);
+  track.addEventListener("mouseleave", handleScrollbarAreaLeave);
   thumb.addEventListener("mousedown", handleThumbMouseDown);
   viewport.addEventListener("mouseenter", handleViewportEnter);
   viewport.addEventListener("mouseleave", handleViewportLeave);
+
+  if (hoverZone) {
+    hoverZone.addEventListener("mouseenter", handleScrollbarAreaEnter);
+    hoverZone.addEventListener("mouseleave", handleScrollbarAreaLeave);
+  }
 
   // =============================================================================
   // Public API
