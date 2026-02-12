@@ -3,6 +3,9 @@
  * Sticky headers and grouped lists
  */
 
+// Builder Plugin
+export { withGroups, type GroupsPluginConfig } from "./plugin";
+
 // Types
 export type {
   GroupsConfig,

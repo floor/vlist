@@ -3,6 +3,9 @@
  * Selection state management
  */
 
+// Builder Plugin
+export { withSelection, type SelectionPluginConfig } from "./plugin";
+
 // Selection State
 export {
   createSelectionState,

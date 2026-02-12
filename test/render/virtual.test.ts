@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "bun:test";
 import {
-  calculateVisibleRange,
+  simpleVisibleRange,
   calculateRenderRange,
   calculateTotalHeight,
   calculateActualHeight,
@@ -17,20 +17,23 @@ import {
   updateViewportState,
   updateViewportSize,
   updateViewportItems,
-  getCompressionState,
   rangesEqual,
   isInRange,
   getRangeCount,
   rangeToIndices,
   diffRanges,
 } from "../../src/render/virtual";
+import {
+  getCompressionState,
+  calculateCompressedScrollToIndex,
+} from "../../src/render/compression";
 import { createHeightCache } from "../../src/render/heights";
 
-describe("calculateVisibleRange", () => {
+describe("simpleVisibleRange", () => {
   it("should return empty range when totalItems is 0", () => {
     const cache = createHeightCache(50, 0);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       0,
       500,
       cache,
@@ -44,7 +47,7 @@ describe("calculateVisibleRange", () => {
   it("should return empty range when containerHeight is 0", () => {
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       0,
       0,
       cache,
@@ -60,7 +63,7 @@ describe("calculateVisibleRange", () => {
     // indexAtOffset(0) = 0, indexAtOffset(500) = 10, +1 = 11 → clamped to 10
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       0,
       500,
       cache,
@@ -79,7 +82,7 @@ describe("calculateVisibleRange", () => {
     // Container: 500px, Item: 50px
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       250,
       500,
       cache,
@@ -96,7 +99,7 @@ describe("calculateVisibleRange", () => {
     // Scrolled near end, only 5 items left
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       4750,
       500,
       cache,
@@ -111,7 +114,7 @@ describe("calculateVisibleRange", () => {
     // Container: 520px, Item: 50px
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       0,
       520,
       cache,
@@ -126,7 +129,7 @@ describe("calculateVisibleRange", () => {
   it("should never return negative start", () => {
     const cache = createHeightCache(50, 100);
     const out = { start: 0, end: 0 };
-    const result = calculateVisibleRange(
+    const result = simpleVisibleRange(
       -100,
       500,
       cache,
@@ -313,6 +316,7 @@ describe("calculateScrollToIndex", () => {
       totalItems,
       "start",
       getCompressionState(totalItems, cache),
+      calculateCompressedScrollToIndex,
     );
 
     // Should map to compressed position

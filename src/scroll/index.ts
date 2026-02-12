@@ -3,6 +3,9 @@
  * Scroll controller and custom scrollbar
  */
 
+// Builder Plugin
+export { withScrollbar, type ScrollbarPluginConfig } from "./plugin";
+
 // Scroll Controller
 export {
   createScrollController,

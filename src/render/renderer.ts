@@ -12,12 +12,33 @@ import type {
   RenderedItem,
 } from "../types";
 
-import {
-  getCompressionState,
-  calculateCompressedItemPosition,
-  type CompressionState,
-} from "./compression";
+import type { CompressionState } from "./virtual";
 import type { HeightCache } from "./heights";
+
+/**
+ * Optional compression position calculator.
+ * Injected by the monolithic factory or the withCompression plugin.
+ * When not provided, the renderer uses simple heightCache offsets.
+ */
+export type CompressedPositionFn = (
+  index: number,
+  scrollTop: number,
+  heightCache: HeightCache,
+  totalItems: number,
+  containerHeight: number,
+  compression: CompressionState,
+  rangeStart?: number,
+) => number;
+
+/**
+ * Optional compression state getter.
+ * Injected by the monolithic factory or the withCompression plugin.
+ * When not provided, the renderer assumes no compression.
+ */
+export type CompressionStateFn = (
+  totalItems: number,
+  heightCache: HeightCache,
+) => CompressionState;
 
 // =============================================================================
 // Types
@@ -167,6 +188,10 @@ export const createRenderer = <T extends VListItem = VListItem>(
   ariaIdPrefix?: string,
   horizontal?: boolean,
   crossAxisSize?: number,
+  compressionFns?: {
+    getState: CompressionStateFn;
+    getPosition: CompressedPositionFn;
+  },
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, RenderedItem>();
@@ -179,13 +204,25 @@ export const createRenderer = <T extends VListItem = VListItem>(
   let lastAriaSetSize = "";
 
   /**
-   * Get or update compression state
+   * Get or update compression state.
+   * When compression functions are not injected, returns a trivial
+   * "not compressed" state — no compression module imported.
    */
   const getCompression = (totalItems: number): CompressionState => {
     if (cachedCompression && cachedTotalItems === totalItems) {
       return cachedCompression;
     }
-    cachedCompression = getCompressionState(totalItems, heightCache);
+    if (compressionFns) {
+      cachedCompression = compressionFns.getState(totalItems, heightCache);
+    } else {
+      const h = heightCache.getTotalHeight();
+      cachedCompression = {
+        isCompressed: false,
+        actualHeight: h,
+        virtualHeight: h,
+        ratio: 1,
+      };
+    }
     cachedTotalItems = totalItems;
     return cachedCompression;
   };
@@ -249,9 +286,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
     if (compressionCtx) {
       const compression = getCompression(compressionCtx.totalItems);
 
-      if (compression.isCompressed) {
-        // Use compression-aware positioning
-        return calculateCompressedItemPosition(
+      if (compression.isCompressed && compressionFns) {
+        // Use compression-aware positioning (injected)
+        return compressionFns.getPosition(
           index,
           compressionCtx.scrollTop,
           heightCache,

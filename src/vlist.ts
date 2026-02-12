@@ -26,6 +26,7 @@ import {
   updateViewportSize,
   updateViewportItems,
   getCompression,
+  calculateCompressedItemPosition,
   createRenderer,
   createDOMStructure,
   updateContentHeight,
@@ -567,6 +568,10 @@ export const createVList = <T extends VListItem = VListItem>(
       ariaIdPrefix,
       isHorizontal,
       isHorizontal ? crossAxisSize : undefined,
+      {
+        getState: getCompression,
+        getPosition: calculateCompressedItemPosition,
+      },
     );
   }
 

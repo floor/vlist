@@ -81,7 +81,7 @@ export {
   createHeightCache,
   type HeightCache,
   // Virtual scrolling calculations
-  calculateVisibleRange,
+  simpleVisibleRange,
   calculateRenderRange,
   calculateTotalHeight,
   calculateActualHeight,

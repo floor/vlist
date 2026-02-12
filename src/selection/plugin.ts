@@ -1,0 +1,429 @@
+/**
+ * vlist/selection - Builder Plugin
+ * Wraps the selection domain into a VListPlugin for the composable builder.
+ *
+ * Priority: 50 (runs after renderer and data are ready)
+ *
+ * What it wires:
+ * - Click handler on items container — toggles selection on item click
+ * - Keyboard handler on root — ArrowUp/Down for focus, Space/Enter for toggle
+ * - ARIA attributes — aria-selected on items, aria-activedescendant on root
+ * - Live region — announces selection changes to screen readers
+ * - Render integration — passes selection state to render pipeline
+ *
+ * Added methods: select, deselect, toggleSelect, selectAll, clearSelection,
+ *                getSelected, getSelectedItems
+ *
+ * Added events: item:click, selection:change
+ */
+
+import type { VListItem, SelectionMode } from "../types";
+import type { VListPlugin, BuilderContext } from "../builder/types";
+
+import {
+  createSelectionState,
+  selectItems,
+  deselectItems,
+  toggleSelection,
+  selectAll,
+  clearSelection,
+  setFocusedIndex,
+  moveFocusUp,
+  moveFocusDown,
+  moveFocusToFirst,
+  moveFocusToLast,
+  getSelectedIds,
+  getSelectedItems,
+  isSelected,
+} from "./state";
+
+import { calculateScrollToIndex } from "../render";
+
+// =============================================================================
+// Plugin Config
+// =============================================================================
+
+/** Selection plugin configuration */
+export interface SelectionPluginConfig {
+  /** Selection mode (default: 'single') */
+  mode?: SelectionMode;
+
+  /** Initially selected item IDs */
+  initial?: Array<string | number>;
+}
+
+// =============================================================================
+// Plugin Factory
+// =============================================================================
+
+/**
+ * Create a selection plugin for the builder.
+ *
+ * ```ts
+ * import { vlist } from 'vlist/builder'
+ * import { withSelection } from 'vlist/selection'
+ *
+ * const list = vlist({ ... })
+ *   .use(withSelection({ mode: 'multiple', initial: ['id-1'] }))
+ *   .build()
+ *
+ * list.select('id-2')
+ * list.getSelected() // ['id-1', 'id-2']
+ * ```
+ */
+export const withSelection = <T extends VListItem = VListItem>(
+  config?: SelectionPluginConfig,
+): VListPlugin<T> => {
+  const mode: SelectionMode = config?.mode ?? "single";
+  const initial = config?.initial;
+
+  // Selection state — lives for the lifetime of the list
+  let selectionState = createSelectionState(initial);
+  let liveRegion: HTMLDivElement | null = null;
+
+  return {
+    name: "withSelection",
+    priority: 50,
+
+    methods: [
+      "select",
+      "deselect",
+      "toggleSelect",
+      "selectAll",
+      "clearSelection",
+      "getSelected",
+      "getSelectedItems",
+    ] as const,
+
+    setup(ctx: BuilderContext<T>): void {
+      if (mode === "none") return;
+
+      const { dom, emitter, config: resolvedConfig } = ctx;
+      const { classPrefix, ariaIdPrefix } = resolvedConfig;
+
+      // ── Override renderIfNeeded / forceRender to include selection state ──
+      // We monkey-patch the context's render methods to pass selection state.
+      // This avoids adding hooks to the hot path — the render call signature
+      // stays the same, we just supply the selection Set and focusedIndex.
+      const originalRenderIfNeeded = ctx.renderIfNeeded.bind(ctx);
+      const originalForceRender = ctx.forceRender.bind(ctx);
+
+      const renderWithSelection = (): void => {
+        if (ctx.state.isDestroyed) return;
+
+        const { renderRange, isCompressed } = ctx.state.viewportState;
+        const lastRange = ctx.state.lastRenderRange;
+
+        if (
+          renderRange.start === lastRange.start &&
+          renderRange.end === lastRange.end
+        ) {
+          if (isCompressed) {
+            ctx.renderer.updatePositions(ctx.getCompressionContext());
+          }
+          return;
+        }
+
+        const items = ctx.getItemsForRange(renderRange);
+        const compressionCtx = isCompressed
+          ? ctx.getCompressionContext()
+          : undefined;
+
+        ctx.renderer.render(
+          items,
+          renderRange,
+          selectionState.selected,
+          selectionState.focusedIndex,
+          compressionCtx,
+        );
+
+        ctx.state.lastRenderRange = { ...renderRange };
+        emitter.emit("range:change", { range: renderRange });
+      };
+
+      const forceRenderWithSelection = (): void => {
+        if (ctx.state.isDestroyed) return;
+
+        const { renderRange, isCompressed } = ctx.state.viewportState;
+        const items = ctx.getItemsForRange(renderRange);
+        const compressionCtx = isCompressed
+          ? ctx.getCompressionContext()
+          : undefined;
+
+        ctx.renderer.render(
+          items,
+          renderRange,
+          selectionState.selected,
+          selectionState.focusedIndex,
+          compressionCtx,
+        );
+      };
+
+      // Replace the context render methods
+      (ctx as any).renderIfNeeded = renderWithSelection;
+      (ctx as any).forceRender = forceRenderWithSelection;
+
+      // ── Helper: render and emit selection change ──
+      const renderAndEmit = (): void => {
+        forceRenderWithSelection();
+
+        emitter.emit("selection:change", {
+          selected: getSelectedIds(selectionState),
+          items: getSelectedItems(selectionState, (id) =>
+            ctx.dataManager.getItemById(id),
+          ),
+        });
+      };
+
+      // ── ARIA live region ──
+      liveRegion = document.createElement("div");
+      liveRegion.setAttribute("aria-live", "polite");
+      liveRegion.setAttribute("aria-atomic", "true");
+      liveRegion.className = `${classPrefix}-live-region`;
+      liveRegion.style.cssText =
+        "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      dom.root.appendChild(liveRegion);
+
+      // Announce selection changes
+      const liveRef = liveRegion;
+      emitter.on("selection:change", ({ selected }) => {
+        const count = selected.length;
+        if (count === 0) {
+          liveRef.textContent = "";
+        } else if (count === 1) {
+          liveRef.textContent = "1 item selected";
+        } else {
+          liveRef.textContent = `${count} items selected`;
+        }
+      });
+
+      // ── Click handler ──
+      ctx.clickHandlers.push((event: MouseEvent): void => {
+        if (ctx.state.isDestroyed) return;
+
+        const target = event.target as HTMLElement;
+        const itemElement = target.closest("[data-index]") as HTMLElement | null;
+        if (!itemElement) return;
+
+        const index = parseInt(itemElement.dataset.index ?? "-1", 10);
+        if (index < 0) return;
+
+        const item = ctx.dataManager.getItem(index);
+        if (!item) return;
+
+        // Emit click event
+        emitter.emit("item:click", { item, index, event });
+
+        // Update focused index
+        selectionState = setFocusedIndex(selectionState, index);
+
+        // ARIA: update aria-activedescendant
+        dom.root.setAttribute(
+          "aria-activedescendant",
+          `${ariaIdPrefix}-item-${index}`,
+        );
+
+        // Toggle selection
+        selectionState = toggleSelection(selectionState, item.id, mode);
+
+        // Re-render with selection
+        renderAndEmit();
+      });
+
+      // ── Keyboard handler ──
+      ctx.keydownHandlers.push((event: KeyboardEvent): void => {
+        if (ctx.state.isDestroyed) return;
+
+        const totalItems = ctx.dataManager.getTotal();
+        const previousFocusIndex = selectionState.focusedIndex;
+
+        let handled = false;
+        let focusOnly = false;
+        let newState = selectionState;
+
+        switch (event.key) {
+          case "ArrowUp":
+            newState = moveFocusUp(selectionState, totalItems);
+            handled = true;
+            focusOnly = true;
+            break;
+
+          case "ArrowDown":
+            newState = moveFocusDown(selectionState, totalItems);
+            handled = true;
+            focusOnly = true;
+            break;
+
+          case "Home":
+            newState = moveFocusToFirst(selectionState, totalItems);
+            handled = true;
+            focusOnly = true;
+            break;
+
+          case "End":
+            newState = moveFocusToLast(selectionState, totalItems);
+            handled = true;
+            focusOnly = true;
+            break;
+
+          case " ":
+          case "Enter":
+            if (selectionState.focusedIndex >= 0) {
+              const focusedItem = ctx.dataManager.getItem(
+                selectionState.focusedIndex,
+              );
+              if (focusedItem) {
+                newState = toggleSelection(
+                  selectionState,
+                  focusedItem.id,
+                  mode,
+                );
+              }
+              handled = true;
+            }
+            break;
+        }
+
+        if (handled) {
+          event.preventDefault();
+          selectionState = newState;
+
+          const newFocusIndex = selectionState.focusedIndex;
+
+          // Scroll focused item into view + ARIA
+          if (newFocusIndex >= 0) {
+            const dataState = ctx.dataManager.getState();
+            const position = calculateScrollToIndex(
+              newFocusIndex,
+              ctx.heightCache,
+              ctx.state.viewportState.containerHeight,
+              dataState.total,
+              "center",
+              ctx.getCachedCompression(),
+            );
+            ctx.scrollController.scrollTo(position);
+
+            dom.root.setAttribute(
+              "aria-activedescendant",
+              `${ariaIdPrefix}-item-${newFocusIndex}`,
+            );
+          } else {
+            dom.root.removeAttribute("aria-activedescendant");
+          }
+
+          if (focusOnly) {
+            // Targeted update — only touch two affected items
+            const { selected } = selectionState;
+
+            if (
+              previousFocusIndex >= 0 &&
+              previousFocusIndex !== newFocusIndex
+            ) {
+              const prevItem = ctx.dataManager.getItem(previousFocusIndex);
+              if (prevItem) {
+                ctx.renderer.updateItemClasses(
+                  previousFocusIndex,
+                  selected.has(prevItem.id),
+                  false,
+                );
+              }
+            }
+
+            if (newFocusIndex >= 0) {
+              const newItem = ctx.dataManager.getItem(newFocusIndex);
+              if (newItem) {
+                ctx.renderer.updateItemClasses(
+                  newFocusIndex,
+                  selected.has(newItem.id),
+                  true,
+                );
+              }
+            }
+          } else {
+            // Full re-render for selection changes (Space/Enter)
+            forceRenderWithSelection();
+
+            emitter.emit("selection:change", {
+              selected: getSelectedIds(selectionState),
+              items: getSelectedItems(selectionState, (id) =>
+                ctx.dataManager.getItemById(id),
+              ),
+            });
+          }
+        }
+      });
+
+      // ── Register public methods ──
+      ctx.methods.set("select", (...ids: Array<string | number>): void => {
+        if (mode === "none") return;
+        selectionState = selectItems(selectionState, ids, mode);
+        renderAndEmit();
+      });
+
+      ctx.methods.set("deselect", (...ids: Array<string | number>): void => {
+        selectionState = deselectItems(selectionState, ids);
+        renderAndEmit();
+      });
+
+      ctx.methods.set("toggleSelect", (id: string | number): void => {
+        if (mode === "none") return;
+        selectionState = toggleSelection(selectionState, id, mode);
+        renderAndEmit();
+      });
+
+      ctx.methods.set("selectAll", (): void => {
+        if (mode !== "multiple") return;
+        const allItems = ctx.getAllLoadedItems();
+        selectionState = selectAll(selectionState, allItems, mode);
+        renderAndEmit();
+      });
+
+      ctx.methods.set("clearSelection", (): void => {
+        selectionState = clearSelection(selectionState);
+
+        const { renderRange, isCompressed } = ctx.state.viewportState;
+        const items = ctx.getItemsForRange(renderRange);
+        const compressionCtx = isCompressed
+          ? ctx.getCompressionContext()
+          : undefined;
+
+        ctx.renderer.render(
+          items,
+          renderRange,
+          selectionState.selected,
+          selectionState.focusedIndex,
+          compressionCtx,
+        );
+
+        emitter.emit("selection:change", {
+          selected: [],
+          items: [],
+        });
+      });
+
+      ctx.methods.set("getSelected", (): Array<string | number> => {
+        return getSelectedIds(selectionState);
+      });
+
+      ctx.methods.set("getSelectedItems", (): T[] => {
+        return getSelectedItems(selectionState, (id) =>
+          ctx.dataManager.getItemById(id),
+        );
+      });
+
+      // ── Cleanup handler ──
+      ctx.destroyHandlers.push(() => {
+        if (liveRef && liveRef.parentNode) {
+          liveRef.remove();
+        }
+      });
+    },
+
+    destroy(): void {
+      if (liveRegion && liveRegion.parentNode) {
+        liveRegion.remove();
+      }
+      liveRegion = null;
+    },
+  };
+};
