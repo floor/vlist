@@ -292,6 +292,29 @@ export interface ScrollbarOptions {
 
   /** Minimum thumb size in pixels (default: 30) */
   minThumbSize?: number;
+
+  /**
+   * Show scrollbar when hovering near the scrollbar edge (default: true).
+   * When true, an invisible hover zone is placed along the scrollbar edge.
+   * Moving the mouse into this zone reveals the scrollbar; it stays visible
+   * as long as the cursor remains over the zone or the track.
+   */
+  showOnHover?: boolean;
+
+  /**
+   * Width of the invisible hover zone in pixels (default: 16).
+   * Only used when `showOnHover` is true.
+   * A wider zone makes the scrollbar easier to discover;
+   * a narrower zone avoids interference with content near the edge.
+   */
+  hoverZoneWidth?: number;
+
+  /**
+   * Show scrollbar when the mouse enters the list viewport (default: true).
+   * When false, the scrollbar only appears on scroll or when hovering
+   * near the scrollbar edge (if `showOnHover` is true).
+   */
+  showOnViewportEnter?: boolean;
 }
 
 // =============================================================================
