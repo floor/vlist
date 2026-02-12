@@ -1,0 +1,1509 @@
+/**
+ * vlist/builder — Self-contained composable virtual list builder
+ *
+ * Everything inlined — height cache, emitter, DOM, element pool, renderer,
+ * range calculations, scroll handling. Zero module imports means the builder
+ * core is ~12 KB minified instead of ~25 KB.
+ *
+ * Plugins compose features *around* the hot path via extension points:
+ * afterScroll, clickHandlers, keydownHandlers, resizeHandlers, destroyHandlers,
+ * and the methods Map for public API extension.
+ */
+
+import type {
+  VListItem,
+  VListEvents,
+  ItemTemplate,
+  ItemState,
+  EventHandler,
+  Unsubscribe,
+  Range,
+} from "../types";
+
+import type {
+  BuilderConfig,
+  BuilderContext,
+  BuilderState,
+  ResolvedBuilderConfig,
+  VListPlugin,
+  VListBuilder,
+  BuiltVList,
+  CachedCompression,
+} from "./types";
+
+// Re-export CompressionState type from virtual for plugins that need it
+export type { CompressionState } from "../render/virtual";
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const DEFAULT_OVERSCAN = 3;
+const DEFAULT_CLASS_PREFIX = "vlist";
+const DEFAULT_SMOOTH_DURATION = 300;
+const SCROLL_IDLE_TIMEOUT = 150;
+
+// =============================================================================
+// Module-level instance counter for unique ARIA element IDs
+// =============================================================================
+
+let builderInstanceId = 0;
+
+// =============================================================================
+// Inlined: Height Cache
+// =============================================================================
+
+interface HeightCache {
+  getOffset(index: number): number;
+  getHeight(index: number): number;
+  indexAtOffset(offset: number): number;
+  getTotalHeight(): number;
+  getTotal(): number;
+  rebuild(totalItems: number): void;
+}
+
+const createHeightCache = (
+  height: number | ((index: number) => number),
+  initialTotal: number,
+): HeightCache => {
+  if (typeof height === "number") {
+    let total = initialTotal;
+    return {
+      getOffset: (i) => i * height,
+      getHeight: () => height,
+      indexAtOffset: (offset) => {
+        if (total === 0 || height === 0) return 0;
+        return Math.max(0, Math.min(Math.floor(offset / height), total - 1));
+      },
+      getTotalHeight: () => total * height,
+      getTotal: () => total,
+      rebuild: (n) => {
+        total = n;
+      },
+    };
+  }
+
+  let total = initialTotal;
+  let prefixSums = new Float64Array(0);
+
+  const build = (n: number): void => {
+    total = n;
+    prefixSums = new Float64Array(n + 1);
+    prefixSums[0] = 0;
+    for (let i = 0; i < n; i++) {
+      prefixSums[i + 1] = prefixSums[i]! + height(i);
+    }
+  };
+
+  build(initialTotal);
+
+  return {
+    getOffset: (index) => {
+      if (index <= 0) return 0;
+      if (index >= total) return prefixSums[total] as number;
+      return prefixSums[index] as number;
+    },
+    getHeight: (index) => height(index),
+    indexAtOffset: (offset) => {
+      if (total === 0) return 0;
+      if (offset <= 0) return 0;
+      if (offset >= prefixSums[total]!) return total - 1;
+      let lo = 0;
+      let hi = total - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (prefixSums[mid]! <= offset) lo = mid;
+        else hi = mid - 1;
+      }
+      return lo;
+    },
+    getTotalHeight: () => (prefixSums[total] as number) ?? 0,
+    getTotal: () => total,
+    rebuild: (n) => build(n),
+  };
+};
+
+// =============================================================================
+// Inlined: Event Emitter
+// =============================================================================
+
+type Listeners = Record<string, Set<EventHandler<any>> | undefined>;
+
+interface Emitter {
+  on(event: string, handler: EventHandler<any>): Unsubscribe;
+  off(event: string, handler: EventHandler<any>): void;
+  emit(event: string, payload: unknown): void;
+  clear(): void;
+}
+
+const createEmitter = (): Emitter => {
+  const listeners: Listeners = {};
+
+  const on = (event: string, handler: EventHandler<any>): Unsubscribe => {
+    if (!listeners[event]) listeners[event] = new Set();
+    listeners[event]!.add(handler);
+    return () => off(event, handler);
+  };
+
+  const off = (event: string, handler: EventHandler<any>): void => {
+    listeners[event]?.delete(handler);
+  };
+
+  const emit = (event: string, payload: unknown): void => {
+    listeners[event]?.forEach((h) => {
+      try {
+        h(payload);
+      } catch (e) {
+        console.error(`[vlist] Error in "${event}" handler:`, e);
+      }
+    });
+  };
+
+  const clear = (): void => {
+    for (const key in listeners) delete listeners[key];
+  };
+
+  return { on, off, emit, clear };
+};
+
+// =============================================================================
+// Inlined: DOM Structure
+// =============================================================================
+
+interface DOMStructure {
+  root: HTMLElement;
+  viewport: HTMLElement;
+  content: HTMLElement;
+  items: HTMLElement;
+}
+
+const resolveContainer = (container: HTMLElement | string): HTMLElement => {
+  if (typeof container === "string") {
+    const el = document.querySelector<HTMLElement>(container);
+    if (!el)
+      throw new Error(`[vlist/builder] Container not found: ${container}`);
+    return el;
+  }
+  return container;
+};
+
+const createDOMStructure = (
+  container: HTMLElement,
+  classPrefix: string,
+  ariaLabel?: string,
+  horizontal?: boolean,
+): DOMStructure => {
+  const root = document.createElement("div");
+  root.className = classPrefix;
+  root.setAttribute("role", "listbox");
+  root.setAttribute("tabindex", "0");
+  if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
+  if (horizontal) root.setAttribute("aria-orientation", "horizontal");
+
+  const viewport = document.createElement("div");
+  viewport.className = `${classPrefix}-viewport`;
+  viewport.style.overflow = "auto";
+  viewport.style.height = "100%";
+  viewport.style.width = "100%";
+
+  const content = document.createElement("div");
+  content.className = `${classPrefix}-content`;
+  content.style.position = "relative";
+  content.style.width = "100%";
+
+  const items = document.createElement("div");
+  items.className = `${classPrefix}-items`;
+  items.style.position = "relative";
+  items.style.width = "100%";
+
+  content.appendChild(items);
+  viewport.appendChild(content);
+  root.appendChild(viewport);
+  container.appendChild(root);
+
+  return { root, viewport, content, items };
+};
+
+// =============================================================================
+// Inlined: Element Pool
+// =============================================================================
+
+const createElementPool = (maxSize = 100) => {
+  const pool: HTMLElement[] = [];
+
+  return {
+    acquire: (): HTMLElement => {
+      const el = pool.pop();
+      if (el) return el;
+      const newEl = document.createElement("div");
+      newEl.setAttribute("role", "option");
+      return newEl;
+    },
+    release: (el: HTMLElement): void => {
+      if (pool.length < maxSize) {
+        el.className = "";
+        el.textContent = "";
+        el.removeAttribute("style");
+        el.removeAttribute("data-index");
+        el.removeAttribute("data-id");
+        pool.push(el);
+      }
+    },
+    clear: (): void => {
+      pool.length = 0;
+    },
+  };
+};
+
+// =============================================================================
+// Inlined: Range Calculation (no compression)
+// =============================================================================
+
+const calcVisibleRange = (
+  scrollTop: number,
+  containerHeight: number,
+  hc: HeightCache,
+  totalItems: number,
+  out: Range,
+): void => {
+  if (totalItems === 0 || containerHeight === 0) {
+    out.start = 0;
+    out.end = 0;
+    return;
+  }
+  const start = hc.indexAtOffset(scrollTop);
+  let end = hc.indexAtOffset(scrollTop + containerHeight);
+  if (end < totalItems - 1) end++;
+  out.start = Math.max(0, start);
+  out.end = Math.min(totalItems - 1, Math.max(0, end));
+};
+
+const applyOverscan = (
+  visible: Range,
+  overscan: number,
+  totalItems: number,
+  out: Range,
+): void => {
+  if (totalItems === 0) {
+    out.start = 0;
+    out.end = 0;
+    return;
+  }
+  out.start = Math.max(0, visible.start - overscan);
+  out.end = Math.min(totalItems - 1, visible.end + overscan);
+};
+
+// =============================================================================
+// Inlined: Scroll-to-index
+// =============================================================================
+
+const calcScrollToPosition = (
+  index: number,
+  hc: HeightCache,
+  containerHeight: number,
+  totalItems: number,
+  align: "start" | "center" | "end",
+): number => {
+  if (totalItems === 0) return 0;
+  const clamped = Math.max(0, Math.min(index, totalItems - 1));
+  const offset = hc.getOffset(clamped);
+  const itemH = hc.getHeight(clamped);
+  const maxScroll = Math.max(0, hc.getTotalHeight() - containerHeight);
+  let pos: number;
+  switch (align) {
+    case "center":
+      pos = offset - (containerHeight - itemH) / 2;
+      break;
+    case "end":
+      pos = offset - containerHeight + itemH;
+      break;
+    default:
+      pos = offset;
+  }
+  return Math.max(0, Math.min(pos, maxScroll));
+};
+
+const easeInOutQuad = (t: number): number =>
+  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+const resolveScrollArgs = (
+  alignOrOptions?:
+    | "start"
+    | "center"
+    | "end"
+    | import("../types").ScrollToOptions,
+): {
+  align: "start" | "center" | "end";
+  behavior: "auto" | "smooth";
+  duration: number;
+} => {
+  if (typeof alignOrOptions === "string")
+    return {
+      align: alignOrOptions,
+      behavior: "auto",
+      duration: DEFAULT_SMOOTH_DURATION,
+    };
+  if (alignOrOptions && typeof alignOrOptions === "object")
+    return {
+      align: alignOrOptions.align ?? "start",
+      behavior: alignOrOptions.behavior ?? "auto",
+      duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
+    };
+  return {
+    align: "start",
+    behavior: "auto",
+    duration: DEFAULT_SMOOTH_DURATION,
+  };
+};
+
+// =============================================================================
+// vlist() — Builder Factory
+// =============================================================================
+
+export const vlist = <T extends VListItem = VListItem>(
+  config: BuilderConfig<T>,
+): VListBuilder<T> => {
+  // ── Validate ────────────────────────────────────────────────────
+  if (!config.container) {
+    throw new Error("[vlist/builder] Container is required");
+  }
+  if (!config.item) {
+    throw new Error("[vlist/builder] item configuration is required");
+  }
+
+  const isHorizontal = config.direction === "horizontal";
+  const mainAxisProp = isHorizontal ? "width" : "height";
+  const mainAxisValue = isHorizontal ? config.item.width : config.item.height;
+
+  if (mainAxisValue == null) {
+    throw new Error(
+      `[vlist/builder] item.${mainAxisProp} is required${isHorizontal ? " when direction is 'horizontal'" : ""}`,
+    );
+  }
+  if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
+    throw new Error(
+      `[vlist/builder] item.${mainAxisProp} must be a positive number`,
+    );
+  }
+  if (
+    typeof mainAxisValue !== "number" &&
+    typeof mainAxisValue !== "function"
+  ) {
+    throw new Error(
+      `[vlist/builder] item.${mainAxisProp} must be a number or a function (index) => number`,
+    );
+  }
+  if (!config.item.template) {
+    throw new Error("[vlist/builder] item.template is required");
+  }
+  if (isHorizontal && config.reverse) {
+    throw new Error(
+      "[vlist/builder] horizontal direction cannot be combined with reverse mode",
+    );
+  }
+
+  // ── Store plugins ───────────────────────────────────────────────
+  const plugins: Map<string, VListPlugin<T>> = new Map();
+  let built = false;
+
+  const builder: VListBuilder<T> = {
+    use(plugin: VListPlugin<T>): VListBuilder<T> {
+      if (built) {
+        throw new Error("[vlist/builder] Cannot call .use() after .build()");
+      }
+      plugins.set(plugin.name, plugin);
+      return builder;
+    },
+
+    build(): BuiltVList<T> {
+      if (built) {
+        throw new Error("[vlist/builder] .build() can only be called once");
+      }
+      built = true;
+      return materialize(
+        config,
+        plugins,
+        isHorizontal,
+        mainAxisValue as number | ((index: number) => number),
+      );
+    },
+  };
+
+  return builder;
+};
+
+// =============================================================================
+// materialize() — the actual build logic
+// =============================================================================
+
+function materialize<T extends VListItem = VListItem>(
+  config: BuilderConfig<T>,
+  plugins: Map<string, VListPlugin<T>>,
+  isHorizontal: boolean,
+  mainAxisValue: number | ((index: number) => number),
+): BuiltVList<T> {
+  // ── Resolve config ──────────────────────────────────────────────
+  const {
+    item: itemConfig,
+    items: initialItems,
+    overscan = DEFAULT_OVERSCAN,
+    classPrefix = DEFAULT_CLASS_PREFIX,
+    ariaLabel,
+    reverse: reverseMode = false,
+    scroll: scrollConfig,
+  } = config;
+
+  const wheelEnabled = scrollConfig?.wheel ?? true;
+  const wrapEnabled = scrollConfig?.wrap ?? false;
+  const scrollElement = scrollConfig?.element;
+  const isWindowMode = !!scrollElement;
+  const isReverse = reverseMode;
+  const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
+  const mainAxisSizeConfig = mainAxisValue;
+  const crossAxisSize: number | undefined = isHorizontal
+    ? typeof itemConfig.height === "number"
+      ? itemConfig.height
+      : undefined
+    : typeof itemConfig.width === "number"
+      ? itemConfig.width
+      : undefined;
+  const userTemplate = itemConfig.template as ItemTemplate<T>;
+
+  const resolvedConfig: ResolvedBuilderConfig = {
+    overscan,
+    classPrefix,
+    reverse: isReverse,
+    wrap: wrapEnabled,
+    horizontal: isHorizontal,
+    ariaIdPrefix,
+  };
+
+  // ── Sort and validate plugins ───────────────────────────────────
+  const sortedPlugins = Array.from(plugins.values()).sort(
+    (a, b) => (a.priority ?? 50) - (b.priority ?? 50),
+  );
+
+  const pluginNames = new Set(sortedPlugins.map((p) => p.name));
+  for (const plugin of sortedPlugins) {
+    if (plugin.conflicts) {
+      for (const conflict of plugin.conflicts) {
+        if (pluginNames.has(conflict)) {
+          throw new Error(
+            `[vlist/builder] ${plugin.name} and ${conflict} cannot be combined`,
+          );
+        }
+      }
+    }
+  }
+
+  if (isHorizontal) {
+    if (pluginNames.has("withGrid")) {
+      throw new Error(
+        "[vlist/builder] withGrid cannot be used with direction: 'horizontal'",
+      );
+    }
+    if (pluginNames.has("withGroups")) {
+      throw new Error(
+        "[vlist/builder] withGroups cannot be used with direction: 'horizontal'",
+      );
+    }
+  }
+  if (isReverse) {
+    if (pluginNames.has("withGrid")) {
+      throw new Error(
+        "[vlist/builder] withGrid cannot be used with reverse: true",
+      );
+    }
+    if (pluginNames.has("withGroups")) {
+      throw new Error(
+        "[vlist/builder] withGroups cannot be used with reverse: true",
+      );
+    }
+  }
+
+  // ── Create DOM ──────────────────────────────────────────────────
+  const containerElement = resolveContainer(config.container);
+  const dom = createDOMStructure(
+    containerElement,
+    classPrefix,
+    ariaLabel,
+    isHorizontal,
+  );
+
+  if (isWindowMode) {
+    dom.root.style.overflow = "visible";
+    dom.root.style.height = "auto";
+    dom.viewport.style.overflow = "visible";
+    dom.viewport.style.height = "auto";
+  }
+
+  // ── Create core components (inlined) ────────────────────────────
+  const emitter = createEmitter();
+  let items: T[] = initialItems ? [...initialItems] : [];
+  let heightCache = createHeightCache(mainAxisSizeConfig, items.length);
+  const pool = createElementPool();
+
+  let containerHeight = isWindowMode
+    ? window.innerHeight
+    : dom.viewport.clientHeight;
+
+  // ── State ───────────────────────────────────────────────────────
+  let isDestroyed = false;
+  let isInitialized = false;
+  let lastScrollTop = 0;
+  let animationFrameId: number | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Reusable range objects (no allocation on scroll)
+  const visibleRange: Range = { start: 0, end: 0 };
+  const renderRange: Range = { start: 0, end: 0 };
+  const lastRenderRange: Range = { start: -1, end: -1 };
+
+  // Rendered item tracking
+  const rendered = new Map<number, HTMLElement>();
+  const itemState: ItemState = { selected: false, focused: false };
+  const baseClass = `${classPrefix}-item`;
+  let lastAriaSetSize = "";
+
+  // ID → index map for fast lookups
+  const idToIndex = new Map<string | number, number>();
+
+  const rebuildIdIndex = (): void => {
+    idToIndex.clear();
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item) idToIndex.set(item.id, i);
+    }
+  };
+
+  rebuildIdIndex();
+
+  // Virtual total — plugins (grid/groups) can override this
+  let virtualTotalFn = (): number => items.length;
+
+  // ── Plugin extension points ─────────────────────────────────────
+  const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
+  const clickHandlers: Array<(event: MouseEvent) => void> = [];
+  const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
+  const resizeHandlers: Array<(width: number, height: number) => void> = [];
+  const destroyHandlers: Array<() => void> = [];
+  const methods: Map<string, Function> = new Map();
+
+  // Pluggable scroll functions — compression plugin replaces these
+  let scrollGetTop = (): number => {
+    if (isWindowMode) {
+      return Math.max(
+        0,
+        (scrollElement as Window).scrollY +
+          dom.viewport.getBoundingClientRect().top * -1,
+      );
+    }
+    return dom.viewport.scrollTop;
+  };
+  let scrollSetTop = (pos: number): void => {
+    if (isWindowMode) {
+      const rect = dom.viewport.getBoundingClientRect();
+      const pageOffset = rect.top + window.scrollY;
+      (scrollElement as Window).scrollTo(0, pageOffset + pos);
+    } else {
+      dom.viewport.scrollTop = pos;
+    }
+  };
+  let scrollIsAtBottom = (threshold = 2): boolean => {
+    const total = heightCache.getTotalHeight();
+    return lastScrollTop + containerHeight >= total - threshold;
+  };
+  let scrollIsCompressed = false;
+
+  // Pluggable visible range function — compression plugin replaces this
+  let calcVisibleRangeFn = (
+    scrollTop: number,
+    cHeight: number,
+    hc: HeightCache,
+    total: number,
+    out: Range,
+  ): void => {
+    calcVisibleRange(scrollTop, cHeight, hc, total, out);
+  };
+
+  // Pluggable scrollToIndex position calculator — compression plugin replaces
+  let calcScrollToPosFn = (
+    index: number,
+    hc: HeightCache,
+    cHeight: number,
+    total: number,
+    align: "start" | "center" | "end",
+  ): number => {
+    return calcScrollToPosition(index, hc, cHeight, total, align);
+  };
+
+  // ── Rendering ───────────────────────────────────────────────────
+
+  const applyTemplate = (
+    element: HTMLElement,
+    result: string | HTMLElement,
+  ): void => {
+    if (typeof result === "string") element.innerHTML = result;
+    else element.replaceChildren(result);
+  };
+
+  const positionElement = (element: HTMLElement, index: number): void => {
+    const offset = Math.round(heightCache.getOffset(index));
+    if (isHorizontal) {
+      element.style.transform = `translateX(${offset}px)`;
+    } else {
+      element.style.transform = `translateY(${offset}px)`;
+    }
+  };
+
+  // Pluggable position function — compression plugin can replace
+  let positionElementFn = positionElement;
+
+  const renderItem = (index: number, item: T): HTMLElement => {
+    const element = pool.acquire();
+    element.className = baseClass;
+
+    if (isHorizontal) {
+      element.style.width = `${heightCache.getHeight(index)}px`;
+      if (crossAxisSize != null) {
+        element.style.height = `${crossAxisSize}px`;
+      }
+    } else {
+      element.style.height = `${heightCache.getHeight(index)}px`;
+    }
+
+    element.dataset.index = String(index);
+    element.dataset.id = String(item.id);
+    element.ariaSelected = "false";
+    element.id = `${ariaIdPrefix}-item-${index}`;
+    lastAriaSetSize = String(virtualTotalFn());
+    element.setAttribute("aria-setsize", lastAriaSetSize);
+    element.setAttribute("aria-posinset", String(index + 1));
+
+    applyTemplate(element, userTemplate(item, index, itemState));
+    positionElementFn(element, index);
+    return element;
+  };
+
+  const updateContentSize = (): void => {
+    const size = `${heightCache.getTotalHeight()}px`;
+    if (isHorizontal) {
+      dom.content.style.width = size;
+    } else {
+      dom.content.style.height = size;
+    }
+  };
+
+  // ── Main render function ────────────────────────────────────────
+  // This is the hot path — called on every scroll-triggered range change.
+
+  // Selection state — plugins (withSelection) inject these
+  let selectionSet: Set<string | number> = new Set();
+  let focusedIndex = -1;
+
+  const renderIfNeeded = (): void => {
+    if (isDestroyed) return;
+
+    const total = virtualTotalFn();
+    calcVisibleRangeFn(
+      lastScrollTop,
+      containerHeight,
+      heightCache,
+      total,
+      visibleRange,
+    );
+    applyOverscan(visibleRange, overscan, total, renderRange);
+
+    if (
+      renderRange.start === lastRenderRange.start &&
+      renderRange.end === lastRenderRange.end
+    ) {
+      return;
+    }
+
+    const currentSetSize = String(total);
+    const setSizeChanged = currentSetSize !== lastAriaSetSize;
+    lastAriaSetSize = currentSetSize;
+
+    // Remove items outside new range
+    for (const [index, element] of rendered) {
+      if (index < renderRange.start || index > renderRange.end) {
+        element.remove();
+        pool.release(element);
+        rendered.delete(index);
+      }
+    }
+
+    // Add / update items in range
+    const fragment = document.createDocumentFragment();
+    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+
+    for (let i = renderRange.start; i <= renderRange.end; i++) {
+      const item = items[i];
+      if (!item) continue;
+
+      const existing = rendered.get(i);
+      if (existing) {
+        const existingId = existing.dataset.id;
+        const newId = String(item.id);
+        if (existingId !== newId) {
+          applyTemplate(existing, userTemplate(item, i, itemState));
+          existing.dataset.id = newId;
+          if (isHorizontal) {
+            existing.style.width = `${heightCache.getHeight(i)}px`;
+          } else {
+            existing.style.height = `${heightCache.getHeight(i)}px`;
+          }
+        }
+        positionElementFn(existing, i);
+
+        // Selection class updates
+        const isSelected = selectionSet.has(item.id);
+        const isFocused = i === focusedIndex;
+        existing.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+        existing.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+        existing.ariaSelected = isSelected ? "true" : "false";
+
+        if (setSizeChanged) {
+          existing.setAttribute("aria-setsize", lastAriaSetSize);
+        }
+      } else {
+        const element = renderItem(i, item);
+
+        // Selection state for new elements
+        const isSelected = selectionSet.has(item.id);
+        const isFocused = i === focusedIndex;
+        if (isSelected) {
+          element.classList.add(`${classPrefix}-item--selected`);
+          element.ariaSelected = "true";
+        }
+        if (isFocused) {
+          element.classList.add(`${classPrefix}-item--focused`);
+        }
+
+        fragment.appendChild(element);
+        newElements.push({ index: i, element });
+      }
+    }
+
+    if (newElements.length > 0) {
+      dom.items.appendChild(fragment);
+      for (const { index, element } of newElements) {
+        rendered.set(index, element);
+      }
+    }
+
+    lastRenderRange.start = renderRange.start;
+    lastRenderRange.end = renderRange.end;
+
+    emitter.emit("range:change", {
+      range: { start: renderRange.start, end: renderRange.end },
+    });
+  };
+
+  const forceRender = (): void => {
+    lastRenderRange.start = -1;
+    lastRenderRange.end = -1;
+    renderIfNeeded();
+  };
+
+  // ── Scroll handling ─────────────────────────────────────────────
+
+  const onScrollFrame = (): void => {
+    if (isDestroyed) return;
+
+    const scrollTop = scrollGetTop();
+    const direction: "up" | "down" = scrollTop >= lastScrollTop ? "down" : "up";
+
+    if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
+      dom.root.classList.add(`${classPrefix}--scrolling`);
+    }
+
+    lastScrollTop = scrollTop;
+    renderIfNeeded();
+
+    emitter.emit("scroll", { scrollTop, direction });
+
+    // Plugin post-scroll actions
+    for (let i = 0; i < afterScroll.length; i++) {
+      afterScroll[i]!(scrollTop, direction);
+    }
+
+    // Idle detection
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      dom.root.classList.remove(`${classPrefix}--scrolling`);
+    }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+  };
+
+  // Wheel handler (can be disabled via config)
+  let wheelHandler: ((e: WheelEvent) => void) | null = null;
+
+  const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
+  scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
+
+  // Hide native scrollbar by default (plugins may override)
+  if (!isWindowMode) {
+    dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+  }
+
+  // ── Click & keydown handlers (delegate to plugins) ──────────────
+
+  const handleClick = (event: MouseEvent): void => {
+    // Core: emit item:click
+    const target = event.target as HTMLElement;
+    const itemEl = target.closest("[data-index]") as HTMLElement | null;
+    if (itemEl) {
+      const index = parseInt(itemEl.dataset.index ?? "-1", 10);
+      if (index >= 0 && items[index]) {
+        emitter.emit("item:click", { item: items[index], index, event });
+      }
+    }
+
+    for (let i = 0; i < clickHandlers.length; i++) {
+      clickHandlers[i]!(event);
+    }
+  };
+
+  const handleKeydown = (event: KeyboardEvent): void => {
+    for (let i = 0; i < keydownHandlers.length; i++) {
+      keydownHandlers[i]!(event);
+    }
+  };
+
+  dom.items.addEventListener("click", handleClick);
+  dom.root.addEventListener("keydown", handleKeydown);
+
+  // ── ResizeObserver ──────────────────────────────────────────────
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    if (isDestroyed || isWindowMode) return;
+
+    for (const entry of entries) {
+      const newHeight = entry.contentRect.height;
+      const newWidth = entry.contentRect.width;
+      const newMainAxis = isHorizontal ? newWidth : newHeight;
+
+      if (Math.abs(newMainAxis - containerHeight) > 1) {
+        containerHeight = newMainAxis;
+        updateContentSize();
+        renderIfNeeded();
+        emitter.emit("resize", { height: newHeight, width: newWidth });
+      }
+
+      for (let i = 0; i < resizeHandlers.length; i++) {
+        resizeHandlers[i]!(newWidth, newHeight);
+      }
+    }
+  });
+
+  resizeObserver.observe(dom.viewport);
+
+  // Window resize handler
+  let handleWindowResize: (() => void) | null = null;
+  if (isWindowMode) {
+    handleWindowResize = () => {
+      if (isDestroyed) return;
+      const newHeight = window.innerHeight;
+      if (Math.abs(newHeight - containerHeight) > 1) {
+        containerHeight = newHeight;
+        updateContentSize();
+        renderIfNeeded();
+        emitter.emit("resize", {
+          height: newHeight,
+          width: window.innerWidth,
+        });
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
+  }
+
+  // ── ARIA: Live Region ───────────────────────────────────────────
+
+  const liveRegion = document.createElement("div");
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.className = `${classPrefix}-live-region`;
+  liveRegion.style.cssText =
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+  dom.root.appendChild(liveRegion);
+
+  // ── BuilderContext ──────────────────────────────────────────────
+  // The context plugins receive. Provides extension points without
+  // exposing implementation details. We build it as a plain object
+  // with getters so plugins always see the latest state.
+
+  const ctx: BuilderContext<T> = {
+    get dom() {
+      return dom as any;
+    },
+    get heightCache() {
+      return heightCache as any;
+    },
+    get emitter() {
+      return emitter as any;
+    },
+    get config() {
+      return resolvedConfig;
+    },
+    get rawConfig() {
+      return config;
+    },
+
+    // Mutable component slots (plugins can replace)
+    get renderer() {
+      return null as any; // Renderer is inlined — plugins that need
+      // to replace it (grid) can override renderIfNeeded/forceRender
+    },
+    set renderer(_r: any) {
+      // no-op — grid plugin overrides via methods below
+    },
+
+    get dataManager() {
+      return dataManagerProxy as any;
+    },
+    set dataManager(dm: any) {
+      dataManagerProxy = dm;
+    },
+
+    get scrollController() {
+      return scrollControllerProxy as any;
+    },
+    set scrollController(sc: any) {
+      scrollControllerProxy = sc;
+    },
+
+    state: {
+      viewportState: {
+        scrollTop: 0,
+        containerHeight,
+        totalHeight: heightCache.getTotalHeight(),
+        actualHeight: heightCache.getTotalHeight(),
+        isCompressed: false,
+        compressionRatio: 1,
+        visibleRange: { start: 0, end: 0 },
+        renderRange: { start: 0, end: 0 },
+      },
+      lastRenderRange: { start: 0, end: 0 },
+      isInitialized: false,
+      isDestroyed: false,
+      cachedCompression: null,
+    } as BuilderState,
+
+    afterScroll,
+    clickHandlers,
+    keydownHandlers,
+    resizeHandlers,
+    destroyHandlers,
+    methods,
+
+    replaceRenderer(_r: any): void {
+      // Renderer is inlined; grid plugin should override
+      // renderIfNeeded and forceRender via ctx instead
+    },
+    replaceDataManager(dm: any): void {
+      dataManagerProxy = dm;
+    },
+    replaceScrollController(sc: any): void {
+      scrollControllerProxy = sc;
+    },
+
+    getItemsForRange(range: Range): T[] {
+      const result: T[] = [];
+      for (let i = range.start; i <= range.end; i++) {
+        if (items[i]) result.push(items[i]!);
+      }
+      return result;
+    },
+    getAllLoadedItems(): T[] {
+      return [...items];
+    },
+    getVirtualTotal(): number {
+      return virtualTotalFn();
+    },
+    getCachedCompression() {
+      return {
+        isCompressed: false,
+        actualHeight: heightCache.getTotalHeight(),
+        virtualHeight: heightCache.getTotalHeight(),
+        ratio: 1,
+      } as any;
+    },
+    getCompressionContext() {
+      return {
+        scrollTop: lastScrollTop,
+        totalItems: virtualTotalFn(),
+        containerHeight,
+        rangeStart: renderRange.start,
+      } as any;
+    },
+    renderIfNeeded(): void {
+      renderIfNeeded();
+    },
+    forceRender(): void {
+      forceRender();
+    },
+
+    setVirtualTotalFn(fn: () => number): void {
+      virtualTotalFn = fn;
+    },
+    rebuildHeightCache(total?: number): void {
+      heightCache.rebuild(total ?? virtualTotalFn());
+    },
+    setHeightConfig(newConfig: number | ((index: number) => number)): void {
+      heightCache = createHeightCache(newConfig, virtualTotalFn());
+    },
+    updateContentSize(totalSize: number): void {
+      const size = `${totalSize}px`;
+      if (isHorizontal) {
+        dom.content.style.width = size;
+      } else {
+        dom.content.style.height = size;
+      }
+    },
+    updateCompressionMode(): void {
+      // No-op by default — withCompression plugin replaces this
+    },
+  };
+
+  // ── Data manager proxy (plugins can replace) ────────────────────
+  // The default is a thin wrapper around the items array.
+  // withData plugin replaces this with the full adapter-backed manager.
+
+  let dataManagerProxy: any = {
+    getState: () => ({
+      total: items.length,
+      cached: items.length,
+      isLoading: false,
+      pendingRanges: [],
+      error: undefined,
+      hasMore: false,
+      cursor: undefined,
+    }),
+    getTotal: () => items.length,
+    getCached: () => items.length,
+    getIsLoading: () => false,
+    getHasMore: () => false,
+    getStorage: () => null,
+    getPlaceholders: () => null,
+    getItem: (index: number) => items[index],
+    getItemById: (id: string | number) => {
+      const idx = idToIndex.get(id);
+      return idx !== undefined ? items[idx] : undefined;
+    },
+    getIndexById: (id: string | number) => idToIndex.get(id) ?? -1,
+    isItemLoaded: (index: number) =>
+      index >= 0 && index < items.length && items[index] !== undefined,
+    getItemsInRange: (start: number, end: number) => {
+      const result: T[] = [];
+      const s = Math.max(0, start);
+      const e = Math.min(end, items.length - 1);
+      for (let i = s; i <= e; i++) result.push(items[i] as T);
+      return result;
+    },
+    setTotal: (t: number) => {
+      // no-op for simple manager
+      void t;
+    },
+    setItems: (newItems: T[], offset = 0, newTotal?: number) => {
+      if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
+        items = [...newItems];
+      } else {
+        for (let i = 0; i < newItems.length; i++) {
+          items[offset + i] = newItems[i]!;
+        }
+      }
+      if (newTotal !== undefined) {
+        // trim or leave
+      }
+      rebuildIdIndex();
+      if (isInitialized) {
+        heightCache.rebuild(virtualTotalFn());
+        updateContentSize();
+        forceRender();
+      }
+    },
+    updateItem: (id: string | number, updates: Partial<T>) => {
+      const index = idToIndex.get(id);
+      if (index === undefined) return false;
+      const item = items[index];
+      if (!item) return false;
+      items[index] = { ...item, ...updates } as T;
+      if (updates.id !== undefined && updates.id !== id) {
+        idToIndex.delete(id);
+        idToIndex.set(updates.id, index);
+      }
+      // Re-render if visible
+      const el = rendered.get(index);
+      if (el) {
+        applyTemplate(el, userTemplate(items[index]!, index, itemState));
+        el.dataset.id = String(items[index]!.id);
+      }
+      return true;
+    },
+    removeItem: (id: string | number) => {
+      const index = idToIndex.get(id);
+      if (index === undefined) return false;
+      items.splice(index, 1);
+      rebuildIdIndex();
+      if (isInitialized) {
+        heightCache.rebuild(virtualTotalFn());
+        updateContentSize();
+        forceRender();
+      }
+      return true;
+    },
+    loadRange: async () => {},
+    ensureRange: async () => {},
+    loadInitial: async () => {},
+    loadMore: async () => false,
+    reload: async () => {},
+    evictDistant: () => {},
+    clear: () => {
+      items = [];
+      idToIndex.clear();
+    },
+    reset: () => {
+      items = [];
+      idToIndex.clear();
+      if (isInitialized) {
+        heightCache.rebuild(0);
+        updateContentSize();
+        forceRender();
+      }
+    },
+  };
+
+  // ── Scroll controller proxy (plugins can replace) ───────────────
+  // Minimal proxy — plugins like withCompression replace this.
+
+  let scrollControllerProxy: any = {
+    getScrollTop: () => scrollGetTop(),
+    scrollTo: (pos: number) => scrollSetTop(pos),
+    scrollBy: (delta: number) => scrollSetTop(scrollGetTop() + delta),
+    isAtTop: () => lastScrollTop <= 2,
+    isAtBottom: (threshold = 2) => scrollIsAtBottom(threshold),
+    getScrollPercentage: () => {
+      const total = heightCache.getTotalHeight();
+      const maxScroll = Math.max(0, total - containerHeight);
+      return maxScroll > 0 ? lastScrollTop / maxScroll : 0;
+    },
+    getVelocity: () => 0,
+    isTracking: () => true,
+    isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
+    updateConfig: () => {},
+    enableCompression: () => {},
+    disableCompression: () => {},
+    isCompressed: () => scrollIsCompressed,
+    isWindowMode: () => isWindowMode,
+    updateContainerHeight: (h: number) => {
+      containerHeight = h;
+    },
+    destroy: () => {},
+  };
+
+  // ── Run plugin setup ────────────────────────────────────────────
+
+  // Check for method collisions
+  const allMethodNames = new Map<string, string>();
+  for (const plugin of sortedPlugins) {
+    if (plugin.methods) {
+      for (const method of plugin.methods) {
+        const existing = allMethodNames.get(method);
+        if (existing) {
+          throw new Error(
+            `[vlist/builder] Method "${method}" is registered by both "${existing}" and "${plugin.name}"`,
+          );
+        }
+        allMethodNames.set(method, plugin.name);
+      }
+    }
+  }
+
+  for (const plugin of sortedPlugins) {
+    plugin.setup(ctx);
+  }
+
+  // ── Mark initialized ────────────────────────────────────────────
+  isInitialized = true;
+  ctx.state.isInitialized = true;
+
+  // ── Initial render ──────────────────────────────────────────────
+  updateContentSize();
+  renderIfNeeded();
+
+  // Reverse mode: scroll to bottom
+  if (isReverse && items.length > 0) {
+    const pos = calcScrollToPosFn(
+      items.length - 1,
+      heightCache,
+      containerHeight,
+      items.length,
+      "end",
+    );
+    scrollSetTop(pos);
+    lastScrollTop = pos;
+    renderIfNeeded();
+  }
+
+  // ── Base data methods ───────────────────────────────────────────
+
+  const setItems = (newItems: T[]): void => {
+    ctx.dataManager.setItems(newItems, 0, newItems.length);
+  };
+
+  const appendItems = isReverse
+    ? (newItems: T[]): void => {
+        const wasAtBottom = scrollIsAtBottom(2);
+        const currentTotal = items.length;
+        ctx.dataManager.setItems(newItems, currentTotal);
+        if (wasAtBottom && items.length > 0) {
+          const pos = calcScrollToPosFn(
+            items.length - 1,
+            heightCache,
+            containerHeight,
+            items.length,
+            "end",
+          );
+          scrollSetTop(pos);
+          lastScrollTop = pos;
+          renderIfNeeded();
+        }
+      }
+    : (newItems: T[]): void => {
+        const currentTotal = items.length;
+        ctx.dataManager.setItems(newItems, currentTotal);
+      };
+
+  const prependItems = isReverse
+    ? (newItems: T[]): void => {
+        const scrollTop = scrollGetTop();
+        const heightBefore = heightCache.getTotalHeight();
+        const existingItems = [...items];
+        ctx.dataManager.clear();
+        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
+        const heightAfter = heightCache.getTotalHeight();
+        const delta = heightAfter - heightBefore;
+        if (delta > 0) {
+          scrollSetTop(scrollTop + delta);
+          lastScrollTop = scrollTop + delta;
+        }
+      }
+    : (newItems: T[]): void => {
+        const existingItems = [...items];
+        ctx.dataManager.clear();
+        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
+      };
+
+  const updateItem = (id: string | number, updates: Partial<T>): void => {
+    ctx.dataManager.updateItem(id, updates);
+  };
+
+  const removeItem = (id: string | number): void => {
+    ctx.dataManager.removeItem(id);
+  };
+
+  const reload = async (): Promise<void> => {
+    if ((ctx.dataManager as any).reload) {
+      await (ctx.dataManager as any).reload();
+    }
+  };
+
+  // ── Base scroll methods ─────────────────────────────────────────
+
+  const cancelScroll = (): void => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+  };
+
+  const animateScroll = (from: number, to: number, duration: number): void => {
+    cancelScroll();
+    if (Math.abs(to - from) < 1) {
+      scrollSetTop(to);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number): void => {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      scrollSetTop(from + (to - from) * easeInOutQuad(t));
+      if (t < 1) animationFrameId = requestAnimationFrame(tick);
+      else animationFrameId = null;
+    };
+    animationFrameId = requestAnimationFrame(tick);
+  };
+
+  const scrollToIndex = (
+    index: number,
+    alignOrOptions?:
+      | "start"
+      | "center"
+      | "end"
+      | import("../types").ScrollToOptions,
+  ): void => {
+    const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
+    const total = virtualTotalFn();
+
+    let idx = index;
+    if (wrapEnabled && total > 0) {
+      idx = ((idx % total) + total) % total;
+    }
+
+    const position = calcScrollToPosFn(
+      idx,
+      heightCache,
+      containerHeight,
+      total,
+      align,
+    );
+
+    if (behavior === "smooth") {
+      animateScroll(scrollGetTop(), position, duration);
+    } else {
+      cancelScroll();
+      scrollSetTop(position);
+    }
+  };
+
+  const scrollToItem = (
+    id: string | number,
+    alignOrOptions?:
+      | "start"
+      | "center"
+      | "end"
+      | import("../types").ScrollToOptions,
+  ): void => {
+    const index = idToIndex.get(id) ?? ctx.dataManager.getIndexById(id);
+    if (index >= 0) scrollToIndex(index, alignOrOptions);
+  };
+
+  const getScrollPosition = (): number => scrollGetTop();
+
+  // ── Event subscription ──────────────────────────────────────────
+
+  const on = <K extends keyof VListEvents<T>>(
+    event: K,
+    handler: EventHandler<VListEvents<T>[K]>,
+  ): Unsubscribe => {
+    return emitter.on(event as string, handler);
+  };
+
+  const off = <K extends keyof VListEvents<T>>(
+    event: K,
+    handler: EventHandler<VListEvents<T>[K]>,
+  ): void => {
+    emitter.off(event as string, handler);
+  };
+
+  // ── Destroy ─────────────────────────────────────────────────────
+
+  const destroy = (): void => {
+    if (isDestroyed) return;
+    isDestroyed = true;
+    ctx.state.isDestroyed = true;
+
+    dom.items.removeEventListener("click", handleClick);
+    dom.root.removeEventListener("keydown", handleKeydown);
+    scrollTarget.removeEventListener("scroll", onScrollFrame);
+    liveRegion.remove();
+    resizeObserver.disconnect();
+
+    if (handleWindowResize) {
+      window.removeEventListener("resize", handleWindowResize);
+    }
+    if (wheelHandler) {
+      dom.viewport.removeEventListener("wheel", wheelHandler);
+    }
+    if (idleTimer) clearTimeout(idleTimer);
+
+    for (let i = 0; i < destroyHandlers.length; i++) {
+      destroyHandlers[i]!();
+    }
+    for (const plugin of sortedPlugins) {
+      if (plugin.destroy) plugin.destroy();
+    }
+
+    cancelScroll();
+
+    for (const [, element] of rendered) {
+      element.remove();
+      pool.release(element);
+    }
+    rendered.clear();
+    pool.clear();
+    emitter.clear();
+
+    dom.root.remove();
+  };
+
+  // ── Assemble public API ─────────────────────────────────────────
+
+  const api: BuiltVList<T> = {
+    get element() {
+      return dom.root;
+    },
+    get items() {
+      return items as readonly T[];
+    },
+    get total() {
+      return virtualTotalFn();
+    },
+
+    setItems: methods.has("setItems")
+      ? (methods.get("setItems") as any)
+      : setItems,
+    appendItems: methods.has("appendItems")
+      ? (methods.get("appendItems") as any)
+      : appendItems,
+    prependItems: methods.has("prependItems")
+      ? (methods.get("prependItems") as any)
+      : prependItems,
+    updateItem: methods.has("updateItem")
+      ? (methods.get("updateItem") as any)
+      : updateItem,
+    removeItem: methods.has("removeItem")
+      ? (methods.get("removeItem") as any)
+      : removeItem,
+    reload: methods.has("reload") ? (methods.get("reload") as any) : reload,
+
+    scrollToIndex: methods.has("scrollToIndex")
+      ? (methods.get("scrollToIndex") as any)
+      : scrollToIndex,
+    scrollToItem: methods.has("scrollToItem")
+      ? (methods.get("scrollToItem") as any)
+      : scrollToItem,
+    cancelScroll: methods.has("cancelScroll")
+      ? (methods.get("cancelScroll") as any)
+      : cancelScroll,
+    getScrollPosition: methods.has("getScrollPosition")
+      ? (methods.get("getScrollPosition") as any)
+      : getScrollPosition,
+
+    on,
+    off,
+    destroy,
+  };
+
+  // Merge plugin methods
+  for (const [name, fn] of methods) {
+    if (
+      name === "setItems" ||
+      name === "appendItems" ||
+      name === "prependItems" ||
+      name === "updateItem" ||
+      name === "removeItem" ||
+      name === "reload" ||
+      name === "scrollToIndex" ||
+      name === "scrollToItem" ||
+      name === "cancelScroll" ||
+      name === "getScrollPosition"
+    ) {
+      continue;
+    }
+    (api as any)[name] = fn;
+  }
+
+  return api;
+}

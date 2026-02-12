@@ -23,6 +23,8 @@ export {
   type Renderer,
   type DOMStructure,
   type CompressionContext,
+  type CompressedPositionFn,
+  type CompressionStateFn,
 } from "./renderer";
 
 // Virtual Scrolling
@@ -31,7 +33,6 @@ export {
   updateViewportState,
   updateViewportSize,
   updateViewportItems,
-  calculateVisibleRange,
   calculateRenderRange,
   calculateTotalHeight,
   calculateActualHeight,
@@ -43,12 +44,19 @@ export {
   isInRange,
   getRangeCount,
   diffRanges,
-  getCompressionState,
+  getSimpleCompressionState,
+  simpleVisibleRange,
+  simpleScrollToIndex,
+  NO_COMPRESSION,
+  type CompressionState,
+  type VisibleRangeFn,
+  type ScrollToIndexFn,
 } from "./virtual";
 
-// Compression
+// Compression (full module — used by monolithic factory and withCompression plugin)
 export {
   MAX_VIRTUAL_HEIGHT,
+  getCompressionState,
   getCompressionState as getCompression,
   needsCompression,
   getMaxItemsWithoutCompression,
@@ -58,5 +66,4 @@ export {
   calculateCompressedItemPosition,
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
-  type CompressionState,
 } from "./compression";

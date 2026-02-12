@@ -3,6 +3,9 @@
  * Data management, sparse storage, and placeholder generation
  */
 
+// Builder Plugin
+export { withData, type DataPluginConfig } from "./plugin";
+
 // Data Manager
 export {
   createDataManager,

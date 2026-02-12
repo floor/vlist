@@ -1,49 +1,211 @@
 /**
  * vlist - Virtual Scrolling Core
- * Pure functions for virtual scroll calculations with compression support
+ * Pure functions for virtual scroll calculations
  *
- * Compression is automatically applied when the total list height exceeds
- * browser limits (~16M pixels). This allows handling millions of items.
+ * Compression support is NOT imported here — it's injected via
+ * CompressionState parameters. When compression is inactive
+ * (the common case), all calculations use simple height-cache math
+ * with zero dependency on the compression module.
+ *
+ * This keeps the builder core lightweight. The withCompression plugin
+ * and the monolithic createVList entry point import compression
+ * separately and pass the state in.
  */
 
 import type { Range, ViewportState } from "../types";
 import type { HeightCache } from "./heights";
-import {
-  getCompressionState,
-  calculateCompressedVisibleRange,
-  calculateCompressedRenderRange,
-  calculateCompressedScrollToIndex,
-  type CompressionState,
-} from "./compression";
 
 // =============================================================================
-// Re-export compression utilities
+// Compression State (type only — no runtime import)
 // =============================================================================
 
-export {
-  MAX_VIRTUAL_HEIGHT,
-  getCompressionState,
-  needsCompression,
-  calculateCompressedVisibleRange as calculateVisibleRange,
-  calculateCompressedRenderRange as calculateRenderRange,
-} from "./compression";
-export type { CompressionState } from "./compression";
+/** Compression calculation result */
+export interface CompressionState {
+  /** Whether compression is active */
+  isCompressed: boolean;
+
+  /** The actual total height */
+  actualHeight: number;
+
+  /** The virtual height (capped at MAX_VIRTUAL_HEIGHT) */
+  virtualHeight: number;
+
+  /** Compression ratio (1 = no compression, <1 = compressed) */
+  ratio: number;
+}
 
 /**
- * Calculate total content height (capped for compression)
- * Pure function - no side effects
+ * A "no compression" state for lists that don't need it.
+ * Used by the builder core when withCompression is not installed.
+ */
+export const NO_COMPRESSION: CompressionState = {
+  isCompressed: false,
+  actualHeight: 0,
+  virtualHeight: 0,
+  ratio: 1,
+};
+
+/**
+ * Create a trivial compression state from a height cache.
+ * No compression logic — just reads the total height.
+ * For use when the full compression module is not loaded.
+ */
+export const getSimpleCompressionState = (
+  _totalItems: number,
+  heightCache: HeightCache,
+): CompressionState => {
+  const h = heightCache.getTotalHeight();
+  return {
+    isCompressed: false,
+    actualHeight: h,
+    virtualHeight: h,
+    ratio: 1,
+  };
+};
+
+// =============================================================================
+// Visible-range callbacks (injectable by compression module)
+// =============================================================================
+
+/**
+ * Signature for the function that calculates the visible item range.
+ * The compression module provides a version that handles compressed scroll;
+ * virtual.ts provides a simple fallback for non-compressed lists.
+ */
+export type VisibleRangeFn = (
+  scrollTop: number,
+  containerHeight: number,
+  heightCache: HeightCache,
+  totalItems: number,
+  compression: CompressionState,
+  out: Range,
+) => Range;
+
+/**
+ * Signature for the scroll-to-index calculator.
+ */
+export type ScrollToIndexFn = (
+  index: number,
+  heightCache: HeightCache,
+  containerHeight: number,
+  totalItems: number,
+  compression: CompressionState,
+  align: "start" | "center" | "end",
+) => number;
+
+// =============================================================================
+// Simple (non-compressed) range calculation
+// =============================================================================
+
+/**
+ * Calculate visible range using height cache lookups.
+ * Fast path for lists that don't need compression (< ~350 000 items at 48px).
+ * Mutates `out` to avoid allocation on the scroll hot path.
+ */
+export const simpleVisibleRange: VisibleRangeFn = (
+  scrollTop,
+  containerHeight,
+  heightCache,
+  totalItems,
+  _compression,
+  out,
+) => {
+  if (totalItems === 0 || containerHeight === 0) {
+    out.start = 0;
+    out.end = -1;
+    return out;
+  }
+
+  const start = heightCache.indexAtOffset(scrollTop);
+  let end = heightCache.indexAtOffset(scrollTop + containerHeight);
+  if (end < totalItems - 1) end++;
+
+  out.start = Math.max(0, start);
+  out.end = Math.min(totalItems - 1, Math.max(0, end));
+  return out;
+};
+
+/**
+ * Calculate render range (adds overscan around visible range).
+ * This function is compression-agnostic — works for both paths.
+ * Mutates `out` to avoid allocation on the scroll hot path.
+ */
+export const calculateRenderRange = (
+  visibleRange: Range,
+  overscan: number,
+  totalItems: number,
+  out: Range,
+): Range => {
+  if (totalItems === 0) {
+    out.start = 0;
+    out.end = -1;
+    return out;
+  }
+
+  out.start = Math.max(0, visibleRange.start - overscan);
+  out.end = Math.min(totalItems - 1, visibleRange.end + overscan);
+  return out;
+};
+
+/**
+ * Simple scroll-to-index calculation (non-compressed).
+ * Uses height cache offsets directly.
+ */
+export const simpleScrollToIndex: ScrollToIndexFn = (
+  index,
+  heightCache,
+  containerHeight,
+  totalItems,
+  _compression,
+  align,
+) => {
+  if (totalItems === 0) return 0;
+
+  const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
+  const itemOffset = heightCache.getOffset(safeIndex);
+  const itemHeight = heightCache.getHeight(safeIndex);
+  const totalHeight = heightCache.getTotalHeight();
+  const maxScroll = Math.max(0, totalHeight - containerHeight);
+
+  let position: number;
+
+  switch (align) {
+    case "center":
+      position = itemOffset - containerHeight / 2 + itemHeight / 2;
+      break;
+    case "end":
+      position = itemOffset - containerHeight + itemHeight;
+      break;
+    case "start":
+    default:
+      position = itemOffset;
+      break;
+  }
+
+  return Math.max(0, Math.min(position, maxScroll));
+};
+
+// =============================================================================
+// Calculate total content height
+// =============================================================================
+
+/**
+ * Calculate total content height.
+ * Uses compression's virtualHeight when compressed, raw height otherwise.
  */
 export const calculateTotalHeight = (
-  totalItems: number,
+  _totalItems: number,
   heightCache: HeightCache,
+  compression?: CompressionState | null,
 ): number => {
-  const compression = getCompressionState(totalItems, heightCache);
-  return compression.virtualHeight;
+  if (compression && compression.isCompressed) {
+    return compression.virtualHeight;
+  }
+  return heightCache.getTotalHeight();
 };
 
 /**
  * Calculate actual total height (without compression cap)
- * Pure function - no side effects
  */
 export const calculateActualHeight = (
   _totalItems: number,
@@ -54,8 +216,7 @@ export const calculateActualHeight = (
 
 /**
  * Calculate the offset (translateY) for an item
- * For non-compressed lists only - use calculateCompressedItemPosition for compressed
- * Pure function - no side effects
+ * For non-compressed lists only
  */
 export const calculateItemOffset = (
   index: number,
@@ -65,35 +226,11 @@ export const calculateItemOffset = (
 };
 
 // =============================================================================
-// Scroll Position Calculations
+// Scroll helpers
 // =============================================================================
 
 /**
- * Calculate scroll position to bring an index into view
- * Automatically handles compression for large lists
- * Pure function - no side effects
- */
-export const calculateScrollToIndex = (
-  index: number,
-  heightCache: HeightCache,
-  containerHeight: number,
-  totalItems: number,
-  align: "start" | "center" | "end" = "start",
-  compression: CompressionState,
-): number => {
-  return calculateCompressedScrollToIndex(
-    index,
-    heightCache,
-    containerHeight,
-    totalItems,
-    compression,
-    align,
-  );
-};
-
-/**
  * Clamp scroll position to valid range
- * Pure function - no side effects
  */
 export const clampScrollPosition = (
   scrollTop: number,
@@ -106,7 +243,6 @@ export const clampScrollPosition = (
 
 /**
  * Determine scroll direction
- * Pure function - no side effects
  */
 export const getScrollDirection = (
   currentScrollTop: number,
@@ -120,8 +256,10 @@ export const getScrollDirection = (
 // =============================================================================
 
 /**
- * Create initial viewport state with compression support
- * Pure function - no side effects
+ * Create initial viewport state.
+ *
+ * Accepts an optional `visibleRangeFn` so that compression-aware callers
+ * can inject the compressed version. Defaults to `simpleVisibleRange`.
  */
 export const createViewportState = (
   containerHeight: number,
@@ -129,11 +267,12 @@ export const createViewportState = (
   totalItems: number,
   overscan: number,
   compression: CompressionState,
+  visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   const visibleRange: Range = { start: 0, end: 0 };
   const renderRange: Range = { start: 0, end: 0 };
 
-  calculateCompressedVisibleRange(
+  visibleRangeFn(
     0,
     containerHeight,
     heightCache,
@@ -141,12 +280,7 @@ export const createViewportState = (
     compression,
     visibleRange,
   );
-  calculateCompressedRenderRange(
-    visibleRange,
-    overscan,
-    totalItems,
-    renderRange,
-  );
+  calculateRenderRange(visibleRange, overscan, totalItems, renderRange);
 
   return {
     scrollTop: 0,
@@ -161,8 +295,8 @@ export const createViewportState = (
 };
 
 /**
- * Update viewport state after scroll
- * Mutates state in place for performance on scroll hot path
+ * Update viewport state after scroll.
+ * Mutates state in place for performance on the scroll hot path.
  */
 export const updateViewportState = (
   state: ViewportState,
@@ -171,8 +305,9 @@ export const updateViewportState = (
   totalItems: number,
   overscan: number,
   compression: CompressionState,
+  visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
-  calculateCompressedVisibleRange(
+  visibleRangeFn(
     scrollTop,
     state.containerHeight,
     heightCache,
@@ -180,7 +315,7 @@ export const updateViewportState = (
     compression,
     state.visibleRange,
   );
-  calculateCompressedRenderRange(
+  calculateRenderRange(
     state.visibleRange,
     overscan,
     totalItems,
@@ -193,8 +328,8 @@ export const updateViewportState = (
 };
 
 /**
- * Update viewport state when container resizes
- * Mutates state in place for performance
+ * Update viewport state when container resizes.
+ * Mutates state in place for performance.
  */
 export const updateViewportSize = (
   state: ViewportState,
@@ -203,8 +338,9 @@ export const updateViewportSize = (
   totalItems: number,
   overscan: number,
   compression: CompressionState,
+  visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
-  calculateCompressedVisibleRange(
+  visibleRangeFn(
     state.scrollTop,
     containerHeight,
     heightCache,
@@ -212,7 +348,7 @@ export const updateViewportSize = (
     compression,
     state.visibleRange,
   );
-  calculateCompressedRenderRange(
+  calculateRenderRange(
     state.visibleRange,
     overscan,
     totalItems,
@@ -229,8 +365,8 @@ export const updateViewportSize = (
 };
 
 /**
- * Update viewport state when total items changes
- * Mutates state in place for performance
+ * Update viewport state when total items changes.
+ * Mutates state in place for performance.
  */
 export const updateViewportItems = (
   state: ViewportState,
@@ -238,8 +374,9 @@ export const updateViewportItems = (
   totalItems: number,
   overscan: number,
   compression: CompressionState,
+  visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
-  calculateCompressedVisibleRange(
+  visibleRangeFn(
     state.scrollTop,
     state.containerHeight,
     heightCache,
@@ -247,7 +384,7 @@ export const updateViewportItems = (
     compression,
     state.visibleRange,
   );
-  calculateCompressedRenderRange(
+  calculateRenderRange(
     state.visibleRange,
     overscan,
     totalItems,
@@ -263,12 +400,40 @@ export const updateViewportItems = (
 };
 
 // =============================================================================
+// calculateScrollToIndex (public API)
+// =============================================================================
+
+/**
+ * Calculate scroll position to bring an index into view.
+ *
+ * Accepts an optional `scrollToIndexFn` so that compression-aware callers
+ * can inject the compressed version. Defaults to `simpleScrollToIndex`.
+ */
+export const calculateScrollToIndex = (
+  index: number,
+  heightCache: HeightCache,
+  containerHeight: number,
+  totalItems: number,
+  align: "start" | "center" | "end" = "start",
+  compression: CompressionState,
+  scrollToIndexFn: ScrollToIndexFn = simpleScrollToIndex,
+): number => {
+  return scrollToIndexFn(
+    index,
+    heightCache,
+    containerHeight,
+    totalItems,
+    compression,
+    align,
+  );
+};
+
+// =============================================================================
 // Range Utilities
 // =============================================================================
 
 /**
  * Check if two ranges are equal
- * Pure function - no side effects
  */
 export const rangesEqual = (a: Range, b: Range): boolean => {
   return a.start === b.start && a.end === b.end;
@@ -276,7 +441,6 @@ export const rangesEqual = (a: Range, b: Range): boolean => {
 
 /**
  * Check if an index is within a range
- * Pure function - no side effects
  */
 export const isInRange = (index: number, range: Range): boolean => {
   return index >= range.start && index <= range.end;
@@ -284,7 +448,6 @@ export const isInRange = (index: number, range: Range): boolean => {
 
 /**
  * Get the count of items in a range
- * Pure function - no side effects
  */
 export const getRangeCount = (range: Range): number => {
   if (range.end < range.start) return 0;
@@ -293,7 +456,6 @@ export const getRangeCount = (range: Range): number => {
 
 /**
  * Create an array of indices from a range
- * Pure function - no side effects
  */
 export const rangeToIndices = (range: Range): number[] => {
   const indices: number[] = [];
@@ -305,7 +467,6 @@ export const rangeToIndices = (range: Range): number[] => {
 
 /**
  * Calculate which indices need to be added/removed when range changes
- * Pure function - no side effects
  */
 export const diffRanges = (
   oldRange: Range,
@@ -314,14 +475,12 @@ export const diffRanges = (
   const add: number[] = [];
   const remove: number[] = [];
 
-  // Find indices to remove (in old but not in new)
   for (let i = oldRange.start; i <= oldRange.end; i++) {
     if (i < newRange.start || i > newRange.end) {
       remove.push(i);
     }
   }
 
-  // Find indices to add (in new but not in old)
   for (let i = newRange.start; i <= newRange.end; i++) {
     if (i < oldRange.start || i > oldRange.end) {
       add.push(i);

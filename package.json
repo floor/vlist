@@ -61,6 +61,14 @@
       "import": "./dist/grid/index.js",
       "types": "./dist/grid/index.d.ts"
     },
+    "./builder": {
+      "import": "./dist/builder/index.js",
+      "types": "./dist/builder/index.d.ts"
+    },
+    "./snapshots": {
+      "import": "./dist/snapshots/index.js",
+      "types": "./dist/snapshots/index.d.ts"
+    },
     "./react": {
       "import": "./dist/react/index.js",
       "types": "./dist/adapters/react.d.ts"

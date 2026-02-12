@@ -39,12 +39,14 @@ async function build() {
 
   const subModules = [
     { entry: "./src/core.ts", out: "core" },
+    { entry: "./src/builder/index.ts", out: "builder" },
     { entry: "./src/data/index.ts", out: "data" },
-    { entry: "./src/compression.ts", out: "compression" },
+    { entry: "./src/compression/index.ts", out: "compression" },
     { entry: "./src/selection/index.ts", out: "selection" },
     { entry: "./src/scroll/index.ts", out: "scroll" },
     { entry: "./src/groups/index.ts", out: "groups" },
     { entry: "./src/grid/index.ts", out: "grid" },
+    { entry: "./src/snapshots/index.ts", out: "snapshots" },
   ];
 
   // Framework adapters — built with externals so framework imports
