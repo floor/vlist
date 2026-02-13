@@ -1911,6 +1911,158 @@ describe("withGrid plugin", () => {
     expect(firstItem.getAttribute("aria-setsize")).toBeDefined();
     expect(firstItem.getAttribute("aria-posinset")).toBeDefined();
   });
+
+  // Integration tests for scroll virtualization
+  it("should virtualize and render multiple rows on scroll", () => {
+    // Container with 600px height can show ~6 rows at 100px each
+    container.style.height = "600px";
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 100, template },
+      items: createTestItems(600), // 150 rows with 4 columns
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+
+    // Initial: first rows (with overscan)
+    let indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(16); // More than 1 row
+    const firstMax = Math.max(...indices);
+    expect(firstMax).toBeLessThan(60); // Still near top
+
+    // Scroll down
+    simulateScroll(list, 2000);
+    flush();
+
+    indices = getRenderedIndices(list);
+    const secondMin = Math.min(...indices);
+    const secondMax = Math.max(...indices);
+
+    // Should have scrolled - range should be different
+    expect(secondMin).toBeGreaterThan(50); // Past initial rows
+    expect(secondMax).toBeGreaterThan(firstMax); // Further than before
+  });
+
+  it("should update rendered items continuously as user scrolls", () => {
+    container.style.height = "400px";
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 100, template },
+      items: createTestItems(400), // 100 rows
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+
+    // Start at top
+    let indices = getRenderedIndices(list);
+    const firstMin = Math.min(...indices);
+    const firstMax = Math.max(...indices);
+
+    // Scroll down by 500px
+    simulateScroll(list, 500);
+    flush();
+
+    indices = getRenderedIndices(list);
+    const secondMin = Math.min(...indices);
+    const secondMax = Math.max(...indices);
+
+    // Range should have shifted down
+    expect(secondMin).toBeGreaterThan(firstMin);
+    expect(secondMax).toBeGreaterThan(firstMax);
+
+    // Scroll down more
+    simulateScroll(list, 1500);
+    flush();
+
+    indices = getRenderedIndices(list);
+    const thirdMin = Math.min(...indices);
+    const thirdMax = Math.max(...indices);
+
+    // Range should continue shifting
+    expect(thirdMin).toBeGreaterThan(secondMin);
+    expect(thirdMax).toBeGreaterThan(secondMax);
+  });
+
+  it("should render correct rows with gap applied", () => {
+    container.style.height = "600px";
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 100, template },
+      items: createTestItems(200), // 50 rows
+    })
+      .use(withGrid({ columns: 4, gap: 8 }))
+      .build();
+
+    // Initial render
+    let indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+
+    // Scroll down
+    simulateScroll(list, 1000);
+    flush();
+
+    indices = getRenderedIndices(list);
+    // Should have items from middle rows
+    expect(Math.min(...indices)).toBeGreaterThan(20);
+    expect(Math.max(...indices)).toBeLessThan(180);
+  });
+
+  it("should handle range:change events on scroll", () => {
+    container.style.height = "600px";
+    let rangeChanges = 0;
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 100, template },
+      items: createTestItems(400),
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+
+    list.on("range:change", () => {
+      rangeChanges++;
+    });
+
+    const initialRangeChanges = rangeChanges;
+
+    // Scroll and trigger range updates
+    simulateScroll(list, 500);
+    flush();
+
+    simulateScroll(list, 1500);
+    flush();
+
+    // Should have emitted range:change events
+    expect(rangeChanges).toBeGreaterThan(initialRangeChanges);
+  });
+
+  it("should render all visible items in viewport at various scroll positions", () => {
+    container.style.height = "500px"; // 5 rows visible
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 100, template },
+      items: createTestItems(1000), // 250 rows
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+
+    // Test multiple scroll positions (stay within reasonable scroll bounds)
+    const scrollPositions = [0, 1000, 3000, 5000];
+
+    for (const scrollTop of scrollPositions) {
+      simulateScroll(list, scrollTop);
+      flush();
+
+      const indices = getRenderedIndices(list);
+      // Should always have items rendered (with overscan)
+      expect(indices.length).toBeGreaterThan(20); // At least 5 rows + overscan
+      expect(indices.length).toBeLessThan(100); // But not everything
+    }
+  });
 });
 
 // =============================================================================

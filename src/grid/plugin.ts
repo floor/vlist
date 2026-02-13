@@ -159,8 +159,42 @@ export const withGrid = <T extends VListItem = VListItem>(
       const gridRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        const { renderRange, isCompressed } = ctx.state.viewportState;
+        // Calculate visible and render ranges (in row space)
+        const scrollTop = ctx.scrollController.getScrollTop();
+        const containerHeight = ctx.state.viewportState.containerHeight;
+        const totalRows = ctx.getVirtualTotal();
+
+        // Calculate visible row range
+        const visibleRange = { start: 0, end: 0 };
+        if (totalRows === 0 || containerHeight === 0) {
+          visibleRange.start = 0;
+          visibleRange.end = 0;
+        } else {
+          visibleRange.start = Math.max(
+            0,
+            ctx.heightCache.indexAtOffset(scrollTop),
+          );
+          let visibleEnd = ctx.heightCache.indexAtOffset(
+            scrollTop + containerHeight,
+          );
+          if (visibleEnd < totalRows - 1) visibleEnd++;
+          visibleRange.end = Math.min(totalRows - 1, Math.max(0, visibleEnd));
+        }
+
+        // Apply overscan
+        const overscan = resolvedConfig.overscan ?? 3;
+        const renderRange = {
+          start: Math.max(0, visibleRange.start - overscan),
+          end: Math.min(totalRows - 1, visibleRange.end + overscan),
+        };
+
+        // Update viewport state
+        ctx.state.viewportState.scrollTop = scrollTop;
+        ctx.state.viewportState.visibleRange = visibleRange;
+        ctx.state.viewportState.renderRange = renderRange;
+
         const lastRange = ctx.state.lastRenderRange;
+        const isCompressed = ctx.state.viewportState.isCompressed;
 
         if (
           renderRange.start === lastRange.start &&
