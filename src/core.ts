@@ -816,13 +816,20 @@ export const createVList = <T extends VListItem = VListItem>(
     cancelScroll();
     if (Math.abs(to - from) < 1) {
       doScrollTo(to);
+      lastScrollTop = to;
+      renderIfNeeded();
       return;
     }
     const start = performance.now();
     const tick = (now: number): void => {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      doScrollTo(from + (to - from) * easeInOutQuad(t));
+      const newPos = from + (to - from) * easeInOutQuad(t);
+      doScrollTo(newPos);
+      // Update lastScrollTop BEFORE rendering so range calculation uses correct value
+      lastScrollTop = newPos;
+      // Ensure rendering happens on each frame during smooth scroll
+      renderIfNeeded();
       if (t < 1) animationFrameId = requestAnimationFrame(tick);
       else animationFrameId = null;
     };
