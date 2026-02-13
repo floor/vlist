@@ -615,6 +615,7 @@ function materialize<T extends VListItem = VListItem>(
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
+  const contentSizeHandlers: Array<() => void> = [];
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
 
@@ -834,6 +835,15 @@ function materialize<T extends VListItem = VListItem>(
     // Sync shared state for plugins that use it
     sharedState.lastRenderRange.start = renderRange.start;
     sharedState.lastRenderRange.end = renderRange.end;
+
+    // Update viewport state with current scroll position and calculated ranges
+    // This is critical for plugins (especially compression + scrollbar) that rely
+    // on viewport state being up-to-date
+    sharedState.viewportState.scrollTop = lastScrollTop;
+    sharedState.viewportState.visibleRange.start = visibleRange.start;
+    sharedState.viewportState.visibleRange.end = visibleRange.end;
+    sharedState.viewportState.renderRange.start = renderRange.start;
+    sharedState.viewportState.renderRange.end = renderRange.end;
 
     emitter.emit("range:change", {
       range: { start: renderRange.start, end: renderRange.end },
@@ -1069,6 +1079,7 @@ function materialize<T extends VListItem = VListItem>(
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
+    contentSizeHandlers,
     destroyHandlers,
     methods,
 
@@ -1260,6 +1271,10 @@ function materialize<T extends VListItem = VListItem>(
       if (isInitialized) {
         heightCache.rebuild(virtualTotalFn());
         updateContentSize();
+        ctx.updateCompressionMode();
+        for (let i = 0; i < contentSizeHandlers.length; i++) {
+          contentSizeHandlers[i]!();
+        }
         forceRenderFn();
       }
     },
@@ -1289,6 +1304,10 @@ function materialize<T extends VListItem = VListItem>(
       if (isInitialized) {
         heightCache.rebuild(virtualTotalFn());
         updateContentSize();
+        ctx.updateCompressionMode();
+        for (let i = 0; i < contentSizeHandlers.length; i++) {
+          contentSizeHandlers[i]!();
+        }
         forceRenderFn();
       }
       return true;
