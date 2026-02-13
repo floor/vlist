@@ -20,7 +20,13 @@
 import type { VListItem } from "../types";
 import type { VListPlugin, BuilderContext } from "../builder/types";
 
-import { getCompressionState } from "../render/compression";
+import {
+  getCompressionState,
+  calculateCompressedVisibleRange,
+  calculateCompressedScrollToIndex,
+  calculateCompressedItemPosition,
+} from "../render/compression";
+import type { Range } from "../types";
 import { createScrollbar, type Scrollbar } from "../scroll";
 
 // =============================================================================
@@ -47,8 +53,12 @@ import { createScrollbar, type Scrollbar } from "../scroll";
  * .build()
  * ```
  */
-export const withCompression = <T extends VListItem = VListItem>(): VListPlugin<T> => {
+export const withCompression = <
+  T extends VListItem = VListItem,
+>(): VListPlugin<T> => {
   let scrollbar: Scrollbar | null = null;
+  let virtualScrollTop = 0;
+  let compressedModeActive = false;
 
   return {
     name: "withCompression",
@@ -78,9 +88,40 @@ export const withCompression = <T extends VListItem = VListItem>(): VListPlugin<
         const total = ctx.getVirtualTotal();
         const compression = getCompressionState(total, ctx.heightCache);
 
-        if (compression.isCompressed && !ctx.scrollController.isCompressed()) {
+        if (compression.isCompressed && !compressedModeActive) {
           // Entering compressed mode
+          compressedModeActive = true;
           ctx.scrollController.enableCompression(compression);
+
+          // Replace scroll functions with virtual scroll position.
+          // In compressed mode the total height exceeds the browser's DOM
+          // scrollTop limit, so we store the position in a variable and
+          // bypass native scroll entirely.
+          ctx.setScrollFns(
+            () => virtualScrollTop,
+            (pos: number) => {
+              virtualScrollTop = pos;
+            },
+          );
+
+          // Install wheel handler for compressed scrolling
+          const viewport = dom.viewport;
+          const wheelHandler = (e: WheelEvent): void => {
+            e.preventDefault();
+            const maxScroll =
+              compression.virtualHeight -
+              ctx.state.viewportState.containerHeight;
+            virtualScrollTop = Math.max(
+              0,
+              Math.min(virtualScrollTop + e.deltaY, maxScroll),
+            );
+            // setScrollFns wrapper calls onScrollFrame automatically
+            ctx.scrollController.scrollTo(virtualScrollTop);
+          };
+          viewport.addEventListener("wheel", wheelHandler, { passive: false });
+          ctx.destroyHandlers.push(() => {
+            viewport.removeEventListener("wheel", wheelHandler);
+          });
 
           // Force custom scrollbar if not already present
           // (native scrollbar can't represent compressed space)
@@ -129,23 +170,19 @@ export const withCompression = <T extends VListItem = VListItem>(): VListPlugin<
             );
 
             // Wire resize handler for scrollbar
-            ctx.resizeHandlers.push(
-              (_width: number, _height: number): void => {
-                if (scrollbarRef) {
-                  const comp = ctx.getCachedCompression();
-                  scrollbarRef.updateBounds(
-                    comp.virtualHeight,
-                    ctx.state.viewportState.containerHeight,
-                  );
-                }
-              },
-            );
+            ctx.resizeHandlers.push((_width: number, _height: number): void => {
+              if (scrollbarRef) {
+                const comp = ctx.getCachedCompression();
+                scrollbarRef.updateBounds(
+                  comp.virtualHeight,
+                  ctx.state.viewportState.containerHeight,
+                );
+              }
+            });
           }
-        } else if (
-          !compression.isCompressed &&
-          ctx.scrollController.isCompressed()
-        ) {
+        } else if (!compression.isCompressed && compressedModeActive) {
           // Leaving compressed mode
+          compressedModeActive = false;
           ctx.scrollController.disableCompression();
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
@@ -169,6 +206,84 @@ export const withCompression = <T extends VListItem = VListItem>(): VListPlugin<
 
       // Replace the context's updateCompressionMode with our enhanced version
       (ctx as any).updateCompressionMode = enhancedUpdateCompressionMode;
+
+      // ── Replace visible-range and scroll-to-index with compressed versions ──
+      // These handle both compressed and non-compressed cases, so they're safe
+      // to install unconditionally.
+
+      ctx.setVisibleRangeFn(
+        (
+          scrollTop: number,
+          containerHeight: number,
+          hc: any,
+          totalItems: number,
+          out: Range,
+        ): void => {
+          const compression = getCompressionState(totalItems, hc);
+          calculateCompressedVisibleRange(
+            scrollTop,
+            containerHeight,
+            hc,
+            totalItems,
+            compression,
+            out,
+          );
+        },
+      );
+
+      ctx.setScrollToPosFn(
+        (
+          index: number,
+          hc: any,
+          containerHeight: number,
+          totalItems: number,
+          align: "start" | "center" | "end",
+        ): number => {
+          const compression = getCompressionState(totalItems, hc);
+          return calculateCompressedScrollToIndex(
+            index,
+            hc,
+            containerHeight,
+            totalItems,
+            compression,
+            align,
+          );
+        },
+      );
+
+      // ── Replace item positioning with compressed version ──
+      // The builder core's positionElementFn uses simple heightCache offsets.
+      // In compressed mode, items must be positioned relative to the viewport.
+      // ── Replace item positioning with compressed version ──
+      // The builder core's positionElementFn uses simple heightCache offsets.
+      // In compressed mode, items must be positioned relative to the viewport.
+      ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
+        const total = ctx.getVirtualTotal();
+        const compression = getCompressionState(total, ctx.heightCache);
+
+        if (compression.isCompressed) {
+          const offset = Math.round(
+            calculateCompressedItemPosition(
+              index,
+              ctx.scrollController.getScrollTop(),
+              ctx.heightCache as any,
+              total,
+              ctx.state.viewportState.containerHeight,
+              compression,
+            ),
+          );
+          const horizontal = ctx.config.horizontal;
+          el.style.transform = horizontal
+            ? `translateX(${offset}px)`
+            : `translateY(${offset}px)`;
+        } else {
+          const offset = Math.round(ctx.heightCache.getOffset(index));
+          const horizontal = ctx.config.horizontal;
+          el.style.transform = horizontal
+            ? `translateX(${offset}px)`
+            : `translateY(${offset}px)`;
+        }
+      });
 
       // Run initial compression check
       enhancedUpdateCompressionMode();

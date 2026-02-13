@@ -123,6 +123,7 @@ export const createScrollHandler = <T extends VListItem>(
       total,
       ctx.config.overscan,
       ctx.getCachedCompression(),
+      ctx.visibleRangeFn,
     );
 
     // Update custom scrollbar position

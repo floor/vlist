@@ -266,6 +266,7 @@ export const createScrollMethods = <T extends VListItem>(
       dataState.total,
       align,
       ctx.getCachedCompression(),
+      ctx.scrollToIndexFn,
     );
 
     if (behavior === "smooth") {

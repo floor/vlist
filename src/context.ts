@@ -23,6 +23,8 @@ import type {
   CompressionContext,
   CompressionState,
   HeightCache,
+  VisibleRangeFn,
+  ScrollToIndexFn,
 } from "./render";
 import type { SelectionState } from "./selection";
 
@@ -104,6 +106,24 @@ export interface VListContext<T extends VListItem = VListItem> {
   getCachedCompression: () => CompressionState;
 
   /**
+   * Visible-range calculation function.
+   * The monolithic factory injects `calculateCompressedVisibleRange` which
+   * handles both compressed and non-compressed lists.
+   * The builder core defaults to `simpleVisibleRange` (no compression import).
+   * Handlers pass this to updateViewportState / updateViewportItems / etc.
+   */
+  readonly visibleRangeFn?: VisibleRangeFn | undefined;
+
+  /**
+   * Scroll-to-index calculation function.
+   * The monolithic factory injects `calculateCompressedScrollToIndex` which
+   * handles both compressed and non-compressed lists.
+   * The builder core defaults to `simpleScrollToIndex` (no compression import).
+   * Methods pass this to calculateScrollToIndex.
+   */
+  readonly scrollToIndexFn?: ScrollToIndexFn | undefined;
+
+  /**
    * Get the "virtual total" used for viewport/height/compression calculations.
    * In grid mode this returns the total number of ROWS (not items).
    * In list/groups mode this returns the raw item total from the data manager.
@@ -135,6 +155,8 @@ export const createContext = <T extends VListItem = VListItem>(
   scrollbar: Scrollbar | null,
   initialState: VListContextState,
   virtualTotalFn?: () => number,
+  visibleRangeFn?: VisibleRangeFn,
+  scrollToIndexFn?: ScrollToIndexFn,
 ): VListContext<T> => {
   // State is mutable and will be updated by handlers
   const state = initialState;
@@ -216,5 +238,7 @@ export const createContext = <T extends VListItem = VListItem>(
     getCompressionContext,
     getCachedCompression,
     getVirtualTotal,
+    visibleRangeFn,
+    scrollToIndexFn,
   };
 };

@@ -101,71 +101,67 @@ export const withSelection = <T extends VListItem = VListItem>(
       const { dom, emitter, config: resolvedConfig } = ctx;
       const { classPrefix, ariaIdPrefix } = resolvedConfig;
 
-      // ── Override renderIfNeeded / forceRender to include selection state ──
-      // We monkey-patch the context's render methods to pass selection state.
-      // This avoids adding hooks to the hot path — the render call signature
-      // stays the same, we just supply the selection Set and focusedIndex.
-      const originalRenderIfNeeded = ctx.renderIfNeeded.bind(ctx);
-      const originalForceRender = ctx.forceRender.bind(ctx);
+      // ── Wrap existing render functions to inject selection state ──
+      // We capture the current renderIfNeeded (which may have been set by
+      // grid/groups plugins) and wrap it. After rendering, we update
+      // selection classes on the rendered elements.
+
+      // Capture the current render functions BEFORE we replace them
+      // This avoids infinite recursion since we get the actual function refs
+      const {
+        renderIfNeeded: previousRenderIfNeeded,
+        forceRender: previousForceRender,
+      } = ctx.getRenderFns();
+
+      // Helper to apply selection classes to rendered items
+      const applySelectionClasses = (): void => {
+        const rendered = ctx.dom.items.querySelectorAll("[data-index]");
+        rendered.forEach((el) => {
+          const element = el as HTMLElement;
+          const id = element.dataset.id;
+          if (id !== undefined) {
+            // Try to parse as number first, fall back to string
+            const itemId = /^\d+$/.test(id) ? parseInt(id, 10) : id;
+            const isSelected = selectionState.selected.has(itemId);
+            const index = parseInt(element.dataset.index ?? "-1", 10);
+            const isFocused = index === selectionState.focusedIndex;
+
+            element.classList.toggle(
+              `${classPrefix}-item--selected`,
+              isSelected,
+            );
+            element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+            element.ariaSelected = isSelected ? "true" : "false";
+          }
+        });
+      };
 
       const renderWithSelection = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        const { renderRange, isCompressed } = ctx.state.viewportState;
-        const lastRange = ctx.state.lastRenderRange;
+        // Call the previous render function (grid's or core's)
+        previousRenderIfNeeded();
 
-        if (
-          renderRange.start === lastRange.start &&
-          renderRange.end === lastRange.end
-        ) {
-          if (isCompressed) {
-            ctx.renderer.updatePositions(ctx.getCompressionContext());
-          }
-          return;
-        }
-
-        const items = ctx.getItemsForRange(renderRange);
-        const compressionCtx = isCompressed
-          ? ctx.getCompressionContext()
-          : undefined;
-
-        ctx.renderer.render(
-          items,
-          renderRange,
-          selectionState.selected,
-          selectionState.focusedIndex,
-          compressionCtx,
-        );
-
-        ctx.state.lastRenderRange = { ...renderRange };
-        emitter.emit("range:change", { range: renderRange });
+        // Apply selection classes to whatever was rendered
+        applySelectionClasses();
       };
 
       const forceRenderWithSelection = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        const { renderRange, isCompressed } = ctx.state.viewportState;
-        const items = ctx.getItemsForRange(renderRange);
-        const compressionCtx = isCompressed
-          ? ctx.getCompressionContext()
-          : undefined;
+        // Call the previous force render
+        previousForceRender();
 
-        ctx.renderer.render(
-          items,
-          renderRange,
-          selectionState.selected,
-          selectionState.focusedIndex,
-          compressionCtx,
-        );
+        // Apply selection classes to whatever was rendered
+        applySelectionClasses();
       };
 
-      // Replace the context render methods
-      (ctx as any).renderIfNeeded = renderWithSelection;
-      (ctx as any).forceRender = forceRenderWithSelection;
+      // Replace the render functions via setRenderFns
+      ctx.setRenderFns(renderWithSelection, forceRenderWithSelection);
 
-      // ── Helper: render and emit selection change ──
+      // ── Helper: apply selection and emit selection change ──
       const renderAndEmit = (): void => {
-        forceRenderWithSelection();
+        applySelectionClasses();
 
         emitter.emit("selection:change", {
           selected: getSelectedIds(selectionState),
@@ -202,7 +198,9 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (ctx.state.isDestroyed) return;
 
         const target = event.target as HTMLElement;
-        const itemElement = target.closest("[data-index]") as HTMLElement | null;
+        const itemElement = target.closest(
+          "[data-index]",
+        ) as HTMLElement | null;
         if (!itemElement) return;
 
         const index = parseInt(itemElement.dataset.index ?? "-1", 10);

@@ -2108,6 +2108,51 @@ describe("createVList compression", () => {
     vlist.scrollToIndex(0, "start");
     vlist.scrollToIndex(499_999, "end");
   });
+
+  it("should render items near the target index after scrollToIndex in compressed mode", () => {
+    const items = createTestItems(500_000);
+    vlist = createVList({
+      container,
+      item: { height: 40, template },
+      items,
+    });
+
+    // Scroll to a mid-list position
+    const targetIndex = 250_000;
+    vlist.scrollToIndex(targetIndex, "center");
+
+    // Collect rendered item indices from the DOM
+    const rendered = vlist.element.querySelectorAll("[data-index]");
+    const indices = Array.from(rendered).map((el) =>
+      parseInt((el as HTMLElement).dataset.index!, 10),
+    );
+
+    expect(indices.length).toBeGreaterThan(0);
+
+    // Every rendered item should be near the target (within overscan + viewport)
+    // With containerHeight=500, itemHeight=40, overscan~5: visible ~13 items + 10 overscan = ~23
+    // Allow generous tolerance for compressed positioning
+    const tolerance = 50;
+    for (const idx of indices) {
+      expect(idx).toBeGreaterThanOrEqual(targetIndex - tolerance);
+      expect(idx).toBeLessThanOrEqual(targetIndex + tolerance);
+    }
+
+    // Now scroll to the end
+    vlist.scrollToIndex(499_999, "end");
+
+    const renderedEnd = vlist.element.querySelectorAll("[data-index]");
+    const endIndices = Array.from(renderedEnd).map((el) =>
+      parseInt((el as HTMLElement).dataset.index!, 10),
+    );
+
+    expect(endIndices.length).toBeGreaterThan(0);
+
+    // Should contain the last item and items near the end
+    expect(endIndices).toContain(499_999);
+    const minEnd = Math.min(...endIndices);
+    expect(minEnd).toBeGreaterThan(499_000);
+  });
 });
 
 // =============================================================================
