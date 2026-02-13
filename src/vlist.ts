@@ -27,6 +27,8 @@ import {
   updateViewportItems,
   getCompression,
   calculateCompressedItemPosition,
+  calculateCompressedVisibleRange,
+  calculateCompressedScrollToIndex,
   createRenderer,
   createDOMStructure,
   updateContentHeight,
@@ -494,6 +496,7 @@ export const createVList = <T extends VListItem = VListItem>(
     initialVirtualTotal,
     overscan,
     initialCompression,
+    calculateCompressedVisibleRange,
   );
 
   // Mutable reference to scroll handler (needed for idle callback)
@@ -685,6 +688,10 @@ export const createVList = <T extends VListItem = VListItem>(
     },
     // In grid mode, the virtual total is the row count (not item count)
     isGrid ? getVirtualTotal : undefined,
+    // Monolithic factory: use compression-aware visible range for all viewport updates
+    calculateCompressedVisibleRange,
+    // Monolithic factory: use compression-aware scroll-to-index for all scroll calculations
+    calculateCompressedScrollToIndex,
   ));
 
   // ===========================================================================
@@ -768,6 +775,7 @@ export const createVList = <T extends VListItem = VListItem>(
       getVirtualTotal(),
       overscan,
       ctx.getCachedCompression(),
+      calculateCompressedVisibleRange,
     );
 
     // Update content size on the main axis
@@ -1069,6 +1077,7 @@ export const createVList = <T extends VListItem = VListItem>(
           getVirtualTotal(),
           overscan,
           ctx.getCachedCompression(),
+          calculateCompressedVisibleRange,
         );
 
         // Update content size and scrollbar bounds
@@ -1122,6 +1131,7 @@ export const createVList = <T extends VListItem = VListItem>(
           getVirtualTotal(),
           overscan,
           ctx.getCachedCompression(),
+          calculateCompressedVisibleRange,
         );
 
         updateContentSize(ctx.state.viewportState.totalHeight);

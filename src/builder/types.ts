@@ -171,6 +171,19 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   forceRender(): void;
 
   /**
+   * Get current render functions (for wrapping by selection/other plugins).
+   * Call this BEFORE setRenderFns to capture the current functions.
+   */
+  getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void };
+
+  /**
+   * Get current container width (for grid plugin).
+   * This returns the width detected by ResizeObserver, which is more reliable
+   * than viewport.clientWidth in test environments.
+   */
+  getContainerWidth(): number;
+
+  /**
    * Replace the virtual-total function.
    * Used by grid/groups plugins that change what "total" means
    * (e.g. row count instead of item count).
@@ -199,6 +212,54 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * Called by the core after data changes and by plugins that alter totals.
    */
   updateCompressionMode(): void;
+
+  /**
+   * Replace the visible-range calculation function.
+   * Used by withCompression to inject compressed range calculation.
+   */
+  setVisibleRangeFn(
+    fn: (
+      scrollTop: number,
+      containerHeight: number,
+      hc: HeightCache,
+      totalItems: number,
+      out: Range,
+    ) => void,
+  ): void;
+
+  /**
+   * Replace the scroll-to-index position calculator.
+   * Used by withCompression to inject compressed position calculation.
+   */
+  setScrollToPosFn(
+    fn: (
+      index: number,
+      hc: HeightCache,
+      containerHeight: number,
+      totalItems: number,
+      align: "start" | "center" | "end",
+    ) => number,
+  ): void;
+
+  /**
+   * Replace the item positioning function.
+   * Used by withCompression to inject compressed item positioning.
+   */
+  setPositionElementFn(fn: (element: HTMLElement, index: number) => void): void;
+
+  /**
+   * Replace the render functions.
+   * Used by grid/groups plugins that need to completely replace the render logic
+   * (e.g., to convert row ranges to item ranges for grid rendering).
+   */
+  setRenderFns(renderIfNeeded: () => void, forceRender: () => void): void;
+
+  /**
+   * Replace the scroll get/set functions.
+   * Used by withCompression to manage a virtual scroll position that bypasses
+   * native DOM scrollTop (which can't represent compressed scroll space).
+   */
+  setScrollFns(getTop: () => number, setTop: (pos: number) => void): void;
 }
 
 // =============================================================================

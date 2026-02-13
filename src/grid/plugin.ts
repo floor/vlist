@@ -64,7 +64,9 @@ export const withGrid = <T extends VListItem = VListItem>(
 ): VListPlugin<T> => {
   // Validate
   if (!config.columns || config.columns < 1) {
-    throw new Error("[vlist/builder] withGrid: columns must be a positive integer >= 1");
+    throw new Error(
+      "[vlist/builder] withGrid: columns must be a positive integer >= 1",
+    );
   }
 
   let gridLayout: GridLayout | null = null;
@@ -131,7 +133,8 @@ export const withGrid = <T extends VListItem = VListItem>(
       dom.root.classList.add(`${classPrefix}--grid`);
 
       // ── Get container width for grid renderer ──
-      const containerWidth = dom.viewport.clientWidth;
+      // Use ctx.getContainerWidth() which reflects the ResizeObserver-detected width
+      const containerWidth = ctx.getContainerWidth();
 
       // ── Create grid renderer ──
       const template = rawConfig.item.template;
@@ -152,9 +155,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridRenderer as unknown as import("../render").Renderer<T>,
       );
 
-      // ── Override renderIfNeeded to convert row range → item range ──
-      const originalRenderIfNeeded = ctx.renderIfNeeded;
-
+      // ── Override render functions to convert row range → item range ──
       const gridRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
 
@@ -166,7 +167,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           renderRange.end === lastRange.end
         ) {
           if (isCompressed) {
-            ctx.renderer.updatePositions(ctx.getCompressionContext());
+            gridRenderer!.updatePositions(ctx.getCompressionContext());
           }
           return;
         }
@@ -189,7 +190,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           : undefined;
 
         // Pass ITEM range to grid renderer (it positions by item index)
-        ctx.renderer.render(
+        gridRenderer!.render(
           items,
           itemRange,
           new Set(), // selection — overridden by selection plugin if present
@@ -201,39 +202,16 @@ export const withGrid = <T extends VListItem = VListItem>(
         emitter.emit("range:change", { range: renderRange });
       };
 
-      (ctx as any).renderIfNeeded = gridRenderIfNeeded;
-
-      // ── Override forceRender similarly ──
       const gridForceRender = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        const { renderRange, isCompressed } = ctx.state.viewportState;
-        const totalItems = ctx.dataManager.getTotal();
-        const itemRange = gridLayout!.getItemRange(
-          renderRange.start,
-          renderRange.end,
-          totalItems,
-        );
-
-        const items = ctx.dataManager.getItemsInRange(
-          itemRange.start,
-          itemRange.end,
-        ) as T[];
-
-        const compressionCtx = isCompressed
-          ? ctx.getCompressionContext()
-          : undefined;
-
-        ctx.renderer.render(
-          items,
-          itemRange,
-          new Set(),
-          -1,
-          compressionCtx,
-        );
+        // Reset last range to force re-render
+        ctx.state.lastRenderRange = { start: -1, end: -1 };
+        gridRenderIfNeeded();
       };
 
-      (ctx as any).forceRender = gridForceRender;
+      // Replace the core's render functions with our grid-aware versions
+      ctx.setRenderFns(gridRenderIfNeeded, gridForceRender);
 
       // ── Resize: update column widths ──
       ctx.resizeHandlers.push((width: number, _height: number): void => {
@@ -261,7 +239,8 @@ export const withGrid = <T extends VListItem = VListItem>(
           const rowIndex = Math.floor(index / config.columns);
           // Call the base scrollToIndex (which the builder core provides)
           // We need to call it directly on the scroll controller
-          const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
+          const { align, behavior, duration } =
+            resolveScrollArgs(alignOrOptions);
 
           const dataState = ctx.dataManager.getState();
           const totalRows = gridLayout!.getTotalRows(dataState.total);
@@ -342,5 +321,9 @@ const resolveScrollArgs = (
       duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
     };
   }
-  return { align: "start", behavior: "auto", duration: DEFAULT_SMOOTH_DURATION };
+  return {
+    align: "start",
+    behavior: "auto",
+    duration: DEFAULT_SMOOTH_DURATION,
+  };
 };

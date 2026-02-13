@@ -60,6 +60,7 @@ interface HeightCache {
   getTotalHeight(): number;
   getTotal(): number;
   rebuild(totalItems: number): void;
+  isVariable(): boolean;
 }
 
 const createHeightCache = (
@@ -80,6 +81,7 @@ const createHeightCache = (
       rebuild: (n) => {
         total = n;
       },
+      isVariable: () => false,
     };
   }
 
@@ -120,6 +122,7 @@ const createHeightCache = (
     getTotalHeight: () => (prefixSums[total] as number) ?? 0,
     getTotal: () => total,
     rebuild: (n) => build(n),
+    isVariable: () => true,
   };
 };
 
@@ -546,6 +549,7 @@ function materialize<T extends VListItem = VListItem>(
   let containerHeight = isWindowMode
     ? window.innerHeight
     : dom.viewport.clientHeight;
+  let containerWidth = dom.viewport.clientWidth;
 
   // ── State ───────────────────────────────────────────────────────
   let isDestroyed = false;
@@ -558,6 +562,24 @@ function materialize<T extends VListItem = VListItem>(
   const visibleRange: Range = { start: 0, end: 0 };
   const renderRange: Range = { start: 0, end: 0 };
   const lastRenderRange: Range = { start: -1, end: -1 };
+
+  // Shared state object for plugins (defined early so core render can reference it)
+  const sharedState: BuilderState = {
+    viewportState: {
+      scrollTop: 0,
+      containerHeight,
+      totalHeight: heightCache.getTotalHeight(),
+      actualHeight: heightCache.getTotalHeight(),
+      isCompressed: false,
+      compressionRatio: 1,
+      visibleRange: { start: 0, end: 0 },
+      renderRange: { start: 0, end: 0 },
+    },
+    lastRenderRange: { start: -1, end: -1 },
+    isInitialized: false,
+    isDestroyed: false,
+    cachedCompression: null,
+  };
 
   // Rendered item tracking
   const rendered = new Map<number, HTMLElement>();
@@ -578,8 +600,15 @@ function materialize<T extends VListItem = VListItem>(
 
   rebuildIdIndex();
 
+  // Forward-declare so closures above the full initialisation can reference it.
+  // Before assignment it is null, so every access must null-guard.
+  let dataManagerProxy: any = null;
+
   // Virtual total — plugins (grid/groups) can override this
-  let virtualTotalFn = (): number => items.length;
+  // Delegates to the data manager proxy so withData's total propagates correctly.
+  // Falls back to items.length before dataManagerProxy is initialised.
+  let virtualTotalFn = (): number =>
+    dataManagerProxy ? dataManagerProxy.getTotal() : items.length;
 
   // ── Plugin extension points ─────────────────────────────────────
   const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
@@ -615,8 +644,12 @@ function materialize<T extends VListItem = VListItem>(
   };
   let scrollIsCompressed = false;
 
+  // Pluggable render functions — grid/groups plugins replace these
+  let renderIfNeededFn: () => void;
+  let forceRenderFn: () => void;
+
   // Pluggable visible range function — compression plugin replaces this
-  let calcVisibleRangeFn = (
+  let getVisibleRange = (
     scrollTop: number,
     cHeight: number,
     hc: HeightCache,
@@ -627,7 +660,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   // Pluggable scrollToIndex position calculator — compression plugin replaces
-  let calcScrollToPosFn = (
+  let getScrollToPos = (
     index: number,
     hc: HeightCache,
     cHeight: number,
@@ -701,11 +734,11 @@ function materialize<T extends VListItem = VListItem>(
   let selectionSet: Set<string | number> = new Set();
   let focusedIndex = -1;
 
-  const renderIfNeeded = (): void => {
+  const coreRenderIfNeeded = (): void => {
     if (isDestroyed) return;
 
     const total = virtualTotalFn();
-    calcVisibleRangeFn(
+    getVisibleRange(
       lastScrollTop,
       containerHeight,
       heightCache,
@@ -739,7 +772,9 @@ function materialize<T extends VListItem = VListItem>(
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
-      const item = items[i];
+      const item = (
+        dataManagerProxy ? dataManagerProxy.getItem(i) : items[i]
+      ) as T | undefined;
       if (!item) continue;
 
       const existing = rendered.get(i);
@@ -796,16 +831,24 @@ function materialize<T extends VListItem = VListItem>(
     lastRenderRange.start = renderRange.start;
     lastRenderRange.end = renderRange.end;
 
+    // Sync shared state for plugins that use it
+    sharedState.lastRenderRange.start = renderRange.start;
+    sharedState.lastRenderRange.end = renderRange.end;
+
     emitter.emit("range:change", {
       range: { start: renderRange.start, end: renderRange.end },
     });
   };
 
-  const forceRender = (): void => {
+  const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
-    renderIfNeeded();
+    renderIfNeededFn();
   };
+
+  // Initialize replaceable render function references
+  renderIfNeededFn = coreRenderIfNeeded;
+  forceRenderFn = coreForceRender;
 
   // ── Scroll handling ─────────────────────────────────────────────
 
@@ -820,7 +863,7 @@ function materialize<T extends VListItem = VListItem>(
     }
 
     lastScrollTop = scrollTop;
-    renderIfNeeded();
+    renderIfNeededFn();
 
     emitter.emit("scroll", { scrollTop, direction });
 
@@ -884,15 +927,26 @@ function materialize<T extends VListItem = VListItem>(
       const newWidth = entry.contentRect.width;
       const newMainAxis = isHorizontal ? newWidth : newHeight;
 
+      // Always update dimensions (even before initialization)
+      containerWidth = newWidth;
+
       if (Math.abs(newMainAxis - containerHeight) > 1) {
         containerHeight = newMainAxis;
-        updateContentSize();
-        renderIfNeeded();
-        emitter.emit("resize", { height: newHeight, width: newWidth });
+        sharedState.viewportState.containerHeight = newMainAxis;
+
+        // Only render if already initialized (plugins have run)
+        if (isInitialized) {
+          updateContentSize();
+          renderIfNeededFn();
+          emitter.emit("resize", { height: newHeight, width: newWidth });
+        }
       }
 
-      for (let i = 0; i < resizeHandlers.length; i++) {
-        resizeHandlers[i]!(newWidth, newHeight);
+      // Only call resize handlers if initialized
+      if (isInitialized) {
+        for (let i = 0; i < resizeHandlers.length; i++) {
+          resizeHandlers[i]!(newWidth, newHeight);
+        }
       }
     }
   });
@@ -908,7 +962,7 @@ function materialize<T extends VListItem = VListItem>(
       if (Math.abs(newHeight - containerHeight) > 1) {
         containerHeight = newHeight;
         updateContentSize();
-        renderIfNeeded();
+        renderIfNeededFn();
         emitter.emit("resize", {
           height: newHeight,
           width: window.innerWidth,
@@ -951,9 +1005,40 @@ function materialize<T extends VListItem = VListItem>(
     },
 
     // Mutable component slots (plugins can replace)
+    // Expose a renderer proxy so plugins (e.g. withSelection) can call
+    // ctx.renderer.render() and ctx.renderer.updateItemClasses() without
+    // needing access to the inlined rendering internals.
     get renderer() {
-      return null as any; // Renderer is inlined — plugins that need
-      // to replace it (grid) can override renderIfNeeded/forceRender
+      return {
+        render: (
+          _items: T[],
+          _range: Range,
+          selected: Set<string | number>,
+          focusedIdx: number,
+          _compressionCtx?: any,
+        ): void => {
+          // Inject selection state into the inlined renderer's closure
+          selectionSet = selected;
+          focusedIndex = focusedIdx;
+          forceRenderFn();
+        },
+        updateItemClasses: (
+          index: number,
+          isSelected: boolean,
+          isFocused: boolean,
+        ): void => {
+          const el = rendered.get(index);
+          if (!el) return;
+          el.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+          el.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+          el.ariaSelected = isSelected ? "true" : "false";
+        },
+        updatePositions: () => {},
+        updateItem: () => {},
+        getElement: (index: number) => rendered.get(index) ?? null,
+        clear: () => {},
+        destroy: () => {},
+      } as any;
     },
     set renderer(_r: any) {
       // no-op — grid plugin overrides via methods below
@@ -973,22 +1058,12 @@ function materialize<T extends VListItem = VListItem>(
       scrollControllerProxy = sc;
     },
 
-    state: {
-      viewportState: {
-        scrollTop: 0,
-        containerHeight,
-        totalHeight: heightCache.getTotalHeight(),
-        actualHeight: heightCache.getTotalHeight(),
-        isCompressed: false,
-        compressionRatio: 1,
-        visibleRange: { start: 0, end: 0 },
-        renderRange: { start: 0, end: 0 },
-      },
-      lastRenderRange: { start: 0, end: 0 },
-      isInitialized: false,
-      isDestroyed: false,
-      cachedCompression: null,
-    } as BuilderState,
+    state: sharedState,
+
+    /** Get current container width (for grid plugin) */
+    getContainerWidth(): number {
+      return containerWidth;
+    },
 
     afterScroll,
     clickHandlers,
@@ -1011,11 +1086,23 @@ function materialize<T extends VListItem = VListItem>(
     getItemsForRange(range: Range): T[] {
       const result: T[] = [];
       for (let i = range.start; i <= range.end; i++) {
-        if (items[i]) result.push(items[i]!);
+        const item = (
+          dataManagerProxy ? dataManagerProxy.getItem(i) : items[i]
+        ) as T | undefined;
+        if (item) result.push(item);
       }
       return result;
     },
     getAllLoadedItems(): T[] {
+      if (dataManagerProxy) {
+        const total = dataManagerProxy.getTotal();
+        const result: T[] = [];
+        for (let i = 0; i < total; i++) {
+          const item = dataManagerProxy.getItem(i) as T | undefined;
+          if (item) result.push(item);
+        }
+        return result;
+      }
       return [...items];
     },
     getVirtualTotal(): number {
@@ -1038,10 +1125,20 @@ function materialize<T extends VListItem = VListItem>(
       } as any;
     },
     renderIfNeeded(): void {
-      renderIfNeeded();
+      renderIfNeededFn();
     },
     forceRender(): void {
-      forceRender();
+      forceRenderFn();
+    },
+    getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void } {
+      return {
+        renderIfNeeded: renderIfNeededFn,
+        forceRender: forceRenderFn,
+      };
+    },
+    setRenderFns(renderFn: () => void, forceFn: () => void): void {
+      renderIfNeededFn = renderFn;
+      forceRenderFn = forceFn;
     },
 
     setVirtualTotalFn(fn: () => number): void {
@@ -1064,13 +1161,56 @@ function materialize<T extends VListItem = VListItem>(
     updateCompressionMode(): void {
       // No-op by default — withCompression plugin replaces this
     },
+
+    setVisibleRangeFn(
+      fn: (
+        scrollTop: number,
+        cHeight: number,
+        hc: HeightCache,
+        total: number,
+        out: Range,
+      ) => void,
+    ): void {
+      getVisibleRange = fn;
+    },
+
+    setScrollToPosFn(
+      fn: (
+        index: number,
+        hc: HeightCache,
+        cHeight: number,
+        total: number,
+        align: "start" | "center" | "end",
+      ) => number,
+    ): void {
+      getScrollToPos = fn;
+    },
+
+    setPositionElementFn(
+      fn: (element: HTMLElement, index: number) => void,
+    ): void {
+      positionElementFn = fn;
+    },
+
+    setScrollFns(getTop: () => number, setTop: (pos: number) => void): void {
+      scrollGetTop = getTop;
+      // Wrap the provided setTop so that after storing the position
+      // the builder's scroll pipeline (render + events) fires immediately.
+      // In compressed mode the native scroll event may not fire (or may
+      // fire with a clamped value), so we must trigger explicitly.
+      scrollSetTop = (pos: number): void => {
+        setTop(pos);
+        onScrollFrame();
+      };
+    },
   };
 
   // ── Data manager proxy (plugins can replace) ────────────────────
   // The default is a thin wrapper around the items array.
   // withData plugin replaces this with the full adapter-backed manager.
+  // (variable is forward-declared above virtualTotalFn to avoid TDZ)
 
-  let dataManagerProxy: any = {
+  dataManagerProxy = {
     getState: () => ({
       total: items.length,
       cached: items.length,
@@ -1120,7 +1260,7 @@ function materialize<T extends VListItem = VListItem>(
       if (isInitialized) {
         heightCache.rebuild(virtualTotalFn());
         updateContentSize();
-        forceRender();
+        forceRenderFn();
       }
     },
     updateItem: (id: string | number, updates: Partial<T>) => {
@@ -1149,7 +1289,7 @@ function materialize<T extends VListItem = VListItem>(
       if (isInitialized) {
         heightCache.rebuild(virtualTotalFn());
         updateContentSize();
-        forceRender();
+        forceRenderFn();
       }
       return true;
     },
@@ -1169,7 +1309,7 @@ function materialize<T extends VListItem = VListItem>(
       if (isInitialized) {
         heightCache.rebuild(0);
         updateContentSize();
-        forceRender();
+        forceRenderFn();
       }
     },
   };
@@ -1230,11 +1370,11 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Initial render ──────────────────────────────────────────────
   updateContentSize();
-  renderIfNeeded();
+  renderIfNeededFn();
 
   // Reverse mode: scroll to bottom
   if (isReverse && items.length > 0) {
-    const pos = calcScrollToPosFn(
+    const pos = getScrollToPos(
       items.length - 1,
       heightCache,
       containerHeight,
@@ -1243,7 +1383,7 @@ function materialize<T extends VListItem = VListItem>(
     );
     scrollSetTop(pos);
     lastScrollTop = pos;
-    renderIfNeeded();
+    renderIfNeededFn();
   }
 
   // ── Base data methods ───────────────────────────────────────────
@@ -1258,7 +1398,7 @@ function materialize<T extends VListItem = VListItem>(
         const currentTotal = items.length;
         ctx.dataManager.setItems(newItems, currentTotal);
         if (wasAtBottom && items.length > 0) {
-          const pos = calcScrollToPosFn(
+          const pos = getScrollToPos(
             items.length - 1,
             heightCache,
             containerHeight,
@@ -1267,7 +1407,7 @@ function materialize<T extends VListItem = VListItem>(
           );
           scrollSetTop(pos);
           lastScrollTop = pos;
-          renderIfNeeded();
+          renderIfNeededFn();
         }
       }
     : (newItems: T[]): void => {
@@ -1351,7 +1491,7 @@ function materialize<T extends VListItem = VListItem>(
       idx = ((idx % total) + total) % total;
     }
 
-    const position = calcScrollToPosFn(
+    const position = getScrollToPos(
       idx,
       heightCache,
       containerHeight,
