@@ -93,6 +93,11 @@ export const withCompression = <
           compressedModeActive = true;
           ctx.scrollController.enableCompression(compression);
 
+          // Set content size to virtual height (not actual height)
+          // This is critical - the content div must match the virtual height
+          // for scrolling and positioning to work correctly
+          ctx.updateContentSize(compression.virtualHeight);
+
           // Replace scroll functions with virtual scroll position.
           // In compressed mode the total height exceeds the browser's DOM
           // scrollTop limit, so we store the position in a variable and
@@ -184,9 +189,15 @@ export const withCompression = <
           // Leaving compressed mode
           compressedModeActive = false;
           ctx.scrollController.disableCompression();
+
+          // Restore content size to actual height
+          ctx.updateContentSize(compression.actualHeight);
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
           ctx.scrollController.updateConfig({ compression });
+
+          // Update content size to new virtual height
+          ctx.updateContentSize(compression.virtualHeight);
         }
 
         // Update scrollbar bounds if we have a fallback scrollbar

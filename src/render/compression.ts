@@ -227,6 +227,14 @@ export const calculateCompressedItemPosition = (
 
   // Near-bottom interpolation: ensures we can smoothly reach the last items
   if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
+    // Special case: at exact max scroll, position items from bottom up
+    if (scrollTop >= maxScroll - 1) {
+      // Calculate position from the bottom of the viewport
+      const totalHeightFromBottom =
+        heightCache.getTotalHeight() - heightCache.getOffset(index);
+      return containerHeight - totalHeightFromBottom;
+    }
+
     const itemsAtBottom = countItemsFittingFromBottom(
       heightCache,
       containerHeight,
@@ -294,6 +302,12 @@ export const calculateCompressedScrollToIndex = (
   let targetPosition: number;
 
   if (compression.isCompressed) {
+    // Special case: last item with "end" alignment should go to max scroll
+    // to avoid gap at bottom due to compression ratio precision
+    if (align === "end" && index === totalItems - 1) {
+      return Math.max(0, compression.virtualHeight - containerHeight);
+    }
+
     // Map index to compressed scroll position
     const ratio = index / totalItems;
     targetPosition = ratio * compression.virtualHeight;

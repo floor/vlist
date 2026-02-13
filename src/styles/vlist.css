@@ -157,6 +157,7 @@
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
     contain: content;
+    box-sizing: border-box;
 }
 
 /* Suppress transitions during active scroll for better performance */
