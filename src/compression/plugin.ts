@@ -207,6 +207,15 @@ export const withCompression = <
       // Replace the context's updateCompressionMode with our enhanced version
       (ctx as any).updateCompressionMode = enhancedUpdateCompressionMode;
 
+      // Replace getCachedCompression to return actual cached state
+      const originalGetCachedCompression = ctx.getCachedCompression.bind(ctx);
+      ctx.getCachedCompression = () => {
+        if (ctx.state.cachedCompression) {
+          return ctx.state.cachedCompression.state;
+        }
+        return originalGetCachedCompression();
+      };
+
       // ── Replace visible-range and scroll-to-index with compressed versions ──
       // These handle both compressed and non-compressed cases, so they're safe
       // to install unconditionally.

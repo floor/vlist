@@ -150,6 +150,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   clickHandlers: Array<(event: MouseEvent) => void>;
   keydownHandlers: Array<(event: KeyboardEvent) => void>;
   resizeHandlers: Array<(width: number, height: number) => void>;
+  contentSizeHandlers: Array<() => void>;
   destroyHandlers: Array<() => void>;
 
   // ── Public method registration ────────────────────────────────

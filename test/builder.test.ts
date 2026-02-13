@@ -1137,6 +1137,93 @@ describe("withCompression plugin", () => {
     const indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
   });
+
+  it("should update viewport state during scroll with compression", () => {
+    // Regression test for viewport state sync issue with compression + scrollbar
+    // This was the bug that caused items to not render properly on large lists
+    const items = createTestItems(500_000);
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withCompression())
+      .use(withScrollbar({ autoHide: true }))
+      .build();
+
+    // Track range changes after scroll
+    let rangeChanged = false;
+    list.on("range:change", () => {
+      rangeChanged = true;
+    });
+
+    // Initial render at top
+    const initialIndices = getRenderedIndices(list);
+    expect(initialIndices.length).toBeGreaterThan(0);
+    expect(initialIndices).toContain(0);
+
+    // Scroll to middle - this should trigger range updates
+    const targetIndex = 250_000;
+    list.scrollToIndex(targetIndex, "center");
+
+    // Range change event should have fired
+    expect(rangeChanged).toBe(true);
+
+    // Items should render near the target (verifies viewport state was updated)
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+
+    // At least some items should be near the target
+    const hasNearbyItems = indices.some(
+      (idx) => Math.abs(idx - targetIndex) < 100,
+    );
+    expect(hasNearbyItems).toBe(true);
+
+    // Should not still be rendering items from the top
+    const hasTopItems = indices.some((idx) => idx < 100);
+    expect(hasTopItems).toBe(false);
+  });
+
+  it("should update scrollbar bounds when items change", () => {
+    // Regression test for scrollbar not updating when switching item counts
+    // (e.g., from 100K to 500K in the example)
+    const items100k = createTestItems(100_000);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: items100k,
+    })
+      .use(withCompression())
+      .use(withScrollbar({ autoHide: true }))
+      .build();
+
+    // Initial render
+    let indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(0);
+
+    // Change to 500K items (triggers compression)
+    const items500k = createTestItems(500_000);
+    list.setItems(items500k);
+
+    expect(list.total).toBe(500_000);
+
+    // Scroll to middle - this should work if scrollbar bounds were updated
+    list.scrollToIndex(250_000, "center");
+
+    // Items should render near the middle (not stuck at top or empty)
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    const hasMiddleItems = indices.some((idx) => Math.abs(idx - 250_000) < 100);
+    expect(hasMiddleItems).toBe(true);
+
+    // Scroll to end - should render items at the end
+    list.scrollToIndex(499_999, "end");
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(499_999);
+  });
 });
 
 // =============================================================================
