@@ -1359,6 +1359,13 @@ describe("plugin combinations", () => {
   });
 
   it("should work with compression + scrollbar", () => {
+    // This test must verify:
+    // 1. getCachedCompression() returns correct compressed state
+    // 2. Scrollbar gets correct compressed bounds (not uncompressed)
+    // 3. Viewport state is synced during scroll
+    // 4. Scrollbar updates when item count changes
+    // 5. Scrolling to positions works correctly
+
     const items = createTestItems(500_000);
     list = vlist<TestItem>({
       container,
@@ -1371,12 +1378,53 @@ describe("plugin combinations", () => {
 
     expect(list.total).toBe(500_000);
 
-    // Scrollbar should exist (either from plugin or compression fallback)
+    // Scrollbar should exist (from withScrollbar plugin)
     const scrollbar = list.element.querySelector(".vlist-scrollbar");
     expect(scrollbar).not.toBeNull();
 
-    const indices = getRenderedIndices(list);
+    // Initial render at top
+    let indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(0);
+
+    // Scroll to middle - this tests:
+    // - Viewport state is synced (needed for compression calculations)
+    // - Scrollbar bounds are correct (thumb position calculated from bounds)
+    list.scrollToIndex(250_000, "center");
+
+    // Should render items near middle (not stuck at top)
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    const hasMiddleItems = indices.some((idx) => Math.abs(idx - 250_000) < 100);
+    expect(hasMiddleItems).toBe(true);
+    const hasTopItems = indices.some((idx) => idx < 100);
+    expect(hasTopItems).toBe(false);
+
+    // Scroll to end
+    list.scrollToIndex(499_999, "end");
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(499_999);
+
+    // Change item count to test scrollbar bounds update
+    // Switch to 100K items (below compression threshold)
+    const items100k = createTestItems(100_000);
+    list.setItems(items100k);
+    expect(list.total).toBe(100_000);
+
+    // Scroll to top after setItems (setItems doesn't reset scroll position)
+    list.scrollToIndex(0, "start");
+
+    // Should render at top
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(0);
+
+    // Scroll to end with new item count - tests scrollbar bounds were updated
+    list.scrollToIndex(99_999, "end");
+    indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(99_999);
   });
 
   it("should work with compression + selection", () => {
