@@ -109,21 +109,49 @@ export const withGrid = <T extends VListItem = VListItem>(
         return gridLayout!.getTotalRows(rawTotal);
       });
 
-      // ── Update height config to include gap ──
+      // ── Update height config to include gap and inject grid context ──
       // In grid mode, each row's height in the height cache = itemHeight + gap
       // so that rows are spaced apart vertically. The grid renderer subtracts
       // the gap when sizing the DOM element.
       const itemConfig = rawConfig.item;
       const baseHeight = (
         resolvedConfig.horizontal ? itemConfig.width : itemConfig.height
-      ) as number | ((index: number) => number);
+      ) as
+        | number
+        | ((
+            index: number,
+            context?: import("../types").GridHeightContext,
+          ) => number);
 
-      if (gap > 0) {
-        if (typeof baseHeight === "number") {
-          ctx.setHeightConfig(baseHeight + gap);
-        } else {
-          ctx.setHeightConfig((index: number) => baseHeight(index) + gap);
-        }
+      // Store mutable grid state for dynamic height calculation
+      const gridState = {
+        containerWidth: ctx.getContainerWidth(),
+        columns: gridLayout.columns,
+        gap: gridLayout.gap,
+      };
+
+      if (typeof baseHeight === "function") {
+        // Height function - inject grid context
+        ctx.setHeightConfig((index: number) => {
+          // Calculate grid context
+          const innerWidth = gridState.containerWidth - 2; // account for borders
+          const totalGaps = (gridState.columns - 1) * gridState.gap;
+          const columnWidth = (innerWidth - totalGaps) / gridState.columns;
+
+          const context: import("../types").GridHeightContext = {
+            containerWidth: gridState.containerWidth,
+            columns: gridState.columns,
+            gap: gridState.gap,
+            columnWidth,
+          };
+
+          // Call user's function with context
+          const height = baseHeight(index, context);
+          return height + gridState.gap; // Add gap for row spacing
+        });
+      } else if (gap > 0) {
+        // Fixed height - just add gap
+        ctx.setHeightConfig(baseHeight + gap);
       }
 
       // Rebuild height cache with row count
@@ -154,6 +182,57 @@ export const withGrid = <T extends VListItem = VListItem>(
       ctx.replaceRenderer(
         gridRenderer as unknown as import("../render").Renderer<T>,
       );
+
+      // ── Expose update method for grid config changes ──
+      ctx.methods.set("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
+        if (newConfig.columns !== undefined) {
+          if (!Number.isInteger(newConfig.columns) || newConfig.columns < 1) {
+            throw new Error(
+              "[vlist/builder] updateGrid: columns must be a positive integer >= 1",
+            );
+          }
+          gridConfig.columns = newConfig.columns;
+        }
+
+        if (newConfig.gap !== undefined) {
+          if (newConfig.gap < 0) {
+            throw new Error(
+              "[vlist/builder] updateGrid: gap must be non-negative",
+            );
+          }
+          gridConfig.gap = newConfig.gap;
+        }
+
+        // Update grid layout
+        if (gridLayout) {
+          gridLayout.update(gridConfig);
+        }
+
+        // Update grid state for height function
+        const containerWidth = ctx.getContainerWidth();
+        gridState.containerWidth = containerWidth;
+        gridState.columns = gridConfig.columns;
+        gridState.gap = gridConfig.gap;
+
+        // Update grid renderer
+        if (gridRenderer) {
+          gridRenderer.updateContainerWidth(containerWidth);
+        }
+
+        // Recalculate total rows
+        const totalRows = Math.ceil(
+          ctx.dataManager.getTotal() / gridConfig.columns,
+        );
+
+        // Rebuild height cache with new row count
+        ctx.rebuildHeightCache();
+
+        // Clear and re-render
+        if (gridRenderer) {
+          gridRenderer.clear();
+        }
+        ctx.forceRender();
+      });
 
       // ── Override render functions to convert row range → item range ──
       const gridRenderIfNeeded = (): void => {

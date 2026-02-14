@@ -25,8 +25,8 @@ import type { GridConfig, GridLayout, GridPosition, ItemRange } from "./types";
  * @returns GridLayout with O(1) mapping functions
  */
 export const createGridLayout = (config: GridConfig): GridLayout => {
-  const columns = Math.max(1, Math.floor(config.columns));
-  const gap = config.gap ?? 0;
+  let columns = Math.max(1, Math.floor(config.columns));
+  let gap = config.gap ?? 0;
 
   // Reusable position object to avoid allocation on hot paths
   const reusablePosition: GridPosition = { row: 0, col: 0 };
@@ -119,9 +119,27 @@ export const createGridLayout = (config: GridConfig): GridLayout => {
     return col * (colWidth + gap);
   };
 
+  /**
+   * Update grid configuration without recreating the layout.
+   * This is more efficient than destroying and recreating.
+   */
+  const update = (newConfig: Partial<GridConfig>): void => {
+    if (newConfig.columns !== undefined) {
+      columns = Math.max(1, Math.floor(newConfig.columns));
+    }
+    if (newConfig.gap !== undefined) {
+      gap = newConfig.gap;
+    }
+  };
+
   return {
-    columns,
-    gap,
+    get columns() {
+      return columns;
+    },
+    get gap() {
+      return gap;
+    },
+    update,
     getTotalRows,
     getPosition,
     getRow,

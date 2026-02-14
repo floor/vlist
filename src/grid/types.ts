@@ -67,6 +67,9 @@ export interface GridLayout {
   /** Gap between items in pixels */
   readonly gap: number;
 
+  /** Update grid configuration without recreating the layout */
+  update: (config: Partial<GridConfig>) => void;
+
   /** Get total number of rows for a given item count */
   getTotalRows: (totalItems: number) => number;
 
@@ -83,7 +86,11 @@ export interface GridLayout {
    * Get the flat item range for a range of rows.
    * The last row may be partially filled (end is clamped to totalItems - 1).
    */
-  getItemRange: (rowStart: number, rowEnd: number, totalItems: number) => ItemRange;
+  getItemRange: (
+    rowStart: number,
+    rowEnd: number,
+    totalItems: number,
+  ) => ItemRange;
 
   /**
    * Get the flat item index from a row and column.
