@@ -28,17 +28,42 @@ export interface VListItem {
 // =============================================================================
 
 /** Item-specific configuration */
+/** Context provided to height function in grid mode */
+export interface GridHeightContext {
+  /** Current container width */
+  containerWidth: number;
+  /** Number of columns */
+  columns: number;
+  /** Gap between items in pixels */
+  gap: number;
+  /** Calculated column width */
+  columnWidth: number;
+}
+
 export interface ItemConfig<T extends VListItem = VListItem> {
   /**
    * Item height in pixels (required for vertical scrolling, cross-axis size for horizontal)
    *
    * - `number` — Fixed height for all items (fast path, zero overhead)
    * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
+   * - `(index: number, context?: GridHeightContext) => number` — Dynamic height based on grid state
+   *
+   * In grid mode, the height function receives grid context as a second parameter,
+   * allowing you to calculate height based on column width to maintain aspect ratios:
+   *
+   * ```ts
+   * height: (index, context) => {
+   *   if (context) {
+   *     return context.columnWidth * 0.75; // 4:3 aspect ratio
+   *   }
+   *   return 200; // fallback for non-grid
+   * }
+   * ```
    *
    * Required when `direction` is `'vertical'` (default).
    * Optional when `direction` is `'horizontal'` (used as cross-axis size).
    */
-  height?: number | ((index: number) => number);
+  height?: number | ((index: number, context?: GridHeightContext) => number);
 
   /**
    * Item width in pixels (required for horizontal scrolling)
@@ -186,6 +211,42 @@ export interface VListConfig<T extends VListItem = VListItem> {
    * ```
    */
   reverse?: boolean;
+}
+
+// =============================================================================
+// Update Configuration
+// =============================================================================
+
+/**
+ * Configuration options that can be updated dynamically without recreating the instance.
+ * Used by the update() method.
+ */
+export interface VListUpdateConfig {
+  /**
+   * Grid configuration (columns and gap).
+   * Only applicable when layout is 'grid'.
+   */
+  grid?: {
+    columns?: number;
+    gap?: number;
+  };
+
+  /**
+   * Item height (for variable height updates).
+   * Can be a number or a function.
+   */
+  itemHeight?: number | ((index: number) => number);
+
+  /**
+   * Selection mode.
+   * Changes selection behavior without recreating the list.
+   */
+  selectionMode?: SelectionMode;
+
+  /**
+   * Overscan value (number of items to render outside viewport).
+   */
+  overscan?: number;
 }
 
 // =============================================================================
@@ -521,6 +582,10 @@ export interface VList<T extends VListItem = VListItem> {
 
   /** Reload data (clears and re-fetches if using adapter) */
   reload: () => Promise<void>;
+
+  // Configuration methods
+  /** Update configuration without recreating the instance */
+  update: (config: Partial<VListUpdateConfig>) => void;
 
   // Scroll methods
   /** Scroll to specific index */
