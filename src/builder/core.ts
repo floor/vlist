@@ -622,19 +622,25 @@ function materialize<T extends VListItem = VListItem>(
   // Pluggable scroll functions — compression plugin replaces these
   let scrollGetTop = (): number => {
     if (isWindowMode) {
-      return Math.max(
-        0,
-        (scrollElement as Window).scrollY +
-          dom.viewport.getBoundingClientRect().top * -1,
-      );
+      const rect = dom.viewport.getBoundingClientRect();
+      return Math.max(0, isHorizontal ? -rect.left : -rect.top);
     }
-    return dom.viewport.scrollTop;
+    return isHorizontal ? dom.viewport.scrollLeft : dom.viewport.scrollTop;
   };
   let scrollSetTop = (pos: number): void => {
     if (isWindowMode) {
       const rect = dom.viewport.getBoundingClientRect();
-      const pageOffset = rect.top + window.scrollY;
-      (scrollElement as Window).scrollTo(0, pageOffset + pos);
+      if (isHorizontal) {
+        const listDocumentLeft = rect.left + window.scrollX;
+        window.scrollTo({ left: listDocumentLeft + pos });
+      } else {
+        const listDocumentTop = rect.top + window.scrollY;
+        window.scrollTo({ top: listDocumentTop + pos });
+      }
+      return;
+    }
+    if (isHorizontal) {
+      dom.viewport.scrollLeft = pos;
     } else {
       dom.viewport.scrollTop = pos;
     }
@@ -895,6 +901,16 @@ function materialize<T extends VListItem = VListItem>(
   const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
   scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
 
+  // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
+  if (isHorizontal && wheelEnabled && !isWindowMode) {
+    wheelHandler = (event: WheelEvent): void => {
+      if (event.deltaX) return; // native horizontal scroll handles it
+      event.preventDefault();
+      dom.viewport.scrollLeft += event.deltaY;
+    };
+    dom.viewport.addEventListener("wheel", wheelHandler);
+  }
+
   // Hide native scrollbar by default (plugins may override)
   if (!isWindowMode) {
     dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
@@ -961,7 +977,11 @@ function materialize<T extends VListItem = VListItem>(
     }
   });
 
-  resizeObserver.observe(dom.viewport);
+  // ResizeObserver should not observe viewport in window mode
+  // (viewport size reflects content, not visible area)
+  if (!isWindowMode) {
+    resizeObserver.observe(dom.viewport);
+  }
 
   // Window resize handler
   let handleWindowResize: (() => void) | null = null;
@@ -1581,6 +1601,9 @@ function materialize<T extends VListItem = VListItem>(
 
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
+    const scrollTarget = isWindowMode
+      ? (scrollElement as Window)
+      : dom.viewport;
     scrollTarget.removeEventListener("scroll", onScrollFrame);
     liveRegion.remove();
     resizeObserver.disconnect();
