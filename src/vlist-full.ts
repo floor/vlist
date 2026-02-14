@@ -1,12 +1,22 @@
 /**
- * vlist - Main Entry Point
- * Creates a virtual list instance with all features
+ * vlist - Legacy Monolithic Implementation
  *
- * This is the composition root that:
+ * This is the original createVList implementation that bundles all features together.
+ * It provides a simple API but results in larger bundles (~57 KB gzip).
+ *
+ * **Deprecated:** As of v0.5.0, the default entry point uses the builder pattern internally
+ * for 53% smaller bundles. This file is kept for backwards compatibility and internal use.
+ *
+ * For production use, prefer:
+ * - `import { createVList } from 'vlist'` - Builder-based default (~27 KB gzip)
+ * - `import { vlist } from 'vlist/builder'` - Manual builder pattern (smallest)
+ *
+ * This implementation:
  * 1. Validates configuration
  * 2. Creates all domain components
  * 3. Wires them together via context
  * 4. Attaches handlers and returns public API
+ * 5. Includes all features bundled (selection, scrollbar, compression, etc.)
  */
 
 import type {
