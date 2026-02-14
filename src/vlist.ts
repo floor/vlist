@@ -97,7 +97,7 @@ export const createVList = <T extends VListItem = VListItem>(
     builder = builder.use(
       withData({
         adapter: config.adapter,
-        loading: config.loading,
+        ...(config.loading && { loading: config.loading }),
       }),
     );
   }

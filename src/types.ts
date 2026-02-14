@@ -527,6 +527,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Scroll position changed */
   scroll: { scrollTop: number; direction: "up" | "down" };
 
+  /** Scroll velocity changed */
+  "velocity:change": { velocity: number; reliable: boolean };
+
   /** Visible range changed */
   "range:change": { range: Range };
 
