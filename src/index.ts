@@ -9,9 +9,6 @@
 // Main factory (builder-based, default)
 export { createVList } from "./vlist";
 
-// Legacy monolithic API (for backwards compatibility)
-export { createVList as createVListFull } from "./vlist-full";
-
 // Types
 export type {
   // Core types
