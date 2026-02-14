@@ -26,63 +26,6 @@ import type { VListConfig, VListItem, VList } from "./types";
  * includes plugins based on the configuration provided, maintaining full backwards
  * compatibility with the monolithic API.
  *
- * @example Basic list
- * ```ts
- * import { createVList } from 'vlist';
- *
- * const list = createVList({
- *   container: '#app',
- *   item: { height: 48, template: renderItem },
- *   items: data,
- * });
- * ```
- *
- * @example Grid layout with dynamic aspect ratio
- * ```ts
- * const gallery = createVList({
- *   container: '#gallery',
- *   layout: 'grid',
- *   grid: { columns: 4, gap: 8 },
- *   item: {
- *     height: (index, context) => context.columnWidth * 0.75,
- *     template: renderPhoto,
- *   },
- *   items: photos,
- * });
- *
- * // Update grid configuration
- * gallery.updateGrid({ columns: 2 });
- * ```
- *
- * @example Grouped list with sticky headers
- * ```ts
- * const list = createVList({
- *   container: '#list',
- *   item: { height: 48, template: renderItem },
- *   groups: {
- *     getGroupForIndex: (index) => items[index].category,
- *     headerHeight: 32,
- *     headerTemplate: (group) => `<h3>${group}</h3>`,
- *   },
- *   items: data,
- * });
- * ```
- *
- * @example Infinite scroll with adapter
- * ```ts
- * const list = createVList({
- *   container: '#list',
- *   item: { height: 48, template: renderItem },
- *   adapter: {
- *     read: async ({ offset, limit }) => {
- *       const response = await fetch(`/api/items?offset=${offset}&limit=${limit}`);
- *       const data = await response.json();
- *       return { items: data.items, total: data.total };
- *     },
- *   },
- * });
- * ```
- *
  * @param config - Virtual list configuration
  * @returns Virtual list instance with full API
  */
@@ -97,7 +40,7 @@ export const createVList = <T extends VListItem = VListItem>(
     builder = builder.use(
       withData({
         adapter: config.adapter,
-        loading: config.loading,
+        ...(config.loading && { loading: config.loading }),
       }),
     );
   }
@@ -105,33 +48,50 @@ export const createVList = <T extends VListItem = VListItem>(
   // Auto-apply groups plugin if groups config provided
   // Note: Groups and grid are mutually exclusive
   if (config.groups) {
-    builder = builder.use(
-      withGroups({
-        getGroupForIndex: config.groups.getGroupForIndex,
-        headerHeight: config.groups.headerHeight,
-        headerTemplate: config.groups.headerTemplate,
-        stickyHeaders: config.groups.stickyHeaders ?? true,
-      }),
-    );
+    const groupsConfig: {
+      getGroupForIndex: (index: number) => string;
+      headerHeight: number;
+      headerTemplate: (
+        group: string,
+        groupIndex: number,
+      ) => string | HTMLElement;
+      sticky?: boolean;
+    } = {
+      getGroupForIndex: config.groups.getGroupForIndex,
+      headerHeight:
+        typeof config.groups.headerHeight === "function"
+          ? config.groups.headerHeight("", 0) // Call with dummy values to get height
+          : config.groups.headerHeight,
+      headerTemplate: config.groups.headerTemplate,
+    };
+    if (config.groups.sticky !== undefined) {
+      groupsConfig.sticky = config.groups.sticky;
+    }
+    builder = builder.use(withGroups(groupsConfig));
   }
   // Auto-apply grid plugin if layout is 'grid'
   else if (config.layout === "grid" && config.grid) {
-    builder = builder.use(
-      withGrid({
-        columns: config.grid.columns,
-        gap: config.grid.gap,
-      }),
-    );
+    const gridConfig: { columns: number; gap?: number } = {
+      columns: config.grid.columns,
+    };
+    if (config.grid.gap !== undefined) {
+      gridConfig.gap = config.grid.gap;
+    }
+    builder = builder.use(withGrid(gridConfig));
   }
 
   // Auto-apply selection plugin if selection config provided
   if (config.selection && config.selection.mode !== "none") {
-    builder = builder.use(
-      withSelection({
-        mode: config.selection.mode || "single",
-        initial: config.selection.initial,
-      }),
-    );
+    const selectionConfig: {
+      mode: "single" | "multiple";
+      initial?: Array<string | number>;
+    } = {
+      mode: config.selection.mode || "single",
+    };
+    if (config.selection.initial !== undefined) {
+      selectionConfig.initial = config.selection.initial;
+    }
+    builder = builder.use(withSelection(selectionConfig));
   }
 
   // Auto-apply compression plugin (always beneficial for large lists)
