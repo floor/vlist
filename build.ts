@@ -9,45 +9,43 @@ async function build() {
   const totalStart = performance.now();
   console.log("Building vlist...\n");
 
-  // Build main bundle (full library)
-  const bundleStart = performance.now();
-  const result = await Bun.build({
-    entrypoints: ["./src/index.ts"],
-    outdir: "./dist",
-    format: "esm",
-    target: "browser",
-    minify: !isDev,
-    sourcemap: isDev ? "inline" : "none",
-  });
-
-  if (!result.success) {
-    console.error("\nBuild failed:\n");
-    for (const log of result.logs) {
-      console.error(log);
-    }
-    process.exit(1);
-  }
-  const bundleTime = performance.now() - bundleStart;
-  const jsFile = Bun.file("./dist/index.js");
-  const jsSize = (jsFile.size / 1024).toFixed(1);
-  console.log(
-    `  JS          ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${jsSize} KB)`,
-  );
-
   // Build sub-module bundles for tree-shaking
   const subStart = performance.now();
 
-  const subModules = [
-    { entry: "./src/core.ts", out: "core" },
-    { entry: "./src/builder/index.ts", out: "builder" },
-    { entry: "./src/plugins/data/index.ts", out: "data" },
-    { entry: "./src/plugins/compression/index.ts", out: "compression" },
-    { entry: "./src/plugins/selection/index.ts", out: "selection" },
-    { entry: "./src/plugins/scroll/index.ts", out: "scroll" },
-    { entry: "./src/plugins/groups/index.ts", out: "groups" },
-    { entry: "./src/plugins/grid/index.ts", out: "grid" },
-    { entry: "./src/plugins/snapshots/index.ts", out: "snapshots" },
-    { entry: "./src/plugins/window/index.ts", out: "window" },
+  const coreModules = [{ entry: "./src/core.ts", out: "core", folder: true }];
+
+  const builderModules = [
+    { entry: "./src/builder/index.ts", out: "builder", folder: true },
+  ];
+
+  const pluginModules = [
+    { entry: "./src/plugins/data/index.ts", out: "data", folder: true },
+    {
+      entry: "./src/plugins/compression/index.ts",
+      out: "compression",
+      folder: true,
+    },
+    {
+      entry: "./src/plugins/selection/index.ts",
+      out: "selection",
+      folder: true,
+    },
+    { entry: "./src/plugins/scroll/index.ts", out: "scroll", folder: true },
+    { entry: "./src/plugins/groups/index.ts", out: "groups", folder: true },
+    { entry: "./src/plugins/grid/index.ts", out: "grid", folder: true },
+    {
+      entry: "./src/plugins/snapshots/index.ts",
+      out: "snapshots",
+      folder: true,
+    },
+    { entry: "./src/plugins/window/index.ts", out: "window", folder: true },
+  ];
+
+  const allModules = [...coreModules, ...builderModules, ...pluginModules];
+
+  // Single-file builds (no folder structure)
+  const singleFileModules = [
+    { entry: "./src/core-light.ts", out: "core-light.js" },
   ];
 
   // Framework adapters — built with externals so framework imports
@@ -62,9 +60,14 @@ async function build() {
     { entry: "./src/adapters/svelte.ts", out: "svelte", externals: ["vlist"] },
   ];
 
-  const subResults: { name: string; size: string }[] = [];
+  const subResults: { name: string; size: string; type: string }[] = [];
 
-  for (const sub of subModules) {
+  for (const sub of allModules) {
+    const moduleType = coreModules.includes(sub)
+      ? "core"
+      : builderModules.includes(sub)
+        ? "builder"
+        : "plugin";
     const subResult = await Bun.build({
       entrypoints: [sub.entry],
       outdir: `./dist/${sub.out}`,
@@ -85,7 +88,33 @@ async function build() {
 
     const subFile = Bun.file(`./dist/${sub.out}/index.js`);
     const subSize = (subFile.size / 1024).toFixed(1);
-    subResults.push({ name: sub.out, size: subSize });
+    subResults.push({ name: sub.out, size: subSize, type: moduleType });
+  }
+
+  // Build single-file modules
+  for (const single of singleFileModules) {
+    const singleResult = await Bun.build({
+      entrypoints: [single.entry],
+      outdir: "./dist",
+      format: "esm",
+      target: "browser",
+      minify: !isDev,
+      sourcemap: isDev ? "inline" : "none",
+      naming: single.out,
+    });
+
+    if (!singleResult.success) {
+      console.error(`\nSingle-file module build failed (${single.out}):\n`);
+      for (const log of singleResult.logs) {
+        console.error(log);
+      }
+      process.exit(1);
+    }
+
+    const singleFile = Bun.file(`./dist/${single.out}`);
+    const singleSize = (singleFile.size / 1024).toFixed(1);
+    const name = single.out.replace(".js", "");
+    subResults.push({ name, size: singleSize, type: "core" });
   }
 
   const subTime = performance.now() - subStart;
@@ -178,13 +207,40 @@ async function build() {
   };
 
   console.log("");
-  const gzipSize = await gzipBytes("dist/index.js");
-  console.log(`  Full bundle: ${jsSize} KB minified, ${gzipSize} KB gzipped`);
+  console.log("  Core:");
 
-  for (const sub of subResults) {
-    const gzipSubSize = await gzipBytes(`dist/${sub.name}/index.js`);
+  // Show core modules
+  for (const sub of subResults.filter((s) => s.type === "core")) {
+    let gzipSize;
+    if (sub.name === "core-light") {
+      gzipSize = await gzipBytes(`dist/${sub.name}.js`);
+    } else {
+      gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
+    }
     console.log(
-      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSubSize} KB gzipped`,
+      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
+    );
+  }
+
+  console.log("");
+  console.log("  Builder:");
+
+  // Show builder
+  for (const sub of subResults.filter((s) => s.type === "builder")) {
+    const gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
+    console.log(
+      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
+    );
+  }
+
+  console.log("");
+  console.log("  Plugins:");
+
+  // Show plugins
+  for (const sub of subResults.filter((s) => s.type === "plugin")) {
+    const gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
+    console.log(
+      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
     );
   }
 
