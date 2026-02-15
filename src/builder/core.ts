@@ -549,8 +549,6 @@ function materialize<T extends VListItem = VListItem>(
 
   const wheelEnabled = scrollConfig?.wheel ?? true;
   const wrapEnabled = scrollConfig?.wrap ?? false;
-  const scrollElement = scrollConfig?.element;
-  const isWindowMode = !!scrollElement;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
   const mainAxisSizeConfig = mainAxisValue;
@@ -624,22 +622,13 @@ function materialize<T extends VListItem = VListItem>(
     isHorizontal,
   );
 
-  if (isWindowMode) {
-    dom.root.style.overflow = "visible";
-    dom.root.style.height = "auto";
-    dom.viewport.style.overflow = "visible";
-    dom.viewport.style.height = "auto";
-  }
-
   // ── Create core components (inlined) ────────────────────────────
   const emitter = createEmitter();
   let items: T[] = initialItems ? [...initialItems] : [];
   let heightCache = createHeightCache(mainAxisSizeConfig, items.length);
   const pool = createElementPool();
 
-  let containerHeight = isWindowMode
-    ? window.innerHeight
-    : dom.viewport.clientHeight;
+  let containerHeight = dom.viewport.clientHeight;
   let containerWidth = dom.viewport.clientWidth;
 
   // ── State ───────────────────────────────────────────────────────
@@ -715,24 +704,9 @@ function materialize<T extends VListItem = VListItem>(
 
   // Pluggable scroll functions — compression plugin replaces these
   let scrollGetTop = (): number => {
-    if (isWindowMode) {
-      const rect = dom.viewport.getBoundingClientRect();
-      return Math.max(0, isHorizontal ? -rect.left : -rect.top);
-    }
     return isHorizontal ? dom.viewport.scrollLeft : dom.viewport.scrollTop;
   };
   let scrollSetTop = (pos: number): void => {
-    if (isWindowMode) {
-      const rect = dom.viewport.getBoundingClientRect();
-      if (isHorizontal) {
-        const listDocumentLeft = rect.left + window.scrollX;
-        window.scrollTo({ left: listDocumentLeft + pos });
-      } else {
-        const listDocumentTop = rect.top + window.scrollY;
-        window.scrollTo({ top: listDocumentTop + pos });
-      }
-      return;
-    }
     if (isHorizontal) {
       dom.viewport.scrollLeft = pos;
     } else {
@@ -1008,11 +982,12 @@ function materialize<T extends VListItem = VListItem>(
   // Wheel handler (can be disabled via config)
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
-  const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
+  // Pluggable scroll target (window mode plugin can replace this)
+  let scrollTarget: HTMLElement | Window = dom.viewport;
   scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
 
   // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
-  if (isHorizontal && wheelEnabled && !isWindowMode) {
+  if (isHorizontal && wheelEnabled) {
     wheelHandler = (event: WheelEvent): void => {
       if (event.deltaX) return; // native horizontal scroll handles it
       event.preventDefault();
@@ -1022,9 +997,7 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   // Hide native scrollbar by default (plugins may override)
-  if (!isWindowMode) {
-    dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
-  }
+  dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
 
   // ── Click & keydown handlers (delegate to plugins) ──────────────
 
@@ -1055,8 +1028,15 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── ResizeObserver ──────────────────────────────────────────────
 
+  // Pluggable viewport resize behavior (window mode plugin can disable)
+  let viewportResizeEnabled = true;
+
+  // Pluggable container dimension getters (window mode plugin can replace)
+  let getContainerWidth = (): number => containerWidth;
+  let getContainerHeight = (): number => containerHeight;
+
   const resizeObserver = new ResizeObserver((entries) => {
-    if (isDestroyed || isWindowMode) return;
+    if (isDestroyed) return;
 
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
@@ -1087,30 +1067,12 @@ function materialize<T extends VListItem = VListItem>(
     }
   });
 
-  // ResizeObserver should not observe viewport in window mode
-  // (viewport size reflects content, not visible area)
-  if (!isWindowMode) {
+  // Plugins can disable viewport resize observation
+  if (viewportResizeEnabled) {
     resizeObserver.observe(dom.viewport);
   }
 
-  // Window resize handler
-  let handleWindowResize: (() => void) | null = null;
-  if (isWindowMode) {
-    handleWindowResize = () => {
-      if (isDestroyed) return;
-      const newHeight = window.innerHeight;
-      if (Math.abs(newHeight - containerHeight) > 1) {
-        containerHeight = newHeight;
-        updateContentSize();
-        renderIfNeededFn();
-        emitter.emit("resize", {
-          height: newHeight,
-          width: window.innerWidth,
-        });
-      }
-    };
-    window.addEventListener("resize", handleWindowResize);
-  }
+  // ── Compression mode ────────────────────────────────────────────
 
   // ── ARIA: Live Region ───────────────────────────────────────────
 
@@ -1344,6 +1306,38 @@ function materialize<T extends VListItem = VListItem>(
         onScrollFrame();
       };
     },
+
+    setScrollTarget(target: HTMLElement | Window): void {
+      // Remove listener from old target
+      scrollTarget.removeEventListener("scroll", onScrollFrame);
+      // Update target and re-attach listener
+      scrollTarget = target;
+      scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
+    },
+
+    getScrollTarget(): HTMLElement | Window {
+      return scrollTarget;
+    },
+
+    setContainerDimensions(getter: {
+      width: () => number;
+      height: () => number;
+    }): void {
+      getContainerWidth = getter.width;
+      getContainerHeight = getter.height;
+      // Update current dimensions immediately
+      containerWidth = getter.width();
+      containerHeight = getter.height();
+      sharedState.viewportState.containerWidth = containerWidth;
+      sharedState.viewportState.containerHeight = containerHeight;
+    },
+
+    disableViewportResize(): void {
+      if (viewportResizeEnabled) {
+        viewportResizeEnabled = false;
+        resizeObserver.unobserve(dom.viewport);
+      }
+    },
   };
 
   // ── Data manager proxy (plugins can replace) ────────────────────
@@ -1493,7 +1487,7 @@ function materialize<T extends VListItem = VListItem>(
     enableCompression: () => {},
     disableCompression: () => {},
     isCompressed: () => scrollIsCompressed,
-    isWindowMode: () => isWindowMode,
+    isWindowMode: () => false,
     updateContainerHeight: (h: number) => {
       containerHeight = h;
     },
@@ -1711,16 +1705,10 @@ function materialize<T extends VListItem = VListItem>(
 
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
-    const scrollTarget = isWindowMode
-      ? (scrollElement as Window)
-      : dom.viewport;
     scrollTarget.removeEventListener("scroll", onScrollFrame);
     liveRegion.remove();
     resizeObserver.disconnect();
 
-    if (handleWindowResize) {
-      window.removeEventListener("resize", handleWindowResize);
-    }
     if (wheelHandler) {
       dom.viewport.removeEventListener("wheel", wheelHandler);
     }

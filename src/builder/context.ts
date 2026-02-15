@@ -331,6 +331,18 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setHeightConfig,
     updateContentSize,
     updateCompressionMode,
+
+    // Window mode plugin hooks (stubs for this simplified context)
+    setScrollTarget: () => {
+      // Stub - not used in simplified context
+    },
+    getScrollTarget: () => dom.viewport,
+    setContainerDimensions: () => {
+      // Stub - not used in simplified context
+    },
+    disableViewportResize: () => {
+      // Stub - not used in simplified context
+    },
   };
 
   return ctx;

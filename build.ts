@@ -47,6 +47,7 @@ async function build() {
     { entry: "./src/groups/index.ts", out: "groups" },
     { entry: "./src/grid/index.ts", out: "grid" },
     { entry: "./src/snapshots/index.ts", out: "snapshots" },
+    { entry: "./src/window/index.ts", out: "window" },
   ];
 
   // Framework adapters — built with externals so framework imports

@@ -261,6 +261,35 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * native DOM scrollTop (which can't represent compressed scroll space).
    */
   setScrollFns(getTop: () => number, setTop: (pos: number) => void): void;
+
+  /**
+   * Set the scroll target element (default: viewport).
+   * Used by window mode plugin to use window instead of viewport for scroll events.
+   */
+  setScrollTarget(target: HTMLElement | Window): void;
+
+  /**
+   * Get the current scroll target element.
+   * Returns the element/window that scroll events are bound to.
+   */
+  getScrollTarget(): HTMLElement | Window;
+
+  /**
+   * Override container dimension getters.
+   * Used by window mode plugin to use window.innerWidth/innerHeight instead
+   * of viewport.clientWidth/clientHeight.
+   */
+  setContainerDimensions(getter: {
+    width: () => number;
+    height: () => number;
+  }): void;
+
+  /**
+   * Disable the ResizeObserver on the viewport element.
+   * Used by window mode plugin where the viewport doesn't need observation
+   * (window resize is used instead).
+   */
+  disableViewportResize(): void;
 }
 
 // =============================================================================
