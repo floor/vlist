@@ -3,44 +3,10 @@
  * Types for sticky headers and grouped lists
  */
 
-import type { VListItem } from "../types";
+import type { VListItem, GroupsConfig } from "../types";
 
-// =============================================================================
-// Configuration
-// =============================================================================
-
-/** Groups configuration for createVList */
-export interface GroupsConfig {
-  /**
-   * Determine which group an item belongs to.
-   * Called with the DATA index (index into the original items array).
-   * Items with the same group key are grouped together.
-   *
-   * Items MUST be pre-sorted by group — the function is called in order
-   * and a new header is inserted whenever the return value changes.
-   */
-  getGroupForIndex: (index: number) => string;
-
-  /**
-   * Height of group header elements in pixels.
-   * - `number` — Fixed height for all headers
-   * - `(group: string, groupIndex: number) => number` — Variable height per group
-   */
-  headerHeight: number | ((group: string, groupIndex: number) => number);
-
-  /**
-   * Template function to render a group header.
-   * Receives the group key and the group's sequential index (0-based).
-   */
-  headerTemplate: (group: string, groupIndex: number) => string | HTMLElement;
-
-  /**
-   * Enable sticky headers (default: true).
-   * When true, the current group's header "sticks" to the top of the
-   * viewport and is pushed out by the next group's header approaching.
-   */
-  sticky?: boolean;
-}
+// Re-export GroupsConfig from main types
+export type { GroupsConfig };
 
 // =============================================================================
 // Group Layout

@@ -9,26 +9,10 @@
  * - Compression applies to row count, not item count
  */
 
-// =============================================================================
-// Configuration
-// =============================================================================
+import type { GridConfig } from "../types";
 
-/** Grid configuration for createVList */
-export interface GridConfig {
-  /**
-   * Number of columns in the grid.
-   * Item width = containerWidth / columns (minus gaps).
-   *
-   * Must be a positive integer ≥ 1.
-   */
-  columns: number;
-
-  /**
-   * Gap between grid items in pixels (default: 0).
-   * Applied both horizontally (between columns) and vertically (between rows).
-   */
-  gap?: number;
-}
+// Re-export GridConfig from main types
+export type { GridConfig };
 
 // =============================================================================
 // Grid Layout
