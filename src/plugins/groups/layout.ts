@@ -21,7 +21,7 @@ import type {
   LayoutEntry,
   GroupHeaderItem,
 } from "./types";
-import type { VListItem } from "../types";
+import type { VListItem } from "../../types";
 
 // =============================================================================
 // Binary Search Helpers

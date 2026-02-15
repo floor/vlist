@@ -17,12 +17,12 @@
  * Added methods: getScrollSnapshot, restoreScroll
  */
 
-import type { VListItem, ScrollSnapshot } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem, ScrollSnapshot } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import {
   selectItems,
-} from "../selection/state";
+} from "../../selection/state";
 
 // =============================================================================
 // Plugin Factory

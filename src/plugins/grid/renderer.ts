@@ -20,15 +20,15 @@ import type {
   ItemState,
   Range,
   RenderedItem,
-} from "../types";
+} from "../../types";
 
 import {
   getCompressionState,
   calculateCompressedItemPosition,
   type CompressionState,
-} from "../render/compression";
-import type { HeightCache } from "../render/heights";
-import type { CompressionContext } from "../render/renderer";
+} from "../../render/compression";
+import type { HeightCache } from "../../render/heights";
+import type { CompressionContext } from "../../render/renderer";
 import type { GridLayout } from "./types";
 
 // =============================================================================

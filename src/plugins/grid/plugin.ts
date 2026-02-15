@@ -17,8 +17,8 @@
  * - Cannot be combined with reverse: true
  */
 
-import type { VListItem } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import { createGridLayout, type GridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
@@ -416,7 +416,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 // Helpers (duplicated from builder/core.ts to keep plugin self-contained)
 // =============================================================================
 
-import { calculateScrollToIndex } from "../render";
+import { calculateScrollToIndex } from "../../render";
 
 const DEFAULT_SMOOTH_DURATION = 300;
 

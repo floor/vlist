@@ -17,16 +17,16 @@
  * height exceeds the browser limit, and deactivates when items are removed.
  */
 
-import type { VListItem } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import {
   getCompressionState,
   calculateCompressedVisibleRange,
   calculateCompressedScrollToIndex,
   calculateCompressedItemPosition,
-} from "../render/compression";
-import type { Range } from "../types";
+} from "../../render/compression";
+import type { Range } from "../../types";
 import { createScrollbar, type Scrollbar } from "../scroll";
 
 // =============================================================================

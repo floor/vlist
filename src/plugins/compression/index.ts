@@ -18,6 +18,6 @@ export {
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
   type CompressionState,
-} from "../render/compression";
+} from "../../render/compression";
 
 export { withCompression } from "./plugin";
