@@ -3,9 +3,6 @@
  * Minimal, clean interfaces for the virtual list
  */
 
-import type { GroupsConfig } from "./groups/types";
-import type { GridConfig } from "./grid/types";
-
 // =============================================================================
 // Event Map Base Type
 // =============================================================================
@@ -21,6 +18,60 @@ export type EventMap = Record<string, unknown>;
 export interface VListItem {
   id: string | number;
   [key: string]: unknown;
+}
+
+// =============================================================================
+// Plugin Configuration Types
+// =============================================================================
+
+/** Groups configuration for createVList */
+export interface GroupsConfig {
+  /**
+   * Determine which group an item belongs to.
+   * Called with the DATA index (index into the original items array).
+   * Items with the same group key are grouped together.
+   *
+   * Items MUST be pre-sorted by group — the function is called in order
+   * and a new header is inserted whenever the return value changes.
+   */
+  getGroupForIndex: (index: number) => string;
+
+  /**
+   * Height of group header elements in pixels.
+   * - `number` — Fixed height for all headers
+   * - `(group: string, groupIndex: number) => number` — Variable height per group
+   */
+  headerHeight: number | ((group: string, groupIndex: number) => number);
+
+  /**
+   * Template function to render a group header.
+   * Receives the group key and the group's sequential index (0-based).
+   */
+  headerTemplate: (group: string, groupIndex: number) => string | HTMLElement;
+
+  /**
+   * Enable sticky headers (default: true).
+   * When true, the current group's header "sticks" to the top of the
+   * viewport and is pushed out by the next group's header approaching.
+   */
+  sticky?: boolean;
+}
+
+/** Grid configuration for createVList */
+export interface GridConfig {
+  /**
+   * Number of columns in the grid.
+   * Item width = containerWidth / columns (minus gaps).
+   *
+   * Must be a positive integer ≥ 1.
+   */
+  columns: number;
+
+  /**
+   * Gap between grid items in pixels (default: 0).
+   * Applied both horizontally (between columns) and vertically (between rows).
+   */
+  gap?: number;
 }
 
 // =============================================================================
@@ -526,6 +577,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Scroll position changed */
   scroll: { scrollTop: number; direction: "up" | "down" };
+
+  /** Scroll velocity changed */
+  "velocity:change": { velocity: number; reliable: boolean };
 
   /** Visible range changed */
   "range:change": { range: Range };

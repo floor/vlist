@@ -227,6 +227,17 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Rebuild height cache with new row count
         ctx.rebuildHeightCache();
 
+        // Update content size to reflect new total height
+        ctx.updateContentSize(ctx.heightCache.getTotalHeight());
+
+        // Update compression mode if compression plugin is active
+        ctx.updateCompressionMode();
+
+        // Trigger content size handlers (e.g., snapshots plugin)
+        for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
+          ctx.contentSizeHandlers[i]!();
+        }
+
         // Clear and re-render
         if (gridRenderer) {
           gridRenderer.clear();
