@@ -16,11 +16,11 @@
  * Added events: load:start, load:end, error
  */
 
-import type { VListItem, VListAdapter, Range } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem, VListAdapter, Range } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import { createDataManager, type DataManagerConfig } from "./manager";
-import { updateViewportItems } from "../render";
+import { updateViewportItems } from "../../render";
 
 import {
   INITIAL_LOAD_SIZE,
@@ -28,7 +28,7 @@ import {
   CANCEL_LOAD_VELOCITY_THRESHOLD,
   PRELOAD_VELOCITY_THRESHOLD,
   PRELOAD_ITEMS_AHEAD,
-} from "../constants";
+} from "../../constants";
 
 // =============================================================================
 // Plugin Config

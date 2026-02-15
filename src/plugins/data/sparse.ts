@@ -3,7 +3,7 @@
  * Efficient storage for million+ item virtual lists
  */
 
-import type { VListItem, Range } from "../types";
+import type { VListItem, Range } from "../../types";
 
 // =============================================================================
 // Types

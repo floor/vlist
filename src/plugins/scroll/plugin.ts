@@ -16,8 +16,8 @@
  * No public methods are added — the scrollbar is entirely automatic.
  */
 
-import type { VListItem } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import { createScrollbar, type Scrollbar } from "./scrollbar";
 

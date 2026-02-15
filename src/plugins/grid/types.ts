@@ -9,7 +9,7 @@
  * - Compression applies to row count, not item count
  */
 
-import type { GridConfig } from "../types";
+import type { GridConfig } from "../../types";
 
 // Re-export GridConfig from main types
 export type { GridConfig };
