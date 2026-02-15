@@ -62,7 +62,7 @@ export {
   type GroupHeaderItem,
   type GroupLayout,
   type StickyHeader,
-} from "./groups";
+} from "./plugins/groups";
 
 // Grid domain (2D grid/card layout)
 export {
@@ -73,7 +73,7 @@ export {
   type GridPosition,
   type GridRenderer,
   type ItemRange,
-} from "./grid";
+} from "./plugins/grid";
 
 // Render domain (virtual scrolling, compression, height cache)
 export {
@@ -118,7 +118,7 @@ export {
   isSelected,
   getSelectedIds,
   getSelectedItems,
-} from "./selection";
+} from "./plugins/selection";
 
 // Events domain
 export { createEmitter, type Emitter } from "./events";
@@ -135,7 +135,7 @@ export {
   type DataManager,
   type SparseStorage,
   type PlaceholderManager,
-} from "./data";
+} from "./plugins/data";
 
 // Scroll domain (for advanced usage)
 export {
@@ -144,4 +144,4 @@ export {
   rafThrottle,
   type ScrollController,
   type Scrollbar,
-} from "./scroll";
+} from "./plugins/scroll";

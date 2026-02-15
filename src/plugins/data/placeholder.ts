@@ -9,7 +9,7 @@
  * - Efficient placeholder detection
  */
 
-import type { VListItem } from "../types";
+import type { VListItem } from "../../types";
 
 // =============================================================================
 // Types

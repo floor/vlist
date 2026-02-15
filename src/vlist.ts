@@ -9,14 +9,14 @@
  */
 
 import { vlist as builderVlist } from "./builder";
-import { withGrid } from "./grid/plugin";
-import { withGroups } from "./groups/plugin";
-import { withSelection } from "./selection/plugin";
-import { withScrollbar } from "./scroll/plugin";
-import { withCompression } from "./compression/plugin";
-import { withSnapshots } from "./snapshots/plugin";
-import { withData } from "./data/plugin";
-import { withWindow } from "./window/plugin";
+import { withGrid } from "./plugins/grid/plugin";
+import { withGroups } from "./plugins/groups/plugin";
+import { withSelection } from "./plugins/selection/plugin";
+import { withScrollbar } from "./plugins/scroll/plugin";
+import { withCompression } from "./plugins/compression/plugin";
+import { withSnapshots } from "./plugins/snapshots/plugin";
+import { withData } from "./plugins/data/plugin";
+import { withWindow } from "./plugins/window/plugin";
 
 import type { VListConfig, VListItem, VList } from "./types";
 

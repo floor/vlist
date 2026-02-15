@@ -3,10 +3,10 @@
  * Pure functions for managing selection state
  */
 
-import type { VListItem, SelectionMode, SelectionState } from "../types";
+import type { VListItem, SelectionMode, SelectionState } from "../../types";
 
 // Re-export SelectionState for convenience
-export type { SelectionState } from "../types";
+export type { SelectionState } from "../../types";
 
 // =============================================================================
 // State Creation

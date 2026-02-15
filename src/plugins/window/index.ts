@@ -5,4 +5,4 @@
  */
 
 export { withWindow } from "./plugin";
-export type { VListPlugin } from "../builder/types";
+export type { VListPlugin } from "../../builder/types";

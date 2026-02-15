@@ -17,8 +17,8 @@
  * Added events: item:click, selection:change
  */
 
-import type { VListItem, SelectionMode } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem, SelectionMode } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import {
   createSelectionState,
@@ -37,7 +37,7 @@ import {
   isSelected,
 } from "./state";
 
-import { calculateScrollToIndex } from "../render";
+import { calculateScrollToIndex } from "../../render";
 
 // =============================================================================
 // Plugin Config

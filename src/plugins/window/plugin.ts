@@ -17,8 +17,8 @@
  * Bundle impact: ~0.3 KB gzipped when used
  */
 
-import type { VListItem } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 /**
  * Create a window scroll mode plugin.
