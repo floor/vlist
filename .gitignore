@@ -34,3 +34,6 @@ bun.lockb
 
 # TypeScript
 *.tsbuildinfo
+
+# Dependency graphs
+*.svg

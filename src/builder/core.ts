@@ -50,6 +50,97 @@ const SCROLL_IDLE_TIMEOUT = 150;
 let builderInstanceId = 0;
 
 // =============================================================================
+// Velocity Tracking (inlined for builder)
+// =============================================================================
+
+const VELOCITY_SAMPLE_COUNT = 5;
+const STALE_GAP_MS = 100;
+const MIN_RELIABLE_SAMPLES = 2;
+
+interface VelocitySample {
+  position: number;
+  time: number;
+}
+
+interface VelocityTracker {
+  velocity: number;
+  lastPosition: number;
+  lastTime: number;
+  samples: VelocitySample[];
+  sampleIndex: number;
+  sampleCount: number;
+}
+
+const createVelocityTracker = (initialPosition = 0): VelocityTracker => {
+  const samples: VelocitySample[] = new Array(VELOCITY_SAMPLE_COUNT);
+  for (let i = 0; i < VELOCITY_SAMPLE_COUNT; i++) {
+    samples[i] = { position: 0, time: 0 };
+  }
+
+  return {
+    velocity: 0,
+    lastPosition: initialPosition,
+    lastTime: performance.now(),
+    samples,
+    sampleIndex: 0,
+    sampleCount: 0,
+  };
+};
+
+const updateVelocityTracker = (
+  tracker: VelocityTracker,
+  newPosition: number,
+): VelocityTracker => {
+  const now = performance.now();
+  const timeDelta = now - tracker.lastTime;
+
+  if (timeDelta === 0) return tracker;
+
+  // Stale gap detection - reset if too much time passed
+  if (timeDelta > STALE_GAP_MS) {
+    tracker.sampleCount = 0;
+    tracker.sampleIndex = 0;
+    tracker.velocity = 0;
+    const baseline = tracker.samples[0]!;
+    baseline.position = newPosition;
+    baseline.time = now;
+    tracker.sampleIndex = 1;
+    tracker.sampleCount = 1;
+    tracker.lastPosition = newPosition;
+    tracker.lastTime = now;
+    return tracker;
+  }
+
+  // Write to current slot in circular buffer
+  const currentSample = tracker.samples[tracker.sampleIndex]!;
+  currentSample.position = newPosition;
+  currentSample.time = now;
+
+  // Advance index (wrap around)
+  tracker.sampleIndex = (tracker.sampleIndex + 1) % VELOCITY_SAMPLE_COUNT;
+  tracker.sampleCount = Math.min(
+    tracker.sampleCount + 1,
+    VELOCITY_SAMPLE_COUNT,
+  );
+
+  // Calculate average velocity from samples
+  if (tracker.sampleCount >= MIN_RELIABLE_SAMPLES) {
+    const oldestIndex =
+      (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
+      VELOCITY_SAMPLE_COUNT;
+    const oldest = tracker.samples[oldestIndex]!;
+    const totalDistance = newPosition - oldest.position;
+    const totalTime = now - oldest.time;
+    tracker.velocity = totalTime > 0 ? Math.abs(totalDistance) / totalTime : 0;
+  }
+
+  tracker.lastPosition = newPosition;
+  tracker.lastTime = now;
+
+  return tracker;
+};
+
+// =============================================================================
 // Inlined: Height Cache
 // =============================================================================
 
@@ -558,6 +649,9 @@ function materialize<T extends VListItem = VListItem>(
   let animationFrameId: number | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Velocity tracker
+  let velocityTracker = createVelocityTracker(0);
+
   // Reusable range objects (no allocation on scroll)
   const visibleRange: Range = { start: 0, end: 0 };
   const renderRange: Range = { start: 0, end: 0 };
@@ -622,19 +716,25 @@ function materialize<T extends VListItem = VListItem>(
   // Pluggable scroll functions — compression plugin replaces these
   let scrollGetTop = (): number => {
     if (isWindowMode) {
-      return Math.max(
-        0,
-        (scrollElement as Window).scrollY +
-          dom.viewport.getBoundingClientRect().top * -1,
-      );
+      const rect = dom.viewport.getBoundingClientRect();
+      return Math.max(0, isHorizontal ? -rect.left : -rect.top);
     }
-    return dom.viewport.scrollTop;
+    return isHorizontal ? dom.viewport.scrollLeft : dom.viewport.scrollTop;
   };
   let scrollSetTop = (pos: number): void => {
     if (isWindowMode) {
       const rect = dom.viewport.getBoundingClientRect();
-      const pageOffset = rect.top + window.scrollY;
-      (scrollElement as Window).scrollTo(0, pageOffset + pos);
+      if (isHorizontal) {
+        const listDocumentLeft = rect.left + window.scrollX;
+        window.scrollTo({ left: listDocumentLeft + pos });
+      } else {
+        const listDocumentTop = rect.top + window.scrollY;
+        window.scrollTo({ top: listDocumentTop + pos });
+      }
+      return;
+    }
+    if (isHorizontal) {
+      dom.viewport.scrollLeft = pos;
     } else {
       dom.viewport.scrollTop = pos;
     }
@@ -868,6 +968,9 @@ function materialize<T extends VListItem = VListItem>(
     const scrollTop = scrollGetTop();
     const direction: "up" | "down" = scrollTop >= lastScrollTop ? "down" : "up";
 
+    // Update velocity tracker
+    velocityTracker = updateVelocityTracker(velocityTracker, scrollTop);
+
     if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
       dom.root.classList.add(`${classPrefix}--scrolling`);
     }
@@ -876,6 +979,12 @@ function materialize<T extends VListItem = VListItem>(
     renderIfNeededFn();
 
     emitter.emit("scroll", { scrollTop, direction });
+
+    // Emit velocity change
+    emitter.emit("velocity:change", {
+      velocity: velocityTracker.velocity,
+      reliable: velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
+    });
 
     // Plugin post-scroll actions
     for (let i = 0; i < afterScroll.length; i++) {
@@ -886,6 +995,13 @@ function materialize<T extends VListItem = VListItem>(
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       dom.root.classList.remove(`${classPrefix}--scrolling`);
+      // Reset velocity to 0 when idle
+      velocityTracker.velocity = 0;
+      velocityTracker.sampleCount = 0;
+      emitter.emit("velocity:change", {
+        velocity: 0,
+        reliable: false,
+      });
     }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
@@ -894,6 +1010,16 @@ function materialize<T extends VListItem = VListItem>(
 
   const scrollTarget = isWindowMode ? (scrollElement as Window) : dom.viewport;
   scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
+
+  // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
+  if (isHorizontal && wheelEnabled && !isWindowMode) {
+    wheelHandler = (event: WheelEvent): void => {
+      if (event.deltaX) return; // native horizontal scroll handles it
+      event.preventDefault();
+      dom.viewport.scrollLeft += event.deltaY;
+    };
+    dom.viewport.addEventListener("wheel", wheelHandler);
+  }
 
   // Hide native scrollbar by default (plugins may override)
   if (!isWindowMode) {
@@ -961,7 +1087,11 @@ function materialize<T extends VListItem = VListItem>(
     }
   });
 
-  resizeObserver.observe(dom.viewport);
+  // ResizeObserver should not observe viewport in window mode
+  // (viewport size reflects content, not visible area)
+  if (!isWindowMode) {
+    resizeObserver.observe(dom.viewport);
+  }
 
   // Window resize handler
   let handleWindowResize: (() => void) | null = null;
@@ -1356,8 +1486,8 @@ function materialize<T extends VListItem = VListItem>(
       const maxScroll = Math.max(0, total - containerHeight);
       return maxScroll > 0 ? lastScrollTop / maxScroll : 0;
     },
-    getVelocity: () => 0,
-    isTracking: () => true,
+    getVelocity: () => velocityTracker.velocity,
+    isTracking: () => velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
     isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
     updateConfig: () => {},
     enableCompression: () => {},
@@ -1581,6 +1711,9 @@ function materialize<T extends VListItem = VListItem>(
 
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
+    const scrollTarget = isWindowMode
+      ? (scrollElement as Window)
+      : dom.viewport;
     scrollTarget.removeEventListener("scroll", onScrollFrame);
     liveRegion.remove();
     resizeObserver.disconnect();
