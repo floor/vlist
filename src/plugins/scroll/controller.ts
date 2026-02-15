@@ -7,7 +7,7 @@
  * This allows smooth scrolling through millions of items.
  */
 
-import type { CompressionState } from "../render/compression";
+import type { CompressionState } from "../../render/compression";
 
 // =============================================================================
 // Types

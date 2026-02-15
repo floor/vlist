@@ -3,7 +3,7 @@
  * Types for sticky headers and grouped lists
  */
 
-import type { VListItem, GroupsConfig } from "../types";
+import type { VListItem, GroupsConfig } from "../../types";
 
 // Re-export GroupsConfig from main types
 export type { GroupsConfig };

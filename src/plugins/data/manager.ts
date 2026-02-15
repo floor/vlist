@@ -3,7 +3,7 @@
  * Handles data with sparse storage for million+ item support
  */
 
-import type { VListItem, VListAdapter, AdapterParams, Range } from "../types";
+import type { VListItem, VListAdapter, AdapterParams, Range } from "../../types";
 
 import {
   createSparseStorage,

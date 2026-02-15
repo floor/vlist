@@ -19,8 +19,8 @@
  * - Cannot be combined with reverse: true
  */
 
-import type { VListItem } from "../types";
-import type { VListPlugin, BuilderContext } from "../builder/types";
+import type { VListItem } from "../../types";
+import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import {
   createGroupLayout,
@@ -37,7 +37,7 @@ import {
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
 
-import { calculateScrollToIndex, createRenderer } from "../render";
+import { calculateScrollToIndex, createRenderer } from "../../render";
 
 // =============================================================================
 // Plugin Config

@@ -19,7 +19,7 @@
  */
 
 import type { GroupLayout, GroupsConfig, StickyHeader } from "./types";
-import type { HeightCache } from "../render/heights";
+import type { HeightCache } from "../../render/heights";
 
 // =============================================================================
 // Factory
