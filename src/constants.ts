@@ -36,7 +36,7 @@ export const DEFAULT_PAGE_SIZE = 50;
  * is likely scrolling quickly past content they don't want to see.
  * Default: 25 px/ms (same as mtrl-addons viewport)
  */
-export const CANCEL_LOAD_VELOCITY_THRESHOLD = 25;
+export const CANCEL_LOAD_VELOCITY_THRESHOLD = 15;
 
 /**
  * Velocity threshold for preloading (px/ms)
