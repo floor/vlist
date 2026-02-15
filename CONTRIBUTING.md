@@ -38,34 +38,33 @@ Interactive examples and documentation are available at **[vlist.dev](https://vl
 vlist/
 ├── src/
 │   ├── index.ts          # Main entry — exports everything
-│   ├── core.ts           # Lightweight standalone entry (7.3 KB)
-│   ├── vlist.ts          # Full factory — wires all domains together
+│   ├── core.ts           # Lightweight standalone entry (8.0 KB)
+│   ├── vlist.ts          # Default entry with auto-plugin detection
 │   ├── types.ts          # Public type definitions
-│   ├── context.ts        # Internal state container (dependency injection)
-│   ├── handlers.ts       # Scroll, click, keyboard event handlers
-│   ├── methods.ts        # Public API methods (data, scroll, selection)
-│   ├── constants.ts      # All default values and magic numbers
-│   ├── compression.ts    # Re-export for tree-shakeable sub-module
-│   ├── render/           # Rendering domain
-│   │   ├── heights.ts    #   Height cache (fixed + variable via prefix sums)
-│   │   ├── renderer.ts   #   DOM rendering with element pooling
-│   │   ├── virtual.ts    #   Virtual scrolling calculations
-│   │   └── compression.ts#   Large-list compression (1M+ items)
-│   ├── grid/             # Grid layout domain
-│   │   ├── types.ts      #   GridConfig, GridLayout interfaces
-│   │   ├── layout.ts     #   O(1) row/col calculations
-│   │   └── renderer.ts   #   2D grid renderer (translate(x, y))
-│   ├── groups/           # Sticky headers domain
-│   │   ├── types.ts      #   GroupsConfig, GroupLayout interfaces
-│   │   ├── layout.ts     #   Group boundary mapping
-│   │   └── sticky.ts     #   Sticky header positioning
-│   ├── data/             # Data management domain
-│   ├── scroll/           # Scroll controller + custom scrollbar
-│   ├── selection/        # Selection state management
+│   ├── builder/          # Builder pattern implementation
+│   │   ├── index.ts      #   Main builder entry
+│   │   ├── core.ts       #   Core materialize function
+│   │   ├── types.ts      #   BuilderContext, VListPlugin interfaces
+│   │   ├── context.ts    #   Simplified context creator
+│   │   └── data.ts       #   Simple data manager
+│   ├── plugins/          # Plugin system (v0.6.0)
+│   │   ├── window/       #   Window scroll mode plugin
+│   │   ├── compression/  #   Large-list compression (1M+ items)
+│   │   ├── grid/         #   2D grid layout
+│   │   ├── groups/       #   Sticky headers
+│   │   ├── data/         #   Async data adapter
+│   │   ├── scroll/       #   Custom scrollbar
+│   │   ├── selection/    #   Selection state management
+│   │   └── snapshots/    #   Scroll save/restore
+│   ├── render/           # Core rendering (not plugins)
+│   │   ├── heights.ts    #   Height cache (prefix sums)
+│   │   ├── renderer.ts   #   DOM rendering with pooling
+│   │   ├── virtual.ts    #   Virtual scroll calculations
+│   │   └── compression.ts#   Compression utilities
 │   ├── events/           # Event emitter
 │   ├── styles/           # CSS files
 │       ├── vlist.css     #   Core styles
-│       └── vlist-extras.css # Optional variants and animations
+│       └── vlist-extras.css # Optional variants
 ├── test/                 # Tests (mirrors src/ structure)
 └── build.ts              # Build script
 ```
@@ -74,11 +73,18 @@ vlist/
 
 ### Architecture
 
-vlist follows a **domain-driven** architecture. Each domain (`render/`, `grid/`, `groups/`, `data/`, `scroll/`, `selection/`, `events/`) is self-contained with its own types, pure functions, and tests.
+**v0.6.0**: vlist now uses a **plugin architecture**. The core provides virtual scrolling essentials, and everything else is opt-in via plugins.
 
-The composition root is `vlist.ts` — it creates all domain components and wires them together via the **context** (`context.ts`), which acts as a dependency injection container. Handlers and methods receive the context and operate on its state.
+- **Core** (`src/builder/core.ts`) — Virtual scrolling, element pooling, basic DOM structure
+- **Plugins** (`src/plugins/`) — Features that can be composed: window mode, grid, groups, selection, data adapter, compression, custom scrollbar, snapshots
+- **Builder** (`src/builder/`) — Provides the plugin system and composability via `.use()` pattern
+- **Auto-detection** (`src/vlist.ts`) — Default entry that auto-applies plugins based on config
 
-**Key principle:** domains never import from each other horizontally. They only depend on shared types and the context.
+**Key principles:**
+- Plugins extend the builder via `BuilderContext` hooks
+- Core provides hook points for plugins to override behavior
+- Each plugin is self-contained with minimal dependencies
+- Plugins can conflict with each other (e.g., grid + groups)
 
 ## Development Workflow
 
@@ -168,17 +174,21 @@ Dev dependencies (testing, building) are fine.
 
 ## Adding a New Feature
 
-### New Domain
+### New Plugin
 
-If your feature is a new capability (like grid or groups were):
+If your feature is a new capability:
 
-1. Create `src/{domain}/` with `types.ts`, implementation files, and `index.ts`
-2. Add tests in `test/{domain}/`
-3. Wire into `vlist.ts` following the existing pattern (see how `grid/` or `groups/` integrate)
-4. Add exports to `src/index.ts`
-5. Add sub-module build entry to `build.ts`
-6. Add package.json export path
-7. Create a sandbox example in the [vlist.dev](https://github.com/floor/vlist.dev) repository
+1. Create `src/plugins/{name}/` with `plugin.ts`, `index.ts`, and any supporting files
+2. Implement `VListPlugin` interface with `name`, `priority`, and `setup()` method
+3. Add tests in `test/plugins/{name}/`
+4. Add auto-detection logic to `src/vlist.ts` if applicable
+5. Add exports to `src/index.ts`
+6. Add sub-module build entry to `build.ts` 
+7. Add package.json export path (`"./plugins/{name}"`)
+8. Create a sandbox example in the [vlist.dev](https://github.com/floor/vlist.dev) repository
+9. Document in `docs/plugins.md`
+
+See `src/plugins/window/` for a complete example of feature extraction.
 
 ## Commit Messages
 
@@ -198,7 +208,7 @@ chore(deps): update dev dependencies
 
 **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
 
-**Scopes:** `grid`, `render`, `scroll`, `data`, `selection`, `groups`, `events`, `core`, `styles`, `sandbox`, `readme`, `deps`
+**Scopes:** `plugin`, `builder`, `render`, `core`, `styles`, `sandbox`, `readme`, `deps`, or specific plugin names (`window`, `grid`, `selection`, etc.)
 
 ## Pull Requests
 
