@@ -36,5 +36,4 @@ bun.lockb
 *.tsbuildinfo
 
 # Dependency graphs
-deps-graph.svg
-deps-circular.svg
+*.svg
