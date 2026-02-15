@@ -33,10 +33,6 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./full": {
-      "import": "./dist/full.js",
-      "types": "./dist/full.d.ts"
-    },
     "./core": {
       "import": "./dist/core/index.js",
       "types": "./dist/core.d.ts"
