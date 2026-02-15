@@ -16,6 +16,7 @@ import { withScrollbar } from "./scroll/plugin";
 import { withCompression } from "./compression/plugin";
 import { withSnapshots } from "./snapshots/plugin";
 import { withData } from "./data/plugin";
+import { withWindow } from "./window/plugin";
 
 import type { VListConfig, VListItem, VList } from "./types";
 
@@ -34,6 +35,11 @@ export const createVList = <T extends VListItem = VListItem>(
 ): VList<T> => {
   // Start with builder
   let builder = builderVlist(config);
+
+  // Auto-apply window plugin if scroll.element is window (must be first)
+  if (config.scroll?.element === window) {
+    builder = builder.use(withWindow());
+  }
 
   // Auto-apply data plugin if adapter provided (must be first for data loading)
   if (config.adapter) {
