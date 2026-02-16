@@ -1309,21 +1309,28 @@ describe("createVList grid mode", () => {
       );
     });
 
-    it("should throw when grid is combined with groups", () => {
-      expect(() => {
-        createVList({
-          container,
-          item: { height: 100, template },
-          items: [],
-          layout: "grid",
-          grid: { columns: 3 },
-          groups: {
-            key: "group",
-            headerTemplate: () => "<div>Header</div>",
-            height: 30,
-          },
-        });
-      }).toThrow("[vlist/builder] grid layout cannot be combined with groups");
+    it("should allow grid combined with groups for 2D grouped layouts", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items,
+        layout: "grid",
+        grid: { columns: 3 },
+        groups: {
+          getGroupForIndex: (index: number) =>
+            index < 10 ? "Group A" : "Group B",
+          headerHeight: 30,
+          headerTemplate: (group: string) =>
+            `<div class="header">${group}</div>`,
+        },
+      });
+
+      // Grid + groups creates 2D grouped layouts
+      expect(vlist).toBeDefined();
+      expect(vlist.total).toBe(20);
+      expect(vlist.element.classList.contains("vlist--grid")).toBe(true);
+      expect(vlist.element.classList.contains("vlist--grouped")).toBe(true);
     });
   });
 
