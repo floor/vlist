@@ -64,7 +64,7 @@ export type EventHandler<T> = (payload: T) => void;
 export type Unsubscribe = () => void;
 
 /** Core event map */
-export interface CoreEvents<T extends VListItem = VListItem> {
+export interface CoreEvents {
   scroll: { scrollTop: number; direction: "up" | "down" };
   "range:change": { range: Range };
   "selection:change": { selectedId: string | number | null };
@@ -103,13 +103,13 @@ export interface VListCore<T extends VListItem = VListItem> {
   deselectItem(): void;
   getSelectedId(): string | number | null;
 
-  on<K extends keyof CoreEvents<T>>(
+  on<K extends keyof CoreEvents>(
     event: K,
-    handler: EventHandler<CoreEvents<T>[K]>,
+    handler: EventHandler<CoreEvents[K]>,
   ): Unsubscribe;
-  off<K extends keyof CoreEvents<T>>(
+  off<K extends keyof CoreEvents>(
     event: K,
-    handler: EventHandler<CoreEvents<T>[K]>,
+    handler: EventHandler<CoreEvents[K]>,
   ): void;
 
   destroy(): void;
@@ -699,14 +699,14 @@ export const createVList = <T extends VListItem = VListItem>(
     deselectItem,
     getSelectedId,
 
-    on: <K extends keyof CoreEvents<T>>(
+    on: <K extends keyof CoreEvents>(
       event: K,
-      handler: EventHandler<CoreEvents<T>[K]>,
+      handler: EventHandler<CoreEvents[K]>,
     ): Unsubscribe => emitter.on(event as string, handler),
 
-    off: <K extends keyof CoreEvents<T>>(
+    off: <K extends keyof CoreEvents>(
       event: K,
-      handler: EventHandler<CoreEvents<T>[K]>,
+      handler: EventHandler<CoreEvents[K]>,
     ): void => emitter.off(event as string, handler),
 
     destroy,

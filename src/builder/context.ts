@@ -25,7 +25,7 @@ import { createHeightCache } from "../render/heights";
 import { updateContentHeight, updateContentWidth } from "../render/renderer";
 
 import type { SimpleDataManager } from "./data";
-import type { ScrollController } from "../scroll/controller";
+import type { ScrollController } from "../plugins/scroll/controller";
 import type { Emitter } from "../events/emitter";
 
 import type {
@@ -329,6 +329,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
+    contentSizeHandlers: [],
     destroyHandlers,
     methods,
 
@@ -350,6 +351,16 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setHeightConfig,
     updateContentSize,
     updateCompressionMode,
+
+    // Additional helpers required by BuilderContext interface
+    getRenderFns: () => ({ renderIfNeeded, forceRender }),
+    setRenderFns: () => {
+      // Stub - render functions are not replaceable in simplified context
+    },
+    getContainerWidth: () => dom.viewport.clientWidth,
+    setVisibleRangeFn: () => {
+      // Stub - not used in simplified context
+    },
 
     // Window mode plugin hooks (stubs for this simplified context)
     setScrollTarget: () => {

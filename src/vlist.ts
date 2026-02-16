@@ -172,5 +172,5 @@ export const createVList = <T extends VListItem = VListItem>(
   };
 
   // Return the instance with update method added
-  return instance as VList<T>;
+  return instance as unknown as VList<T>;
 };

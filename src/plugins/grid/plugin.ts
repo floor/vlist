@@ -21,9 +21,9 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, BuilderContext } from "../../builder/types";
 
-import { createGridLayout, type GridLayout } from "./layout";
+import { createGridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
-import type { GridConfig } from "./types";
+import type { GridLayout } from "./types";
 
 // =============================================================================
 // Plugin Config
@@ -108,7 +108,7 @@ export const withGrid = <T extends VListItem = VListItem>(
       if (hasGroups) {
         gridConfig.isHeaderFn = (index: number) => {
           const item = ctx.dataManager.getItem(index);
-          return item && (item as any).__groupHeader === true;
+          return !!(item && (item as any).__groupHeader === true);
         };
       }
 
@@ -132,7 +132,12 @@ export const withGrid = <T extends VListItem = VListItem>(
         | number
         | ((
             index: number,
-            context?: import("../types").GridHeightContext,
+            context?: {
+              row: number;
+              column: number;
+              totalRows: number;
+              totalColumns: number;
+            },
           ) => number);
 
       // Store mutable grid state for dynamic height calculation
@@ -150,7 +155,12 @@ export const withGrid = <T extends VListItem = VListItem>(
           const totalGaps = (gridState.columns - 1) * gridState.gap;
           const columnWidth = (innerWidth - totalGaps) / gridState.columns;
 
-          const context: import("../types").GridHeightContext = {
+          const context: {
+            row: number;
+            column: number;
+            totalRows: number;
+            totalColumns: number;
+          } = {
             containerWidth: gridState.containerWidth,
             columns: gridState.columns,
             gap: gridState.gap,
@@ -168,7 +178,6 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       // Rebuild height cache with row count
       const totalItems = ctx.dataManager.getTotal();
-      const totalRows = gridLayout.getTotalRows(totalItems);
       ctx.rebuildHeightCache();
 
       // ── Add grid CSS class ──
@@ -194,9 +203,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         );
 
         // ── Replace the list renderer with the grid renderer ──
-        ctx.replaceRenderer(
-          gridRenderer as unknown as import("../render").Renderer<T>,
-        );
+        ctx.replaceRenderer(gridRenderer as unknown as any);
       };
 
       createAndSetGridRenderer();
@@ -218,8 +225,6 @@ export const withGrid = <T extends VListItem = VListItem>(
 
           // Calculate correct total height by summing only column 0 items
           const totalItems = ctx.dataManager.getTotal();
-          const totalRows = gridLayout.getTotalRows(totalItems);
-
           let correctTotalHeight = 0;
           for (let i = 0; i < totalItems; i++) {
             if (gridLayout.getCol(i) === 0) {
@@ -230,9 +235,6 @@ export const withGrid = <T extends VListItem = VListItem>(
 
           // Override height cache getTotalHeight to return corrected value
           // This ensures everything (DOM, scrollbar, calculations) uses the correct height
-          const originalGetTotalHeight = ctx.heightCache.getTotalHeight.bind(
-            ctx.heightCache,
-          );
           ctx.heightCache.getTotalHeight = () => correctTotalHeight;
 
           // Manually update DOM content height
@@ -278,11 +280,6 @@ export const withGrid = <T extends VListItem = VListItem>(
         if (gridRenderer) {
           gridRenderer.updateContainerWidth(containerWidth);
         }
-
-        // Recalculate total rows
-        const totalRows = Math.ceil(
-          ctx.dataManager.getTotal() / gridConfig.columns,
-        );
 
         // Rebuild height cache with new row count
         ctx.rebuildHeightCache();
@@ -423,8 +420,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           const rowIndex = Math.floor(index / config.columns);
           // Call the base scrollToIndex (which the builder core provides)
           // We need to call it directly on the scroll controller
-          const { align, behavior, duration } =
-            resolveScrollArgs(alignOrOptions);
+          const { align, behavior } = resolveScrollArgs(alignOrOptions);
 
           const dataState = ctx.dataManager.getState();
           const totalRows = gridLayout!.getTotalRows(dataState.total);
@@ -491,7 +487,11 @@ const resolveScrollArgs = (
     | "start"
     | "center"
     | "end"
-    | import("../types").ScrollToOptions,
+    | {
+        align?: "start" | "center" | "end";
+        behavior?: "auto" | "smooth";
+        duration?: number;
+      },
 ): {
   align: "start" | "center" | "end";
   behavior: "auto" | "smooth";
@@ -499,7 +499,7 @@ const resolveScrollArgs = (
 } => {
   if (typeof alignOrOptions === "string") {
     return {
-      align: alignOrOptions,
+      align: alignOrOptions as "start" | "center" | "end",
       behavior: "auto",
       duration: DEFAULT_SMOOTH_DURATION,
     };
