@@ -16,8 +16,8 @@ import {
 let rafCallbacks: Array<() => void> = [];
 let rafId = 0;
 
-const mockRaf = (callback: () => void): number => {
-  rafCallbacks.push(callback);
+const mockRaf = (callback: FrameRequestCallback): number => {
+  rafCallbacks.push(() => callback(performance.now()));
   return ++rafId;
 };
 
@@ -35,9 +35,7 @@ describe("rafThrottle", () => {
   beforeEach(() => {
     rafCallbacks = [];
     rafId = 0;
-    // @ts-expect-error - mocking global
     globalThis.requestAnimationFrame = mockRaf;
-    // @ts-expect-error - mocking global
     globalThis.cancelAnimationFrame = mockCancelRaf;
   });
 
@@ -288,9 +286,7 @@ describe("createScrollController", () => {
     // RAF mocks for this describe block
     rafCallbacks = [];
     rafId = 0;
-    // @ts-expect-error - mocking global
     globalThis.requestAnimationFrame = mockRaf;
-    // @ts-expect-error - mocking global
     globalThis.cancelAnimationFrame = mockCancelRaf;
   });
 
@@ -2421,9 +2417,12 @@ describe("scroll controller window mode compression", () => {
     controller.scrollTo(300);
 
     expect(scrollToSpy).toHaveBeenCalled();
-    const callArgs = scrollToSpy.mock.calls[0]?.[0] as any;
-    if (callArgs && typeof callArgs === "object") {
-      expect(callArgs.left).toBeDefined();
+    const calls = scrollToSpy.mock.calls as any[];
+    if (calls.length > 0) {
+      const callArgs = calls[0][0];
+      if (callArgs && typeof callArgs === "object") {
+        expect(callArgs.left).toBeDefined();
+      }
     }
 
     controller.destroy();
