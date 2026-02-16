@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import { createVList } from "vlist";
+import { createVList } from "../vlist";
 import type {
   VListConfig,
   VListItem,
@@ -20,7 +20,7 @@ import type {
   VListEvents,
   EventHandler,
   Unsubscribe,
-} from "vlist";
+} from "../types";
 
 // =============================================================================
 // Types
