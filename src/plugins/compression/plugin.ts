@@ -82,8 +82,6 @@ export const withCompression = <
        * When compression state changes (e.g. total items changed):
        * - Updates the scroll controller's compression config
        */
-      const originalUpdateCompressionMode = ctx.updateCompressionMode.bind(ctx);
-
       const enhancedUpdateCompressionMode = (): void => {
         const total = ctx.getVirtualTotal();
         const compression = getCompressionState(total, ctx.heightCache);

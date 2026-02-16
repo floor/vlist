@@ -7,6 +7,7 @@ import type {
   VListItem,
   VListEvents,
   ItemConfig,
+  ItemTemplate,
   Range,
   ViewportState,
   EventHandler,
@@ -24,7 +25,7 @@ import type {
 } from "../render";
 import type { CompressionState } from "../render/virtual";
 import type { SimpleDataManager } from "./data";
-import type { ScrollController } from "../scroll/controller";
+import type { ScrollController } from "../plugins/scroll/controller";
 import type { Emitter } from "../events";
 
 // =============================================================================

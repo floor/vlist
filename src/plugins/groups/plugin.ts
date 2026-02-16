@@ -38,7 +38,7 @@ import {
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
 
-import { calculateScrollToIndex, createRenderer } from "../../render";
+import { calculateScrollToIndex } from "../../render";
 
 // =============================================================================
 // Plugin Config
@@ -116,7 +116,7 @@ export const withGroups = <T extends VListItem = VListItem>(
     priority: 10,
 
     setup(ctx: BuilderContext<T>): void {
-      const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
+      const { dom, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
       // Validate direction/reverse constraints

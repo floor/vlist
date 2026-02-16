@@ -20,10 +20,6 @@
 import type { VListItem, ScrollSnapshot } from "../../types";
 import type { VListPlugin, BuilderContext } from "../../builder/types";
 
-import {
-  selectItems,
-} from "../../selection/state";
-
 // =============================================================================
 // Plugin Factory
 // =============================================================================
@@ -50,7 +46,9 @@ import {
  * if (saved) list.restoreScroll(saved)
  * ```
  */
-export const withSnapshots = <T extends VListItem = VListItem>(): VListPlugin<T> => {
+export const withSnapshots = <
+  T extends VListItem = VListItem,
+>(): VListPlugin<T> => {
   return {
     name: "withSnapshots",
     priority: 50,
@@ -59,103 +57,89 @@ export const withSnapshots = <T extends VListItem = VListItem>(): VListPlugin<T>
 
     setup(ctx: BuilderContext<T>): void {
       // ── getScrollSnapshot ──
-      ctx.methods.set(
-        "getScrollSnapshot",
-        (): ScrollSnapshot => {
-          const scrollTop = ctx.scrollController.getScrollTop();
-          const compression = ctx.getCachedCompression();
-          const totalItems = ctx.getVirtualTotal();
+      ctx.methods.set("getScrollSnapshot", (): ScrollSnapshot => {
+        const scrollTop = ctx.scrollController.getScrollTop();
+        const compression = ctx.getCachedCompression();
+        const totalItems = ctx.getVirtualTotal();
 
-          // Check if selection plugin registered getSelected
-          const getSelected = ctx.methods.get("getSelected") as
-            | (() => Array<string | number>)
-            | undefined;
-          const selectedIds =
-            getSelected && getSelected().length > 0
-              ? getSelected()
-              : undefined;
+        // Check if selection plugin registered getSelected
+        const getSelected = ctx.methods.get("getSelected") as
+          | (() => Array<string | number>)
+          | undefined;
+        const selectedIds =
+          getSelected && getSelected().length > 0 ? getSelected() : undefined;
 
-          if (totalItems === 0) {
-            const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0 };
-            if (selectedIds) snapshot.selectedIds = selectedIds;
-            return snapshot;
-          }
-
-          let index: number;
-          let offsetInItem: number;
-
-          if (compression.isCompressed) {
-            // Compressed: scroll position maps linearly to item index
-            const scrollRatio = scrollTop / compression.virtualHeight;
-            const exactIndex = scrollRatio * totalItems;
-            index = Math.max(
-              0,
-              Math.min(Math.floor(exactIndex), totalItems - 1),
-            );
-            const fraction = exactIndex - index;
-            offsetInItem = fraction * ctx.heightCache.getHeight(index);
-          } else {
-            // Normal: direct offset lookup
-            index = ctx.heightCache.indexAtOffset(scrollTop);
-            offsetInItem = scrollTop - ctx.heightCache.getOffset(index);
-          }
-
-          // Clamp offsetInItem to non-negative (floating point edge cases)
-          offsetInItem = Math.max(0, offsetInItem);
-
-          const snapshot: ScrollSnapshot = { index, offsetInItem };
+        if (totalItems === 0) {
+          const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0 };
           if (selectedIds) snapshot.selectedIds = selectedIds;
           return snapshot;
-        },
-      );
+        }
+
+        let index: number;
+        let offsetInItem: number;
+
+        if (compression.isCompressed) {
+          // Compressed: scroll position maps linearly to item index
+          const scrollRatio = scrollTop / compression.virtualHeight;
+          const exactIndex = scrollRatio * totalItems;
+          index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
+          const fraction = exactIndex - index;
+          offsetInItem = fraction * ctx.heightCache.getHeight(index);
+        } else {
+          // Normal: direct offset lookup
+          index = ctx.heightCache.indexAtOffset(scrollTop);
+          offsetInItem = scrollTop - ctx.heightCache.getOffset(index);
+        }
+
+        // Clamp offsetInItem to non-negative (floating point edge cases)
+        offsetInItem = Math.max(0, offsetInItem);
+
+        const snapshot: ScrollSnapshot = { index, offsetInItem };
+        if (selectedIds) snapshot.selectedIds = selectedIds;
+        return snapshot;
+      });
 
       // ── restoreScroll ──
-      ctx.methods.set(
-        "restoreScroll",
-        (snapshot: ScrollSnapshot): void => {
-          const { index, offsetInItem, selectedIds } = snapshot;
-          const compression = ctx.getCachedCompression();
-          const totalItems = ctx.getVirtualTotal();
+      ctx.methods.set("restoreScroll", (snapshot: ScrollSnapshot): void => {
+        const { index, offsetInItem, selectedIds } = snapshot;
+        const compression = ctx.getCachedCompression();
+        const totalItems = ctx.getVirtualTotal();
 
-          if (totalItems === 0) return;
+        if (totalItems === 0) return;
 
-          const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
-          let scrollPosition: number;
+        const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
+        let scrollPosition: number;
 
-          if (compression.isCompressed) {
-            // Compressed: reverse the linear mapping
-            const itemHeight = ctx.heightCache.getHeight(safeIndex);
-            const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
-            scrollPosition =
-              ((safeIndex + fraction) / totalItems) *
-              compression.virtualHeight;
-          } else {
-            // Normal: direct offset
-            scrollPosition =
-              ctx.heightCache.getOffset(safeIndex) + offsetInItem;
+        if (compression.isCompressed) {
+          // Compressed: reverse the linear mapping
+          const itemHeight = ctx.heightCache.getHeight(safeIndex);
+          const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
+          scrollPosition =
+            ((safeIndex + fraction) / totalItems) * compression.virtualHeight;
+        } else {
+          // Normal: direct offset
+          scrollPosition = ctx.heightCache.getOffset(safeIndex) + offsetInItem;
+        }
+
+        // Clamp to valid range
+        const maxScroll = Math.max(
+          0,
+          compression.virtualHeight - ctx.state.viewportState.containerHeight,
+        );
+        scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
+
+        ctx.scrollController.scrollTo(scrollPosition);
+
+        // Restore selection if provided and selection plugin is present
+        if (selectedIds && selectedIds.length > 0) {
+          const selectFn = ctx.methods.get("select") as
+            | ((...ids: Array<string | number>) => void)
+            | undefined;
+          if (selectFn) {
+            selectFn(...selectedIds);
           }
-
-          // Clamp to valid range
-          const maxScroll = Math.max(
-            0,
-            compression.virtualHeight -
-              ctx.state.viewportState.containerHeight,
-          );
-          scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
-
-          ctx.scrollController.scrollTo(scrollPosition);
-
-          // Restore selection if provided and selection plugin is present
-          if (selectedIds && selectedIds.length > 0) {
-            const selectFn = ctx.methods.get("select") as
-              | ((...ids: Array<string | number>) => void)
-              | undefined;
-            if (selectFn) {
-              selectFn(...selectedIds);
-            }
-          }
-        },
-      );
+        }
+      });
     },
   };
 };

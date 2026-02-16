@@ -34,7 +34,6 @@ import {
   moveFocusToLast,
   getSelectedIds,
   getSelectedItems,
-  isSelected,
 } from "./state";
 
 import { calculateScrollToIndex } from "../../render";
@@ -364,7 +363,6 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Register public methods ──
       ctx.methods.set("select", (...ids: Array<string | number>): void => {
-        if (mode === "none") return;
         selectionState = selectItems(selectionState, ids, mode);
         renderAndEmit();
       });
@@ -375,7 +373,6 @@ export const withSelection = <T extends VListItem = VListItem>(
       });
 
       ctx.methods.set("toggleSelect", (id: string | number): void => {
-        if (mode === "none") return;
         selectionState = toggleSelection(selectionState, id, mode);
         renderAndEmit();
       });

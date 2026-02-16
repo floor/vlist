@@ -28,7 +28,6 @@ import type {
   VListPlugin,
   VListBuilder,
   BuiltVList,
-  CachedCompression,
 } from "./types";
 
 // Re-export CompressionState type from virtual for plugins that need it
@@ -1078,7 +1077,9 @@ function materialize<T extends VListItem = VListItem>(
   let viewportResizeEnabled = true;
 
   // Pluggable container dimension getters (window mode plugin can replace)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let getContainerWidth = (): number => containerWidth;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let getContainerHeight = (): number => containerHeight;
 
   const resizeObserver = new ResizeObserver((entries) => {
@@ -1370,7 +1371,6 @@ function materialize<T extends VListItem = VListItem>(
       // Update current dimensions immediately
       containerWidth = getter.width();
       containerHeight = getter.height();
-      sharedState.viewportState.containerWidth = containerWidth;
       sharedState.viewportState.containerHeight = containerHeight;
     },
 

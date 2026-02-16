@@ -19,7 +19,7 @@
 import type { VListItem, VListAdapter, Range } from "../../types";
 import type { VListPlugin, BuilderContext } from "../../builder/types";
 
-import { createDataManager, type DataManagerConfig } from "./manager";
+import { createDataManager } from "./manager";
 import { updateViewportItems } from "../../render";
 
 import {
