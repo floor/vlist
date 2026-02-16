@@ -622,11 +622,8 @@ function materialize<T extends VListItem = VListItem>(
         "[vlist/builder] withGrid cannot be used with reverse: true",
       );
     }
-    if (pluginNames.has("withGroups")) {
-      throw new Error(
-        "[vlist/builder] withGroups cannot be used with reverse: true",
-      );
-    }
+    // Note: withGroups validation moved to plugin itself
+    // (allows sticky: false with reverse mode for chat UIs)
   }
 
   // ── Create DOM ──────────────────────────────────────────────────

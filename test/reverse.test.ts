@@ -192,11 +192,12 @@ describe("reverse mode", () => {
   // ---------------------------------------------------------------------------
 
   describe("validation", () => {
-    it("should throw when combined with groups", () => {
+    it("should allow sticky headers with reverse mode", () => {
       const items = createMessages(10);
 
-      expect(() =>
-        createVList({
+      // Default sticky: true should work with reverse mode
+      expect(() => {
+        const list = createVList({
           container,
           item: {
             height: 60,
@@ -209,8 +210,52 @@ describe("reverse mode", () => {
             headerHeight: 30,
             headerTemplate: (group: string) => `<div>${group}</div>`,
           },
-        }),
-      ).toThrow("[vlist/builder] withGroups cannot be used with reverse: true");
+        });
+        list.destroy();
+      }).not.toThrow();
+
+      // Explicit sticky: true should also work
+      expect(() => {
+        const list = createVList({
+          container,
+          item: {
+            height: 60,
+            template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+          },
+          items,
+          reverse: true,
+          groups: {
+            getGroupForIndex: (index: number) => items[index]!.sender,
+            headerHeight: 30,
+            headerTemplate: (group: string) => `<div>${group}</div>`,
+            sticky: true,
+          },
+        });
+        list.destroy();
+      }).not.toThrow();
+    });
+
+    it("should allow inline headers with reverse mode (sticky: false)", () => {
+      const items = createMessages(10);
+
+      expect(() => {
+        const list = createVList({
+          container,
+          item: {
+            height: 60,
+            template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+          },
+          items,
+          reverse: true,
+          groups: {
+            getGroupForIndex: (index: number) => items[index]!.sender,
+            headerHeight: 30,
+            headerTemplate: (group: string) => `<div>${group}</div>`,
+            sticky: false,
+          },
+        });
+        list.destroy();
+      }).not.toThrow();
     });
 
     it("should throw when combined with grid layout", () => {
@@ -789,6 +834,217 @@ describe("reverse mode", () => {
       const scrollAfter = list.getScrollPosition();
       // In non-reverse mode, scroll position is NOT adjusted
       expect(scrollAfter).toBe(scrollBefore);
+
+      list.destroy();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Reverse mode with groups (sticky headers work!)
+  // ---------------------------------------------------------------------------
+
+  describe("with groups", () => {
+    it("should allow reverse mode with non-sticky groups", () => {
+      const items = createMessages(20);
+
+      // This should NOT throw when sticky: false
+      expect(() => {
+        const list = createVList({
+          container,
+          item: {
+            height: 60,
+            template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+          },
+          items,
+          reverse: true,
+          groups: {
+            getGroupForIndex: (index: number) => items[index]!.sender,
+            headerHeight: 30,
+            headerTemplate: (group: string) =>
+              `<div class="date-header">${group}</div>`,
+            sticky: false, // KEY: Inline headers, not sticky
+          },
+        });
+        list.destroy();
+      }).not.toThrow();
+    });
+
+    it("should render inline headers in reverse mode", () => {
+      const items = createMessages(20);
+
+      const list = createVList({
+        container,
+        item: {
+          height: 60,
+          template: (msg: ChatMessage) =>
+            `<div class="message">${msg.text}</div>`,
+        },
+        items,
+        reverse: true,
+        groups: {
+          getGroupForIndex: (index: number) => items[index]!.sender,
+          headerHeight: 30,
+          headerTemplate: (group: string) =>
+            `<div class="group-header">${group}</div>`,
+          sticky: false,
+        },
+      });
+
+      expect(list.total).toBe(20);
+
+      // Check that group headers are rendered (they're part of the layout)
+      const allItems = container.querySelectorAll("[data-index]");
+      expect(allItems.length).toBeGreaterThan(0);
+
+      // Should have some group headers
+      const headers = container.querySelectorAll(".group-header");
+      expect(headers.length).toBeGreaterThan(0);
+
+      list.destroy();
+    });
+
+    it("should start at bottom with inline groups", () => {
+      const items = createMessages(100);
+
+      const list = createVList({
+        container,
+        item: {
+          height: 60,
+          template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+        },
+        items,
+        reverse: true,
+        groups: {
+          getGroupForIndex: (index: number) => {
+            // Group by tens for testing
+            return `Group ${Math.floor(index / 10)}`;
+          },
+          headerHeight: 30,
+          headerTemplate: (group: string) => `<div>${group}</div>`,
+          sticky: false,
+        },
+      });
+
+      const scrollTop = list.getScrollPosition();
+      const maxScroll = container.scrollHeight - container.clientHeight;
+
+      // Should be at or near bottom
+      expect(scrollTop).toBeGreaterThan(maxScroll * 0.9);
+
+      list.destroy();
+    });
+
+    it("should work with scrollToIndex when using inline groups", () => {
+      const items = createMessages(30);
+
+      const list = createVList({
+        container,
+        item: {
+          height: 60,
+          template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+        },
+        items,
+        reverse: true,
+        groups: {
+          getGroupForIndex: (index: number) => items[index]!.sender,
+          headerHeight: 30,
+          headerTemplate: (group: string) => `<div>${group}</div>`,
+          sticky: false,
+        },
+      });
+
+      expect(list.total).toBe(30);
+
+      // scrollToIndex should work with groups
+      expect(() => {
+        list.scrollToIndex(15, "center");
+      }).not.toThrow();
+
+      list.destroy();
+    });
+
+    it("should support data operations with inline groups", () => {
+      const items = createMessages(20);
+
+      const list = createVList({
+        container,
+        item: {
+          height: 60,
+          template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+        },
+        items,
+        reverse: true,
+        groups: {
+          getGroupForIndex: (index: number) => items[index]!.sender,
+          headerHeight: 30,
+          headerTemplate: (group: string) => `<div>${group}</div>`,
+          sticky: false,
+        },
+      });
+
+      expect(list.total).toBe(20);
+
+      // Should start at bottom
+      const scrollBefore = list.getScrollPosition();
+      const maxScrollBefore = container.scrollHeight - container.clientHeight;
+      expect(scrollBefore).toBeGreaterThan(maxScrollBefore * 0.8);
+
+      list.destroy();
+    });
+
+    it("should work with sticky headers in reverse mode", () => {
+      const items = createMessages(20);
+
+      // Sticky headers should work with reverse mode
+      expect(() => {
+        const list = createVList({
+          container,
+          item: {
+            height: 60,
+            template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+          },
+          items,
+          reverse: true,
+          groups: {
+            getGroupForIndex: (index: number) => items[index]!.sender,
+            headerHeight: 30,
+            headerTemplate: (group: string) => `<div>${group}</div>`,
+            sticky: true, // Sticky headers work in reverse mode!
+          },
+        });
+        list.destroy();
+      }).not.toThrow();
+    });
+
+    it("should work with variable heights and inline groups", () => {
+      const items = createMessages(30);
+
+      const list = createVList({
+        container,
+        item: {
+          height: (index: number) => {
+            // Variable heights based on message content
+            const msg = items[index]!;
+            return msg.text.length > 20 ? 80 : 60;
+          },
+          template: (msg: ChatMessage) => `<div>${msg.text}</div>`,
+        },
+        items,
+        reverse: true,
+        groups: {
+          getGroupForIndex: (index: number) => items[index]!.sender,
+          headerHeight: 30,
+          headerTemplate: (group: string) => `<div>${group}</div>`,
+          sticky: false,
+        },
+      });
+
+      expect(list.total).toBe(30);
+
+      // Should still start at bottom
+      const scrollTop = list.getScrollPosition();
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      expect(scrollTop).toBeGreaterThan(maxScroll * 0.8);
 
       list.destroy();
     });
