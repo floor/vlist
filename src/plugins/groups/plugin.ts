@@ -146,7 +146,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         getGroupForIndex: config.getGroupForIndex,
         headerHeight: config.headerHeight,
         headerTemplate: config.headerTemplate,
-        sticky: config.sticky,
+        sticky: config.sticky ?? false,
       };
 
       groupLayout = createGroupLayout(total, groupsConfig);
@@ -201,7 +201,7 @@ export const withGroups = <T extends VListItem = VListItem>(
           // Update grid layout to handle full-width headers
           updateGridLayoutForGroups((index: number) => {
             const item = layoutItems[index];
-            return item && isGroupHeader(item);
+            return !!(item && isGroupHeader(item));
           });
         }
 
@@ -209,7 +209,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         const { createGridRenderer } = require("../grid/renderer");
         const gridLayout = getGridLayout();
 
-        const newGridRenderer = createGridRenderer<T>(
+        const newGridRenderer = createGridRenderer(
           dom.items,
           unifiedTemplate,
           ctx.heightCache,
@@ -237,7 +237,7 @@ export const withGroups = <T extends VListItem = VListItem>(
           dom.root,
           groupLayout,
           ctx.heightCache,
-          groupsConfig,
+          { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
           classPrefix,
         );
 
@@ -304,13 +304,16 @@ export const withGroups = <T extends VListItem = VListItem>(
             | "start"
             | "center"
             | "end"
-            | import("../types").ScrollToOptions,
+            | {
+                align?: "start" | "center" | "end";
+                behavior?: "auto" | "smooth";
+                duration?: number;
+              },
         ): void => {
           // Convert data index to layout index
           const layoutIndex = groupLayout!.dataToLayoutIndex(index);
 
-          const { align, behavior, duration } =
-            resolveScrollArgs(alignOrOptions);
+          const { align, behavior } = resolveScrollArgs(alignOrOptions);
           const total = ctx.dataManager.getTotal();
 
           const position = calculateScrollToIndex(
@@ -365,7 +368,11 @@ const resolveScrollArgs = (
     | "start"
     | "center"
     | "end"
-    | import("../types").ScrollToOptions,
+    | {
+        align?: "start" | "center" | "end";
+        behavior?: "auto" | "smooth";
+        duration?: number;
+      },
 ): {
   align: "start" | "center" | "end";
   behavior: "auto" | "smooth";
@@ -373,7 +380,7 @@ const resolveScrollArgs = (
 } => {
   if (typeof alignOrOptions === "string") {
     return {
-      align: alignOrOptions,
+      align: alignOrOptions as "start" | "center" | "end",
       behavior: "auto",
       duration: DEFAULT_SMOOTH_DURATION,
     };

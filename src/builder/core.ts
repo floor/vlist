@@ -1077,9 +1077,9 @@ function materialize<T extends VListItem = VListItem>(
   let viewportResizeEnabled = true;
 
   // Pluggable container dimension getters (window mode plugin can replace)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-ignore - used by window plugin via setContainerDimensions
   let getContainerWidth = (): number => containerWidth;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-ignore - used by window plugin via setContainerDimensions
   let getContainerHeight = (): number => containerHeight;
 
   const resizeObserver = new ResizeObserver((entries) => {
