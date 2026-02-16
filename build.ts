@@ -269,14 +269,71 @@ async function build() {
       ...adapterModules.map((a) => `./dist/${a.out}/index.js`),
     ];
 
+    // Smart line breaking that avoids breaking strings
+    const addLineBreaks = (code: string): string => {
+      let result = "";
+      let inString = false;
+      let stringChar = "";
+      let inTemplate = false;
+      let templateDepth = 0;
+
+      for (let i = 0; i < code.length; i++) {
+        const char = code[i];
+        const prev = code[i - 1];
+        const next = code[i + 1];
+
+        // Track string state
+        if (!inTemplate && (char === '"' || char === "'") && prev !== "\\") {
+          if (!inString) {
+            inString = true;
+            stringChar = char;
+          } else if (char === stringChar) {
+            inString = false;
+            stringChar = "";
+          }
+        }
+
+        // Track template literal state
+        if (char === "`" && prev !== "\\") {
+          if (!inTemplate) {
+            inTemplate = true;
+            templateDepth = 1;
+          } else {
+            templateDepth--;
+            if (templateDepth === 0) {
+              inTemplate = false;
+            }
+          }
+        }
+
+        // Track nested templates
+        if (inTemplate && char === "{" && prev === "$") {
+          templateDepth++;
+        } else if (inTemplate && char === "}" && templateDepth > 1) {
+          templateDepth--;
+        }
+
+        result += char;
+
+        // Add line breaks after semicolons and braces, but only outside strings
+        if (!inString && !inTemplate) {
+          if (
+            (char === ";" || char === "}") &&
+            next &&
+            /[a-zA-Z$_]/.test(next)
+          ) {
+            result += "\n";
+          }
+        }
+      }
+
+      return result;
+    };
+
     for (const file of filesToFix) {
       if (existsSync(file)) {
         let content = readFileSync(file, "utf-8");
-        // Add line breaks after semicolons and closing braces to prevent very long lines
-        // This makes the output compatible with esbuild-wasm used by Bundlephobia
-        content = content
-          .replace(/;(?=[a-zA-Z$_])/g, ";\n")
-          .replace(/\}(?=[a-zA-Z$_])/g, "}\n");
+        content = addLineBreaks(content);
         writeFileSync(file, content);
       }
     }
