@@ -4,6 +4,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
+[![tests](https://img.shields.io/badge/tests-1730%20passing-brightgreen)](https://github.com/floor/vlist)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 ## Features
