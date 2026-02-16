@@ -9,12 +9,12 @@
 After the `refactor/builder-pattern` and `feat/plugin-architecture` merges, many tests are failing or irrelevant due to API changes.
 
 **Current Status:**
-- ✅ 706 tests passing (was 646)
-- ❌ 50 tests failing (was 110)
+- ✅ 733 tests passing (was 646)
+- ❌ 23 tests failing (was 110)
 - ⚠️ 11 errors
 - **Total:** 756 tests across 22 files
 
-**Progress:** 60 tests fixed! (85.5% → 93.4% passing)
+**Progress:** 87 tests fixed! (85.5% → 96.9% passing)
 
 ## Test Failure Breakdown
 
@@ -41,7 +41,8 @@ The spread operator (`{ ...instance }`) in `vlist.ts` was destroying getters! Wh
 
 ---
 
-#### 2. Horizontal Direction Tests (26 failures)
+#### 2. Horizontal Direction Tests (26 failures) ⏳ PARTIAL
+**Remaining:** 6 failures (DOM structure issues)
 **File:** `test/core.test.ts` (createVList horizontal direction)
 
 **Issues:**
@@ -57,24 +58,26 @@ The spread operator (`{ ...instance }`) in `vlist.ts` was destroying getters! Wh
 
 ---
 
-#### 3. Grid Mode Tests (16 failures)
+#### 3. Grid Mode Tests (16 failures) ✅ FIXED
 **File:** `test/core.test.ts` (createVList grid mode)
 
 **Issues:**
 - Validation errors format changed
 - Grid initialization failing
 - Data methods not working in grid mode
-- Grid + compression integration broken (4 additional failures in `test/integration.test.ts`)
+- `total` returning row count instead of item count
 
-**Fix Strategy:**
-- [ ] Update validation error expectations
-- [ ] Fix grid mode initialization with builder
-- [ ] Fix grid data methods (`setItems`, `appendItems`, `removeItem`)
-- [ ] Fix grid + compression integration
+**Fix Applied:**
+- ✅ Updated validation error expectations
+- ✅ Fixed grid mode initialization with builder
+- ✅ Added `_getTotal` override in grid plugin to return flat item count
+- ✅ All grid tests now passing!
+
+**Result:** All 16 grid mode tests passing!
 
 ---
 
-#### 4. Groups Mode Tests (12 failures)
+#### 4. Groups Mode Tests (12 failures) ✅ FIXED
 **File:** `test/core.test.ts` (createVList groups mode)
 
 **Issues:**
@@ -82,17 +85,15 @@ The spread operator (`{ ...instance }`) in `vlist.ts` was destroying getters! Wh
 - Data methods (`setItems`, `appendItems`, `prependItems`, `removeItem`) broken
 - Group layout rebuild not working
 - Items getter not returning original items without headers
+- Total getter returning layout items (with headers) instead of original items
 
-**Additional Failures:**
-- `test/vlist-coverage.test.ts`: 4 failures in groups data mutation methods
-- `test/vlist-coverage.test.ts`: 2 failures in groups scrollToIndex
+**Fix Applied:**
+- ✅ Modified builder core to check for `_getItems` plugin override
+- ✅ Modified builder core to check for `_getTotal` plugin override
+- ✅ Groups plugin already sets these overrides to return original items
+- ✅ All groups tests now passing!
 
-**Fix Strategy:**
-- [ ] Fix groups initialization with builder
-- [ ] Fix groups data mutation methods
-- [ ] Fix group layout rebuild logic
-- [ ] Fix items getter to exclude headers
-- [ ] Fix scrollToIndex with groups
+**Result:** All 12 groups mode tests passing!
 
 ---
 
@@ -228,7 +229,7 @@ The spread operator (`{ ...instance }`) in `vlist.ts` was destroying getters! Wh
 
 **Solution:** Update all error message expectations globally.
 
-### 2. Data Methods Not Working ✅ FIXED (Root Cause)
+### 2. Data Methods Not Working ✅ FIXED
 `appendItems()`, `prependItems()`, `setItems()`, `removeItem()` appeared broken in several modes.
 
 **Root Cause Found:**
@@ -302,23 +303,27 @@ Tests for combinations (reverse + groups, horizontal + groups, grid + groups) ar
 
 ## Progress Tracking
 
-- [x] Phase 1: Core API (4/5) - **80% complete**
+- [x] Phase 1: Core API (5/5) - **100% complete!** ✅
   - ✅ Error message format
   - ✅ Data mutation methods
-  - ✅ Total getter
+  - ✅ Total getter (with plugin overrides)
   - ✅ Reverse mode
-  - ⏳ Groups mode
-- [ ] Phase 2: Layout Modes (0/3)
+  - ✅ Groups mode
+- [x] Phase 2: Layout Modes (2/3) - **67% complete**
+  - ⏳ Horizontal mode (partial - class modifier added, DOM structure needs work)
+  - ✅ Grid mode
+  - ✅ Grid + compression integration (fixed with grid mode)
 - [ ] Phase 3: Advanced Features (0/5)
 - [ ] Phase 4: Edge Cases & Cleanup (0/3)
 
 **Target:** All tests passing (756/756)
-**Current:** 706/756 passing (93.4%)
-**Remaining:** 50 failures to fix
+**Current:** 733/756 passing (96.9%)
+**Remaining:** 23 failures to fix
 
 **Major Wins:** 
 - Fixed the spread operator bug that was breaking getters - this fixed 45+ tests!
 - Fixed all validation error message format issues - 15+ more tests fixed!
+- Fixed groups and grid modes with plugin getter overrides - 27+ more tests fixed!
 
 ---
 
@@ -340,18 +345,34 @@ Tests for combinations (reverse + groups, horizontal + groups, grid + groups) ar
 - Impact: Fixed 15 more tests
 - Progress: 91.4% → 93.4% passing (691 → 706 tests)
 
-**Remaining Issues (50 failures):**
-- Horizontal mode DOM structure (overflow, width) - needs full implementation
-- Groups mode data mutations and total getter
-- Grid mode data methods and total getter
+**Remaining Issues (23 failures):**
 - Live region / accessibility tests (8 failures)
-- Grid + compression integration (4 failures)
+- Horizontal mode DOM structure (6 failures) - overflow, width calculations
+- Validation error messages (4 failures) - final cleanup
 - Window resize handler (2 failures)
+- Keyboard navigation ARIA (2 failures)
+- Edge cases (2 failures)
+
+### 2026-02-16 - Phase 1 Complete + Groups/Grid Fixed (Session 3)
+**Fixed:** Groups and grid modes with plugin getter overrides
+- **Root cause:** Builder API didn't check for `_getItems` and `_getTotal` plugin overrides
+- **Solution:** Added checks in builder core API getters
+- Groups plugin already set these overrides (returning original items without headers)
+- Grid plugin added `_getTotal` override (returning flat item count, not row count)
+- Impact: Fixed 27 more tests
+- Progress: 93.4% → 96.9% passing (706 → 733 tests)
+
+**Phase 1 Complete! ✅**
+- All core API functionality working
+- All data mutation methods working
+- All mode combinations validated properly
+- Groups and grid modes fully functional
 
 **Next Steps:**
-- Focus on groups mode (data mutations, total getter) - 12 failures
-- Investigate grid mode failures - 10 failures
-- Horizontal mode may require larger refactor (DOM structure changes)
+- Live region / accessibility (8 failures) - likely needs feature implementation
+- Horizontal mode (6 failures) - needs DOM structure implementation
+- Final validation cleanup (4 failures)
+- Minor edge cases (6 failures)
 
 ---
 
