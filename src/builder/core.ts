@@ -1006,14 +1006,42 @@ function materialize<T extends VListItem = VListItem>(
     const target = event.target as HTMLElement;
     const itemEl = target.closest("[data-index]") as HTMLElement | null;
     if (itemEl) {
-      const index = parseInt(itemEl.dataset.index ?? "-1", 10);
-      if (index >= 0 && items[index]) {
-        emitter.emit("item:click", { item: items[index], index, event });
+      const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
+      if (layoutIndex >= 0) {
+        const item =
+          dataManagerProxy?.getItem(layoutIndex) ?? items[layoutIndex];
+        if (item) {
+          // Skip group headers
+          if ((item as any).__groupHeader) {
+            return;
+          }
+          emitter.emit("item:click", { item, index: layoutIndex, event });
+        }
       }
     }
 
     for (let i = 0; i < clickHandlers.length; i++) {
       clickHandlers[i]!(event);
+    }
+  };
+
+  const handleDblClick = (event: MouseEvent): void => {
+    // Core: emit item:dblclick
+    const target = event.target as HTMLElement;
+    const itemEl = target.closest("[data-index]") as HTMLElement | null;
+    if (itemEl) {
+      const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
+      if (layoutIndex >= 0) {
+        const item =
+          dataManagerProxy?.getItem(layoutIndex) ?? items[layoutIndex];
+        if (item) {
+          // Skip group headers
+          if ((item as any).__groupHeader) {
+            return;
+          }
+          emitter.emit("item:dblclick", { item, index: layoutIndex, event });
+        }
+      }
     }
   };
 
@@ -1024,6 +1052,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   dom.items.addEventListener("click", handleClick);
+  dom.items.addEventListener("dblclick", handleDblClick);
   dom.root.addEventListener("keydown", handleKeydown);
 
   // ── ResizeObserver ──────────────────────────────────────────────

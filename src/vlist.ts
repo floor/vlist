@@ -51,8 +51,19 @@ export const createVList = <T extends VListItem = VListItem>(
     );
   }
 
+  // Auto-apply grid plugin if layout is 'grid' or grid config provided
+  if (config.layout === "grid" && config.grid) {
+    const gridConfig: { columns: number; gap?: number } = {
+      columns: config.grid.columns,
+    };
+    if (config.grid.gap !== undefined) {
+      gridConfig.gap = config.grid.gap;
+    }
+    builder = builder.use(withGrid(gridConfig));
+  }
+
   // Auto-apply groups plugin if groups config provided
-  // Note: Groups and grid are mutually exclusive
+  // Works together with grid for grouped 2D layouts
   if (config.groups) {
     const groupsConfig: {
       getGroupForIndex: (index: number) => string;
@@ -74,16 +85,6 @@ export const createVList = <T extends VListItem = VListItem>(
       groupsConfig.sticky = config.groups.sticky;
     }
     builder = builder.use(withGroups(groupsConfig));
-  }
-  // Auto-apply grid plugin if layout is 'grid'
-  else if (config.layout === "grid" && config.grid) {
-    const gridConfig: { columns: number; gap?: number } = {
-      columns: config.grid.columns,
-    };
-    if (config.grid.gap !== undefined) {
-      gridConfig.gap = config.grid.gap;
-    }
-    builder = builder.use(withGrid(gridConfig));
   }
 
   // Auto-apply selection plugin if selection config provided
