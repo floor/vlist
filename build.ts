@@ -1,6 +1,6 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -258,6 +258,30 @@ async function build() {
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
+
+  // Post-process: Add line breaks for esbuild-wasm compatibility
+  if (!isDev) {
+    console.log("\nAdding line breaks for bundler compatibility...");
+    const filesToFix = [
+      "./dist/index.js",
+      "./dist/core-light.js",
+      ...allModules.map((m) => `./dist/${m.out}/index.js`),
+      ...adapterModules.map((a) => `./dist/${a.out}/index.js`),
+    ];
+
+    for (const file of filesToFix) {
+      if (existsSync(file)) {
+        let content = readFileSync(file, "utf-8");
+        // Add line breaks after semicolons and closing braces to prevent very long lines
+        // This makes the output compatible with esbuild-wasm used by Bundlephobia
+        content = content
+          .replace(/;(?=[a-zA-Z$_])/g, ";\n")
+          .replace(/\}(?=[a-zA-Z$_])/g, "}\n");
+        writeFileSync(file, content);
+      }
+    }
+    console.log("✓ Line breaks added");
+  }
 }
 
 if (isDev) {
