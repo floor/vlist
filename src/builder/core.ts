@@ -289,6 +289,7 @@ const createDOMStructure = (
 ): DOMStructure => {
   const root = document.createElement("div");
   root.className = classPrefix;
+  if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
   root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
   if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
