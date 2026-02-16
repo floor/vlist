@@ -3,7 +3,15 @@
  * Tests for the vlist entry point that auto-applies plugins based on config
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "bun:test";
 import { JSDOM } from "jsdom";
 import { createVList } from "../src/vlist";
 import type { VListConfig, VListItem } from "../src/types";
@@ -77,8 +85,14 @@ let container: HTMLElement;
 
 beforeEach(() => {
   container = document.createElement("div");
-  Object.defineProperty(container, "clientHeight", { value: 600, configurable: true });
-  Object.defineProperty(container, "clientWidth", { value: 400, configurable: true });
+  Object.defineProperty(container, "clientHeight", {
+    value: 600,
+    configurable: true,
+  });
+  Object.defineProperty(container, "clientWidth", {
+    value: 400,
+    configurable: true,
+  });
   document.body.appendChild(container);
 });
 
@@ -190,7 +204,7 @@ describe("vlist entry point", () => {
         container,
         item: { height: 40, template },
         items: createTestItems(100),
-        scrollbar: "none",
+        scroll: { scrollbar: "none" },
       });
 
       // Scrollbar should not be created
@@ -396,7 +410,7 @@ describe("vlist entry point", () => {
         container,
         item: { height: 40, template },
         items: createTestItems(100),
-        scrollbar: { autoHide: true, trackColor: "#ccc" },
+        scroll: { scrollbar: { autoHide: true } },
       });
 
       expect(list.element.querySelector(".vlist-scrollbar")).toBeDefined();
@@ -589,7 +603,9 @@ describe("vlist entry point", () => {
       expect(list.items.length).toBe(10);
 
       // Mutate data
-      list.appendItems(createTestItems(5).map(item => ({ ...item, id: item.id + 10 })));
+      list.appendItems(
+        createTestItems(5).map((item) => ({ ...item, id: item.id + 10 })),
+      );
 
       // Getters should still work
       expect(list.total).toBe(15);

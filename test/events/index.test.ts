@@ -12,6 +12,7 @@ interface TestEvents {
   change: { value: string };
   empty: Record<string, never>;
   data: { items: number[] };
+  [key: string]: unknown;
 }
 
 describe("createEmitter", () => {
@@ -75,7 +76,7 @@ describe("on / emit", () => {
 
   it("should pass correct payload to handler", () => {
     const emitter = createEmitter<TestEvents>();
-    let receivedPayload: { items: number[] } | null = null;
+    let receivedPayload: { items: number[] } | undefined;
 
     emitter.on("data", (payload) => {
       receivedPayload = payload;

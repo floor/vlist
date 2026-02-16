@@ -538,8 +538,9 @@ describe("vlist window resize handler", () => {
 
     // The resize handler should have been called (containerHeight changed)
     expect(resizeHandler).toHaveBeenCalled();
-    const payload = resizeHandler.mock.calls[0]?.[0] as any;
-    if (payload) {
+    const calls = resizeHandler.mock.calls as any[];
+    if (calls.length > 0) {
+      const payload = calls[0][0];
       expect(payload.height).toBe(800);
       expect(payload.width).toBe(400);
     }
@@ -1030,7 +1031,7 @@ describe("vlist groups scrollToIndex wrapper", () => {
 
     // Use options object form
     expect(() =>
-      vlist!.scrollToIndex(2, { align: "center", behavior: "instant" }),
+      vlist!.scrollToIndex(2, { align: "center", behavior: "auto" }),
     ).not.toThrow();
   });
 
@@ -1689,7 +1690,7 @@ describe("vlist window mode compression sync", () => {
 
 describe("vlist additional edge cases", () => {
   let container: HTMLElement;
-  let vlist: VList<TestItem> | null = null;
+  let vlist: VList<any> | null = null;
 
   beforeEach(() => {
     container = createContainer();
