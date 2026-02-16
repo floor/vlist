@@ -2869,11 +2869,12 @@ describe("withGroups plugin", () => {
     }).toThrow(/cannot be used with direction: 'horizontal'/);
   });
 
-  it("should throw when used with reverse mode", () => {
+  it("should allow sticky headers with reverse mode", () => {
     const items = createGroupedItems(6);
 
+    // Default sticky: true should work with reverse mode
     expect(() => {
-      vlist<GroupedTestItem>({
+      const list = vlist<GroupedTestItem>({
         container,
         item: { height: 50, template: groupedTemplate },
         items,
@@ -2887,7 +2888,52 @@ describe("withGroups plugin", () => {
           }),
         )
         .build();
-    }).toThrow(/cannot be used with reverse: true/);
+      list.destroy();
+    }).not.toThrow();
+
+    // Explicit sticky: true should also work
+    expect(() => {
+      const list = vlist<GroupedTestItem>({
+        container,
+        item: { height: 50, template: groupedTemplate },
+        items,
+        reverse: true,
+      })
+        .use(
+          withGroups({
+            getGroupForIndex: (i) => items[i]!.group,
+            headerHeight: 32,
+            headerTemplate,
+            sticky: true,
+          }),
+        )
+        .build();
+      list.destroy();
+    }).not.toThrow();
+  });
+
+  it("should allow inline headers with reverse mode (sticky: false)", () => {
+    const items = createGroupedItems(6);
+
+    // sticky: false should also work with reverse mode
+    expect(() => {
+      const list = vlist<GroupedTestItem>({
+        container,
+        item: { height: 50, template: groupedTemplate },
+        items,
+        reverse: true,
+      })
+        .use(
+          withGroups({
+            getGroupForIndex: (i) => items[i]!.group,
+            headerHeight: 32,
+            headerTemplate,
+            sticky: false,
+          }),
+        )
+        .build();
+      list.destroy();
+    }).not.toThrow();
   });
 
   it("should clean up grouped class on destroy", () => {

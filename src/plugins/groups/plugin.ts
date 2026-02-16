@@ -15,9 +15,10 @@
  * Restrictions:
  * - Items must be pre-sorted by group
  * - Cannot be combined with direction: 'horizontal'
- * - Cannot be combined with reverse: true
  *
- * Can be combined with withGrid for grouped 2D layouts.
+ * Can be combined with:
+ * - withGrid for grouped 2D layouts
+ * - reverse: true (sticky header shows current section as you scroll up through history)
  */
 
 import type { VListItem } from "../../types";
@@ -119,17 +120,14 @@ export const withGroups = <T extends VListItem = VListItem>(
       const { dom, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      // Validate direction/reverse constraints
+      // Validate direction constraint
       if (resolvedConfig.horizontal) {
         throw new Error(
           "[vlist/builder] withGroups cannot be used with direction: 'horizontal'",
         );
       }
-      if (resolvedConfig.reverse) {
-        throw new Error(
-          "[vlist/builder] withGroups cannot be used with reverse: true",
-        );
-      }
+      // Note: sticky headers work with reverse mode!
+      // As you scroll up through history, the current section header sticks at top
 
       // ── Get the base item height ──
       const itemConfig = rawConfig.item;
