@@ -1187,6 +1187,7 @@ describe("createStickyHeader", () => {
         getTotalHeight: () => 100 + 4 * 40,
         getTotal: () => 4,
         rebuild: () => {},
+        isVariable: () => false,
       };
 
       const sticky = createStickyHeader(
@@ -1226,6 +1227,7 @@ describe("createStickyHeader", () => {
         getTotalHeight: () => 100 + 4 * 40,
         getTotal: () => 4,
         rebuild: () => {},
+        isVariable: () => false,
       };
 
       const sticky = createStickyHeader(
@@ -1265,6 +1267,7 @@ describe("createStickyHeader", () => {
         getTotalHeight: () => 100 + 4 * 40,
         getTotal: () => 4,
         rebuild: () => {},
+        isVariable: () => false,
       };
 
       const sticky = createStickyHeader(
@@ -1506,6 +1509,7 @@ describe("groups/sticky — invalid group index (L85-86)", () => {
     id: number;
     name: string;
     category: string;
+    [key: string]: unknown;
   }
 
   it("should handle sticky header at scroll position with no valid group", () => {
