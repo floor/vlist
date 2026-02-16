@@ -2863,7 +2863,7 @@ describe("vlist — validation", () => {
         container: null as any,
         item: { height: 40, template: () => "" },
       }),
-    ).toThrow("[vlist] Container is required");
+    ).toThrow("[vlist/builder] Container is required");
   });
 
   it("should throw when no item config provided", async () => {
@@ -2873,7 +2873,7 @@ describe("vlist — validation", () => {
         container,
         item: undefined as any,
       }),
-    ).toThrow("[vlist] item configuration is required");
+    ).toThrow("[vlist/builder] item configuration is required");
 
     cleanupContainer(container);
   });

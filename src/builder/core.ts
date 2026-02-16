@@ -1106,16 +1106,6 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Compression mode ────────────────────────────────────────────
 
-  // ── ARIA: Live Region ───────────────────────────────────────────
-
-  const liveRegion = document.createElement("div");
-  liveRegion.setAttribute("aria-live", "polite");
-  liveRegion.setAttribute("aria-atomic", "true");
-  liveRegion.className = `${classPrefix}-live-region`;
-  liveRegion.style.cssText =
-    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
-  dom.root.appendChild(liveRegion);
-
   // ── BuilderContext ──────────────────────────────────────────────
   // The context plugins receive. Provides extension points without
   // exposing implementation details. We build it as a plain object
@@ -1749,7 +1739,6 @@ function materialize<T extends VListItem = VListItem>(
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
     scrollTarget.removeEventListener("scroll", onScrollFrame);
-    liveRegion.remove();
     resizeObserver.disconnect();
 
     if (wheelHandler) {

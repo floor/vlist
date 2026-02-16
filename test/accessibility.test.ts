@@ -787,7 +787,7 @@ describe("live region", () => {
     expect(liveRegion?.textContent).toBe("1 item selected");
   });
 
-  it("should still create live region without selection mode", () => {
+  it("should not create live region without selection mode", () => {
     const items = createTestItems(20);
     vlist = createVList({
       container,
@@ -795,10 +795,9 @@ describe("live region", () => {
       items,
     });
 
-    // Live region should exist (for future announcements) but be empty
+    // Live region should only exist when selection plugin is active
     const liveRegion = vlist.element.querySelector('[aria-live="polite"]');
-    expect(liveRegion).not.toBeNull();
-    expect(liveRegion?.textContent).toBe("");
+    expect(liveRegion).toBeNull();
   });
 
   it("should remove live region on destroy", () => {
