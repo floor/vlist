@@ -158,7 +158,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   methods: Map<string, Function>;
 
   // ── Component replacement ─────────────────────────────────────
-  replaceRenderer(renderer: Renderer<T>): void;
+  replaceTemplate(template: ItemTemplate<T>): void;
   replaceDataManager(dataManager: SimpleDataManager<T>): void;
   replaceScrollController(scrollController: ScrollController): void;
 

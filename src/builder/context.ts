@@ -6,7 +6,7 @@
  * registration points for handlers, methods, and cleanup callbacks.
  */
 
-import type { VListItem, VListEvents, Range } from "../types";
+import type { VListItem, VListEvents, Range, ItemTemplate } from "../types";
 
 // Direct file imports — NOT barrel indexes — so Bun tree-shakes correctly.
 import type { HeightCache } from "../render/heights";
@@ -15,6 +15,7 @@ import type {
   DOMStructure,
   CompressionContext,
 } from "../render/renderer";
+import { createRenderer } from "../render/renderer";
 import {
   type CompressionState,
   getSimpleCompressionState,
@@ -230,6 +231,23 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     renderer = newRenderer;
   };
 
+  const replaceTemplate = (newTemplate: ItemTemplate<T>): void => {
+    // For context-based builds, create a new renderer with the new template
+    // This is less efficient than the materialize path (which can swap templates directly)
+    // but maintains the abstraction of external components
+    const newRenderer = createRenderer<T>(
+      dom.items,
+      newTemplate,
+      heightCache,
+      resolvedConfig.classPrefix,
+      () => dataManager.getTotal(),
+      resolvedConfig.ariaIdPrefix,
+      resolvedConfig.horizontal,
+      undefined,
+    );
+    renderer = newRenderer;
+  };
+
   const replaceDataManager = (newDataManager: SimpleDataManager<T>): void => {
     dataManager = newDataManager;
   };
@@ -315,6 +333,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     methods,
 
     replaceRenderer,
+    replaceTemplate,
     replaceDataManager,
     replaceScrollController,
 
