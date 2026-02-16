@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -43,27 +43,27 @@
     },
     "./data": {
       "import": "./dist/data/index.js",
-      "types": "./dist/data/index.d.ts"
+      "types": "./dist/plugins/data/index.d.ts"
     },
     "./compression": {
       "import": "./dist/compression/index.js",
-      "types": "./dist/compression.d.ts"
+      "types": "./dist/plugins/compression/index.d.ts"
     },
     "./selection": {
       "import": "./dist/selection/index.js",
-      "types": "./dist/selection/index.d.ts"
+      "types": "./dist/plugins/selection/index.d.ts"
     },
     "./scroll": {
       "import": "./dist/scroll/index.js",
-      "types": "./dist/scroll/index.d.ts"
+      "types": "./dist/plugins/scroll/index.d.ts"
     },
     "./groups": {
       "import": "./dist/groups/index.js",
-      "types": "./dist/groups/index.d.ts"
+      "types": "./dist/plugins/groups/index.d.ts"
     },
     "./grid": {
       "import": "./dist/grid/index.js",
-      "types": "./dist/grid/index.d.ts"
+      "types": "./dist/plugins/grid/index.d.ts"
     },
     "./builder": {
       "import": "./dist/builder/index.js",
@@ -71,7 +71,7 @@
     },
     "./snapshots": {
       "import": "./dist/snapshots/index.js",
-      "types": "./dist/snapshots/index.d.ts"
+      "types": "./dist/plugins/snapshots/index.d.ts"
     },
     "./react": {
       "import": "./dist/react/index.js",
