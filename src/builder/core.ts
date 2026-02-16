@@ -289,6 +289,7 @@ const createDOMStructure = (
 ): DOMStructure => {
   const root = document.createElement("div");
   root.className = classPrefix;
+  if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
   root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
   if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
@@ -296,19 +297,33 @@ const createDOMStructure = (
 
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
+  if (horizontal) {
+    viewport.style.overflowX = "auto";
+    viewport.style.overflowY = "hidden";
+  } else {
+    viewport.style.overflow = "auto";
+  }
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
   const content = document.createElement("div");
   content.className = `${classPrefix}-content`;
   content.style.position = "relative";
-  content.style.width = "100%";
+  if (horizontal) {
+    content.style.height = "100%";
+    // Width will be set dynamically based on total items * width
+  } else {
+    content.style.width = "100%";
+  }
 
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
   items.style.position = "relative";
-  items.style.width = "100%";
+  if (horizontal) {
+    items.style.height = "100%";
+  } else {
+    items.style.width = "100%";
+  }
 
   content.appendChild(items);
   viewport.appendChild(content);
@@ -1105,16 +1120,6 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Compression mode ────────────────────────────────────────────
 
-  // ── ARIA: Live Region ───────────────────────────────────────────
-
-  const liveRegion = document.createElement("div");
-  liveRegion.setAttribute("aria-live", "polite");
-  liveRegion.setAttribute("aria-atomic", "true");
-  liveRegion.className = `${classPrefix}-live-region`;
-  liveRegion.style.cssText =
-    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
-  dom.root.appendChild(liveRegion);
-
   // ── BuilderContext ──────────────────────────────────────────────
   // The context plugins receive. Provides extension points without
   // exposing implementation details. We build it as a plain object
@@ -1421,6 +1426,11 @@ function materialize<T extends VListItem = VListItem>(
       if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
         items = [...newItems];
       } else {
+        // Ensure items array is large enough before assigning
+        const requiredLength = offset + newItems.length;
+        if (items.length < requiredLength) {
+          items.length = requiredLength;
+        }
         for (let i = 0; i < newItems.length; i++) {
           items[offset + i] = newItems[i]!;
         }
@@ -1743,7 +1753,6 @@ function materialize<T extends VListItem = VListItem>(
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
     scrollTarget.removeEventListener("scroll", onScrollFrame);
-    liveRegion.remove();
     resizeObserver.disconnect();
 
     if (wheelHandler) {
@@ -1778,9 +1787,17 @@ function materialize<T extends VListItem = VListItem>(
       return dom.root;
     },
     get items() {
+      // Check if a plugin (e.g., groups) provides a custom items getter
+      if (methods.has("_getItems")) {
+        return (methods.get("_getItems") as any)();
+      }
       return items as readonly T[];
     },
     get total() {
+      // Check if a plugin (e.g., groups) provides a custom total getter
+      if (methods.has("_getTotal")) {
+        return (methods.get("_getTotal") as any)();
+      }
       return virtualTotalFn();
     },
 

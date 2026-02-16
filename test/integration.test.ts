@@ -199,7 +199,7 @@ describe("createVList", () => {
           item: { height: 40, template },
           items: [],
         });
-      }).toThrow("[vlist] Container is required");
+      }).toThrow("[vlist/builder] Container is required");
     });
 
     it("should throw error without item config", () => {
@@ -209,7 +209,7 @@ describe("createVList", () => {
           item: undefined as any,
           items: [],
         });
-      }).toThrow("[vlist] item configuration is required");
+      }).toThrow("[vlist/builder] item configuration is required");
     });
 
     it("should throw error without item.height", () => {
@@ -219,7 +219,7 @@ describe("createVList", () => {
           item: { height: 0, template },
           items: [],
         });
-      }).toThrow("[vlist] item.height must be a positive number");
+      }).toThrow("[vlist/builder] item.height must be a positive number");
     });
 
     it("should throw error without item.template", () => {
@@ -229,7 +229,7 @@ describe("createVList", () => {
           item: { height: 40, template: null as any },
           items: [],
         });
-      }).toThrow("[vlist] item.template is required");
+      }).toThrow("[vlist/builder] item.template is required");
     });
 
     it("should accept container as string selector", () => {
@@ -869,7 +869,7 @@ describe("createVList horizontal direction", () => {
           items: [],
         });
       }).toThrow(
-        "[vlist] item.width is required when direction is 'horizontal'",
+        "[vlist/builder] item.width is required when direction is 'horizontal'",
       );
     });
 
@@ -881,7 +881,7 @@ describe("createVList horizontal direction", () => {
           item: { width: 0, template },
           items: [],
         });
-      }).toThrow("[vlist] item.width must be a positive number");
+      }).toThrow("[vlist/builder] item.width must be a positive number");
     });
 
     it("should throw when item.width is negative in horizontal mode", () => {
@@ -892,7 +892,7 @@ describe("createVList horizontal direction", () => {
           item: { width: -10, template },
           items: [],
         });
-      }).toThrow("[vlist] item.width must be a positive number");
+      }).toThrow("[vlist/builder] item.width must be a positive number");
     });
 
     it("should throw when item.width is invalid type in horizontal mode", () => {
@@ -903,7 +903,9 @@ describe("createVList horizontal direction", () => {
           item: { width: "100px" as any, template },
           items: [],
         });
-      }).toThrow("[vlist] item.width must be a number or a function");
+      }).toThrow(
+        "[vlist/builder] item.width must be a number or a function (index) => number",
+      );
     });
 
     it("should throw when horizontal combined with groups", () => {
@@ -919,7 +921,9 @@ describe("createVList horizontal direction", () => {
             height: 30,
           },
         });
-      }).toThrow("horizontal direction cannot be combined with groups");
+      }).toThrow(
+        "[vlist/builder] horizontal direction cannot be combined with groups",
+      );
     });
 
     it("should throw when horizontal combined with grid layout", () => {
@@ -932,7 +936,9 @@ describe("createVList horizontal direction", () => {
           layout: "grid",
           grid: { columns: 3 },
         });
-      }).toThrow("horizontal direction cannot be combined with grid layout");
+      }).toThrow(
+        "[vlist/builder] withGrid cannot be used with direction: 'horizontal'",
+      );
     });
 
     it("should throw when horizontal combined with reverse mode", () => {
@@ -944,7 +950,9 @@ describe("createVList horizontal direction", () => {
           items: [],
           reverse: true,
         });
-      }).toThrow("horizontal direction cannot be combined with reverse mode");
+      }).toThrow(
+        "[vlist/builder] horizontal direction cannot be combined with reverse mode",
+      );
     });
   });
 
@@ -1282,7 +1290,9 @@ describe("createVList grid mode", () => {
           items: [],
           layout: "grid",
         });
-      }).toThrow("grid configuration is required");
+      }).toThrow(
+        "[vlist/builder] grid configuration is required when layout is 'grid'",
+      );
     });
 
     it("should throw when grid.columns is 0", () => {
@@ -1294,24 +1304,33 @@ describe("createVList grid mode", () => {
           layout: "grid",
           grid: { columns: 0 },
         });
-      }).toThrow("grid.columns must be a positive integer");
+      }).toThrow(
+        "[vlist/builder] grid.columns must be a positive integer >= 1",
+      );
     });
 
-    it("should throw when grid is combined with groups", () => {
-      expect(() => {
-        createVList({
-          container,
-          item: { height: 100, template },
-          items: [],
-          layout: "grid",
-          grid: { columns: 3 },
-          groups: {
-            key: "group",
-            headerTemplate: () => "<div>Header</div>",
-            height: 30,
-          },
-        });
-      }).toThrow("grid layout cannot be combined with groups");
+    it("should allow grid combined with groups for 2D grouped layouts", () => {
+      const items = createTestItems(20);
+      vlist = createVList({
+        container,
+        item: { height: 100, template },
+        items,
+        layout: "grid",
+        grid: { columns: 3 },
+        groups: {
+          getGroupForIndex: (index: number) =>
+            index < 10 ? "Group A" : "Group B",
+          headerHeight: 30,
+          headerTemplate: (group: string) =>
+            `<div class="header">${group}</div>`,
+        },
+      });
+
+      // Grid + groups creates 2D grouped layouts
+      expect(vlist).toBeDefined();
+      expect(vlist.total).toBe(20);
+      expect(vlist.element.classList.contains("vlist--grid")).toBe(true);
+      expect(vlist.element.classList.contains("vlist--grouped")).toBe(true);
     });
   });
 
@@ -2851,7 +2870,7 @@ describe("vlist — validation", () => {
         container: null as any,
         item: { height: 40, template: () => "" },
       }),
-    ).toThrow("[vlist] Container is required");
+    ).toThrow("[vlist/builder] Container is required");
   });
 
   it("should throw when no item config provided", async () => {
@@ -2861,7 +2880,7 @@ describe("vlist — validation", () => {
         container,
         item: undefined as any,
       }),
-    ).toThrow("[vlist] item configuration is required");
+    ).toThrow("[vlist/builder] item configuration is required");
 
     cleanupContainer(container);
   });

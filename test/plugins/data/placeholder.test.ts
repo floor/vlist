@@ -11,8 +11,8 @@ import {
   countRealItems,
   replacePlaceholders,
   type PlaceholderManager,
-} from "../../src/data/placeholder";
-import type { VListItem } from "../../src/types";
+} from "../../../src/plugins/data/placeholder";
+import type { VListItem } from "../../../src/types";
 
 // =============================================================================
 // Test Data
