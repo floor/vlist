@@ -24,9 +24,9 @@ import {
   isSelectionEmpty,
   selectFocused,
   selectRange,
-} from "../../src/selection";
+} from "../../../src/plugins/selection";
 
-import type { VListItem } from "../../src/types";
+import type { VListItem } from "../../../src/types";
 
 // Test data
 const createTestItems = (count: number): VListItem[] => {

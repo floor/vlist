@@ -450,6 +450,12 @@ export const withGrid = <T extends VListItem = VListItem>(
         },
       );
 
+      // ── Override total getter to return flat item count (not row count) ──
+      // Only set if not already set by another plugin (e.g., groups)
+      if (!ctx.methods.has("_getTotal")) {
+        ctx.methods.set("_getTotal", () => ctx.dataManager.getTotal());
+      }
+
       // ── Override snapshot methods for grid if snapshots plugin is present ──
       // This is handled by the snapshots plugin which checks for grid
 

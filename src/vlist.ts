@@ -52,7 +52,17 @@ export const createVList = <T extends VListItem = VListItem>(
   }
 
   // Auto-apply grid plugin if layout is 'grid' or grid config provided
-  if (config.layout === "grid" && config.grid) {
+  if (config.layout === "grid") {
+    if (!config.grid) {
+      throw new Error(
+        "[vlist/builder] grid configuration is required when layout is 'grid'",
+      );
+    }
+    if (!config.grid.columns || config.grid.columns < 1) {
+      throw new Error(
+        "[vlist/builder] grid.columns must be a positive integer >= 1",
+      );
+    }
     const gridConfig: { columns: number; gap?: number } = {
       columns: config.grid.columns,
     };
@@ -65,6 +75,12 @@ export const createVList = <T extends VListItem = VListItem>(
   // Auto-apply groups plugin if groups config provided
   // Works together with grid for grouped 2D layouts
   if (config.groups) {
+    // Validate: groups cannot be combined with horizontal (but CAN work with grid)
+    if (config.direction === "horizontal") {
+      throw new Error(
+        "[vlist/builder] horizontal direction cannot be combined with groups",
+      );
+    }
     const groupsConfig: {
       getGroupForIndex: (index: number) => string;
       headerHeight: number;
@@ -87,18 +103,23 @@ export const createVList = <T extends VListItem = VListItem>(
     builder = builder.use(withGroups(groupsConfig));
   }
 
-  // Auto-apply selection plugin if selection config provided
-  if (config.selection && config.selection.mode !== "none") {
+  // Auto-apply selection plugin for backwards compatibility
+  // Even without config, apply with mode='none' so selection methods exist
+  const selectionMode = config.selection?.mode || "none";
+  if (selectionMode !== "none") {
     const selectionConfig: {
       mode: "single" | "multiple";
       initial?: Array<string | number>;
     } = {
-      mode: config.selection.mode || "single",
+      mode: selectionMode as "single" | "multiple",
     };
-    if (config.selection.initial !== undefined) {
+    if (config.selection?.initial !== undefined) {
       selectionConfig.initial = config.selection.initial;
     }
     builder = builder.use(withSelection(selectionConfig));
+  } else {
+    // Apply with mode='none' for backwards compatibility
+    builder = builder.use(withSelection({ mode: "none" }));
   }
 
   // Auto-apply compression plugin (always beneficial for large lists)
@@ -118,40 +139,38 @@ export const createVList = <T extends VListItem = VListItem>(
   // Build and return
   const instance = builder.build();
 
-  // Return with full VList interface
-  // The built instance already has most methods from plugins
-  return {
-    ...instance,
+  // Add update() method for backwards compatibility
+  // Note: We must add it directly to the instance to preserve getters
+  (instance as any).update = (updateConfig: any) => {
+    // If grid config changed, use updateGrid from plugin
+    if (updateConfig.grid && (instance as any).updateGrid) {
+      (instance as any).updateGrid(updateConfig.grid);
+    }
 
-    // Add update() method for backwards compatibility
-    update: (updateConfig) => {
-      // If grid config changed, use updateGrid from plugin
-      if (updateConfig.grid && (instance as any).updateGrid) {
-        (instance as any).updateGrid(updateConfig.grid);
-      }
+    // If selection mode changed
+    if (
+      updateConfig.selectionMode !== undefined &&
+      (instance as any).setSelectionMode
+    ) {
+      (instance as any).setSelectionMode(updateConfig.selectionMode);
+    }
 
-      // If selection mode changed
-      if (
-        updateConfig.selectionMode !== undefined &&
-        (instance as any).setSelectionMode
-      ) {
-        (instance as any).setSelectionMode(updateConfig.selectionMode);
-      }
+    // Note: itemHeight updates not yet supported in builder
+    if (updateConfig.itemHeight !== undefined) {
+      console.warn(
+        "[vlist] Updating itemHeight via update() is not yet supported with the builder pattern. " +
+          "Please recreate the instance or use the full API from 'vlist/full'.",
+      );
+    }
 
-      // Note: itemHeight updates not yet supported in builder
-      if (updateConfig.itemHeight !== undefined) {
-        console.warn(
-          "[vlist] Updating itemHeight via update() is not yet supported with the builder pattern. " +
-            "Please recreate the instance or use the full API from 'vlist/full'.",
-        );
-      }
+    // Overscan updates not yet supported
+    if (updateConfig.overscan !== undefined) {
+      console.warn(
+        "[vlist] Updating overscan via update() is not yet supported with the builder pattern.",
+      );
+    }
+  };
 
-      // Overscan updates not yet supported
-      if (updateConfig.overscan !== undefined) {
-        console.warn(
-          "[vlist] Updating overscan via update() is not yet supported with the builder pattern.",
-        );
-      }
-    },
-  } as VList<T>;
+  // Return the instance with update method added
+  return instance as VList<T>;
 };

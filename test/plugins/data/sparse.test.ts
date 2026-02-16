@@ -8,9 +8,9 @@ import {
   createSparseStorage,
   mergeRanges,
   calculateMissingRanges,
-} from "../../src/data/sparse";
+} from "../../../src/plugins/data/sparse";
 
-import type { VListItem } from "../../src/types";
+import type { VListItem } from "../../../src/types";
 
 // =============================================================================
 // Test Helpers
@@ -951,9 +951,7 @@ describe("createSparseStorage", () => {
     });
 
     it("should call onEvict callback with count and ranges", () => {
-      const onEvict = mock(
-        (_count: number, _ranges: number[]) => {},
-      );
+      const onEvict = mock((_count: number, _ranges: number[]) => {});
       const storage = createSparseStorage({
         chunkSize: 10,
         maxCachedItems: 20,
@@ -1028,9 +1026,7 @@ describe("createSparseStorage", () => {
     });
 
     it("should call onEvict callback", () => {
-      const onEvict = mock(
-        (_count: number, _ranges: number[]) => {},
-      );
+      const onEvict = mock((_count: number, _ranges: number[]) => {});
       const storage = createSparseStorage({
         chunkSize: 10,
         maxCachedItems: 20,
@@ -1390,11 +1386,7 @@ describe("calculateMissingRanges (sparse module)", () => {
   });
 
   it("should align to chunk boundaries", () => {
-    const missing = calculateMissingRanges(
-      { start: 13, end: 27 },
-      [],
-      10,
-    );
+    const missing = calculateMissingRanges({ start: 13, end: 27 }, [], 10);
 
     // aligned: start = floor(13/10)*10 = 10, end = ceil(28/10)*10 - 1 = 29
     expect(missing.length).toBe(1);

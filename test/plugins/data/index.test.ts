@@ -8,9 +8,9 @@ import {
   createDataManager,
   mergeRanges,
   calculateMissingRanges,
-} from "../../src/data";
+} from "../../../src/plugins/data";
 
-import type { VListItem, VListAdapter } from "../../src/types";
+import type { VListItem, VListAdapter } from "../../../src/types";
 
 // Test data helpers
 const createTestItems = (count: number, startId: number = 1): VListItem[] => {
