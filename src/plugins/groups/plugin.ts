@@ -161,6 +161,12 @@ export const withGroups = <T extends VListItem = VListItem>(
       ctx.setHeightConfig(groupedHeightFn);
       ctx.rebuildHeightCache(layoutItems.length);
 
+      // Log final height after groups applied
+      const totalHeight = ctx.heightCache.getTotalHeight();
+      console.log(
+        `🔍 GROUPS HEIGHT: ${layoutItems.length} layout items, total height: ${totalHeight}px`,
+      );
+
       // ── Replace data manager items with layout items ──
       ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
 

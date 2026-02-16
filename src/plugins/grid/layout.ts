@@ -54,9 +54,11 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     // Groups-aware calculation
     let row = 0;
     let colInRow = 0;
+    let headerCount = 0;
 
     for (let i = 0; i < totalItems; i++) {
       if (isHeaderFn(i)) {
+        headerCount++;
         // Header: start new row if not at beginning
         if (colInRow > 0) {
           row++;
@@ -80,6 +82,9 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       row++;
     }
 
+    console.log(
+      `🔍 GROUPS-GRID: ${totalItems} total items (${headerCount} headers, ${totalItems - headerCount} data items) → ${row} rows`,
+    );
     return row;
   };
 
@@ -88,8 +93,8 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
    * Reuses a single object to reduce GC pressure on scroll hot path.
    */
   const getPosition = (itemIndex: number): GridPosition => {
-    reusablePosition.row = Math.floor(itemIndex / columns);
-    reusablePosition.col = itemIndex % columns;
+    reusablePosition.row = getRow(itemIndex);
+    reusablePosition.col = getCol(itemIndex);
     return reusablePosition;
   };
 
@@ -107,19 +112,25 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     let colInRow = 0;
 
     for (let i = 0; i <= itemIndex; i++) {
-      if (isHeaderFn(i)) {
+      const isHeader = isHeaderFn(i);
+
+      if (isHeader) {
         // Header: start new row if not at beginning
         if (colInRow > 0) {
           row++;
           colInRow = 0;
         }
         // Header occupies its own row
-        if (i === itemIndex) return row;
+        if (i === itemIndex) {
+          return row;
+        }
         row++;
         colInRow = 0;
       } else {
         // Regular item
-        if (i === itemIndex) return row;
+        if (i === itemIndex) {
+          return row;
+        }
         colInRow++;
         if (colInRow >= columns) {
           row++;
@@ -128,6 +139,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       }
     }
 
+    console.warn(`⚠️ getRow(${itemIndex}) fell through - returning ${row}`);
     return row;
   };
 
@@ -149,11 +161,15 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     let colInRow = 0;
 
     for (let i = 0; i <= itemIndex; i++) {
-      if (isHeaderFn(i)) {
+      const isHeader = isHeaderFn(i);
+
+      if (isHeader) {
         // Header: reset column counter
         colInRow = 0;
       } else {
-        if (i === itemIndex) return colInRow;
+        if (i === itemIndex) {
+          return colInRow;
+        }
         colInRow++;
         if (colInRow >= columns) {
           colInRow = 0;
@@ -169,6 +185,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
    *
    * rowStart and rowEnd are inclusive row indices.
    * The returned end is clamped to totalItems - 1.
+   * When isHeaderFn is provided, this accounts for headers disrupting the grid flow.
    */
   const getItemRange = (
     rowStart: number,
@@ -177,9 +194,65 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
   ): ItemRange => {
     if (totalItems <= 0) return { start: 0, end: -1 };
 
-    const start = Math.max(0, rowStart * columns);
-    const end = Math.min(totalItems - 1, (rowEnd + 1) * columns - 1);
+    if (!isHeaderFn) {
+      // Simple O(1) calculation for regular grids
+      const start = Math.max(0, rowStart * columns);
+      const end = Math.min(totalItems - 1, (rowEnd + 1) * columns - 1);
+      return { start, end };
+    }
 
+    // Groups-aware calculation - find items that fall in the row range
+    let start = -1;
+    let end = -1;
+    let currentRow = 0;
+    let colInRow = 0;
+
+    for (let i = 0; i < totalItems; i++) {
+      const isHeader = isHeaderFn(i);
+
+      if (isHeader) {
+        // Header: start new row if not at beginning
+        if (colInRow > 0) {
+          currentRow++;
+          colInRow = 0;
+        }
+        // Check if this header's row is in range
+        if (currentRow >= rowStart && currentRow <= rowEnd) {
+          if (start === -1) start = i;
+          end = i;
+        }
+        currentRow++;
+        colInRow = 0;
+      } else {
+        // Regular item
+        if (currentRow >= rowStart && currentRow <= rowEnd) {
+          if (start === -1) start = i;
+          end = i;
+        }
+        colInRow++;
+        if (colInRow >= columns) {
+          currentRow++;
+          colInRow = 0;
+        }
+      }
+
+      // Early exit if we're past the end row
+      if (currentRow > rowEnd && colInRow === 0) {
+        break;
+      }
+    }
+
+    // If no items found in range, return empty range
+    if (start === -1) {
+      console.log(
+        `⚠️ getItemRange EMPTY: rows ${rowStart}-${rowEnd} (totalItems: ${totalItems}, endedAtRow: ${currentRow})`,
+      );
+      return { start: 0, end: -1 };
+    }
+
+    console.log(
+      `🔍 getItemRange: rows ${rowStart}-${rowEnd} → items ${start}-${end} (of ${totalItems})`,
+    );
     return { start, end };
   };
 
@@ -242,7 +315,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     get gap() {
       return gap;
     },
-    update,
+    update: updateConfig,
     getTotalRows,
     getPosition,
     getRow,

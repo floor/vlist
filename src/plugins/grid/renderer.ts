@@ -158,6 +158,9 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   let containerWidth = initialContainerWidth;
 
+  // Track if groups are active (affects height cache indexing)
+  let groupsActive = false;
+
   // Cache compression state
   let cachedCompression: CompressionState | null = null;
   let cachedTotalRows = 0;
@@ -260,7 +263,40 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     const col = isHeader ? 0 : gridLayout.getCol(itemIndex);
     const x = isHeader ? 0 : gridLayout.getColumnOffset(col, containerWidth);
-    const y = calculateRowOffset(itemIndex, compressionCtx);
+
+    // Y position: when groups are active, calculate by summing each row's height once
+    let y: number;
+    if (groupsActive) {
+      // Grouped grid: sum the height of each row before this item's row
+      // Each row height should only be counted once, not per-item
+      const itemRow = gridLayout.getRow(itemIndex);
+      let offset = 0;
+      const rowsSeen = new Set<number>();
+      const heightsUsed: Array<{
+        row: number;
+        itemIdx: number;
+        height: number;
+      }> = [];
+
+      // For each item before this one, add its row's height only once
+      for (let i = 0; i < itemIndex; i++) {
+        const prevItemRow = gridLayout.getRow(i);
+        if (prevItemRow < itemRow && !rowsSeen.has(prevItemRow)) {
+          const height = heightCache.getHeight(i);
+          offset += height;
+          rowsSeen.add(prevItemRow);
+          heightsUsed.push({ row: prevItemRow, itemIdx: i, height });
+        }
+      }
+
+      console.log(
+        `🔍 Y-OFFSET: item ${itemIndex} (row ${itemRow}) → ${offset}px | Heights: ${heightsUsed.map((h) => `row${h.row}:item${h.itemIdx}=${h.height.toFixed(1)}px`).join(", ")}`,
+      );
+      y = offset;
+    } else {
+      // Regular grid: height cache is row-based
+      y = calculateRowOffset(itemIndex, compressionCtx);
+    }
 
     element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   };
@@ -276,13 +312,22 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     const colWidth = isHeader
       ? containerWidth
       : gridLayout.getColumnWidth(containerWidth);
-    const row = gridLayout.getRow(itemIndex);
-    // The height cache includes the gap for row spacing; subtract it
-    // so the DOM element is the real item height (gap = visual space between rows).
-    const rowHeight = heightCache.getHeight(row) - gridLayout.gap;
+
+    // Height lookup depends on whether groups are active
+    // Grouped grids: height cache uses ITEM indices
+    // Regular grids: height cache uses ROW indices
+    let itemHeight: number;
+    if (groupsActive || isHeader) {
+      // Grouped grid: height cache is item-based
+      itemHeight = heightCache.getHeight(itemIndex) - gridLayout.gap;
+    } else {
+      // Regular grid: height cache is row-based
+      const row = gridLayout.getRow(itemIndex);
+      itemHeight = heightCache.getHeight(row) - gridLayout.gap;
+    }
 
     element.style.width = `${colWidth}px`;
-    element.style.height = `${rowHeight}px`;
+    element.style.height = `${itemHeight}px`;
   };
 
   /**
@@ -345,6 +390,17 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
+    // Detect if groups are active by checking if ANY item in the dataset is a header
+    // Don't check items[0] because it's relative to the render range, not the full dataset
+    // Instead, check if the first item in the full range is a header
+    if (range.start === 0 && items.length > 0) {
+      groupsActive = isGroupHeader(items[0]);
+    }
+    // Once groupsActive is true, it stays true (groups don't disappear mid-scroll)
+    console.log(
+      `🔍 RENDER: groupsActive=${groupsActive}, range=${range.start}-${range.end}`,
+    );
+
     // Remove items outside the new range
     for (const [index, renderedItem] of rendered) {
       if (index < range.start || index > range.end) {
@@ -368,9 +424,15 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     // Add/update items in range
     for (let i = range.start; i <= range.end; i++) {
+      // Items array is 0-indexed relative to range.start
       const itemIndex = i - range.start;
       const item = items[itemIndex];
-      if (!item) continue;
+      if (!item) {
+        console.warn(
+          `⚠️ RENDER: Missing item at index ${i} (range: ${range.start}-${range.end}, items.length: ${items.length})`,
+        );
+        continue;
+      }
 
       const isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
