@@ -52,7 +52,17 @@ export const createVList = <T extends VListItem = VListItem>(
   }
 
   // Auto-apply grid plugin if layout is 'grid' or grid config provided
-  if (config.layout === "grid" && config.grid) {
+  if (config.layout === "grid") {
+    if (!config.grid) {
+      throw new Error(
+        "[vlist/builder] grid configuration is required when layout is 'grid'",
+      );
+    }
+    if (!config.grid.columns || config.grid.columns < 1) {
+      throw new Error(
+        "[vlist/builder] grid.columns must be a positive integer >= 1",
+      );
+    }
     const gridConfig: { columns: number; gap?: number } = {
       columns: config.grid.columns,
     };
@@ -65,6 +75,17 @@ export const createVList = <T extends VListItem = VListItem>(
   // Auto-apply groups plugin if groups config provided
   // Works together with grid for grouped 2D layouts
   if (config.groups) {
+    // Validate: groups cannot be combined with grid or horizontal
+    if (config.layout === "grid") {
+      throw new Error(
+        "[vlist/builder] grid layout cannot be combined with groups",
+      );
+    }
+    if (config.direction === "horizontal") {
+      throw new Error(
+        "[vlist/builder] horizontal direction cannot be combined with groups",
+      );
+    }
     const groupsConfig: {
       getGroupForIndex: (index: number) => string;
       headerHeight: number;
