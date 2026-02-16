@@ -272,11 +272,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       const itemRow = gridLayout.getRow(itemIndex);
       let offset = 0;
       const rowsSeen = new Set<number>();
-      const heightsUsed: Array<{
-        row: number;
-        itemIdx: number;
-        height: number;
-      }> = [];
 
       // For each item before this one, add its row's height only once
       for (let i = 0; i < itemIndex; i++) {
@@ -285,13 +280,9 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
           const height = heightCache.getHeight(i);
           offset += height;
           rowsSeen.add(prevItemRow);
-          heightsUsed.push({ row: prevItemRow, itemIdx: i, height });
         }
       }
 
-      console.log(
-        `🔍 Y-OFFSET: item ${itemIndex} (row ${itemRow}) → ${offset}px | Heights: ${heightsUsed.map((h) => `row${h.row}:item${h.itemIdx}=${h.height.toFixed(1)}px`).join(", ")}`,
-      );
       y = offset;
     } else {
       // Regular grid: height cache is row-based
@@ -397,9 +388,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       groupsActive = isGroupHeader(items[0]);
     }
     // Once groupsActive is true, it stays true (groups don't disappear mid-scroll)
-    console.log(
-      `🔍 RENDER: groupsActive=${groupsActive}, range=${range.start}-${range.end}`,
-    );
 
     // Remove items outside the new range
     for (const [index, renderedItem] of rendered) {

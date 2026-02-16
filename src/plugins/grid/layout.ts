@@ -82,9 +82,6 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       row++;
     }
 
-    console.log(
-      `🔍 GROUPS-GRID: ${totalItems} total items (${headerCount} headers, ${totalItems - headerCount} data items) → ${row} rows`,
-    );
     return row;
   };
 
@@ -244,15 +241,9 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
 
     // If no items found in range, return empty range
     if (start === -1) {
-      console.log(
-        `⚠️ getItemRange EMPTY: rows ${rowStart}-${rowEnd} (totalItems: ${totalItems}, endedAtRow: ${currentRow})`,
-      );
       return { start: 0, end: -1 };
     }
 
-    console.log(
-      `🔍 getItemRange: rows ${rowStart}-${rowEnd} → items ${start}-${end} (of ${totalItems})`,
-    );
     return { start, end };
   };
 
