@@ -43,7 +43,7 @@ Interactive examples and documentation are available at **[vlist.dev](https://vl
 | **Horizontal** | [Basic Horizontal](https://vlist.dev/sandbox/horizontal/basic/) — 10K card carousel |
 | **Groups Plugin** | [Sticky Headers](https://vlist.dev/sandbox/groups/sticky-headers/) — A–Z contact list |
 | **Other Plugins** | [Scroll Restore](https://vlist.dev/sandbox/scroll-restore/) • [Window Scroll](https://vlist.dev/sandbox/window-scroll/) |
-| **Advanced** | [Variable Heights](https://vlist.dev/sandbox/variable-heights/) • [Reverse Chat](https://vlist.dev/sandbox/reverse-chat/) • [Wizard Nav](https://vlist.dev/sandbox/wizard-nav/) |
+| **Advanced** | [Variable Heights](https://vlist.dev/sandbox/variable-heights/) • [Reverse Chat + Groups](https://vlist.dev/sandbox/reverse-chat/) • [Wizard Nav](https://vlist.dev/sandbox/wizard-nav/) |
 
 ## Installation
 
@@ -240,7 +240,7 @@ const list = createVList({
 
 Variable heights use a prefix-sum array for O(1) offset lookups and O(log n) binary search for index-at-offset.
 
-### Sticky Headers
+### Sticky Headers (Contacts List)
 
 ```typescript
 const list = createVList({
@@ -258,6 +258,31 @@ const list = createVList({
   },
 });
 ```
+
+### Chat with Date Headers (Reverse + Groups)
+
+```typescript
+const chat = createVList({
+  container: '#messages',
+  reverse: true,
+  item: {
+    height: (index) => messages[index].height || 60,
+    template: (msg) => `<div class="message">${msg.text}</div>`,
+  },
+  items: messages,   // Chronological order (oldest first)
+  groups: {
+    getGroupForIndex: (i) => {
+      const date = new Date(messages[i].timestamp);
+      return date.toLocaleDateString();   // "Dec 12", "Dec 14", etc.
+    },
+    headerHeight: 28,
+    headerTemplate: (date) => `<div class="date-header">${date}</div>`,
+    sticky: false,   // inline headers (iMessage style) or true (Telegram style)
+  },
+});
+```
+
+Combines reverse mode with groups for iMessage/Telegram-style chat UIs. Use `sticky: false` for inline date headers (iMessage, WhatsApp) or `sticky: true` for headers that stick at top while scrolling (Telegram). As you scroll up through history, date headers appear automatically.
 
 ### Window Scrolling
 
@@ -325,7 +350,7 @@ chat.appendItems([newMessage]);
 chat.prependItems(olderMessages);
 ```
 
-Reverse mode starts scrolled to the bottom. `appendItems` auto-scrolls to show new messages when the user is at the bottom. `prependItems` adjusts the scroll position so older messages appear above without disrupting the current view. Works with both fixed and variable heights. Cannot be combined with `groups` or `grid`.
+Reverse mode starts scrolled to the bottom. `appendItems` auto-scrolls to show new messages when the user is at the bottom. `prependItems` adjusts the scroll position so older messages appear above without disrupting the current view. Works with both fixed and variable heights. **Works with `groups`** for date headers (both inline and sticky). Cannot be combined with `grid`.
 
 ### With Selection
 
