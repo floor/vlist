@@ -171,12 +171,6 @@ export const withGrid = <T extends VListItem = VListItem>(
       const totalRows = gridLayout.getTotalRows(totalItems);
       ctx.rebuildHeightCache();
 
-      // Log total height for debugging scroll issues
-      const totalHeight = ctx.heightCache.getTotalHeight();
-      console.log(
-        `🔍 GRID HEIGHT: ${totalRows} rows, total height: ${totalHeight}px, items: ${totalItems}`,
-      );
-
       // ── Add grid CSS class ──
       dom.root.classList.add(`${classPrefix}--grid`);
 
@@ -222,15 +216,27 @@ export const withGrid = <T extends VListItem = VListItem>(
         (isHeaderFn: (index: number) => boolean) => {
           gridLayout.update({ isHeaderFn });
 
-          // Rebuild height cache with new row count
+          // Calculate correct total height by summing only column 0 items
           const totalItems = ctx.dataManager.getTotal();
           const totalRows = gridLayout.getTotalRows(totalItems);
-          ctx.rebuildHeightCache();
 
-          const totalHeight = ctx.heightCache.getTotalHeight();
-          console.log(
-            `🔍 GRID+GROUPS: Updated layout - ${totalRows} rows, total height: ${totalHeight}px, items: ${totalItems}`,
+          let correctTotalHeight = 0;
+          for (let i = 0; i < totalItems; i++) {
+            if (gridLayout.getCol(i) === 0) {
+              const height = ctx.heightCache.getHeight(i);
+              correctTotalHeight += height;
+            }
+          }
+
+          // Override height cache getTotalHeight to return corrected value
+          // This ensures everything (DOM, scrollbar, calculations) uses the correct height
+          const originalGetTotalHeight = ctx.heightCache.getTotalHeight.bind(
+            ctx.heightCache,
           );
+          ctx.heightCache.getTotalHeight = () => correctTotalHeight;
+
+          // Manually update DOM content height
+          ctx.dom.content.style.height = `${correctTotalHeight}px`;
 
           // Recreate renderer with updated layout
           createAndSetGridRenderer();
