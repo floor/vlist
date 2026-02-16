@@ -47,58 +47,60 @@ Interactive examples and documentation are available at **[vlist.dev](https://vl
 ## Installation
 
 ```bash
-npm install vlist
+npm install @floor/vlist
 ```
+
+> **Note:** Currently published as `@floor/vlist` (scoped package). When the npm dispute for `vlist` is resolved, the package will migrate to the simpler `vlist` name.
 
 ### Sub-module Imports
 
 For smaller bundles, import only what you need:
 
 ```typescript
-import { createVList } from 'vlist'                    // full library (48.2 KB / 16.0 KB gzip)
-import { createVList } from 'vlist/core'               // lightweight core (7.8 KB / 3.2 KB gzip)
-import { createGridLayout } from 'vlist/grid'          // grid layout utilities only
-import { createSparseStorage } from 'vlist/data'       // data utilities only
-import { getCompressionInfo } from 'vlist/compression'  // compression utilities only
-import { createSelectionState } from 'vlist/selection'  // selection utilities only
-import { createScrollController } from 'vlist/scroll'   // scroll utilities only
-import { createGroupLayout } from 'vlist/groups'        // group/sticky header utilities only
+import { createVList } from '@floor/vlist'                    // full library (48.2 KB / 16.0 KB gzip)
+import { createVList } from '@floor/vlist/core'               // lightweight core (7.8 KB / 3.2 KB gzip)
+import { createGridLayout } from '@floor/vlist/grid'          // grid layout utilities only
+import { createSparseStorage } from '@floor/vlist/data'       // data utilities only
+import { getCompressionInfo } from '@floor/vlist/compression'  // compression utilities only
+import { createSelectionState } from '@floor/vlist/selection'  // selection utilities only
+import { createScrollController } from '@floor/vlist/scroll'   // scroll utilities only
+import { createGroupLayout } from '@floor/vlist/groups'        // group/sticky header utilities only
 ```
 
 | Import | Minified | Gzipped | Description |
 |--------|----------|---------|-------------|
-| `vlist` | 48.2 KB | 16.0 KB | All features |
-| **`vlist/core`** | **7.8 KB** | **3.2 KB** | **Lightweight — 83% smaller** |
-| `vlist/data` | 9.2 KB | 3.8 KB | Sparse storage, placeholders, data manager |
-| `vlist/scroll` | 6.0 KB | 2.3 KB | Scroll controller + custom scrollbar |
-| `vlist/grid` | 4.1 KB | 1.9 KB | Grid layout + 2D renderer |
-| `vlist/groups` | 3.6 KB | 1.4 KB | Group layout + sticky headers |
-| `vlist/compression` | 2.6 KB | 1.1 KB | Large-list compression utilities |
-| `vlist/selection` | 1.9 KB | 0.7 KB | Selection state management |
+| `@floor/vlist` | 48.2 KB | 16.0 KB | All features |
+| **`@floor/vlist/core`** | **7.8 KB** | **3.2 KB** | **Lightweight — 83% smaller** |
+| `@floor/vlist/data` | 9.2 KB | 3.8 KB | Sparse storage, placeholders, data manager |
+| `@floor/vlist/scroll` | 6.0 KB | 2.3 KB | Scroll controller + custom scrollbar |
+| `@floor/vlist/grid` | 4.1 KB | 1.9 KB | Grid layout + 2D renderer |
+| `@floor/vlist/groups` | 3.6 KB | 1.4 KB | Group layout + sticky headers |
+| `@floor/vlist/compression` | 2.6 KB | 1.1 KB | Large-list compression utilities |
+| `@floor/vlist/selection` | 1.9 KB | 0.7 KB | Selection state management |
 
 ### Framework Adapters
 
 Thin wrappers for React, Vue, and Svelte — each under 1 KB:
 
 ```typescript
-import { useVList } from 'vlist/react'       // React hook (0.7 KB / 0.4 KB gzip)
-import { useVList } from 'vlist/vue'         // Vue 3 composable (0.5 KB / 0.4 KB gzip)
-import { vlist } from 'vlist/svelte'         // Svelte action (0.3 KB / 0.2 KB gzip)
+import { useVList } from '@floor/vlist/react'       // React hook (0.7 KB / 0.4 KB gzip)
+import { useVList } from '@floor/vlist/vue'         // Vue 3 composable (0.5 KB / 0.4 KB gzip)
+import { vlist } from '@floor/vlist/svelte'         // Svelte action (0.3 KB / 0.2 KB gzip)
 ```
 
 | Import | Minified | Gzipped | Description |
 |--------|----------|---------|-------------|
-| `vlist/react` | 0.7 KB | 0.4 KB | `useVList` hook + `useVListEvent` |
-| `vlist/vue` | 0.5 KB | 0.4 KB | `useVList` composable + `useVListEvent` |
-| `vlist/svelte` | 0.3 KB | 0.2 KB | `vlist` action + `onVListEvent` |
+| `@floor/vlist/react` | 0.7 KB | 0.4 KB | `useVList` hook + `useVListEvent` |
+| `@floor/vlist/vue` | 0.5 KB | 0.4 KB | `useVList` composable + `useVListEvent` |
+| `@floor/vlist/svelte` | 0.3 KB | 0.2 KB | `vlist` action + `onVListEvent` |
 
 Adapters manage the vlist lifecycle (create on mount, destroy on unmount) and sync items reactively. See [Framework Adapters](#framework-adapters) for full examples.
 
 ## Quick Start
 
 ```typescript
-import { createVList } from 'vlist';
-import 'vlist/styles';
+import { createVList } from '@floor/vlist';
+import '@floor/vlist/styles';
 
 const list = createVList({
   container: '#my-list',
@@ -125,8 +127,8 @@ const list = createVList({
 If you don't need selection, groups, grid, compression, custom scrollbar, or async data adapters, use the lightweight core for an **83% smaller bundle**:
 
 ```typescript
-import { createVList } from 'vlist/core';
-import 'vlist/styles';
+import { createVList } from '@floor/vlist/core';
+import '@floor/vlist/styles';
 
 const list = createVList({
   container: '#my-list',
