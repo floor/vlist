@@ -9,12 +9,12 @@
 After the `refactor/builder-pattern` and `feat/plugin-architecture` merges, many tests are failing or irrelevant due to API changes.
 
 **Current Status:**
-- ✅ 691 tests passing (was 646)
-- ❌ 65 tests failing (was 110)
+- ✅ 706 tests passing (was 646)
+- ❌ 50 tests failing (was 110)
 - ⚠️ 11 errors
 - **Total:** 756 tests across 22 files
 
-**Progress:** 45 tests fixed! (85.5% → 91.4% passing)
+**Progress:** 60 tests fixed! (85.5% → 93.4% passing)
 
 ## Test Failure Breakdown
 
@@ -313,25 +313,45 @@ Tests for combinations (reverse + groups, horizontal + groups, grid + groups) ar
 - [ ] Phase 4: Edge Cases & Cleanup (0/3)
 
 **Target:** All tests passing (756/756)
-**Current:** 691/756 passing (91.4%)
-**Remaining:** 65 failures to fix
+**Current:** 706/756 passing (93.4%)
+**Remaining:** 50 failures to fix
 
-**Major Win:** Fixed the spread operator bug that was breaking getters - this fixed 45+ tests across multiple categories!
+**Major Wins:** 
+- Fixed the spread operator bug that was breaking getters - this fixed 45+ tests!
+- Fixed all validation error message format issues - 15+ more tests fixed!
 
 ---
 
 ## Session Notes
 
-### 2026-02-16 - Phase 1 Progress
+### 2026-02-16 - Phase 1 Progress (Session 1)
 **Fixed:** Spread operator bug in `vlist.ts` destroying getters
 - Root cause: `{ ...instance }` copies getter VALUES, not getter functions
 - Impact: Fixed 45+ tests across reverse mode and other areas
 - All reverse mode tests now passing (36/36)
 - Progress: 85.5% → 91.4% passing (646 → 691 tests)
 
+### 2026-02-16 - Phase 1 Progress (Session 2)
+**Fixed:** Validation error messages and grid/groups/horizontal validations
+- Updated all validation error messages to match builder format `[vlist/builder]`
+- Added grid config validation in `vlist.ts` (required when layout='grid')
+- Added groups/horizontal incompatibility validation
+- Added `--horizontal` class modifier to root element
+- Impact: Fixed 15 more tests
+- Progress: 91.4% → 93.4% passing (691 → 706 tests)
+
+**Remaining Issues (50 failures):**
+- Horizontal mode DOM structure (overflow, width) - needs full implementation
+- Groups mode data mutations and total getter
+- Grid mode data methods and total getter
+- Live region / accessibility tests (8 failures)
+- Grid + compression integration (4 failures)
+- Window resize handler (2 failures)
+
 **Next Steps:**
-- Continue with remaining Phase 1 items (groups mode, horizontal mode, grid mode)
-- Many failures likely stem from same error message format issues
+- Focus on groups mode (data mutations, total getter) - 12 failures
+- Investigate grid mode failures - 10 failures
+- Horizontal mode may require larger refactor (DOM structure changes)
 
 ---
 
