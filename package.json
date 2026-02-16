@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -30,60 +30,74 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     },
     "./core": {
+      "types": "./dist/core.d.ts",
       "import": "./dist/core/index.js",
-      "types": "./dist/core.d.ts"
+      "default": "./dist/core/index.js"
     },
     "./core-light": {
+      "types": "./dist/core-light.d.ts",
       "import": "./dist/core-light.js",
-      "types": "./dist/core-light.d.ts"
+      "default": "./dist/core-light.js"
     },
     "./data": {
+      "types": "./dist/plugins/data/index.d.ts",
       "import": "./dist/data/index.js",
-      "types": "./dist/plugins/data/index.d.ts"
+      "default": "./dist/data/index.js"
     },
     "./compression": {
+      "types": "./dist/plugins/compression/index.d.ts",
       "import": "./dist/compression/index.js",
-      "types": "./dist/plugins/compression/index.d.ts"
+      "default": "./dist/compression/index.js"
     },
     "./selection": {
+      "types": "./dist/plugins/selection/index.d.ts",
       "import": "./dist/selection/index.js",
-      "types": "./dist/plugins/selection/index.d.ts"
+      "default": "./dist/selection/index.js"
     },
     "./scroll": {
+      "types": "./dist/plugins/scroll/index.d.ts",
       "import": "./dist/scroll/index.js",
-      "types": "./dist/plugins/scroll/index.d.ts"
+      "default": "./dist/scroll/index.js"
     },
     "./groups": {
+      "types": "./dist/plugins/groups/index.d.ts",
       "import": "./dist/groups/index.js",
-      "types": "./dist/plugins/groups/index.d.ts"
+      "default": "./dist/groups/index.js"
     },
     "./grid": {
+      "types": "./dist/plugins/grid/index.d.ts",
       "import": "./dist/grid/index.js",
-      "types": "./dist/plugins/grid/index.d.ts"
+      "default": "./dist/grid/index.js"
     },
     "./builder": {
+      "types": "./dist/builder/index.d.ts",
       "import": "./dist/builder/index.js",
-      "types": "./dist/builder/index.d.ts"
+      "default": "./dist/builder/index.js"
     },
     "./snapshots": {
+      "types": "./dist/plugins/snapshots/index.d.ts",
       "import": "./dist/snapshots/index.js",
-      "types": "./dist/plugins/snapshots/index.d.ts"
+      "default": "./dist/snapshots/index.js"
     },
     "./react": {
+      "types": "./dist/adapters/react.d.ts",
       "import": "./dist/react/index.js",
-      "types": "./dist/adapters/react.d.ts"
+      "default": "./dist/react/index.js"
     },
     "./vue": {
+      "types": "./dist/adapters/vue.d.ts",
       "import": "./dist/vue/index.js",
-      "types": "./dist/adapters/vue.d.ts"
+      "default": "./dist/vue/index.js"
     },
     "./svelte": {
+      "types": "./dist/adapters/svelte.d.ts",
       "import": "./dist/svelte/index.js",
-      "types": "./dist/adapters/svelte.d.ts"
+      "default": "./dist/svelte/index.js"
     },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css"
