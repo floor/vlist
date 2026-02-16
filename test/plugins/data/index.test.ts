@@ -12,6 +12,9 @@ import {
 
 import type { VListItem, VListAdapter } from "../../../src/types";
 
+// Test type alias
+type TestItem = VListItem;
+
 // Test data helpers
 const createTestItems = (count: number, startId: number = 1): VListItem[] => {
   return Array.from({ length: count }, (_, i) => ({
@@ -951,7 +954,7 @@ describe("createDataManager", () => {
     });
 
     it("should skip already-loading chunk ranges", async () => {
-      let resolveFirst: (() => void) | null = null;
+      let resolveFirst: (() => void) | undefined;
       let callCount = 0;
 
       const adapter: VListAdapter = {
@@ -1535,7 +1538,7 @@ describe("data/manager — uncovered lines", () => {
         name: `Item ${i + 1}`,
       }));
 
-      let resolveRead: ((value: any) => void) | null = null;
+      let resolveLoad: ((value: void) => void) | undefined;
       let readCount = 0;
 
       const adapter = {
@@ -1544,12 +1547,13 @@ describe("data/manager — uncovered lines", () => {
           // First call: delay to simulate slow network
           if (readCount === 1) {
             return new Promise<any>((resolve) => {
-              resolveRead = () =>
+              resolveLoad = () => {
                 resolve({
                   items: allItems.slice(offset, offset + limit),
                   total: allItems.length,
                   hasMore: true,
                 });
+              };
             });
           }
           // Subsequent calls: resolve immediately
@@ -1574,7 +1578,7 @@ describe("data/manager — uncovered lines", () => {
       const load2 = manager.loadRange(0, 49);
 
       // Resolve the first load
-      if (resolveRead) resolveRead(undefined);
+      if (resolveLoad) resolveLoad();
 
       await Promise.all([load1, load2]);
 
@@ -1860,7 +1864,7 @@ describe("data/manager — concurrent loadRange dedup overlapping chunks", () =>
 
     // Resolve all pending reads
     for (const rp of readPromises) {
-      rp.resolve();
+      rp.resolve(undefined);
     }
 
     await Promise.all([p1, p2]);
@@ -1874,12 +1878,12 @@ describe("data/manager — concurrent loadRange dedup overlapping chunks", () =>
 describe("data/manager — loadMore edge cases", () => {
   it("should return false from loadMore when already loading", async () => {
     const items = createTestItems(50);
-    let resolveRead: ((v: any) => void) | null = null;
+    let resolveLoad: ((v: any) => void) | undefined;
 
     const adapter = {
       read: async ({ offset, limit }: any) =>
         new Promise<any>((resolve) => {
-          resolveRead = () =>
+          resolveLoad = () =>
             resolve({
               items: items.slice(offset, offset + limit),
               total: items.length,
@@ -1901,7 +1905,7 @@ describe("data/manager — loadMore edge cases", () => {
     expect(result).toBe(false);
 
     // Resolve and cleanup
-    if (resolveRead) resolveRead(undefined);
+    if (resolveLoad) resolveLoad(undefined);
     await p1.catch(() => {});
   });
 });
