@@ -1421,6 +1421,11 @@ function materialize<T extends VListItem = VListItem>(
       if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
         items = [...newItems];
       } else {
+        // Ensure items array is large enough before assigning
+        const requiredLength = offset + newItems.length;
+        if (items.length < requiredLength) {
+          items.length = requiredLength;
+        }
         for (let i = 0; i < newItems.length; i++) {
           items[offset + i] = newItems[i]!;
         }

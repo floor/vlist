@@ -210,7 +210,7 @@ describe("reverse mode", () => {
             headerTemplate: (group: string) => `<div>${group}</div>`,
           },
         }),
-      ).toThrow("[vlist] reverse mode cannot be combined with groups");
+      ).toThrow("[vlist/builder] withGroups cannot be used with reverse: true");
     });
 
     it("should throw when combined with grid layout", () => {
@@ -228,7 +228,7 @@ describe("reverse mode", () => {
           items,
           reverse: true,
         }),
-      ).toThrow("[vlist] reverse mode cannot be combined with grid layout");
+      ).toThrow("[vlist/builder] withGrid cannot be used with reverse: true");
     });
 
     it("should accept reverse: true without groups or grid", () => {
