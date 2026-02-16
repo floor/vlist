@@ -1784,9 +1784,17 @@ function materialize<T extends VListItem = VListItem>(
       return dom.root;
     },
     get items() {
+      // Check if a plugin (e.g., groups) provides a custom items getter
+      if (methods.has("_getItems")) {
+        return (methods.get("_getItems") as any)();
+      }
       return items as readonly T[];
     },
     get total() {
+      // Check if a plugin (e.g., groups) provides a custom total getter
+      if (methods.has("_getTotal")) {
+        return (methods.get("_getTotal") as any)();
+      }
       return virtualTotalFn();
     },
 
