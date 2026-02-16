@@ -294,6 +294,11 @@ export const withGroups = <T extends VListItem = VListItem>(
       });
 
       // ── Override scrollToIndex: convert data index → layout index ──
+      const { animateScroll, cancelScroll } = createSmoothScroll(
+        ctx.scrollController,
+        ctx.renderIfNeeded,
+      );
+
       ctx.methods.set(
         "scrollToIndex",
         (
@@ -311,7 +316,8 @@ export const withGroups = <T extends VListItem = VListItem>(
           // Convert data index to layout index
           const layoutIndex = groupLayout!.dataToLayoutIndex(index);
 
-          const { align, behavior } = resolveScrollArgs(alignOrOptions);
+          const { align, behavior, duration } =
+            resolveScrollArgs(alignOrOptions);
           const total = ctx.dataManager.getTotal();
 
           const position = calculateScrollToIndex(
@@ -324,8 +330,13 @@ export const withGroups = <T extends VListItem = VListItem>(
           );
 
           if (behavior === "smooth") {
-            ctx.scrollController.scrollTo(position);
+            animateScroll(
+              ctx.scrollController.getScrollTop(),
+              position,
+              duration,
+            );
           } else {
+            cancelScroll();
             ctx.scrollController.scrollTo(position);
           }
         },
@@ -338,6 +349,10 @@ export const withGroups = <T extends VListItem = VListItem>(
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
+        if (smoothScrollAnimationId !== null) {
+          cancelAnimationFrame(smoothScrollAnimationId);
+          smoothScrollAnimationId = null;
+        }
         if (stickyHeader) {
           stickyHeader.destroy();
           stickyHeader = null;
@@ -360,6 +375,46 @@ export const withGroups = <T extends VListItem = VListItem>(
 // =============================================================================
 
 const DEFAULT_SMOOTH_DURATION = 300;
+
+// Smooth scroll animation helpers
+const easeInOutQuad = (t: number): number =>
+  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+let smoothScrollAnimationId: number | null = null;
+
+const createSmoothScroll = (scrollController: any, renderFn: () => void) => {
+  const cancelScroll = (): void => {
+    if (smoothScrollAnimationId !== null) {
+      cancelAnimationFrame(smoothScrollAnimationId);
+      smoothScrollAnimationId = null;
+    }
+  };
+
+  const animateScroll = (from: number, to: number, duration: number): void => {
+    cancelScroll();
+    if (Math.abs(to - from) < 1) {
+      scrollController.scrollTo(to);
+      return;
+    }
+
+    const start = performance.now();
+    const tick = (now: number): void => {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      const newPos = from + (to - from) * easeInOutQuad(t);
+      scrollController.scrollTo(newPos);
+      renderFn();
+      if (t < 1) {
+        smoothScrollAnimationId = requestAnimationFrame(tick);
+      } else {
+        smoothScrollAnimationId = null;
+      }
+    };
+    smoothScrollAnimationId = requestAnimationFrame(tick);
+  };
+
+  return { animateScroll, cancelScroll };
+};
 
 const resolveScrollArgs = (
   alignOrOptions?:
