@@ -297,19 +297,33 @@ const createDOMStructure = (
 
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
-  viewport.style.overflow = "auto";
+  if (horizontal) {
+    viewport.style.overflowX = "auto";
+    viewport.style.overflowY = "hidden";
+  } else {
+    viewport.style.overflow = "auto";
+  }
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
   const content = document.createElement("div");
   content.className = `${classPrefix}-content`;
   content.style.position = "relative";
-  content.style.width = "100%";
+  if (horizontal) {
+    content.style.height = "100%";
+    // Width will be set dynamically based on total items * width
+  } else {
+    content.style.width = "100%";
+  }
 
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
   items.style.position = "relative";
-  items.style.width = "100%";
+  if (horizontal) {
+    items.style.height = "100%";
+  } else {
+    items.style.width = "100%";
+  }
 
   content.appendChild(items);
   viewport.appendChild(content);
