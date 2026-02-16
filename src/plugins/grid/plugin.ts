@@ -155,16 +155,15 @@ export const withGrid = <T extends VListItem = VListItem>(
           const totalGaps = (gridState.columns - 1) * gridState.gap;
           const columnWidth = (innerWidth - totalGaps) / gridState.columns;
 
-          const context: {
-            row: number;
-            column: number;
-            totalRows: number;
-            totalColumns: number;
-          } = {
+          const context: any = {
             containerWidth: gridState.containerWidth,
             columns: gridState.columns,
             gap: gridState.gap,
             columnWidth,
+            row: gridLayout!.getRow(index),
+            column: gridLayout!.getCol(index),
+            totalRows: gridLayout!.getTotalRows(ctx.dataManager.getTotal()),
+            totalColumns: gridState.columns,
           };
 
           // Call user's function with context
@@ -177,7 +176,6 @@ export const withGrid = <T extends VListItem = VListItem>(
       }
 
       // Rebuild height cache with row count
-      const totalItems = ctx.dataManager.getTotal();
       ctx.rebuildHeightCache();
 
       // ── Add grid CSS class ──
@@ -195,7 +193,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           dom.items,
           template,
           ctx.heightCache,
-          gridLayout,
+          gridLayout!,
           classPrefix,
           containerWidth,
           () => ctx.dataManager.getTotal(),
@@ -221,13 +219,13 @@ export const withGrid = <T extends VListItem = VListItem>(
       ctx.methods.set(
         "_updateGridLayoutForGroups",
         (isHeaderFn: (index: number) => boolean) => {
-          gridLayout.update({ isHeaderFn });
+          gridLayout!.update({ isHeaderFn } as any);
 
           // Calculate correct total height by summing only column 0 items
           const totalItems = ctx.dataManager.getTotal();
           let correctTotalHeight = 0;
           for (let i = 0; i < totalItems; i++) {
-            if (gridLayout.getCol(i) === 0) {
+            if (gridLayout!.getCol(i) === 0) {
               const height = ctx.heightCache.getHeight(i);
               correctTotalHeight += height;
             }
@@ -274,7 +272,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         const containerWidth = ctx.getContainerWidth();
         gridState.containerWidth = containerWidth;
         gridState.columns = gridConfig.columns;
-        gridState.gap = gridConfig.gap;
+        gridState.gap = gridConfig.gap ?? 0;
 
         // Update grid renderer
         if (gridRenderer) {
@@ -414,7 +412,11 @@ export const withGrid = <T extends VListItem = VListItem>(
             | "start"
             | "center"
             | "end"
-            | import("../types").ScrollToOptions,
+            | {
+                align?: "start" | "center" | "end";
+                behavior?: "auto" | "smooth";
+                duration?: number;
+              },
         ): void => {
           // Convert item index to row index
           const rowIndex = Math.floor(index / config.columns);

@@ -361,6 +361,15 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setVisibleRangeFn: () => {
       // Stub - not used in simplified context
     },
+    setScrollToPosFn: () => {
+      // Stub - not used in simplified context
+    },
+    setPositionElementFn: () => {
+      // Stub - not used in simplified context
+    },
+    setScrollFns: () => {
+      // Stub - not used in simplified context
+    },
 
     // Window mode plugin hooks (stubs for this simplified context)
     setScrollTarget: () => {
