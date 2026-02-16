@@ -8,9 +8,9 @@ import {
   createSparseStorage,
   mergeRanges,
   calculateMissingRanges,
-} from "../../src/plugins/data/sparse";
+} from "../../../src/plugins/data/sparse";
 
-import type { VListItem } from "../../src/types";
+import type { VListItem } from "../../../src/types";
 
 // =============================================================================
 // Test Helpers

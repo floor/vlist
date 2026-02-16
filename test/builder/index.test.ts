@@ -29,17 +29,17 @@ import {
 } from "bun:test";
 import { JSDOM } from "jsdom";
 
-import { vlist } from "../src/builder/core";
-import type { BuiltVList } from "../src/builder/types";
-import type { VListItem, VListAdapter } from "../src/types";
-import { withSelection } from "../src/plugins/selection/plugin";
-import { withScrollbar } from "../src/plugins/scroll/plugin";
-import { withData } from "../src/plugins/data/plugin";
-import { withCompression } from "../src/plugins/compression/plugin";
-import { withSnapshots } from "../src/plugins/snapshots/plugin";
-import { withGrid } from "../src/plugins/grid/plugin";
-import { withGroups } from "../src/plugins/groups/plugin";
-import { isGroupHeader } from "../src/plugins/groups/types";
+import { vlist } from "../../src/builder/core";
+import type { BuiltVList } from "../../src/builder/types";
+import type { VListItem, VListAdapter } from "../../src/types";
+import { withSelection } from "../../src/plugins/selection/plugin";
+import { withScrollbar } from "../../src/plugins/scroll/plugin";
+import { withData } from "../../src/plugins/data/plugin";
+import { withCompression } from "../../src/plugins/compression/plugin";
+import { withSnapshots } from "../../src/plugins/snapshots/plugin";
+import { withGrid } from "../../src/plugins/grid/plugin";
+import { withGroups } from "../../src/plugins/groups/plugin";
+import { isGroupHeader } from "../../src/plugins/groups/types";
 
 // =============================================================================
 // JSDOM Setup
