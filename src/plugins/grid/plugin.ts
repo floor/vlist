@@ -167,7 +167,15 @@ export const withGrid = <T extends VListItem = VListItem>(
       }
 
       // Rebuild height cache with row count
+      const totalItems = ctx.dataManager.getTotal();
+      const totalRows = gridLayout.getTotalRows(totalItems);
       ctx.rebuildHeightCache();
+
+      // Log total height for debugging scroll issues
+      const totalHeight = ctx.heightCache.getTotalHeight();
+      console.log(
+        `🔍 GRID HEIGHT: ${totalRows} rows, total height: ${totalHeight}px, items: ${totalItems}`,
+      );
 
       // ── Add grid CSS class ──
       dom.root.classList.add(`${classPrefix}--grid`);
@@ -213,6 +221,17 @@ export const withGrid = <T extends VListItem = VListItem>(
         "_updateGridLayoutForGroups",
         (isHeaderFn: (index: number) => boolean) => {
           gridLayout.update({ isHeaderFn });
+
+          // Rebuild height cache with new row count
+          const totalItems = ctx.dataManager.getTotal();
+          const totalRows = gridLayout.getTotalRows(totalItems);
+          ctx.rebuildHeightCache();
+
+          const totalHeight = ctx.heightCache.getTotalHeight();
+          console.log(
+            `🔍 GRID+GROUPS: Updated layout - ${totalRows} rows, total height: ${totalHeight}px, items: ${totalItems}`,
+          );
+
           // Recreate renderer with updated layout
           createAndSetGridRenderer();
         },
