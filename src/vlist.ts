@@ -75,12 +75,7 @@ export const createVList = <T extends VListItem = VListItem>(
   // Auto-apply groups plugin if groups config provided
   // Works together with grid for grouped 2D layouts
   if (config.groups) {
-    // Validate: groups cannot be combined with grid or horizontal
-    if (config.layout === "grid") {
-      throw new Error(
-        "[vlist/builder] grid layout cannot be combined with groups",
-      );
-    }
+    // Validate: groups cannot be combined with horizontal (but CAN work with grid)
     if (config.direction === "horizontal") {
       throw new Error(
         "[vlist/builder] horizontal direction cannot be combined with groups",
