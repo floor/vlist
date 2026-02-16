@@ -190,9 +190,21 @@ export const withGroups = <T extends VListItem = VListItem>(
       const replaceGridRenderer = ctx.methods.get("_replaceGridRenderer") as
         | ((renderer: any) => void)
         | undefined;
+      const updateGridLayoutForGroups = ctx.methods.get(
+        "_updateGridLayoutForGroups",
+      ) as ((isHeaderFn: (index: number) => boolean) => void) | undefined;
 
       if (getGridLayout && replaceGridRenderer) {
-        // Grid renderer is active - recreate it with unified template
+        // Grid renderer is active - make grid layout groups-aware
+        if (updateGridLayoutForGroups) {
+          // Update grid layout to handle full-width headers
+          updateGridLayoutForGroups((index: number) => {
+            const item = layoutItems[index];
+            return item && isGroupHeader(item);
+          });
+        }
+
+        // Recreate grid renderer with unified template
         const { createGridRenderer } = require("../grid/renderer");
         const gridLayout = getGridLayout();
 

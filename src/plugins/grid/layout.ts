@@ -14,6 +14,14 @@
 
 import type { GridConfig, GridLayout, GridPosition, ItemRange } from "./types";
 
+/**
+ * Extended grid config with optional groups support
+ */
+export interface GridConfigWithGroups extends GridConfig {
+  /** Optional: check if an item index is a group header (for groups-aware layout) */
+  isHeaderFn?: (index: number) => boolean;
+}
+
 // =============================================================================
 // Factory
 // =============================================================================
@@ -21,23 +29,58 @@ import type { GridConfig, GridLayout, GridPosition, ItemRange } from "./types";
 /**
  * Create a GridLayout instance.
  *
- * @param config - Grid configuration (columns, gap)
- * @returns GridLayout with O(1) mapping functions
+ * @param config - Grid configuration (columns, gap, optional isHeaderFn)
+ * @returns GridLayout with O(1) mapping functions (or groups-aware if isHeaderFn provided)
  */
-export const createGridLayout = (config: GridConfig): GridLayout => {
+export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
   let columns = Math.max(1, Math.floor(config.columns));
   let gap = config.gap ?? 0;
+  let isHeaderFn = config.isHeaderFn;
 
   // Reusable position object to avoid allocation on hot paths
   const reusablePosition: GridPosition = { row: 0, col: 0 };
 
   /**
    * Total rows for a given item count.
-   * ceil(totalItems / columns)
+   * When isHeaderFn is provided, headers force new rows.
    */
   const getTotalRows = (totalItems: number): number => {
     if (totalItems <= 0) return 0;
-    return Math.ceil(totalItems / columns);
+
+    if (!isHeaderFn) {
+      return Math.ceil(totalItems / columns);
+    }
+
+    // Groups-aware calculation
+    let row = 0;
+    let colInRow = 0;
+
+    for (let i = 0; i < totalItems; i++) {
+      if (isHeaderFn(i)) {
+        // Header: start new row if not at beginning
+        if (colInRow > 0) {
+          row++;
+          colInRow = 0;
+        }
+        // Header occupies its own row
+        row++;
+        colInRow = 0;
+      } else {
+        // Regular item
+        colInRow++;
+        if (colInRow >= columns) {
+          row++;
+          colInRow = 0;
+        }
+      }
+    }
+
+    // Add final row if there are items in it
+    if (colInRow > 0) {
+      row++;
+    }
+
+    return row;
   };
 
   /**
@@ -52,16 +95,73 @@ export const createGridLayout = (config: GridConfig): GridLayout => {
 
   /**
    * Get row index for a flat item index — O(1)
+   * When isHeaderFn is provided, headers force new rows and span all columns.
    */
   const getRow = (itemIndex: number): number => {
-    return Math.floor(itemIndex / columns);
+    if (!isHeaderFn) {
+      return Math.floor(itemIndex / columns);
+    }
+
+    // Groups-aware calculation
+    let row = 0;
+    let colInRow = 0;
+
+    for (let i = 0; i <= itemIndex; i++) {
+      if (isHeaderFn(i)) {
+        // Header: start new row if not at beginning
+        if (colInRow > 0) {
+          row++;
+          colInRow = 0;
+        }
+        // Header occupies its own row
+        if (i === itemIndex) return row;
+        row++;
+        colInRow = 0;
+      } else {
+        // Regular item
+        if (i === itemIndex) return row;
+        colInRow++;
+        if (colInRow >= columns) {
+          row++;
+          colInRow = 0;
+        }
+      }
+    }
+
+    return row;
   };
 
   /**
    * Get column index for a flat item index — O(1)
+   * Headers always return col 0 when isHeaderFn is provided.
    */
   const getCol = (itemIndex: number): number => {
-    return itemIndex % columns;
+    if (!isHeaderFn) {
+      return itemIndex % columns;
+    }
+
+    // Headers always at column 0
+    if (isHeaderFn(itemIndex)) {
+      return 0;
+    }
+
+    // Calculate column for regular items
+    let colInRow = 0;
+
+    for (let i = 0; i <= itemIndex; i++) {
+      if (isHeaderFn(i)) {
+        // Header: reset column counter
+        colInRow = 0;
+      } else {
+        if (i === itemIndex) return colInRow;
+        colInRow++;
+        if (colInRow >= columns) {
+          colInRow = 0;
+        }
+      }
+    }
+
+    return colInRow;
   };
 
   /**
@@ -123,12 +223,15 @@ export const createGridLayout = (config: GridConfig): GridLayout => {
    * Update grid configuration without recreating the layout.
    * This is more efficient than destroying and recreating.
    */
-  const update = (newConfig: Partial<GridConfig>): void => {
+  const updateConfig = (newConfig: Partial<GridConfigWithGroups>): void => {
     if (newConfig.columns !== undefined) {
       columns = Math.max(1, Math.floor(newConfig.columns));
     }
     if (newConfig.gap !== undefined) {
       gap = newConfig.gap;
+    }
+    if (newConfig.isHeaderFn !== undefined) {
+      isHeaderFn = newConfig.isHeaderFn;
     }
   };
 

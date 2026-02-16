@@ -94,10 +94,23 @@ export const withGrid = <T extends VListItem = VListItem>(
       }
 
       // ── Create grid layout ──
-      const gridConfig: GridConfig = {
+      // Check if groups plugin will be active (items contain group headers)
+      const hasGroups = rawConfig.items?.some(
+        (item: any) => item.__groupHeader === true,
+      );
+
+      const gridConfig: import("./layout").GridConfigWithGroups = {
         columns: config.columns,
         gap: config.gap ?? 0,
       };
+
+      // If groups detected, add isHeaderFn for groups-aware layout
+      if (hasGroups) {
+        gridConfig.isHeaderFn = (index: number) => {
+          const item = ctx.dataManager.getItem(index);
+          return item && (item as any).__groupHeader === true;
+        };
+      }
 
       gridLayout = createGridLayout(gridConfig);
       const gap = gridLayout.gap;
@@ -166,21 +179,25 @@ export const withGrid = <T extends VListItem = VListItem>(
       // ── Create grid renderer ──
       const template = rawConfig.item.template;
 
-      gridRenderer = createGridRenderer<T>(
-        dom.items,
-        template,
-        ctx.heightCache,
-        gridLayout,
-        classPrefix,
-        containerWidth,
-        () => ctx.dataManager.getTotal(),
-        resolvedConfig.ariaIdPrefix,
-      );
+      const createAndSetGridRenderer = () => {
+        gridRenderer = createGridRenderer<T>(
+          dom.items,
+          template,
+          ctx.heightCache,
+          gridLayout,
+          classPrefix,
+          containerWidth,
+          () => ctx.dataManager.getTotal(),
+          resolvedConfig.ariaIdPrefix,
+        );
 
-      // ── Replace the list renderer with the grid renderer ──
-      ctx.replaceRenderer(
-        gridRenderer as unknown as import("../render").Renderer<T>,
-      );
+        // ── Replace the list renderer with the grid renderer ──
+        ctx.replaceRenderer(
+          gridRenderer as unknown as import("../render").Renderer<T>,
+        );
+      };
+
+      createAndSetGridRenderer();
 
       // ── Expose grid layout for other plugins (e.g., groups) ──
       ctx.methods.set("_getGridLayout", () => gridLayout);
@@ -190,6 +207,16 @@ export const withGrid = <T extends VListItem = VListItem>(
       ctx.methods.set("_replaceGridRenderer", (newRenderer: any) => {
         gridRenderer = newRenderer;
       });
+
+      // ── Expose method to update grid layout with isHeaderFn (for groups plugin) ──
+      ctx.methods.set(
+        "_updateGridLayoutForGroups",
+        (isHeaderFn: (index: number) => boolean) => {
+          gridLayout.update({ isHeaderFn });
+          // Recreate renderer with updated layout
+          createAndSetGridRenderer();
+        },
+      );
 
       // ── Expose update method for grid config changes ──
       ctx.methods.set("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
