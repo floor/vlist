@@ -262,7 +262,7 @@ describe("isRangeVisible", () => {
 // Scroll Controller Tests
 // =============================================================================
 
-import { createScrollController } from "../../src/scroll";
+import { createScrollController } from "../../src/plugins/scroll";
 import { JSDOM } from "jsdom";
 
 describe("createScrollController", () => {
