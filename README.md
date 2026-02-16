@@ -32,7 +32,7 @@ Lightweight, high-performance virtual list with zero dependencies.
 
 Interactive examples and documentation are available at **[vlist.dev](https://vlist.dev)**.
 
-**19 examples** across 8 categories — many with multi-framework implementations (JavaScript, React, Svelte, Vue):
+**14 examples** across 7 categories — many with multi-framework implementations (JavaScript, React, Svelte, Vue):
 
 | Category | Examples |
 |----------|----------|
@@ -44,7 +44,6 @@ Interactive examples and documentation are available at **[vlist.dev](https://vl
 | **Groups Plugin** | [Sticky Headers](https://vlist.dev/sandbox/groups/sticky-headers/) — A–Z contact list |
 | **Other Plugins** | [Scroll Restore](https://vlist.dev/sandbox/scroll-restore/) • [Window Scroll](https://vlist.dev/sandbox/window-scroll/) |
 | **Advanced** | [Variable Heights](https://vlist.dev/sandbox/variable-heights/) • [Reverse Chat](https://vlist.dev/sandbox/reverse-chat/) • [Wizard Nav](https://vlist.dev/sandbox/wizard-nav/) |
-| **Builder Pattern** | [Basic](https://vlist.dev/sandbox/builder/basic/) • [Controls](https://vlist.dev/sandbox/builder/controls/) • [Large List](https://vlist.dev/sandbox/builder/large-list/) • [Photo Album](https://vlist.dev/sandbox/builder/photo-album/) • [Chat](https://vlist.dev/sandbox/builder/chat/) |
 
 ## Installation
 
