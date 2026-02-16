@@ -118,40 +118,38 @@ export const createVList = <T extends VListItem = VListItem>(
   // Build and return
   const instance = builder.build();
 
-  // Return with full VList interface
-  // The built instance already has most methods from plugins
-  return {
-    ...instance,
+  // Add update() method for backwards compatibility
+  // Note: We must add it directly to the instance to preserve getters
+  (instance as any).update = (updateConfig: any) => {
+    // If grid config changed, use updateGrid from plugin
+    if (updateConfig.grid && (instance as any).updateGrid) {
+      (instance as any).updateGrid(updateConfig.grid);
+    }
 
-    // Add update() method for backwards compatibility
-    update: (updateConfig) => {
-      // If grid config changed, use updateGrid from plugin
-      if (updateConfig.grid && (instance as any).updateGrid) {
-        (instance as any).updateGrid(updateConfig.grid);
-      }
+    // If selection mode changed
+    if (
+      updateConfig.selectionMode !== undefined &&
+      (instance as any).setSelectionMode
+    ) {
+      (instance as any).setSelectionMode(updateConfig.selectionMode);
+    }
 
-      // If selection mode changed
-      if (
-        updateConfig.selectionMode !== undefined &&
-        (instance as any).setSelectionMode
-      ) {
-        (instance as any).setSelectionMode(updateConfig.selectionMode);
-      }
+    // Note: itemHeight updates not yet supported in builder
+    if (updateConfig.itemHeight !== undefined) {
+      console.warn(
+        "[vlist] Updating itemHeight via update() is not yet supported with the builder pattern. " +
+          "Please recreate the instance or use the full API from 'vlist/full'.",
+      );
+    }
 
-      // Note: itemHeight updates not yet supported in builder
-      if (updateConfig.itemHeight !== undefined) {
-        console.warn(
-          "[vlist] Updating itemHeight via update() is not yet supported with the builder pattern. " +
-            "Please recreate the instance or use the full API from 'vlist/full'.",
-        );
-      }
+    // Overscan updates not yet supported
+    if (updateConfig.overscan !== undefined) {
+      console.warn(
+        "[vlist] Updating overscan via update() is not yet supported with the builder pattern.",
+      );
+    }
+  };
 
-      // Overscan updates not yet supported
-      if (updateConfig.overscan !== undefined) {
-        console.warn(
-          "[vlist] Updating overscan via update() is not yet supported with the builder pattern.",
-        );
-      }
-    },
-  } as VList<T>;
+  // Return the instance with update method added
+  return instance as VList<T>;
 };
