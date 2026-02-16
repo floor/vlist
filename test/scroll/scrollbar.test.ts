@@ -14,7 +14,10 @@ import {
   mock,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createScrollbar, type Scrollbar } from "../../src/scroll/scrollbar";
+import {
+  createScrollbar,
+  type Scrollbar,
+} from "../../src/plugins/scroll/scrollbar";
 
 // =============================================================================
 // JSDOM Setup
@@ -1120,8 +1123,6 @@ describe("createScrollbar", () => {
 });
 
 describe("scroll/scrollbar — destroy with pending animation frame (L348-349)", () => {
-
-
   let viewport: HTMLElement;
 
   const createViewport = (): HTMLElement => {

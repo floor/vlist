@@ -14,11 +14,11 @@ import {
   afterEach,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createGridRenderer } from "../../src/grid/renderer";
-import { createGridLayout } from "../../src/grid/layout";
+import { createGridRenderer } from "../../src/plugins/grid/renderer";
+import { createGridLayout } from "../../src/plugins/grid/layout";
 import { createHeightCache } from "../../src/render/heights";
-import type { GridRenderer } from "../../src/grid/renderer";
-import type { GridLayout } from "../../src/grid/types";
+import type { GridRenderer } from "../../src/plugins/grid/renderer";
+import type { GridLayout } from "../../src/plugins/grid/types";
 import type {
   VListItem,
   ItemTemplate,
