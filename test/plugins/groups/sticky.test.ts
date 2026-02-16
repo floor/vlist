@@ -14,17 +14,17 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createStickyHeader } from "../../src/plugins/groups/sticky";
+import { createStickyHeader } from "../../../src/plugins/groups/sticky";
 import {
   createGroupLayout,
   createGroupedHeightFn,
-} from "../../src/plugins/groups/layout";
-import { createHeightCache } from "../../src/render/heights";
-import { createVList } from "../../src/vlist";
-import type { GroupsConfig } from "../../src/plugins/groups/types";
-import type { GroupLayout } from "../../src/plugins/groups/types";
-import type { HeightCache } from "../../src/render/heights";
-import type { VListItem } from "../../src/types";
+} from "../../../src/plugins/groups/layout";
+import { createHeightCache } from "../../../src/render/heights";
+import { createVList } from "../../../src/vlist";
+import type { GroupsConfig } from "../../../src/plugins/groups/types";
+import type { GroupLayout } from "../../../src/plugins/groups/types";
+import type { HeightCache } from "../../../src/render/heights";
+import type { VListItem } from "../../../src/types";
 
 // =============================================================================
 // JSDOM Setup
