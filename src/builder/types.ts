@@ -159,6 +159,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   // ── Component replacement ─────────────────────────────────────
   replaceTemplate(template: ItemTemplate<T>): void;
+  replaceRenderer(renderer: Renderer<T>): void; // For grid plugin compatibility
   replaceDataManager(dataManager: SimpleDataManager<T>): void;
   replaceScrollController(scrollController: ScrollController): void;
 

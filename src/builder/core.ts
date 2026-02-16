@@ -1211,6 +1211,11 @@ function materialize<T extends VListItem = VListItem>(
       // This is the proper way to modify rendering in the materialize path
       activeTemplate = newTemplate;
     },
+    replaceRenderer(_renderer: any): void {
+      // No-op in materialize (renderer is inlined)
+      // Grid plugin uses this, but manages its own renderer via methods
+      // Groups plugin should use replaceTemplate instead
+    },
     replaceDataManager(dm: any): void {
       dataManagerProxy = dm;
     },
