@@ -96,10 +96,21 @@ export const withSelection = <T extends VListItem = VListItem>(
     ] as const,
 
     setup(ctx: BuilderContext<T>): void {
-      if (mode === "none") return;
-
       const { dom, emitter, config: resolvedConfig } = ctx;
       const { classPrefix, ariaIdPrefix } = resolvedConfig;
+
+      // If mode is 'none', register stub methods for backwards compatibility
+      if (mode === "none") {
+        ctx.methods.set("select", () => {});
+        ctx.methods.set("deselect", () => {});
+        ctx.methods.set("toggleSelect", () => {});
+        ctx.methods.set("selectAll", () => {});
+        ctx.methods.set("clearSelection", () => {});
+        ctx.methods.set("getSelected", () => []);
+        ctx.methods.set("getSelectedItems", () => []);
+        ctx.methods.set("setSelectionMode", () => {});
+        return;
+      }
 
       // ── Wrap existing render functions to inject selection state ──
       // We capture the current renderIfNeeded (which may have been set by

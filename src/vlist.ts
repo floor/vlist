@@ -108,18 +108,23 @@ export const createVList = <T extends VListItem = VListItem>(
     builder = builder.use(withGroups(groupsConfig));
   }
 
-  // Auto-apply selection plugin if selection config provided
-  if (config.selection && config.selection.mode !== "none") {
+  // Auto-apply selection plugin for backwards compatibility
+  // Even without config, apply with mode='none' so selection methods exist
+  const selectionMode = config.selection?.mode || "none";
+  if (selectionMode !== "none") {
     const selectionConfig: {
       mode: "single" | "multiple";
       initial?: Array<string | number>;
     } = {
-      mode: config.selection.mode || "single",
+      mode: selectionMode as "single" | "multiple",
     };
-    if (config.selection.initial !== undefined) {
+    if (config.selection?.initial !== undefined) {
       selectionConfig.initial = config.selection.initial;
     }
     builder = builder.use(withSelection(selectionConfig));
+  } else {
+    // Apply with mode='none' for backwards compatibility
+    builder = builder.use(withSelection({ mode: "none" }));
   }
 
   // Auto-apply compression plugin (always beneficial for large lists)
