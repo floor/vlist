@@ -61,7 +61,7 @@ export const withWindow = <
     priority: 5, // Run early, before scroll/selection plugins
 
     setup(ctx: BuilderContext<T>): void {
-      const { dom, state, config } = ctx;
+      const { dom, state, config, emitter } = ctx;
 
       // ── 1. Modify DOM for window scroll ────────────────────────
 
@@ -126,13 +126,31 @@ export const withWindow = <
 
       // ── 6. Window resize handler ───────────────────────────────
 
+      let previousHeight = window.innerHeight;
+      let previousWidth = window.innerWidth;
+
       const handleResize = (): void => {
         const newWidth = window.innerWidth;
         const newHeight = window.innerHeight;
 
+        // Only process resize if change is > 1px (same as ResizeObserver in core)
+        const mainAxis = config.horizontal ? newWidth : newHeight;
+        const prevMainAxis = config.horizontal ? previousWidth : previousHeight;
+
+        if (Math.abs(mainAxis - prevMainAxis) <= 1) {
+          return; // Skip tiny changes
+        }
+
+        // Update tracking
+        previousHeight = newHeight;
+        previousWidth = newWidth;
+
         // Update state
         state.viewportState.containerWidth = newWidth;
         state.viewportState.containerHeight = newHeight;
+
+        // Emit resize event for listeners
+        emitter.emit("resize", { width: newWidth, height: newHeight });
 
         // Notify resize handlers (other plugins may need this)
         for (let i = 0; i < ctx.resizeHandlers.length; i++) {
