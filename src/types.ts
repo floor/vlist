@@ -572,6 +572,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Item clicked */
   "item:click": { item: T; index: number; event: MouseEvent };
 
+  /** Item double-clicked */
+  "item:dblclick": { item: T; index: number; event: MouseEvent };
+
   /** Selection changed */
   "selection:change": { selected: Array<string | number>; items: T[] };
 

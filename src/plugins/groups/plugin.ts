@@ -14,9 +14,10 @@
  *
  * Restrictions:
  * - Items must be pre-sorted by group
- * - Cannot be combined with withGrid
  * - Cannot be combined with direction: 'horizontal'
  * - Cannot be combined with reverse: true
+ *
+ * Can be combined with withGrid for grouped 2D layouts.
  */
 
 import type { VListItem } from "../../types";
@@ -114,8 +115,6 @@ export const withGroups = <T extends VListItem = VListItem>(
     name: "withGroups",
     priority: 10,
 
-    conflicts: ["withGrid"] as const,
-
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
@@ -169,8 +168,7 @@ export const withGroups = <T extends VListItem = VListItem>(
       const userTemplate = rawConfig.item.template;
       const { headerTemplate } = config;
 
-      // We need to override the renderer's template. We do this by creating
-      // a new renderer with the unified template.
+      // Create unified template that handles both headers and items
       const unifiedTemplate = ((
         item: T | GroupHeaderItem,
         index: number,
@@ -185,19 +183,47 @@ export const withGroups = <T extends VListItem = VListItem>(
         return userTemplate(item as T, index, state);
       }) as typeof userTemplate;
 
-      // ── Replace renderer with one that uses the unified template ──
-      const newRenderer = createRenderer<T>(
-        dom.items,
-        unifiedTemplate,
-        ctx.heightCache,
-        classPrefix,
-        () => ctx.dataManager.getTotal(),
-        resolvedConfig.ariaIdPrefix,
-        false, // not horizontal
-        undefined,
-      );
+      // ── Check if grid plugin has exposed its layout ──
+      const getGridLayout = ctx.methods.get("_getGridLayout") as
+        | (() => any)
+        | undefined;
+      const replaceGridRenderer = ctx.methods.get("_replaceGridRenderer") as
+        | ((renderer: any) => void)
+        | undefined;
 
-      ctx.replaceRenderer(newRenderer);
+      if (getGridLayout && replaceGridRenderer) {
+        // Grid renderer is active - recreate it with unified template
+        const { createGridRenderer } = require("../grid/renderer");
+        const gridLayout = getGridLayout();
+
+        const newGridRenderer = createGridRenderer<T>(
+          dom.items,
+          unifiedTemplate,
+          ctx.heightCache,
+          gridLayout,
+          classPrefix,
+          ctx.getContainerWidth(),
+          () => ctx.dataManager.getTotal(),
+          resolvedConfig.ariaIdPrefix,
+        );
+
+        // Use grid plugin's method to replace its renderer instance
+        replaceGridRenderer(newGridRenderer);
+      } else {
+        // List renderer - replace with list renderer using unified template
+        const newRenderer = createRenderer<T>(
+          dom.items,
+          unifiedTemplate,
+          ctx.heightCache,
+          classPrefix,
+          () => ctx.dataManager.getTotal(),
+          resolvedConfig.ariaIdPrefix,
+          false, // not horizontal
+          undefined,
+        );
+
+        ctx.replaceRenderer(newRenderer);
+      }
 
       // ── Add grouped CSS class ──
       dom.root.classList.add(`${classPrefix}--grouped`);

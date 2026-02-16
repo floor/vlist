@@ -76,6 +76,7 @@ export type Unsubscribe = () => void;
 /** Core event map */
 export interface CoreEvents<T extends VListItem = VListItem> {
   "item:click": { item: T; index: number; event: MouseEvent };
+  "item:dblclick": { item: T; index: number; event: MouseEvent };
   scroll: { scrollTop: number; direction: "up" | "down" };
   "range:change": { range: Range };
   resize: { height: number; width: number };
@@ -721,7 +722,22 @@ export const createVList = <T extends VListItem = VListItem>(
     emitter.emit("item:click", { item, index, event });
   };
 
+  const handleDblClick = (event: MouseEvent): void => {
+    if (isDestroyed) return;
+    const target = event.target as HTMLElement;
+    const itemEl = target.closest("[data-index]") as HTMLElement | null;
+    if (!itemEl) return;
+
+    const index = parseInt(itemEl.dataset.index ?? "-1", 10);
+    if (index < 0) return;
+    const item = items[index];
+    if (!item) return;
+
+    emitter.emit("item:dblclick", { item, index, event });
+  };
+
   dom.items.addEventListener("click", handleClick);
+  dom.items.addEventListener("dblclick", handleDblClick);
 
   // ---------------------------------------------------------------------------
   // ResizeObserver

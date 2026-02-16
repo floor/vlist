@@ -12,9 +12,10 @@
  * - CSS class — adds .vlist--grid to the root element
  *
  * Restrictions:
- * - Cannot be combined with withGroups
  * - Cannot be combined with direction: 'horizontal'
  * - Cannot be combined with reverse: true
+ *
+ * Can be combined with withGroups for grouped 2D layouts.
  */
 
 import type { VListItem } from "../../types";
@@ -75,8 +76,6 @@ export const withGrid = <T extends VListItem = VListItem>(
   return {
     name: "withGrid",
     priority: 10,
-
-    conflicts: ["withGroups"] as const,
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
@@ -182,6 +181,15 @@ export const withGrid = <T extends VListItem = VListItem>(
       ctx.replaceRenderer(
         gridRenderer as unknown as import("../render").Renderer<T>,
       );
+
+      // ── Expose grid layout for other plugins (e.g., groups) ──
+      ctx.methods.set("_getGridLayout", () => gridLayout);
+      ctx.methods.set("_getGridConfig", () => gridConfig);
+
+      // ── Expose method to replace renderer (for groups plugin) ──
+      ctx.methods.set("_replaceGridRenderer", (newRenderer: any) => {
+        gridRenderer = newRenderer;
+      });
 
       // ── Expose update method for grid config changes ──
       ctx.methods.set("updateGrid", (newConfig: Partial<GridPluginConfig>) => {

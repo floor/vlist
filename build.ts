@@ -18,6 +18,8 @@ async function build() {
     { entry: "./src/builder/index.ts", out: "builder", folder: true },
   ];
 
+  const mainModule = { entry: "./src/index.ts", out: "index.js" };
+
   const pluginModules = [
     { entry: "./src/plugins/data/index.ts", out: "data", folder: true },
     {
@@ -45,6 +47,7 @@ async function build() {
 
   // Single-file builds (no folder structure)
   const singleFileModules = [
+    mainModule,
     { entry: "./src/core-light.ts", out: "core-light.js" },
   ];
 
