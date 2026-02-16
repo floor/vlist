@@ -30,6 +30,7 @@ import {
 import type { HeightCache } from "../../render/heights";
 import type { CompressionContext } from "../../render/renderer";
 import type { GridLayout } from "./types";
+import { isGroupHeader } from "../groups/types";
 
 // =============================================================================
 // Types
@@ -247,14 +248,18 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   /**
    * Position an element at the correct (col, row) offset.
    * Uses translate(x, y) for efficient GPU-accelerated positioning.
+   * Group headers are positioned at x=0 to span full width.
    */
   const positionElement = (
     element: HTMLElement,
     itemIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
-    const col = gridLayout.getCol(itemIndex);
-    const x = gridLayout.getColumnOffset(col, containerWidth);
+    // Check if this is a group header - position at full width
+    const isHeader = element.dataset.id?.startsWith("__group_header");
+
+    const col = isHeader ? 0 : gridLayout.getCol(itemIndex);
+    const x = isHeader ? 0 : gridLayout.getColumnOffset(col, containerWidth);
     const y = calculateRowOffset(itemIndex, compressionCtx);
 
     element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
@@ -262,9 +267,15 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Apply size styles to an element (width from column, height from row height).
+   * Group headers get full container width instead of column width.
    */
   const applySizeStyles = (element: HTMLElement, itemIndex: number): void => {
-    const colWidth = gridLayout.getColumnWidth(containerWidth);
+    // Check if this is a group header - use full width
+    const isHeader = element.dataset.id?.startsWith("__group_header");
+
+    const colWidth = isHeader
+      ? containerWidth
+      : gridLayout.getColumnWidth(containerWidth);
     const row = gridLayout.getRow(itemIndex);
     // The height cache includes the gap for row spacing; subtract it
     // so the DOM element is the real item height (gap = visual space between rows).
