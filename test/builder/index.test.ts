@@ -3108,8 +3108,8 @@ describe("withGroups plugin combinations", () => {
     expect(typeof list.getSelected).toBe("function");
 
     // Selection should work
-    list.select(items[0]!.id);
-    expect(list.getSelected()).toContain(items[0]!.id);
+    list.select!(items[0]!.id);
+    expect(list.getSelected!()).toContain(items[0]!.id);
   });
 
   it("should work with scrollbar plugin", () => {
@@ -3190,8 +3190,8 @@ describe("withGroups plugin combinations", () => {
     const scrollbar = list.element.querySelector(".vlist-scrollbar");
     expect(scrollbar).not.toBeNull();
 
-    list.select(items[0]!.id);
-    expect(list.getSelected()).toContain(items[0]!.id);
+    list.select!(items[0]!.id);
+    expect(list.getSelected!()).toContain(items[0]!.id);
   });
 
   it("should work with withGrid plugin for 2D grouped layouts", () => {
@@ -3678,8 +3678,8 @@ describe("withGroups template rendering", () => {
       .build();
 
     // First header should have key "A" and index 0
-    expect(capturedKey).toBe("A");
-    expect(capturedIndex).toBe(0);
+    expect(capturedKey).toBe("A" as any);
+    expect(capturedIndex).toBe(0 as any);
   });
 });
 
@@ -4788,7 +4788,7 @@ describe("withSnapshots plugin compression mode", () => {
       .build();
 
     // Select some items
-    list.select(1, 2, 3);
+    list.select!(1, 2, 3);
 
     const snapshot = list.getScrollSnapshot!();
     expect(snapshot).toBeDefined();
@@ -4811,21 +4811,21 @@ describe("withSnapshots plugin compression mode", () => {
       .build();
 
     // Select and scroll
-    list.select(5, 6);
+    list.select!(5, 6);
     list.scrollToIndex(10);
     simulateScroll(list, 400);
 
     const snapshot = list.getScrollSnapshot!();
 
     // Clear selection and scroll back
-    list.clearSelection();
+    list.clearSelection!();
     simulateScroll(list, 0);
 
     // Restore
     list.restoreScroll!(snapshot);
 
     // Selection should be restored
-    const selected = list.getSelected();
+    const selected = list.getSelected!();
     expect(selected).toContain(5);
     expect(selected).toContain(6);
   });
@@ -5456,9 +5456,9 @@ describe("withSelection plugin edge cases", () => {
       .use(withSelection({ mode: "multiple" }))
       .build();
 
-    list.select(1, 2, 3);
+    list.select!(1, 2, 3);
 
-    const selectedItems = list.getSelectedItems();
+    const selectedItems = list.getSelectedItems!();
     expect(selectedItems.length).toBe(3);
   });
 
@@ -5474,12 +5474,12 @@ describe("withSelection plugin edge cases", () => {
       .build();
 
     // Toggle on
-    list.toggleSelect(5);
-    expect(list.getSelected()).toContain(5);
+    list.toggleSelect!(5);
+    expect(list.getSelected!()).toContain(5);
 
     // Toggle off
-    list.toggleSelect(5);
-    expect(list.getSelected()).not.toContain(5);
+    list.toggleSelect!(5);
+    expect(list.getSelected!()).not.toContain(5);
   });
 
   it("should handle deselect method", () => {
@@ -5493,12 +5493,12 @@ describe("withSelection plugin edge cases", () => {
       .use(withSelection({ mode: "multiple" }))
       .build();
 
-    list.select(5, 6, 7);
-    expect(list.getSelected().length).toBe(3);
+    list.select!(5, 6, 7);
+    expect(list.getSelected!().length).toBe(3);
 
-    list.deselect(6);
-    expect(list.getSelected().length).toBe(2);
-    expect(list.getSelected()).not.toContain(6);
+    list.deselect!(6);
+    expect(list.getSelected!().length).toBe(2);
+    expect(list.getSelected!()).not.toContain(6);
   });
 
   it("should handle clearSelection", () => {
@@ -5512,11 +5512,11 @@ describe("withSelection plugin edge cases", () => {
       .use(withSelection({ mode: "multiple" }))
       .build();
 
-    list.selectAll();
-    expect(list.getSelected().length).toBe(20);
+    list.selectAll!();
+    expect(list.getSelected!().length).toBe(20);
 
-    list.clearSelection();
-    expect(list.getSelected().length).toBe(0);
+    list.clearSelection!();
+    expect(list.getSelected!().length).toBe(0);
   });
 });
 
@@ -5669,7 +5669,7 @@ describe("withSelection plugin keyboard navigation", () => {
     }
 
     // Clear selection first
-    list.clearSelection();
+    list.clearSelection!();
 
     // Move to item 5
     list.element.dispatchEvent(
@@ -5693,7 +5693,7 @@ describe("withSelection plugin keyboard navigation", () => {
     list.element.dispatchEvent(spaceEvent);
 
     // Should have selected the focused item
-    const selected = list.getSelected();
+    const selected = list.getSelected!();
     expect(selected.length).toBeGreaterThan(0);
   });
 
@@ -5714,10 +5714,8 @@ describe("withSelection plugin keyboard navigation", () => {
       );
     }
 
-    // Clear and focus again
-    list.clearSelection();
-
     // Press Enter to select
+    list.clearSelection!();
     const enterEvent = new dom.window.KeyboardEvent("keydown", {
       key: "Enter",
       bubbles: true,
@@ -5725,7 +5723,7 @@ describe("withSelection plugin keyboard navigation", () => {
     list.element.dispatchEvent(enterEvent);
 
     // Should have selected the focused item
-    const selected = list.getSelected();
+    const selected = list.getSelected!();
     expect(selected.length).toBeGreaterThan(0);
   });
 

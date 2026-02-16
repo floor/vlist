@@ -629,11 +629,11 @@ describe("aria-busy", () => {
   });
 
   it("should set aria-busy when adapter starts loading", async () => {
-    let resolveRead: ((value: any) => void) | null = null;
+    let resolveRead: ((value: any) => void) | undefined;
 
     const adapter: VListAdapter<TestItem> = {
       read: () => {
-        return new Promise((resolve) => {
+        return new Promise<any>((resolve) => {
           resolveRead = resolve;
         });
       },

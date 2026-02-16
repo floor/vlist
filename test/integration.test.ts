@@ -129,10 +129,10 @@ interface TestItem extends VListItem {
   value?: number;
 }
 
-const createTestItems = (count: number): TestItem[] => {
+const createTestItems = (count: number, startId = 1): TestItem[] => {
   return Array.from({ length: count }, (_, i) => ({
-    id: i + 1,
-    name: `Item ${i + 1}`,
+    id: startId + i,
+    name: `Item ${startId + i}`,
     value: i * 10,
   }));
 };
@@ -366,9 +366,9 @@ describe("createVList", () => {
       });
 
       // Should not throw - scrollTo is mocked in JSDOM setup
-      expect(() => vlist.scrollToIndex(50)).not.toThrow();
-      expect(() => vlist.scrollToIndex(50, "center")).not.toThrow();
-      expect(() => vlist.scrollToIndex(50, "end")).not.toThrow();
+      expect(() => vlist!.scrollToIndex(50)).not.toThrow();
+      expect(() => vlist!.scrollToIndex(50, "center")).not.toThrow();
+      expect(() => vlist!.scrollToIndex(50, "end")).not.toThrow();
     });
 
     it("should scroll to item by ID", () => {
@@ -379,8 +379,8 @@ describe("createVList", () => {
       });
 
       // Should not throw - scrollTo is mocked in JSDOM setup
-      expect(() => vlist.scrollToItem(50)).not.toThrow();
-      expect(() => vlist.scrollToItem(50, "center")).not.toThrow();
+      expect(() => vlist!.scrollToItem(50)).not.toThrow();
+      expect(() => vlist!.scrollToItem(50, "center")).not.toThrow();
     });
 
     it("should get scroll position", () => {
@@ -916,9 +916,9 @@ describe("createVList horizontal direction", () => {
           item: { width: 100, template },
           items: [],
           groups: {
-            key: "group",
-            template: () => "",
-            height: 30,
+            getGroupForIndex: () => "group",
+            headerTemplate: () => "",
+            headerHeight: 30,
           },
         });
       }).toThrow(
@@ -2441,6 +2441,7 @@ describe("vlist — groups data mutation methods", () => {
     id: number;
     name: string;
     category: string;
+    [key: string]: unknown;
   }
 
   let container: HTMLElement;
@@ -2613,11 +2614,12 @@ describe("vlist — groups scrollToIndex with ScrollToOptions", () => {
     cleanupContainer(container);
   });
 
-  it("should accept ScrollToOptions object in group mode scrollToIndex", async () => {
+  it("should accept ScrollToOptions object in group mode scrollToIndex", () => {
     interface GroupedItem {
       id: number;
       name: string;
       category: string;
+      [key: string]: unknown;
     }
 
     const items: GroupedItem[] = [
@@ -2773,11 +2775,12 @@ describe("vlist — items and total getters in group mode", () => {
     cleanupContainer(container);
   });
 
-  it("should return original items (without headers) from .items getter", async () => {
+  it("should return original items (without headers) from .items getter", () => {
     interface GroupedItem {
       id: number;
       name: string;
       category: string;
+      [key: string]: unknown;
     }
 
     const items: GroupedItem[] = [
