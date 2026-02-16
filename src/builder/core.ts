@@ -559,7 +559,9 @@ function materialize<T extends VListItem = VListItem>(
     : typeof itemConfig.width === "number"
       ? itemConfig.width
       : undefined;
-  const userTemplate = itemConfig.template as ItemTemplate<T>;
+
+  // Mutable template reference - plugins can replace this (e.g., withGroups wraps it)
+  let activeTemplate = itemConfig.template as ItemTemplate<T>;
 
   const resolvedConfig: ResolvedBuilderConfig = {
     overscan,
@@ -788,7 +790,7 @@ function materialize<T extends VListItem = VListItem>(
     element.setAttribute("aria-setsize", lastAriaSetSize);
     element.setAttribute("aria-posinset", String(index + 1));
 
-    applyTemplate(element, userTemplate(item, index, itemState));
+    applyTemplate(element, activeTemplate(item, index, itemState));
     positionElementFn(element, index);
     return element;
   };
@@ -857,7 +859,7 @@ function materialize<T extends VListItem = VListItem>(
         const existingId = existing.dataset.id;
         const newId = String(item.id);
         if (existingId !== newId) {
-          applyTemplate(existing, userTemplate(item, i, itemState));
+          applyTemplate(existing, activeTemplate(item, i, itemState));
           existing.dataset.id = newId;
           if (isHorizontal) {
             existing.style.width = `${heightCache.getHeight(i)}px`;
@@ -1204,9 +1206,10 @@ function materialize<T extends VListItem = VListItem>(
     destroyHandlers,
     methods,
 
-    replaceRenderer(_r: any): void {
-      // Renderer is inlined; grid plugin should override
-      // renderIfNeeded and forceRender via ctx instead
+    replaceTemplate(newTemplate: ItemTemplate<T>): void {
+      // Replace the active template (used by inlined renderer)
+      // This is the proper way to modify rendering in the materialize path
+      activeTemplate = newTemplate;
     },
     replaceDataManager(dm: any): void {
       dataManagerProxy = dm;
@@ -1444,7 +1447,7 @@ function materialize<T extends VListItem = VListItem>(
       // Re-render if visible
       const el = rendered.get(index);
       if (el) {
-        applyTemplate(el, userTemplate(items[index]!, index, itemState));
+        applyTemplate(el, activeTemplate(items[index]!, index, itemState));
         el.dataset.id = String(items[index]!.id);
       }
       return true;

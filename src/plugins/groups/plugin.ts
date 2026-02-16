@@ -210,19 +210,9 @@ export const withGroups = <T extends VListItem = VListItem>(
         // Use grid plugin's method to replace its renderer instance
         replaceGridRenderer(newGridRenderer);
       } else {
-        // List renderer - replace with list renderer using unified template
-        const newRenderer = createRenderer<T>(
-          dom.items,
-          unifiedTemplate,
-          ctx.heightCache,
-          classPrefix,
-          () => ctx.dataManager.getTotal(),
-          resolvedConfig.ariaIdPrefix,
-          false, // not horizontal
-          undefined,
-        );
-
-        ctx.replaceRenderer(newRenderer);
+        // Replace the template with the unified version
+        // This works with the materialize inlined renderer
+        ctx.replaceTemplate(unifiedTemplate);
       }
 
       // ── Add grouped CSS class ──
