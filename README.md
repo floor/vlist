@@ -14,10 +14,12 @@ Lightweight, high-performance virtual list with zero dependencies.
 - 🎯 **Simple API** - Easy to use with TypeScript support
 - 📐 **Grid layout** - 2D virtualized grid with configurable columns and gap
 - 📏 **Variable heights** - Fixed or per-item height via `(index) => number`
+- ↔️ **Horizontal scrolling** - Horizontal lists and carousels with `direction: 'horizontal'`
 - 📜 **Infinite scroll** - Built-in async adapter support
 - ✅ **Selection** - Single and multiple selection modes
 - 📌 **Sticky headers** - Grouped lists with sticky section headers
 - 🪟 **Window scrolling** - Document-level scrolling with `scrollElement: window`
+- 🔄 **Wrap navigation** - Circular scrolling for wizards and carousels
 - 🎨 **Customizable** - Beautiful, customizable styles
 - ♿ **Accessible** - WAI-ARIA listbox pattern, `aria-setsize`/`aria-posinset`, `aria-activedescendant`, live region, keyboard navigation
 - 🌊 **Smooth scrolling** - Animated `scrollToIndex` / `scrollToItem`
@@ -30,20 +32,19 @@ Lightweight, high-performance virtual list with zero dependencies.
 
 Interactive examples and documentation are available at **[vlist.dev](https://vlist.dev)**.
 
-| Example | Description |
-|---------|-------------|
-| [Basic](https://vlist.dev/sandbox/basic/) | Pure vanilla JS — no frameworks, no dependencies |
-| [Core](https://vlist.dev/sandbox/core/) | Lightweight `vlist/core` — 7.3 KB, 83% smaller |
-| [Grid](https://vlist.dev/sandbox/grid/) | 2D photo gallery with real photos from Lorem Picsum |
-| [Variable Heights](https://vlist.dev/sandbox/variable-heights/) | Chat-style messages with 4 different item heights |
-| [Reverse Chat](https://vlist.dev/sandbox/reverse-chat/) | Chat UI with reverse mode, prepend history, auto-scroll |
-| [Selection](https://vlist.dev/sandbox/selection/) | Single/multiple selection with keyboard navigation |
-| [Infinite Scroll](https://vlist.dev/sandbox/infinite-scroll/) | Async data loading with simulated API |
-| [Million Items](https://vlist.dev/sandbox/million-items/) | Stress test with 1–5 million items |
-| [Velocity Loading](https://vlist.dev/sandbox/velocity-loading/) | Velocity-based load skipping demo |
-| [Sticky Headers](https://vlist.dev/sandbox/sticky-headers/) | Grouped contact list with sticky section headers |
-| [Window Scroll](https://vlist.dev/sandbox/window-scroll/) | Document-level scrolling with `scrollElement: window` |
-| [Scroll Restore](https://vlist.dev/sandbox/scroll-restore/) | Save/restore scroll position across SPA navigation |
+**19 examples** across 8 categories — many with multi-framework implementations (JavaScript, React, Svelte, Vue):
+
+| Category | Examples |
+|----------|----------|
+| **Getting Started** | [Basic](https://vlist.dev/sandbox/basic/) • [Controls](https://vlist.dev/sandbox/controls/) |
+| **Core (Lightweight)** | [Basic Core](https://vlist.dev/sandbox/core/basic/) — 7.8KB, 83% smaller |
+| **Grid Plugin** | [Photo Album](https://vlist.dev/sandbox/grid/photo-album/) • [File Browser](https://vlist.dev/sandbox/grid/file-browser/) |
+| **Data Plugin** | [Large List](https://vlist.dev/sandbox/data/large-list/) (100K–5M items) • [Velocity Loading](https://vlist.dev/sandbox/data/velocity-loading/) |
+| **Horizontal** | [Basic Horizontal](https://vlist.dev/sandbox/horizontal/basic/) — 10K card carousel |
+| **Groups Plugin** | [Sticky Headers](https://vlist.dev/sandbox/groups/sticky-headers/) — A–Z contact list |
+| **Other Plugins** | [Scroll Restore](https://vlist.dev/sandbox/scroll-restore/) • [Window Scroll](https://vlist.dev/sandbox/window-scroll/) |
+| **Advanced** | [Variable Heights](https://vlist.dev/sandbox/variable-heights/) • [Reverse Chat](https://vlist.dev/sandbox/reverse-chat/) • [Wizard Nav](https://vlist.dev/sandbox/wizard-nav/) |
+| **Builder Pattern** | [Basic](https://vlist.dev/sandbox/builder/basic/) • [Controls](https://vlist.dev/sandbox/builder/controls/) • [Large List](https://vlist.dev/sandbox/builder/large-list/) • [Photo Album](https://vlist.dev/sandbox/builder/photo-album/) • [Chat](https://vlist.dev/sandbox/builder/chat/) |
 
 ## Installation
 
@@ -123,7 +124,7 @@ const list = createVList({
 });
 ```
 
-### Lightweight Core (7.3 KB)
+### Lightweight Core (7.8 KB)
 
 If you don't need selection, groups, grid, compression, custom scrollbar, or async data adapters, use the lightweight core for an **83% smaller bundle**:
 
