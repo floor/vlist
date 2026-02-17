@@ -17,7 +17,7 @@ import { JSDOM } from "jsdom";
 import {
   createScrollbar,
   type Scrollbar,
-} from "../../../src/plugins/scroll/scrollbar";
+} from "../../../src/features/scrollbar/scrollbar";
 
 // =============================================================================
 // JSDOM Setup

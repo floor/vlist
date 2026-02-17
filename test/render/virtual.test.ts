@@ -22,12 +22,12 @@ import {
   getRangeCount,
   rangeToIndices,
   diffRanges,
-} from "../../src/render/virtual";
+} from "../../src/rendering/viewport";
 import {
   getCompressionState,
   calculateCompressedScrollToIndex,
-} from "../../src/render/compression";
-import { createHeightCache } from "../../src/render/heights";
+} from "../../src/rendering/scale";
+import { createHeightCache } from "../../src/rendering/heights";
 
 describe("simpleVisibleRange", () => {
   it("should return empty range when totalItems is 0", () => {

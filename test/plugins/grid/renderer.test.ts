@@ -14,18 +14,18 @@ import {
   afterEach,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createGridRenderer } from "../../../src/plugins/grid/renderer";
-import { createGridLayout } from "../../../src/plugins/grid/layout";
-import { createHeightCache } from "../../../src/render/heights";
-import type { GridRenderer } from "../../../src/plugins/grid/renderer";
-import type { GridLayout } from "../../../src/plugins/grid/types";
+import { createGridRenderer } from "../../../src/features/grid/renderer";
+import { createGridLayout } from "../../../src/features/grid/layout";
+import { createHeightCache } from "../../../src/rendering/heights";
+import type { GridRenderer } from "../../../src/features/grid/renderer";
+import type { GridLayout } from "../../../src/features/grid/types";
 import type {
   VListItem,
   ItemTemplate,
   ItemState,
   Range,
 } from "../../../src/types";
-import type { HeightCache } from "../../../src/render/heights";
+import type { HeightCache } from "../../../src/rendering/heights";
 
 // =============================================================================
 // JSDOM Setup

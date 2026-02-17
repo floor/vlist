@@ -14,16 +14,16 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createStickyHeader } from "../../../src/plugins/groups/sticky";
+import { createStickyHeader } from "../../../src/features/sections/sticky";
 import {
   createGroupLayout,
   createGroupedHeightFn,
-} from "../../../src/plugins/groups/layout";
-import { createHeightCache } from "../../../src/render/heights";
-import { createVList } from "../../../src/vlist";
-import type { GroupsConfig } from "../../../src/plugins/groups/types";
-import type { GroupLayout } from "../../../src/plugins/groups/types";
-import type { HeightCache } from "../../../src/render/heights";
+} from "../../../src/features/sections/layout";
+import { createHeightCache } from "../../../src/rendering/heights";
+import { createVList } from "../../../src/core/full";
+import type { GroupsConfig } from "../../../src/features/sections/types";
+import type { GroupLayout } from "../../../src/features/sections/types";
+import type { HeightCache } from "../../../src/rendering/heights";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================

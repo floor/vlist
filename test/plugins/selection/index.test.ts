@@ -24,7 +24,7 @@ import {
   isSelectionEmpty,
   selectFocused,
   selectRange,
-} from "../../../src/plugins/selection";
+} from "../../../src/features/selection";
 
 import type { VListItem } from "../../../src/types";
 
