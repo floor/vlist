@@ -12,7 +12,9 @@ async function build() {
   // Build sub-module bundles for tree-shaking
   const subStart = performance.now();
 
-  const coreModules = [{ entry: "./src/core.ts", out: "core", folder: true }];
+  const coreModules = [
+    { entry: "./src/core/lite.ts", out: "core", folder: true },
+  ];
 
   const builderModules = [
     { entry: "./src/builder/index.ts", out: "builder", folder: true },
@@ -20,35 +22,39 @@ async function build() {
 
   const mainModule = { entry: "./src/index.ts", out: "index.js" };
 
-  const pluginModules = [
-    { entry: "./src/plugins/data/index.ts", out: "data", folder: true },
+  const featureModules = [
+    { entry: "./src/features/async/index.ts", out: "async", folder: true },
+    { entry: "./src/features/scale/index.ts", out: "scale", folder: true },
     {
-      entry: "./src/plugins/compression/index.ts",
-      out: "compression",
-      folder: true,
-    },
-    {
-      entry: "./src/plugins/selection/index.ts",
+      entry: "./src/features/selection/index.ts",
       out: "selection",
       folder: true,
     },
-    { entry: "./src/plugins/scroll/index.ts", out: "scroll", folder: true },
-    { entry: "./src/plugins/groups/index.ts", out: "groups", folder: true },
-    { entry: "./src/plugins/grid/index.ts", out: "grid", folder: true },
     {
-      entry: "./src/plugins/snapshots/index.ts",
+      entry: "./src/features/scrollbar/index.ts",
+      out: "scrollbar",
+      folder: true,
+    },
+    {
+      entry: "./src/features/sections/index.ts",
+      out: "sections",
+      folder: true,
+    },
+    { entry: "./src/features/grid/index.ts", out: "grid", folder: true },
+    {
+      entry: "./src/features/snapshots/index.ts",
       out: "snapshots",
       folder: true,
     },
-    { entry: "./src/plugins/window/index.ts", out: "window", folder: true },
+    { entry: "./src/features/page/index.ts", out: "page", folder: true },
   ];
 
-  const allModules = [...coreModules, ...builderModules, ...pluginModules];
+  const allModules = [...coreModules, ...builderModules, ...featureModules];
 
   // Single-file builds (no folder structure)
   const singleFileModules = [
     mainModule,
-    { entry: "./src/core-light.ts", out: "core-light.js" },
+    { entry: "./src/core/minimal.ts", out: "core-light.js" },
   ];
 
   // Framework adapters — built with externals so framework imports
@@ -70,7 +76,7 @@ async function build() {
       ? "core"
       : builderModules.includes(sub)
         ? "builder"
-        : "plugin";
+        : "feature";
     const subResult = await Bun.build({
       entrypoints: [sub.entry],
       outdir: `./dist/${sub.out}`,

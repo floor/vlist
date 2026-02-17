@@ -24,8 +24,8 @@ import {
   createHeightCache,
   resolveContainer,
   type Renderer,
-} from "../../src/render";
-import { createElementPool } from "../../src/render/renderer";
+} from "../../src/rendering";
+import { createElementPool } from "../../src/rendering/renderer";
 import type { VListItem, ItemTemplate, ItemState } from "../../src/types";
 
 // =============================================================================

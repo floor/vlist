@@ -10,7 +10,7 @@ import {
   countItemsFittingFromBottom,
   getOffsetForVirtualIndex,
   type HeightCache,
-} from "../../src/render/heights";
+} from "../../src/rendering/heights";
 
 // =============================================================================
 // Fixed Height Cache

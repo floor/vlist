@@ -3,7 +3,7 @@
  * Re-exports compression utilities for tree-shakeable imports
  *
  * Usage: import { getCompressionInfo } from 'vlist/compression'
- * Usage: import { withCompression } from 'vlist/compression'
+ * Usage: import { withScale } from 'vlist/compression'
  */
 
 export {
@@ -18,6 +18,6 @@ export {
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
   type CompressionState,
-} from "../../render/compression";
+} from "../../rendering/scale";
 
-export { withCompression } from "./plugin";
+export { withScale } from "./plugin";

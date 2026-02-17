@@ -20,7 +20,7 @@ import {
   type Ref,
   type ShallowRef,
 } from "vue";
-import { createVList } from "../vlist";
+import { createVList } from "../core/full";
 import type {
   VListConfig,
   VListItem,

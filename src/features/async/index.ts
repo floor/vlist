@@ -4,7 +4,7 @@
  */
 
 // Builder Plugin
-export { withData, type DataPluginConfig } from "./plugin";
+export { withAsync, type DataPluginConfig } from "./plugin";
 
 // Data Manager
 export {

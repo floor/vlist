@@ -15,8 +15,8 @@ import {
   needsCompression,
   getMaxItemsWithoutCompression,
   getCompressionInfo,
-} from "../../src/render/compression";
-import { createHeightCache } from "../../src/render/heights";
+} from "../../src/rendering/scale";
+import { createHeightCache } from "../../src/rendering/heights";
 
 // =============================================================================
 // Constants Tests

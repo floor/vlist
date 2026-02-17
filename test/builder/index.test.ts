@@ -6,15 +6,15 @@
  * - Builder core (vlist().build())
  * - withSelection plugin
  * - withScrollbar plugin
- * - withData plugin (async adapter)
- * - withCompression plugin (1M+ items)
+ * - withAsync plugin (async adapter)
+ * - withScale plugin (1M+ items)
  * - withSnapshots plugin
  * - Plugin combinations (data + compression, selection + scrollbar, etc.)
  *
  * Previously known builder limitations (now fixed):
  * - ctx.renderer returns null → fixed: builder exposes renderer proxy
- * - withCompression doesn't replace getVisibleRange/getScrollToPos → fixed: plugin injects them
- * - withData items not connected to render loop → fixed: render reads from dataManagerProxy
+ * - withScale doesn't replace getVisibleRange/getScrollToPos → fixed: plugin injects them
+ * - withAsync items not connected to render loop → fixed: render reads from dataManagerProxy
  */
 
 import {
@@ -32,14 +32,14 @@ import { JSDOM } from "jsdom";
 import { vlist } from "../../src/builder/core";
 import type { BuiltVList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
-import { withSelection } from "../../src/plugins/selection/plugin";
-import { withScrollbar } from "../../src/plugins/scroll/plugin";
-import { withData } from "../../src/plugins/data/plugin";
-import { withCompression } from "../../src/plugins/compression/plugin";
-import { withSnapshots } from "../../src/plugins/snapshots/plugin";
-import { withGrid } from "../../src/plugins/grid/plugin";
-import { withGroups } from "../../src/plugins/groups/plugin";
-import { isGroupHeader } from "../../src/plugins/groups/types";
+import { withSelection } from "../../src/features/selection/plugin";
+import { withScrollbar } from "../../src/features/scrollbar/plugin";
+import { withAsync } from "../../src/features/async/plugin";
+import { withScale } from "../../src/features/scale/plugin";
+import { withSnapshots } from "../../src/features/snapshots/plugin";
+import { withGrid } from "../../src/features/grid/plugin";
+import { withSections } from "../../src/features/sections/plugin";
+import { isSectionHeader } from "../../src/features/sections";
 
 // =============================================================================
 // JSDOM Setup
@@ -868,10 +868,10 @@ describe("withScrollbar plugin", () => {
 });
 
 // =============================================================================
-// withData Plugin (Async Adapter)
+// withAsync Plugin (Async Adapter)
 // =============================================================================
 
-describe("withData plugin", () => {
+describe("withAsync plugin", () => {
   let container: HTMLElement;
   let list: BuiltVList<TestItem> | null = null;
 
@@ -894,7 +894,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -909,7 +909,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     // aria-busy should be set synchronously before the async load completes
@@ -923,7 +923,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -938,7 +938,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     const loadEndHandler = mock(() => {});
@@ -956,7 +956,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -977,7 +977,7 @@ describe("withData plugin", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -988,10 +988,10 @@ describe("withData plugin", () => {
 });
 
 // =============================================================================
-// withCompression Plugin
+// withScale Plugin
 // =============================================================================
 
-describe("withCompression plugin", () => {
+describe("withScale plugin", () => {
   let container: HTMLElement;
   let list: BuiltVList<TestItem> | null = null;
 
@@ -1015,7 +1015,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(list.total).toBe(500_000);
@@ -1031,7 +1031,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     // Compression plugin creates a fallback scrollbar when no withScrollbar
@@ -1046,7 +1046,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     const indices = getRenderedIndices(list);
@@ -1063,7 +1063,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     const targetIndex = 250_000;
@@ -1086,7 +1086,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     list.scrollToIndex(499_999, "end");
@@ -1106,7 +1106,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(list.total).toBe(100);
@@ -1127,7 +1127,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     // Shrink below compression threshold
@@ -1148,7 +1148,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar({ autoHide: true }))
       .build();
 
@@ -1194,7 +1194,7 @@ describe("withCompression plugin", () => {
       item: { height: 40, template },
       items: items100k,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar({ autoHide: true }))
       .build();
 
@@ -1372,7 +1372,7 @@ describe("plugin combinations", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar())
       .build();
 
@@ -1434,7 +1434,7 @@ describe("plugin combinations", () => {
       item: { height: 40, template },
       items,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withSelection({ mode: "single" }))
       .build();
 
@@ -1449,8 +1449,8 @@ describe("plugin combinations", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
-      .use(withCompression())
+      .use(withAsync({ adapter }))
+      .use(withScale())
       .build();
 
     await flush();
@@ -1468,7 +1468,7 @@ describe("plugin combinations", () => {
       item: { height: 40, template },
       items: createTestItems(100),
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar())
       .use(withSelection({ mode: "multiple" }))
       .use(withSnapshots())
@@ -1496,7 +1496,7 @@ describe("plugin combinations", () => {
       items: createTestItems(500_000),
     })
       .use(withScrollbar()) // priority 30
-      .use(withCompression()) // priority 20
+      .use(withScale()) // priority 20
       .use(withSelection({ mode: "single" })) // priority 50
       .build();
 
@@ -1519,7 +1519,7 @@ describe("plugin combinations", () => {
       item: { height: 40, template },
       items: createTestItems(100),
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar())
       .use(withSnapshots())
       .build();
@@ -2300,7 +2300,7 @@ describe("withGrid plugin combinations", () => {
       items: largeItems,
     })
       .use(withGrid({ columns: 5 }))
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     // Should render some items (viewport + overscan)
@@ -2319,7 +2319,7 @@ describe("withGrid plugin combinations", () => {
       item: { height: 100, template },
     })
       .use(withGrid({ columns: 4 }))
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     // Wait for initial load
@@ -2341,7 +2341,7 @@ describe("withGrid plugin combinations", () => {
       item: { height: 100, template },
     })
       .use(withGrid({ columns: 4 }))
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -2402,7 +2402,7 @@ describe("withGrid plugin combinations", () => {
 });
 
 // =============================================================================
-// withGroups Plugin
+// withSections Plugin
 // =============================================================================
 
 /** Test item with a group field for grouped list tests */
@@ -2462,7 +2462,7 @@ const headerTemplate = (key: string, _groupIndex: number): HTMLElement => {
   return el;
 };
 
-describe("withGroups plugin", () => {
+describe("withSections plugin", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -2487,7 +2487,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2508,7 +2508,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2530,7 +2530,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2555,7 +2555,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2578,7 +2578,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2600,7 +2600,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2628,7 +2628,7 @@ describe("withGroups plugin", () => {
       items: currentItems,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "Z",
           headerHeight: 32,
           headerTemplate,
@@ -2658,7 +2658,7 @@ describe("withGroups plugin", () => {
       items: currentItems,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "A",
           headerHeight: 32,
           headerTemplate,
@@ -2686,7 +2686,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2708,7 +2708,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2730,7 +2730,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2746,7 +2746,7 @@ describe("withGroups plugin", () => {
     expect(returnedItems.length).toBe(items.length);
 
     // None of the returned items should be headers
-    const headers = returnedItems.filter((item: any) => isGroupHeader(item));
+    const headers = returnedItems.filter((item: any) => isSectionHeader(item));
     expect(headers.length).toBe(0);
   });
 
@@ -2759,7 +2759,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2782,7 +2782,7 @@ describe("withGroups plugin", () => {
         items,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: undefined as any,
             headerHeight: 32,
             headerTemplate,
@@ -2802,7 +2802,7 @@ describe("withGroups plugin", () => {
         items,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 0,
             headerTemplate,
@@ -2818,7 +2818,7 @@ describe("withGroups plugin", () => {
         items,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: -10,
             headerTemplate,
@@ -2838,7 +2838,7 @@ describe("withGroups plugin", () => {
         items,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate: undefined as any,
@@ -2859,7 +2859,7 @@ describe("withGroups plugin", () => {
         direction: "horizontal",
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2881,7 +2881,7 @@ describe("withGroups plugin", () => {
         reverse: true,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2900,7 +2900,7 @@ describe("withGroups plugin", () => {
         reverse: true,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2924,7 +2924,7 @@ describe("withGroups plugin", () => {
         reverse: true,
       })
         .use(
-          withGroups({
+          withSections({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2945,7 +2945,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2971,7 +2971,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2998,7 +2998,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (_i) => "A",
           headerHeight: 32,
           headerTemplate,
@@ -3019,7 +3019,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: () => "A",
           headerHeight: 32,
           headerTemplate,
@@ -3048,7 +3048,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3073,7 +3073,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate: (key) => `<div class="string-header">${key}</div>`,
@@ -3097,7 +3097,7 @@ describe("withGroups plugin", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3112,10 +3112,10 @@ describe("withGroups plugin", () => {
 });
 
 // =============================================================================
-// withGroups Plugin Combinations
+// withSections Plugin Combinations
 // =============================================================================
 
-describe("withGroups plugin combinations", () => {
+describe("withSections plugin combinations", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -3140,7 +3140,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3167,7 +3167,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3191,7 +3191,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3221,7 +3221,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3250,7 +3250,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3275,7 +3275,7 @@ describe("withGroups plugin combinations", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3298,10 +3298,10 @@ describe("withGroups plugin combinations", () => {
 });
 
 // =============================================================================
-// withGroups Layout Logic (Unit Tests)
+// withSections Layout Logic (Unit Tests)
 // =============================================================================
 
-describe("withGroups layout logic", () => {
+describe("withSections layout logic", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -3334,7 +3334,7 @@ describe("withGroups layout logic", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3360,7 +3360,7 @@ describe("withGroups layout logic", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3391,7 +3391,7 @@ describe("withGroups layout logic", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3423,7 +3423,7 @@ describe("withGroups layout logic", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3442,10 +3442,10 @@ describe("withGroups layout logic", () => {
 });
 
 // =============================================================================
-// withGroups Sticky Header Behavior
+// withSections Sticky Header Behavior
 // =============================================================================
 
-describe("withGroups sticky header behavior", () => {
+describe("withSections sticky header behavior", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -3470,7 +3470,7 @@ describe("withGroups sticky header behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3495,7 +3495,7 @@ describe("withGroups sticky header behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3519,7 +3519,7 @@ describe("withGroups sticky header behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight,
           headerTemplate,
@@ -3555,7 +3555,7 @@ describe("withGroups sticky header behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3578,7 +3578,7 @@ describe("withGroups sticky header behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3594,10 +3594,10 @@ describe("withGroups sticky header behavior", () => {
 });
 
 // =============================================================================
-// withGroups Template Rendering
+// withSections Template Rendering
 // =============================================================================
 
-describe("withGroups template rendering", () => {
+describe("withSections template rendering", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -3625,7 +3625,7 @@ describe("withGroups template rendering", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3650,7 +3650,7 @@ describe("withGroups template rendering", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3675,7 +3675,7 @@ describe("withGroups template rendering", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3706,7 +3706,7 @@ describe("withGroups template rendering", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate: (key, groupIndex) => {
@@ -3730,10 +3730,10 @@ describe("withGroups template rendering", () => {
 });
 
 // =============================================================================
-// withGroups Scroll Behavior
+// withSections Scroll Behavior
 // =============================================================================
 
-describe("withGroups scroll behavior", () => {
+describe("withSections scroll behavior", () => {
   let container: HTMLElement;
   let list: BuiltVList<GroupedTestItem> | null = null;
 
@@ -3758,7 +3758,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3778,7 +3778,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3798,7 +3798,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3818,7 +3818,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3840,7 +3840,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3862,7 +3862,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3888,7 +3888,7 @@ describe("withGroups scroll behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3916,10 +3916,10 @@ describe("withGroups scroll behavior", () => {
 });
 
 // =============================================================================
-// withGroups Destroy Behavior
+// withSections Destroy Behavior
 // =============================================================================
 
-describe("withGroups destroy behavior", () => {
+describe("withSections destroy behavior", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
@@ -3939,7 +3939,7 @@ describe("withGroups destroy behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3970,7 +3970,7 @@ describe("withGroups destroy behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3994,7 +3994,7 @@ describe("withGroups destroy behavior", () => {
       items,
     })
       .use(
-        withGroups({
+        withSections({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -4017,10 +4017,10 @@ describe("withGroups destroy behavior", () => {
 });
 
 // =============================================================================
-// withData Plugin - Velocity-Aware Loading
+// withAsync Plugin - Velocity-Aware Loading
 // =============================================================================
 
-describe("withData plugin velocity-aware loading", () => {
+describe("withAsync plugin velocity-aware loading", () => {
   let container: HTMLElement;
   let list: BuiltVList<TestItem> | null = null;
 
@@ -4043,7 +4043,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4060,7 +4060,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     list.on("load:end", loadEndHandler);
@@ -4078,7 +4078,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     // aria-busy should be set during initial load
@@ -4098,7 +4098,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4121,7 +4121,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4142,7 +4142,7 @@ describe("withData plugin velocity-aware loading", () => {
       item: { height: 40, template },
     })
       .use(
-        withData({
+        withAsync({
           adapter,
           loading: {
             cancelThreshold: 50,
@@ -4172,7 +4172,7 @@ describe("withData plugin velocity-aware loading", () => {
         container,
         item: { height: 40, template },
       })
-        .use(withData({ adapter: failingAdapter }))
+        .use(withAsync({ adapter: failingAdapter }))
         .build();
     }).not.toThrow();
 
@@ -4189,7 +4189,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4222,7 +4222,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter: finiteAdapter }))
+      .use(withAsync({ adapter: finiteAdapter }))
       .build();
 
     await flush();
@@ -4247,7 +4247,7 @@ describe("withData plugin velocity-aware loading", () => {
       item: { height: 40, template },
       reverse: true,
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4266,7 +4266,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4290,7 +4290,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4314,7 +4314,7 @@ describe("withData plugin velocity-aware loading", () => {
       container,
       item: { height: 40, template },
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -4700,7 +4700,7 @@ describe("withGrid plugin additional coverage", () => {
       items: largeItems,
     })
       .use(withGrid({ columns: 4 }))
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(list.element.classList.contains("vlist--grid")).toBe(true);
@@ -4759,7 +4759,7 @@ describe("withScrollbar plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withScrollbar())
       .build();
 
@@ -4918,7 +4918,7 @@ describe("withSnapshots plugin compression mode", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withSnapshots())
       .build();
 
@@ -4946,7 +4946,7 @@ describe("withSnapshots plugin compression mode", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withSnapshots())
       .build();
 
@@ -4973,7 +4973,7 @@ describe("withSnapshots plugin compression mode", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withSnapshots())
       .build();
 
@@ -4998,7 +4998,7 @@ describe("withSnapshots plugin compression mode", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .use(withSnapshots())
       .build();
 
@@ -5249,7 +5249,7 @@ describe("builder core scroll methods", () => {
 // Compression Plugin - Additional Coverage
 // =============================================================================
 
-describe("withCompression plugin additional coverage", () => {
+describe("withScale plugin additional coverage", () => {
   let container: HTMLElement;
   let list: BuiltVList<TestItem> | null = null;
 
@@ -5274,7 +5274,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     // Various scroll positions
@@ -5291,7 +5291,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(() => list!.scrollToIndex(250000, "start")).not.toThrow();
@@ -5308,7 +5308,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: smallItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(list.total).toBe(100);
@@ -5329,7 +5329,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     expect(list.total).toBe(500000);
@@ -5349,7 +5349,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     const scrollHandler = mock(() => {});
@@ -5371,7 +5371,7 @@ describe("withCompression plugin additional coverage", () => {
       item: { height: 40, template },
       items: largeItems,
     })
-      .use(withCompression())
+      .use(withScale())
       .build();
 
     // Should have rendered items
@@ -5384,7 +5384,7 @@ describe("withCompression plugin additional coverage", () => {
 // Data Plugin - Reverse Mode
 // =============================================================================
 
-describe("withData plugin reverse mode", () => {
+describe("withAsync plugin reverse mode", () => {
   let container: HTMLElement;
   let list: BuiltVList<TestItem> | null = null;
 
@@ -5408,7 +5408,7 @@ describe("withData plugin reverse mode", () => {
       item: { height: 40, template },
       reverse: true,
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
@@ -5424,7 +5424,7 @@ describe("withData plugin reverse mode", () => {
       item: { height: 40, template },
       reverse: true,
     })
-      .use(withData({ adapter }))
+      .use(withAsync({ adapter }))
       .build();
 
     await flush();
