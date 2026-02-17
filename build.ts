@@ -12,9 +12,7 @@ async function build() {
   // Build sub-module bundles for tree-shaking
   const subStart = performance.now();
 
-  const coreModules = [
-    { entry: "./src/core/lite.ts", out: "core", folder: true },
-  ];
+  const coreModules: { entry: string; out: string; folder: boolean }[] = [];
 
   const builderModules = [
     { entry: "./src/builder/index.ts", out: "builder", folder: true },
@@ -52,10 +50,7 @@ async function build() {
   const allModules = [...coreModules, ...builderModules, ...featureModules];
 
   // Single-file builds (no folder structure)
-  const singleFileModules = [
-    mainModule,
-    { entry: "./src/core/minimal.ts", out: "core-light.js" },
-  ];
+  const singleFileModules = [mainModule];
 
   // Framework adapters — built with externals so framework imports
   // are left as bare specifiers (resolved by the consumer's bundler).
