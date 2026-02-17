@@ -1,6 +1,6 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -258,87 +258,6 @@ async function build() {
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
-
-  // Post-process: Add line breaks for esbuild-wasm compatibility
-  if (!isDev) {
-    console.log("\nAdding line breaks for bundler compatibility...");
-    const filesToFix = [
-      "./dist/index.js",
-      "./dist/core-light.js",
-      ...allModules.map((m) => `./dist/${m.out}/index.js`),
-      ...adapterModules.map((a) => `./dist/${a.out}/index.js`),
-    ];
-
-    // Smart line breaking that avoids breaking strings
-    const addLineBreaks = (code: string): string => {
-      let result = "";
-      let inString = false;
-      let stringChar = "";
-      let inTemplate = false;
-      let templateDepth = 0;
-
-      for (let i = 0; i < code.length; i++) {
-        const char = code[i];
-        const prev = code[i - 1];
-        const next = code[i + 1];
-
-        // Track string state
-        if (!inTemplate && (char === '"' || char === "'") && prev !== "\\") {
-          if (!inString) {
-            inString = true;
-            stringChar = char;
-          } else if (char === stringChar) {
-            inString = false;
-            stringChar = "";
-          }
-        }
-
-        // Track template literal state
-        if (char === "`" && prev !== "\\") {
-          if (!inTemplate) {
-            inTemplate = true;
-            templateDepth = 1;
-          } else {
-            templateDepth--;
-            if (templateDepth === 0) {
-              inTemplate = false;
-            }
-          }
-        }
-
-        // Track nested templates
-        if (inTemplate && char === "{" && prev === "$") {
-          templateDepth++;
-        } else if (inTemplate && char === "}" && templateDepth > 1) {
-          templateDepth--;
-        }
-
-        result += char;
-
-        // Add line breaks after semicolons and braces, but only outside strings
-        if (!inString && !inTemplate) {
-          if (
-            (char === ";" || char === "}") &&
-            next &&
-            /[a-zA-Z$_]/.test(next)
-          ) {
-            result += "\n";
-          }
-        }
-      }
-
-      return result;
-    };
-
-    for (const file of filesToFix) {
-      if (existsSync(file)) {
-        let content = readFileSync(file, "utf-8");
-        content = addLineBreaks(content);
-        writeFileSync(file, content);
-      }
-    }
-    console.log("✓ Line breaks added");
-  }
 }
 
 if (isDev) {
