@@ -51,13 +51,13 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
  * .build()
  * ```
  */
-export const withWindow = <
+export const withPage = <
   T extends VListItem = VListItem,
 >(): VListPlugin<T> => {
   let cleanupResize: (() => void) | null = null;
 
   return {
-    name: "withWindow",
+    name: "withPage",
     priority: 5, // Run early, before scroll/selection plugins
 
     setup(ctx: BuilderContext<T>): void {

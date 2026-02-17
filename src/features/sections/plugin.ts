@@ -39,7 +39,7 @@ import {
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
 
-import { calculateScrollToIndex } from "../../render";
+import { calculateScrollToIndex } from "../../rendering";
 
 // =============================================================================
 // Plugin Config
@@ -91,7 +91,7 @@ export interface GroupsPluginConfig {
  * .build()
  * ```
  */
-export const withGroups = <T extends VListItem = VListItem>(
+export const withSections = <T extends VListItem = VListItem>(
   config: GroupsPluginConfig,
 ): VListPlugin<T> => {
   // Validate
@@ -113,7 +113,7 @@ export const withGroups = <T extends VListItem = VListItem>(
   let layoutItems: Array<T | GroupHeaderItem> = [];
 
   return {
-    name: "withGroups",
+    name: "withSections",
     priority: 10,
 
     setup(ctx: BuilderContext<T>): void {

@@ -480,7 +480,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 // Helpers (duplicated from builder/core.ts to keep plugin self-contained)
 // =============================================================================
 
-import { calculateScrollToIndex } from "../../render";
+import { calculateScrollToIndex } from "../../rendering";
 
 const DEFAULT_SMOOTH_DURATION = 300;
 

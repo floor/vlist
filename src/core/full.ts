@@ -8,17 +8,17 @@
  * For the legacy monolithic implementation, use 'vlist/full' instead.
  */
 
-import { vlist as builderVlist } from "./builder";
-import { withGrid } from "./plugins/grid/plugin";
-import { withGroups } from "./plugins/groups/plugin";
-import { withSelection } from "./plugins/selection/plugin";
-import { withScrollbar } from "./plugins/scroll/plugin";
-import { withCompression } from "./plugins/compression/plugin";
-import { withSnapshots } from "./plugins/snapshots/plugin";
-import { withData } from "./plugins/data/plugin";
-import { withWindow } from "./plugins/window/plugin";
+import { vlist as builderVlist } from "../builder";
+import { withGrid } from "../features/grid/plugin";
+import { withSections } from "../features/sections/plugin";
+import { withSelection } from "../features/selection/plugin";
+import { withScrollbar } from "../features/scrollbar/plugin";
+import { withScale } from "../features/scale/plugin";
+import { withSnapshots } from "../features/snapshots/plugin";
+import { withAsync } from "../features/async/plugin";
+import { withPage } from "../features/page/plugin";
 
-import type { VListConfig, VListItem, VList } from "./types";
+import type { VListConfig, VListItem, VList } from "../types";
 
 /**
  * Create a virtual list instance.
@@ -38,13 +38,13 @@ export const createVList = <T extends VListItem = VListItem>(
 
   // Auto-apply window plugin if scroll.element is window (must be first)
   if (config.scroll?.element === window) {
-    builder = builder.use(withWindow());
+    builder = builder.use(withPage());
   }
 
   // Auto-apply data plugin if adapter provided (must be first for data loading)
   if (config.adapter) {
     builder = builder.use(
-      withData({
+      withAsync({
         adapter: config.adapter,
         ...(config.loading && { loading: config.loading }),
       }),
@@ -100,7 +100,7 @@ export const createVList = <T extends VListItem = VListItem>(
     if (config.groups.sticky !== undefined) {
       groupsConfig.sticky = config.groups.sticky;
     }
-    builder = builder.use(withGroups(groupsConfig));
+    builder = builder.use(withSections(groupsConfig));
   }
 
   // Auto-apply selection plugin for backwards compatibility
@@ -123,7 +123,7 @@ export const createVList = <T extends VListItem = VListItem>(
   }
 
   // Auto-apply compression plugin (always beneficial for large lists)
-  builder = builder.use(withCompression());
+  builder = builder.use(withScale());
 
   // Auto-apply scrollbar plugin based on scrollbar config
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
