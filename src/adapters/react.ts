@@ -10,7 +10,7 @@
  */
 
 import { useRef, useEffect, useCallback } from "react";
-import { createVList } from "../vlist";
+import { createVList } from "../core/full";
 import type {
   VListConfig,
   VListItem,

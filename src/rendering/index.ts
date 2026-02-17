@@ -1,6 +1,6 @@
 /**
- * vlist - Render Domain
- * Rendering, virtualization, and compression
+ * vlist - Rendering Domain
+ * Rendering, virtualization, and scaling for large datasets
  */
 
 // Height Cache
@@ -27,7 +27,7 @@ export {
   type CompressionStateFn,
 } from "./renderer";
 
-// Virtual Scrolling
+// Viewport Scrolling
 export {
   createViewportState,
   updateViewportState,
@@ -51,9 +51,9 @@ export {
   type CompressionState,
   type VisibleRangeFn,
   type ScrollToIndexFn,
-} from "./virtual";
+} from "./viewport";
 
-// Compression (full module — used by monolithic factory and withCompression plugin)
+// Scale (large dataset handling - used by withScale plugin)
 export {
   MAX_VIRTUAL_HEIGHT,
   getCompressionState,
@@ -66,4 +66,4 @@ export {
   calculateCompressedItemPosition,
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
-} from "./compression";
+} from "./scale";

@@ -22,10 +22,10 @@ import type {
   Renderer,
   HeightCache,
   CompressionContext,
-} from "../render";
-import type { CompressionState } from "../render/virtual";
+} from "../rendering";
+import type { CompressionState } from "../rendering/viewport";
 import type { SimpleDataManager } from "./data";
-import type { ScrollController } from "../plugins/scroll/controller";
+import type { ScrollController } from "../features/scrollbar/controller";
 import type { Emitter } from "../events";
 
 // =============================================================================

@@ -20,7 +20,7 @@ import type { VListItem, VListAdapter, Range } from "../../types";
 import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import { createDataManager } from "./manager";
-import { updateViewportItems } from "../../render";
+import { updateViewportItems } from "../../rendering";
 
 import {
   INITIAL_LOAD_SIZE,
@@ -81,7 +81,7 @@ export interface DataPluginConfig<T extends VListItem = VListItem> {
  * .build()
  * ```
  */
-export const withData = <T extends VListItem = VListItem>(
+export const withAsync = <T extends VListItem = VListItem>(
   config: DataPluginConfig<T>,
 ): VListPlugin<T> => {
   const { adapter, loading } = config;
@@ -92,7 +92,7 @@ export const withData = <T extends VListItem = VListItem>(
   const preloadAhead = loading?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
 
   return {
-    name: "withData",
+    name: "withAsync",
     priority: 20,
 
     methods: ["reload"] as const,
