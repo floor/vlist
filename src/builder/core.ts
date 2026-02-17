@@ -1009,8 +1009,8 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.addEventListener("wheel", wheelHandler);
   }
 
-  // Hide native scrollbar by default (plugins may override)
-  dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+  // Note: The custom-scrollbar class is added by withScrollbar plugin when used
+  // Native scrollbars are visible by default
 
   // ── Click & keydown handlers (delegate to plugins) ──────────────
 
