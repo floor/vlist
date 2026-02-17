@@ -20,8 +20,8 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createVList } from "../src/vlist";
-import { createVList as createVListCore } from "../src/core";
+import { createVList } from "../src/core/full";
+import { createVList as createVListCore } from "../src/core/lite";
 import type { VListItem, VList, VListAdapter } from "../src/types";
 
 // =============================================================================

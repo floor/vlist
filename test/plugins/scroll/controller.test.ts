@@ -10,7 +10,7 @@ import {
   isAtTop,
   getScrollPercentage,
   isRangeVisible,
-} from "../../../src/plugins/scroll";
+} from "../../../src/features/scrollbar";
 
 // Mock requestAnimationFrame for testing
 let rafCallbacks: Array<() => void> = [];
@@ -260,7 +260,7 @@ describe("isRangeVisible", () => {
 // Scroll Controller Tests
 // =============================================================================
 
-import { createScrollController } from "../../../src/plugins/scroll";
+import { createScrollController } from "../../../src/features/scrollbar";
 import { JSDOM } from "jsdom";
 
 describe("createScrollController", () => {

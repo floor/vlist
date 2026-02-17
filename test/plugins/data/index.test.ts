@@ -8,7 +8,7 @@ import {
   createDataManager,
   mergeRanges,
   calculateMissingRanges,
-} from "../../../src/plugins/data";
+} from "../../../src/features/async";
 
 import type { VListItem, VListAdapter } from "../../../src/types";
 

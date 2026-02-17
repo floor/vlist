@@ -16,7 +16,7 @@ export type {
   StickyHeader,
 } from "./types";
 
-export { isGroupHeader } from "./types";
+export { isGroupHeader, isGroupHeader as isSectionHeader } from "./types";
 
 // Layout
 export {

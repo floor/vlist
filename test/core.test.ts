@@ -14,8 +14,8 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createVList } from "../src/core";
-import type { VListItem, VListCore, CoreConfig } from "../src/core";
+import { createVList } from "../src/core/lite";
+import type { VListItem, VListCore, CoreConfig } from "../src/core/lite";
 
 // =============================================================================
 // JSDOM Setup
