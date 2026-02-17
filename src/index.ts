@@ -1,15 +1,25 @@
 /**
  * vlist - Lightweight Virtual List
  * High-performance virtual scrolling with zero dependencies
- * Supports compression for handling 1M+ items
+ * Builder-only API for optimal tree-shaking
  *
  * @packageDocumentation
  */
 
-// Main factory (builder-based, default)
-export { createVList } from "./vlist";
+// Main builder export
+export { vlist } from "./builder";
 
-// Types
+// Feature plugins - tree-shakeable
+export { withScale } from "./features/scale";
+export { withAsync } from "./features/async";
+export { withScrollbar } from "./features/scrollbar";
+export { withPage } from "./features/page";
+export { withSections } from "./features/sections";
+export { withGrid } from "./features/grid";
+export { withSelection } from "./features/selection";
+export { withSnapshots } from "./features/snapshots";
+
+// Core Types
 export type {
   // Core types
   VList,
@@ -49,20 +59,29 @@ export type {
   Unsubscribe,
 } from "./types";
 
-// Groups domain (sticky headers / grouped lists)
+// Builder types
+export type {
+  VListBuilder,
+  BuiltVList,
+  BuilderConfig,
+  VListPlugin,
+  BuilderContext,
+} from "./builder";
+
+// Sections domain (grouped lists with headers)
 export {
-  createGroupLayout,
+  createGroupLayout as createSectionLayout,
   buildLayoutItems,
-  createGroupedHeightFn,
+  createGroupedHeightFn as createSectionedHeightFn,
   createStickyHeader,
-  isGroupHeader,
-  type GroupsConfig,
-  type GroupBoundary,
+  isGroupHeader as isSectionHeader,
+  type GroupsConfig as SectionsConfig,
+  type GroupBoundary as SectionBoundary,
   type LayoutEntry,
-  type GroupHeaderItem,
-  type GroupLayout,
+  type GroupHeaderItem as SectionHeaderItem,
+  type GroupLayout as SectionLayout,
   type StickyHeader,
-} from "./plugins/groups";
+} from "./features/sections";
 
 // Grid domain (2D grid/card layout)
 export {
@@ -73,9 +92,9 @@ export {
   type GridPosition,
   type GridRenderer,
   type ItemRange,
-} from "./plugins/grid";
+} from "./features/grid";
 
-// Render domain (virtual scrolling, compression, height cache)
+// Rendering domain (virtual scrolling, height cache, scaling)
 export {
   // Height cache (variable item heights)
   createHeightCache,
@@ -92,20 +111,20 @@ export {
   isInRange,
   getRangeCount,
   diffRanges,
-  // Compression utilities (for handling 1M+ items)
+  // Scale utilities (for handling 1M+ items)
   MAX_VIRTUAL_HEIGHT,
-  getCompressionState,
-  getCompression,
-  needsCompression,
-  getMaxItemsWithoutCompression,
-  getCompressionInfo,
-  calculateCompressedVisibleRange,
-  calculateCompressedRenderRange,
-  calculateCompressedItemPosition,
-  calculateCompressedScrollToIndex,
+  getCompressionState as getScaleState,
+  getCompression as getScale,
+  needsCompression as needsScaling,
+  getMaxItemsWithoutCompression as getMaxItemsWithoutScaling,
+  getCompressionInfo as getScaleInfo,
+  calculateCompressedVisibleRange as calculateScaledVisibleRange,
+  calculateCompressedRenderRange as calculateScaledRenderRange,
+  calculateCompressedItemPosition as calculateScaledItemPosition,
+  calculateCompressedScrollToIndex as calculateScaledScrollToIndex,
   calculateIndexFromScrollPosition,
-  type CompressionState,
-} from "./render";
+  type CompressionState as ScaleState,
+} from "./rendering";
 
 // Selection domain
 export {
@@ -118,30 +137,30 @@ export {
   isSelected,
   getSelectedIds,
   getSelectedItems,
-} from "./plugins/selection";
+} from "./features/selection";
 
 // Events domain
 export { createEmitter, type Emitter } from "./events";
 
-// Data domain (for advanced usage)
+// Async domain (for advanced usage)
 export {
-  createDataManager,
+  createDataManager as createAsyncManager,
   createSparseStorage,
   createPlaceholderManager,
   isPlaceholderItem,
   filterPlaceholders,
   mergeRanges,
   calculateMissingRanges,
-  type DataManager,
+  type DataManager as AsyncManager,
   type SparseStorage,
   type PlaceholderManager,
-} from "./plugins/data";
+} from "./features/async";
 
-// Scroll domain (for advanced usage)
+// Scrollbar domain (for advanced usage)
 export {
   createScrollController,
   createScrollbar,
   rafThrottle,
   type ScrollController,
   type Scrollbar,
-} from "./plugins/scroll";
+} from "./features/scrollbar";

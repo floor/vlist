@@ -9,23 +9,23 @@
 import type { VListItem, VListEvents, Range, ItemTemplate } from "../types";
 
 // Direct file imports — NOT barrel indexes — so Bun tree-shakes correctly.
-import type { HeightCache } from "../render/heights";
+import type { HeightCache } from "../rendering/heights";
 import type {
   Renderer,
   DOMStructure,
   CompressionContext,
-} from "../render/renderer";
-import { createRenderer } from "../render/renderer";
+} from "../rendering/renderer";
+import { createRenderer } from "../rendering/renderer";
 import {
   type CompressionState,
   getSimpleCompressionState,
-} from "../render/virtual";
+} from "../rendering/viewport";
 
-import { createHeightCache } from "../render/heights";
-import { updateContentHeight, updateContentWidth } from "../render/renderer";
+import { createHeightCache } from "../rendering/heights";
+import { updateContentHeight, updateContentWidth } from "../rendering/renderer";
 
 import type { SimpleDataManager } from "./data";
-import type { ScrollController } from "../plugins/scroll/controller";
+import type { ScrollController } from "../features/scrollbar/controller";
 import type { Emitter } from "../events/emitter";
 
 import type {

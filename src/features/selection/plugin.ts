@@ -36,7 +36,7 @@ import {
   getSelectedItems,
 } from "./state";
 
-import { calculateScrollToIndex } from "../../render";
+import { calculateScrollToIndex } from "../../rendering";
 
 // =============================================================================
 // Plugin Config

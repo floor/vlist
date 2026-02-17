@@ -4,7 +4,7 @@
  */
 
 // Builder Plugin
-export { withGroups, type GroupsPluginConfig } from "./plugin";
+export { withSections, type GroupsPluginConfig } from "./plugin";
 
 // Types
 export type {
@@ -16,7 +16,7 @@ export type {
   StickyHeader,
 } from "./types";
 
-export { isGroupHeader } from "./types";
+export { isGroupHeader, isGroupHeader as isSectionHeader } from "./types";
 
 // Layout
 export {

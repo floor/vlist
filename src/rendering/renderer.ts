@@ -12,7 +12,7 @@ import type {
   RenderedItem,
 } from "../types";
 
-import type { CompressionState } from "./virtual";
+import type { CompressionState } from "./viewport";
 import type { HeightCache } from "./heights";
 
 /**

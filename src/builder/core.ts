@@ -30,8 +30,8 @@ import type {
   BuiltVList,
 } from "./types";
 
-// Re-export CompressionState type from virtual for plugins that need it
-export type { CompressionState } from "../render/virtual";
+// Re-export CompressionState type from viewport for plugins that need it
+export type { CompressionState } from "../rendering/viewport";
 
 // =============================================================================
 // Constants

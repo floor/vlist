@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { createGridLayout } from "../../../src/plugins/grid/layout";
-import type { GridLayout } from "../../../src/plugins/grid/types";
+import { createGridLayout } from "../../../src/features/grid/layout";
+import type { GridLayout } from "../../../src/features/grid/types";
 
 // =============================================================================
 // Factory

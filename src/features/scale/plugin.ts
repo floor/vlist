@@ -25,9 +25,9 @@ import {
   calculateCompressedVisibleRange,
   calculateCompressedScrollToIndex,
   calculateCompressedItemPosition,
-} from "../../render/compression";
+} from "../../rendering/scale";
 import type { Range } from "../../types";
-import { createScrollbar, type Scrollbar } from "../scroll";
+import { createScrollbar, type Scrollbar } from "../scrollbar";
 
 // =============================================================================
 // Plugin Factory
@@ -53,7 +53,7 @@ import { createScrollbar, type Scrollbar } from "../scroll";
  * .build()
  * ```
  */
-export const withCompression = <
+export const withScale = <
   T extends VListItem = VListItem,
 >(): VListPlugin<T> => {
   let scrollbar: Scrollbar | null = null;
@@ -61,7 +61,7 @@ export const withCompression = <
   let compressedModeActive = false;
 
   return {
-    name: "withCompression",
+    name: "withScale",
     priority: 20,
 
     setup(ctx: BuilderContext<T>): void {
