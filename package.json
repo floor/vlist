@@ -34,56 +34,6 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./core": {
-      "types": "./dist/core.d.ts",
-      "import": "./dist/core/index.js",
-      "default": "./dist/core/index.js"
-    },
-    "./core-light": {
-      "types": "./dist/core-light.d.ts",
-      "import": "./dist/core-light.js",
-      "default": "./dist/core-light.js"
-    },
-    "./data": {
-      "types": "./dist/plugins/data/index.d.ts",
-      "import": "./dist/data/index.js",
-      "default": "./dist/data/index.js"
-    },
-    "./compression": {
-      "types": "./dist/plugins/compression/index.d.ts",
-      "import": "./dist/compression/index.js",
-      "default": "./dist/compression/index.js"
-    },
-    "./selection": {
-      "types": "./dist/plugins/selection/index.d.ts",
-      "import": "./dist/selection/index.js",
-      "default": "./dist/selection/index.js"
-    },
-    "./scroll": {
-      "types": "./dist/plugins/scroll/index.d.ts",
-      "import": "./dist/scroll/index.js",
-      "default": "./dist/scroll/index.js"
-    },
-    "./groups": {
-      "types": "./dist/plugins/groups/index.d.ts",
-      "import": "./dist/groups/index.js",
-      "default": "./dist/groups/index.js"
-    },
-    "./grid": {
-      "types": "./dist/plugins/grid/index.d.ts",
-      "import": "./dist/grid/index.js",
-      "default": "./dist/grid/index.js"
-    },
-    "./builder": {
-      "types": "./dist/builder/index.d.ts",
-      "import": "./dist/builder/index.js",
-      "default": "./dist/builder/index.js"
-    },
-    "./snapshots": {
-      "types": "./dist/plugins/snapshots/index.d.ts",
-      "import": "./dist/snapshots/index.js",
-      "default": "./dist/snapshots/index.js"
-    },
     "./react": {
       "types": "./dist/adapters/react.d.ts",
       "import": "./dist/react/index.js",
