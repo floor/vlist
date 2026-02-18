@@ -34,39 +34,18 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./react": {
-      "types": "./dist/adapters/react.d.ts",
-      "import": "./dist/react/index.js",
-      "default": "./dist/react/index.js"
-    },
-    "./vue": {
-      "types": "./dist/adapters/vue.d.ts",
-      "import": "./dist/vue/index.js",
-      "default": "./dist/vue/index.js"
-    },
-    "./svelte": {
-      "types": "./dist/adapters/svelte.d.ts",
-      "import": "./dist/svelte/index.js",
-      "default": "./dist/svelte/index.js"
-    },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css",
     "./package.json": "./package.json"
   },
-  "peerDependencies": {
-    "react": ">=17.0.0",
-    "vue": ">=3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "vue": {
-      "optional": true
-    }
-  },
   "files": [
-    "dist"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.css",
+    "!dist/**/*.d.ts.map",
+    "!dist/core/lite.d.ts",
+    "!dist/core/minimal.d.ts",
+    "!dist/adapters/**"
   ],
   "sideEffects": [
     "*.css"

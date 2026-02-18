@@ -1,6 +1,6 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, rmSync } from "fs";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -8,6 +8,15 @@ const withTypes = process.argv.includes("--types");
 async function build() {
   const totalStart = performance.now();
   console.log("Building vlist...\n");
+
+  // Clean dist folder before building to avoid stale files
+  const cleanStart = performance.now();
+  if (!isDev) {
+    rmSync("./dist", { recursive: true, force: true });
+    console.log(
+      `  Clean       ${(performance.now() - cleanStart).toFixed(0).padStart(6)}ms  dist/`,
+    );
+  }
 
   // Build sub-module bundles for tree-shaking
   const subStart = performance.now();
@@ -52,17 +61,10 @@ async function build() {
   // Single-file builds (no folder structure)
   const singleFileModules = [mainModule];
 
-  // Framework adapters — built with externals so framework imports
-  // are left as bare specifiers (resolved by the consumer's bundler).
-  const adapterModules = [
-    {
-      entry: "./src/adapters/react.ts",
-      out: "react",
-      externals: ["react", "vlist"],
-    },
-    { entry: "./src/adapters/vue.ts", out: "vue", externals: ["vue", "vlist"] },
-    { entry: "./src/adapters/svelte.ts", out: "svelte", externals: ["vlist"] },
-  ];
+  // Framework adapters removed - now separate packages:
+  // - vlist-react (https://github.com/floor/vlist-react)
+  // - vlist-vue (https://github.com/floor/vlist-vue)
+  // - vlist-svelte (https://github.com/floor/vlist-svelte)
 
   const subResults: { name: string; size: string; type: string }[] = [];
 
@@ -129,42 +131,7 @@ async function build() {
     `  Sub-modules ${subTime.toFixed(0).padStart(6)}ms  ${subSummary}`,
   );
 
-  // Build framework adapters (with external framework imports)
-  const adapterStart = performance.now();
-  const adapterResults: { name: string; size: string }[] = [];
-
-  for (const adapter of adapterModules) {
-    const adapterResult = await Bun.build({
-      entrypoints: [adapter.entry],
-      outdir: `./dist/${adapter.out}`,
-      format: "esm",
-      target: "browser",
-      minify: !isDev,
-      sourcemap: isDev ? "inline" : "none",
-      naming: "index.js",
-      external: adapter.externals,
-    });
-
-    if (!adapterResult.success) {
-      console.error(`\nAdapter build failed (${adapter.out}):\n`);
-      for (const log of adapterResult.logs) {
-        console.error(log);
-      }
-      process.exit(1);
-    }
-
-    const adapterFile = Bun.file(`./dist/${adapter.out}/index.js`);
-    const adapterSize = (adapterFile.size / 1024).toFixed(1);
-    adapterResults.push({ name: adapter.out, size: adapterSize });
-  }
-
-  const adapterTime = performance.now() - adapterStart;
-  const adapterSummary = adapterResults
-    .map((a) => `${a.name} (${a.size} KB)`)
-    .join(", ");
-  console.log(
-    `  Adapters    ${adapterTime.toFixed(0).padStart(6)}ms  ${adapterSummary}`,
-  );
+  // Adapters moved to separate packages - no longer built here
 
   // Generate type declarations (optional)
   if (withTypes) {
@@ -245,15 +212,6 @@ async function build() {
     const gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
     console.log(
       `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
-    );
-  }
-
-  console.log("");
-  console.log("  Adapters:");
-  for (const adapter of adapterResults) {
-    const gzipAdapterSize = await gzipBytes(`dist/${adapter.name}/index.js`);
-    console.log(
-      `  ${adapter.name.padEnd(13)} ${adapter.size} KB minified, ${gzipAdapterSize} KB gzipped`,
     );
   }
 
