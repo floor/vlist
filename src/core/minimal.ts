@@ -419,6 +419,12 @@ export const createVList = <T extends VListItem = VListItem>(
     element.setAttribute("aria-setsize", lastAriaSetSize);
     element.setAttribute("aria-posinset", String(index + 1));
 
+    // Add placeholder class if this is a placeholder item
+    const isPlaceholder = String(item.id).startsWith("__placeholder_");
+    if (isPlaceholder) {
+      element.classList.add(`${classPrefix}-item--placeholder`);
+    }
+
     // Update selection state
     const isSelected = item.id === selectedId;
     itemState.selected = isSelected;
@@ -489,9 +495,29 @@ export const createVList = <T extends VListItem = VListItem>(
         const existingId = existing.dataset.id;
         const newId = String(item.id);
         if (existingId !== newId) {
+          // Check if we're replacing a placeholder (ID starts with __placeholder_)
+          const wasPlaceholder = existingId?.startsWith("__placeholder_");
+          const isPlaceholder = newId.startsWith("__placeholder_");
+
           applyTemplate(existing, template(item, i, itemState));
           existing.dataset.id = newId;
           existing.style.height = `${heightCache.getHeight(i)}px`;
+
+          // Update placeholder class
+          if (isPlaceholder) {
+            existing.classList.add(`${classPrefix}-item--placeholder`);
+          } else {
+            existing.classList.remove(`${classPrefix}-item--placeholder`);
+          }
+
+          // Add --replaced class for fade-in animation when placeholder is replaced
+          if (wasPlaceholder && !isPlaceholder) {
+            existing.classList.add(`${classPrefix}-item--replaced`);
+            // Remove class after animation completes to allow reuse
+            setTimeout(() => {
+              existing.classList.remove(`${classPrefix}-item--replaced`);
+            }, 300);
+          }
         }
 
         // Update selection state
