@@ -28,7 +28,6 @@ async function build() {
   ];
 
   const mainModule = { entry: "./src/index.ts", out: "index.js" };
-  const vlistModule = { entry: "./src/vlist.ts", out: "vlist.js" };
 
   const featureModules = [
     { entry: "./src/features/async/index.ts", out: "async", folder: true },
@@ -60,7 +59,7 @@ async function build() {
   const allModules = [...coreModules, ...builderModules, ...featureModules];
 
   // Single-file builds (no folder structure)
-  const singleFileModules = [mainModule, vlistModule];
+  const singleFileModules = [mainModule];
 
   // Framework adapters removed - now separate packages:
   // - vlist-react (https://github.com/floor/vlist-react)

@@ -25,7 +25,7 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createVList } from "../src/vlist";
+import { createVList } from "../src/core/full";
 import type { VListItem, VList, VListAdapter } from "../src/types";
 
 // =============================================================================

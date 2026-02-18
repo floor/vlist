@@ -10,17 +10,17 @@
  * For the modular builder API, use `import { vlist } from '@floor/vlist'` instead.
  */
 
-import { vlist as builderVlist } from "./builder";
-import { withGrid } from "./features/grid/plugin";
-import { withSections } from "./features/sections/plugin";
-import { withSelection } from "./features/selection/plugin";
-import { withScrollbar } from "./features/scrollbar/plugin";
-import { withScale } from "./features/scale/plugin";
-import { withSnapshots } from "./features/snapshots/plugin";
-import { withAsync } from "./features/async/plugin";
-import { withPage } from "./features/page/plugin";
+import { vlist as builderVlist } from "../builder";
+import { withGrid } from "../features/grid/plugin";
+import { withSections } from "../features/sections/plugin";
+import { withSelection } from "../features/selection/plugin";
+import { withScrollbar } from "../features/scrollbar/plugin";
+import { withScale } from "../features/scale/plugin";
+import { withSnapshots } from "../features/snapshots/plugin";
+import { withAsync } from "../features/async/plugin";
+import { withPage } from "../features/page/plugin";
 
-import type { VListConfig, VListItem, VList } from "./types";
+import type { VListConfig, VListItem, VList } from "../types";
 
 /**
  * Create a virtual list instance.

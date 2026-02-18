@@ -20,7 +20,7 @@ import {
   createGroupedHeightFn,
 } from "../../../src/features/sections/layout";
 import { createHeightCache } from "../../../src/rendering/heights";
-import { createVList } from "../../../src/vlist";
+import { createVList } from "../../../src/core/full";
 import type { GroupsConfig } from "../../../src/features/sections/types";
 import type { GroupLayout } from "../../../src/features/sections/types";
 import type { HeightCache } from "../../../src/rendering/heights";
