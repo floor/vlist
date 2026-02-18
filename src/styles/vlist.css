@@ -5,6 +5,29 @@
  */
 
 /* =============================================================================
+   Animations
+   ============================================================================= */
+
+@keyframes vlist-fade-in {
+    from {
+        opacity: 0.6;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes vlist-placeholder-pulse {
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* =============================================================================
    CSS Custom Properties (Design Tokens)
    ============================================================================= */
 
@@ -154,10 +177,14 @@
     background-color: var(--vlist-bg);
     cursor: pointer;
     user-select: none;
-    transition: background-color var(--vlist-transition-duration)
-        var(--vlist-transition-timing);
+    opacity: 1;
+    transition:
+        background-color var(--vlist-transition-duration)
+            var(--vlist-transition-timing),
+        opacity var(--vlist-transition-duration) var(--vlist-transition-timing);
     contain: content;
     box-sizing: border-box;
+    will-change: transform;
 }
 
 /* Suppress transitions during active scroll for better performance */
@@ -187,6 +214,19 @@
     outline-offset: -2px;
     z-index: 1;
 }
+
+/* Item replaced state - fade in when placeholder is replaced with real data */
+.vlist-item--replaced {
+    animation: animation: fade-in 0.3s ease-out;
+}
+
+/* Placeholder item styling */
+.vlist-item--placeholder {
+    opacity: 0.6;
+    animation: vlist-placeholder-pulse 2s ease-in-out infinite;
+}
+
+/* Placeholder content styling - examples should define their own placeholder appearance */
 
 /* Combined selected + focused */
 .vlist-item--selected.vlist-item--focused {
