@@ -1,24 +1,26 @@
 /**
- * vlist - Virtual List (Builder-based)
+ * vlist - Full API with Convenience Wrapper
  *
- * This is the new default entry point that uses the builder pattern internally.
- * It provides full backwards compatibility with the monolithic API while maintaining
- * modularity and smaller bundle sizes through automatic plugin application.
+ * This file provides `createVList()` - a convenience wrapper around the builder pattern
+ * that automatically applies plugins based on configuration, maintaining backwards
+ * compatibility with monolithic-style API while leveraging the modular builder internally.
  *
- * For the legacy monolithic implementation, use 'vlist/full' instead.
+ * Import: `import { createVList } from '@floor/vlist'` or `import { createVList } from '@floor/vlist/vlist'`
+ *
+ * For the modular builder API, use `import { vlist } from '@floor/vlist'` instead.
  */
 
-import { vlist as builderVlist } from "../builder";
-import { withGrid } from "../features/grid/plugin";
-import { withSections } from "../features/sections/plugin";
-import { withSelection } from "../features/selection/plugin";
-import { withScrollbar } from "../features/scrollbar/plugin";
-import { withScale } from "../features/scale/plugin";
-import { withSnapshots } from "../features/snapshots/plugin";
-import { withAsync } from "../features/async/plugin";
-import { withPage } from "../features/page/plugin";
+import { vlist as builderVlist } from "./builder";
+import { withGrid } from "./features/grid/plugin";
+import { withSections } from "./features/sections/plugin";
+import { withSelection } from "./features/selection/plugin";
+import { withScrollbar } from "./features/scrollbar/plugin";
+import { withScale } from "./features/scale/plugin";
+import { withSnapshots } from "./features/snapshots/plugin";
+import { withAsync } from "./features/async/plugin";
+import { withPage } from "./features/page/plugin";
 
-import type { VListConfig, VListItem, VList } from "../types";
+import type { VListConfig, VListItem, VList } from "./types";
 
 /**
  * Create a virtual list instance.
@@ -127,7 +129,15 @@ export const createVList = <T extends VListItem = VListItem>(
 
   // Auto-apply scrollbar plugin based on scrollbar config
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
-  if (scrollbarConfig !== "none") {
+
+  // Check if scrollbar is disabled via legacy config or 'none' mode
+  const isScrollbarDisabled =
+    scrollbarConfig === "none" ||
+    (typeof scrollbarConfig === "object" &&
+      "enabled" in scrollbarConfig &&
+      scrollbarConfig.enabled === false);
+
+  if (!isScrollbarDisabled) {
     const scrollbarOptions =
       typeof scrollbarConfig === "object" ? scrollbarConfig : {};
     builder = builder.use(withScrollbar(scrollbarOptions));

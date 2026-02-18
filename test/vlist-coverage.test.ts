@@ -25,7 +25,7 @@ import {
   afterAll,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createVList } from "../src/core/full";
+import { createVList } from "../src/vlist";
 import type { VListItem, VList, VListAdapter } from "../src/types";
 
 // =============================================================================
@@ -215,13 +215,18 @@ describe("vlist scrollbar mode resolution", () => {
     expect(vlist).toBeDefined();
     expect(vlist.element).toBeInstanceOf(HTMLElement);
 
-    // In none mode, native scrollbar is hidden and no custom scrollbar created
+    // In none mode, no scrollbar plugin is applied (native scrollbar remains visible)
     const viewport = vlist.element.querySelector("[class*='-viewport']");
     expect(viewport).toBeTruthy();
-    // The viewport should have the custom-scrollbar class to hide native
+
+    // The viewport should NOT have the custom-scrollbar class (no scrollbar plugin)
     expect(
       viewport!.classList.contains("vlist-viewport--custom-scrollbar"),
-    ).toBe(true);
+    ).toBe(false);
+
+    // No custom scrollbar elements should be created
+    const scrollbar = vlist.element.querySelector("[class*='scrollbar']");
+    expect(scrollbar).toBeFalsy();
   });
 
   it("should use custom scrollbar mode via scroll.scrollbar = object", () => {
@@ -261,10 +266,15 @@ describe("vlist scrollbar mode resolution", () => {
     // No scrollbar element when disabled
     const viewport = vlist.element.querySelector("[class*='-viewport']");
     expect(viewport).toBeTruthy();
-    // Native scrollbar should be hidden
+
+    // The viewport should NOT have the custom-scrollbar class (no scrollbar plugin)
     expect(
       viewport!.classList.contains("vlist-viewport--custom-scrollbar"),
-    ).toBe(true);
+    ).toBe(false);
+
+    // No custom scrollbar elements should be created
+    const scrollbar = vlist.element.querySelector("[class*='scrollbar']");
+    expect(scrollbar).toBeFalsy();
   });
 
   it("should use custom mode via legacy scrollbar config with enabled=true", () => {
