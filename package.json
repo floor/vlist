@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -33,11 +33,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./vlist": {
-      "types": "./dist/vlist.d.ts",
-      "import": "./dist/vlist.js",
-      "default": "./dist/vlist.js"
     },
     "./styles": "./dist/vlist.css",
     "./styles/extras": "./dist/vlist-extras.css",

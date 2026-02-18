@@ -9,9 +9,6 @@
 // Main builder export
 export { vlist } from "./builder";
 
-// Full API convenience export
-export { createVList } from "./vlist";
-
 // Feature plugins - tree-shakeable
 export { withScale } from "./features/scale";
 export { withAsync } from "./features/async";
