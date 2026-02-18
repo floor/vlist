@@ -21,7 +21,7 @@ import {
   mock,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createVList } from "../src/core/full";
+import { createVList } from "../src/vlist";
 import type { VListConfig, VListItem, VList } from "../src/types";
 
 // =============================================================================
