@@ -764,103 +764,98 @@ const list = vlist({
 
 ## Framework Adapters
 
+Framework-specific adapters are available as separate packages for easier integration and smaller bundle sizes.
+
 ### React
 
-```typescript
-import { vlist, withSelection } from 'vlist';
-import { useEffect, useRef } from 'react';
+**Package:** [`vlist-react`](https://github.com/floor/vlist-react) - 1.4 KB (0.6 KB gzipped)
 
-function MyList({ items }) {
-  const containerRef = useRef(null);
-  const listRef = useRef(null);
+```bash
+npm install @floor/vlist vlist-react
+```
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+```tsx
+import { useVList } from 'vlist-react';
+import '@floor/vlist/styles';
 
-    listRef.current = vlist({
-      container: containerRef.current,
-      items,
-      item: { height: 48, template: renderItem },
-    })
-      .use(withSelection({ mode: 'single' }))
-      .build();
+function UserList({ users }) {
+  const { containerRef, instanceRef } = useVList({
+    item: {
+      height: 48,
+      template: (user) => `<div class="user">${user.name}</div>`,
+    },
+    items: users,
+  });
 
-    return () => listRef.current?.destroy();
-  }, []);
-
-  useEffect(() => {
-    listRef.current?.setItems(items);
-  }, [items]);
-
-  return <div ref={containerRef} />;
+  return <div ref={containerRef} style={{ height: 400 }} />;
 }
 ```
 
-### Vue 3
+**Documentation:** [github.com/floor/vlist-react](https://github.com/floor/vlist-react)
 
-```typescript
-import { vlist, withSelection } from 'vlist';
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+### Vue
 
-export default {
-  setup() {
-    const container = ref(null);
-    const list = ref(null);
+**Package:** [`vlist-vue`](https://github.com/floor/vlist-vue) - 1.1 KB (0.6 KB gzipped)
 
-    onMounted(() => {
-      list.value = vlist({
-        container: container.value,
-        items: items.value,
-        item: { height: 48, template: renderItem },
-      })
-        .use(withSelection({ mode: 'single' }))
-        .build();
-    });
-
-    watch(items, (newItems) => {
-      list.value?.setItems(newItems);
-    });
-
-    onUnmounted(() => {
-      list.value?.destroy();
-    });
-
-    return { container };
-  },
-};
+```bash
+npm install @floor/vlist vlist-vue
 ```
+
+```vue
+<script setup>
+import { useVList } from 'vlist-vue';
+import '@floor/vlist/styles';
+
+const users = ref([...]);
+
+const { containerRef, instance } = useVList({
+  item: {
+    height: 48,
+    template: (user) => `<div class="user">${user.name}</div>`,
+  },
+  items: users,
+});
+</script>
+
+<template>
+  <div ref="containerRef" style="height: 400px" />
+</template>
+```
+
+**Documentation:** [github.com/floor/vlist-vue](https://github.com/floor/vlist-vue)
 
 ### Svelte
 
-```typescript
+**Package:** [`vlist-svelte`](https://github.com/floor/vlist-svelte) - 0.9 KB (0.5 KB gzipped)
+
+```bash
+npm install @floor/vlist vlist-svelte
+```
+
+```svelte
 <script>
-  import { vlist, withSelection } from 'vlist';
-  import { onMount, onDestroy } from 'svelte';
+  import { vlist } from 'vlist-svelte';
+  import '@floor/vlist/styles';
 
-  export let items = [];
-  
-  let container;
-  let list;
+  let users = [...];
+  let instance;
 
-  onMount(() => {
-    list = vlist({
-      container,
-      items,
-      item: { height: 48, template: renderItem },
-    })
-      .use(withSelection({ mode: 'single' }))
-      .build();
-  });
-
-  $: list?.setItems(items);
-
-  onDestroy(() => {
-    list?.destroy();
-  });
+  const config = {
+    item: {
+      height: 48,
+      template: (user) => `<div class="user">${user.name}</div>`,
+    },
+    items: users,
+  };
 </script>
 
-<div bind:this={container}></div>
+<div
+  use:vlist={{ config, onInstance: (i) => (instance = i) }}
+  style="height: 400px"
+/>
 ```
+
+**Documentation:** [github.com/floor/vlist-svelte](https://github.com/floor/vlist-svelte)
 
 ## Styling
 
