@@ -6,6 +6,7 @@
 
 import type { Range } from "../types";
 import type { HeightCache } from "../rendering/heights";
+import { countVisibleItems } from "../rendering/heights";
 
 // =============================================================================
 // Visible Range
@@ -23,9 +24,19 @@ export const calcVisibleRange = (
     out.end = 0;
     return;
   }
+
   const start = hc.indexAtOffset(scrollTop);
-  let end = hc.indexAtOffset(scrollTop + containerHeight);
-  if (end < totalItems - 1) end++;
+
+  // Use accurate visible item counting (same logic as compressed mode)
+  // This ensures we render enough items during fast scrolling
+  const visibleCount = countVisibleItems(
+    hc,
+    start,
+    containerHeight,
+    totalItems,
+  );
+  const end = start + visibleCount;
+
   out.start = Math.max(0, start);
   out.end = Math.min(totalItems - 1, Math.max(0, end));
 };
