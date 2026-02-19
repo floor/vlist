@@ -1887,7 +1887,7 @@ describe("withGrid plugin", () => {
     const initialCount = list.element.querySelectorAll("[data-index]").length;
     expect(initialCount).toBeGreaterThan(0);
 
-    list.removeItem(items[0].id);
+    list.removeItem(0);
 
     // Should not throw and grid should still be functional
     expect(list.element.classList.contains("vlist--grid")).toBe(true);
@@ -2695,7 +2695,7 @@ describe("withSections plugin", () => {
       .build();
 
     // Remove an item
-    expect(() => list!.removeItem(items[0]!.id)).not.toThrow();
+    expect(() => list!.removeItem(0)).not.toThrow();
     expect(list.element.classList.contains("vlist--grouped")).toBe(true);
   });
 
