@@ -247,57 +247,53 @@ function materialize<T extends VListItem = VListItem>(
   // All mutable state lives here so that extracted factories (ctx,
   // data proxy, scroll proxy) and core.ts read/write the same values.
   const $: MRefs<T> = {
-    items: initialItemsCopy,
-    heightCache: initialHeightCache,
-    containerHeight: dom.viewport.clientHeight,
-    containerWidth: dom.viewport.clientWidth,
-    isDestroyed: false,
-    isInitialized: false,
-    lastScrollTop: 0,
-    velocityTracker: createVelocityTracker(0),
-    selectionSet: new Set<string | number>(),
-    focusedIndex: -1,
-    lastAriaSetSize: "",
-    dataManagerProxy: null as any,
-    scrollControllerProxy: null as any,
-    virtualTotalFn: null as unknown as () => number,
-    scrollGetTop: isHorizontal
+    it: initialItemsCopy,
+    hc: initialHeightCache,
+    ch: dom.viewport.clientHeight,
+    cw: dom.viewport.clientWidth,
+    id: false,
+    ii: false,
+    ls: 0,
+    vt: createVelocityTracker(0),
+    ss: new Set<string | number>(),
+    fi: -1,
+    la: "",
+    dm: null as any,
+    sc: null as any,
+    vtf: null as unknown as () => number,
+    sgt: isHorizontal
       ? () => dom.viewport.scrollLeft
       : () => dom.viewport.scrollTop,
-    scrollSetTop: isHorizontal
+    sst: isHorizontal
       ? (pos: number) => {
           dom.viewport.scrollLeft = pos;
         }
       : (pos: number) => {
           dom.viewport.scrollTop = pos;
         },
-    scrollIsAtBottom: (threshold = 2) => {
-      const total = $.heightCache.getTotalHeight();
-      return $.lastScrollTop + $.containerHeight >= total - threshold;
+    sab: (threshold = 2) => {
+      const total = $.hc.getTotalHeight();
+      return $.ls + $.ch >= total - threshold;
     },
-    scrollIsCompressed: false,
-    renderIfNeededFn: null as unknown as () => void,
-    forceRenderFn: null as unknown as () => void,
-    getVisibleRange: (scrollTop, cHeight, hc, total, out) => {
+    sic: false,
+    rfn: null as unknown as () => void,
+    ffn: null as unknown as () => void,
+    gvr: (scrollTop, cHeight, hc, total, out) => {
       calcVisibleRange(scrollTop, cHeight, hc, total, out);
     },
-    getScrollToPos: (index, hc, cHeight, total, align) => {
+    gsp: (index, hc, cHeight, total, align) => {
       return calcScrollToPosition(index, hc, cHeight, total, align);
     },
-    positionElementFn: null as unknown as (
-      element: HTMLElement,
-      index: number,
-    ) => void,
-    activeTemplate: itemConfig.template as ItemTemplate<T>,
-    viewportResizeEnabled: true,
-    scrollTarget: dom.viewport as HTMLElement | Window,
-    getContainerWidth: () => $.containerWidth,
-    getContainerHeight: () => $.containerHeight,
+    pef: null as unknown as (element: HTMLElement, index: number) => void,
+    at: itemConfig.template as ItemTemplate<T>,
+    vre: true,
+    st: dom.viewport as HTMLElement | Window,
+    gcw: () => $.cw,
+    gch: () => $.ch,
   };
 
   // virtualTotalFn must reference $ after creation
-  $.virtualTotalFn = () =>
-    $.dataManagerProxy ? $.dataManagerProxy.getTotal() : $.items.length;
+  $.vtf = () => ($.dm ? $.dm.getTotal() : $.it.length);
 
   // Local-only mutable state (not needed by extracted factories)
   let animationFrameId: number | null = null;
@@ -312,9 +308,9 @@ function materialize<T extends VListItem = VListItem>(
   const sharedState: BuilderState = {
     viewportState: {
       scrollTop: 0,
-      containerHeight: $.containerHeight,
-      totalHeight: $.heightCache.getTotalHeight(),
-      actualHeight: $.heightCache.getTotalHeight(),
+      containerHeight: $.ch,
+      totalHeight: $.hc.getTotalHeight(),
+      actualHeight: $.hc.getTotalHeight(),
       isCompressed: false,
       compressionRatio: 1,
       visibleRange: { start: 0, end: 0 },
@@ -336,8 +332,8 @@ function materialize<T extends VListItem = VListItem>(
 
   const rebuildIdIndex = (): void => {
     idToIndex.clear();
-    for (let i = 0; i < $.items.length; i++) {
-      const item = $.items[i];
+    for (let i = 0; i < $.it.length; i++) {
+      const item = $.it[i];
       if (item) idToIndex.set(item.id, i);
     }
   };
@@ -364,7 +360,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const positionElement = (element: HTMLElement, index: number): void => {
-    const offset = Math.round($.heightCache.getOffset(index));
+    const offset = Math.round($.hc.getOffset(index));
     if (isHorizontal) {
       element.style.transform = `translateX(${offset}px)`;
     } else {
@@ -373,27 +369,27 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   // Set initial position function on refs
-  $.positionElementFn = positionElement;
+  $.pef = positionElement;
 
   const renderItem = (index: number, item: T): HTMLElement => {
     const element = pool.acquire();
     element.className = baseClass;
 
     if (isHorizontal) {
-      element.style.width = `${$.heightCache.getHeight(index)}px`;
+      element.style.width = `${$.hc.getHeight(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${$.heightCache.getHeight(index)}px`;
+      element.style.height = `${$.hc.getHeight(index)}px`;
     }
 
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
     element.ariaSelected = "false";
     element.id = `${ariaIdPrefix}-item-${index}`;
-    $.lastAriaSetSize = String($.virtualTotalFn());
-    element.setAttribute("aria-setsize", $.lastAriaSetSize);
+    $.la = String($.vtf());
+    element.setAttribute("aria-setsize", $.la);
     element.setAttribute("aria-posinset", String(index + 1));
 
     // Add placeholder class if this is a placeholder item
@@ -402,13 +398,13 @@ function materialize<T extends VListItem = VListItem>(
       element.classList.add(`${classPrefix}-item--placeholder`);
     }
 
-    applyTemplate(element, $.activeTemplate(item, index, itemState));
-    $.positionElementFn(element, index);
+    applyTemplate(element, $.at(item, index, itemState));
+    $.pef(element, index);
     return element;
   };
 
   const updateContentSize = (): void => {
-    const size = `${$.heightCache.getTotalHeight()}px`;
+    const size = `${$.hc.getTotalHeight()}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -420,16 +416,10 @@ function materialize<T extends VListItem = VListItem>(
   // This is the hot path — called on every scroll-triggered range change.
 
   const coreRenderIfNeeded = (): void => {
-    if ($.isDestroyed) return;
+    if ($.id) return;
 
-    const total = $.virtualTotalFn();
-    $.getVisibleRange(
-      $.lastScrollTop,
-      $.containerHeight,
-      $.heightCache,
-      total,
-      visibleRange,
-    );
+    const total = $.vtf();
+    $.gvr($.ls, $.ch, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
 
     if (
@@ -438,18 +428,18 @@ function materialize<T extends VListItem = VListItem>(
     ) {
       // In compressed mode, items must be repositioned even when range is unchanged
       // because their positions are relative to the viewport, not absolute
-      if ($.scrollIsCompressed) {
+      if ($.sic) {
         // Reposition all currently rendered items
         for (const [index, element] of rendered) {
-          $.positionElementFn(element, index);
+          $.pef(element, index);
         }
       }
       return;
     }
 
     const currentSetSize = String(total);
-    const setSizeChanged = currentSetSize !== $.lastAriaSetSize;
-    $.lastAriaSetSize = currentSetSize;
+    const setSizeChanged = currentSetSize !== $.la;
+    $.la = currentSetSize;
 
     // Remove items outside new range
     for (const [index, element] of rendered) {
@@ -465,9 +455,7 @@ function materialize<T extends VListItem = VListItem>(
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
-      const item = (
-        $.dataManagerProxy ? $.dataManagerProxy.getItem(i) : $.items[i]
-      ) as T | undefined;
+      const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
       if (!item) continue;
 
       const existing = rendered.get(i);
@@ -479,12 +467,12 @@ function materialize<T extends VListItem = VListItem>(
           const wasPlaceholder = existingId?.startsWith("__placeholder_");
           const isPlaceholder = newId.startsWith("__placeholder_");
 
-          applyTemplate(existing, $.activeTemplate(item, i, itemState));
+          applyTemplate(existing, $.at(item, i, itemState));
           existing.dataset.id = newId;
           if (isHorizontal) {
-            existing.style.width = `${$.heightCache.getHeight(i)}px`;
+            existing.style.width = `${$.hc.getHeight(i)}px`;
           } else {
-            existing.style.height = `${$.heightCache.getHeight(i)}px`;
+            existing.style.height = `${$.hc.getHeight(i)}px`;
           }
 
           // Update placeholder class
@@ -502,24 +490,24 @@ function materialize<T extends VListItem = VListItem>(
             }, 300);
           }
         }
-        $.positionElementFn(existing, i);
+        $.pef(existing, i);
 
         // Selection class updates
-        const isSelected = $.selectionSet.has(item.id);
-        const isFocused = i === $.focusedIndex;
+        const isSelected = $.ss.has(item.id);
+        const isFocused = i === $.fi;
         existing.classList.toggle(`${classPrefix}-item--selected`, isSelected);
         existing.classList.toggle(`${classPrefix}-item--focused`, isFocused);
         existing.ariaSelected = isSelected ? "true" : "false";
 
         if (setSizeChanged) {
-          existing.setAttribute("aria-setsize", $.lastAriaSetSize);
+          existing.setAttribute("aria-setsize", $.la);
         }
       } else {
         const element = renderItem(i, item);
 
         // Selection state for new elements
-        const isSelected = $.selectionSet.has(item.id);
-        const isFocused = i === $.focusedIndex;
+        const isSelected = $.ss.has(item.id);
+        const isFocused = i === $.fi;
         if (isSelected) {
           element.classList.add(`${classPrefix}-item--selected`);
           element.ariaSelected = "true";
@@ -550,7 +538,7 @@ function materialize<T extends VListItem = VListItem>(
     // Update viewport state with current scroll position and calculated ranges
     // This is critical for plugins (especially compression + scrollbar) that rely
     // on viewport state being up-to-date
-    sharedState.viewportState.scrollTop = $.lastScrollTop;
+    sharedState.viewportState.scrollTop = $.ls;
     sharedState.viewportState.visibleRange.start = visibleRange.start;
     sharedState.viewportState.visibleRange.end = visibleRange.end;
     sharedState.viewportState.renderRange.start = renderRange.start;
@@ -564,41 +552,37 @@ function materialize<T extends VListItem = VListItem>(
   const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
-    $.renderIfNeededFn();
+    $.rfn();
   };
 
   // Initialize replaceable render function references
-  $.renderIfNeededFn = coreRenderIfNeeded;
-  $.forceRenderFn = coreForceRender;
+  $.rfn = coreRenderIfNeeded;
+  $.ffn = coreForceRender;
 
   // ── Scroll handling ─────────────────────────────────────────────
 
   const onScrollFrame = (): void => {
-    if ($.isDestroyed) return;
+    if ($.id) return;
 
-    const scrollTop = $.scrollGetTop();
-    const direction: "up" | "down" =
-      scrollTop >= $.lastScrollTop ? "down" : "up";
+    const scrollTop = $.sgt();
+    const direction: "up" | "down" = scrollTop >= $.ls ? "down" : "up";
 
     // Update velocity tracker
-    $.velocityTracker = updateVelocityTracker(
-      $.velocityTracker as any,
-      scrollTop,
-    );
+    $.vt = updateVelocityTracker($.vt as any, scrollTop);
 
     if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
       dom.root.classList.add(`${classPrefix}--scrolling`);
     }
 
-    $.lastScrollTop = scrollTop;
-    $.renderIfNeededFn();
+    $.ls = scrollTop;
+    $.rfn();
 
     emitter.emit("scroll", { scrollTop, direction });
 
     // Emit velocity change
     emitter.emit("velocity:change", {
-      velocity: $.velocityTracker.velocity,
-      reliable: $.velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
+      velocity: $.vt.velocity,
+      reliable: $.vt.sampleCount >= MIN_RELIABLE_SAMPLES,
     });
 
     // Plugin post-scroll actions
@@ -611,8 +595,8 @@ function materialize<T extends VListItem = VListItem>(
     idleTimer = setTimeout(() => {
       dom.root.classList.remove(`${classPrefix}--scrolling`);
       // Reset velocity to 0 when idle
-      $.velocityTracker.velocity = 0;
-      $.velocityTracker.sampleCount = 0;
+      $.vt.velocity = 0;
+      $.vt.sampleCount = 0;
       emitter.emit("velocity:change", {
         velocity: 0,
         reliable: false,
@@ -623,8 +607,8 @@ function materialize<T extends VListItem = VListItem>(
   // Wheel handler (can be disabled via config)
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
-  // Attach scroll listener to initial target ($.scrollTarget set during $ init)
-  $.scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
+  // Attach scroll listener to initial target ($.st set during $ init)
+  $.st.addEventListener("scroll", onScrollFrame, { passive: true });
 
   // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
   if (isHorizontal && wheelEnabled) {
@@ -648,8 +632,7 @@ function materialize<T extends VListItem = VListItem>(
     if (itemEl) {
       const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
       if (layoutIndex >= 0) {
-        const item =
-          $.dataManagerProxy?.getItem(layoutIndex) ?? $.items[layoutIndex];
+        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
         if (item) {
           // Skip group headers
           if ((item as any).__groupHeader) {
@@ -672,8 +655,7 @@ function materialize<T extends VListItem = VListItem>(
     if (itemEl) {
       const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
       if (layoutIndex >= 0) {
-        const item =
-          $.dataManagerProxy?.getItem(layoutIndex) ?? $.items[layoutIndex];
+        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
         if (item) {
           // Skip group headers
           if ((item as any).__groupHeader) {
@@ -698,7 +680,7 @@ function materialize<T extends VListItem = VListItem>(
   // ── ResizeObserver ──────────────────────────────────────────────
 
   const resizeObserver = new ResizeObserver((entries) => {
-    if ($.isDestroyed) return;
+    if ($.id) return;
 
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
@@ -706,22 +688,22 @@ function materialize<T extends VListItem = VListItem>(
       const newMainAxis = isHorizontal ? newWidth : newHeight;
 
       // Always update dimensions (even before initialization)
-      $.containerWidth = newWidth;
+      $.cw = newWidth;
 
-      if (Math.abs(newMainAxis - $.containerHeight) > 1) {
-        $.containerHeight = newMainAxis;
+      if (Math.abs(newMainAxis - $.ch) > 1) {
+        $.ch = newMainAxis;
         sharedState.viewportState.containerHeight = newMainAxis;
 
         // Only render if already initialized (plugins have run)
-        if ($.isInitialized) {
+        if ($.ii) {
           updateContentSize();
-          $.renderIfNeededFn();
+          $.rfn();
           emitter.emit("resize", { height: newHeight, width: newWidth });
         }
       }
 
       // Only call resize handlers if initialized
-      if ($.isInitialized) {
+      if ($.ii) {
         for (let i = 0; i < resizeHandlers.length; i++) {
           resizeHandlers[i]!(newWidth, newHeight);
         }
@@ -730,7 +712,7 @@ function materialize<T extends VListItem = VListItem>(
   });
 
   // Plugins can disable viewport resize observation
-  if ($.viewportResizeEnabled) {
+  if ($.vre) {
     resizeObserver.observe(dom.viewport);
   }
 
@@ -765,8 +747,8 @@ function materialize<T extends VListItem = VListItem>(
 
   const ctx: BuilderContext<T> = createMaterializeCtx($, deps);
 
-  $.dataManagerProxy = createDefaultDataProxy($, deps, ctx);
-  $.scrollControllerProxy = createDefaultScrollProxy($, deps);
+  $.dm = createDefaultDataProxy($, deps, ctx);
+  $.sc = createDefaultScrollProxy($, deps);
 
   // ── Run plugin setup ────────────────────────────────────────────
 
@@ -791,25 +773,19 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   // ── Mark initialized ────────────────────────────────────────────
-  $.isInitialized = true;
+  $.ii = true;
   ctx.state.isInitialized = true;
 
   // ── Initial render ──────────────────────────────────────────────
   updateContentSize();
-  $.renderIfNeededFn();
+  $.rfn();
 
   // Reverse mode: scroll to bottom
-  if (isReverse && $.items.length > 0) {
-    const pos = $.getScrollToPos(
-      $.items.length - 1,
-      $.heightCache,
-      $.containerHeight,
-      $.items.length,
-      "end",
-    );
-    $.scrollSetTop(pos);
-    $.lastScrollTop = pos;
-    $.renderIfNeededFn();
+  if (isReverse && $.it.length > 0) {
+    const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
+    $.sst(pos);
+    $.ls = pos;
+    $.rfn();
   }
 
   // ── Base data methods ───────────────────────────────────────────
@@ -820,43 +796,37 @@ function materialize<T extends VListItem = VListItem>(
 
   const appendItems = isReverse
     ? (newItems: T[]): void => {
-        const wasAtBottom = $.scrollIsAtBottom(2);
-        const currentTotal = $.items.length;
+        const wasAtBottom = $.sab(2);
+        const currentTotal = $.it.length;
         ctx.dataManager.setItems(newItems, currentTotal);
-        if (wasAtBottom && $.items.length > 0) {
-          const pos = $.getScrollToPos(
-            $.items.length - 1,
-            $.heightCache,
-            $.containerHeight,
-            $.items.length,
-            "end",
-          );
-          $.scrollSetTop(pos);
-          $.lastScrollTop = pos;
-          $.renderIfNeededFn();
+        if (wasAtBottom && $.it.length > 0) {
+          const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
+          $.sst(pos);
+          $.ls = pos;
+          $.rfn();
         }
       }
     : (newItems: T[]): void => {
-        const currentTotal = $.items.length;
+        const currentTotal = $.it.length;
         ctx.dataManager.setItems(newItems, currentTotal);
       };
 
   const prependItems = isReverse
     ? (newItems: T[]): void => {
-        const scrollTop = $.scrollGetTop();
-        const heightBefore = $.heightCache.getTotalHeight();
-        const existingItems = [...$.items];
+        const scrollTop = $.sgt();
+        const heightBefore = $.hc.getTotalHeight();
+        const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = $.heightCache.getTotalHeight();
+        const heightAfter = $.hc.getTotalHeight();
         const delta = heightAfter - heightBefore;
         if (delta > 0) {
-          $.scrollSetTop(scrollTop + delta);
-          $.lastScrollTop = scrollTop + delta;
+          $.sst(scrollTop + delta);
+          $.ls = scrollTop + delta;
         }
       }
     : (newItems: T[]): void => {
-        const existingItems = [...$.items];
+        const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
       };
@@ -887,9 +857,9 @@ function materialize<T extends VListItem = VListItem>(
   const animateScroll = (from: number, to: number, duration: number): void => {
     cancelScroll();
     if (Math.abs(to - from) < 1) {
-      $.scrollSetTop(to);
-      $.lastScrollTop = to;
-      $.renderIfNeededFn();
+      $.sst(to);
+      $.ls = to;
+      $.rfn();
       return;
     }
     const start = performance.now();
@@ -897,11 +867,11 @@ function materialize<T extends VListItem = VListItem>(
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
       const newPos = from + (to - from) * easeInOutQuad(t);
-      $.scrollSetTop(newPos);
+      $.sst(newPos);
       // Update lastScrollTop BEFORE rendering so range calculation uses correct value
-      $.lastScrollTop = newPos;
+      $.ls = newPos;
       // Ensure rendering happens on each frame during smooth scroll
-      $.renderIfNeededFn();
+      $.rfn();
       if (t < 1) animationFrameId = requestAnimationFrame(tick);
       else animationFrameId = null;
     };
@@ -917,26 +887,20 @@ function materialize<T extends VListItem = VListItem>(
       | import("../types").ScrollToOptions,
   ): void => {
     const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
-    const total = $.virtualTotalFn();
+    const total = $.vtf();
 
     let idx = index;
     if (wrapEnabled && total > 0) {
       idx = ((idx % total) + total) % total;
     }
 
-    const position = $.getScrollToPos(
-      idx,
-      $.heightCache,
-      $.containerHeight,
-      total,
-      align,
-    );
+    const position = $.gsp(idx, $.hc, $.ch, total, align);
 
     if (behavior === "smooth") {
-      animateScroll($.scrollGetTop(), position, duration);
+      animateScroll($.sgt(), position, duration);
     } else {
       cancelScroll();
-      $.scrollSetTop(position);
+      $.sst(position);
     }
   };
 
@@ -952,7 +916,7 @@ function materialize<T extends VListItem = VListItem>(
     if (index >= 0) scrollToIndex(index, alignOrOptions);
   };
 
-  const getScrollPosition = (): number => $.scrollGetTop();
+  const getScrollPosition = (): number => $.sgt();
 
   // ── Event subscription ──────────────────────────────────────────
 
@@ -976,13 +940,13 @@ function materialize<T extends VListItem = VListItem>(
   // ── Destroy ─────────────────────────────────────────────────────
 
   const destroy = (): void => {
-    if ($.isDestroyed) return;
-    $.isDestroyed = true;
+    if ($.id) return;
+    $.id = true;
     ctx.state.isDestroyed = true;
 
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
-    $.scrollTarget.removeEventListener("scroll", onScrollFrame);
+    $.st.removeEventListener("scroll", onScrollFrame);
     resizeObserver.disconnect();
 
     if (wheelHandler) {
@@ -1021,14 +985,14 @@ function materialize<T extends VListItem = VListItem>(
       if (methods.has("_getItems")) {
         return (methods.get("_getItems") as any)();
       }
-      return $.items as readonly T[];
+      return $.it as readonly T[];
     },
     get total() {
       // Check if a plugin (e.g., groups) provides a custom total getter
       if (methods.has("_getTotal")) {
         return (methods.get("_getTotal") as any)();
       }
-      return $.virtualTotalFn();
+      return $.vtf();
     },
 
     setItems: methods.has("setItems")
