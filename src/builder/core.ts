@@ -56,7 +56,7 @@ import type { MRefs } from "./materializectx";
 // Constants
 // =============================================================================
 
-const DEFAULT_OVERSCAN = 3;
+const DEFAULT_OVERSCAN = 15;
 const DEFAULT_CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 
@@ -603,14 +603,64 @@ function materialize<T extends VListItem = VListItem>(
   // Attach scroll listener to initial target ($.st set during $ init)
   $.st.addEventListener("scroll", onScrollFrame, { passive: true });
 
-  // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
-  if (isHorizontal && wheelEnabled) {
+  // Setup wheel handling to prevent Chrome/Safari scroll race condition
+  // Chrome/Safari update scroll position before JS can render, causing blank areas
+  // Firefox doesn't have this issue, so we only intercept on Chromium/WebKit
+  const isChromiumOrWebKit =
+    /Chrome|Safari/.test(navigator.userAgent) &&
+    !/Firefox/.test(navigator.userAgent);
+
+  if (wheelEnabled && !isHorizontal && isChromiumOrWebKit) {
+    // Intercept wheel events and handle scroll manually
+    wheelHandler = (event: WheelEvent): void => {
+      event.preventDefault();
+
+      // Get current scroll position
+      const currentScroll = $.sgt();
+      const delta = event.deltaY;
+
+      // Calculate new scroll position
+      const newScroll = Math.max(
+        0,
+        Math.min(currentScroll + delta, $.hc.getTotalHeight() - $.ch),
+      );
+
+      // Update scroll position
+      $.sst(newScroll);
+
+      // Trigger scroll frame handler immediately (synchronous rendering)
+      $.ls = newScroll;
+      $.vt = updateVelocityTracker($.vt as any, newScroll);
+      $.rfn();
+
+      // Emit scroll event
+      const direction: "up" | "down" =
+        newScroll >= currentScroll ? "down" : "up";
+      emitter.emit("scroll", { scrollTop: newScroll, direction });
+
+      // Update scrolling class
+      if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
+        dom.root.classList.add(`${classPrefix}--scrolling`);
+      }
+
+      // Idle detection
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        dom.root.classList.remove(`${classPrefix}--scrolling`);
+        $.vt.velocity = 0;
+        $.vt.sampleCount = 0;
+        emitter.emit("velocity:change", { velocity: 0, reliable: false });
+      }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+    };
+    dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
+  } else if (isHorizontal && wheelEnabled) {
+    // Horizontal mode: convert vertical wheel to horizontal scroll
     wheelHandler = (event: WheelEvent): void => {
       if (event.deltaX) return; // native horizontal scroll handles it
       event.preventDefault();
       dom.viewport.scrollLeft += event.deltaY;
     };
-    dom.viewport.addEventListener("wheel", wheelHandler);
+    dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
   }
 
   // Note: The custom-scrollbar class is added by withScrollbar plugin when used
