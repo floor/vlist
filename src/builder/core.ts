@@ -1,9 +1,9 @@
 /**
- * vlist/builder — Self-contained composable virtual list builder
+ * vlist/builder — Composable virtual list builder
  *
- * Everything inlined — height cache, emitter, DOM, element pool, renderer,
- * range calculations, scroll handling. Zero module imports means the builder
- * core is ~12 KB minified instead of ~25 KB.
+ * Pure utilities (velocity, DOM, pool, range, scroll) live in sibling files.
+ * Height cache and emitter are reused from rendering/ and events/ modules.
+ * Bun.build inlines everything into a single bundle automatically.
  *
  * Plugins compose features *around* the hot path via extension points:
  * afterScroll, clickHandlers, keydownHandlers, resizeHandlers, destroyHandlers,
@@ -33,13 +33,31 @@ import type {
 // Re-export CompressionState type from viewport for plugins that need it
 export type { CompressionState } from "../rendering/viewport";
 
+// Extracted utilities — Bun.build inlines these into the single bundle
+import {
+  createVelocityTracker,
+  updateVelocityTracker,
+  MIN_RELIABLE_SAMPLES,
+} from "./velocity";
+import { createHeightCache } from "../rendering/heights";
+import { createEmitter } from "../events/emitter";
+import { resolveContainer, createDOMStructure } from "./dom";
+import { createElementPool } from "./pool";
+import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
+import { easeInOutQuad, resolveScrollArgs } from "./scroll";
+import {
+  createMaterializeCtx,
+  createDefaultDataProxy,
+  createDefaultScrollProxy,
+} from "./materializectx";
+import type { MRefs } from "./materializectx";
+
 // =============================================================================
 // Constants
 // =============================================================================
 
 const DEFAULT_OVERSCAN = 3;
 const DEFAULT_CLASS_PREFIX = "vlist";
-const DEFAULT_SMOOTH_DURATION = 300;
 const SCROLL_IDLE_TIMEOUT = 150;
 
 // =============================================================================
@@ -47,422 +65,6 @@ const SCROLL_IDLE_TIMEOUT = 150;
 // =============================================================================
 
 let builderInstanceId = 0;
-
-// =============================================================================
-// Velocity Tracking (inlined for builder)
-// =============================================================================
-
-const VELOCITY_SAMPLE_COUNT = 5;
-const STALE_GAP_MS = 100;
-const MIN_RELIABLE_SAMPLES = 2;
-
-interface VelocitySample {
-  position: number;
-  time: number;
-}
-
-interface VelocityTracker {
-  velocity: number;
-  lastPosition: number;
-  lastTime: number;
-  samples: VelocitySample[];
-  sampleIndex: number;
-  sampleCount: number;
-}
-
-const createVelocityTracker = (initialPosition = 0): VelocityTracker => {
-  const samples: VelocitySample[] = new Array(VELOCITY_SAMPLE_COUNT);
-  for (let i = 0; i < VELOCITY_SAMPLE_COUNT; i++) {
-    samples[i] = { position: 0, time: 0 };
-  }
-
-  return {
-    velocity: 0,
-    lastPosition: initialPosition,
-    lastTime: performance.now(),
-    samples,
-    sampleIndex: 0,
-    sampleCount: 0,
-  };
-};
-
-const updateVelocityTracker = (
-  tracker: VelocityTracker,
-  newPosition: number,
-): VelocityTracker => {
-  const now = performance.now();
-  const timeDelta = now - tracker.lastTime;
-
-  if (timeDelta === 0) return tracker;
-
-  // Stale gap detection - reset if too much time passed
-  if (timeDelta > STALE_GAP_MS) {
-    tracker.sampleCount = 0;
-    tracker.sampleIndex = 0;
-    tracker.velocity = 0;
-    const baseline = tracker.samples[0]!;
-    baseline.position = newPosition;
-    baseline.time = now;
-    tracker.sampleIndex = 1;
-    tracker.sampleCount = 1;
-    tracker.lastPosition = newPosition;
-    tracker.lastTime = now;
-    return tracker;
-  }
-
-  // Write to current slot in circular buffer
-  const currentSample = tracker.samples[tracker.sampleIndex]!;
-  currentSample.position = newPosition;
-  currentSample.time = now;
-
-  // Advance index (wrap around)
-  tracker.sampleIndex = (tracker.sampleIndex + 1) % VELOCITY_SAMPLE_COUNT;
-  tracker.sampleCount = Math.min(
-    tracker.sampleCount + 1,
-    VELOCITY_SAMPLE_COUNT,
-  );
-
-  // Calculate average velocity from samples
-  if (tracker.sampleCount >= MIN_RELIABLE_SAMPLES) {
-    const oldestIndex =
-      (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
-      VELOCITY_SAMPLE_COUNT;
-    const oldest = tracker.samples[oldestIndex]!;
-    const totalDistance = newPosition - oldest.position;
-    const totalTime = now - oldest.time;
-    tracker.velocity = totalTime > 0 ? Math.abs(totalDistance) / totalTime : 0;
-  }
-
-  tracker.lastPosition = newPosition;
-  tracker.lastTime = now;
-
-  return tracker;
-};
-
-// =============================================================================
-// Inlined: Height Cache
-// =============================================================================
-
-interface HeightCache {
-  getOffset(index: number): number;
-  getHeight(index: number): number;
-  indexAtOffset(offset: number): number;
-  getTotalHeight(): number;
-  getTotal(): number;
-  rebuild(totalItems: number): void;
-  isVariable(): boolean;
-}
-
-const createHeightCache = (
-  height: number | ((index: number) => number),
-  initialTotal: number,
-): HeightCache => {
-  if (typeof height === "number") {
-    let total = initialTotal;
-    return {
-      getOffset: (i) => i * height,
-      getHeight: () => height,
-      indexAtOffset: (offset) => {
-        if (total === 0 || height === 0) return 0;
-        return Math.max(0, Math.min(Math.floor(offset / height), total - 1));
-      },
-      getTotalHeight: () => total * height,
-      getTotal: () => total,
-      rebuild: (n) => {
-        total = n;
-      },
-      isVariable: () => false,
-    };
-  }
-
-  let total = initialTotal;
-  let prefixSums = new Float64Array(0);
-
-  const build = (n: number): void => {
-    total = n;
-    prefixSums = new Float64Array(n + 1);
-    prefixSums[0] = 0;
-    for (let i = 0; i < n; i++) {
-      prefixSums[i + 1] = prefixSums[i]! + height(i);
-    }
-  };
-
-  build(initialTotal);
-
-  return {
-    getOffset: (index) => {
-      if (index <= 0) return 0;
-      if (index >= total) return prefixSums[total] as number;
-      return prefixSums[index] as number;
-    },
-    getHeight: (index) => height(index),
-    indexAtOffset: (offset) => {
-      if (total === 0) return 0;
-      if (offset <= 0) return 0;
-      if (offset >= prefixSums[total]!) return total - 1;
-      let lo = 0;
-      let hi = total - 1;
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >>> 1;
-        if (prefixSums[mid]! <= offset) lo = mid;
-        else hi = mid - 1;
-      }
-      return lo;
-    },
-    getTotalHeight: () => (prefixSums[total] as number) ?? 0,
-    getTotal: () => total,
-    rebuild: (n) => build(n),
-    isVariable: () => true,
-  };
-};
-
-// =============================================================================
-// Inlined: Event Emitter
-// =============================================================================
-
-type Listeners = Record<string, Set<EventHandler<any>> | undefined>;
-
-interface Emitter {
-  on(event: string, handler: EventHandler<any>): Unsubscribe;
-  off(event: string, handler: EventHandler<any>): void;
-  emit(event: string, payload: unknown): void;
-  clear(): void;
-}
-
-const createEmitter = (): Emitter => {
-  const listeners: Listeners = {};
-
-  const on = (event: string, handler: EventHandler<any>): Unsubscribe => {
-    if (!listeners[event]) listeners[event] = new Set();
-    listeners[event]!.add(handler);
-    return () => off(event, handler);
-  };
-
-  const off = (event: string, handler: EventHandler<any>): void => {
-    listeners[event]?.delete(handler);
-  };
-
-  const emit = (event: string, payload: unknown): void => {
-    listeners[event]?.forEach((h) => {
-      try {
-        h(payload);
-      } catch (e) {
-        console.error(`[vlist] Error in "${event}" handler:`, e);
-      }
-    });
-  };
-
-  const clear = (): void => {
-    for (const key in listeners) delete listeners[key];
-  };
-
-  return { on, off, emit, clear };
-};
-
-// =============================================================================
-// Inlined: DOM Structure
-// =============================================================================
-
-interface DOMStructure {
-  root: HTMLElement;
-  viewport: HTMLElement;
-  content: HTMLElement;
-  items: HTMLElement;
-}
-
-const resolveContainer = (container: HTMLElement | string): HTMLElement => {
-  if (typeof container === "string") {
-    const el = document.querySelector<HTMLElement>(container);
-    if (!el)
-      throw new Error(`[vlist/builder] Container not found: ${container}`);
-    return el;
-  }
-  return container;
-};
-
-const createDOMStructure = (
-  container: HTMLElement,
-  classPrefix: string,
-  ariaLabel?: string,
-  horizontal?: boolean,
-): DOMStructure => {
-  const root = document.createElement("div");
-  root.className = classPrefix;
-  if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
-  root.setAttribute("role", "listbox");
-  root.setAttribute("tabindex", "0");
-  if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
-  if (horizontal) root.setAttribute("aria-orientation", "horizontal");
-
-  const viewport = document.createElement("div");
-  viewport.className = `${classPrefix}-viewport`;
-  if (horizontal) {
-    viewport.style.overflowX = "auto";
-    viewport.style.overflowY = "hidden";
-  } else {
-    viewport.style.overflow = "auto";
-  }
-  viewport.style.height = "100%";
-  viewport.style.width = "100%";
-
-  const content = document.createElement("div");
-  content.className = `${classPrefix}-content`;
-  content.style.position = "relative";
-  if (horizontal) {
-    content.style.height = "100%";
-    // Width will be set dynamically based on total items * width
-  } else {
-    content.style.width = "100%";
-  }
-
-  const items = document.createElement("div");
-  items.className = `${classPrefix}-items`;
-  items.style.position = "relative";
-  if (horizontal) {
-    items.style.height = "100%";
-  } else {
-    items.style.width = "100%";
-  }
-
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  container.appendChild(root);
-
-  return { root, viewport, content, items };
-};
-
-// =============================================================================
-// Inlined: Element Pool
-// =============================================================================
-
-const createElementPool = (maxSize = 100) => {
-  const pool: HTMLElement[] = [];
-
-  return {
-    acquire: (): HTMLElement => {
-      const el = pool.pop();
-      if (el) return el;
-      const newEl = document.createElement("div");
-      newEl.setAttribute("role", "option");
-      return newEl;
-    },
-    release: (el: HTMLElement): void => {
-      if (pool.length < maxSize) {
-        el.className = "";
-        el.textContent = "";
-        el.removeAttribute("style");
-        el.removeAttribute("data-index");
-        el.removeAttribute("data-id");
-        pool.push(el);
-      }
-    },
-    clear: (): void => {
-      pool.length = 0;
-    },
-  };
-};
-
-// =============================================================================
-// Inlined: Range Calculation (no compression)
-// =============================================================================
-
-const calcVisibleRange = (
-  scrollTop: number,
-  containerHeight: number,
-  hc: HeightCache,
-  totalItems: number,
-  out: Range,
-): void => {
-  if (totalItems === 0 || containerHeight === 0) {
-    out.start = 0;
-    out.end = 0;
-    return;
-  }
-  const start = hc.indexAtOffset(scrollTop);
-  let end = hc.indexAtOffset(scrollTop + containerHeight);
-  if (end < totalItems - 1) end++;
-  out.start = Math.max(0, start);
-  out.end = Math.min(totalItems - 1, Math.max(0, end));
-};
-
-const applyOverscan = (
-  visible: Range,
-  overscan: number,
-  totalItems: number,
-  out: Range,
-): void => {
-  if (totalItems === 0) {
-    out.start = 0;
-    out.end = 0;
-    return;
-  }
-  out.start = Math.max(0, visible.start - overscan);
-  out.end = Math.min(totalItems - 1, visible.end + overscan);
-};
-
-// =============================================================================
-// Inlined: Scroll-to-index
-// =============================================================================
-
-const calcScrollToPosition = (
-  index: number,
-  hc: HeightCache,
-  containerHeight: number,
-  totalItems: number,
-  align: "start" | "center" | "end",
-): number => {
-  if (totalItems === 0) return 0;
-  const clamped = Math.max(0, Math.min(index, totalItems - 1));
-  const offset = hc.getOffset(clamped);
-  const itemH = hc.getHeight(clamped);
-  const maxScroll = Math.max(0, hc.getTotalHeight() - containerHeight);
-  let pos: number;
-  switch (align) {
-    case "center":
-      pos = offset - (containerHeight - itemH) / 2;
-      break;
-    case "end":
-      pos = offset - containerHeight + itemH;
-      break;
-    default:
-      pos = offset;
-  }
-  return Math.max(0, Math.min(pos, maxScroll));
-};
-
-const easeInOutQuad = (t: number): number =>
-  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-
-const resolveScrollArgs = (
-  alignOrOptions?:
-    | "start"
-    | "center"
-    | "end"
-    | import("../types").ScrollToOptions,
-): {
-  align: "start" | "center" | "end";
-  behavior: "auto" | "smooth";
-  duration: number;
-} => {
-  if (typeof alignOrOptions === "string")
-    return {
-      align: alignOrOptions,
-      behavior: "auto",
-      duration: DEFAULT_SMOOTH_DURATION,
-    };
-  if (alignOrOptions && typeof alignOrOptions === "object")
-    return {
-      align: alignOrOptions.align ?? "start",
-      behavior: alignOrOptions.behavior ?? "auto",
-      duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
-    };
-  return {
-    align: "start",
-    behavior: "auto",
-    duration: DEFAULT_SMOOTH_DURATION,
-  };
-};
 
 // =============================================================================
 // vlist() — Builder Factory
@@ -574,9 +176,6 @@ function materialize<T extends VListItem = VListItem>(
       ? itemConfig.width
       : undefined;
 
-  // Mutable template reference - plugins can replace this (e.g., withGroups wraps it)
-  let activeTemplate = itemConfig.template as ItemTemplate<T>;
-
   const resolvedConfig: ResolvedBuilderConfig = {
     overscan,
     classPrefix,
@@ -635,24 +234,73 @@ function materialize<T extends VListItem = VListItem>(
     isHorizontal,
   );
 
-  // ── Create core components (inlined) ────────────────────────────
-  const emitter = createEmitter();
-  let items: T[] = initialItems ? [...initialItems] : [];
-  let heightCache = createHeightCache(mainAxisSizeConfig, items.length);
+  // ── Create core components ──────────────────────────────────────
+  const emitter = createEmitter<VListEvents<T>>();
+
+  // Use items array by reference (memory-optimized)
+  const initialItemsArray: T[] = initialItems || [];
+
+  const initialHeightCache = createHeightCache(
+    mainAxisSizeConfig,
+    initialItemsArray.length,
+  );
   const pool = createElementPool();
 
-  let containerHeight = dom.viewport.clientHeight;
-  let containerWidth = dom.viewport.clientWidth;
+  // ── Shared mutable refs ($) ─────────────────────────────────────
+  // All mutable state lives here so that extracted factories (ctx,
+  // data proxy, scroll proxy) and core.ts read/write the same values.
+  const $: MRefs<T> = {
+    it: initialItemsArray,
+    hc: initialHeightCache,
+    ch: dom.viewport.clientHeight,
+    cw: dom.viewport.clientWidth,
+    id: false,
+    ii: false,
+    ls: 0,
+    vt: createVelocityTracker(0),
+    ss: new Set<string | number>(),
+    fi: -1,
+    la: "",
+    dm: null as any,
+    sc: null as any,
+    vtf: null as unknown as () => number,
+    sgt: isHorizontal
+      ? () => dom.viewport.scrollLeft
+      : () => dom.viewport.scrollTop,
+    sst: isHorizontal
+      ? (pos: number) => {
+          dom.viewport.scrollLeft = pos;
+        }
+      : (pos: number) => {
+          dom.viewport.scrollTop = pos;
+        },
+    sab: (threshold = 2) => {
+      const total = $.hc.getTotalHeight();
+      return $.ls + $.ch >= total - threshold;
+    },
+    sic: false,
+    rfn: null as unknown as () => void,
+    ffn: null as unknown as () => void,
+    gvr: (scrollTop, cHeight, hc, total, out) => {
+      calcVisibleRange(scrollTop, cHeight, hc, total, out);
+    },
+    gsp: (index, hc, cHeight, total, align) => {
+      return calcScrollToPosition(index, hc, cHeight, total, align);
+    },
+    pef: null as unknown as (element: HTMLElement, index: number) => void,
+    at: itemConfig.template as ItemTemplate<T>,
+    vre: true,
+    st: dom.viewport as HTMLElement | Window,
+    gcw: () => $.cw,
+    gch: () => $.ch,
+  };
 
-  // ── State ───────────────────────────────────────────────────────
-  let isDestroyed = false;
-  let isInitialized = false;
-  let lastScrollTop = 0;
+  // virtualTotalFn must reference $ after creation
+  $.vtf = () => ($.dm ? $.dm.getTotal() : $.it.length);
+
+  // Local-only mutable state (not needed by extracted factories)
   let animationFrameId: number | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Velocity tracker
-  let velocityTracker = createVelocityTracker(0);
 
   // Reusable range objects (no allocation on scroll)
   const visibleRange: Range = { start: 0, end: 0 };
@@ -663,9 +311,9 @@ function materialize<T extends VListItem = VListItem>(
   const sharedState: BuilderState = {
     viewportState: {
       scrollTop: 0,
-      containerHeight,
-      totalHeight: heightCache.getTotalHeight(),
-      actualHeight: heightCache.getTotalHeight(),
+      containerHeight: $.ch,
+      totalHeight: $.hc.getTotalHeight(),
+      actualHeight: $.hc.getTotalHeight(),
       isCompressed: false,
       compressionRatio: 1,
       visibleRange: { start: 0, end: 0 },
@@ -681,30 +329,9 @@ function materialize<T extends VListItem = VListItem>(
   const rendered = new Map<number, HTMLElement>();
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
-  let lastAriaSetSize = "";
 
-  // ID → index map for fast lookups
-  const idToIndex = new Map<string | number, number>();
-
-  const rebuildIdIndex = (): void => {
-    idToIndex.clear();
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item) idToIndex.set(item.id, i);
-    }
-  };
-
-  rebuildIdIndex();
-
-  // Forward-declare so closures above the full initialisation can reference it.
-  // Before assignment it is null, so every access must null-guard.
-  let dataManagerProxy: any = null;
-
-  // Virtual total — plugins (grid/groups) can override this
-  // Delegates to the data manager proxy so withData's total propagates correctly.
-  // Falls back to items.length before dataManagerProxy is initialised.
-  let virtualTotalFn = (): number =>
-    dataManagerProxy ? dataManagerProxy.getTotal() : items.length;
+  // No ID → index map (removed for memory efficiency)
+  // Users can implement their own Map if needed for O(1) lookups
 
   // ── Plugin extension points ─────────────────────────────────────
   const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
@@ -714,49 +341,6 @@ function materialize<T extends VListItem = VListItem>(
   const contentSizeHandlers: Array<() => void> = [];
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
-
-  // Pluggable scroll functions — compression plugin replaces these
-  let scrollGetTop = (): number => {
-    return isHorizontal ? dom.viewport.scrollLeft : dom.viewport.scrollTop;
-  };
-  let scrollSetTop = (pos: number): void => {
-    if (isHorizontal) {
-      dom.viewport.scrollLeft = pos;
-    } else {
-      dom.viewport.scrollTop = pos;
-    }
-  };
-  let scrollIsAtBottom = (threshold = 2): boolean => {
-    const total = heightCache.getTotalHeight();
-    return lastScrollTop + containerHeight >= total - threshold;
-  };
-  let scrollIsCompressed = false;
-
-  // Pluggable render functions — grid/groups plugins replace these
-  let renderIfNeededFn: () => void;
-  let forceRenderFn: () => void;
-
-  // Pluggable visible range function — compression plugin replaces this
-  let getVisibleRange = (
-    scrollTop: number,
-    cHeight: number,
-    hc: HeightCache,
-    total: number,
-    out: Range,
-  ): void => {
-    calcVisibleRange(scrollTop, cHeight, hc, total, out);
-  };
-
-  // Pluggable scrollToIndex position calculator — compression plugin replaces
-  let getScrollToPos = (
-    index: number,
-    hc: HeightCache,
-    cHeight: number,
-    total: number,
-    align: "start" | "center" | "end",
-  ): number => {
-    return calcScrollToPosition(index, hc, cHeight, total, align);
-  };
 
   // ── Rendering ───────────────────────────────────────────────────
 
@@ -769,7 +353,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const positionElement = (element: HTMLElement, index: number): void => {
-    const offset = Math.round(heightCache.getOffset(index));
+    const offset = Math.round($.hc.getOffset(index));
     if (isHorizontal) {
       element.style.transform = `translateX(${offset}px)`;
     } else {
@@ -777,28 +361,28 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
-  // Pluggable position function — compression plugin can replace
-  let positionElementFn = positionElement;
+  // Set initial position function on refs
+  $.pef = positionElement;
 
   const renderItem = (index: number, item: T): HTMLElement => {
     const element = pool.acquire();
     element.className = baseClass;
 
     if (isHorizontal) {
-      element.style.width = `${heightCache.getHeight(index)}px`;
+      element.style.width = `${$.hc.getHeight(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${heightCache.getHeight(index)}px`;
+      element.style.height = `${$.hc.getHeight(index)}px`;
     }
 
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
     element.ariaSelected = "false";
     element.id = `${ariaIdPrefix}-item-${index}`;
-    lastAriaSetSize = String(virtualTotalFn());
-    element.setAttribute("aria-setsize", lastAriaSetSize);
+    $.la = String($.vtf());
+    element.setAttribute("aria-setsize", $.la);
     element.setAttribute("aria-posinset", String(index + 1));
 
     // Add placeholder class if this is a placeholder item
@@ -807,13 +391,13 @@ function materialize<T extends VListItem = VListItem>(
       element.classList.add(`${classPrefix}-item--placeholder`);
     }
 
-    applyTemplate(element, activeTemplate(item, index, itemState));
-    positionElementFn(element, index);
+    applyTemplate(element, $.at(item, index, itemState));
+    $.pef(element, index);
     return element;
   };
 
   const updateContentSize = (): void => {
-    const size = `${heightCache.getTotalHeight()}px`;
+    const size = `${$.hc.getTotalHeight()}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -824,21 +408,11 @@ function materialize<T extends VListItem = VListItem>(
   // ── Main render function ────────────────────────────────────────
   // This is the hot path — called on every scroll-triggered range change.
 
-  // Selection state — plugins (withSelection) inject these
-  let selectionSet: Set<string | number> = new Set();
-  let focusedIndex = -1;
-
   const coreRenderIfNeeded = (): void => {
-    if (isDestroyed) return;
+    if ($.id) return;
 
-    const total = virtualTotalFn();
-    getVisibleRange(
-      lastScrollTop,
-      containerHeight,
-      heightCache,
-      total,
-      visibleRange,
-    );
+    const total = $.vtf();
+    $.gvr($.ls, $.ch, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
 
     if (
@@ -847,18 +421,18 @@ function materialize<T extends VListItem = VListItem>(
     ) {
       // In compressed mode, items must be repositioned even when range is unchanged
       // because their positions are relative to the viewport, not absolute
-      if (scrollIsCompressed) {
+      if ($.sic) {
         // Reposition all currently rendered items
         for (const [index, element] of rendered) {
-          positionElementFn(element, index);
+          $.pef(element, index);
         }
       }
       return;
     }
 
     const currentSetSize = String(total);
-    const setSizeChanged = currentSetSize !== lastAriaSetSize;
-    lastAriaSetSize = currentSetSize;
+    const setSizeChanged = currentSetSize !== $.la;
+    $.la = currentSetSize;
 
     // Remove items outside new range
     for (const [index, element] of rendered) {
@@ -874,9 +448,7 @@ function materialize<T extends VListItem = VListItem>(
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
-      const item = (
-        dataManagerProxy ? dataManagerProxy.getItem(i) : items[i]
-      ) as T | undefined;
+      const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
       if (!item) continue;
 
       const existing = rendered.get(i);
@@ -888,12 +460,12 @@ function materialize<T extends VListItem = VListItem>(
           const wasPlaceholder = existingId?.startsWith("__placeholder_");
           const isPlaceholder = newId.startsWith("__placeholder_");
 
-          applyTemplate(existing, activeTemplate(item, i, itemState));
+          applyTemplate(existing, $.at(item, i, itemState));
           existing.dataset.id = newId;
           if (isHorizontal) {
-            existing.style.width = `${heightCache.getHeight(i)}px`;
+            existing.style.width = `${$.hc.getHeight(i)}px`;
           } else {
-            existing.style.height = `${heightCache.getHeight(i)}px`;
+            existing.style.height = `${$.hc.getHeight(i)}px`;
           }
 
           // Update placeholder class
@@ -911,24 +483,24 @@ function materialize<T extends VListItem = VListItem>(
             }, 300);
           }
         }
-        positionElementFn(existing, i);
+        $.pef(existing, i);
 
         // Selection class updates
-        const isSelected = selectionSet.has(item.id);
-        const isFocused = i === focusedIndex;
+        const isSelected = $.ss.has(item.id);
+        const isFocused = i === $.fi;
         existing.classList.toggle(`${classPrefix}-item--selected`, isSelected);
         existing.classList.toggle(`${classPrefix}-item--focused`, isFocused);
         existing.ariaSelected = isSelected ? "true" : "false";
 
         if (setSizeChanged) {
-          existing.setAttribute("aria-setsize", lastAriaSetSize);
+          existing.setAttribute("aria-setsize", $.la);
         }
       } else {
         const element = renderItem(i, item);
 
         // Selection state for new elements
-        const isSelected = selectionSet.has(item.id);
-        const isFocused = i === focusedIndex;
+        const isSelected = $.ss.has(item.id);
+        const isFocused = i === $.fi;
         if (isSelected) {
           element.classList.add(`${classPrefix}-item--selected`);
           element.ariaSelected = "true";
@@ -959,7 +531,7 @@ function materialize<T extends VListItem = VListItem>(
     // Update viewport state with current scroll position and calculated ranges
     // This is critical for plugins (especially compression + scrollbar) that rely
     // on viewport state being up-to-date
-    sharedState.viewportState.scrollTop = lastScrollTop;
+    sharedState.viewportState.scrollTop = $.ls;
     sharedState.viewportState.visibleRange.start = visibleRange.start;
     sharedState.viewportState.visibleRange.end = visibleRange.end;
     sharedState.viewportState.renderRange.start = renderRange.start;
@@ -973,37 +545,37 @@ function materialize<T extends VListItem = VListItem>(
   const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
-    renderIfNeededFn();
+    $.rfn();
   };
 
   // Initialize replaceable render function references
-  renderIfNeededFn = coreRenderIfNeeded;
-  forceRenderFn = coreForceRender;
+  $.rfn = coreRenderIfNeeded;
+  $.ffn = coreForceRender;
 
   // ── Scroll handling ─────────────────────────────────────────────
 
   const onScrollFrame = (): void => {
-    if (isDestroyed) return;
+    if ($.id) return;
 
-    const scrollTop = scrollGetTop();
-    const direction: "up" | "down" = scrollTop >= lastScrollTop ? "down" : "up";
+    const scrollTop = $.sgt();
+    const direction: "up" | "down" = scrollTop >= $.ls ? "down" : "up";
 
     // Update velocity tracker
-    velocityTracker = updateVelocityTracker(velocityTracker, scrollTop);
+    $.vt = updateVelocityTracker($.vt as any, scrollTop);
 
     if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
       dom.root.classList.add(`${classPrefix}--scrolling`);
     }
 
-    lastScrollTop = scrollTop;
-    renderIfNeededFn();
+    $.ls = scrollTop;
+    $.rfn();
 
     emitter.emit("scroll", { scrollTop, direction });
 
     // Emit velocity change
     emitter.emit("velocity:change", {
-      velocity: velocityTracker.velocity,
-      reliable: velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
+      velocity: $.vt.velocity,
+      reliable: $.vt.sampleCount >= MIN_RELIABLE_SAMPLES,
     });
 
     // Plugin post-scroll actions
@@ -1016,8 +588,8 @@ function materialize<T extends VListItem = VListItem>(
     idleTimer = setTimeout(() => {
       dom.root.classList.remove(`${classPrefix}--scrolling`);
       // Reset velocity to 0 when idle
-      velocityTracker.velocity = 0;
-      velocityTracker.sampleCount = 0;
+      $.vt.velocity = 0;
+      $.vt.sampleCount = 0;
       emitter.emit("velocity:change", {
         velocity: 0,
         reliable: false,
@@ -1028,9 +600,8 @@ function materialize<T extends VListItem = VListItem>(
   // Wheel handler (can be disabled via config)
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
-  // Pluggable scroll target (window mode plugin can replace this)
-  let scrollTarget: HTMLElement | Window = dom.viewport;
-  scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
+  // Attach scroll listener to initial target ($.st set during $ init)
+  $.st.addEventListener("scroll", onScrollFrame, { passive: true });
 
   // Setup horizontal wheel handling (convert vertical wheel to horizontal scroll)
   if (isHorizontal && wheelEnabled) {
@@ -1054,8 +625,7 @@ function materialize<T extends VListItem = VListItem>(
     if (itemEl) {
       const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
       if (layoutIndex >= 0) {
-        const item =
-          dataManagerProxy?.getItem(layoutIndex) ?? items[layoutIndex];
+        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
         if (item) {
           // Skip group headers
           if ((item as any).__groupHeader) {
@@ -1078,8 +648,7 @@ function materialize<T extends VListItem = VListItem>(
     if (itemEl) {
       const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
       if (layoutIndex >= 0) {
-        const item =
-          dataManagerProxy?.getItem(layoutIndex) ?? items[layoutIndex];
+        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
         if (item) {
           // Skip group headers
           if ((item as any).__groupHeader) {
@@ -1103,17 +672,8 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── ResizeObserver ──────────────────────────────────────────────
 
-  // Pluggable viewport resize behavior (window mode plugin can disable)
-  let viewportResizeEnabled = true;
-
-  // Pluggable container dimension getters (window mode plugin can replace)
-  // @ts-ignore - used by window plugin via setContainerDimensions
-  let getContainerWidth = (): number => containerWidth;
-  // @ts-ignore - used by window plugin via setContainerDimensions
-  let getContainerHeight = (): number => containerHeight;
-
   const resizeObserver = new ResizeObserver((entries) => {
-    if (isDestroyed) return;
+    if ($.id) return;
 
     for (const entry of entries) {
       const newHeight = entry.contentRect.height;
@@ -1121,22 +681,22 @@ function materialize<T extends VListItem = VListItem>(
       const newMainAxis = isHorizontal ? newWidth : newHeight;
 
       // Always update dimensions (even before initialization)
-      containerWidth = newWidth;
+      $.cw = newWidth;
 
-      if (Math.abs(newMainAxis - containerHeight) > 1) {
-        containerHeight = newMainAxis;
+      if (Math.abs(newMainAxis - $.ch) > 1) {
+        $.ch = newMainAxis;
         sharedState.viewportState.containerHeight = newMainAxis;
 
         // Only render if already initialized (plugins have run)
-        if (isInitialized) {
+        if ($.ii) {
           updateContentSize();
-          renderIfNeededFn();
+          $.rfn();
           emitter.emit("resize", { height: newHeight, width: newWidth });
         }
       }
 
       // Only call resize handlers if initialized
-      if (isInitialized) {
+      if ($.ii) {
         for (let i = 0; i < resizeHandlers.length; i++) {
           resizeHandlers[i]!(newWidth, newHeight);
         }
@@ -1145,442 +705,41 @@ function materialize<T extends VListItem = VListItem>(
   });
 
   // Plugins can disable viewport resize observation
-  if (viewportResizeEnabled) {
+  if ($.vre) {
     resizeObserver.observe(dom.viewport);
   }
 
-  // ── Compression mode ────────────────────────────────────────────
+  // ── BuilderContext + proxies (extracted to materializectx.ts) ───
 
-  // ── BuilderContext ──────────────────────────────────────────────
-  // The context plugins receive. Provides extension points without
-  // exposing implementation details. We build it as a plain object
-  // with getters so plugins always see the latest state.
-
-  const ctx: BuilderContext<T> = {
-    get dom() {
-      return dom as any;
-    },
-    get heightCache() {
-      return heightCache as any;
-    },
-    get emitter() {
-      return emitter as any;
-    },
-    get config() {
-      return resolvedConfig;
-    },
-    get rawConfig() {
-      return config;
-    },
-
-    // Mutable component slots (plugins can replace)
-    // Expose a renderer proxy so plugins (e.g. withSelection) can call
-    // ctx.renderer.render() and ctx.renderer.updateItemClasses() without
-    // needing access to the inlined rendering internals.
-    get renderer() {
-      return {
-        render: (
-          _items: T[],
-          _range: Range,
-          selected: Set<string | number>,
-          focusedIdx: number,
-          _compressionCtx?: any,
-        ): void => {
-          // Inject selection state into the inlined renderer's closure
-          selectionSet = selected;
-          focusedIndex = focusedIdx;
-          forceRenderFn();
-        },
-        updateItemClasses: (
-          index: number,
-          isSelected: boolean,
-          isFocused: boolean,
-        ): void => {
-          const el = rendered.get(index);
-          if (!el) return;
-          el.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-          el.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-          el.ariaSelected = isSelected ? "true" : "false";
-        },
-        updatePositions: () => {},
-        updateItem: () => {},
-        getElement: (index: number) => rendered.get(index) ?? null,
-        clear: () => {},
-        destroy: () => {},
-      } as any;
-    },
-    set renderer(_r: any) {
-      // no-op — grid plugin overrides via methods below
-    },
-
-    get dataManager() {
-      return dataManagerProxy as any;
-    },
-    set dataManager(dm: any) {
-      dataManagerProxy = dm;
-    },
-
-    get scrollController() {
-      return scrollControllerProxy as any;
-    },
-    set scrollController(sc: any) {
-      scrollControllerProxy = sc;
-    },
-
-    state: sharedState,
-
-    /** Get current container width (for grid plugin) */
-    getContainerWidth(): number {
-      return containerWidth;
-    },
-
+  const deps = {
+    dom,
+    emitter,
+    resolvedConfig,
+    rawConfig: config,
+    rendered,
+    pool,
+    itemState,
+    sharedState,
+    renderRange,
+    isHorizontal,
+    classPrefix,
+    contentSizeHandlers,
     afterScroll,
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
-    contentSizeHandlers,
     destroyHandlers,
     methods,
-
-    replaceTemplate(newTemplate: ItemTemplate<T>): void {
-      // Replace the active template (used by inlined renderer)
-      // This is the proper way to modify rendering in the materialize path
-      activeTemplate = newTemplate;
-    },
-    replaceRenderer(_renderer: any): void {
-      // No-op in materialize (renderer is inlined)
-      // Grid plugin uses this, but manages its own renderer via methods
-      // Groups plugin should use replaceTemplate instead
-    },
-    replaceDataManager(dm: any): void {
-      dataManagerProxy = dm;
-    },
-    replaceScrollController(sc: any): void {
-      scrollControllerProxy = sc;
-    },
-
-    getItemsForRange(range: Range): T[] {
-      const result: T[] = [];
-      for (let i = range.start; i <= range.end; i++) {
-        const item = (
-          dataManagerProxy ? dataManagerProxy.getItem(i) : items[i]
-        ) as T | undefined;
-        if (item) result.push(item);
-      }
-      return result;
-    },
-    getAllLoadedItems(): T[] {
-      if (dataManagerProxy) {
-        const total = dataManagerProxy.getTotal();
-        const result: T[] = [];
-        for (let i = 0; i < total; i++) {
-          const item = dataManagerProxy.getItem(i) as T | undefined;
-          if (item) result.push(item);
-        }
-        return result;
-      }
-      return [...items];
-    },
-    getVirtualTotal(): number {
-      return virtualTotalFn();
-    },
-    getCachedCompression() {
-      return {
-        isCompressed: false,
-        actualHeight: heightCache.getTotalHeight(),
-        virtualHeight: heightCache.getTotalHeight(),
-        ratio: 1,
-      } as any;
-    },
-    getCompressionContext() {
-      return {
-        scrollTop: lastScrollTop,
-        totalItems: virtualTotalFn(),
-        containerHeight,
-        rangeStart: renderRange.start,
-      } as any;
-    },
-    renderIfNeeded(): void {
-      renderIfNeededFn();
-    },
-    forceRender(): void {
-      forceRenderFn();
-    },
-    invalidateRendered(): void {
-      for (const [, element] of rendered) {
-        element.remove();
-        pool.release(element);
-      }
-      rendered.clear();
-    },
-    getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void } {
-      return {
-        renderIfNeeded: renderIfNeededFn,
-        forceRender: forceRenderFn,
-      };
-    },
-    setRenderFns(renderFn: () => void, forceFn: () => void): void {
-      renderIfNeededFn = renderFn;
-      forceRenderFn = forceFn;
-    },
-
-    setVirtualTotalFn(fn: () => number): void {
-      virtualTotalFn = fn;
-    },
-    rebuildHeightCache(total?: number): void {
-      heightCache.rebuild(total ?? virtualTotalFn());
-    },
-    setHeightConfig(newConfig: number | ((index: number) => number)): void {
-      heightCache = createHeightCache(newConfig, virtualTotalFn());
-    },
-    updateContentSize(totalSize: number): void {
-      const size = `${totalSize}px`;
-      if (isHorizontal) {
-        dom.content.style.width = size;
-      } else {
-        dom.content.style.height = size;
-      }
-    },
-    updateCompressionMode(): void {
-      // No-op by default — withCompression plugin replaces this
-    },
-
-    setVisibleRangeFn(
-      fn: (
-        scrollTop: number,
-        cHeight: number,
-        hc: HeightCache,
-        total: number,
-        out: Range,
-      ) => void,
-    ): void {
-      getVisibleRange = fn;
-    },
-
-    setScrollToPosFn(
-      fn: (
-        index: number,
-        hc: HeightCache,
-        cHeight: number,
-        total: number,
-        align: "start" | "center" | "end",
-      ) => number,
-    ): void {
-      getScrollToPos = fn;
-    },
-
-    setPositionElementFn(
-      fn: (element: HTMLElement, index: number) => void,
-    ): void {
-      positionElementFn = fn;
-    },
-
-    setScrollFns(getTop: () => number, setTop: (pos: number) => void): void {
-      scrollGetTop = getTop;
-      // Wrap the provided setTop so that after storing the position
-      // the builder's scroll pipeline (render + events) fires immediately.
-      // In compressed mode the native scroll event may not fire (or may
-      // fire with a clamped value), so we must trigger explicitly.
-      scrollSetTop = (pos: number): void => {
-        setTop(pos);
-        onScrollFrame();
-      };
-    },
-
-    setScrollTarget(target: HTMLElement | Window): void {
-      // Remove listener from old target
-      scrollTarget.removeEventListener("scroll", onScrollFrame);
-      // Update target and re-attach listener
-      scrollTarget = target;
-      scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
-    },
-
-    getScrollTarget(): HTMLElement | Window {
-      return scrollTarget;
-    },
-
-    setContainerDimensions(getter: {
-      width: () => number;
-      height: () => number;
-    }): void {
-      getContainerWidth = getter.width;
-      getContainerHeight = getter.height;
-      // Update current dimensions immediately
-      containerWidth = getter.width();
-      containerHeight = getter.height();
-      sharedState.viewportState.containerHeight = containerHeight;
-    },
-
-    disableViewportResize(): void {
-      if (viewportResizeEnabled) {
-        viewportResizeEnabled = false;
-        resizeObserver.unobserve(dom.viewport);
-      }
-    },
+    onScrollFrame,
+    resizeObserver,
+    applyTemplate,
+    updateContentSize,
   };
 
-  // ── Data manager proxy (plugins can replace) ────────────────────
-  // The default is a thin wrapper around the items array.
-  // withData plugin replaces this with the full adapter-backed manager.
-  // (variable is forward-declared above virtualTotalFn to avoid TDZ)
+  const ctx: BuilderContext<T> = createMaterializeCtx($, deps);
 
-  dataManagerProxy = {
-    getState: () => ({
-      total: items.length,
-      cached: items.length,
-      isLoading: false,
-      pendingRanges: [],
-      error: undefined,
-      hasMore: false,
-      cursor: undefined,
-    }),
-    getTotal: () => items.length,
-    getCached: () => items.length,
-    getIsLoading: () => false,
-    getHasMore: () => false,
-    getStorage: () => null,
-    getPlaceholders: () => null,
-    getItem: (index: number) => items[index],
-    getItemById: (id: string | number) => {
-      const idx = idToIndex.get(id);
-      return idx !== undefined ? items[idx] : undefined;
-    },
-    getIndexById: (id: string | number) => idToIndex.get(id) ?? -1,
-    isItemLoaded: (index: number) =>
-      index >= 0 && index < items.length && items[index] !== undefined,
-    getItemsInRange: (start: number, end: number) => {
-      const result: T[] = [];
-      const s = Math.max(0, start);
-      const e = Math.min(end, items.length - 1);
-      for (let i = s; i <= e; i++) result.push(items[i] as T);
-      return result;
-    },
-    setTotal: (t: number) => {
-      // no-op for simple manager
-      void t;
-    },
-    setItems: (newItems: T[], offset = 0, newTotal?: number) => {
-      if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
-        items = [...newItems];
-      } else {
-        // Ensure items array is large enough before assigning
-        const requiredLength = offset + newItems.length;
-        if (items.length < requiredLength) {
-          items.length = requiredLength;
-        }
-        for (let i = 0; i < newItems.length; i++) {
-          items[offset + i] = newItems[i]!;
-        }
-      }
-      if (newTotal !== undefined) {
-        // trim or leave
-      }
-      rebuildIdIndex();
-      if (isInitialized) {
-        heightCache.rebuild(virtualTotalFn());
-        updateContentSize();
-        ctx.updateCompressionMode();
-        for (let i = 0; i < contentSizeHandlers.length; i++) {
-          contentSizeHandlers[i]!();
-        }
-        forceRenderFn();
-      }
-    },
-    updateItem: (id: string | number, updates: Partial<T>) => {
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
-      const item = items[index];
-      if (!item) return false;
-      items[index] = { ...item, ...updates } as T;
-      if (updates.id !== undefined && updates.id !== id) {
-        idToIndex.delete(id);
-        idToIndex.set(updates.id, index);
-      }
-      // Re-render if visible
-      const el = rendered.get(index);
-      if (el) {
-        applyTemplate(el, activeTemplate(items[index]!, index, itemState));
-        el.dataset.id = String(items[index]!.id);
-      }
-      return true;
-    },
-    removeItem: (id: string | number) => {
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
-      items.splice(index, 1);
-      rebuildIdIndex();
-      if (isInitialized) {
-        heightCache.rebuild(virtualTotalFn());
-        updateContentSize();
-        ctx.updateCompressionMode();
-        for (let i = 0; i < contentSizeHandlers.length; i++) {
-          contentSizeHandlers[i]!();
-        }
-        forceRenderFn();
-      }
-      return true;
-    },
-    loadRange: async () => {},
-    ensureRange: async () => {},
-    loadInitial: async () => {},
-    loadMore: async () => false,
-    reload: async () => {},
-    evictDistant: () => {},
-    clear: () => {
-      items = [];
-      idToIndex.clear();
-    },
-    reset: () => {
-      items = [];
-      idToIndex.clear();
-      if (isInitialized) {
-        heightCache.rebuild(0);
-        updateContentSize();
-        forceRenderFn();
-      }
-    },
-  };
-
-  // ── Scroll controller proxy (plugins can replace) ───────────────
-  // Minimal proxy — plugins like withCompression replace this.
-
-  let scrollControllerProxy: any = {
-    getScrollTop: () => scrollGetTop(),
-    scrollTo: (pos: number) => {
-      scrollSetTop(pos);
-      lastScrollTop = pos;
-      renderIfNeededFn();
-    },
-    scrollBy: (delta: number) => {
-      const newPos = scrollGetTop() + delta;
-      scrollSetTop(newPos);
-      lastScrollTop = newPos;
-      renderIfNeededFn();
-    },
-    isAtTop: () => lastScrollTop <= 2,
-    isAtBottom: (threshold = 2) => scrollIsAtBottom(threshold),
-    getScrollPercentage: () => {
-      const total = heightCache.getTotalHeight();
-      const maxScroll = Math.max(0, total - containerHeight);
-      return maxScroll > 0 ? lastScrollTop / maxScroll : 0;
-    },
-    getVelocity: () => velocityTracker.velocity,
-    isTracking: () => velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
-    isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
-    updateConfig: () => {},
-    enableCompression: () => {
-      scrollIsCompressed = true;
-    },
-    disableCompression: () => {
-      scrollIsCompressed = false;
-    },
-    isCompressed: () => scrollIsCompressed,
-    isWindowMode: () => false,
-    updateContainerHeight: (h: number) => {
-      containerHeight = h;
-    },
-    destroy: () => {},
-  };
+  $.dm = createDefaultDataProxy($, deps, ctx);
+  $.sc = createDefaultScrollProxy($, deps);
 
   // ── Run plugin setup ────────────────────────────────────────────
 
@@ -1605,25 +764,19 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   // ── Mark initialized ────────────────────────────────────────────
-  isInitialized = true;
+  $.ii = true;
   ctx.state.isInitialized = true;
 
   // ── Initial render ──────────────────────────────────────────────
   updateContentSize();
-  renderIfNeededFn();
+  $.rfn();
 
   // Reverse mode: scroll to bottom
-  if (isReverse && items.length > 0) {
-    const pos = getScrollToPos(
-      items.length - 1,
-      heightCache,
-      containerHeight,
-      items.length,
-      "end",
-    );
-    scrollSetTop(pos);
-    lastScrollTop = pos;
-    renderIfNeededFn();
+  if (isReverse && $.it.length > 0) {
+    const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
+    $.sst(pos);
+    $.ls = pos;
+    $.rfn();
   }
 
   // ── Base data methods ───────────────────────────────────────────
@@ -1634,43 +787,37 @@ function materialize<T extends VListItem = VListItem>(
 
   const appendItems = isReverse
     ? (newItems: T[]): void => {
-        const wasAtBottom = scrollIsAtBottom(2);
-        const currentTotal = items.length;
+        const wasAtBottom = $.sab(2);
+        const currentTotal = $.it.length;
         ctx.dataManager.setItems(newItems, currentTotal);
-        if (wasAtBottom && items.length > 0) {
-          const pos = getScrollToPos(
-            items.length - 1,
-            heightCache,
-            containerHeight,
-            items.length,
-            "end",
-          );
-          scrollSetTop(pos);
-          lastScrollTop = pos;
-          renderIfNeededFn();
+        if (wasAtBottom && $.it.length > 0) {
+          const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
+          $.sst(pos);
+          $.ls = pos;
+          $.rfn();
         }
       }
     : (newItems: T[]): void => {
-        const currentTotal = items.length;
+        const currentTotal = $.it.length;
         ctx.dataManager.setItems(newItems, currentTotal);
       };
 
   const prependItems = isReverse
     ? (newItems: T[]): void => {
-        const scrollTop = scrollGetTop();
-        const heightBefore = heightCache.getTotalHeight();
-        const existingItems = [...items];
+        const scrollTop = $.sgt();
+        const heightBefore = $.hc.getTotalHeight();
+        const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = heightCache.getTotalHeight();
+        const heightAfter = $.hc.getTotalHeight();
         const delta = heightAfter - heightBefore;
         if (delta > 0) {
-          scrollSetTop(scrollTop + delta);
-          lastScrollTop = scrollTop + delta;
+          $.sst(scrollTop + delta);
+          $.ls = scrollTop + delta;
         }
       }
     : (newItems: T[]): void => {
-        const existingItems = [...items];
+        const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
       };
@@ -1701,9 +848,9 @@ function materialize<T extends VListItem = VListItem>(
   const animateScroll = (from: number, to: number, duration: number): void => {
     cancelScroll();
     if (Math.abs(to - from) < 1) {
-      scrollSetTop(to);
-      lastScrollTop = to;
-      renderIfNeededFn();
+      $.sst(to);
+      $.ls = to;
+      $.rfn();
       return;
     }
     const start = performance.now();
@@ -1711,11 +858,11 @@ function materialize<T extends VListItem = VListItem>(
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
       const newPos = from + (to - from) * easeInOutQuad(t);
-      scrollSetTop(newPos);
+      $.sst(newPos);
       // Update lastScrollTop BEFORE rendering so range calculation uses correct value
-      lastScrollTop = newPos;
+      $.ls = newPos;
       // Ensure rendering happens on each frame during smooth scroll
-      renderIfNeededFn();
+      $.rfn();
       if (t < 1) animationFrameId = requestAnimationFrame(tick);
       else animationFrameId = null;
     };
@@ -1731,42 +878,27 @@ function materialize<T extends VListItem = VListItem>(
       | import("../types").ScrollToOptions,
   ): void => {
     const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
-    const total = virtualTotalFn();
+    const total = $.vtf();
 
     let idx = index;
     if (wrapEnabled && total > 0) {
       idx = ((idx % total) + total) % total;
     }
 
-    const position = getScrollToPos(
-      idx,
-      heightCache,
-      containerHeight,
-      total,
-      align,
-    );
+    const position = $.gsp(idx, $.hc, $.ch, total, align);
 
     if (behavior === "smooth") {
-      animateScroll(scrollGetTop(), position, duration);
+      animateScroll($.sgt(), position, duration);
     } else {
       cancelScroll();
-      scrollSetTop(position);
+      $.sst(position);
     }
   };
 
-  const scrollToItem = (
-    id: string | number,
-    alignOrOptions?:
-      | "start"
-      | "center"
-      | "end"
-      | import("../types").ScrollToOptions,
-  ): void => {
-    const index = idToIndex.get(id) ?? ctx.dataManager.getIndexById(id);
-    if (index >= 0) scrollToIndex(index, alignOrOptions);
-  };
+  // scrollToItem removed - use scrollToIndex instead
+  // Users can maintain their own id→index map if needed
 
-  const getScrollPosition = (): number => scrollGetTop();
+  const getScrollPosition = (): number => $.sgt();
 
   // ── Event subscription ──────────────────────────────────────────
 
@@ -1774,26 +906,29 @@ function materialize<T extends VListItem = VListItem>(
     event: K,
     handler: EventHandler<VListEvents<T>[K]>,
   ): Unsubscribe => {
-    return emitter.on(event as string, handler);
+    return emitter.on(
+      event,
+      handler as EventHandler<VListEvents<T>[typeof event]>,
+    );
   };
 
   const off = <K extends keyof VListEvents<T>>(
     event: K,
     handler: EventHandler<VListEvents<T>[K]>,
   ): void => {
-    emitter.off(event as string, handler);
+    emitter.off(event, handler as EventHandler<VListEvents<T>[typeof event]>);
   };
 
   // ── Destroy ─────────────────────────────────────────────────────
 
   const destroy = (): void => {
-    if (isDestroyed) return;
-    isDestroyed = true;
+    if ($.id) return;
+    $.id = true;
     ctx.state.isDestroyed = true;
 
     dom.items.removeEventListener("click", handleClick);
     dom.root.removeEventListener("keydown", handleKeydown);
-    scrollTarget.removeEventListener("scroll", onScrollFrame);
+    $.st.removeEventListener("scroll", onScrollFrame);
     resizeObserver.disconnect();
 
     if (wheelHandler) {
@@ -1832,14 +967,14 @@ function materialize<T extends VListItem = VListItem>(
       if (methods.has("_getItems")) {
         return (methods.get("_getItems") as any)();
       }
-      return items as readonly T[];
+      return $.it as readonly T[];
     },
     get total() {
       // Check if a plugin (e.g., groups) provides a custom total getter
       if (methods.has("_getTotal")) {
         return (methods.get("_getTotal") as any)();
       }
-      return virtualTotalFn();
+      return $.vtf();
     },
 
     setItems: methods.has("setItems")
@@ -1862,9 +997,6 @@ function materialize<T extends VListItem = VListItem>(
     scrollToIndex: methods.has("scrollToIndex")
       ? (methods.get("scrollToIndex") as any)
       : scrollToIndex,
-    scrollToItem: methods.has("scrollToItem")
-      ? (methods.get("scrollToItem") as any)
-      : scrollToItem,
     cancelScroll: methods.has("cancelScroll")
       ? (methods.get("cancelScroll") as any)
       : cancelScroll,
