@@ -43,20 +43,18 @@ export interface SimpleDataManager<T extends VListItem = VListItem> {
   getStorage: () => unknown;
   getPlaceholders: () => unknown;
   getItem: (index: number) => T | undefined;
-  getItemById: (id: string | number) => T | undefined;
-  getIndexById: (id: string | number) => number;
   isItemLoaded: (index: number) => boolean;
   getItemsInRange: (start: number, end: number) => T[];
   setTotal: (total: number) => void;
   setItems: (items: T[], offset?: number, total?: number) => void;
-  updateItem: (id: string | number, updates: Partial<T>) => boolean;
-  removeItem: (id: string | number) => boolean;
-  loadRange: (start: number, end: number) => Promise<void>;
-  ensureRange: (start: number, end: number) => Promise<void>;
-  loadInitial: () => Promise<void>;
-  loadMore: () => Promise<boolean>;
-  reload: () => Promise<void>;
-  evictDistant: (visibleStart: number, visibleEnd: number) => void;
+  updateItem: (index: number, updates: Partial<T>) => boolean;
+  removeItem: (index: number) => boolean;
+  loadRange: (start: number, end: number) => void;
+  ensureRange: (start: number, end: number) => void;
+  loadInitial: () => void;
+  loadMore: (direction?: "down" | "up") => boolean;
+  reload: () => void;
+  evictDistant: (keepRange: Range) => void;
   clear: () => void;
   reset: () => void;
 }
@@ -99,19 +97,8 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
   let items: T[] = config.initialItems ? [...config.initialItems] : [];
   let total = config.initialTotal ?? items.length;
 
-  // ID → index map for fast lookups
-  const idToIndex = new Map<string | number, number>();
-
-  const rebuildIdIndex = (): void => {
-    idToIndex.clear();
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item) idToIndex.set(item.id, i);
-    }
-  };
-
-  // Build initial index
-  rebuildIdIndex();
+  // ID → index map removed for memory efficiency
+  // Users can maintain their own Map if needed for O(1) lookups
 
   const notifyStateChange = (): void => {
     if (onStateChange) onStateChange(getState());
@@ -138,14 +125,8 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
 
   const getItem = (index: number): T | undefined => items[index];
 
-  const getItemById = (id: string | number): T | undefined => {
-    const index = idToIndex.get(id);
-    return index !== undefined ? items[index] : undefined;
-  };
-
-  const getIndexById = (id: string | number): number => {
-    return idToIndex.get(id) ?? -1;
-  };
+  // getItemById and getIndexById removed for memory efficiency
+  // Users can maintain their own id→index Map if needed
 
   const isItemLoaded = (index: number): boolean => {
     return index >= 0 && index < items.length && items[index] !== undefined;
@@ -180,36 +161,27 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
       total = Math.max(total, offset + newItems.length);
       if (newTotal !== undefined) total = newTotal;
     }
-    rebuildIdIndex();
     notifyStateChange();
     notifyItemsLoaded(newItems, offset, total);
   };
 
-  const updateItem = (id: string | number, updates: Partial<T>): boolean => {
-    const index = idToIndex.get(id);
-    if (index === undefined) return false;
+  const updateItem = (index: number, updates: Partial<T>): boolean => {
+    if (index < 0 || index >= items.length) return false;
 
     const item = items[index];
     if (!item) return false;
 
     items[index] = { ...item, ...updates } as T;
 
-    // Update ID index if ID changed
-    if (updates.id !== undefined && updates.id !== id) {
-      idToIndex.delete(id);
-      idToIndex.set(updates.id, index);
-    }
-
+    notifyStateChange();
     return true;
   };
 
-  const removeItem = (id: string | number): boolean => {
-    const index = idToIndex.get(id);
-    if (index === undefined) return false;
+  const removeItem = (index: number): boolean => {
+    if (index < 0 || index >= items.length) return false;
 
     items.splice(index, 1);
     total = Math.max(0, total - 1);
-    rebuildIdIndex();
     notifyStateChange();
     return true;
   };
@@ -222,7 +194,6 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
   const clear = (): void => {
     items = [];
     total = 0;
-    idToIndex.clear();
   };
 
   const reset = (): void => {
@@ -241,8 +212,6 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
     getStorage: () => null,
     getPlaceholders: () => null,
     getItem,
-    getItemById,
-    getIndexById,
     isItemLoaded,
     getItemsInRange,
     setTotal,

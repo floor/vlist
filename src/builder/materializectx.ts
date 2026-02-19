@@ -161,7 +161,6 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly pool: ReturnType<typeof createElementPool>;
   readonly itemState: ItemState;
   readonly sharedState: BuilderState;
-  readonly idToIndex: Map<string | number, number> | null;
   readonly renderRange: Range;
   readonly isHorizontal: boolean;
   readonly classPrefix: string;
@@ -174,7 +173,6 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly methods: Map<string, Function>;
   readonly onScrollFrame: () => void;
   readonly resizeObserver: ResizeObserver;
-  readonly rebuildIdIndex: () => void;
   readonly applyTemplate: (
     element: HTMLElement,
     result: string | HTMLElement,
@@ -482,22 +480,18 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
   $: MRefs<T>,
   deps: Pick<
     MDeps<T>,
-    | "idToIndex"
     | "rendered"
     | "itemState"
     | "contentSizeHandlers"
-    | "rebuildIdIndex"
     | "applyTemplate"
     | "updateContentSize"
   >,
   ctx: BuilderContext<T>,
 ): any => {
   const {
-    idToIndex,
     rendered,
     itemState,
     contentSizeHandlers,
-    rebuildIdIndex,
     applyTemplate,
     updateContentSize,
   } = deps;
@@ -533,33 +527,8 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     getStorage: () => null,
     getPlaceholders: () => null,
     getItem: (index: number) => $.it[index],
-    getItemById: (id: string | number) => {
-      if (!idToIndex) {
-        if (!hasWarnedItemById) {
-          console.warn(
-            "[vlist] getItemById() called but enableItemById is false. " +
-              "Set config.enableItemById = true to enable this feature.",
-          );
-          hasWarnedItemById = true;
-        }
-        return undefined;
-      }
-      const idx = idToIndex.get(id);
-      return idx !== undefined ? $.it[idx] : undefined;
-    },
-    getIndexById: (id: string | number) => {
-      if (!idToIndex) {
-        if (!hasWarnedItemById) {
-          console.warn(
-            "[vlist] getIndexById() called but enableItemById is false. " +
-              "Set config.enableItemById = true to enable this feature.",
-          );
-          hasWarnedItemById = true;
-        }
-        return -1;
-      }
-      return idToIndex.get(id) ?? -1;
-    },
+    // getItemById and getIndexById removed for memory efficiency
+    // Users can maintain their own id→index Map if needed
     isItemLoaded: (index: number) =>
       index >= 0 && index < $.it.length && $.it[index] !== undefined,
     getItemsInRange: (start: number, end: number) => {
@@ -591,23 +560,14 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       if (newTotal !== undefined) {
         // trim or leave
       }
-      rebuildIdIndex();
       if ($.ii) syncAfterChange();
     },
-    updateItem: (id: string | number, updates: Partial<T>) => {
+    updateItem: (index: number, updates: Partial<T>) => {
       const items = $.it;
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
+      if (index < 0 || index >= items.length) return false;
       const item = items[index];
       if (!item) return false;
       items[index] = { ...item, ...updates } as T;
-      if (updates.id !== undefined && updates.id !== id) {
-        if (idToIndex) {
-          idToIndex.delete(id);
-          idToIndex.set(updates.id, index);
-        }
-      }
-      rebuildIdIndex();
       // Re-render if visible
       const el = rendered.get(index);
       if (el) {
@@ -616,11 +576,9 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       }
       return true;
     },
-    removeItem: (id: string | number) => {
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
+    removeItem: (index: number) => {
+      if (index < 0 || index >= $.it.length) return false;
       $.it.splice(index, 1);
-      rebuildIdIndex();
       if ($.ii) syncAfterChange();
       return true;
     },
@@ -632,11 +590,9 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     evictDistant: () => {},
     clear: () => {
       $.it = [] as unknown as T[];
-      idToIndex.clear();
     },
     reset: () => {
       $.it = [] as unknown as T[];
-      idToIndex.clear();
       if ($.ii) {
         $.hc.rebuild(0);
         updateContentSize();

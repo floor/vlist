@@ -237,14 +237,8 @@ function materialize<T extends VListItem = VListItem>(
   // ── Create core components ──────────────────────────────────────
   const emitter = createEmitter<VListEvents<T>>();
 
-  // Memory optimization: conditionally copy items array
-  // copyOnInit defaults to true for safety (backward compatible)
-  const copyOnInit = config.copyOnInit !== false;
-  const initialItemsArray: T[] = initialItems
-    ? copyOnInit
-      ? [...initialItems]
-      : initialItems
-    : [];
+  // Use items array by reference (memory-optimized)
+  const initialItemsArray: T[] = initialItems || [];
 
   const initialHeightCache = createHeightCache(
     mainAxisSizeConfig,
@@ -336,23 +330,8 @@ function materialize<T extends VListItem = VListItem>(
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
 
-  // ID → index map for fast lookups
-  // Memory optimization: optional based on enableItemById flag (defaults to true)
-  const enableItemById = config.enableItemById !== false;
-  const idToIndex = enableItemById ? new Map<string | number, number>() : null;
-
-  const rebuildIdIndex = (): void => {
-    if (!idToIndex) return;
-    idToIndex.clear();
-    for (let i = 0; i < $.it.length; i++) {
-      const item = $.it[i];
-      if (item) idToIndex.set(item.id, i);
-    }
-  };
-
-  if (enableItemById) {
-    rebuildIdIndex();
-  }
+  // No ID → index map (removed for memory efficiency)
+  // Users can implement their own Map if needed for O(1) lookups
 
   // ── Plugin extension points ─────────────────────────────────────
   const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
@@ -741,7 +720,6 @@ function materialize<T extends VListItem = VListItem>(
     pool,
     itemState,
     sharedState,
-    idToIndex,
     renderRange,
     isHorizontal,
     classPrefix,
@@ -754,7 +732,6 @@ function materialize<T extends VListItem = VListItem>(
     methods,
     onScrollFrame,
     resizeObserver,
-    rebuildIdIndex,
     applyTemplate,
     updateContentSize,
   };
@@ -918,17 +895,8 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
-  const scrollToItem = (
-    id: string | number,
-    alignOrOptions?:
-      | "start"
-      | "center"
-      | "end"
-      | import("../types").ScrollToOptions,
-  ): void => {
-    const index = idToIndex.get(id) ?? ctx.dataManager.getIndexById(id);
-    if (index >= 0) scrollToIndex(index, alignOrOptions);
-  };
+  // scrollToItem removed - use scrollToIndex instead
+  // Users can maintain their own id→index map if needed
 
   const getScrollPosition = (): number => $.sgt();
 
@@ -1029,9 +997,6 @@ function materialize<T extends VListItem = VListItem>(
     scrollToIndex: methods.has("scrollToIndex")
       ? (methods.get("scrollToIndex") as any)
       : scrollToIndex,
-    scrollToItem: methods.has("scrollToItem")
-      ? (methods.get("scrollToItem") as any)
-      : scrollToItem,
     cancelScroll: methods.has("cancelScroll")
       ? (methods.get("cancelScroll") as any)
       : cancelScroll,

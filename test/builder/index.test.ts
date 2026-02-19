@@ -297,10 +297,10 @@ describe("builder core", () => {
       items,
     }).build();
 
-    list.updateItem(1, { name: "Updated Item" });
+    list.updateItem(0, { name: "Updated Item" });
     expect(list.items[0]!.name).toBe("Updated Item");
 
-    list.removeItem(1);
+    list.removeItem(0);
     expect(list.total).toBe(19);
   });
 
@@ -4353,32 +4353,7 @@ describe("builder core edge cases", () => {
     container.remove();
   });
 
-  it("should handle scrollToItem by id", () => {
-    const items = createTestItems(50);
-
-    list = vlist<TestItem>({
-      container,
-      item: { height: 40, template },
-      items,
-    }).build();
-
-    // scrollToItem should work with item id
-    expect(() => list!.scrollToItem(25)).not.toThrow();
-    expect(() => list!.scrollToItem(25, "center")).not.toThrow();
-  });
-
-  it("should handle scrollToItem with non-existent id", () => {
-    const items = createTestItems(20);
-
-    list = vlist<TestItem>({
-      container,
-      item: { height: 40, template },
-      items,
-    }).build();
-
-    // Should not throw for non-existent id
-    expect(() => list!.scrollToItem(999)).not.toThrow();
-  });
+  // scrollToItem removed - use scrollToIndex instead for memory efficiency
 
   it("should handle off() to unsubscribe events", () => {
     const items = createTestItems(20);
@@ -5177,21 +5152,7 @@ describe("builder core scroll methods", () => {
     expect(() => list!.scrollToIndex(100)).not.toThrow();
   });
 
-  it("should handle scrollToItem with string id", () => {
-    const items: TestItem[] = [
-      { id: "a", name: "Item A" } as any,
-      { id: "b", name: "Item B" } as any,
-      { id: "c", name: "Item C" } as any,
-    ];
-
-    list = vlist<TestItem>({
-      container,
-      item: { height: 40, template },
-      items,
-    }).build();
-
-    expect(() => list!.scrollToItem("b")).not.toThrow();
-  });
+  // scrollToItem removed - use scrollToIndex instead for memory efficiency
 
   it("should handle cancelScroll when no animation is running", () => {
     const items = createTestItems(50);
