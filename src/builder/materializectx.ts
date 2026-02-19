@@ -161,7 +161,7 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly pool: ReturnType<typeof createElementPool>;
   readonly itemState: ItemState;
   readonly sharedState: BuilderState;
-  readonly idToIndex: Map<string | number, number>;
+  readonly idToIndex: Map<string | number, number> | null;
   readonly renderRange: Range;
   readonly isHorizontal: boolean;
   readonly classPrefix: string;
@@ -502,6 +502,9 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     updateContentSize,
   } = deps;
 
+  // Track if we've shown the warning for disabled features
+  let hasWarnedItemById = false;
+
   /** Sync height cache, content size, compression, notify handlers, re-render. */
   const syncAfterChange = (): void => {
     $.hc.rebuild($.vtf());
@@ -531,10 +534,32 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     getPlaceholders: () => null,
     getItem: (index: number) => $.it[index],
     getItemById: (id: string | number) => {
+      if (!idToIndex) {
+        if (!hasWarnedItemById) {
+          console.warn(
+            "[vlist] getItemById() called but enableItemById is false. " +
+              "Set config.enableItemById = true to enable this feature.",
+          );
+          hasWarnedItemById = true;
+        }
+        return undefined;
+      }
       const idx = idToIndex.get(id);
       return idx !== undefined ? $.it[idx] : undefined;
     },
-    getIndexById: (id: string | number) => idToIndex.get(id) ?? -1,
+    getIndexById: (id: string | number) => {
+      if (!idToIndex) {
+        if (!hasWarnedItemById) {
+          console.warn(
+            "[vlist] getIndexById() called but enableItemById is false. " +
+              "Set config.enableItemById = true to enable this feature.",
+          );
+          hasWarnedItemById = true;
+        }
+        return -1;
+      }
+      return idToIndex.get(id) ?? -1;
+    },
     isItemLoaded: (index: number) =>
       index >= 0 && index < $.it.length && $.it[index] !== undefined,
     getItemsInRange: (start: number, end: number) => {
@@ -577,9 +602,12 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       if (!item) return false;
       items[index] = { ...item, ...updates } as T;
       if (updates.id !== undefined && updates.id !== id) {
-        idToIndex.delete(id);
-        idToIndex.set(updates.id, index);
+        if (idToIndex) {
+          idToIndex.delete(id);
+          idToIndex.set(updates.id, index);
+        }
       }
+      rebuildIdIndex();
       // Re-render if visible
       const el = rendered.get(index);
       if (el) {

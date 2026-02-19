@@ -43,6 +43,28 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
   /** Static items array (optional if using adapter via plugin) */
   items?: T[];
 
+  /**
+   * Memory optimization: Copy items array on initialization
+   * - true (default): Safe - creates a copy, protects against external mutations
+   * - false: Memory-efficient - uses reference, user must not mutate the array
+   *
+   * Impact: For 100K items, setting to false can save ~20-50 MB of memory
+   *
+   * @default true
+   */
+  copyOnInit?: boolean;
+
+  /**
+   * Memory optimization: Enable getItemById() lookups
+   * - true (default): Builds id→index Map for O(1) lookups via getItemById()
+   * - false: Disables Map, saves memory, getItemById() will return undefined
+   *
+   * Impact: For 100K items, setting to false can save ~3 MB of memory
+   *
+   * @default true
+   */
+  enableItemById?: boolean;
+
   /** Number of extra items to render outside viewport (default: 3) */
   overscan?: number;
 
