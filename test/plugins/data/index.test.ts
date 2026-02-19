@@ -500,7 +500,7 @@ describe("createDataManager", () => {
   });
 
   describe("reload", () => {
-    it("should clear and reload data", async () => {
+    it("should clear state on reload", async () => {
       const items = createTestItems(100);
       const adapter = createMockAdapter(items);
       const manager = createDataManager({
@@ -514,7 +514,13 @@ describe("createDataManager", () => {
 
       await manager.reload();
 
-      // After reload, should have similar amount of data
+      // After reload, state is cleared — no data loaded yet
+      expect(manager.getState().cached).toBe(0);
+      expect(manager.isItemLoaded(0)).toBe(false);
+      expect(manager.getHasMore()).toBe(true);
+
+      // Caller loads what they need
+      await manager.loadInitial();
       expect(manager.getState().cached).toBeGreaterThanOrEqual(50);
       expect(manager.isItemLoaded(0)).toBe(true);
     });
@@ -1117,8 +1123,13 @@ describe("createDataManager", () => {
 
       await manager.reload();
 
-      // Cursor should be refreshed from new load
+      // Cursor should be cleared
       expect(manager.getState().hasMore).toBe(true);
+      expect(manager.getState().cached).toBe(0);
+
+      // Caller reloads what they need
+      await manager.loadInitial();
+      expect(manager.getState().cached).toBeGreaterThan(0);
     });
 
     it("should clear placeholders on reload", async () => {
@@ -1141,6 +1152,11 @@ describe("createDataManager", () => {
       await manager.loadInitial();
       await manager.reload();
 
+      // After reload, state is cleared
+      expect(manager.getCached()).toBe(0);
+
+      // Caller loads what they need
+      await manager.loadInitial();
       expect(manager.getCached()).toBeGreaterThan(0);
     });
   });

@@ -20,7 +20,6 @@ import type { VListItem, VListAdapter, Range } from "../../types";
 import type { VListPlugin, BuilderContext } from "../../builder/types";
 
 import { createDataManager } from "./manager";
-import { updateViewportItems } from "../../rendering";
 
 import {
   INITIAL_LOAD_SIZE,
@@ -100,7 +99,6 @@ export const withAsync = <T extends VListItem = VListItem>(
     setup(ctx: BuilderContext<T>): void {
       const { emitter } = ctx;
       const isReverse = ctx.config.reverse;
-      const overscan = ctx.config.overscan;
 
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
@@ -110,14 +108,20 @@ export const withAsync = <T extends VListItem = VListItem>(
           if (ctx.state.isInitialized) {
             ctx.heightCache.rebuild(ctx.getVirtualTotal());
             ctx.updateCompressionMode();
-            ctx.state.viewportState = updateViewportItems(
-              ctx.state.viewportState,
-              ctx.heightCache,
-              ctx.getVirtualTotal(),
-              overscan,
-              ctx.getCachedCompression(),
-            );
-            ctx.updateContentSize(ctx.state.viewportState.totalHeight);
+
+            // Update compression metadata on viewport state, but do NOT
+            // recalculate renderRange here. updateViewportItems uses the
+            // default simpleVisibleRange which gives wrong indices when
+            // withScale's compressed range function is active. The core
+            // renderer always recalculates renderRange with the correct
+            // installed visibleRangeFn, so we leave that to renderIfNeeded.
+            const compression = ctx.getCachedCompression();
+            ctx.state.viewportState.totalHeight = compression.virtualHeight;
+            ctx.state.viewportState.actualHeight = compression.actualHeight;
+            ctx.state.viewportState.isCompressed = compression.isCompressed;
+            ctx.state.viewportState.compressionRatio = compression.ratio;
+
+            ctx.updateContentSize(compression.virtualHeight);
             ctx.renderIfNeeded();
           }
         },
@@ -298,7 +302,29 @@ export const withAsync = <T extends VListItem = VListItem>(
 
       // ── Register reload method ──
       ctx.methods.set("reload", async (): Promise<void> => {
+        lastEnsuredRange = null;
+        pendingRange = null;
+
+        // Clear all rendered DOM elements so the renderer recreates them
+        // from scratch. Without this, items whose ID hasn't changed
+        // (e.g. same index → same id after switching data source) would
+        // keep their old template content due to the ID-match optimisation.
+        ctx.invalidateRendered();
+
         await ctx.dataManager.reload();
+
+        // Force a render to immediately show placeholders (good UX while
+        // the API responds) and to guarantee viewportState.renderRange
+        // reflects the correct visible range — including compressed mode.
+        ctx.forceRender();
+
+        // After reload, ensure the currently visible range is loaded.
+        // Without this, if the user is scrolled past the initial page,
+        // placeholders are never replaced because no scroll event fires.
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end > 0) {
+          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+        }
       });
 
       // ── Load initial data ──

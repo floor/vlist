@@ -174,6 +174,13 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   forceRender(): void;
 
   /**
+   * Remove all rendered DOM elements and return them to the pool.
+   * Used by reload to force a full re-render from scratch, bypassing
+   * the ID-based optimization that skips template updates for same-ID items.
+   */
+  invalidateRendered(): void;
+
+  /**
    * Get current render functions (for wrapping by selection/other plugins).
    * Call this BEFORE setRenderFns to capture the current functions.
    */

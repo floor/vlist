@@ -3,7 +3,12 @@
  * Handles data with sparse storage for million+ item support
  */
 
-import type { VListItem, VListAdapter, AdapterParams, Range } from "../../types";
+import type {
+  VListItem,
+  VListAdapter,
+  AdapterParams,
+  Range,
+} from "../../types";
 
 import {
   createSparseStorage,
@@ -619,18 +624,21 @@ export const createDataManager = <T extends VListItem = VListItem>(
   };
 
   const reload = async (): Promise<void> => {
-    // Clear everything
+    // Clear everything — but do NOT load initial data.
+    // The caller (e.g. withAsync plugin) decides what range to load,
+    // which avoids a wasted request to offset=0 when the viewport
+    // is scrolled elsewhere.
     storage.clear();
     idToIndex.clear();
     if (placeholders) placeholders.clear();
+    activeLoads.clear();
+    pendingRanges = [];
+    isLoading = false;
     cursor = undefined;
     hasMore = true;
     error = undefined;
 
     notifyStateChange();
-
-    // Load initial data
-    await loadInitial();
   };
 
   // ==========================================================================

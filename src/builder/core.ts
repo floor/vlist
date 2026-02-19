@@ -1306,6 +1306,13 @@ function materialize<T extends VListItem = VListItem>(
     forceRender(): void {
       forceRenderFn();
     },
+    invalidateRendered(): void {
+      for (const [, element] of rendered) {
+        element.remove();
+        pool.release(element);
+      }
+      rendered.clear();
+    },
     getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void } {
       return {
         renderIfNeeded: renderIfNeededFn,
