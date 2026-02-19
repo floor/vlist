@@ -382,6 +382,9 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     disableViewportResize: () => {
       // Stub - not used in simplified context
     },
+    invalidateRendered: () => {
+      // Stub - not used in simplified context
+    },
   };
 
   return ctx;
