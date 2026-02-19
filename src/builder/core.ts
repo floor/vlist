@@ -33,6 +33,14 @@ import type {
 // Re-export CompressionState type from viewport for plugins that need it
 export type { CompressionState } from "../rendering/viewport";
 
+// Extracted context and proxy factories (Option B: Getter-Setter Deps)
+import {
+  createMaterializeCtx,
+  createDefaultDataProxy,
+  createDefaultScrollProxy,
+} from "./materializectx";
+import type { MAccessors, MDeps } from "./materializectx";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -1151,436 +1159,237 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Compression mode ────────────────────────────────────────────
 
-  // ── BuilderContext ──────────────────────────────────────────────
-  // The context plugins receive. Provides extension points without
-  // exposing implementation details. We build it as a plain object
-  // with getters so plugins always see the latest state.
+  // ── Accessor Object (Option B: Getter-Setter Deps) ──────────────
+  // Closures that capture materialize()'s local `let` variables.
+  // Passed to extracted factories (ctx, data proxy, scroll proxy).
+  // Hot-path code (coreRenderIfNeeded, onScrollFrame) uses bare locals directly.
 
-  const ctx: BuilderContext<T> = {
-    get dom() {
-      return dom as any;
-    },
-    get heightCache() {
-      return heightCache as any;
-    },
-    get emitter() {
-      return emitter as any;
-    },
-    get config() {
-      return resolvedConfig;
-    },
-    get rawConfig() {
-      return config;
-    },
+  const acc: MAccessors<T> = {
+    // Getters
+    it: () => items,
+    hc: () => heightCache,
+    ch: () => containerHeight,
+    cw: () => containerWidth,
+    id: () => isDestroyed,
+    ii: () => isInitialized,
+    ls: () => lastScrollTop,
+    vt: () => velocityTracker,
+    ss: () => selectionSet,
+    fi: () => focusedIndex,
+    la: () => lastAriaSetSize,
+    dm: () => dataManagerProxy,
+    sc: () => scrollControllerProxy,
+    vtf: () => virtualTotalFn,
+    sgt: () => scrollGetTop,
+    sst: () => scrollSetTop,
+    sab: () => scrollIsAtBottom,
+    sic: () => scrollIsCompressed,
+    rfn: () => renderIfNeededFn,
+    ffn: () => forceRenderFn,
+    gvr: () => getVisibleRange,
+    gsp: () => getScrollToPos,
+    pef: () => positionElementFn,
+    at: () => activeTemplate,
+    vre: () => viewportResizeEnabled,
+    st: () => scrollTarget,
+    gcw: () => getContainerWidth,
+    gch: () => getContainerHeight,
 
-    // Mutable component slots (plugins can replace)
-    // Expose a renderer proxy so plugins (e.g. withSelection) can call
-    // ctx.renderer.render() and ctx.renderer.updateItemClasses() without
-    // needing access to the inlined rendering internals.
-    get renderer() {
-      return {
-        render: (
-          _items: T[],
-          _range: Range,
-          selected: Set<string | number>,
-          focusedIdx: number,
-          _compressionCtx?: any,
-        ): void => {
-          // Inject selection state into the inlined renderer's closure
-          selectionSet = selected;
-          focusedIndex = focusedIdx;
-          forceRenderFn();
-        },
-        updateItemClasses: (
-          index: number,
-          isSelected: boolean,
-          isFocused: boolean,
-        ): void => {
-          const el = rendered.get(index);
-          if (!el) return;
-          el.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-          el.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-          el.ariaSelected = isSelected ? "true" : "false";
-        },
-        updatePositions: () => {},
-        updateItem: () => {},
-        getElement: (index: number) => rendered.get(index) ?? null,
-        clear: () => {},
-        destroy: () => {},
-      } as any;
+    // Setters
+    setIT: (v) => {
+      items = v;
     },
-    set renderer(_r: any) {
-      // no-op — grid plugin overrides via methods below
+    setHC: (v) => {
+      heightCache = v;
     },
+    setCH: (v) => {
+      containerHeight = v;
+    },
+    setCW: (v) => {
+      containerWidth = v;
+    },
+    setID: (v) => {
+      isDestroyed = v;
+    },
+    setII: (v) => {
+      isInitialized = v;
+    },
+    setLS: (v) => {
+      lastScrollTop = v;
+    },
+    setVT: (v) => {
+      velocityTracker = v;
+    },
+    setSS: (v) => {
+      selectionSet = v;
+    },
+    setFI: (v) => {
+      focusedIndex = v;
+    },
+    setLA: (v) => {
+      lastAriaSetSize = v;
+    },
+    setDM: (v) => {
+      dataManagerProxy = v;
+    },
+    setSC: (v) => {
+      scrollControllerProxy = v;
+    },
+    setVTF: (v) => {
+      virtualTotalFn = v;
+    },
+    setSGT: (v) => {
+      scrollGetTop = v;
+    },
+    setSST: (v) => {
+      scrollSetTop = v;
+    },
+    setSAB: (v) => {
+      scrollIsAtBottom = v;
+    },
+    setSIC: (v) => {
+      scrollIsCompressed = v;
+    },
+    setRFN: (v) => {
+      renderIfNeededFn = v;
+    },
+    setFFN: (v) => {
+      forceRenderFn = v;
+    },
+    setGVR: (v) => {
+      getVisibleRange = v;
+    },
+    setGSP: (v) => {
+      getScrollToPos = v;
+    },
+    setPEF: (v) => {
+      positionElementFn = v;
+    },
+    setAT: (v) => {
+      activeTemplate = v;
+    },
+    setVRE: (v) => {
+      viewportResizeEnabled = v;
+    },
+    setST: (v) => {
+      scrollTarget = v;
+    },
+    setGCW: (v) => {
+      getContainerWidth = v;
+    },
+    setGCH: (v) => {
+      getContainerHeight = v;
+    },
+  };
 
-    get dataManager() {
-      return dataManagerProxy as any;
-    },
-    set dataManager(dm: any) {
-      dataManagerProxy = dm;
-    },
-
-    get scrollController() {
-      return scrollControllerProxy as any;
-    },
-    set scrollController(sc: any) {
-      scrollControllerProxy = sc;
-    },
-
-    state: sharedState,
-
-    /** Get current container width (for grid plugin) */
-    getContainerWidth(): number {
-      return containerWidth;
-    },
-
+  // ── Immutable Dependencies (MDeps) ──────────────────────────────
+  const deps: MDeps<T> = {
+    dom,
+    emitter,
+    resolvedConfig,
+    rawConfig: config,
+    rendered,
+    pool,
+    itemState,
+    sharedState,
+    idToIndex,
+    renderRange,
+    isHorizontal,
+    classPrefix,
+    contentSizeHandlers,
     afterScroll,
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
-    contentSizeHandlers,
     destroyHandlers,
     methods,
-
-    replaceTemplate(newTemplate: ItemTemplate<T>): void {
-      // Replace the active template (used by inlined renderer)
-      // This is the proper way to modify rendering in the materialize path
-      activeTemplate = newTemplate;
-    },
-    replaceRenderer(_renderer: any): void {
-      // No-op in materialize (renderer is inlined)
-      // Grid plugin uses this, but manages its own renderer via methods
-      // Groups plugin should use replaceTemplate instead
-    },
-    replaceDataManager(dm: any): void {
-      dataManagerProxy = dm;
-    },
-    replaceScrollController(sc: any): void {
-      scrollControllerProxy = sc;
-    },
-
-    getItemsForRange(range: Range): T[] {
-      const result: T[] = [];
-      for (let i = range.start; i <= range.end; i++) {
-        const item = (
-          dataManagerProxy ? dataManagerProxy.getItem(i) : items[i]
-        ) as T | undefined;
-        if (item) result.push(item);
-      }
-      return result;
-    },
-    getAllLoadedItems(): T[] {
-      if (dataManagerProxy) {
-        const total = dataManagerProxy.getTotal();
-        const result: T[] = [];
-        for (let i = 0; i < total; i++) {
-          const item = dataManagerProxy.getItem(i) as T | undefined;
-          if (item) result.push(item);
-        }
-        return result;
-      }
-      return [...items];
-    },
-    getVirtualTotal(): number {
-      return virtualTotalFn();
-    },
-    getCachedCompression() {
-      return {
-        isCompressed: false,
-        actualHeight: heightCache.getTotalHeight(),
-        virtualHeight: heightCache.getTotalHeight(),
-        ratio: 1,
-      } as any;
-    },
-    getCompressionContext() {
-      return {
-        scrollTop: lastScrollTop,
-        totalItems: virtualTotalFn(),
-        containerHeight,
-        rangeStart: renderRange.start,
-      } as any;
-    },
-    renderIfNeeded(): void {
-      renderIfNeededFn();
-    },
-    forceRender(): void {
-      forceRenderFn();
-    },
-    invalidateRendered(): void {
-      for (const [, element] of rendered) {
-        element.remove();
-        pool.release(element);
-      }
-      rendered.clear();
-    },
-    getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void } {
-      return {
-        renderIfNeeded: renderIfNeededFn,
-        forceRender: forceRenderFn,
-      };
-    },
-    setRenderFns(renderFn: () => void, forceFn: () => void): void {
-      renderIfNeededFn = renderFn;
-      forceRenderFn = forceFn;
-    },
-
-    setVirtualTotalFn(fn: () => number): void {
-      virtualTotalFn = fn;
-    },
-    rebuildHeightCache(total?: number): void {
-      heightCache.rebuild(total ?? virtualTotalFn());
-    },
-    setHeightConfig(newConfig: number | ((index: number) => number)): void {
-      heightCache = createHeightCache(newConfig, virtualTotalFn());
-    },
-    updateContentSize(totalSize: number): void {
-      const size = `${totalSize}px`;
-      if (isHorizontal) {
-        dom.content.style.width = size;
-      } else {
-        dom.content.style.height = size;
-      }
-    },
-    updateCompressionMode(): void {
-      // No-op by default — withCompression plugin replaces this
-    },
-
-    setVisibleRangeFn(
-      fn: (
-        scrollTop: number,
-        cHeight: number,
-        hc: HeightCache,
-        total: number,
-        out: Range,
-      ) => void,
-    ): void {
-      getVisibleRange = fn;
-    },
-
-    setScrollToPosFn(
-      fn: (
-        index: number,
-        hc: HeightCache,
-        cHeight: number,
-        total: number,
-        align: "start" | "center" | "end",
-      ) => number,
-    ): void {
-      getScrollToPos = fn;
-    },
-
-    setPositionElementFn(
-      fn: (element: HTMLElement, index: number) => void,
-    ): void {
-      positionElementFn = fn;
-    },
-
-    setScrollFns(getTop: () => number, setTop: (pos: number) => void): void {
-      scrollGetTop = getTop;
-      // Wrap the provided setTop so that after storing the position
-      // the builder's scroll pipeline (render + events) fires immediately.
-      // In compressed mode the native scroll event may not fire (or may
-      // fire with a clamped value), so we must trigger explicitly.
-      scrollSetTop = (pos: number): void => {
-        setTop(pos);
-        onScrollFrame();
-      };
-    },
-
-    setScrollTarget(target: HTMLElement | Window): void {
-      // Remove listener from old target
-      scrollTarget.removeEventListener("scroll", onScrollFrame);
-      // Update target and re-attach listener
-      scrollTarget = target;
-      scrollTarget.addEventListener("scroll", onScrollFrame, { passive: true });
-    },
-
-    getScrollTarget(): HTMLElement | Window {
-      return scrollTarget;
-    },
-
-    setContainerDimensions(getter: {
-      width: () => number;
-      height: () => number;
-    }): void {
-      getContainerWidth = getter.width;
-      getContainerHeight = getter.height;
-      // Update current dimensions immediately
-      containerWidth = getter.width();
-      containerHeight = getter.height();
-      sharedState.viewportState.containerHeight = containerHeight;
-    },
-
-    disableViewportResize(): void {
-      if (viewportResizeEnabled) {
-        viewportResizeEnabled = false;
-        resizeObserver.unobserve(dom.viewport);
-      }
-    },
+    onScrollFrame,
+    resizeObserver,
+    rebuildIdIndex,
+    applyTemplate,
+    updateContentSize,
   };
 
-  // ── Data manager proxy (plugins can replace) ────────────────────
-  // The default is a thin wrapper around the items array.
-  // withData plugin replaces this with the full adapter-backed manager.
-  // (variable is forward-declared above virtualTotalFn to avoid TDZ)
+  // ── BuilderContext (factory-created) ────────────────────────────
+  const ctx: BuilderContext<T> = createMaterializeCtx(acc, deps);
 
-  dataManagerProxy = {
-    getState: () => ({
-      total: items.length,
-      cached: items.length,
-      isLoading: false,
-      pendingRanges: [],
-      error: undefined,
-      hasMore: false,
-      cursor: undefined,
-    }),
-    getTotal: () => items.length,
-    getCached: () => items.length,
-    getIsLoading: () => false,
-    getHasMore: () => false,
-    getStorage: () => null,
-    getPlaceholders: () => null,
-    getItem: (index: number) => items[index],
-    getItemById: (id: string | number) => {
-      const idx = idToIndex.get(id);
-      return idx !== undefined ? items[idx] : undefined;
-    },
-    getIndexById: (id: string | number) => idToIndex.get(id) ?? -1,
-    isItemLoaded: (index: number) =>
-      index >= 0 && index < items.length && items[index] !== undefined,
-    getItemsInRange: (start: number, end: number) => {
-      const result: T[] = [];
-      const s = Math.max(0, start);
-      const e = Math.min(end, items.length - 1);
-      for (let i = s; i <= e; i++) result.push(items[i] as T);
-      return result;
-    },
-    setTotal: (t: number) => {
-      // no-op for simple manager
-      void t;
-    },
-    setItems: (newItems: T[], offset = 0, newTotal?: number) => {
-      if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
-        items = [...newItems];
-      } else {
-        // Ensure items array is large enough before assigning
-        const requiredLength = offset + newItems.length;
-        if (items.length < requiredLength) {
-          items.length = requiredLength;
-        }
-        for (let i = 0; i < newItems.length; i++) {
-          items[offset + i] = newItems[i]!;
-        }
-      }
-      if (newTotal !== undefined) {
-        // trim or leave
-      }
-      rebuildIdIndex();
-      if (isInitialized) {
-        heightCache.rebuild(virtualTotalFn());
-        updateContentSize();
-        ctx.updateCompressionMode();
-        for (let i = 0; i < contentSizeHandlers.length; i++) {
-          contentSizeHandlers[i]!();
-        }
-        forceRenderFn();
-      }
-    },
-    updateItem: (id: string | number, updates: Partial<T>) => {
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
-      const item = items[index];
-      if (!item) return false;
-      items[index] = { ...item, ...updates } as T;
-      if (updates.id !== undefined && updates.id !== id) {
-        idToIndex.delete(id);
-        idToIndex.set(updates.id, index);
-      }
-      // Re-render if visible
-      const el = rendered.get(index);
-      if (el) {
-        applyTemplate(el, activeTemplate(items[index]!, index, itemState));
-        el.dataset.id = String(items[index]!.id);
-      }
-      return true;
-    },
-    removeItem: (id: string | number) => {
-      const index = idToIndex.get(id);
-      if (index === undefined) return false;
-      items.splice(index, 1);
-      rebuildIdIndex();
-      if (isInitialized) {
-        heightCache.rebuild(virtualTotalFn());
-        updateContentSize();
-        ctx.updateCompressionMode();
-        for (let i = 0; i < contentSizeHandlers.length; i++) {
-          contentSizeHandlers[i]!();
-        }
-        forceRenderFn();
-      }
-      return true;
-    },
-    loadRange: async () => {},
-    ensureRange: async () => {},
-    loadInitial: async () => {},
-    loadMore: async () => false,
-    reload: async () => {},
-    evictDistant: () => {},
-    clear: () => {
-      items = [];
-      idToIndex.clear();
-    },
-    reset: () => {
-      items = [];
-      idToIndex.clear();
-      if (isInitialized) {
-        heightCache.rebuild(0);
-        updateContentSize();
-        forceRenderFn();
-      }
-    },
+  // Override specific methods that need local closure access
+  ctx.setVisibleRangeFn = (
+    fn: (
+      scrollTop: number,
+      cHeight: number,
+      hc: HeightCache,
+      total: number,
+      out: Range,
+    ) => void,
+  ): void => {
+    getVisibleRange = fn;
   };
 
-  // ── Scroll controller proxy (plugins can replace) ───────────────
-  // Minimal proxy — plugins like withCompression replace this.
-
-  let scrollControllerProxy: any = {
-    getScrollTop: () => scrollGetTop(),
-    scrollTo: (pos: number) => {
-      scrollSetTop(pos);
-      lastScrollTop = pos;
-      renderIfNeededFn();
-    },
-    scrollBy: (delta: number) => {
-      const newPos = scrollGetTop() + delta;
-      scrollSetTop(newPos);
-      lastScrollTop = newPos;
-      renderIfNeededFn();
-    },
-    isAtTop: () => lastScrollTop <= 2,
-    isAtBottom: (threshold = 2) => scrollIsAtBottom(threshold),
-    getScrollPercentage: () => {
-      const total = heightCache.getTotalHeight();
-      const maxScroll = Math.max(0, total - containerHeight);
-      return maxScroll > 0 ? lastScrollTop / maxScroll : 0;
-    },
-    getVelocity: () => velocityTracker.velocity,
-    isTracking: () => velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
-    isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
-    updateConfig: () => {},
-    enableCompression: () => {
-      scrollIsCompressed = true;
-    },
-    disableCompression: () => {
-      scrollIsCompressed = false;
-    },
-    isCompressed: () => scrollIsCompressed,
-    isWindowMode: () => false,
-    updateContainerHeight: (h: number) => {
-      containerHeight = h;
-    },
-    destroy: () => {},
+  ctx.setScrollToPosFn = (
+    fn: (
+      index: number,
+      hc: HeightCache,
+      cHeight: number,
+      total: number,
+      align: "start" | "center" | "end",
+    ) => number,
+  ): void => {
+    getScrollToPos = fn;
   };
+
+  ctx.setPositionElementFn = (
+    fn: (element: HTMLElement, index: number) => void,
+  ): void => {
+    positionElementFn = fn;
+  };
+
+  ctx.setScrollFns = (
+    getTop: () => number,
+    setTop: (pos: number) => void,
+  ): void => {
+    scrollGetTop = getTop;
+    // Wrap the provided setTop so that after storing the position
+    // the builder's scroll pipeline (render + events) fires immediately.
+    // In compressed mode the native scroll event may not fire (or may
+    // fire with a clamped value), so we must trigger explicitly.
+    scrollSetTop = (pos: number): void => {
+      setTop(pos);
+      onScrollFrame();
+    };
+  };
+
+  ctx.setContainerDimensions = (getter: {
+    width: () => number;
+    height: () => number;
+  }): void => {
+    getContainerWidth = getter.width;
+    getContainerHeight = getter.height;
+    // Update current dimensions immediately
+    containerWidth = getter.width();
+    containerHeight = getter.height();
+    sharedState.viewportState.containerHeight = containerHeight;
+  };
+
+  ctx.disableViewportResize = (): void => {
+    if (viewportResizeEnabled) {
+      viewportResizeEnabled = false;
+      resizeObserver.unobserve(dom.viewport);
+    }
+  };
+
+  // Note: The old inline ctx definition is replaced by the factory call above.
+  // The following properties were part of the old ctx object and are now
+  // handled by createMaterializeCtx() factory. Keeping this comment for reference:
+  /*
+  const ctx: BuilderContext<T> = {
+  */
+
+  // ── Data manager proxy (factory-created) ────────────────────────
+  dataManagerProxy = createDefaultDataProxy(acc, deps, ctx);
+
+  // ── Scroll controller proxy (factory-created) ───────────────────
+  let scrollControllerProxy: any = createDefaultScrollProxy(acc, deps);
 
   // ── Run plugin setup ────────────────────────────────────────────
 
