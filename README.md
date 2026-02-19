@@ -8,7 +8,7 @@ Lightweight, high-performance virtual list with zero dependencies and optimal tr
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Zero dependencies** — no external libraries
-- **Memory efficient** — constant ~0.05 MB overhead regardless of dataset size (1M items = same memory as 10K)
+- **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
 - **8–12 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable plugins with perfect tree-shaking
 - **Grid, sections, async, selection, scale** — all opt-in
@@ -306,16 +306,16 @@ Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--sele
 
 vlist uses **constant memory** regardless of dataset size through optimized internal architecture:
 
-| Dataset Size | Memory Usage | Comparison |
-|--------------|--------------|------------|
-| 10K items | ~0.1 MB | Constant baseline |
-| 100K items | ~0.5 MB | 5× items, 5× memory |
-| 1M items | ~0.45 MB | 100× items, 4.5× memory |
+| Dataset Size | Memory Usage | Notes |
+|--------------|--------------|-------|
+| 10K items | ~0.2 MB | Constant baseline |
+| 100K items | ~0.2 MB | 10× items, same memory |
+| 1M items | ~0.4 MB | 100× items, 2× memory |
 
 **Key advantages:**
 - No array copying — uses references for zero-copy performance
 - No ID indexing overhead — O(1) memory complexity
-- Competitive with react-window while being framework-agnostic
+- Industry-leading memory efficiency for virtual list libraries
 
 ### DOM Efficiency
 
