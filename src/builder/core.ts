@@ -845,6 +845,14 @@ function materialize<T extends VListItem = VListItem>(
       renderRange.start === lastRenderRange.start &&
       renderRange.end === lastRenderRange.end
     ) {
+      // In compressed mode, items must be repositioned even when range is unchanged
+      // because their positions are relative to the viewport, not absolute
+      if (scrollIsCompressed) {
+        // Reposition all currently rendered items
+        for (const [index, element] of rendered) {
+          positionElementFn(element, index);
+        }
+      }
       return;
     }
 
@@ -1553,8 +1561,12 @@ function materialize<T extends VListItem = VListItem>(
     isTracking: () => velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES,
     isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
     updateConfig: () => {},
-    enableCompression: () => {},
-    disableCompression: () => {},
+    enableCompression: () => {
+      scrollIsCompressed = true;
+    },
+    disableCompression: () => {
+      scrollIsCompressed = false;
+    },
     isCompressed: () => scrollIsCompressed,
     isWindowMode: () => false,
     updateContainerHeight: (h: number) => {

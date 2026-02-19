@@ -12,6 +12,7 @@
  * - Custom scrollbar fallback — forces custom scrollbar in compressed mode
  * - Near-bottom interpolation — smooth blending near the end of the list
  * - Cached compression state — recalculates only when total item count changes
+ * - Smooth scroll interpolation — lerp-based wheel handling for cross-browser consistency
  *
  * No configuration needed — compression activates automatically when the total
  * height exceeds the browser limit, and deactivates when items are removed.
@@ -28,6 +29,36 @@ import {
 } from "../../rendering/scale";
 import type { Range } from "../../types";
 import { createScrollbar, type Scrollbar } from "../scrollbar";
+
+// =============================================================================
+// Smooth Scroll Constants
+// =============================================================================
+
+/**
+ * Lerp factor for smooth scroll interpolation (0–1).
+ *
+ * Each animation frame moves this fraction of the remaining distance
+ * toward the target scroll position. Higher values feel more responsive;
+ * lower values feel smoother.
+ *
+ * At 0.65, ~88% of movement completes within 2 frames (~33ms at 60fps),
+ * which feels immediate while still producing intermediate positions that
+ * prevent the Firefox scroll-up stacking bug.
+ *
+ * The bug: Firefox mouse wheel scroll-up produces deltaY = -16px.
+ * With a typical compression ratio of 4.5 (16M virtual / 72M actual),
+ * this maps to exactly 72px of actual offset change — one full item height.
+ * Items swap positions 1:1, creating a visual stacking effect where
+ * nothing appears to move.
+ *
+ * By interpolating over multiple frames, each frame produces a non-aligned
+ * offset (e.g. 46.8px, 16.4px, 5.7px…) instead of a single 72px jump,
+ * breaking the alignment and producing smooth visual scrolling.
+ */
+const LERP_FACTOR = 0.65;
+
+/** Snap to target when remaining distance is below this threshold (px). */
+const SNAP_THRESHOLD = 0.5;
 
 // =============================================================================
 // Plugin Factory
@@ -59,6 +90,12 @@ export const withScale = <
   let scrollbar: Scrollbar | null = null;
   let virtualScrollTop = 0;
   let compressedModeActive = false;
+
+  // Smooth scroll state — shared across the plugin closure so that
+  // external scroll position changes (scrollbar drag, scrollToIndex)
+  // can cancel an in-flight animation and stay in sync.
+  let targetScrollTop = 0;
+  let smoothScrollId: number | null = null;
 
   return {
     name: "withScale",
@@ -100,30 +137,75 @@ export const withScale = <
           // In compressed mode the total height exceeds the browser's DOM
           // scrollTop limit, so we store the position in a variable and
           // bypass native scroll entirely.
+          //
+          // The setter also keeps targetScrollTop in sync and cancels any
+          // in-flight smooth scroll animation so that external position
+          // changes (scrollbar drag, scrollToIndex) take effect immediately.
           ctx.setScrollFns(
             () => virtualScrollTop,
             (pos: number) => {
               virtualScrollTop = pos;
+              targetScrollTop = pos;
+              if (smoothScrollId !== null) {
+                cancelAnimationFrame(smoothScrollId);
+                smoothScrollId = null;
+              }
             },
           );
 
-          // Install wheel handler for compressed scrolling
+          // ── Smooth scroll tick ──────────────────────────────────────────
+          // Called on each animation frame while the scroll is converging
+          // toward targetScrollTop. Produces intermediate positions that
+          // prevent exact item-height-aligned jumps (the Firefox bug).
+          const smoothScrollTick = (): void => {
+            const diff = targetScrollTop - virtualScrollTop;
+
+            if (Math.abs(diff) < SNAP_THRESHOLD) {
+              // Close enough — snap to target and stop animating
+              virtualScrollTop = targetScrollTop;
+              smoothScrollId = null;
+            } else {
+              // Move a fraction of the remaining distance
+              virtualScrollTop += diff * LERP_FACTOR;
+              smoothScrollId = requestAnimationFrame(smoothScrollTick);
+            }
+
+            ctx.scrollController.scrollTo(virtualScrollTop);
+          };
+
+          // ── Wheel handler ───────────────────────────────────────────────
+          // Instead of immediately applying deltaY to virtualScrollTop, we
+          // accumulate it in targetScrollTop and let the lerp animation
+          // converge over a few frames. This:
+          //   1. Breaks exact item-height alignment (fixes Firefox bug)
+          //   2. Coalesces multiple wheel events per frame (better perf)
+          //   3. Produces smoother visual scrolling in all browsers
           const viewport = dom.viewport;
           const wheelHandler = (e: WheelEvent): void => {
             e.preventDefault();
+
+            // Use latest compression state for accurate maxScroll
+            const comp = ctx.getCachedCompression();
             const maxScroll =
-              compression.virtualHeight -
-              ctx.state.viewportState.containerHeight;
-            virtualScrollTop = Math.max(
+              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+
+            targetScrollTop = Math.max(
               0,
-              Math.min(virtualScrollTop + e.deltaY, maxScroll),
+              Math.min(targetScrollTop + e.deltaY, maxScroll),
             );
-            // setScrollFns wrapper calls onScrollFrame automatically
-            ctx.scrollController.scrollTo(virtualScrollTop);
+
+            // Start animation loop if not already running
+            if (smoothScrollId === null) {
+              smoothScrollId = requestAnimationFrame(smoothScrollTick);
+            }
           };
           viewport.addEventListener("wheel", wheelHandler, { passive: false });
           ctx.destroyHandlers.push(() => {
             viewport.removeEventListener("wheel", wheelHandler);
+            if (smoothScrollId !== null) {
+              cancelAnimationFrame(smoothScrollId);
+              smoothScrollId = null;
+            }
           });
 
           // Force custom scrollbar if not already present
@@ -237,6 +319,10 @@ export const withScale = <
           totalItems: number,
           out: Range,
         ): void => {
+          // Reset anchor before calculating new range (for relative positioning fix)
+          firstItemPosition = null;
+          firstItemIndex = null;
+
           const compression = getCompressionState(totalItems, hc);
           calculateCompressedVisibleRange(
             scrollTop,
@@ -272,24 +358,42 @@ export const withScale = <
       // ── Replace item positioning with compressed version ──
       // The builder core's positionElementFn uses simple heightCache offsets.
       // In compressed mode, items must be positioned relative to the viewport.
-      // ── Replace item positioning with compressed version ──
-      // The builder core's positionElementFn uses simple heightCache offsets.
-      // In compressed mode, items must be positioned relative to the viewport.
+      //
+      // We calculate only the FIRST visible item's position using the
+      // compression formula, then position all other items using FIXED
+      // OFFSETS relative to the first item. This ensures consistent spacing
+      // between items regardless of floating-point edge cases.
+      let firstItemPosition: number | null = null;
+      let firstItemIndex: number | null = null;
+
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
         const total = ctx.getVirtualTotal();
         const compression = getCompressionState(total, ctx.heightCache);
 
         if (compression.isCompressed) {
-          const offset = Math.round(
-            calculateCompressedItemPosition(
-              index,
-              ctx.scrollController.getScrollTop(),
-              ctx.heightCache as any,
-              total,
-              ctx.state.viewportState.containerHeight,
-              compression,
-            ),
-          );
+          const scrollTop = ctx.scrollController.getScrollTop();
+
+          // Calculate first item position (anchor point)
+          if (firstItemPosition === null || index < firstItemIndex!) {
+            firstItemIndex = index;
+            firstItemPosition = Math.round(
+              calculateCompressedItemPosition(
+                index,
+                scrollTop,
+                ctx.heightCache as any,
+                total,
+                ctx.state.viewportState.containerHeight,
+                compression,
+              ),
+            );
+          }
+
+          // Position this item relative to the first item using fixed offsets
+          const offset =
+            firstItemPosition! +
+            ctx.heightCache.getOffset(index) -
+            ctx.heightCache.getOffset(firstItemIndex!);
+
           const horizontal = ctx.config.horizontal;
           el.style.transform = horizontal
             ? `translateX(${offset}px)`
@@ -312,6 +416,10 @@ export const withScale = <
           scrollbar.destroy();
           scrollbar = null;
         }
+        if (smoothScrollId !== null) {
+          cancelAnimationFrame(smoothScrollId);
+          smoothScrollId = null;
+        }
       });
     },
 
@@ -319,6 +427,10 @@ export const withScale = <
       if (scrollbar) {
         scrollbar.destroy();
         scrollbar = null;
+      }
+      if (smoothScrollId !== null) {
+        cancelAnimationFrame(smoothScrollId);
+        smoothScrollId = null;
       }
     },
   };

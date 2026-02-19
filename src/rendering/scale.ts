@@ -205,7 +205,6 @@ export const calculateCompressedRenderRange = (
  * @param totalItems - Total number of items
  * @param containerHeight - Viewport container height
  * @param compression - Compression state
- * @param _rangeStart - (unused, kept for API compatibility)
  */
 export const calculateCompressedItemPosition = (
   index: number,
@@ -264,14 +263,15 @@ export const calculateCompressedItemPosition = (
     return normalPosition + (bottomPosition - normalPosition) * interpolation;
   }
 
-  // Normal compressed positioning: relative to virtual scroll index
+  // Normal compressed positioning
+  //
+  // Map scrollTop to an actual-space offset via the compression ratio,
+  // then position the item relative to that offset.
   const scrollRatio = scrollTop / virtualHeight;
-  const virtualScrollIndex = scrollRatio * totalItems;
+  const actualHeight = heightCache.getTotalHeight();
+  const virtualScrollOffset = scrollRatio * actualHeight;
 
-  return (
-    heightCache.getOffset(index) -
-    getOffsetForVirtualIndex(heightCache, virtualScrollIndex, totalItems)
-  );
+  return heightCache.getOffset(index) - virtualScrollOffset;
 };
 
 // =============================================================================
