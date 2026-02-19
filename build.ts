@@ -18,120 +18,33 @@ async function build() {
     );
   }
 
-  // Build sub-module bundles for tree-shaking
-  const subStart = performance.now();
+  // Build main bundle
+  const bundleStart = performance.now();
 
-  const coreModules: { entry: string; out: string; folder: boolean }[] = [];
+  const bundleResult = await Bun.build({
+    entrypoints: ["./src/index.ts"],
+    outdir: "./dist",
+    format: "esm",
+    target: "browser",
+    minify: !isDev,
+    sourcemap: isDev ? "inline" : "none",
+    naming: "index.js",
+  });
 
-  const builderModules = [
-    { entry: "./src/builder/index.ts", out: "builder", folder: true },
-  ];
-
-  const mainModule = { entry: "./src/index.ts", out: "index.js" };
-
-  const featureModules = [
-    { entry: "./src/features/async/index.ts", out: "async", folder: true },
-    { entry: "./src/features/scale/index.ts", out: "scale", folder: true },
-    {
-      entry: "./src/features/selection/index.ts",
-      out: "selection",
-      folder: true,
-    },
-    {
-      entry: "./src/features/scrollbar/index.ts",
-      out: "scrollbar",
-      folder: true,
-    },
-    {
-      entry: "./src/features/sections/index.ts",
-      out: "sections",
-      folder: true,
-    },
-    { entry: "./src/features/grid/index.ts", out: "grid", folder: true },
-    {
-      entry: "./src/features/snapshots/index.ts",
-      out: "snapshots",
-      folder: true,
-    },
-    { entry: "./src/features/page/index.ts", out: "page", folder: true },
-  ];
-
-  const allModules = [...coreModules, ...builderModules, ...featureModules];
-
-  // Single-file builds (no folder structure)
-  const singleFileModules = [mainModule];
-
-  // Framework adapters removed - now separate packages:
-  // - vlist-react (https://github.com/floor/vlist-react)
-  // - vlist-vue (https://github.com/floor/vlist-vue)
-  // - vlist-svelte (https://github.com/floor/vlist-svelte)
-
-  const subResults: { name: string; size: string; type: string }[] = [];
-
-  for (const sub of allModules) {
-    const moduleType = coreModules.includes(sub)
-      ? "core"
-      : builderModules.includes(sub)
-        ? "builder"
-        : "feature";
-    const subResult = await Bun.build({
-      entrypoints: [sub.entry],
-      outdir: `./dist/${sub.out}`,
-      format: "esm",
-      target: "browser",
-      minify: !isDev,
-      sourcemap: isDev ? "inline" : "none",
-      naming: "index.js",
-    });
-
-    if (!subResult.success) {
-      console.error(`\nSub-module build failed (${sub.out}):\n`);
-      for (const log of subResult.logs) {
-        console.error(log);
-      }
-      process.exit(1);
+  if (!bundleResult.success) {
+    console.error("\nBundle build failed:\n");
+    for (const log of bundleResult.logs) {
+      console.error(log);
     }
-
-    const subFile = Bun.file(`./dist/${sub.out}/index.js`);
-    const subSize = (subFile.size / 1024).toFixed(1);
-    subResults.push({ name: sub.out, size: subSize, type: moduleType });
+    process.exit(1);
   }
 
-  // Build single-file modules
-  for (const single of singleFileModules) {
-    const singleResult = await Bun.build({
-      entrypoints: [single.entry],
-      outdir: "./dist",
-      format: "esm",
-      target: "browser",
-      minify: !isDev,
-      sourcemap: isDev ? "inline" : "none",
-      naming: single.out,
-    });
-
-    if (!singleResult.success) {
-      console.error(`\nSingle-file module build failed (${single.out}):\n`);
-      for (const log of singleResult.logs) {
-        console.error(log);
-      }
-      process.exit(1);
-    }
-
-    const singleFile = Bun.file(`./dist/${single.out}`);
-    const singleSize = (singleFile.size / 1024).toFixed(1);
-    const name = single.out.replace(".js", "");
-    subResults.push({ name, size: singleSize, type: "core" });
-  }
-
-  const subTime = performance.now() - subStart;
-  const subSummary = subResults
-    .map((s) => `${s.name} (${s.size} KB)`)
-    .join(", ");
+  const bundleFile = Bun.file("./dist/index.js");
+  const bundleSize = (bundleFile.size / 1024).toFixed(1);
+  const bundleTime = performance.now() - bundleStart;
   console.log(
-    `  Sub-modules ${subTime.toFixed(0).padStart(6)}ms  ${subSummary}`,
+    `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
-
-  // Adapters moved to separate packages - no longer built here
 
   // Generate type declarations (optional)
   if (withTypes) {
@@ -172,48 +85,16 @@ async function build() {
   );
 
   // Size summary
-  const gzipBytes = async (path: string): Promise<string> => {
-    const raw = await $`gzip -c ${path} | wc -c`.quiet().text();
-    return (parseInt(raw.trim(), 10) / 1024).toFixed(1);
+  const gzipSize = async (path: string): Promise<string> => {
+    const content = await Bun.file(path).arrayBuffer();
+    const compressed = Bun.gzipSync(new Uint8Array(content));
+    return (compressed.byteLength / 1024).toFixed(1);
   };
 
-  console.log("");
-  console.log("  Core:");
-
-  // Show core modules
-  for (const sub of subResults.filter((s) => s.type === "core")) {
-    let gzipSize;
-    if (sub.name === "core-light") {
-      gzipSize = await gzipBytes(`dist/${sub.name}.js`);
-    } else {
-      gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
-    }
-    console.log(
-      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
-    );
-  }
+  const gzipped = await gzipSize("./dist/index.js");
 
   console.log("");
-  console.log("  Builder:");
-
-  // Show builder
-  for (const sub of subResults.filter((s) => s.type === "builder")) {
-    const gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
-    console.log(
-      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
-    );
-  }
-
-  console.log("");
-  console.log("  Plugins:");
-
-  // Show plugins
-  for (const sub of subResults.filter((s) => s.type === "plugin")) {
-    const gzipSize = await gzipBytes(`dist/${sub.name}/index.js`);
-    console.log(
-      `  ${sub.name.padEnd(13)} ${sub.size} KB minified, ${gzipSize} KB gzipped`,
-    );
-  }
+  console.log(`  index.js    ${bundleSize} KB minified, ${gzipped} KB gzipped`);
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
