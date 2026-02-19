@@ -42,11 +42,7 @@
     "dist/index.js",
     "dist/**/*.d.ts",
     "dist/**/*.css",
-    "!dist/**/*.d.ts.map",
-    "!dist/core/lite.d.ts",
-    "!dist/core/minimal.d.ts",
-    "!dist/core/full.d.ts",
-    "!dist/adapters/**"
+    "!dist/**/*.d.ts.map"
   ],
   "sideEffects": [
     "*.css"

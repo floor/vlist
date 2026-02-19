@@ -173,11 +173,18 @@ export const withSelection = <T extends VListItem = VListItem>(
       const renderAndEmit = (): void => {
         applySelectionClasses();
 
+        // Linear search for items by ID (no Map for memory efficiency)
+        const getItemByIdFn = (id: string | number): T | undefined => {
+          const items = ctx.dataManager.getItemsInRange(
+            0,
+            ctx.dataManager.getTotal() - 1,
+          );
+          return items.find((item) => item && item.id === id);
+        };
+
         emitter.emit("selection:change", {
           selected: getSelectedIds(selectionState),
-          items: getSelectedItems(selectionState, (id) =>
-            ctx.dataManager.getItemById(id),
-          ),
+          items: getSelectedItems(selectionState, getItemByIdFn),
         });
       };
 
@@ -351,11 +358,18 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Full re-render for selection changes (Space/Enter)
             forceRenderWithSelection();
 
+            // Linear search for items by ID (no Map for memory efficiency)
+            const getItemByIdFn = (id: string | number): T | undefined => {
+              const items = ctx.dataManager.getItemsInRange(
+                0,
+                ctx.dataManager.getTotal() - 1,
+              );
+              return items.find((item) => item && item.id === id);
+            };
+
             emitter.emit("selection:change", {
               selected: getSelectedIds(selectionState),
-              items: getSelectedItems(selectionState, (id) =>
-                ctx.dataManager.getItemById(id),
-              ),
+              items: getSelectedItems(selectionState, getItemByIdFn),
             });
           }
         }
@@ -412,9 +426,15 @@ export const withSelection = <T extends VListItem = VListItem>(
       });
 
       ctx.methods.set("getSelectedItems", (): T[] => {
-        return getSelectedItems(selectionState, (id) =>
-          ctx.dataManager.getItemById(id),
-        );
+        // Linear search for items by ID (no Map for memory efficiency)
+        const getItemByIdFn = (id: string | number): T | undefined => {
+          const items = ctx.dataManager.getItemsInRange(
+            0,
+            ctx.dataManager.getTotal() - 1,
+          );
+          return items.find((item) => item && item.id === id);
+        };
+        return getSelectedItems(selectionState, getItemByIdFn);
       });
 
       // ── Cleanup handler ──

@@ -379,10 +379,6 @@ export interface BuiltVList<T extends VListItem = VListItem> {
     index: number,
     alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
   ) => void;
-  scrollToItem: (
-    id: string | number,
-    alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
-  ) => void;
   cancelScroll: () => void;
   getScrollPosition: () => number;
 
