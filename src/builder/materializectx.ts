@@ -496,9 +496,6 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     updateContentSize,
   } = deps;
 
-  // Track if we've shown the warning for disabled features
-  let hasWarnedItemById = false;
-
   /** Sync height cache, content size, compression, notify handlers, re-render. */
   const syncAfterChange = (): void => {
     $.hc.rebuild($.vtf());

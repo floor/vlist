@@ -822,12 +822,12 @@ function materialize<T extends VListItem = VListItem>(
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
       };
 
-  const updateItem = (id: string | number, updates: Partial<T>): void => {
-    ctx.dataManager.updateItem(id, updates);
+  const updateItem = (index: number, updates: Partial<T>): void => {
+    ctx.dataManager.updateItem(index, updates);
   };
 
-  const removeItem = (id: string | number): void => {
-    ctx.dataManager.removeItem(id);
+  const removeItem = (index: number): void => {
+    ctx.dataManager.removeItem(index);
   };
 
   const reload = async (): Promise<void> => {
