@@ -603,14 +603,10 @@ function materialize<T extends VListItem = VListItem>(
   // Attach scroll listener to initial target ($.st set during $ init)
   $.st.addEventListener("scroll", onScrollFrame, { passive: true });
 
-  // Setup wheel handling to prevent Chrome/Safari scroll race condition
-  // Chrome/Safari update scroll position before JS can render, causing blank areas
-  // Firefox doesn't have this issue, so we only intercept on Chromium/WebKit
-  const isChromiumOrWebKit =
-    /Chrome|Safari/.test(navigator.userAgent) &&
-    !/Firefox/.test(navigator.userAgent);
-
-  if (wheelEnabled && !isHorizontal && isChromiumOrWebKit) {
+  // Setup wheel handling for consistent synchronous rendering
+  // Intercept wheel events and render before scroll position updates
+  // This prevents blank areas during fast scrolling on all browsers
+  if (wheelEnabled && !isHorizontal) {
     // Intercept wheel events and handle scroll manually
     wheelHandler = (event: WheelEvent): void => {
       event.preventDefault();
