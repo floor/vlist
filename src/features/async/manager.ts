@@ -223,6 +223,11 @@ export const createDataManager = <T extends VListItem = VListItem>(
   let cursor: string | undefined;
   let pendingRanges: Range[] = [];
 
+  // Track the furthest loaded offset so that concurrent chunk responses
+  // don't race: an earlier chunk's hasMore:true can't override a later
+  // chunk's hasMore:false.
+  let hasMoreHighWater = 0;
+
   // Track active load requests to prevent duplicates
   const activeLoads = new Map<string, Promise<void>>();
 
@@ -401,7 +406,17 @@ export const createDataManager = <T extends VListItem = VListItem>(
       storage.setTotal(offset + items.length);
     }
 
-    hasMore = storage.getCachedCount() < storage.getTotal();
+    // Only allow hasMore to decrease here, never increase. With sparse
+    // loading, getCachedCount() is almost always less than total (we never
+    // cache all 1M items), so setting hasMore=true would trigger endless
+    // loadMore calls at the bottom. But when all items ARE cached (e.g.
+    // direct setItems use without an adapter), we must turn it off.
+    if (
+      storage.getCachedCount() >= storage.getTotal() &&
+      storage.getTotal() > 0
+    ) {
+      hasMore = false;
+    }
 
     // Notify
     onItemsLoaded?.(items, offset, storage.getTotal());
@@ -556,10 +571,18 @@ export const createDataManager = <T extends VListItem = VListItem>(
           if (response.cursor) {
             cursor = response.cursor;
           }
-          if (response.hasMore !== undefined) {
-            hasMore = response.hasMore;
-          } else if (response.total !== undefined) {
-            hasMore = storage.getCachedCount() < response.total;
+          // Update hasMore — but only if this chunk covers a range at or
+          // beyond anything we've seen before. This prevents an earlier
+          // concurrent chunk (hasMore:true) from overriding a later chunk
+          // (hasMore:false) that already reached the end of the dataset.
+          const chunkEndOffset = chunk.start + response.items.length;
+          if (chunkEndOffset >= hasMoreHighWater) {
+            hasMoreHighWater = chunkEndOffset;
+            if (response.hasMore !== undefined) {
+              hasMore = response.hasMore;
+            } else if (response.total !== undefined) {
+              hasMore = chunkEndOffset < response.total;
+            }
           }
         } catch (err) {
           error = err instanceof Error ? err : new Error(String(err));
@@ -636,6 +659,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     isLoading = false;
     cursor = undefined;
     hasMore = true;
+    hasMoreHighWater = 0;
     error = undefined;
 
     notifyStateChange();
@@ -674,6 +698,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     if (placeholders) placeholders.clear();
     cursor = undefined;
     hasMore = true;
+    hasMoreHighWater = 0;
     error = undefined;
     pendingRanges = [];
     isLoading = false;
