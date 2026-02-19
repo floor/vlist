@@ -56,7 +56,7 @@ import type { MRefs } from "./materializectx";
 // Constants
 // =============================================================================
 
-const DEFAULT_OVERSCAN = 15;
+const DEFAULT_OVERSCAN = 3;
 const DEFAULT_CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 
