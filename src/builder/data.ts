@@ -94,7 +94,7 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
     if (onItemsLoaded) onItemsLoaded(loadedItems, offset, newTotal);
   };
 
-  let items: T[] = config.initialItems ? [...config.initialItems] : [];
+  let items: T[] = config.initialItems || [];
   let total = config.initialTotal ?? items.length;
 
   // ID → index map removed for memory efficiency
@@ -150,8 +150,8 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
 
   const setItems = (newItems: T[], offset = 0, newTotal?: number): void => {
     if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
-      // Full replacement
-      items = [...newItems];
+      // Full replacement - use reference (no copy)
+      items = newItems;
       total = newTotal ?? newItems.length;
     } else {
       // Partial set (append at offset)

@@ -546,7 +546,7 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     setItems: (newItems: T[], offset = 0, newTotal?: number) => {
       const items = $.it;
       if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
-        $.it = [...newItems];
+        $.it = newItems;
       } else {
         // Ensure items array is large enough before assigning
         const requiredLength = offset + newItems.length;
