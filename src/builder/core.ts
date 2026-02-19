@@ -236,10 +236,19 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Create core components ──────────────────────────────────────
   const emitter = createEmitter<VListEvents<T>>();
-  const initialItemsCopy: T[] = initialItems ? [...initialItems] : [];
+
+  // Memory optimization: conditionally copy items array
+  // copyOnInit defaults to true for safety (backward compatible)
+  const copyOnInit = config.copyOnInit !== false;
+  const initialItemsArray: T[] = initialItems
+    ? copyOnInit
+      ? [...initialItems]
+      : initialItems
+    : [];
+
   const initialHeightCache = createHeightCache(
     mainAxisSizeConfig,
-    initialItemsCopy.length,
+    initialItemsArray.length,
   );
   const pool = createElementPool();
 
@@ -247,7 +256,7 @@ function materialize<T extends VListItem = VListItem>(
   // All mutable state lives here so that extracted factories (ctx,
   // data proxy, scroll proxy) and core.ts read/write the same values.
   const $: MRefs<T> = {
-    it: initialItemsCopy,
+    it: initialItemsArray,
     hc: initialHeightCache,
     ch: dom.viewport.clientHeight,
     cw: dom.viewport.clientWidth,
@@ -328,9 +337,12 @@ function materialize<T extends VListItem = VListItem>(
   const baseClass = `${classPrefix}-item`;
 
   // ID → index map for fast lookups
-  const idToIndex = new Map<string | number, number>();
+  // Memory optimization: optional based on enableItemById flag (defaults to true)
+  const enableItemById = config.enableItemById !== false;
+  const idToIndex = enableItemById ? new Map<string | number, number>() : null;
 
   const rebuildIdIndex = (): void => {
+    if (!idToIndex) return;
     idToIndex.clear();
     for (let i = 0; i < $.it.length; i++) {
       const item = $.it[i];
@@ -338,7 +350,9 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
-  rebuildIdIndex();
+  if (enableItemById) {
+    rebuildIdIndex();
+  }
 
   // ── Plugin extension points ─────────────────────────────────────
   const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
