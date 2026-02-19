@@ -56,14 +56,7 @@
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build --types",
-    "analyze:deps": "madge --circular --extensions ts src",
-    "analyze:orphans": "madge --orphans --extensions ts src",
-    "analyze:tree": "madge --extensions ts src",
-    "analyze:graph": "madge --image deps-graph.svg --extensions ts src",
-    "analyze:graph:circular": "madge --circular --image deps-circular.svg --extensions ts src",
-    "analyze:graphs": "bun run analyze:graph && bun run analyze:graph:circular",
-    "analyze:all": "bun run analyze:deps && bun run analyze:orphans"
+    "prepublishOnly": "bun run build --types"
   },
   "bugs": {
     "url": "https://github.com/floor/vlist/issues"
@@ -72,12 +65,7 @@
   "devDependencies": {
     "@types/bun": "^1.0.0",
     "@types/jsdom": "^27.0.0",
-    "@types/react": "^19.2.13",
-    "esbuild": "^0.27.3",
     "jsdom": "^28.0.0",
-    "madge": "^8.0.0",
-    "react": "^19.2.4",
-    "typescript": "^5.0.0",
-    "vue": "^3.5.28"
+    "typescript": "^5.0.0"
   }
 }
