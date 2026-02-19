@@ -13,6 +13,7 @@
  * - Near-bottom interpolation — smooth blending near the end of the list
  * - Cached compression state — recalculates only when total item count changes
  * - Smooth scroll interpolation — lerp-based wheel handling for cross-browser consistency
+ * - Touch scroll support — finger tracking + momentum for iOS Safari / mobile browsers
  *
  * No configuration needed — compression activates automatically when the total
  * height exceeds the browser limit, and deactivates when items are removed.
@@ -61,6 +62,40 @@ const LERP_FACTOR = 0.65;
 const SNAP_THRESHOLD = 0.5;
 
 // =============================================================================
+// Touch Scroll Constants
+// =============================================================================
+
+/**
+ * Deceleration factor applied per animation frame during momentum scrolling.
+ *
+ * After the user lifts their finger, the scroll velocity is multiplied by
+ * this factor each frame (~16ms at 60fps). Lower values stop faster.
+ *
+ * 0.95 gives a natural iOS-like feel: fast flicks travel far, gentle
+ * flicks stop quickly. At 60fps the velocity halves in ~13 frames (~220ms).
+ */
+const TOUCH_DECELERATION = 0.95;
+
+/**
+ * Minimum velocity (px/ms) below which momentum animation stops.
+ * Prevents the scroll from drifting imperceptibly for many frames.
+ */
+const TOUCH_MIN_VELOCITY = 0.1;
+
+/**
+ * Maximum number of recent touch samples used for velocity estimation.
+ * Using only the last few samples (within a short time window) avoids
+ * averaging in stale positions from a long hold before release.
+ */
+const TOUCH_VELOCITY_SAMPLES = 5;
+
+/**
+ * Maximum age (ms) of a touch sample to be included in velocity calculation.
+ * Samples older than this are discarded — they represent a pause, not a flick.
+ */
+const TOUCH_VELOCITY_WINDOW = 100;
+
+// =============================================================================
 // Plugin Factory
 // =============================================================================
 
@@ -96,6 +131,13 @@ export const withScale = <
   // can cancel an in-flight animation and stay in sync.
   let targetScrollTop = 0;
   let smoothScrollId: number | null = null;
+
+  // Touch scroll state — tracks finger position and velocity for
+  // compressed-mode touch scrolling (iOS Safari, Android, etc.).
+  let touchStartY = 0;
+  let touchScrollStart = 0;
+  let momentumId: number | null = null;
+  let touchSamples: Array<{ time: number; y: number }> = [];
 
   return {
     name: "withScale",
@@ -200,8 +242,152 @@ export const withScale = <
             }
           };
           viewport.addEventListener("wheel", wheelHandler, { passive: false });
+
+          // ── Touch handlers ────────────────────────────────────────────
+          // On touch devices (iOS Safari, Android) wheel events never fire.
+          // We track the finger directly during touchmove (1:1 mapping) and
+          // apply momentum/inertial scrolling on touchend, mimicking native
+          // scroll physics.
+
+          const cancelMomentum = (): void => {
+            if (momentumId !== null) {
+              cancelAnimationFrame(momentumId);
+              momentumId = null;
+            }
+          };
+
+          const touchStartHandler = (e: TouchEvent): void => {
+            // Cancel any in-flight animations
+            cancelMomentum();
+            if (smoothScrollId !== null) {
+              cancelAnimationFrame(smoothScrollId);
+              smoothScrollId = null;
+            }
+
+            const touch = e.touches[0];
+            if (!touch) return;
+            const y = horizontal ? touch.clientX : touch.clientY;
+
+            touchStartY = y;
+            touchScrollStart = virtualScrollTop;
+            touchSamples = [{ time: performance.now(), y }];
+          };
+
+          const touchMoveHandler = (e: TouchEvent): void => {
+            // Prevent native page scroll / iOS bounce
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            if (!touch) return;
+            const y = horizontal ? touch.clientX : touch.clientY;
+            const now = performance.now();
+
+            // Record sample for velocity estimation (ring buffer)
+            touchSamples.push({ time: now, y });
+            if (touchSamples.length > TOUCH_VELOCITY_SAMPLES) {
+              touchSamples.shift();
+            }
+
+            // Delta: finger moving UP (negative dy) should scroll DOWN (positive delta)
+            const delta = touchStartY - y;
+            const comp = ctx.getCachedCompression();
+            const maxScroll =
+              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+
+            const newPos = Math.max(
+              0,
+              Math.min(touchScrollStart + delta, maxScroll),
+            );
+
+            virtualScrollTop = newPos;
+            targetScrollTop = newPos;
+            ctx.scrollController.scrollTo(newPos);
+          };
+
+          const touchEndHandler = (_e: TouchEvent): void => {
+            // Calculate flick velocity from recent samples
+            const now = performance.now();
+
+            // Filter samples within the velocity window
+            const recent = touchSamples.filter(
+              (s) => now - s.time < TOUCH_VELOCITY_WINDOW,
+            );
+
+            let velocity = 0; // px/ms, positive = scrolling down
+            if (recent.length >= 2) {
+              const first = recent[0]!;
+              const last = recent[recent.length - 1]!;
+              const dt = last.time - first.time;
+              if (dt > 0) {
+                // finger up (negative dy) → positive velocity (scroll down)
+                velocity = (first.y - last.y) / dt;
+              }
+            }
+            touchSamples = [];
+
+            // Apply momentum if flick was fast enough
+            if (Math.abs(velocity) < TOUCH_MIN_VELOCITY) return;
+
+            // Convert velocity from px/ms to px/frame (~16ms at 60fps)
+            let frameVelocity = velocity * 16;
+
+            const momentumTick = (): void => {
+              frameVelocity *= TOUCH_DECELERATION;
+
+              if (Math.abs(frameVelocity) < 0.5) {
+                momentumId = null;
+                return;
+              }
+
+              const comp = ctx.getCachedCompression();
+              const maxScroll =
+                comp.virtualHeight - ctx.state.viewportState.containerHeight;
+
+              let newPos = virtualScrollTop + frameVelocity;
+              newPos = Math.max(0, Math.min(newPos, maxScroll));
+
+              // Stop at edges
+              if (
+                (newPos <= 0 && frameVelocity < 0) ||
+                (newPos >= maxScroll && frameVelocity > 0)
+              ) {
+                virtualScrollTop = newPos;
+                targetScrollTop = newPos;
+                ctx.scrollController.scrollTo(newPos);
+                momentumId = null;
+                return;
+              }
+
+              virtualScrollTop = newPos;
+              targetScrollTop = newPos;
+              ctx.scrollController.scrollTo(newPos);
+
+              momentumId = requestAnimationFrame(momentumTick);
+            };
+
+            momentumId = requestAnimationFrame(momentumTick);
+          };
+
+          viewport.addEventListener("touchstart", touchStartHandler, {
+            passive: true,
+          });
+          viewport.addEventListener("touchmove", touchMoveHandler, {
+            passive: false,
+          });
+          viewport.addEventListener("touchend", touchEndHandler, {
+            passive: true,
+          });
+          viewport.addEventListener("touchcancel", touchEndHandler, {
+            passive: true,
+          });
+
           ctx.destroyHandlers.push(() => {
             viewport.removeEventListener("wheel", wheelHandler);
+            viewport.removeEventListener("touchstart", touchStartHandler);
+            viewport.removeEventListener("touchmove", touchMoveHandler);
+            viewport.removeEventListener("touchend", touchEndHandler);
+            viewport.removeEventListener("touchcancel", touchEndHandler);
+            cancelMomentum();
             if (smoothScrollId !== null) {
               cancelAnimationFrame(smoothScrollId);
               smoothScrollId = null;
@@ -431,6 +617,10 @@ export const withScale = <
       if (smoothScrollId !== null) {
         cancelAnimationFrame(smoothScrollId);
         smoothScrollId = null;
+      }
+      if (momentumId !== null) {
+        cancelAnimationFrame(momentumId);
+        momentumId = null;
       }
     },
   };
