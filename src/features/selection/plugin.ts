@@ -111,6 +111,21 @@ export const withSelection = <T extends VListItem = VListItem>(
         return;
       }
 
+      // ── ID → index map for O(1) lookups (selection plugin only) ──
+      const idToIndexMap = new Map<string | number, number>();
+
+      const rebuildIdIndex = (): void => {
+        idToIndexMap.clear();
+        const total = ctx.dataManager.getTotal();
+        for (let i = 0; i < total; i++) {
+          const item = ctx.dataManager.getItem(i);
+          if (item) idToIndexMap.set(item.id, i);
+        }
+      };
+
+      // Build initial index
+      rebuildIdIndex();
+
       // ── Wrap existing render functions to inject selection state ──
       // We capture the current renderIfNeeded (which may have been set by
       // grid/groups plugins) and wrap it. After rendering, we update
@@ -173,13 +188,11 @@ export const withSelection = <T extends VListItem = VListItem>(
       const renderAndEmit = (): void => {
         applySelectionClasses();
 
-        // Linear search for items by ID (no Map for memory efficiency)
+        // O(1) lookup using ID → index map
         const getItemByIdFn = (id: string | number): T | undefined => {
-          const items = ctx.dataManager.getItemsInRange(
-            0,
-            ctx.dataManager.getTotal() - 1,
-          );
-          return items.find((item) => item && item.id === id);
+          const index = idToIndexMap.get(id);
+          if (index === undefined) return undefined;
+          return ctx.dataManager.getItem(index);
         };
 
         emitter.emit("selection:change", {
@@ -360,11 +373,9 @@ export const withSelection = <T extends VListItem = VListItem>(
 
             // Linear search for items by ID (no Map for memory efficiency)
             const getItemByIdFn = (id: string | number): T | undefined => {
-              const items = ctx.dataManager.getItemsInRange(
-                0,
-                ctx.dataManager.getTotal() - 1,
-              );
-              return items.find((item) => item && item.id === id);
+              const index = idToIndexMap.get(id);
+              if (index === undefined) return undefined;
+              return ctx.dataManager.getItem(index);
             };
 
             emitter.emit("selection:change", {
@@ -395,6 +406,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (mode !== "multiple") return;
         const allItems = ctx.getAllLoadedItems();
         selectionState = selectAll(selectionState, allItems, mode);
+        rebuildIdIndex(); // Ensure index is current
         renderAndEmit();
       });
 
@@ -426,13 +438,11 @@ export const withSelection = <T extends VListItem = VListItem>(
       });
 
       ctx.methods.set("getSelectedItems", (): T[] => {
-        // Linear search for items by ID (no Map for memory efficiency)
+        // O(1) lookup using ID → index map
         const getItemByIdFn = (id: string | number): T | undefined => {
-          const items = ctx.dataManager.getItemsInRange(
-            0,
-            ctx.dataManager.getTotal() - 1,
-          );
-          return items.find((item) => item && item.id === id);
+          const index = idToIndexMap.get(id);
+          if (index === undefined) return undefined;
+          return ctx.dataManager.getItem(index);
         };
         return getSelectedItems(selectionState, getItemByIdFn);
       });
