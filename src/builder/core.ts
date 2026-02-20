@@ -168,6 +168,13 @@ function materialize<T extends VListItem = VListItem>(
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
   const mainAxisSizeConfig = mainAxisValue;
+
+  // Detect mobile devices once at creation time - preserve native touch scrolling
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    ) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
   const crossAxisSize: number | undefined = isHorizontal
     ? typeof itemConfig.height === "number"
       ? itemConfig.height
@@ -605,8 +612,9 @@ function materialize<T extends VListItem = VListItem>(
 
   // Setup wheel handling for consistent synchronous rendering
   // Intercept wheel events and render before scroll position updates
-  // This prevents blank areas during fast scrolling on all browsers
-  if (wheelEnabled && !isHorizontal) {
+  // This prevents blank areas during fast scrolling on desktop browsers
+  // Skip on mobile to preserve native touch scrolling with momentum/bounce
+  if (wheelEnabled && !isHorizontal && !isMobile) {
     // Intercept wheel events and handle scroll manually
     wheelHandler = (event: WheelEvent): void => {
       event.preventDefault();
