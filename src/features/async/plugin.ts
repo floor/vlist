@@ -157,7 +157,7 @@ export const withAsync = <T extends VListItem = VListItem>(
       };
 
       // ── Post-scroll: velocity-aware loading + load-more ──
-      ctx.afterScroll.push((scrollTop: number, direction: string): void => {
+      ctx.afterScroll.push((scrollPosition: number, direction: string): void => {
         if (ctx.state.isDestroyed) return;
 
         const currentVelocity = ctx.scrollController.getVelocity();
@@ -273,7 +273,7 @@ export const withAsync = <T extends VListItem = VListItem>(
 
       // We push a second afterScroll callback that manages the idle timer.
       // The first afterScroll (pushed above) handles per-frame loading logic.
-      ctx.afterScroll.push((_scrollTop: number, _direction: string): void => {
+      ctx.afterScroll.push((_scrollPosition: number, _direction: string): void => {
         // Reset idle timer on every scroll frame
         if (idleTimer !== null) {
           clearTimeout(idleTimer);

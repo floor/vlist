@@ -341,7 +341,9 @@ function materialize<T extends VListItem = VListItem>(
   // Users can implement their own Map if needed for O(1) lookups
 
   // ── Plugin extension points ─────────────────────────────────────
-  const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
+  const afterScroll: Array<
+    (scrollPosition: number, direction: string) => void
+  > = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
@@ -577,7 +579,7 @@ function materialize<T extends VListItem = VListItem>(
     $.ls = scrollTop;
     $.rfn();
 
-    emitter.emit("scroll", { scrollTop, direction });
+    emitter.emit("scroll", { scrollPosition: scrollTop, direction });
 
     // Emit velocity change
     emitter.emit("velocity:change", {
@@ -640,7 +642,7 @@ function materialize<T extends VListItem = VListItem>(
       // Emit scroll event
       const direction: "up" | "down" =
         newScroll >= currentScroll ? "down" : "up";
-      emitter.emit("scroll", { scrollTop: newScroll, direction });
+      emitter.emit("scroll", { scrollPosition: newScroll, direction });
 
       // Update scrolling class
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
