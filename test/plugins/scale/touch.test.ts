@@ -916,7 +916,7 @@ describe("withScale touch scrolling", () => {
         container,
         item: { width: 40, template },
         items,
-        direction: "horizontal",
+        orientation: "horizontal",
       })
         .use(withScale())
         .build();

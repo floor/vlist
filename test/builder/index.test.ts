@@ -625,7 +625,7 @@ describe("builder validation", () => {
       vlist<TestItem>({
         container,
         item: { height: 40, width: 100, template },
-        direction: "horizontal",
+        orientation: "horizontal",
         reverse: true,
       });
     }).toThrow("horizontal direction cannot be combined with reverse mode");
@@ -1675,7 +1675,7 @@ describe("builder horizontal mode", () => {
     list = vlist<TestItem>({
       container,
       item: { width: 100, height: 40, template },
-      direction: "horizontal",
+      orientation: "horizontal",
     }).build();
 
     expect(list.element).toBeDefined();
@@ -1687,7 +1687,7 @@ describe("builder horizontal mode", () => {
       container,
       item: { width: 100, height: 40, template },
       items: createTestItems(50),
-      direction: "horizontal",
+      orientation: "horizontal",
     }).build();
 
     expect(list.total).toBe(50);
@@ -1930,11 +1930,11 @@ describe("withGrid plugin", () => {
         container,
         item: { height: 100, width: 100, template },
         items: createTestItems(8),
-        direction: "horizontal",
+        orientation: "horizontal",
       })
         .use(withGrid({ columns: 4 }))
         .build();
-    }).toThrow("withGrid cannot be used with direction: 'horizontal'");
+    }).toThrow("withGrid cannot be used with orientation: 'horizontal'");
   });
 
   it("should throw when used with reverse mode", () => {
@@ -2847,26 +2847,28 @@ describe("withSections plugin", () => {
         .build();
     }).toThrow(/headerTemplate is required/);
   });
-
-  it("should throw when used with horizontal direction", () => {
+  it("should work with horizontal orientation", () => {
     const items = createGroupedItems(6);
 
-    expect(() => {
-      vlist<GroupedTestItem>({
-        container,
-        item: { height: 50, width: 100, template: groupedTemplate },
-        items,
-        direction: "horizontal",
-      })
-        .use(
-          withSections({
-            getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 32,
-            headerTemplate,
-          }),
-        )
-        .build();
-    }).toThrow(/cannot be used with direction: 'horizontal'/);
+    // Horizontal orientation should be supported for withSections
+    // (sticky headers stick to left edge instead of top)
+    const list = vlist<GroupedTestItem>({
+      container,
+      item: { height: 50, width: 100, template: groupedTemplate },
+      items,
+      orientation: "horizontal",
+    })
+      .use(
+        withSections({
+          getGroupForIndex: (i) => items[i]!.group,
+          headerHeight: 32,
+          headerTemplate,
+        }),
+      )
+      .build();
+
+    expect(list.element).toBeDefined();
+    list.destroy();
   });
 
   it("should allow sticky headers with reverse mode", () => {
