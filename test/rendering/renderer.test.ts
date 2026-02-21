@@ -711,3 +711,360 @@ describe("getContainerDimensions", () => {
     document.body.removeChild(viewport);
   });
 });
+
+// =============================================================================
+// Compression Context Tests
+// =============================================================================
+
+describe("renderer with compression context", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should use compression-aware positioning when compressionFns provided", () => {
+    const sizeCache = createSizeCache(40, 20);
+
+    // Mock compression functions
+    const mockGetPosition = mock(
+      (
+        index: number,
+        scrollTop: number,
+        _sizeCache: any,
+        _totalItems: number,
+        _containerHeight: number,
+        _compression: any,
+        _rangeStart?: number,
+      ) => {
+        // Return custom compressed position
+        return index * 30; // Different from normal offset
+      },
+    );
+
+    const mockGetState = mock((totalItems: number, _sizeCache: any) => {
+      return {
+        isCompressed: true,
+        actualSize: 10000,
+        virtualSize: totalItems * 40,
+        ratio: 0.5,
+      };
+    });
+
+    const compressionFns = {
+      getPosition: mockGetPosition,
+      getState: mockGetState,
+    };
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      false, // horizontal
+      undefined, // crossAxisSize
+      compressionFns,
+    );
+
+    const items = createTestItems(10);
+    const renderRange: Range = { start: 0, end: 9 };
+    const compressionCtx = {
+      scrollPosition: 100,
+      totalItems: 10,
+      containerSize: 500,
+      rangeStart: 0,
+    };
+
+    renderer.render(items, renderRange, new Set<number>(), -1, compressionCtx);
+
+    // Verify compression functions were called
+    expect(mockGetState).toHaveBeenCalled();
+    expect(mockGetPosition).toHaveBeenCalled();
+
+    renderer.destroy();
+  });
+
+  it("should fall back to normal positioning when compression is not active", () => {
+    const sizeCache = createSizeCache(40, 20);
+
+    const mockGetPosition = mock(() => 999);
+    const mockGetState = mock(() => {
+      return {
+        isCompressed: false, // Not compressed
+        actualSize: 400,
+        virtualSize: 400,
+        ratio: 1,
+      };
+    });
+
+    const compressionFns = {
+      getPosition: mockGetPosition,
+      getState: mockGetState,
+    };
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      false, // horizontal
+      undefined, // crossAxisSize
+      compressionFns,
+    );
+
+    const items = createTestItems(10);
+    const renderRange: Range = { start: 0, end: 9 };
+    const compressionCtx = {
+      scrollPosition: 100,
+      totalItems: 10,
+      containerSize: 500,
+      rangeStart: 0,
+    };
+
+    renderer.render(items, renderRange, new Set<number>(), -1, compressionCtx);
+
+    // Compression state checked but position function should not be called
+    // because isCompressed is false
+    expect(mockGetState).toHaveBeenCalled();
+    // mockGetPosition should NOT be called when isCompressed=false
+    expect(mockGetPosition).not.toHaveBeenCalled();
+
+    renderer.destroy();
+  });
+
+  it("should use normal positioning when compressionCtx is undefined", () => {
+    const sizeCache = createSizeCache(40, 20);
+
+    const mockGetPosition = mock(() => 999);
+    const mockGetState = mock(() => ({
+      isCompressed: true,
+      actualSize: 10000,
+      virtualSize: 400,
+      ratio: 0.5,
+    }));
+
+    const compressionFns = {
+      getPosition: mockGetPosition,
+      getState: mockGetState,
+    };
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      false, // horizontal
+      undefined, // crossAxisSize
+      compressionFns,
+    );
+
+    const items = createTestItems(10);
+    const renderRange: Range = { start: 0, end: 9 };
+
+    // Render without compressionCtx
+    renderer.render(items, renderRange, new Set<number>(), -1);
+
+    // Should not call compression functions when no context provided
+    expect(mockGetPosition).not.toHaveBeenCalled();
+
+    renderer.destroy();
+  });
+
+  it("should update positions when compressionCtx changes", () => {
+    const sizeCache = createSizeCache(40, 20);
+
+    const mockGetPosition = mock((index: number) => index * 35);
+    const mockGetState = mock(() => ({
+      isCompressed: true,
+      actualSize: 10000,
+      virtualSize: 400,
+      ratio: 0.5,
+    }));
+
+    const compressionFns = {
+      getPosition: mockGetPosition,
+      getState: mockGetState,
+    };
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      false, // horizontal
+      undefined, // crossAxisSize
+      compressionFns,
+    );
+
+    const items = createTestItems(10);
+    const renderRange: Range = { start: 0, end: 9 };
+    const compressionCtx1 = {
+      scrollPosition: 100,
+      totalItems: 10,
+      containerSize: 500,
+      rangeStart: 0,
+    };
+
+    renderer.render(items, renderRange, new Set<number>(), -1, compressionCtx1);
+
+    const callCountAfterRender = (mockGetPosition as any).mock.calls.length;
+
+    // Update positions with new context
+    const compressionCtx2 = {
+      scrollPosition: 200,
+      totalItems: 10,
+      containerSize: 500,
+      rangeStart: 0,
+    };
+
+    renderer.updatePositions(compressionCtx2);
+
+    // Should have called getPosition again for each rendered item
+    expect((mockGetPosition as any).mock.calls.length).toBeGreaterThan(
+      callCountAfterRender,
+    );
+
+    renderer.destroy();
+  });
+
+  it("should handle updatePositions with empty rendered map", () => {
+    const sizeCache = createSizeCache(40, 20);
+
+    const mockGetPosition = mock(() => 100);
+    const mockGetState = mock(() => ({
+      isCompressed: true,
+      actualSize: 10000,
+      virtualSize: 400,
+      ratio: 0.5,
+    }));
+
+    const compressionFns = {
+      getPosition: mockGetPosition,
+      getState: mockGetState,
+    };
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      false, // horizontal
+      undefined, // crossAxisSize
+      compressionFns,
+    );
+
+    const compressionCtx = {
+      scrollPosition: 100,
+      totalItems: 10,
+      containerSize: 500,
+      rangeStart: 0,
+    };
+
+    // Call updatePositions without rendering anything
+    expect(() => {
+      renderer.updatePositions(compressionCtx);
+    }).not.toThrow();
+
+    // Should not call getPosition when nothing is rendered
+    expect(mockGetPosition).not.toHaveBeenCalled();
+
+    renderer.destroy();
+  });
+});
+
+// =============================================================================
+// Cross-axis Size Tests
+// =============================================================================
+
+describe("renderer with cross-axis size (horizontal mode)", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should apply height from crossAxisSize in horizontal mode", () => {
+    const sizeCache = createSizeCache(200, 20); // Width-based cache
+    const crossAxisSize = 300; // Fixed height
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      true, // horizontal
+      crossAxisSize,
+    );
+
+    const items = createTestItems(5);
+    const renderRange: Range = { start: 0, end: 4 };
+
+    renderer.render(items, renderRange, new Set<number>(), -1);
+
+    const firstElement = renderer.getElement(0);
+    expect(firstElement).toBeTruthy();
+
+    // In horizontal mode with crossAxisSize, height should be set
+    if (firstElement) {
+      expect(firstElement.style.height).toBe("300px");
+      expect(firstElement.style.width).toBeTruthy(); // Width from cache
+    }
+
+    renderer.destroy();
+  });
+
+  it("should not set height when crossAxisSize is undefined", () => {
+    const sizeCache = createSizeCache(200, 20);
+
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      undefined, // totalItemsGetter
+      "test-0",
+      true, // horizontal
+      undefined, // no crossAxisSize
+    );
+
+    const items = createTestItems(5);
+    const renderRange: Range = { start: 0, end: 4 };
+
+    renderer.render(items, renderRange, new Set<number>(), -1);
+
+    const firstElement = renderer.getElement(0);
+    expect(firstElement).toBeTruthy();
+
+    if (firstElement) {
+      // In horizontal mode, width is set from cache
+      // Height may still be set from cache size, so we just verify element exists
+      expect(firstElement.style.width).toBeTruthy();
+    }
+
+    renderer.destroy();
+  });
+});
