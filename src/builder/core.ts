@@ -2,7 +2,7 @@
  * vlist/builder — Composable virtual list builder
  *
  * Pure utilities (velocity, DOM, pool, range, scroll) live in sibling files.
- * Height cache and emitter are reused from rendering/ and events/ modules.
+ * Size cache and emitter are reused from rendering/ and events/ modules.
  * Bun.build inlines everything into a single bundle automatically.
  *
  * Plugins compose features *around* the hot path via extension points:

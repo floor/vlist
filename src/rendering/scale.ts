@@ -78,7 +78,7 @@ export const getCompressionState = (
  *
  * @param scrollTop - Current scroll position
  * @param containerHeight - Viewport container height
- * @param heightCache - Height cache for item heights/offsets
+ * @param sizeCache - Size cache for item sizes/offsets
  * @param totalItems - Total number of items
  * @param compression - Compression state
  * @param out - Output range to mutate (avoids allocation on hot path)
@@ -98,7 +98,7 @@ export const calculateCompressedVisibleRange = (
   }
 
   if (!compression.isCompressed) {
-    // Normal calculation using height cache
+    // Normal calculation using size cache
     const start = sizeCache.indexAtOffset(scrollTop);
     // Find the last item that is at least partially visible
     // Add 1 to match the fixed-height ceil() behavior (safe overshoot)
@@ -201,7 +201,7 @@ export const calculateCompressedRenderRange = (
  *
  * @param index - Item index
  * @param scrollTop - Current (virtual) scroll position
- * @param heightCache - Height cache for item heights/offsets
+ * @param sizeCache - Size cache for item sizes/offsets
  * @param totalItems - Total number of items
  * @param containerHeight - Viewport container height
  * @param compression - Compression state
@@ -282,7 +282,7 @@ export const calculateCompressedItemPosition = (
  * Pure function - no side effects
  *
  * @param index - Target item index
- * @param heightCache - Height cache for item heights/offsets
+ * @param sizeCache - Size cache for item sizes/offsets
  * @param containerHeight - Viewport container height
  * @param totalItems - Total number of items
  * @param compression - Compression state
@@ -315,15 +315,15 @@ export const calculateCompressedScrollToIndex = (
     targetPosition = sizeCache.getOffset(index);
   }
 
-  // Adjust for alignment using the specific item's height
-  const itemHeight = sizeCache.getSize(index);
+  // Adjust for alignment using the specific item's size
+  const itemSize = sizeCache.getSize(index);
 
   switch (align) {
     case "center":
-      targetPosition -= (containerHeight - itemHeight) / 2;
+      targetPosition -= (containerHeight - itemSize) / 2;
       break;
     case "end":
-      targetPosition -= containerHeight - itemHeight;
+      targetPosition -= containerHeight - itemSize;
       break;
   }
 
@@ -379,9 +379,9 @@ export const needsCompression = (
  * Only meaningful for fixed-height items
  * Pure function - no side effects
  */
-export const getMaxItemsWithoutCompression = (itemHeight: number): number => {
-  if (itemHeight <= 0) return 0;
-  return Math.floor(MAX_VIRTUAL_HEIGHT / itemHeight);
+export const getMaxItemsWithoutCompression = (itemSize: number): number => {
+  if (itemSize <= 0) return 0;
+  return Math.floor(MAX_VIRTUAL_HEIGHT / itemSize);
 };
 
 /**

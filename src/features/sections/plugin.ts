@@ -27,7 +27,7 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
 import {
   createGroupLayout,
   buildLayoutItems,
-  createGroupedHeightFn,
+  createGroupedSizeFn,
 } from "./layout";
 
 import { createStickyHeader } from "./sticky";
@@ -129,9 +129,9 @@ export const withSections = <T extends VListItem = VListItem>(
       // Note: sticky headers work with reverse mode!
       // As you scroll up through history, the current section header sticks at top
 
-      // ── Get the base item height ──
+      // ── Get the base item size ──
       const itemConfig = rawConfig.item;
-      const baseHeight = itemConfig.height as
+      const baseSize = itemConfig.height as
         | number
         | ((index: number) => number);
 
@@ -152,11 +152,11 @@ export const withSections = <T extends VListItem = VListItem>(
       // ── Build layout items (items + headers) ──
       layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
-      // ── Create grouped height function ──
-      const groupedHeightFn = createGroupedHeightFn(groupLayout, baseHeight);
+      // ── Create grouped size function ──
+      const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
 
-      // ── Update height config and rebuild height cache ──
-      ctx.setSizeConfig(groupedHeightFn);
+      // ── Update size config and rebuild size cache ──
+      ctx.setSizeConfig(groupedSizeFn);
 
       ctx.rebuildSizeCache(layoutItems.length);
 
@@ -256,11 +256,8 @@ export const withSections = <T extends VListItem = VListItem>(
         groupLayout.rebuild(originalItems.length);
         layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
-        const newGroupedHeightFn = createGroupedHeightFn(
-          groupLayout,
-          baseHeight,
-        );
-        ctx.setSizeConfig(newGroupedHeightFn);
+        const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
+        ctx.setSizeConfig(newGroupedSizeFn);
         ctx.rebuildSizeCache(layoutItems.length);
 
         // Update data manager with new layout items

@@ -30,7 +30,7 @@ import type { SizeCache } from "../../rendering/sizes";
  *
  * @param root - The vlist root element (.vlist) — sticky header is appended here
  * @param layout - Group layout for index/group resolution
- * @param heightCache - The LAYOUT height cache (includes headers)
+ * @param sizeCache - The LAYOUT size cache (includes headers)
  * @param config - Groups configuration (headerTemplate, headerHeight)
  * @param classPrefix - CSS class prefix (default: 'vlist')
  * @returns StickyHeader instance
@@ -38,7 +38,7 @@ import type { SizeCache } from "../../rendering/sizes";
 export const createStickyHeader = (
   root: HTMLElement,
   layout: GroupLayout,
-  heightCache: SizeCache,
+  sizeCache: SizeCache,
   config: GroupsConfig,
   classPrefix: string,
 ): StickyHeader => {
@@ -126,7 +126,7 @@ export const createStickyHeader = (
     let activeGroupIdx = 0;
 
     for (let i = groups.length - 1; i >= 0; i--) {
-      const headerOffset = heightCache.getOffset(groups[i]!.headerLayoutIndex);
+      const headerOffset = sizeCache.getOffset(groups[i]!.headerLayoutIndex);
       if (headerOffset <= scrollTop) {
         activeGroupIdx = i;
         break;
@@ -134,9 +134,7 @@ export const createStickyHeader = (
     }
 
     // Edge case: if scrollTop is before the first header, show the first group
-    const firstHeaderOffset = heightCache.getOffset(
-      groups[0]!.headerLayoutIndex,
-    );
+    const firstHeaderOffset = sizeCache.getOffset(groups[0]!.headerLayoutIndex);
     if (scrollTop < firstHeaderOffset) {
       hide();
       return;
@@ -156,7 +154,7 @@ export const createStickyHeader = (
 
     const nextGroupIdx = activeGroupIdx + 1;
     if (nextGroupIdx < groups.length) {
-      const nextHeaderOffset = heightCache.getOffset(
+      const nextHeaderOffset = sizeCache.getOffset(
         groups[nextGroupIdx]!.headerLayoutIndex,
       );
       const distance = nextHeaderOffset - scrollTop;

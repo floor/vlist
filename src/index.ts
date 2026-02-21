@@ -72,7 +72,7 @@ export type {
 export {
   createGroupLayout as createSectionLayout,
   buildLayoutItems,
-  createGroupedHeightFn as createSectionedHeightFn,
+  createGroupedSizeFn as createSectionedSizeFn,
   createStickyHeader,
   isGroupHeader as isSectionHeader,
   type GroupsConfig as SectionsConfig,

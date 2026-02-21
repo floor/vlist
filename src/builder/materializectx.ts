@@ -496,7 +496,7 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     updateContentSize,
   } = deps;
 
-  /** Sync height cache, content size, compression, notify handlers, re-render. */
+  /** Sync size cache, content size, compression, notify handlers, re-render. */
   const syncAfterChange = (): void => {
     $.hc.rebuild($.vtf());
     updateContentSize();

@@ -4,7 +4,7 @@
  *
  * Compression support is NOT imported here — it's injected via
  * CompressionState parameters. When compression is inactive
- * (the common case), all calculations use simple height-cache math
+ * (the common case), all calculations use simple size-cache math
  * with zero dependency on the compression module.
  *
  * This keeps the builder core lightweight. The withCompression plugin
@@ -46,7 +46,7 @@ export const NO_COMPRESSION: CompressionState = {
 };
 
 /**
- * Create a trivial compression state from a height cache.
+ * Create a trivial compression state from a size cache.
  * No compression logic — just reads the total height.
  * For use when the full compression module is not loaded.
  */
@@ -98,7 +98,7 @@ export type ScrollToIndexFn = (
 // =============================================================================
 
 /**
- * Calculate visible range using height cache lookups.
+ * Calculate visible range using size cache lookups.
  * Fast path for lists that don't need compression (< ~350 000 items at 48px).
  * Mutates `out` to avoid allocation on the scroll hot path.
  */
@@ -149,7 +149,7 @@ export const calculateRenderRange = (
 
 /**
  * Simple scroll-to-index calculation (non-compressed).
- * Uses height cache offsets directly.
+ * Uses size cache offsets directly.
  */
 export const simpleScrollToIndex: ScrollToIndexFn = (
   index,
@@ -163,7 +163,7 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
 
   const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
   const itemOffset = sizeCache.getOffset(safeIndex);
-  const itemHeight = sizeCache.getSize(safeIndex);
+  const itemSize = sizeCache.getSize(safeIndex);
   const totalHeight = sizeCache.getTotalSize();
   const maxScroll = Math.max(0, totalHeight - containerHeight);
 
@@ -171,10 +171,10 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
 
   switch (align) {
     case "center":
-      position = itemOffset - containerHeight / 2 + itemHeight / 2;
+      position = itemOffset - containerHeight / 2 + itemSize / 2;
       break;
     case "end":
-      position = itemOffset - containerHeight + itemHeight;
+      position = itemOffset - containerHeight + itemSize;
       break;
     case "start":
     default:
