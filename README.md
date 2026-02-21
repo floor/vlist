@@ -23,6 +23,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - ✨ **Dimension-agnostic API** — semantically correct terminology for both orientations
 - 🎯 **Horizontal sections** — sticky headers work in horizontal carousels
+- 🎨 **Horizontal grid layouts** — 2D grids work in both orientations
 - 📐 **`orientation` not `direction`** — clearer, more intuitive configuration
 
 ## Installation
@@ -175,6 +176,7 @@ const list = vlist({
 | **Chat UI** | `reverse: true` + `withSections({ sticky: false })` |
 | **Horizontal carousel** | `orientation: 'horizontal'`, `item.width` |
 | **Horizontal sections** | `orientation: 'horizontal'` + `withSections()` |
+| **Horizontal grid** | `orientation: 'horizontal'` + `withGrid()` |
 | **Page-level scroll** | `withPage()` |
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
@@ -397,8 +399,9 @@ const list: VList<Photo> = vlist<Photo>({
 - See [Migration Guide](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
 
 **New Features:**
-- Horizontal orientation support for sections plugin
+- Horizontal orientation support for grid and sections plugins
 - Complete dimension-agnostic architecture
+- Proper axis swapping for horizontal 2D grids
 
 ## Links
 
