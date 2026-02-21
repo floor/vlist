@@ -241,8 +241,8 @@ export const withSections = <T extends VListItem = VListItem>(
 
         // Wire sticky header into afterScroll
         const stickyRef = stickyHeader;
-        ctx.afterScroll.push((scrollTop: number, _direction: string): void => {
-          stickyRef.update(scrollTop);
+        ctx.afterScroll.push((scrollPosition: number, _direction: string): void => {
+          stickyRef.update(scrollPosition);
         });
 
         // Initialize sticky header

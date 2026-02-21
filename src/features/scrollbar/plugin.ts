@@ -114,8 +114,8 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
       // ── Post-scroll: update thumb position ──
       const scrollbarRef = scrollbar;
-      ctx.afterScroll.push((scrollTop: number, _direction: string): void => {
-        scrollbarRef.updatePosition(scrollTop);
+      ctx.afterScroll.push((scrollPosition: number, _direction: string): void => {
+        scrollbarRef.updatePosition(scrollPosition);
         scrollbarRef.show();
       });
 

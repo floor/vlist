@@ -141,7 +141,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * scroll-triggered render. These are NOT on the hot path —
    * they run after DOM updates are complete.
    */
-  afterScroll: Array<(scrollTop: number, direction: string) => void>;
+  afterScroll: Array<(scrollPosition: number, direction: string) => void>;
 
   // ── Event handler slots ───────────────────────────────────────
   /**

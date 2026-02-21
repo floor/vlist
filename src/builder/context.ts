@@ -83,7 +83,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   };
 
   // ── Handler registration arrays ───────────────────────────────
-  const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
+  const afterScroll: Array<(scrollPosition: number, direction: string) => void> = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];

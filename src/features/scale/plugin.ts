@@ -432,9 +432,9 @@ export const withScale = <
             // Wire scrollbar into afterScroll
             const scrollbarRef = scrollbar;
             ctx.afterScroll.push(
-              (scrollTop: number, _direction: string): void => {
+              (scrollPosition: number, _direction: string): void => {
                 if (scrollbarRef) {
-                  scrollbarRef.updatePosition(scrollTop);
+                  scrollbarRef.updatePosition(scrollPosition);
                   scrollbarRef.show();
                 }
               },
