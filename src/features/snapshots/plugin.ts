@@ -112,8 +112,8 @@ export const withSnapshots = <
 
         if (compression.isCompressed) {
           // Compressed: reverse the linear mapping
-          const itemHeight = ctx.sizeCache.getSize(safeIndex);
-          const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
+          const itemSize = ctx.sizeCache.getSize(safeIndex);
+          const fraction = itemSize > 0 ? offsetInItem / itemSize : 0;
           scrollPosition =
             ((safeIndex + fraction) / totalItems) * compression.virtualHeight;
         } else {

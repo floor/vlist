@@ -7,7 +7,7 @@ import { describe, it, expect } from "bun:test";
 import {
   createGroupLayout,
   buildLayoutItems,
-  createGroupedHeightFn,
+  createGroupedSizeFn,
 } from "../../../src/features/sections/layout";
 import { isGroupHeader } from "../../../src/features/sections/types";
 import type { VListItem } from "../../../src/types";
@@ -621,10 +621,10 @@ describe("buildLayoutItems", () => {
 });
 
 // =============================================================================
-// createGroupedHeightFn
+// createGroupedSizeFn
 // =============================================================================
 
-describe("createGroupedHeightFn", () => {
+describe("createGroupedSizeFn", () => {
   it("should return header height for header layout indices", () => {
     const layout = createGroupLayout(
       CONTACTS.length,
@@ -632,7 +632,7 @@ describe("createGroupedHeightFn", () => {
         headerHeight: 32,
       }),
     );
-    const heightFn = createGroupedHeightFn(layout, 48);
+    const heightFn = createGroupedSizeFn(layout, 48);
 
     // Headers at layout indices 0, 3, 7
     expect(heightFn(0)).toBe(32);
@@ -647,7 +647,7 @@ describe("createGroupedHeightFn", () => {
         headerHeight: 32,
       }),
     );
-    const heightFn = createGroupedHeightFn(layout, 48);
+    const heightFn = createGroupedSizeFn(layout, 48);
 
     // Items at layout indices 1, 2, 4, 5, 6, 8
     expect(heightFn(1)).toBe(48);
@@ -667,7 +667,7 @@ describe("createGroupedHeightFn", () => {
     );
     // Variable height: each item has height 40 + dataIndex * 5
     const itemHeightFn = (dataIndex: number) => 40 + dataIndex * 5;
-    const heightFn = createGroupedHeightFn(layout, itemHeightFn);
+    const heightFn = createGroupedSizeFn(layout, itemHeightFn);
 
     // Layout 1 → data 0 → height 40
     expect(heightFn(1)).toBe(40);
@@ -689,7 +689,7 @@ describe("createGroupedHeightFn", () => {
         headerHeight: (_group, groupIndex) => 20 + groupIndex * 10,
       }),
     );
-    const heightFn = createGroupedHeightFn(layout, 48);
+    const heightFn = createGroupedSizeFn(layout, 48);
 
     expect(heightFn(0)).toBe(20); // group 0 header
     expect(heightFn(3)).toBe(30); // group 1 header

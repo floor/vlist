@@ -542,7 +542,7 @@ export const withScale = <
       );
 
       // ── Replace item positioning with compressed version ──
-      // The builder core's positionElementFn uses simple heightCache offsets.
+      // The builder core's positionElementFn uses simple sizeCache offsets.
       // In compressed mode, items must be positioned relative to the viewport.
       //
       // We calculate only the FIRST visible item's position using the

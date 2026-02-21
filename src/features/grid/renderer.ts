@@ -3,14 +3,14 @@
  * Renders items in a 2D grid layout within the virtual scroll container.
  *
  * Extends the base renderer pattern but positions items using both
- * row offsets (translateY from the height cache) and column offsets
+ * row offsets (translateY from the size cache) and column offsets
  * (translateX calculated from column index and container width).
  *
  * Key differences from the list renderer:
  * - Items are positioned with translate(x, y) instead of just translateY(y)
  * - Item width is set to columnWidth (containerWidth / columns - gaps)
  * - The "index" in the rendered map is the FLAT ITEM INDEX (not row index)
- * - Row offsets come from the height cache (which operates on row indices)
+ * - Row offsets come from the size cache (which operates on row indices)
  * - Column offsets are calculated from itemIndex % columns
  */
 
@@ -136,7 +136,7 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
  *
  * @param itemsContainer - The DOM element that holds rendered items
  * @param template - Item template function
- * @param sizeCache - Height cache operating on ROW indices
+ * @param sizeCache - Size cache operating on ROW indices
  * @param gridLayout - Grid layout for row/col calculations
  * @param classPrefix - CSS class prefix
  * @param initialContainerWidth - Initial container width for column sizing
@@ -158,7 +158,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   let containerWidth = initialContainerWidth;
 
-  // Track if groups are active (affects height cache indexing)
+  // Track if groups are active (affects size cache indexing)
   let groupsActive = false;
 
   // Cache compression state
@@ -244,7 +244,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       }
     }
 
-    // Normal positioning: row offset from height cache
+    // Normal positioning: row offset from size cache
     return sizeCache.getOffset(row);
   };
 
@@ -285,7 +285,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
       y = offset;
     } else {
-      // Regular grid: height cache is row-based
+      // Regular grid: size cache is row-based
       y = calculateRowOffset(itemIndex, compressionCtx);
     }
 
@@ -305,14 +305,14 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       : gridLayout.getColumnWidth(containerWidth);
 
     // Height lookup depends on whether groups are active
-    // Grouped grids: height cache uses ITEM indices
-    // Regular grids: height cache uses ROW indices
+    // Grouped grids: size cache uses ITEM indices
+    // Regular grids: size cache uses ROW indices
     let itemHeight: number;
     if (groupsActive || isHeader) {
-      // Grouped grid: height cache is item-based
+      // Grouped grid: size cache is item-based
       itemHeight = sizeCache.getSize(itemIndex) - gridLayout.gap;
     } else {
-      // Regular grid: height cache is row-based
+      // Regular grid: size cache is row-based
       const row = gridLayout.getRow(itemIndex);
       itemHeight = sizeCache.getSize(row) - gridLayout.gap;
     }

@@ -122,11 +122,11 @@ export const withGrid = <T extends VListItem = VListItem>(
       });
 
       // ── Update height config to include gap and inject grid context ──
-      // In grid mode, each row's height in the height cache = itemHeight + gap
+      // In grid mode, each row's size in the size cache = itemSize + gap
       // so that rows are spaced apart vertically. The grid renderer subtracts
       // the gap when sizing the DOM element.
       const itemConfig = rawConfig.item;
-      const baseHeight = (
+      const baseSize = (
         resolvedConfig.horizontal ? itemConfig.width : itemConfig.height
       ) as
         | number
@@ -147,8 +147,8 @@ export const withGrid = <T extends VListItem = VListItem>(
         gap: gridLayout.gap,
       };
 
-      if (typeof baseHeight === "function") {
-        // Height function - inject grid context
+      if (typeof baseSize === "function") {
+        // Size function - inject grid context
         ctx.setSizeConfig((index: number) => {
           // Calculate grid context
           const innerWidth = gridState.containerWidth - 2; // account for borders
@@ -167,15 +167,15 @@ export const withGrid = <T extends VListItem = VListItem>(
           };
 
           // Call user's function with context
-          const height = baseHeight(index, context);
-          return height + gridState.gap; // Add gap for row spacing
+          const size = baseSize(index, context);
+          return size + gridState.gap; // Add gap for row spacing
         });
       } else if (gap > 0) {
-        // Fixed height - just add gap
-        ctx.setSizeConfig(baseHeight + gap);
+        // Fixed size - just add gap
+        ctx.setSizeConfig(baseSize + gap);
       }
 
-      // Rebuild height cache with row count
+      // Rebuild size cache with row count
       ctx.rebuildSizeCache();
 
       // ── Add grid CSS class ──
@@ -231,7 +231,7 @@ export const withGrid = <T extends VListItem = VListItem>(
             }
           }
 
-          // Override height cache getTotalSize to return corrected value
+          // Override size cache getTotalSize to return corrected value
           // This ensures everything (DOM, scrollbar, calculations) uses the correct height
           ctx.sizeCache.getTotalSize = () => correctTotalHeight;
 
@@ -279,7 +279,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           gridRenderer.updateContainerWidth(containerWidth);
         }
 
-        // Rebuild height cache with new row count
+        // Rebuild size cache with new row count
         ctx.rebuildSizeCache();
 
         // Update content size to reflect new total height
@@ -401,7 +401,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       // ── Override scrollToIndex to convert item index → row ──
       // (Plugins like selection that scrollToIndex with item indices need this)
-      // The builder core's scrollToIndex already works with the height cache
+      // The builder core's scrollToIndex already works with the size cache
       // which is in row-space, so we just need to ensure the public API
       // scrollToIndex maps item index → row index.
       ctx.methods.set(
