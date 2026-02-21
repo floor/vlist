@@ -43,6 +43,7 @@ export {
   rangesEqual,
   isInRange,
   getRangeCount,
+  rangeToIndices,
   diffRanges,
   getSimpleCompressionState,
   simpleVisibleRange,
