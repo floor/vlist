@@ -18,7 +18,7 @@
 
 import type { Range } from "../types";
 import { MAX_VIRTUAL_HEIGHT } from "../constants";
-import type { HeightCache } from "./heights";
+import type { SizeCache } from "./sizes";
 import {
   countVisibleItems,
   countItemsFittingFromBottom,
@@ -52,10 +52,10 @@ export interface CompressionState {
  * Pure function - no side effects
  */
 export const getCompressionState = (
-  _totalItems: number,
-  heightCache: HeightCache,
+  totalItems: number,
+  sizeCache: SizeCache,
 ): CompressionState => {
-  const actualHeight = heightCache.getTotalHeight();
+  const actualHeight = sizeCache.getTotalSize();
   const isCompressed = actualHeight > MAX_VIRTUAL_HEIGHT;
   const virtualHeight = isCompressed ? MAX_VIRTUAL_HEIGHT : actualHeight;
   const ratio = actualHeight > 0 ? virtualHeight / actualHeight : 1;
@@ -86,7 +86,7 @@ export const getCompressionState = (
 export const calculateCompressedVisibleRange = (
   scrollTop: number,
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
   out: Range,
@@ -99,10 +99,10 @@ export const calculateCompressedVisibleRange = (
 
   if (!compression.isCompressed) {
     // Normal calculation using height cache
-    const start = heightCache.indexAtOffset(scrollTop);
+    const start = sizeCache.indexAtOffset(scrollTop);
     // Find the last item that is at least partially visible
     // Add 1 to match the fixed-height ceil() behavior (safe overshoot)
-    let end = heightCache.indexAtOffset(scrollTop + containerHeight);
+    let end = sizeCache.indexAtOffset(scrollTop + containerHeight);
     if (end < totalItems - 1) end++;
     out.start = Math.max(0, start);
     out.end = Math.min(totalItems - 1, Math.max(0, end));
@@ -118,7 +118,7 @@ export const calculateCompressedVisibleRange = (
 
   // Count visible items from start using actual heights
   const visibleCount = countVisibleItems(
-    heightCache,
+    sizeCache,
     Math.max(0, start),
     containerHeight,
     totalItems,
@@ -132,7 +132,7 @@ export const calculateCompressedVisibleRange = (
 
   if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
     const itemsAtBottom = countItemsFittingFromBottom(
-      heightCache,
+      sizeCache,
       containerHeight,
       totalItems,
     );
@@ -209,7 +209,7 @@ export const calculateCompressedRenderRange = (
 export const calculateCompressedItemPosition = (
   index: number,
   scrollTop: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   containerHeight: number,
   compression: CompressionState,
@@ -217,7 +217,7 @@ export const calculateCompressedItemPosition = (
 ): number => {
   if (!compression.isCompressed || totalItems === 0) {
     // Normal: absolute position in content space (scroll handled by container)
-    return heightCache.getOffset(index);
+    return sizeCache.getOffset(index);
   }
 
   const { virtualHeight } = compression;
@@ -230,12 +230,12 @@ export const calculateCompressedItemPosition = (
     if (scrollTop >= maxScroll - 1) {
       // Calculate position from the bottom of the viewport
       const totalHeightFromBottom =
-        heightCache.getTotalHeight() - heightCache.getOffset(index);
+        sizeCache.getTotalSize() - sizeCache.getOffset(index);
       return containerHeight - totalHeightFromBottom;
     }
 
     const itemsAtBottom = countItemsFittingFromBottom(
-      heightCache,
+      sizeCache,
       containerHeight,
       totalItems,
     );
@@ -251,13 +251,12 @@ export const calculateCompressedItemPosition = (
 
     // Bottom position: offset relative to first visible item at bottom
     const bottomPosition =
-      heightCache.getOffset(index) -
-      heightCache.getOffset(firstVisibleAtBottom);
+      sizeCache.getOffset(index) - sizeCache.getOffset(firstVisibleAtBottom);
 
     // Normal compressed position: offset relative to virtual scroll index
     const normalPosition =
-      heightCache.getOffset(index) -
-      getOffsetForVirtualIndex(heightCache, exactScrollIndex, totalItems);
+      sizeCache.getOffset(index) -
+      getOffsetForVirtualIndex(sizeCache, exactScrollIndex, totalItems);
 
     // Blend between compressed position and actual bottom position
     return normalPosition + (bottomPosition - normalPosition) * interpolation;
@@ -268,10 +267,10 @@ export const calculateCompressedItemPosition = (
   // Map scrollTop to an actual-space offset via the compression ratio,
   // then position the item relative to that offset.
   const scrollRatio = scrollTop / virtualHeight;
-  const actualHeight = heightCache.getTotalHeight();
+  const actualHeight = sizeCache.getTotalSize();
   const virtualScrollOffset = scrollRatio * actualHeight;
 
-  return heightCache.getOffset(index) - virtualScrollOffset;
+  return sizeCache.getOffset(index) - virtualScrollOffset;
 };
 
 // =============================================================================
@@ -291,7 +290,7 @@ export const calculateCompressedItemPosition = (
  */
 export const calculateCompressedScrollToIndex = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   containerHeight: number,
   totalItems: number,
   compression: CompressionState,
@@ -313,11 +312,11 @@ export const calculateCompressedScrollToIndex = (
     targetPosition = ratio * compression.virtualHeight;
   } else {
     // Direct calculation using actual offset
-    targetPosition = heightCache.getOffset(index);
+    targetPosition = sizeCache.getOffset(index);
   }
 
   // Adjust for alignment using the specific item's height
-  const itemHeight = heightCache.getHeight(index);
+  const itemHeight = sizeCache.getSize(index);
 
   switch (align) {
     case "center":
@@ -351,7 +350,7 @@ export const calculateIndexFromScrollPosition = (
     return Math.floor(scrollRatio * totalItems);
   }
 
-  return heightCache.indexAtOffset(scrollTop);
+  return sizeCache.indexAtOffset(scrollTop);
 };
 
 // =============================================================================

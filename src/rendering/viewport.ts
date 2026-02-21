@@ -13,7 +13,7 @@
  */
 
 import type { Range, ViewportState } from "../types";
-import type { HeightCache } from "./heights";
+import type { SizeCache } from "./sizes";
 
 // =============================================================================
 // Compression State (type only — no runtime import)
@@ -52,9 +52,9 @@ export const NO_COMPRESSION: CompressionState = {
  */
 export const getSimpleCompressionState = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): CompressionState => {
-  const h = heightCache.getTotalHeight();
+  const h = sizeCache.getTotalSize();
   return {
     isCompressed: false,
     actualHeight: h,
@@ -75,7 +75,7 @@ export const getSimpleCompressionState = (
 export type VisibleRangeFn = (
   scrollTop: number,
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
   out: Range,
@@ -86,7 +86,7 @@ export type VisibleRangeFn = (
  */
 export type ScrollToIndexFn = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   containerHeight: number,
   totalItems: number,
   compression: CompressionState,
@@ -105,7 +105,7 @@ export type ScrollToIndexFn = (
 export const simpleVisibleRange: VisibleRangeFn = (
   scrollTop,
   containerHeight,
-  heightCache,
+  sizeCache,
   totalItems,
   _compression,
   out,
@@ -116,8 +116,8 @@ export const simpleVisibleRange: VisibleRangeFn = (
     return out;
   }
 
-  const start = heightCache.indexAtOffset(scrollTop);
-  let end = heightCache.indexAtOffset(scrollTop + containerHeight);
+  const start = sizeCache.indexAtOffset(scrollTop);
+  let end = sizeCache.indexAtOffset(scrollTop + containerHeight);
   if (end < totalItems - 1) end++;
 
   out.start = Math.max(0, start);
@@ -153,7 +153,7 @@ export const calculateRenderRange = (
  */
 export const simpleScrollToIndex: ScrollToIndexFn = (
   index,
-  heightCache,
+  sizeCache,
   containerHeight,
   totalItems,
   _compression,
@@ -162,9 +162,9 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
   if (totalItems === 0) return 0;
 
   const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
-  const itemOffset = heightCache.getOffset(safeIndex);
-  const itemHeight = heightCache.getHeight(safeIndex);
-  const totalHeight = heightCache.getTotalHeight();
+  const itemOffset = sizeCache.getOffset(safeIndex);
+  const itemHeight = sizeCache.getSize(safeIndex);
+  const totalHeight = sizeCache.getTotalSize();
   const maxScroll = Math.max(0, totalHeight - containerHeight);
 
   let position: number;
@@ -195,13 +195,13 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
  */
 export const calculateTotalHeight = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   compression?: CompressionState | null,
 ): number => {
   if (compression && compression.isCompressed) {
     return compression.virtualHeight;
   }
-  return heightCache.getTotalHeight();
+  return sizeCache.getTotalSize();
 };
 
 /**
@@ -209,9 +209,9 @@ export const calculateTotalHeight = (
  */
 export const calculateActualHeight = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): number => {
-  return heightCache.getTotalHeight();
+  return sizeCache.getTotalSize();
 };
 
 /**
@@ -220,9 +220,9 @@ export const calculateActualHeight = (
  */
 export const calculateItemOffset = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): number => {
-  return heightCache.getOffset(index);
+  return sizeCache.getOffset(index);
 };
 
 // =============================================================================
@@ -263,7 +263,7 @@ export const getScrollDirection = (
  */
 export const createViewportState = (
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
@@ -275,7 +275,7 @@ export const createViewportState = (
   visibleRangeFn(
     0,
     containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     visibleRange,
@@ -301,7 +301,7 @@ export const createViewportState = (
 export const updateViewportState = (
   state: ViewportState,
   scrollTop: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
@@ -310,7 +310,7 @@ export const updateViewportState = (
   visibleRangeFn(
     scrollTop,
     state.containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -334,7 +334,7 @@ export const updateViewportState = (
 export const updateViewportSize = (
   state: ViewportState,
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
@@ -343,7 +343,7 @@ export const updateViewportSize = (
   visibleRangeFn(
     state.scrollTop,
     containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -370,7 +370,7 @@ export const updateViewportSize = (
  */
 export const updateViewportItems = (
   state: ViewportState,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
@@ -379,7 +379,7 @@ export const updateViewportItems = (
   visibleRangeFn(
     state.scrollTop,
     state.containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -411,7 +411,7 @@ export const updateViewportItems = (
  */
 export const calculateScrollToIndex = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   containerHeight: number,
   totalItems: number,
   align: "start" | "center" | "end" = "start",
@@ -420,7 +420,7 @@ export const calculateScrollToIndex = (
 ): number => {
   return scrollToIndexFn(
     index,
-    heightCache,
+    sizeCache,
     containerHeight,
     totalItems,
     compression,

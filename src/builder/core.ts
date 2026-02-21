@@ -39,7 +39,7 @@ import {
   updateVelocityTracker,
   MIN_RELIABLE_SAMPLES,
 } from "./velocity";
-import { createHeightCache } from "../rendering/heights";
+import { createSizeCache } from "../rendering/sizes";
 import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
@@ -247,7 +247,7 @@ function materialize<T extends VListItem = VListItem>(
   // Use items array by reference (memory-optimized)
   const initialItemsArray: T[] = initialItems || [];
 
-  const initialHeightCache = createHeightCache(
+  const initialSizeCache = createSizeCache(
     mainAxisSizeConfig,
     initialItemsArray.length,
   );
@@ -258,7 +258,7 @@ function materialize<T extends VListItem = VListItem>(
   // data proxy, scroll proxy) and core.ts read/write the same values.
   const $: MRefs<T> = {
     it: initialItemsArray,
-    hc: initialHeightCache,
+    hc: initialSizeCache,
     ch: dom.viewport.clientHeight,
     cw: dom.viewport.clientWidth,
     id: false,
@@ -282,7 +282,7 @@ function materialize<T extends VListItem = VListItem>(
           dom.viewport.scrollTop = pos;
         },
     sab: (threshold = 2) => {
-      const total = $.hc.getTotalHeight();
+      const total = $.hc.getTotalSize();
       return $.ls + $.ch >= total - threshold;
     },
     sic: false,
@@ -319,8 +319,8 @@ function materialize<T extends VListItem = VListItem>(
     viewportState: {
       scrollTop: 0,
       containerHeight: $.ch,
-      totalHeight: $.hc.getTotalHeight(),
-      actualHeight: $.hc.getTotalHeight(),
+      totalHeight: $.hc.getTotalSize(),
+      actualHeight: $.hc.getTotalSize(),
       isCompressed: false,
       compressionRatio: 1,
       visibleRange: { start: 0, end: 0 },
@@ -376,12 +376,12 @@ function materialize<T extends VListItem = VListItem>(
     element.className = baseClass;
 
     if (isHorizontal) {
-      element.style.width = `${$.hc.getHeight(index)}px`;
+      element.style.width = `${$.hc.getSize(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${$.hc.getHeight(index)}px`;
+      element.style.height = `${$.hc.getSize(index)}px`;
     }
 
     element.dataset.index = String(index);
@@ -404,7 +404,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalHeight()}px`;
+    const size = `${$.hc.getTotalSize()}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -470,9 +470,9 @@ function materialize<T extends VListItem = VListItem>(
           applyTemplate(existing, $.at(item, i, itemState));
           existing.dataset.id = newId;
           if (isHorizontal) {
-            existing.style.width = `${$.hc.getHeight(i)}px`;
+            existing.style.width = `${$.hc.getSize(i)}px`;
           } else {
-            existing.style.height = `${$.hc.getHeight(i)}px`;
+            existing.style.height = `${$.hc.getSize(i)}px`;
           }
 
           // Update placeholder class
@@ -626,7 +626,7 @@ function materialize<T extends VListItem = VListItem>(
       // Calculate new scroll position
       const newScroll = Math.max(
         0,
-        Math.min(currentScroll + delta, $.hc.getTotalHeight() - $.ch),
+        Math.min(currentScroll + delta, $.hc.getTotalSize() - $.ch),
       );
 
       // Update scroll position

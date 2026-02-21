@@ -3,14 +3,20 @@
  * Rendering, virtualization, and scaling for large datasets
  */
 
-// Height Cache
+// Size Cache (dimension-agnostic for vertical/horizontal scrolling)
 export {
-  createHeightCache,
+  createSizeCache,
   countVisibleItems,
   countItemsFittingFromBottom,
   getOffsetForVirtualIndex,
-  type HeightCache,
-} from "./heights";
+  type SizeCache,
+} from "./sizes";
+
+// Legacy exports for backward compatibility (deprecated)
+export {
+  createSizeCache as createHeightCache,
+  type SizeCache as HeightCache,
+} from "./sizes";
 
 // Renderer
 export {
