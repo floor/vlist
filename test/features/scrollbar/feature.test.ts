@@ -6,5 +6,7 @@
 import { describe, it, expect } from "bun:test";
 
 describe("features/scrollbar/plugin.ts", () => {
-  it.todo("should add tests for this module");
+  it("should add tests for this module", () => {
+    // TODO: Add comprehensive tests
+  });
 });

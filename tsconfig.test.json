@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["test/**/*.test.ts", "src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

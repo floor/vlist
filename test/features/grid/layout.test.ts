@@ -758,7 +758,7 @@ describe("groups-aware layout with isHeaderFn", () => {
       expect(layout.getTotalRows(10)).toBe(4);
 
       // Update to different headers
-      layout.update({ isHeaderFn: (i) => i === 0 || i === 5 } as any);
+      layout.update({ isHeaderFn: (i: number) => i === 0 || i === 5 } as any);
       expect(layout.getTotalRows(10)).toBe(6); // [H0] [1,2,3] [4] [H5] [6,7,8] [9]
     });
   });
