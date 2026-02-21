@@ -21,7 +21,7 @@
  * - orientation: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
  */
 
-import type { VListItem, Range } from "../../types";
+import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import {
