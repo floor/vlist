@@ -225,7 +225,7 @@ const list = vlist(config).use(...plugins).build()
 `list.on()` returns an unsubscribe function. You can also use `list.off(event, handler)`.
 
 ```typescript
-list.on('scroll', ({ scrollTop, direction }) => {})
+list.on('scroll', ({ scrollPosition, direction }) => {})
 list.on('range:change', ({ range }) => {})
 list.on('item:click', ({ item, index, event }) => {})
 list.on('item:dblclick', ({ item, index, event }) => {})
