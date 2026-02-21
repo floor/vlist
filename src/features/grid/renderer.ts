@@ -152,6 +152,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   initialContainerWidth: number,
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
+  isHorizontal: boolean = false,
 ): GridRenderer<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, RenderedItem>();
@@ -289,7 +290,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       y = calculateRowOffset(itemIndex, compressionCtx);
     }
 
-    element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    // Swap axes for horizontal orientation
+    if (isHorizontal) {
+      element.style.transform = `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
+    } else {
+      element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    }
   };
 
   /**

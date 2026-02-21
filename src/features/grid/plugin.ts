@@ -195,6 +195,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           containerWidth,
           () => ctx.dataManager.getTotal(),
           resolvedConfig.ariaIdPrefix,
+          resolvedConfig.horizontal,
         );
 
         // ── Replace the list renderer with the grid renderer ──
@@ -232,8 +233,12 @@ export const withGrid = <T extends VListItem = VListItem>(
           // This ensures everything (DOM, scrollbar, calculations) uses the correct height
           ctx.sizeCache.getTotalSize = () => correctTotalHeight;
 
-          // Manually update DOM content height
-          ctx.dom.content.style.height = `${correctTotalHeight}px`;
+          // Manually update DOM content size (height for vertical, width for horizontal)
+          if (resolvedConfig.horizontal) {
+            ctx.dom.content.style.width = `${correctTotalHeight}px`;
+          } else {
+            ctx.dom.content.style.height = `${correctTotalHeight}px`;
+          }
 
           // Recreate renderer with updated layout
           createAndSetGridRenderer();
