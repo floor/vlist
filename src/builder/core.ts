@@ -211,13 +211,9 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   if (isHorizontal) {
-    if (pluginNames.has("withGrid")) {
-      throw new Error(
-        "[vlist/builder] withGrid cannot be used with orientation: 'horizontal'",
-      );
-    }
-    // Note: withGroups/withSections DOES support horizontal orientation
-    // (sticky headers stick to left edge instead of top)
+    // Note: withGrid and withGroups/withSections both support horizontal orientation
+    // - withGrid: items use vertical positioning (TODO: add axis swapping for optimization)
+    // - withGroups/withSections: sticky headers stick to left edge instead of top
   }
   if (isReverse) {
     if (pluginNames.has("withGrid")) {
