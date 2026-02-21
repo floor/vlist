@@ -538,17 +538,17 @@ export interface Range {
 
 /** Viewport state */
 export interface ViewportState {
-  /** Current scroll position */
-  scrollTop: number;
+  /** Current scroll position along main axis (scrollTop for vertical, scrollLeft for horizontal) */
+  scrollPosition: number;
 
-  /** Container height */
-  containerHeight: number;
+  /** Container size along main axis (height for vertical, width for horizontal) */
+  containerSize: number;
 
-  /** Total content height (may be capped for compression) */
-  totalHeight: number;
+  /** Total content size (may be capped for compression) */
+  totalSize: number;
 
-  /** Actual total height without compression (totalItems × itemHeight) */
-  actualHeight: number;
+  /** Actual total size without compression */
+  actualSize: number;
 
   /** Whether compression is active */
   isCompressed: boolean;

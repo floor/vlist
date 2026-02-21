@@ -121,7 +121,7 @@ export const withPage = <
       });
 
       // Update dimensions immediately
-      state.viewportState.containerHeight = window.innerHeight;
+      state.viewportState.containerSize = window.innerHeight;
 
       // ── 6. Window resize handler ───────────────────────────────
 
@@ -145,7 +145,7 @@ export const withPage = <
         previousWidth = newWidth;
 
         // Update state
-        state.viewportState.containerHeight = newHeight;
+        state.viewportState.containerSize = newHeight;
 
         // Emit resize event for listeners
         emitter.emit("resize", { width: newWidth, height: newHeight });

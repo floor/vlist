@@ -38,8 +38,8 @@ describe("getCompressionState", () => {
     const state = getCompressionState(1000, cache);
 
     expect(state.isCompressed).toBe(false);
-    expect(state.actualHeight).toBe(40_000);
-    expect(state.virtualHeight).toBe(40_000);
+    expect(state.actualSize).toBe(40_000);
+    expect(state.virtualSize).toBe(40_000);
     expect(state.ratio).toBe(1);
   });
 
@@ -49,8 +49,8 @@ describe("getCompressionState", () => {
     const state = getCompressionState(1_000_000, cache);
 
     expect(state.isCompressed).toBe(true);
-    expect(state.actualHeight).toBe(40_000_000);
-    expect(state.virtualHeight).toBe(MAX_VIRTUAL_HEIGHT);
+    expect(state.actualSize).toBe(40_000_000);
+    expect(state.virtualSize).toBe(MAX_VIRTUAL_HEIGHT);
     expect(state.ratio).toBe(16_000_000 / 40_000_000); // 0.4
   });
 
@@ -70,8 +70,8 @@ describe("getCompressionState", () => {
     const state = getCompressionState(0, cache);
 
     expect(state.isCompressed).toBe(false);
-    expect(state.actualHeight).toBe(0);
-    expect(state.virtualHeight).toBe(0);
+    expect(state.actualSize).toBe(0);
+    expect(state.virtualSize).toBe(0);
     expect(state.ratio).toBe(1);
   });
 
@@ -80,8 +80,8 @@ describe("getCompressionState", () => {
     const state = getCompressionState(10_000_000, cache);
 
     expect(state.isCompressed).toBe(true);
-    expect(state.actualHeight).toBe(400_000_000);
-    expect(state.virtualHeight).toBe(MAX_VIRTUAL_HEIGHT);
+    expect(state.actualSize).toBe(400_000_000);
+    expect(state.virtualSize).toBe(MAX_VIRTUAL_HEIGHT);
     expect(state.ratio).toBe(16_000_000 / 400_000_000); // 0.04
   });
 });
@@ -161,7 +161,7 @@ describe("calculateCompressedVisibleRange", () => {
       const out = { start: 0, end: 0 };
 
       // Scroll to very end
-      const maxScroll = compression.virtualHeight - containerHeight;
+      const maxScroll = compression.virtualSize - containerHeight;
       const range = calculateCompressedVisibleRange(
         maxScroll,
         containerHeight,
@@ -183,7 +183,7 @@ describe("calculateCompressedVisibleRange", () => {
 
       // Scroll past the end (shouldn't happen but test safety)
       const range = calculateCompressedVisibleRange(
-        compression.virtualHeight,
+        compression.virtualSize,
         containerHeight,
         cache,
         1_000_000,
@@ -349,7 +349,7 @@ describe("calculateCompressedItemPosition", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
-      const maxScroll = compression.virtualHeight - containerHeight;
+      const maxScroll = compression.virtualSize - containerHeight;
 
       // Last item should be positioned within the viewport at max scroll
       const position = calculateCompressedItemPosition(
@@ -458,7 +458,7 @@ describe("calculateCompressedScrollToIndex", () => {
       );
 
       // Should be clamped to max scroll
-      const maxScroll = compression.virtualHeight - containerHeight;
+      const maxScroll = compression.virtualSize - containerHeight;
       expect(position).toBeLessThanOrEqual(maxScroll);
     });
 
@@ -547,7 +547,7 @@ describe("calculateIndexFromScrollPosition", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const index = calculateIndexFromScrollPosition(
-        compression.virtualHeight,
+        compression.virtualSize,
         cache,
         1_000_000,
         compression,
@@ -708,7 +708,7 @@ describe("Compression Integration", () => {
     const compression = getCompressionState(totalItems, cache);
 
     // Scroll to maximum
-    const maxScroll = compression.virtualHeight - containerHeight;
+    const maxScroll = compression.virtualSize - containerHeight;
     const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
       maxScroll,
@@ -737,7 +737,7 @@ describe("Compression with variable heights", () => {
     const compression = getCompressionState(100, cache);
 
     expect(compression.isCompressed).toBe(false);
-    expect(compression.actualHeight).toBe(6000);
+    expect(compression.actualSize).toBe(6000);
   });
 
   it("should calculate correct visible range with variable heights", () => {

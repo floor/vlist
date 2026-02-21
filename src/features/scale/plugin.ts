@@ -173,7 +173,7 @@ export const withScale = <
           // Set content size to virtual height (not actual height)
           // This is critical - the content div must match the virtual height
           // for scrolling and positioning to work correctly
-          ctx.updateContentSize(compression.virtualHeight);
+          ctx.updateContentSize(compression.virtualSize);
 
           // Replace scroll functions with virtual scroll position.
           // In compressed mode the total height exceeds the browser's DOM
@@ -229,7 +229,7 @@ export const withScale = <
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+              comp.virtualHeight - ctx.state.viewportState.containerSize;
 
             targetScrollTop = Math.max(
               0,
@@ -292,7 +292,7 @@ export const withScale = <
             const delta = touchStartY - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+              comp.virtualHeight - ctx.state.viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -341,7 +341,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualHeight - ctx.state.viewportState.containerHeight;
+                comp.virtualHeight - ctx.state.viewportState.containerSize;
 
               let newPos = virtualScrollTop + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -425,8 +425,8 @@ export const withScale = <
 
             // Update scrollbar bounds
             scrollbar.updateBounds(
-              compression.virtualHeight,
-              ctx.state.viewportState.containerHeight,
+              compression.virtualSize,
+              ctx.state.viewportState.containerSize,
             );
 
             // Wire scrollbar into afterScroll
@@ -446,7 +446,7 @@ export const withScale = <
                 const comp = ctx.getCachedCompression();
                 scrollbarRef.updateBounds(
                   comp.virtualHeight,
-                  ctx.state.viewportState.containerHeight,
+                  ctx.state.viewportState.containerSize,
                 );
               }
             });
@@ -457,20 +457,20 @@ export const withScale = <
           ctx.scrollController.disableCompression();
 
           // Restore content size to actual height
-          ctx.updateContentSize(compression.actualHeight);
+          ctx.updateContentSize(compression.actualSize);
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
           ctx.scrollController.updateConfig({ compression });
 
           // Update content size to new virtual height
-          ctx.updateContentSize(compression.virtualHeight);
+          ctx.updateContentSize(compression.virtualSize);
         }
 
         // Update scrollbar bounds if we have a fallback scrollbar
         if (scrollbar) {
           scrollbar.updateBounds(
-            compression.virtualHeight,
-            ctx.state.viewportState.containerHeight,
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
           );
         }
 
@@ -568,7 +568,7 @@ export const withScale = <
                 scrollTop,
                 ctx.sizeCache as any,
                 total,
-                ctx.state.viewportState.containerHeight,
+                ctx.state.viewportState.containerSize,
                 compression,
               ),
             );

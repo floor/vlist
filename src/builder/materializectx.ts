@@ -339,8 +339,8 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       const hc = $.hc;
       return {
         isCompressed: false,
-        actualHeight: hc.getTotalSize(),
-        virtualHeight: hc.getTotalSize(),
+        actualSize: hc.getTotalSize(),
+        virtualSize: hc.getTotalSize(),
         ratio: 1,
       } as any;
     },
@@ -460,7 +460,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       // Update current dimensions immediately
       $.cw = getter.width();
       $.ch = getter.height();
-      sharedState.viewportState.containerHeight = $.ch;
+      sharedState.viewportState.containerSize = $.ch;
     },
 
     disableViewportResize(): void {

@@ -317,10 +317,10 @@ function materialize<T extends VListItem = VListItem>(
   // Shared state object for plugins (defined early so core render can reference it)
   const sharedState: BuilderState = {
     viewportState: {
-      scrollTop: 0,
-      containerHeight: $.ch,
-      totalHeight: $.hc.getTotalSize(),
-      actualHeight: $.hc.getTotalSize(),
+      scrollPosition: 0,
+      containerSize: $.ch,
+      totalSize: $.hc.getTotalSize(),
+      actualSize: $.hc.getTotalSize(),
       isCompressed: false,
       compressionRatio: 1,
       visibleRange: { start: 0, end: 0 },
@@ -538,7 +538,7 @@ function materialize<T extends VListItem = VListItem>(
     // Update viewport state with current scroll position and calculated ranges
     // This is critical for plugins (especially compression + scrollbar) that rely
     // on viewport state being up-to-date
-    sharedState.viewportState.scrollTop = $.ls;
+    sharedState.viewportState.scrollPosition = $.ls;
     sharedState.viewportState.visibleRange.start = visibleRange.start;
     sharedState.viewportState.visibleRange.end = visibleRange.end;
     sharedState.viewportState.renderRange.start = renderRange.start;
@@ -739,7 +739,7 @@ function materialize<T extends VListItem = VListItem>(
 
       if (Math.abs(newMainAxis - $.ch) > 1) {
         $.ch = newMainAxis;
-        sharedState.viewportState.containerHeight = newMainAxis;
+        sharedState.viewportState.containerSize = newMainAxis;
 
         // Only render if already initialized (plugins have run)
         if ($.ii) {

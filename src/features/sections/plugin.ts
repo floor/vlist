@@ -320,7 +320,7 @@ export const withSections = <T extends VListItem = VListItem>(
           const position = calculateScrollToIndex(
             layoutIndex,
             ctx.sizeCache,
-            ctx.state.viewportState.containerHeight,
+            ctx.state.viewportState.containerSize,
             total,
             align,
             ctx.getCachedCompression(),

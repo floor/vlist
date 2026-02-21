@@ -120,10 +120,10 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
    * Reuses a single object to avoid allocation on every scroll frame.
    */
   const getCompressionContext = (): CompressionContext => {
-    reusableCompressionCtx.scrollTop = state.viewportState.scrollTop;
+    reusableCompressionCtx.scrollTop = state.viewportState.scrollPosition;
     reusableCompressionCtx.totalItems = getVirtualTotal();
     reusableCompressionCtx.containerHeight =
-      state.viewportState.containerHeight;
+      state.viewportState.containerSize;
     reusableCompressionCtx.rangeStart = state.viewportState.renderRange.start;
     return reusableCompressionCtx;
   };
