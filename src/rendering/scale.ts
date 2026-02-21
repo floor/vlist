@@ -23,7 +23,7 @@ import {
   countVisibleItems,
   countItemsFittingFromBottom,
   getOffsetForVirtualIndex,
-} from "./heights";
+} from "./sizes";
 
 // Re-export for convenience
 export { MAX_VIRTUAL_HEIGHT };
@@ -339,7 +339,7 @@ export const calculateCompressedScrollToIndex = (
  */
 export const calculateIndexFromScrollPosition = (
   scrollTop: number,
-  heightCache: HeightCache,
+  heightCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
 ): number => {
@@ -371,7 +371,7 @@ export const needsCompression = (
   if (typeof heightOrCache === "number") {
     return totalItems * heightOrCache > MAX_VIRTUAL_HEIGHT;
   }
-  return heightOrCache.getTotalHeight() > MAX_VIRTUAL_HEIGHT;
+  return heightOrCache.getTotalSize() > MAX_VIRTUAL_HEIGHT;
 };
 
 /**
@@ -390,7 +390,7 @@ export const getMaxItemsWithoutCompression = (itemHeight: number): number => {
  */
 export const getCompressionInfo = (
   totalItems: number,
-  heightCache: HeightCache,
+  heightCache: SizeCache,
 ): string => {
   const compression = getCompressionState(totalItems, heightCache);
 

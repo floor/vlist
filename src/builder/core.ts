@@ -859,11 +859,11 @@ function materialize<T extends VListItem = VListItem>(
   const prependItems = isReverse
     ? (newItems: T[]): void => {
         const scrollTop = $.sgt();
-        const heightBefore = $.hc.getTotalHeight();
+        const heightBefore = $.hc.getTotalSize();
         const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = $.hc.getTotalHeight();
+        const heightAfter = $.hc.getTotalSize();
         const delta = heightAfter - heightBefore;
         if (delta > 0) {
           $.sst(scrollTop + delta);
