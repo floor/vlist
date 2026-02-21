@@ -7,7 +7,7 @@
  * (the common case), all calculations use simple size-cache math
  * with zero dependency on the compression module.
  *
- * This keeps the builder core lightweight. The withCompression plugin
+ * This keeps the builder core lightweight. The withCompression feature
  * and the monolithic createVList entry point import compression
  * separately and pass the state in.
  */

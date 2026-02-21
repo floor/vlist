@@ -9,7 +9,7 @@
 // Main builder export
 export { vlist } from "./builder";
 
-// Feature plugins - tree-shakeable
+// Features - tree-shakeable
 export { withScale } from "./features/scale";
 export { withAsync } from "./features/async";
 export { withScrollbar } from "./features/scrollbar";
@@ -64,7 +64,7 @@ export type {
   VListBuilder,
   BuiltVList,
   BuilderConfig,
-  VListPlugin,
+  VListFeature,
   BuilderContext,
 } from "./builder";
 

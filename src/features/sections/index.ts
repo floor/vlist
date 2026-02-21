@@ -3,8 +3,8 @@
  * Sticky headers and grouped lists
  */
 
-// Builder Plugin
-export { withSections, type GroupsPluginConfig } from "./feature";
+// Builder Feature
+export { withSections, type GroupsFeatureConfig } from "./feature";
 
 // Types
 export type {

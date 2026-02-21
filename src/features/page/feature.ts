@@ -1,11 +1,11 @@
 /**
- * vlist/window - Window Scroll Mode Plugin
+ * vlist/window - Window Scroll Mode Feature
  *
  * Enables the list to scroll with the page instead of in its own container.
  * Useful for infinite feeds, full-page lists, and chat UIs that integrate
  * with page scroll.
  *
- * Priority: 5 (runs early, before other plugins that depend on scroll)
+ * Priority: 5 (runs early, before other features that depend on scroll)
  *
  * What it does:
  * - Uses window as scroll target instead of viewport element
@@ -21,7 +21,7 @@ import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
 
 /**
- * Create a window scroll mode plugin.
+ * Create a window scroll mode feature.
  *
  * Use this when you want your list to scroll with the page instead of
  * in a fixed-height container.
@@ -58,7 +58,7 @@ export const withPage = <
 
   return {
     name: "withPage",
-    priority: 5, // Run early, before scroll/selection plugins
+    priority: 5, // Run early, before scroll/selection features
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, state, config, emitter } = ctx;
@@ -150,7 +150,7 @@ export const withPage = <
         // Emit resize event for listeners
         emitter.emit("resize", { width: newWidth, height: newHeight });
 
-        // Notify resize handlers (other plugins may need this)
+        // Notify resize handlers (other features may need this)
         for (let i = 0; i < ctx.resizeHandlers.length; i++) {
           ctx.resizeHandlers[i]!(newWidth, newHeight);
         }

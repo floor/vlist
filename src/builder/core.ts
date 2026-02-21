@@ -5,7 +5,7 @@
  * Size cache and emitter are reused from rendering/ and events/ modules.
  * Bun.build inlines everything into a single bundle automatically.
  *
- * Plugins compose features *around* the hot path via extension points:
+ * Features compose functionality *around* the hot path via extension points:
  * afterScroll, clickHandlers, keydownHandlers, resizeHandlers, destroyHandlers,
  * and the methods Map for public API extension.
  */
@@ -30,7 +30,7 @@ import type {
   BuiltVList,
 } from "./types";
 
-// Re-export CompressionState type from viewport for plugins that need it
+// Re-export CompressionState type from viewport for features that need it
 export type { CompressionState } from "../rendering/viewport";
 
 // Extracted utilities — Bun.build inlines these into the single bundle
@@ -307,7 +307,7 @@ function materialize<T extends VListItem = VListItem>(
   const renderRange: Range = { start: 0, end: 0 };
   const lastRenderRange: Range = { start: -1, end: -1 };
 
-  // Shared state object for plugins (defined early so core render can reference it)
+  // Shared state object for features (defined early so core render can reference it)
   const sharedState: BuilderState = {
     viewportState: {
       scrollPosition: 0,
@@ -333,7 +333,7 @@ function materialize<T extends VListItem = VListItem>(
   // No ID → index map (removed for memory efficiency)
   // Users can implement their own Map if needed for O(1) lookups
 
-  // ── Plugin extension points ─────────────────────────────────────
+  // ── Feature extension points ─────────────────────────────────────
   const afterScroll: Array<
     (scrollPosition: number, direction: string) => void
   > = [];
@@ -527,12 +527,12 @@ function materialize<T extends VListItem = VListItem>(
     lastRenderRange.start = renderRange.start;
     lastRenderRange.end = renderRange.end;
 
-    // Sync shared state for plugins that use it
+    // Sync shared state for features that use it
     sharedState.lastRenderRange.start = renderRange.start;
     sharedState.lastRenderRange.end = renderRange.end;
 
     // Update viewport state with current scroll position and calculated ranges
-    // This is critical for plugins (especially compression + scrollbar) that rely
+    // This is critical for features (especially compression + scrollbar) that rely
     // on viewport state being up-to-date
     sharedState.viewportState.scrollPosition = $.ls;
     sharedState.viewportState.visibleRange.start = visibleRange.start;
@@ -581,7 +581,7 @@ function materialize<T extends VListItem = VListItem>(
       reliable: $.vt.sampleCount >= MIN_RELIABLE_SAMPLES,
     });
 
-    // Plugin post-scroll actions
+    // Feature post-scroll actions
     for (let i = 0; i < afterScroll.length; i++) {
       afterScroll[i]!(scrollTop, direction);
     }
@@ -663,10 +663,10 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
   }
 
-  // Note: The custom-scrollbar class is added by withScrollbar plugin when used
+  // Note: The custom-scrollbar class is added by withScrollbar feature when used
   // Native scrollbars are visible by default
 
-  // ── Click & keydown handlers (delegate to plugins) ──────────────
+  // ── Click & keydown handlers (delegate to features) ──────────────
 
   const handleClick = (event: MouseEvent): void => {
     // Core: emit item:click
@@ -738,7 +738,7 @@ function materialize<T extends VListItem = VListItem>(
       if (Math.abs(newMainAxis - prevMainAxis) > 1) {
         sharedState.viewportState.containerSize = newMainAxis;
 
-        // Only render if already initialized (plugins have run)
+        // Only render if already initialized (features have run)
         if ($.ii) {
           updateContentSize();
           $.rfn();
@@ -755,7 +755,7 @@ function materialize<T extends VListItem = VListItem>(
     }
   });
 
-  // Plugins can disable viewport resize observation
+  // Features can disable viewport resize observation
   if ($.vre) {
     resizeObserver.observe(dom.viewport);
   }
@@ -1014,14 +1014,14 @@ function materialize<T extends VListItem = VListItem>(
       return dom.root;
     },
     get items() {
-      // Check if a plugin (e.g., groups) provides a custom items getter
+      // Check if a feature (e.g., groups) provides a custom items getter
       if (methods.has("_getItems")) {
         return (methods.get("_getItems") as any)();
       }
       return $.it as readonly T[];
     },
     get total() {
-      // Check if a plugin (e.g., groups) provides a custom total getter
+      // Check if a feature (e.g., groups) provides a custom total getter
       if (methods.has("_getTotal")) {
         return (methods.get("_getTotal") as any)();
       }
@@ -1060,7 +1060,7 @@ function materialize<T extends VListItem = VListItem>(
     destroy,
   };
 
-  // Merge plugin methods
+  // Merge feature methods
   for (const [name, fn] of methods) {
     if (
       name === "setItems" ||

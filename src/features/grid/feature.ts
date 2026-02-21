@@ -1,5 +1,5 @@
 /**
- * vlist/grid - Builder Plugin
+ * vlist/grid - Builder Feature
  * Switches from list layout to a 2D grid with configurable columns and gap.
  *
  * Priority: 10 (runs first — replaces the renderer before anything else renders)
@@ -26,11 +26,11 @@ import { createGridRenderer, type GridRenderer } from "./renderer";
 import type { GridLayout } from "./types";
 
 // =============================================================================
-// Plugin Config
+// Feature Config
 // =============================================================================
 
-/** Grid plugin configuration */
-export interface GridPluginConfig {
+/** Grid feature configuration */
+export interface GridFeatureConfig {
   /** Number of columns (required, >= 1) */
   columns: number;
 
@@ -39,11 +39,11 @@ export interface GridPluginConfig {
 }
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a grid plugin for the builder.
+ * Create a grid feature for the builder.
  *
  * Switches from list layout to a 2D grid with configurable columns and gap.
  *
@@ -61,7 +61,7 @@ export interface GridPluginConfig {
  * ```
  */
 export const withGrid = <T extends VListItem = VListItem>(
-  config: GridPluginConfig,
+  config: GridFeatureConfig,
 ): VListFeature<T> => {
   // Validate
   if (!config.columns || config.columns < 1) {
@@ -91,7 +91,7 @@ export const withGrid = <T extends VListItem = VListItem>(
       }
 
       // ── Create grid layout ──
-      // Check if groups plugin will be active (items contain group headers)
+      // Check if groups feature will be active (items contain group headers)
       const hasGroups = rawConfig.items?.some(
         (item: any) => item.__groupHeader === true,
       );
@@ -204,16 +204,16 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       createAndSetGridRenderer();
 
-      // ── Expose grid layout for other plugins (e.g., groups) ──
+      // ── Expose grid layout for other features (e.g., groups) ──
       ctx.methods.set("_getGridLayout", () => gridLayout);
       ctx.methods.set("_getGridConfig", () => gridConfig);
 
-      // ── Expose method to replace renderer (for groups plugin) ──
+      // ── Expose method to replace renderer (for groups feature) ──
       ctx.methods.set("_replaceGridRenderer", (newRenderer: any) => {
         gridRenderer = newRenderer;
       });
 
-      // ── Expose method to update grid layout with isHeaderFn (for groups plugin) ──
+      // ── Expose method to update grid layout with isHeaderFn (for groups feature) ──
       ctx.methods.set(
         "_updateGridLayoutForGroups",
         (isHeaderFn: (index: number) => boolean) => {
@@ -246,7 +246,7 @@ export const withGrid = <T extends VListItem = VListItem>(
       );
 
       // ── Expose update method for grid config changes ──
-      ctx.methods.set("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
+      ctx.methods.set("updateGrid", (newConfig: Partial<GridFeatureConfig>) => {
         if (newConfig.columns !== undefined) {
           if (!Number.isInteger(newConfig.columns) || newConfig.columns < 1) {
             throw new Error(
@@ -287,10 +287,10 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Update content size to reflect new total height
         ctx.updateContentSize(ctx.sizeCache.getTotalSize());
 
-        // Update compression mode if compression plugin is active
+        // Update compression mode if compression feature is active
         ctx.updateCompressionMode();
 
-        // Trigger content size handlers (e.g., snapshots plugin)
+        // Trigger content size handlers (e.g., snapshots feature)
         for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
           ctx.contentSizeHandlers[i]!();
         }
@@ -374,7 +374,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridRenderer!.render(
           items,
           itemRange,
-          new Set(), // selection — overridden by selection plugin if present
+          new Set(), // selection — overridden by selection feature if present
           -1,
           compressionCtx,
         );
@@ -402,7 +402,7 @@ export const withGrid = <T extends VListItem = VListItem>(
       });
 
       // ── Override scrollToIndex to convert item index → row ──
-      // (Plugins like selection that scrollToIndex with item indices need this)
+      // (Features like selection that scrollToIndex with item indices need this)
       // The builder core's scrollToIndex already works with the size cache
       // which is in row-space, so we just need to ensure the public API
       // scrollToIndex maps item index → row index.
@@ -451,13 +451,13 @@ export const withGrid = <T extends VListItem = VListItem>(
       );
 
       // ── Override total getter to return flat item count (not row count) ──
-      // Only set if not already set by another plugin (e.g., groups)
+      // Only set if not already set by another feature (e.g., groups)
       if (!ctx.methods.has("_getTotal")) {
         ctx.methods.set("_getTotal", () => ctx.dataManager.getTotal());
       }
 
-      // ── Override snapshot methods for grid if snapshots plugin is present ──
-      // This is handled by the snapshots plugin which checks for grid
+      // ── Override snapshot methods for grid if snapshots feature is present ──
+      // This is handled by the snapshots feature which checks for grid
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
@@ -479,7 +479,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 };
 
 // =============================================================================
-// Helpers (duplicated from builder/core.ts to keep plugin self-contained)
+// Helpers (duplicated from builder/core.ts to keep feature self-contained)
 // =============================================================================
 
 import { calculateScrollToIndex } from "../../rendering";

@@ -1,6 +1,6 @@
 /**
  * vlist/builder - BuilderContext Factory
- * Central state container that plugins receive during setup.
+ * Central state container that features receive during setup.
  *
  * The BuilderContext provides access to all core components plus
  * registration points for handlers, methods, and cleanup callbacks.
@@ -56,9 +56,9 @@ export interface CreateBuilderContextOptions<T extends VListItem = VListItem> {
 /**
  * Create a BuilderContext from individual components.
  *
- * The context acts as the central hub that plugins wire into.
+ * The context acts as the central hub that features wire into.
  * Unlike VListContext (used by the monolithic factory), BuilderContext
- * exposes registration arrays and replacement methods for plugins.
+ * exposes registration arrays and replacement methods for features.
  */
 export const createBuilderContext = <T extends VListItem = VListItem>(
   options: CreateBuilderContextOptions<T>,
@@ -67,10 +67,10 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
 
   let { sizeCache, dataManager, scrollController, renderer } = options;
 
-  // State is mutable and will be updated by the core and plugins
+  // State is mutable and will be updated by the core and features
   const state = initialState;
 
-  // Virtual total function — plugins can replace this
+  // Virtual total function — features can replace this
   // (e.g. grid uses row count instead of item count)
   let virtualTotalFn: () => number = () => dataManager.getTotal();
 
@@ -83,7 +83,9 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   };
 
   // ── Handler registration arrays ───────────────────────────────
-  const afterScroll: Array<(scrollPosition: number, direction: string) => void> = [];
+  const afterScroll: Array<
+    (scrollPosition: number, direction: string) => void
+  > = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
@@ -170,8 +172,8 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     renderer.render(
       items,
       renderRange,
-      new Set(), // selection state — overridden by selection plugin if present
-      -1, // focused index — overridden by selection plugin if present
+      new Set(), // selection state — overridden by selection feature if present
+      -1, // focused index — overridden by selection feature if present
       compressionCtx,
     );
 
@@ -281,7 +283,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   };
 
   // ── Build the context object ──────────────────────────────────
-  // We use a proxy-like approach with getters so that when plugins
+  // We use a proxy-like approach with getters so that when features
   // replace components, the context always reflects the latest reference.
 
   const ctx: BuilderContext<T> = {
@@ -370,7 +372,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       // Stub - not used in simplified context
     },
 
-    // Window mode plugin hooks (stubs for this simplified context)
+    // Window mode feature hooks (stubs for this simplified context)
     setScrollTarget: () => {
       // Stub - not used in simplified context
     },

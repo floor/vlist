@@ -1,7 +1,7 @@
 /**
- * vlist/window - Window Scroll Mode Plugin
+ * vlist/window - Window Scroll Mode Feature
  *
- * Entry point for the window scroll plugin.
+ * Entry point for the window scroll feature.
  */
 
 export { withPage } from "./feature";

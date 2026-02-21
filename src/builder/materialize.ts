@@ -229,8 +229,8 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       return rawConfig;
     },
 
-    // Mutable component slots (plugins can replace)
-    // Expose a renderer proxy so plugins (e.g. withSelection) can call
+    // Mutable component slots (features can replace)
+    // Expose a renderer proxy so features (e.g. withSelection) can call
     // ctx.renderer.render() and ctx.renderer.updateItemClasses() without
     // needing access to the inlined rendering internals.
     get renderer() {
@@ -266,7 +266,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       } as any;
     },
     set renderer(_r: any) {
-      // no-op — grid plugin overrides via methods below
+      // no-op — grid feature overrides via methods below
     },
 
     get dataManager() {
@@ -285,7 +285,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
 
     state: sharedState,
 
-    /** Get current container width (for grid plugin) */
+    /** Get current container width (for grid feature) */
     getContainerWidth(): number {
       return $.cw;
     },
@@ -396,7 +396,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       }
     },
     updateCompressionMode(): void {
-      // No-op by default — withCompression plugin replaces this
+      // No-op by default — withCompression feature replaces this
     },
 
     setVisibleRangeFn(

@@ -3,8 +3,8 @@
  * 2D grid/card layout with virtualized rows
  */
 
-// Builder Plugin
-export { withGrid, type GridPluginConfig } from "./feature";
+// Builder Feature
+export { withGrid, type GridFeatureConfig } from "./feature";
 
 // Layout
 export { createGridLayout } from "./layout";

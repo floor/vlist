@@ -1,6 +1,6 @@
 /**
- * vlist/selection - Builder Plugin
- * Wraps the selection domain into a VListPlugin for the composable builder.
+ * vlist/selection - Builder Feature
+ * Wraps the selection domain into a VListFeature for the composable builder.
  *
  * Priority: 50 (runs after renderer and data are ready)
  *
@@ -18,7 +18,7 @@
  */
 
 import type { VListItem, SelectionMode } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import {
   createSelectionState,
@@ -39,11 +39,11 @@ import {
 import { calculateScrollToIndex } from "../../rendering";
 
 // =============================================================================
-// Plugin Config
+// Feature Config
 // =============================================================================
 
-/** Selection plugin configuration */
-export interface SelectionPluginConfig {
+/** Selection feature configuration */
+export interface SelectionFeatureConfig {
   /** Selection mode (default: 'single') */
   mode?: SelectionMode;
 
@@ -52,11 +52,11 @@ export interface SelectionPluginConfig {
 }
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a selection plugin for the builder.
+ * Create a selection feature for the builder.
  *
  * ```ts
  * import { vlist } from 'vlist/builder'
@@ -71,7 +71,7 @@ export interface SelectionPluginConfig {
  * ```
  */
 export const withSelection = <T extends VListItem = VListItem>(
-  config?: SelectionPluginConfig,
+  config?: SelectionFeatureConfig,
 ): VListFeature<T> => {
   const mode: SelectionMode = config?.mode ?? "single";
   const initial = config?.initial;
@@ -111,7 +111,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         return;
       }
 
-      // ── ID → index map for O(1) lookups (selection plugin only) ──
+      // ── ID → index map for O(1) lookups (selection feature only) ──
       const idToIndexMap = new Map<string | number, number>();
 
       const rebuildIdIndex = (): void => {
@@ -128,7 +128,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Wrap existing render functions to inject selection state ──
       // We capture the current renderIfNeeded (which may have been set by
-      // grid/groups plugins) and wrap it. After rendering, we update
+      // grid/groups features) and wrap it. After rendering, we update
       // selection classes on the rendered elements.
 
       // Capture the current render functions BEFORE we replace them
@@ -371,7 +371,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Full re-render for selection changes (Space/Enter)
             forceRenderWithSelection();
 
-            // Linear search for items by ID (no Map for memory efficiency)
+            // O(1) lookup using ID → index map
             const getItemByIdFn = (id: string | number): T | undefined => {
               const index = idToIndexMap.get(id);
               if (index === undefined) return undefined;

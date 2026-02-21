@@ -1,6 +1,6 @@
 /**
- * vlist/scroll - Builder Plugin
- * Wraps the custom scrollbar into a VListPlugin for the composable builder.
+ * vlist/scroll - Builder Feature
+ * Wraps the custom scrollbar into a VListFeature for the composable builder.
  *
  * Priority: 30 (runs after renderer/data setup but before selection)
  *
@@ -22,11 +22,11 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
 import { createScrollbar, type Scrollbar } from "./scrollbar";
 
 // =============================================================================
-// Plugin Config
+// Feature Config
 // =============================================================================
 
-/** Scrollbar plugin configuration */
-export interface ScrollbarPluginConfig {
+/** Scrollbar feature configuration */
+export interface ScrollbarFeatureConfig {
   /** Auto-hide scrollbar after idle (default: true) */
   autoHide?: boolean;
 
@@ -56,11 +56,11 @@ export interface ScrollbarPluginConfig {
 }
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a scrollbar plugin for the builder.
+ * Create a scrollbar feature for the builder.
  *
  * Replaces the native browser scrollbar with a custom, cross-browser
  * consistent scrollbar.
@@ -75,7 +75,7 @@ export interface ScrollbarPluginConfig {
  * ```
  */
 export const withScrollbar = <T extends VListItem = VListItem>(
-  config?: ScrollbarPluginConfig,
+  config?: ScrollbarFeatureConfig,
 ): VListFeature<T> => {
   let scrollbar: Scrollbar | null = null;
 

@@ -1,5 +1,5 @@
 /**
- * vlist/groups - Builder Plugin
+ * vlist/groups - Builder Feature
  * Adds grouped lists with sticky section headers.
  *
  * Priority: 10 (runs first — transforms item list and height function before rendering)
@@ -42,11 +42,11 @@ import {
 import { calculateScrollToIndex } from "../../rendering";
 
 // =============================================================================
-// Plugin Config
+// Feature Config
 // =============================================================================
 
-/** Groups plugin configuration */
-export interface GroupsPluginConfig {
+/** Groups feature configuration */
+export interface GroupsFeatureConfig {
   /** Returns group key for item at index (required) */
   getGroupForIndex: (index: number) => string;
 
@@ -61,11 +61,11 @@ export interface GroupsPluginConfig {
 }
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a groups plugin for the builder.
+ * Create a groups feature for the builder.
  *
  * Adds grouped lists with sticky section headers.
  *
@@ -92,7 +92,7 @@ export interface GroupsPluginConfig {
  * ```
  */
 export const withSections = <T extends VListItem = VListItem>(
-  config: GroupsPluginConfig,
+  config: GroupsFeatureConfig,
 ): VListFeature<T> => {
   // Validate
   if (!config.getGroupForIndex) {
@@ -177,7 +177,7 @@ export const withSections = <T extends VListItem = VListItem>(
         return userTemplate(item as T, index, state);
       }) as typeof userTemplate;
 
-      // ── Check if grid plugin has exposed its layout ──
+      // ── Check if grid feature has exposed its layout ──
       const getGridLayout = ctx.methods.get("_getGridLayout") as
         | (() => any)
         | undefined;
@@ -213,7 +213,7 @@ export const withSections = <T extends VListItem = VListItem>(
           resolvedConfig.ariaIdPrefix,
         );
 
-        // Use grid plugin's method to replace its renderer instance
+        // Use grid feature's method to replace its renderer instance
         replaceGridRenderer(newGridRenderer);
       } else {
         // Replace the template with the unified version
@@ -366,7 +366,7 @@ export const withSections = <T extends VListItem = VListItem>(
 };
 
 // =============================================================================
-// Helpers (duplicated to keep plugin self-contained)
+// Helpers (duplicated to keep feature self-contained)
 // =============================================================================
 
 const DEFAULT_SMOOTH_DURATION = 300;

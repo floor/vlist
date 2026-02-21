@@ -1,6 +1,6 @@
 /**
- * vlist/data - Builder Plugin
- * Wraps async data loading with sparse storage into a VListPlugin for the composable builder.
+ * vlist/data - Builder Feature
+ * Wraps async data loading with sparse storage into a VListFeature for the composable builder.
  *
  * Priority: 20 (runs before scrollbar and selection, after grid/groups)
  *
@@ -30,11 +30,11 @@ import {
 } from "../../constants";
 
 // =============================================================================
-// Plugin Config
+// Feature Config
 // =============================================================================
 
-/** Data plugin configuration */
-export interface DataPluginConfig<T extends VListItem = VListItem> {
+/** Data feature configuration */
+export interface DataFeatureConfig<T extends VListItem = VListItem> {
   /** Async data source (required) */
   adapter: VListAdapter<T>;
 
@@ -52,11 +52,11 @@ export interface DataPluginConfig<T extends VListItem = VListItem> {
 }
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a data plugin for the builder.
+ * Create a data feature for the builder.
  *
  * Adds async data loading with sparse storage, placeholders, and infinite scroll.
  *
@@ -81,7 +81,7 @@ export interface DataPluginConfig<T extends VListItem = VListItem> {
  * ```
  */
 export const withAsync = <T extends VListItem = VListItem>(
-  config: DataPluginConfig<T>,
+  config: DataFeatureConfig<T>,
 ): VListFeature<T> => {
   const { adapter, loading } = config;
   const cancelLoadThreshold =

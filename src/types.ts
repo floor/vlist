@@ -21,7 +21,7 @@ export interface VListItem {
 }
 
 // =============================================================================
-// Plugin Configuration Types
+// Feature Configuration Types
 // =============================================================================
 
 /** Groups configuration for createVList */

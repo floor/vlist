@@ -54,7 +54,7 @@ export {
   type ScrollToIndexFn,
 } from "./viewport";
 
-// Scale (large dataset handling - used by withScale plugin)
+// Scale (large dataset handling - used by withScale feature)
 export {
   MAX_VIRTUAL_HEIGHT,
   getCompressionState,

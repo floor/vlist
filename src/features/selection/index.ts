@@ -3,8 +3,8 @@
  * Selection state management
  */
 
-// Builder Plugin
-export { withSelection, type SelectionPluginConfig } from "./feature";
+// Builder Feature
+export { withSelection, type SelectionFeatureConfig } from "./feature";
 
 // Selection State
 export {
