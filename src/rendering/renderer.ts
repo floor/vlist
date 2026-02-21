@@ -17,7 +17,7 @@ import type { SizeCache } from "./sizes";
 
 /**
  * Optional compression position calculator.
- * Injected by the monolithic factory or the withCompression plugin.
+ * Injected by the monolithic factory or the withCompression feature.
  * When not provided, the renderer uses simple sizeCache offsets.
  */
 export type CompressedPositionFn = (
@@ -32,7 +32,7 @@ export type CompressedPositionFn = (
 
 /**
  * Optional compression state getter.
- * Injected by the monolithic factory or the withCompression plugin.
+ * Injected by the monolithic factory or the withCompression feature.
  * When not provided, the renderer assumes no compression.
  */
 export type CompressionStateFn = (

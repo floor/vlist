@@ -648,7 +648,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const reload = async (): Promise<void> => {
     // Clear everything — but do NOT load initial data.
-    // The caller (e.g. withAsync plugin) decides what range to load,
+    // The caller (e.g. withAsync feature) decides what range to load,
     // which avoids a wasted request to offset=0 when the viewport
     // is scrolled elsewhere.
     storage.clear();

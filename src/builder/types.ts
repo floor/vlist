@@ -1,6 +1,6 @@
 /**
  * vlist/builder - Types
- * Plugin interface, builder config, builder context, and return types
+ * Feature interface, builder config, builder context, and return types
  */
 
 import type {
@@ -29,7 +29,7 @@ import type { ScrollController } from "../features/scrollbar/controller";
 import type { Emitter } from "../events";
 
 // =============================================================================
-// Builder Configuration (subset of VListConfig without plugin-specific options)
+// Builder Configuration (subset of VListConfig without feature-specific options)
 // =============================================================================
 
 /** Configuration accepted by the builder's vlist() factory */
@@ -40,7 +40,7 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
   /** Item configuration (height/width and template) */
   item: ItemConfig<T>;
 
-  /** Static items array (optional if using adapter via plugin) */
+  /** Static items array (optional if using adapter via feature) */
   items?: T[];
 
   /** Number of extra items to render outside viewport (default: 3) */
@@ -93,7 +93,7 @@ export interface ResolvedBuilderConfig {
 }
 
 // =============================================================================
-// BuilderContext — the interface plugins receive during setup
+// BuilderContext — the interface features receive during setup
 // =============================================================================
 
 /** Cached compression state */
@@ -112,7 +112,7 @@ export interface BuilderState {
 }
 
 /**
- * BuilderContext — the internal interface that plugins receive during setup.
+ * BuilderContext — the internal interface that features receive during setup.
  *
  * Provides access to all core components plus registration points for
  * handlers, methods, and cleanup callbacks.
@@ -124,10 +124,10 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   readonly emitter: Emitter<VListEvents<T>>;
   readonly config: ResolvedBuilderConfig;
 
-  /** The raw user-provided builder config (for plugins that need original values) */
+  /** The raw user-provided builder config (for features that need original values) */
   readonly rawConfig: BuilderConfig<T>;
 
-  // ── Mutable components (replaceable by plugins) ───────────────
+  // ── Mutable components (replaceable by features) ───────────────
   renderer: Renderer<T>;
   dataManager: SimpleDataManager<T>;
   scrollController: ScrollController;
@@ -137,7 +137,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   // ── Post-scroll actions ───────────────────────────────────────
   /**
-   * Plugins register lightweight callbacks that run after each
+   * Features register lightweight callbacks that run after each
    * scroll-triggered render. These are NOT on the hot path —
    * they run after DOM updates are complete.
    */
@@ -145,7 +145,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   // ── Event handler slots ───────────────────────────────────────
   /**
-   * Plugins register handlers for user interaction events.
+   * Features register handlers for user interaction events.
    * These are attached as DOM event listeners during .build().
    */
   clickHandlers: Array<(event: MouseEvent) => void>;
@@ -155,12 +155,12 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   destroyHandlers: Array<() => void>;
 
   // ── Public method registration ────────────────────────────────
-  /** Plugins register public methods by name. Exposed on the returned API. */
+  /** Features register public methods by name. Exposed on the returned API. */
   methods: Map<string, Function>;
 
   // ── Component replacement ─────────────────────────────────────
   replaceTemplate(template: ItemTemplate<T>): void;
-  replaceRenderer(renderer: Renderer<T>): void; // For grid plugin compatibility
+  replaceRenderer(renderer: Renderer<T>): void; // For grid feature compatibility
   replaceDataManager(dataManager: SimpleDataManager<T>): void;
   replaceScrollController(scrollController: ScrollController): void;
 
@@ -181,13 +181,13 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   invalidateRendered(): void;
 
   /**
-   * Get current render functions (for wrapping by selection/other plugins).
+   * Get current render functions (for wrapping by selection/other features).
    * Call this BEFORE setRenderFns to capture the current functions.
    */
   getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void };
 
   /**
-   * Get current container width (for grid plugin).
+   * Get current container width (for grid feature).
    * This returns the width detected by ResizeObserver, which is more reliable
    * than viewport.clientWidth in test environments.
    */
@@ -195,19 +195,19 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Replace the virtual-total function.
-   * Used by grid/groups plugins that change what "total" means
+   * Used by grid/groups features that change what "total" means
    * (e.g. row count instead of item count).
    */
   setVirtualTotalFn(fn: () => number): void;
 
   /**
-   * Used by groups plugin to inject grouped size function and by grid to add gap.
+   * Used by groups feature to inject grouped size function and by grid to add gap.
    */
   rebuildSizeCache(total?: number): void;
 
   /**
    * Set a new effective size config function/value.
-   * Plugins that change sizes (groups, grid) call this before rebuildSizeCache.
+   * Features that change sizes (groups, grid) call this before rebuildSizeCache.
    */
   setSizeConfig(config: number | ((index: number) => number)): void;
 
@@ -218,7 +218,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Update compression mode when total items changes.
-   * Called by the core after data changes and by plugins that alter totals.
+   * Called by the core after data changes and by features that alter totals.
    */
   updateCompressionMode(): void;
 
@@ -258,7 +258,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Replace the render functions.
-   * Used by grid/groups plugins that need to completely replace the render logic
+   * Used by grid/groups features that need to completely replace the render logic
    * (e.g., to convert row ranges to item ranges for grid rendering).
    */
   setRenderFns(renderIfNeeded: () => void, forceRender: () => void): void;
@@ -272,7 +272,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Set the scroll target element (default: viewport).
-   * Used by window mode plugin to use window instead of viewport for scroll events.
+   * Used by window mode feature to use window instead of viewport for scroll events.
    */
   setScrollTarget(target: HTMLElement | Window): void;
 
@@ -284,7 +284,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Override container dimension getters.
-   * Used by window mode plugin to use window.innerWidth/innerHeight instead
+   * Used by window mode feature to use window.innerWidth/innerHeight instead
    * of viewport.clientWidth/clientHeight.
    */
   setContainerDimensions(getter: {
@@ -294,7 +294,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /**
    * Disable the ResizeObserver on the viewport element.
-   * Used by window mode plugin where the viewport doesn't need observation
+   * Used by window mode feature where the viewport doesn't need observation
    * (window resize is used instead).
    */
   disableViewportResize(): void;
@@ -336,12 +336,6 @@ export interface VListFeature<T extends VListItem = VListItem> {
 
 /** Factory function that returns a feature */
 export type FeatureFactory<T extends VListItem = VListItem> = VListFeature<T>;
-
-/** @deprecated Use VListFeature instead */
-export type VListPlugin<T extends VListItem = VListItem> = VListFeature<T>;
-
-/** @deprecated Use FeatureFactory instead */
-export type PluginFactory<T extends VListItem = VListItem> = FeatureFactory<T>;
 
 // =============================================================================
 // VListBuilder — the chainable builder
@@ -400,7 +394,7 @@ export interface BuiltVList<T extends VListItem = VListItem> {
   // ── Lifecycle ─────────────────────────────────────────────────
   destroy: () => void;
 
-  // ── Plugin methods (dynamically added) ────────────────────────
+  // ── Feature methods (dynamically added) ────────────────────────
   // Selection (added by withSelection)
   select?: (...ids: Array<string | number>) => void;
   deselect?: (...ids: Array<string | number>) => void;
@@ -417,6 +411,6 @@ export interface BuiltVList<T extends VListItem = VListItem> {
   // Data (added by withData — override reload)
   // reload is always present but withData makes it functional
 
-  // Allow arbitrary plugin methods
+  // Allow arbitrary feature methods
   [key: string]: unknown;
 }

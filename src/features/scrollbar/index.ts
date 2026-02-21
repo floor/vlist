@@ -3,8 +3,8 @@
  * Scroll controller and custom scrollbar
  */
 
-// Builder Plugins
-export { withScrollbar, type ScrollbarPluginConfig } from "./feature";
+// Builder Feature
+export { withScrollbar, type ScrollbarFeatureConfig } from "./feature";
 
 // Scroll Controller
 export {

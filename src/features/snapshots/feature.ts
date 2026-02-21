@@ -1,8 +1,8 @@
 /**
- * vlist/snapshots - Builder Plugin
+ * vlist/snapshots - Builder Feature
  * Adds scroll save/restore for SPA navigation and tab switching.
  *
- * Priority: 50 (runs last — needs all other plugins initialized)
+ * Priority: 50 (runs last — needs all other features initialized)
  *
  * What it wires:
  * - getScrollSnapshot() — captures current scroll position (item index + sub-pixel offset)
@@ -18,14 +18,14 @@
  */
 
 import type { VListItem, ScrollSnapshot } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a snapshots plugin for the builder.
+ * Create a snapshots feature for the builder.
  *
  * Adds scroll save/restore for SPA navigation and tab switching.
  *
@@ -62,7 +62,7 @@ export const withSnapshots = <
         const compression = ctx.getCachedCompression();
         const totalItems = ctx.getVirtualTotal();
 
-        // Check if selection plugin registered getSelected
+        // Check if selection feature registered getSelected
         const getSelected = ctx.methods.get("getSelected") as
           | (() => Array<string | number>)
           | undefined;
@@ -130,7 +130,7 @@ export const withSnapshots = <
 
         ctx.scrollController.scrollTo(scrollPosition);
 
-        // Restore selection if provided and selection plugin is present
+        // Restore selection if provided and selection feature is present
         if (selectedIds && selectedIds.length > 0) {
           const selectFn = ctx.methods.get("select") as
             | ((...ids: Array<string | number>) => void)

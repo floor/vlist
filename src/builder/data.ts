@@ -5,7 +5,7 @@
  * No sparse storage, no placeholders, no async adapter support.
  *
  * This keeps the builder core small (~12 KB). When the user installs
- * withData(), that plugin replaces this manager with the full
+ * withData(), that feature replaces this manager with the full
  * adapter-backed data manager from src/data/manager.ts.
  */
 
@@ -30,7 +30,7 @@ export interface SimpleDataState<_T extends VListItem = VListItem> {
  * SimpleDataManager — the same interface as the full DataManager,
  * but backed by a plain array instead of sparse storage + placeholders.
  *
- * Only the methods used by the builder core and plugins are implemented.
+ * Only the methods used by the builder core and features are implemented.
  * Adapter-related methods (loadRange, ensureRange, loadInitial, loadMore,
  * reload, evictDistant) are no-ops or stubs.
  */

@@ -1,5 +1,5 @@
 /**
- * vlist/compression - Builder Plugin
+ * vlist/compression - Builder Feature
  * Enables support for lists with 1M+ items by compressing the scroll space
  * when the total height exceeds the browser's ~16.7M pixel limit.
  *
@@ -96,11 +96,11 @@ const TOUCH_VELOCITY_SAMPLES = 5;
 const TOUCH_VELOCITY_WINDOW = 100;
 
 // =============================================================================
-// Plugin Factory
+// Feature Factory
 // =============================================================================
 
 /**
- * Create a compression plugin for the builder.
+ * Create a compression feature for the builder.
  *
  * Enables support for lists with 1M+ items. No configuration needed —
  * compression activates automatically when the total height exceeds
@@ -126,7 +126,7 @@ export const withScale = <
   let virtualScrollTop = 0;
   let compressedModeActive = false;
 
-  // Smooth scroll state — shared across the plugin closure so that
+  // Smooth scroll state — shared across the feature closure so that
   // external scroll position changes (scrollbar drag, scrollToIndex)
   // can cancel an in-flight animation and stay in sync.
   let targetScrollTop = 0;
@@ -396,7 +396,7 @@ export const withScale = <
 
           // Force custom scrollbar if not already present
           // (native scrollbar can't represent compressed space)
-          // Check if withScrollbar plugin already created one by looking for
+          // Check if withScrollbar feature already created one by looking for
           // the scrollbar track element
           const hasScrollbarTrack = dom.viewport.querySelector(
             `.${classPrefix}-scrollbar-track`,

@@ -1,6 +1,6 @@
 /**
  * vlist/snapshots - Scroll Save/Restore
- * Plugin for SPA navigation and tab switching
+ * Feature for SPA navigation and tab switching
  *
  * Usage: import { withSnapshots } from 'vlist/snapshots'
  */

@@ -36,12 +36,6 @@ export type {
   FeatureFactory,
   BuilderContext,
 
-  // Backwards compatibility (deprecated)
-  /** @deprecated Use VListFeature instead */
-  VListPlugin,
-  /** @deprecated Use FeatureFactory instead */
-  PluginFactory,
-
   // Internal (for feature authors)
   BuilderState,
   ResolvedBuilderConfig,

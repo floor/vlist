@@ -3,8 +3,8 @@
  * Data management, sparse storage, and placeholder generation
  */
 
-// Builder Plugin
-export { withAsync, type DataPluginConfig } from "./feature";
+// Builder Feature
+export { withAsync, type DataFeatureConfig } from "./feature";
 
 // Data Manager
 export {
