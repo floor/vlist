@@ -346,9 +346,9 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
     getCompressionContext() {
       return {
-        scrollTop: $.ls,
+        scrollPosition: $.ls,
         totalItems: $.vtf(),
-        containerHeight: $.ch,
+        containerSize: $.ch,
         rangeStart: renderRange.start,
       } as any;
     },

@@ -229,7 +229,7 @@ export const withScale = <
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerSize;
+              comp.virtualSize - ctx.state.viewportState.containerSize;
 
             targetScrollTop = Math.max(
               0,
@@ -292,7 +292,7 @@ export const withScale = <
             const delta = touchStartY - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerSize;
+              comp.virtualSize - ctx.state.viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -341,7 +341,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualHeight - ctx.state.viewportState.containerSize;
+                comp.virtualSize - ctx.state.viewportState.containerSize;
 
               let newPos = virtualScrollTop + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -445,7 +445,7 @@ export const withScale = <
               if (scrollbarRef) {
                 const comp = ctx.getCachedCompression();
                 scrollbarRef.updateBounds(
-                  comp.virtualHeight,
+                  comp.virtualSize,
                   ctx.state.viewportState.containerSize,
                 );
               }

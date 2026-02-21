@@ -84,7 +84,7 @@ export const getCompressionState = (
  * @param out - Output range to mutate (avoids allocation on hot path)
  */
 export const calculateCompressedVisibleRange = (
-  scrollTop: number,
+  scrollPosition: number,
   containerHeight: number,
   sizeCache: SizeCache,
   totalItems: number,
@@ -99,10 +99,10 @@ export const calculateCompressedVisibleRange = (
 
   if (!compression.isCompressed) {
     // Normal calculation using size cache
-    const start = sizeCache.indexAtOffset(scrollTop);
+    const start = sizeCache.indexAtOffset(scrollPosition);
     // Find the last item that is at least partially visible
     // Add 1 to match the fixed-height ceil() behavior (safe overshoot)
-    let end = sizeCache.indexAtOffset(scrollTop + containerHeight);
+    let end = sizeCache.indexAtOffset(scrollPosition + containerHeight);
     if (end < totalItems - 1) end++;
     out.start = Math.max(0, start);
     out.end = Math.min(totalItems - 1, Math.max(0, end));
@@ -111,7 +111,7 @@ export const calculateCompressedVisibleRange = (
 
   // Compressed calculation
   const { virtualSize } = compression;
-  const scrollRatio = scrollTop / virtualSize;
+  const scrollRatio = scrollPosition / virtualSize;
   const exactIndex = scrollRatio * totalItems;
 
   let start = Math.floor(exactIndex);
@@ -128,7 +128,7 @@ export const calculateCompressedVisibleRange = (
   // Near-bottom interpolation
   // This ensures we can reach the actual last items
   const maxScroll = virtualSize - containerHeight;
-  const distanceFromBottom = maxScroll - scrollTop;
+  const distanceFromBottom = maxScroll - scrollPosition;
 
   if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
     const itemsAtBottom = countItemsFittingFromBottom(
@@ -208,7 +208,7 @@ export const calculateCompressedRenderRange = (
  */
 export const calculateCompressedItemPosition = (
   index: number,
-  scrollTop: number,
+  scrollPosition: number,
   sizeCache: SizeCache,
   totalItems: number,
   containerHeight: number,
@@ -222,12 +222,12 @@ export const calculateCompressedItemPosition = (
 
   const { virtualSize } = compression;
   const maxScroll = virtualSize - containerHeight;
-  const distanceFromBottom = maxScroll - scrollTop;
+  const distanceFromBottom = maxScroll - scrollPosition;
 
   // Near-bottom interpolation: ensures we can smoothly reach the last items
   if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
     // Special case: at exact max scroll, position items from bottom up
-    if (scrollTop >= maxScroll - 1) {
+    if (scrollPosition >= maxScroll - 1) {
       // Calculate position from the bottom of the viewport
       const totalHeightFromBottom =
         sizeCache.getTotalSize() - sizeCache.getOffset(index);
@@ -240,7 +240,7 @@ export const calculateCompressedItemPosition = (
       totalItems,
     );
     const firstVisibleAtBottom = Math.max(0, totalItems - itemsAtBottom);
-    const scrollRatio = scrollTop / virtualSize;
+    const scrollRatio = scrollPosition / virtualSize;
     const exactScrollIndex = scrollRatio * totalItems;
 
     // Interpolation factor: 0 at threshold, 1 at bottom
@@ -266,7 +266,7 @@ export const calculateCompressedItemPosition = (
   //
   // Map scrollTop to an actual-space offset via the compression ratio,
   // then position the item relative to that offset.
-  const scrollRatio = scrollTop / virtualSize;
+  const scrollRatio = scrollPosition / virtualSize;
   const actualSize = sizeCache.getTotalSize();
   const virtualScrollOffset = scrollRatio * actualSize;
 
@@ -338,7 +338,7 @@ export const calculateCompressedScrollToIndex = (
  * Pure function - no side effects
  */
 export const calculateIndexFromScrollPosition = (
-  scrollTop: number,
+  scrollPosition: number,
   sizeCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
@@ -346,11 +346,11 @@ export const calculateIndexFromScrollPosition = (
   if (totalItems === 0) return 0;
 
   if (compression.isCompressed) {
-    const scrollRatio = scrollTop / compression.virtualSize;
+    const scrollRatio = scrollPosition / compression.virtualSize;
     return Math.floor(scrollRatio * totalItems);
   }
 
-  return sizeCache.indexAtOffset(scrollTop);
+  return sizeCache.indexAtOffset(scrollPosition);
 };
 
 // =============================================================================
