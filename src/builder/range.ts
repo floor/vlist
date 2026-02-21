@@ -13,7 +13,7 @@ import { countVisibleItems } from "../rendering/sizes";
 // =============================================================================
 
 export const calcVisibleRange = (
-  scrollTop: number,
+  scrollPosition: number,
   containerHeight: number,
   hc: SizeCache,
   totalItems: number,
@@ -25,7 +25,7 @@ export const calcVisibleRange = (
     return;
   }
 
-  const start = hc.indexAtOffset(scrollTop);
+  const start = hc.indexAtOffset(scrollPosition);
 
   // Use accurate visible item counting (same logic as compressed mode)
   // This ensures we render enough items during fast scrolling

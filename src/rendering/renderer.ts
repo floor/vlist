@@ -61,9 +61,9 @@ export interface ElementPool {
 
 /** Compression context for positioning */
 export interface CompressionContext {
-  scrollTop: number;
+  scrollPosition: number;
   totalItems: number;
-  containerHeight: number;
+  containerSize: number;
   rangeStart: number;
 }
 
@@ -290,10 +290,10 @@ export const createRenderer = <T extends VListItem = VListItem>(
         // Use compression-aware positioning (injected)
         return compressionFns.getPosition(
           index,
-          compressionCtx.scrollTop,
+          compressionCtx.scrollPosition,
           sizeCache,
           compressionCtx.totalItems,
-          compressionCtx.containerHeight,
+          compressionCtx.containerSize,
           compression,
           compressionCtx.rangeStart,
         );

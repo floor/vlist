@@ -124,7 +124,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
         if (scrollbarRef) {
           const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
-            comp.virtualHeight,
+            comp.virtualSize,
             ctx.state.viewportState.containerSize,
           );
         }
@@ -135,7 +135,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
         if (scrollbarRef) {
           const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
-            comp.virtualHeight,
+            comp.virtualSize,
             ctx.state.viewportState.containerSize,
           );
         }

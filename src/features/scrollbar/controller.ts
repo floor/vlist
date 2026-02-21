@@ -437,7 +437,7 @@ export const createScrollController = (
 
     compressed = true;
     compression = newCompression;
-    maxScroll = newCompression.virtualHeight - containerHeight;
+    maxScroll = newCompression.virtualSize - containerHeight;
 
     // In window mode, compression is purely mathematical — the content div
     // height is set to the virtual height by vlist.ts, and the browser scrolls
@@ -471,8 +471,8 @@ export const createScrollController = (
     const nativePos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
     if (nativePos > 0) {
       const nativeMax = horizontal
-        ? (compression?.actualHeight ?? viewport.scrollWidth)
-        : (compression?.actualHeight ?? viewport.scrollHeight);
+        ? (compression?.actualSize ?? viewport.scrollWidth)
+        : (compression?.actualSize ?? viewport.scrollHeight);
       const ratio = nativePos / nativeMax;
       scrollPosition = ratio * maxScroll;
     }

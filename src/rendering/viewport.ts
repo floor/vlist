@@ -73,7 +73,7 @@ export const getSimpleCompressionState = (
  * virtual.ts provides a simple fallback for non-compressed lists.
  */
 export type VisibleRangeFn = (
-  scrollTop: number,
+  scrollPosition: number,
   containerHeight: number,
   sizeCache: SizeCache,
   totalItems: number,
@@ -103,7 +103,7 @@ export type ScrollToIndexFn = (
  * Mutates `out` to avoid allocation on the scroll hot path.
  */
 export const simpleVisibleRange: VisibleRangeFn = (
-  scrollTop,
+  scrollPosition,
   containerHeight,
   sizeCache,
   totalItems,
@@ -116,8 +116,8 @@ export const simpleVisibleRange: VisibleRangeFn = (
     return out;
   }
 
-  const start = sizeCache.indexAtOffset(scrollTop);
-  let end = sizeCache.indexAtOffset(scrollTop + containerHeight);
+  const start = sizeCache.indexAtOffset(scrollPosition);
+  let end = sizeCache.indexAtOffset(scrollPosition + containerHeight);
   if (end < totalItems - 1) end++;
 
   out.start = Math.max(0, start);
@@ -233,12 +233,12 @@ export const calculateItemOffset = (
  * Clamp scroll position to valid range
  */
 export const clampScrollPosition = (
-  scrollTop: number,
+  scrollPosition: number,
   totalHeight: number,
   containerHeight: number,
 ): number => {
   const maxScroll = Math.max(0, totalHeight - containerHeight);
-  return Math.max(0, Math.min(scrollTop, maxScroll));
+  return Math.max(0, Math.min(scrollPosition, maxScroll));
 };
 
 /**
@@ -300,7 +300,7 @@ export const createViewportState = (
  */
 export const updateViewportState = (
   state: ViewportState,
-  scrollTop: number,
+  scrollPosition: number,
   sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
@@ -308,7 +308,7 @@ export const updateViewportState = (
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    scrollTop,
+    scrollPosition,
     state.containerSize,
     sizeCache,
     totalItems,
@@ -322,7 +322,7 @@ export const updateViewportState = (
     state.renderRange,
   );
 
-  state.scrollPosition = scrollTop;
+  state.scrollPosition = scrollPosition;
 
   return state;
 };

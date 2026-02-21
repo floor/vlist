@@ -234,10 +234,10 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       if (compression.isCompressed) {
         return calculateCompressedItemPosition(
           row,
-          compressionCtx.scrollTop,
+          compressionCtx.scrollPosition,
           sizeCache,
           totalRows,
-          compressionCtx.containerHeight,
+          compressionCtx.containerSize,
           compression,
           compressionCtx.rangeStart,
         );
