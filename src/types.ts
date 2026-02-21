@@ -111,8 +111,8 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    * }
    * ```
    *
-   * Required when `direction` is `'vertical'` (default).
-   * Optional when `direction` is `'horizontal'` (used as cross-axis size).
+   * Required when `orientation` is `'vertical'` (default).
+   * Optional when `orientation` is `'horizontal'` (used as cross-axis size).
    */
   height?: number | ((index: number, context?: GridHeightContext) => number);
 
@@ -122,8 +122,8 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    * - `number` — Fixed width for all items (fast path, zero overhead)
    * - `(index: number) => number` — Variable width per item (prefix-sum based lookups)
    *
-   * Required when `direction` is `'horizontal'`.
-   * Ignored when `direction` is `'vertical'` (default).
+   * Required when `orientation` is `'horizontal'`.
+   * Ignored when `orientation` is `'vertical'` (default).
    */
   width?: number | ((index: number) => number);
 
@@ -137,7 +137,7 @@ export interface VListConfig<T extends VListItem = VListItem> {
   container: HTMLElement | string;
 
   /**
-   * Scroll direction (default: 'vertical').
+   * Layout orientation (default: 'vertical').
    *
    * - `'vertical'` — Standard top-to-bottom scrolling (default)
    * - `'horizontal'` — Left-to-right scrolling (carousel, timeline, etc.)
@@ -150,7 +150,7 @@ export interface VListConfig<T extends VListItem = VListItem> {
    *
    * Cannot be combined with `groups`, `grid`, or `reverse`.
    */
-  direction?: "vertical" | "horizontal";
+  orientation?: "vertical" | "horizontal";
 
   /** Item configuration (height and template) */
   item: ItemConfig<T>;

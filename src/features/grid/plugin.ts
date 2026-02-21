@@ -12,7 +12,7 @@
  * - CSS class — adds .vlist--grid to the root element
  *
  * Restrictions:
- * - Cannot be combined with direction: 'horizontal'
+ * - Cannot be combined with orientation: 'horizontal'
  * - Cannot be combined with reverse: true
  *
  * Can be combined with withGroups for grouped 2D layouts.
@@ -81,10 +81,10 @@ export const withGrid = <T extends VListItem = VListItem>(
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      // Validate direction/reverse constraints
+      // Validate orientation/reverse constraints
       if (resolvedConfig.horizontal) {
         throw new Error(
-          "[vlist/builder] withGrid cannot be used with direction: 'horizontal'",
+          "[vlist/builder] withGrid cannot be used with orientation: 'horizontal'",
         );
       }
       if (resolvedConfig.reverse) {

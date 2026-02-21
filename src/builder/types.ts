@@ -53,11 +53,11 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
   ariaLabel?: string;
 
   /**
-   * Scroll direction (default: 'vertical')
+   * Layout orientation (default: 'vertical')
    * - 'vertical' — Standard top-to-bottom scrolling
    * - 'horizontal' — Left-to-right scrolling
    */
-  direction?: "vertical" | "horizontal";
+  orientation?: "vertical" | "horizontal";
 
   /** Reverse mode for chat UIs */
   reverse?: boolean;
