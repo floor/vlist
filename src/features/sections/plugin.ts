@@ -14,11 +14,11 @@
  *
  * Restrictions:
  * - Items must be pre-sorted by group
- * - Cannot be combined with direction: 'horizontal'
  *
  * Can be combined with:
  * - withGrid for grouped 2D layouts
  * - reverse: true (sticky header shows current section as you scroll up through history)
+ * - direction: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
  */
 
 import type { VListItem } from "../../types";
@@ -120,14 +120,9 @@ export const withSections = <T extends VListItem = VListItem>(
       const { dom, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      // Validate direction constraint
-      if (resolvedConfig.horizontal) {
-        throw new Error(
-          "[vlist/builder] withGroups cannot be used with direction: 'horizontal'",
-        );
-      }
-      // Note: sticky headers work with reverse mode!
-      // As you scroll up through history, the current section header sticks at top
+      // Note: sticky headers work with both reverse mode and horizontal mode!
+      // - reverse: true - as you scroll up through history, the current section header sticks at top
+      // - horizontal: true - headers stick to left edge and push left when next header approaches
 
       // ── Get the base item size ──
       const itemConfig = rawConfig.item;
@@ -237,13 +232,16 @@ export const withSections = <T extends VListItem = VListItem>(
           ctx.sizeCache,
           { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
           classPrefix,
+          resolvedConfig.horizontal,
         );
 
         // Wire sticky header into afterScroll
         const stickyRef = stickyHeader;
-        ctx.afterScroll.push((scrollPosition: number, _direction: string): void => {
-          stickyRef.update(scrollPosition);
-        });
+        ctx.afterScroll.push(
+          (scrollPosition: number, _direction: string): void => {
+            stickyRef.update(scrollPosition);
+          },
+        );
 
         // Initialize sticky header
         stickyHeader.update(ctx.scrollController.getScrollTop());

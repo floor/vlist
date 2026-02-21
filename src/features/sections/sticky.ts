@@ -33,6 +33,7 @@ import type { SizeCache } from "../../rendering/sizes";
  * @param sizeCache - The LAYOUT size cache (includes headers)
  * @param config - Groups configuration (headerTemplate, headerHeight)
  * @param classPrefix - CSS class prefix (default: 'vlist')
+ * @param horizontal - Whether using horizontal scrolling mode
  * @returns StickyHeader instance
  */
 export const createStickyHeader = (
@@ -41,6 +42,7 @@ export const createStickyHeader = (
   sizeCache: SizeCache,
   config: GroupsConfig,
   classPrefix: string,
+  horizontal: boolean = false,
 ): StickyHeader => {
   // =========================================================================
   // DOM Setup
@@ -51,15 +53,24 @@ export const createStickyHeader = (
   element.setAttribute("role", "presentation");
   element.setAttribute("aria-hidden", "true");
 
-  // Position absolutely at top of root, above the viewport
+  // Position absolutely at top (vertical) or left (horizontal) of root
   element.style.position = "absolute";
-  element.style.top = "0";
-  element.style.left = "0";
-  element.style.right = "0";
   element.style.zIndex = "5";
   element.style.pointerEvents = "none";
   element.style.willChange = "transform";
   element.style.overflow = "hidden";
+
+  if (horizontal) {
+    // Horizontal mode: stick to left edge
+    element.style.top = "0";
+    element.style.bottom = "0";
+    element.style.left = "0";
+  } else {
+    // Vertical mode: stick to top edge
+    element.style.top = "0";
+    element.style.left = "0";
+    element.style.right = "0";
+  }
 
   // Insert as first child of root so it renders above the viewport
   root.insertBefore(element, root.firstChild);
@@ -89,9 +100,13 @@ export const createStickyHeader = (
     const group = groups[groupIndex]!;
     const result = config.headerTemplate(group.key, group.groupIndex);
 
-    // Set the height of the sticky header to match the group's header height
-    const headerHeight = layout.getHeaderHeight(groupIndex);
-    element.style.height = `${headerHeight}px`;
+    // Set the size of the sticky header to match the group's header size
+    const headerSize = layout.getHeaderHeight(groupIndex);
+    if (horizontal) {
+      element.style.width = `${headerSize}px`;
+    } else {
+      element.style.height = `${headerSize}px`;
+    }
 
     if (typeof result === "string") {
       element.innerHTML = result;
@@ -108,12 +123,12 @@ export const createStickyHeader = (
    * Update the sticky header based on the current scroll position.
    *
    * 1. Determine which group is "current" (the group whose header has
-   *    scrolled past the top of the viewport).
+   *    scrolled past the top/left edge of the viewport).
    * 2. Check if the next group's inline header is within the viewport,
-   *    about to push the sticky header upward.
-   * 3. Apply translateY to create the push-out transition effect.
+   *    about to push the sticky header upward/leftward.
+   * 3. Apply translateY (vertical) or translateX (horizontal) for the push-out effect.
    */
-  const update = (scrollTop: number): void => {
+  const update = (scrollPosition: number): void => {
     const groups = layout.groups;
 
     if (groups.length === 0) {
@@ -122,20 +137,20 @@ export const createStickyHeader = (
     }
 
     // Find which group header is at or above the current scroll position.
-    // Walk backward from the last group whose header offset <= scrollTop.
+    // Walk backward from the last group whose header offset <= scrollPosition.
     let activeGroupIdx = 0;
 
     for (let i = groups.length - 1; i >= 0; i--) {
       const headerOffset = sizeCache.getOffset(groups[i]!.headerLayoutIndex);
-      if (headerOffset <= scrollTop) {
+      if (headerOffset <= scrollPosition) {
         activeGroupIdx = i;
         break;
       }
     }
 
-    // Edge case: if scrollTop is before the first header, show the first group
+    // Edge case: if scrollPosition is before the first header, show the first group
     const firstHeaderOffset = sizeCache.getOffset(groups[0]!.headerLayoutIndex);
-    if (scrollTop < firstHeaderOffset) {
+    if (scrollPosition < firstHeaderOffset) {
       hide();
       return;
     }
@@ -148,28 +163,34 @@ export const createStickyHeader = (
 
     // Determine the push-out offset.
     // If there's a next group, check how close its inline header is
-    // to the top of the viewport.
-    const activeHeaderHeight = layout.getHeaderHeight(activeGroupIdx);
-    let translateY = 0;
+    // to the top/left edge of the viewport.
+    const activeHeaderSize = layout.getHeaderHeight(activeGroupIdx);
+    let translateOffset = 0;
 
     const nextGroupIdx = activeGroupIdx + 1;
     if (nextGroupIdx < groups.length) {
       const nextHeaderOffset = sizeCache.getOffset(
         groups[nextGroupIdx]!.headerLayoutIndex,
       );
-      const distance = nextHeaderOffset - scrollTop;
+      const distance = nextHeaderOffset - scrollPosition;
 
-      if (distance < activeHeaderHeight) {
-        // The next header is pushing the sticky header up
-        translateY = distance - activeHeaderHeight;
+      if (distance < activeHeaderSize) {
+        // The next header is pushing the sticky header up/left
+        translateOffset = distance - activeHeaderSize;
       }
     }
 
     // Apply transform only if it changed (avoid layout thrash)
-    if (translateY !== lastTransformY) {
-      lastTransformY = translateY;
-      element.style.transform =
-        translateY === 0 ? "" : `translateY(${Math.round(translateY)}px)`;
+    if (translateOffset !== lastTransformY) {
+      lastTransformY = translateOffset;
+      if (translateOffset === 0) {
+        element.style.transform = "";
+      } else {
+        const transformValue = Math.round(translateOffset);
+        element.style.transform = horizontal
+          ? `translateX(${transformValue}px)`
+          : `translateY(${transformValue}px)`;
+      }
     }
   };
 
