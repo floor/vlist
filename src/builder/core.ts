@@ -414,7 +414,8 @@ function materialize<T extends VListItem = VListItem>(
     if ($.id) return;
 
     const total = $.vtf();
-    $.gvr($.ls, $.ch, $.hc, total, visibleRange);
+    const containerSize = isHorizontal ? $.cw : $.ch;
+    $.gvr($.ls, containerSize, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
 
     if (
@@ -728,12 +729,13 @@ function materialize<T extends VListItem = VListItem>(
       const newHeight = entry.contentRect.height;
       const newWidth = entry.contentRect.width;
       const newMainAxis = isHorizontal ? newWidth : newHeight;
+      const prevMainAxis = isHorizontal ? $.cw : $.ch;
 
       // Always update dimensions (even before initialization)
       $.cw = newWidth;
+      $.ch = newHeight;
 
-      if (Math.abs(newMainAxis - $.ch) > 1) {
-        $.ch = newMainAxis;
+      if (Math.abs(newMainAxis - prevMainAxis) > 1) {
         sharedState.viewportState.containerSize = newMainAxis;
 
         // Only render if already initialized (plugins have run)
