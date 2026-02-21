@@ -106,7 +106,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         pageSize: INITIAL_LOAD_SIZE,
         onStateChange: () => {
           if (ctx.state.isInitialized) {
-            ctx.heightCache.rebuild(ctx.getVirtualTotal());
+            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
             ctx.updateCompressionMode();
 
             // Update compression metadata on viewport state, but do NOT
@@ -116,18 +116,18 @@ export const withAsync = <T extends VListItem = VListItem>(
             // renderer always recalculates renderRange with the correct
             // installed visibleRangeFn, so we leave that to renderIfNeeded.
             const compression = ctx.getCachedCompression();
-            ctx.state.viewportState.totalHeight = compression.virtualHeight;
-            ctx.state.viewportState.actualHeight = compression.actualHeight;
+            ctx.state.viewportState.totalSize = compression.virtualSize;
+            ctx.state.viewportState.actualSize = compression.actualSize;
             ctx.state.viewportState.isCompressed = compression.isCompressed;
             ctx.state.viewportState.compressionRatio = compression.ratio;
 
-            ctx.updateContentSize(compression.virtualHeight);
+            ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
           }
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
-            ctx.heightCache.rebuild(ctx.getVirtualTotal());
+            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
             ctx.forceRender();
             emitter.emit("load:end", { items: loadedItems, total });
           }
@@ -157,110 +157,114 @@ export const withAsync = <T extends VListItem = VListItem>(
       };
 
       // ── Post-scroll: velocity-aware loading + load-more ──
-      ctx.afterScroll.push((scrollTop: number, direction: string): void => {
-        if (ctx.state.isDestroyed) return;
+      ctx.afterScroll.push(
+        (scrollPosition: number, direction: string): void => {
+          if (ctx.state.isDestroyed) return;
 
-        const currentVelocity = ctx.scrollController.getVelocity();
-        const velocityReliable = ctx.scrollController.isTracking();
+          const currentVelocity = ctx.scrollController.getVelocity();
+          const velocityReliable = ctx.scrollController.isTracking();
 
-        // Only allow loading when velocity tracker is reliable and below threshold
-        const canLoad =
-          velocityReliable && currentVelocity <= cancelLoadThreshold;
+          // Only allow loading when velocity tracker is reliable and below threshold
+          const canLoad =
+            velocityReliable && currentVelocity <= cancelLoadThreshold;
 
-        // Check if velocity just dropped below threshold — load pending range immediately
-        if (
-          pendingRange &&
-          previousVelocity > cancelLoadThreshold &&
-          currentVelocity <= cancelLoadThreshold
-        ) {
-          const range = pendingRange;
-          pendingRange = null;
-          ctx.dataManager.ensureRange(range.start, range.end).catch((error) => {
-            emitter.emit("error", { error, context: "ensureRange" });
-          });
-        }
-
-        previousVelocity = currentVelocity;
-
-        // ── Check for infinite scroll (load more) ──
-        if (
-          canLoad &&
-          !ctx.dataManager.getIsLoading() &&
-          ctx.dataManager.getHasMore()
-        ) {
-          if (isReverse) {
-            // Reverse mode: trigger "load more" near the TOP
-            if (scrollTop < LOAD_MORE_THRESHOLD) {
-              emitter.emit("load:start", {
-                offset: ctx.dataManager.getCached(),
-                limit: INITIAL_LOAD_SIZE,
-              });
-
-              ctx.dataManager.loadMore().catch((error) => {
-                emitter.emit("error", { error, context: "loadMore" });
-              });
-            }
-          } else {
-            // Normal mode: trigger "load more" near the BOTTOM
-            const distanceFromBottom =
-              ctx.state.viewportState.totalHeight -
-              scrollTop -
-              ctx.state.viewportState.containerHeight;
-
-            if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
-              emitter.emit("load:start", {
-                offset: ctx.dataManager.getCached(),
-                limit: INITIAL_LOAD_SIZE,
-              });
-
-              ctx.dataManager.loadMore().catch((error) => {
-                emitter.emit("error", { error, context: "loadMore" });
-              });
-            }
-          }
-        }
-
-        // ── Ensure visible range is loaded (sparse data) ──
-        const { renderRange } = ctx.state.viewportState;
-        const rangeChanged =
-          !lastEnsuredRange ||
-          renderRange.start !== lastEnsuredRange.start ||
-          renderRange.end !== lastEnsuredRange.end;
-
-        if (rangeChanged) {
-          lastEnsuredRange = {
-            start: renderRange.start,
-            end: renderRange.end,
-          };
-
-          if (canLoad) {
+          // Check if velocity just dropped below threshold — load pending range immediately
+          if (
+            pendingRange &&
+            previousVelocity > cancelLoadThreshold &&
+            currentVelocity <= cancelLoadThreshold
+          ) {
+            const range = pendingRange;
             pendingRange = null;
+            ctx.dataManager
+              .ensureRange(range.start, range.end)
+              .catch((error) => {
+                emitter.emit("error", { error, context: "ensureRange" });
+              });
+          }
 
-            // Calculate preload range based on scroll direction and velocity
-            let loadStart = renderRange.start;
-            let loadEnd = renderRange.end;
-            const total = ctx.getVirtualTotal();
+          previousVelocity = currentVelocity;
 
-            if (currentVelocity > preloadThreshold) {
-              if (direction === "down") {
-                loadEnd = Math.min(renderRange.end + preloadAhead, total - 1);
-              } else {
-                loadStart = Math.max(renderRange.start - preloadAhead, 0);
+          // ── Check for infinite scroll (load more) ──
+          if (
+            canLoad &&
+            !ctx.dataManager.getIsLoading() &&
+            ctx.dataManager.getHasMore()
+          ) {
+            if (isReverse) {
+              // Reverse mode: trigger "load more" near the TOP
+              if (scrollPosition < LOAD_MORE_THRESHOLD) {
+                emitter.emit("load:start", {
+                  offset: ctx.dataManager.getCached(),
+                  limit: INITIAL_LOAD_SIZE,
+                });
+
+                ctx.dataManager.loadMore().catch((error) => {
+                  emitter.emit("error", { error, context: "loadMore" });
+                });
+              }
+            } else {
+              // Normal mode: trigger "load more" near the BOTTOM
+              const distanceFromBottom =
+                ctx.state.viewportState.totalSize -
+                scrollPosition -
+                ctx.state.viewportState.containerSize;
+
+              if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
+                emitter.emit("load:start", {
+                  offset: ctx.dataManager.getCached(),
+                  limit: INITIAL_LOAD_SIZE,
+                });
+
+                ctx.dataManager.loadMore().catch((error) => {
+                  emitter.emit("error", { error, context: "loadMore" });
+                });
               }
             }
+          }
 
-            ctx.dataManager.ensureRange(loadStart, loadEnd).catch((error) => {
-              emitter.emit("error", { error, context: "ensureRange" });
-            });
-          } else {
-            // Scrolling too fast — save range for loading when idle
-            pendingRange = {
+          // ── Ensure visible range is loaded (sparse data) ──
+          const { renderRange } = ctx.state.viewportState;
+          const rangeChanged =
+            !lastEnsuredRange ||
+            renderRange.start !== lastEnsuredRange.start ||
+            renderRange.end !== lastEnsuredRange.end;
+
+          if (rangeChanged) {
+            lastEnsuredRange = {
               start: renderRange.start,
               end: renderRange.end,
             };
+
+            if (canLoad) {
+              pendingRange = null;
+
+              // Calculate preload range based on scroll direction and velocity
+              let loadStart = renderRange.start;
+              let loadEnd = renderRange.end;
+              const total = ctx.getVirtualTotal();
+
+              if (currentVelocity > preloadThreshold) {
+                if (direction === "down") {
+                  loadEnd = Math.min(renderRange.end + preloadAhead, total - 1);
+                } else {
+                  loadStart = Math.max(renderRange.start - preloadAhead, 0);
+                }
+              }
+
+              ctx.dataManager.ensureRange(loadStart, loadEnd).catch((error) => {
+                emitter.emit("error", { error, context: "ensureRange" });
+              });
+            } else {
+              // Scrolling too fast — save range for loading when idle
+              pendingRange = {
+                start: renderRange.start,
+                end: renderRange.end,
+              };
+            }
           }
-        }
-      });
+        },
+      );
 
       // ── Idle detection for pending ranges ──
       // The scroll controller's onIdle was wired at creation time (in builder
@@ -273,16 +277,18 @@ export const withAsync = <T extends VListItem = VListItem>(
 
       // We push a second afterScroll callback that manages the idle timer.
       // The first afterScroll (pushed above) handles per-frame loading logic.
-      ctx.afterScroll.push((_scrollTop: number, _direction: string): void => {
-        // Reset idle timer on every scroll frame
-        if (idleTimer !== null) {
-          clearTimeout(idleTimer);
-        }
-        idleTimer = setTimeout(() => {
-          idleTimer = null;
-          loadPendingRange();
-        }, idleMs);
-      });
+      ctx.afterScroll.push(
+        (_scrollPosition: number, _direction: string): void => {
+          // Reset idle timer on every scroll frame
+          if (idleTimer !== null) {
+            clearTimeout(idleTimer);
+          }
+          idleTimer = setTimeout(() => {
+            idleTimer = null;
+            loadPendingRange();
+          }, idleMs);
+        },
+      );
 
       // Clean up idle timer on destroy
       ctx.destroyHandlers.push(() => {

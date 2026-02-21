@@ -7,8 +7,8 @@ import { describe, it, expect } from "bun:test";
 import {
   simpleVisibleRange,
   calculateRenderRange,
-  calculateTotalHeight,
-  calculateActualHeight,
+  calculateTotalSize,
+  calculateActualSize,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,
@@ -27,11 +27,11 @@ import {
   getCompressionState,
   calculateCompressedScrollToIndex,
 } from "../../src/rendering/scale";
-import { createHeightCache } from "../../src/rendering/heights";
+import { createSizeCache } from "../../src/rendering/sizes";
 
 describe("simpleVisibleRange", () => {
   it("should return empty range when totalItems is 0", () => {
-    const cache = createHeightCache(50, 0);
+    const cache = createSizeCache(50, 0);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       0,
@@ -45,7 +45,7 @@ describe("simpleVisibleRange", () => {
   });
 
   it("should return empty range when containerHeight is 0", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       0,
@@ -61,7 +61,7 @@ describe("simpleVisibleRange", () => {
   it("should calculate correct range at scroll position 0", () => {
     // Container: 500px, Item: 50px = 10 visible items
     // indexAtOffset(0) = 0, indexAtOffset(500) = 10, +1 = 11 → clamped to 10
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       0,
@@ -80,7 +80,7 @@ describe("simpleVisibleRange", () => {
   it("should calculate correct range when scrolled", () => {
     // Scrolled 250px = 5 items down
     // Container: 500px, Item: 50px
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       250,
@@ -97,7 +97,7 @@ describe("simpleVisibleRange", () => {
 
   it("should clamp end to totalItems - 1", () => {
     // Scrolled near end, only 5 items left
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       4750,
@@ -112,7 +112,7 @@ describe("simpleVisibleRange", () => {
 
   it("should handle partial items", () => {
     // Container: 520px, Item: 50px
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       0,
@@ -127,7 +127,7 @@ describe("simpleVisibleRange", () => {
   });
 
   it("should never return negative start", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const out = { start: 0, end: 0 };
     const result = simpleVisibleRange(
       -100,
@@ -179,79 +179,79 @@ describe("calculateRenderRange", () => {
   });
 });
 
-describe("calculateTotalHeight", () => {
+describe("calculateTotalSize", () => {
   it("should calculate total height correctly", () => {
-    const cache = createHeightCache(50, 100);
-    expect(calculateTotalHeight(100, cache)).toBe(5000);
+    const cache = createSizeCache(50, 100);
+    expect(calculateTotalSize(100, cache)).toBe(5000);
   });
 
   it("should return 0 for 0 items", () => {
-    const cache = createHeightCache(50, 0);
-    expect(calculateTotalHeight(0, cache)).toBe(0);
+    const cache = createSizeCache(50, 0);
+    expect(calculateTotalSize(0, cache)).toBe(0);
   });
 
   it("should handle large numbers", () => {
-    const cache = createHeightCache(48, 100000);
-    expect(calculateTotalHeight(100000, cache)).toBe(4800000);
+    const cache = createSizeCache(48, 100000);
+    expect(calculateTotalSize(100000, cache)).toBe(4800000);
   });
 });
 
 describe("calculateItemOffset", () => {
   it("should calculate offset for first item", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     expect(calculateItemOffset(0, cache)).toBe(0);
   });
 
   it("should calculate offset correctly", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     expect(calculateItemOffset(10, cache)).toBe(500);
   });
 
   it("should handle large indices", () => {
-    const cache = createHeightCache(48, 1001);
+    const cache = createSizeCache(48, 1001);
     expect(calculateItemOffset(1000, cache)).toBe(48000);
   });
 });
 
-describe("calculateActualHeight", () => {
+describe("calculateActualSize", () => {
   it("should return the raw total height from height cache", () => {
-    const cache = createHeightCache(50, 100);
-    const height = calculateActualHeight(100, cache);
+    const cache = createSizeCache(50, 100);
+    const height = calculateActualSize(100, cache);
     expect(height).toBe(5000); // 100 * 50
   });
 
   it("should return 0 for 0 items", () => {
-    const cache = createHeightCache(50, 0);
-    const height = calculateActualHeight(0, cache);
+    const cache = createSizeCache(50, 0);
+    const height = calculateActualSize(0, cache);
     expect(height).toBe(0);
   });
 
   it("should return actual height even for very large lists", () => {
-    const cache = createHeightCache(50, 1_000_000);
-    const height = calculateActualHeight(1_000_000, cache);
+    const cache = createSizeCache(50, 1_000_000);
+    const height = calculateActualSize(1_000_000, cache);
     // Actual height is 50M pixels — NOT capped by compression
     expect(height).toBe(50_000_000);
   });
 
   it("should return actual height with variable heights", () => {
     const heightFn = (index: number) => (index % 2 === 0 ? 40 : 80);
-    const cache = createHeightCache(heightFn, 10);
-    const height = calculateActualHeight(10, cache);
+    const cache = createSizeCache(heightFn, 10);
+    const height = calculateActualSize(10, cache);
     // 5×40 + 5×80 = 600
     expect(height).toBe(600);
   });
 
   it("should ignore the totalItems parameter (uses cache only)", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     // Even if we pass a different totalItems, the cache was built with 100
-    const height = calculateActualHeight(50, cache);
+    const height = calculateActualSize(50, cache);
     expect(height).toBe(5000); // Still 100 * 50 from the cache
   });
 });
 
 describe("calculateScrollToIndex", () => {
   it("should scroll to start alignment", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const result = calculateScrollToIndex(
       10,
       cache,
@@ -264,7 +264,7 @@ describe("calculateScrollToIndex", () => {
   });
 
   it("should scroll to center alignment", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const result = calculateScrollToIndex(
       10,
       cache,
@@ -278,7 +278,7 @@ describe("calculateScrollToIndex", () => {
   });
 
   it("should scroll to end alignment", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const result = calculateScrollToIndex(
       10,
       cache,
@@ -292,7 +292,7 @@ describe("calculateScrollToIndex", () => {
   });
 
   it("should default to start alignment", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const result = calculateScrollToIndex(
       10,
       cache,
@@ -308,7 +308,7 @@ describe("calculateScrollToIndex", () => {
     const totalItems = 1_000_000;
     const itemHeight = 40;
     const containerHeight = 600;
-    const cache = createHeightCache(itemHeight, totalItems);
+    const cache = createSizeCache(itemHeight, totalItems);
     const result = calculateScrollToIndex(
       500_000,
       cache,
@@ -360,7 +360,7 @@ describe("getScrollDirection", () => {
 
 describe("createViewportState", () => {
   it("should create initial viewport state", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const state = createViewportState(
       500,
       cache,
@@ -369,15 +369,15 @@ describe("createViewportState", () => {
       getCompressionState(100, cache),
     );
 
-    expect(state.scrollTop).toBe(0);
-    expect(state.containerHeight).toBe(500);
-    expect(state.totalHeight).toBe(5000);
+    expect(state.scrollPosition).toBe(0);
+    expect(state.containerSize).toBe(500);
+    expect(state.totalSize).toBe(5000);
     expect(state.visibleRange.start).toBe(0);
     expect(state.renderRange.start).toBe(0);
   });
 
   it("should include overscan in render range", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const state = createViewportState(
       500,
       cache,
@@ -392,7 +392,7 @@ describe("createViewportState", () => {
   });
 
   it("should handle empty list", () => {
-    const cache = createHeightCache(50, 0);
+    const cache = createSizeCache(50, 0);
     const state = createViewportState(
       500,
       cache,
@@ -401,14 +401,14 @@ describe("createViewportState", () => {
       getCompressionState(0, cache),
     );
 
-    expect(state.totalHeight).toBe(0);
+    expect(state.totalSize).toBe(0);
     expect(state.visibleRange).toEqual({ start: 0, end: -1 });
   });
 });
 
 describe("updateViewportState", () => {
   it("should update state after scroll", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
     const updated = updateViewportState(
@@ -420,12 +420,12 @@ describe("updateViewportState", () => {
       compression,
     );
 
-    expect(updated.scrollTop).toBe(250);
+    expect(updated.scrollPosition).toBe(250);
     expect(updated.visibleRange.start).toBe(5);
   });
 
   it("should preserve containerHeight", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
     const updated = updateViewportState(
@@ -437,17 +437,17 @@ describe("updateViewportState", () => {
       compression,
     );
 
-    expect(updated.containerHeight).toBe(500);
+    expect(updated.containerSize).toBe(500);
   });
 });
 
 describe("updateViewportSize", () => {
   it("should update container height in state", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
-    expect(initial.containerHeight).toBe(500);
+    expect(initial.containerSize).toBe(500);
 
     const updated = updateViewportSize(
       initial,
@@ -458,11 +458,11 @@ describe("updateViewportSize", () => {
       compression,
     );
 
-    expect(updated.containerHeight).toBe(800);
+    expect(updated.containerSize).toBe(800);
   });
 
   it("should recalculate visible range for new container size", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(200, cache, 100, 3, compression);
 
@@ -486,7 +486,7 @@ describe("updateViewportSize", () => {
   });
 
   it("should update total height and compression fields", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
@@ -499,20 +499,20 @@ describe("updateViewportSize", () => {
       compression,
     );
 
-    expect(updated.totalHeight).toBe(compression.virtualHeight);
-    expect(updated.actualHeight).toBe(compression.actualHeight);
+    expect(updated.totalSize).toBe(compression.virtualSize);
+    expect(updated.actualSize).toBe(compression.actualSize);
     expect(updated.isCompressed).toBe(compression.isCompressed);
     expect(updated.compressionRatio).toBe(compression.ratio);
   });
 
   it("should preserve scroll position when resizing", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
     // Scroll down first
     updateViewportState(initial, 1000, cache, 100, 3, compression);
-    expect(initial.scrollTop).toBe(1000);
+    expect(initial.scrollPosition).toBe(1000);
 
     // Resize container
     const updated = updateViewportSize(
@@ -525,17 +525,17 @@ describe("updateViewportSize", () => {
     );
 
     // Scroll position should be preserved
-    expect(updated.scrollTop).toBe(1000);
+    expect(updated.scrollPosition).toBe(1000);
   });
 
   it("should handle resize to very small container", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
     const updated = updateViewportSize(initial, 50, cache, 100, 3, compression);
 
-    expect(updated.containerHeight).toBe(50);
+    expect(updated.containerSize).toBe(50);
     // Only 1 item visible in 50px with 50px item height
     const visibleCount =
       updated.visibleRange.end - updated.visibleRange.start + 1;
@@ -545,7 +545,7 @@ describe("updateViewportSize", () => {
 
   it("should handle resize with variable heights", () => {
     const heightFn = (index: number) => (index % 2 === 0 ? 40 : 80);
-    const cache = createHeightCache(heightFn, 100);
+    const cache = createSizeCache(heightFn, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
@@ -558,13 +558,13 @@ describe("updateViewportSize", () => {
       compression,
     );
 
-    expect(updated.containerHeight).toBe(1000);
+    expect(updated.containerSize).toBe(1000);
     // Total height = 50×40 + 50×80 = 6000
-    expect(updated.totalHeight).toBe(6000);
+    expect(updated.totalSize).toBe(6000);
   });
 
   it("should mutate state in place for performance", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     const compression = getCompressionState(100, cache);
     const initial = createViewportState(500, cache, 100, 3, compression);
 
@@ -582,21 +582,21 @@ describe("updateViewportSize", () => {
   });
 
   it("should handle resize with empty list", () => {
-    const cache = createHeightCache(50, 0);
+    const cache = createSizeCache(50, 0);
     const compression = getCompressionState(0, cache);
     const initial = createViewportState(500, cache, 0, 3, compression);
 
     const updated = updateViewportSize(initial, 800, cache, 0, 3, compression);
 
-    expect(updated.containerHeight).toBe(800);
-    expect(updated.totalHeight).toBe(0);
+    expect(updated.containerSize).toBe(800);
+    expect(updated.totalSize).toBe(0);
   });
 });
 
 describe("updateViewportItems", () => {
   it("should update total height when items change", () => {
-    const cache100 = createHeightCache(50, 100);
-    const cache200 = createHeightCache(50, 200);
+    const cache100 = createSizeCache(50, 100);
+    const cache200 = createSizeCache(50, 200);
     const initial = createViewportState(
       500,
       cache100,
@@ -612,12 +612,12 @@ describe("updateViewportItems", () => {
       getCompressionState(200, cache200),
     );
 
-    expect(updated.totalHeight).toBe(10000);
+    expect(updated.totalSize).toBe(10000);
   });
 
   it("should recalculate visible range", () => {
-    const cache100 = createHeightCache(50, 100);
-    const cache50 = createHeightCache(50, 50);
+    const cache100 = createSizeCache(50, 100);
+    const cache50 = createSizeCache(50, 50);
     const initial = createViewportState(
       500,
       cache100,
@@ -768,18 +768,18 @@ describe("Variable height support", () => {
   // Alternating heights: 40px and 80px
   const alternatingHeight = (index: number) => (index % 2 === 0 ? 40 : 80);
 
-  describe("calculateTotalHeight with variable heights", () => {
+  describe("calculateTotalSize with variable heights", () => {
     it("should return correct virtual height", () => {
       // 10 items: 5×40 + 5×80 = 600
-      const cache = createHeightCache(alternatingHeight, 10);
-      const height = calculateTotalHeight(10, cache);
+      const cache = createSizeCache(alternatingHeight, 10);
+      const height = calculateTotalSize(10, cache);
       expect(height).toBe(600);
     });
   });
 
   describe("calculateItemOffset with variable heights", () => {
     it("should return prefix-sum based offsets", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(calculateItemOffset(0, cache)).toBe(0);
       expect(calculateItemOffset(1, cache)).toBe(40);
       expect(calculateItemOffset(2, cache)).toBe(120); // 40+80
@@ -789,19 +789,19 @@ describe("Variable height support", () => {
 
   describe("createViewportState with variable heights", () => {
     it("should create correct initial state", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
       const state = createViewportState(500, cache, 100, 3, compression);
 
-      expect(state.scrollTop).toBe(0);
-      expect(state.containerHeight).toBe(500);
+      expect(state.scrollPosition).toBe(0);
+      expect(state.containerSize).toBe(500);
       // Total height = 50×40 + 50×80 = 6000
-      expect(state.totalHeight).toBe(6000);
+      expect(state.totalSize).toBe(6000);
       expect(state.visibleRange.start).toBe(0);
     });
 
     it("should calculate correct visible range with variable heights", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
       const state = createViewportState(500, cache, 100, 3, compression);
 
@@ -816,7 +816,7 @@ describe("Variable height support", () => {
 
   describe("updateViewportState with variable heights", () => {
     it("should update correctly after scroll", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
       const initial = createViewportState(500, cache, 100, 3, compression);
 
@@ -830,14 +830,14 @@ describe("Variable height support", () => {
         compression,
       );
 
-      expect(updated.scrollTop).toBe(120);
+      expect(updated.scrollPosition).toBe(120);
       expect(updated.visibleRange.start).toBe(2);
     });
   });
 
   describe("calculateScrollToIndex with variable heights", () => {
     it("should scroll to correct offset for variable height items", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
 
       // Item 3 offset = 40+80+40 = 160
@@ -853,7 +853,7 @@ describe("Variable height support", () => {
     });
 
     it("should center correctly for variable height items", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
 
       // Item 3 offset = 160, height = 80
@@ -870,7 +870,7 @@ describe("Variable height support", () => {
     });
 
     it("should end-align correctly for variable height items", () => {
-      const cache = createHeightCache(alternatingHeight, 100);
+      const cache = createSizeCache(alternatingHeight, 100);
       const compression = getCompressionState(100, cache);
 
       // Item 20 offset = 10×40 + 10×80 = 1200, height = 40 (index 20 is even)

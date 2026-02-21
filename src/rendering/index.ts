@@ -3,14 +3,14 @@
  * Rendering, virtualization, and scaling for large datasets
  */
 
-// Height Cache
+// Size Cache (dimension-agnostic for vertical/horizontal scrolling)
 export {
-  createHeightCache,
+  createSizeCache,
   countVisibleItems,
   countItemsFittingFromBottom,
   getOffsetForVirtualIndex,
-  type HeightCache,
-} from "./heights";
+  type SizeCache,
+} from "./sizes";
 
 // Renderer
 export {
@@ -34,8 +34,8 @@ export {
   updateViewportSize,
   updateViewportItems,
   calculateRenderRange,
-  calculateTotalHeight,
-  calculateActualHeight,
+  calculateTotalSize,
+  calculateActualSize,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,

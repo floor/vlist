@@ -22,7 +22,7 @@ export { isGroupHeader, isGroupHeader as isSectionHeader } from "./types";
 export {
   createGroupLayout,
   buildLayoutItems,
-  createGroupedHeightFn,
+  createGroupedSizeFn,
 } from "./layout";
 
 // Sticky Header
