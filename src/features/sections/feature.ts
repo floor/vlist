@@ -21,8 +21,8 @@
  * - orientation: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
  */
 
-import type { VListItem } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListItem, Range } from "../../types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import {
   createGroupLayout,
@@ -93,7 +93,7 @@ export interface GroupsPluginConfig {
  */
 export const withSections = <T extends VListItem = VListItem>(
   config: GroupsPluginConfig,
-): VListPlugin<T> => {
+): VListFeature<T> => {
   // Validate
   if (!config.getGroupForIndex) {
     throw new Error("[vlist/builder] withGroups: getGroupForIndex is required");

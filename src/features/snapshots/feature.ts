@@ -48,7 +48,7 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
  */
 export const withSnapshots = <
   T extends VListItem = VListItem,
->(): VListPlugin<T> => {
+>(): VListFeature<T> => {
   return {
     name: "withSnapshots",
     priority: 50,

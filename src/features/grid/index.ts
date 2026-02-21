@@ -4,7 +4,7 @@
  */
 
 // Builder Plugin
-export { withGrid, type GridPluginConfig } from "./plugin";
+export { withGrid, type GridPluginConfig } from "./feature";
 
 // Layout
 export { createGridLayout } from "./layout";

@@ -72,7 +72,7 @@ export interface SelectionPluginConfig {
  */
 export const withSelection = <T extends VListItem = VListItem>(
   config?: SelectionPluginConfig,
-): VListPlugin<T> => {
+): VListFeature<T> => {
   const mode: SelectionMode = config?.mode ?? "single";
   const initial = config?.initial;
 

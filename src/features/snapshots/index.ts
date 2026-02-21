@@ -5,4 +5,4 @@
  * Usage: import { withSnapshots } from 'vlist/snapshots'
  */
 
-export { withSnapshots } from "./plugin";
+export { withSnapshots } from "./feature";

@@ -31,12 +31,18 @@ export type {
   BuiltVList,
   BuilderConfig,
 
-  // Plugin system
-  VListPlugin,
+  // Feature system
+  VListFeature,
+  FeatureFactory,
   BuilderContext,
 
-  // Internal (for plugin authors)
-  ResolvedBuilderConfig,
+  // Backwards compatibility (deprecated)
+  /** @deprecated Use VListFeature instead */
+  VListPlugin,
+  /** @deprecated Use FeatureFactory instead */
+  PluginFactory,
+
+  // Internal (for feature authors)
   BuilderState,
-  CachedCompression,
+  ResolvedBuilderConfig,
 } from "./types";

@@ -4,7 +4,7 @@
  */
 
 // Builder Plugins
-export { withScrollbar, type ScrollbarPluginConfig } from "./plugin";
+export { withScrollbar, type ScrollbarPluginConfig } from "./feature";
 
 // Scroll Controller
 export {

@@ -30,7 +30,7 @@ import { JSDOM } from "jsdom";
 import { vlist } from "../../../src/builder/core";
 import type { BuiltVList } from "../../../src/builder/types";
 import type { VListItem } from "../../../src/types";
-import { withScale } from "../../../src/features/scale/plugin";
+import { withScale } from "../../../src/features/scale/feature";
 
 // =============================================================================
 // JSDOM Setup
@@ -1124,7 +1124,7 @@ describe("withScale touch scrolling", () => {
       // Import withScrollbar inline to keep the test self-contained
       const {
         withScrollbar,
-      } = require("../../../src/features/scrollbar/plugin");
+      } = require("../../../src/features/scrollbar/feature");
 
       const items = createTestItems(500_000);
       list = vlist<TestItem>({

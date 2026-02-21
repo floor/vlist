@@ -17,7 +17,7 @@
  */
 
 import type { VListItem, VListAdapter, Range } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import { createDataManager } from "./manager";
 
@@ -82,7 +82,7 @@ export interface DataPluginConfig<T extends VListItem = VListItem> {
  */
 export const withAsync = <T extends VListItem = VListItem>(
   config: DataPluginConfig<T>,
-): VListPlugin<T> => {
+): VListFeature<T> => {
   const { adapter, loading } = config;
   const cancelLoadThreshold =
     loading?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;

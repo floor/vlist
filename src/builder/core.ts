@@ -25,7 +25,7 @@ import type {
   BuilderContext,
   BuilderState,
   ResolvedBuilderConfig,
-  VListPlugin,
+  VListFeature,
   VListBuilder,
   BuiltVList,
 } from "./types";
@@ -49,8 +49,8 @@ import {
   createMaterializeCtx,
   createDefaultDataProxy,
   createDefaultScrollProxy,
-} from "./materializectx";
-import type { MRefs } from "./materializectx";
+} from "./materialize";
+import type { MRefs } from "./materialize";
 
 // =============================================================================
 // Constants
@@ -112,16 +112,16 @@ export const vlist = <T extends VListItem = VListItem>(
     );
   }
 
-  // ── Store plugins ───────────────────────────────────────────────
-  const plugins: Map<string, VListPlugin<T>> = new Map();
+  // ── Store features ───────────────────────────────────────────────
+  const features: Map<string, VListFeature<T>> = new Map();
   let built = false;
 
   const builder: VListBuilder<T> = {
-    use(plugin: VListPlugin<T>): VListBuilder<T> {
+    use(feature: VListFeature<T>): VListBuilder<T> {
       if (built) {
         throw new Error("[vlist/builder] Cannot call .use() after .build()");
       }
-      plugins.set(plugin.name, plugin);
+      features.set(feature.name, feature);
       return builder;
     },
 
@@ -132,7 +132,7 @@ export const vlist = <T extends VListItem = VListItem>(
       built = true;
       return materialize(
         config,
-        plugins,
+        features,
         isHorizontal,
         mainAxisValue as number | ((index: number) => number),
       );
@@ -148,7 +148,7 @@ export const vlist = <T extends VListItem = VListItem>(
 
 function materialize<T extends VListItem = VListItem>(
   config: BuilderConfig<T>,
-  plugins: Map<string, VListPlugin<T>>,
+  features: Map<string, VListFeature<T>>,
   isHorizontal: boolean,
   mainAxisValue: number | ((index: number) => number),
 ): BuiltVList<T> {
@@ -192,18 +192,18 @@ function materialize<T extends VListItem = VListItem>(
     ariaIdPrefix,
   };
 
-  // ── Sort and validate plugins ───────────────────────────────────
-  const sortedPlugins = Array.from(plugins.values()).sort(
+  // ── Sort and validate features ───────────────────────────────────
+  const sortedFeatures = Array.from(features.values()).sort(
     (a, b) => (a.priority ?? 50) - (b.priority ?? 50),
   );
 
-  const pluginNames = new Set(sortedPlugins.map((p) => p.name));
-  for (const plugin of sortedPlugins) {
-    if (plugin.conflicts) {
-      for (const conflict of plugin.conflicts) {
-        if (pluginNames.has(conflict)) {
+  const featureNames = new Set(sortedFeatures.map((p) => p.name));
+  for (const feature of sortedFeatures) {
+    if (feature.conflicts) {
+      for (const conflict of feature.conflicts) {
+        if (featureNames.has(conflict)) {
           throw new Error(
-            `[vlist/builder] ${plugin.name} and ${conflict} cannot be combined`,
+            `[vlist/builder] ${feature.name} and ${conflict} cannot be combined`,
           );
         }
       }
@@ -216,12 +216,12 @@ function materialize<T extends VListItem = VListItem>(
     // - withGroups/withSections: sticky headers stick to left edge instead of top
   }
   if (isReverse) {
-    if (pluginNames.has("withGrid")) {
+    if (featureNames.has("withGrid")) {
       throw new Error(
         "[vlist/builder] withGrid cannot be used with reverse: true",
       );
     }
-    // Note: withGroups validation moved to plugin itself
+    // Note: withGroups validation moved to feature itself
     // (allows sticky: false with reverse mode for chat UIs)
   }
 
@@ -760,7 +760,7 @@ function materialize<T extends VListItem = VListItem>(
     resizeObserver.observe(dom.viewport);
   }
 
-  // ── BuilderContext + proxies (extracted to materializectx.ts) ───
+  // ── BuilderContext + proxies (extracted to materialize.ts) ───
 
   const deps = {
     dom,
@@ -792,26 +792,26 @@ function materialize<T extends VListItem = VListItem>(
   $.dm = createDefaultDataProxy($, deps, ctx);
   $.sc = createDefaultScrollProxy($, deps);
 
-  // ── Run plugin setup ────────────────────────────────────────────
+  // ── Run feature setup ────────────────────────────────────────────
 
   // Check for method collisions
   const allMethodNames = new Map<string, string>();
-  for (const plugin of sortedPlugins) {
-    if (plugin.methods) {
-      for (const method of plugin.methods) {
+  for (const feature of sortedFeatures) {
+    if (feature.methods) {
+      for (const method of feature.methods) {
         const existing = allMethodNames.get(method);
         if (existing) {
           throw new Error(
-            `[vlist/builder] Method "${method}" is registered by both "${existing}" and "${plugin.name}"`,
+            `[vlist/builder] Method "${method}" is registered by both "${existing}" and "${feature.name}"`,
           );
         }
-        allMethodNames.set(method, plugin.name);
+        allMethodNames.set(method, feature.name);
       }
     }
   }
 
-  for (const plugin of sortedPlugins) {
-    plugin.setup(ctx);
+  for (const feature of sortedFeatures) {
+    feature.setup(ctx);
   }
 
   // ── Mark initialized ────────────────────────────────────────────
@@ -990,8 +990,8 @@ function materialize<T extends VListItem = VListItem>(
     for (let i = 0; i < destroyHandlers.length; i++) {
       destroyHandlers[i]!();
     }
-    for (const plugin of sortedPlugins) {
-      if (plugin.destroy) plugin.destroy();
+    for (const feature of sortedFeatures) {
+      if (feature.destroy) feature.destroy();
     }
 
     cancelScroll();

@@ -4,7 +4,7 @@
  */
 
 // Builder Plugin
-export { withSections, type GroupsPluginConfig } from "./plugin";
+export { withSections, type GroupsPluginConfig } from "./feature";
 
 // Types
 export type {
