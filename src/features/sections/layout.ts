@@ -176,21 +176,22 @@ export const buildLayoutItems = <T extends VListItem>(
 // =============================================================================
 
 /**
- * Create a height function for the layout that returns the correct height
- * for both group headers and data items.
+ * Create a size function for the layout (items + headers).
+ *
+ * Maps layout indices to sizes, accounting for both group headers and data items.
  *
  * @param layout - The group layout instance
- * @param itemHeight - Original item height config (number or function)
- * @returns A height function (layoutIndex) => number suitable for HeightCache
+ * @param itemSize - Original item size config (number or function)
+ * @returns A size function (layoutIndex) => number suitable for SizeCache
  */
-export const createGroupedHeightFn = (
+export const createGroupedSizeFn = (
   layout: GroupLayout,
-  itemHeight: number | ((index: number) => number),
+  itemSize: number | ((index: number) => number),
 ): ((layoutIndex: number) => number) => {
-  const getItemHeight =
-    typeof itemHeight === "number"
-      ? (_dataIndex: number): number => itemHeight
-      : itemHeight;
+  const getItemSize =
+    typeof itemSize === "number"
+      ? (_dataIndex: number): number => itemSize
+      : itemSize;
 
   return (layoutIndex: number): number => {
     const entry = layout.getEntry(layoutIndex);
@@ -199,7 +200,7 @@ export const createGroupedHeightFn = (
       return layout.getHeaderHeight(entry.group.groupIndex);
     }
 
-    return getItemHeight(entry.dataIndex);
+    return getItemSize(entry.dataIndex);
   };
 };
 

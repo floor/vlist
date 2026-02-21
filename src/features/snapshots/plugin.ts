@@ -80,15 +80,15 @@ export const withSnapshots = <
 
         if (compression.isCompressed) {
           // Compressed: scroll position maps linearly to item index
-          const scrollRatio = scrollTop / compression.virtualHeight;
+          const scrollRatio = scrollTop / compression.virtualSize;
           const exactIndex = scrollRatio * totalItems;
           index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
           const fraction = exactIndex - index;
-          offsetInItem = fraction * ctx.heightCache.getHeight(index);
+          offsetInItem = fraction * ctx.sizeCache.getSize(index);
         } else {
           // Normal: direct offset lookup
-          index = ctx.heightCache.indexAtOffset(scrollTop);
-          offsetInItem = scrollTop - ctx.heightCache.getOffset(index);
+          index = ctx.sizeCache.indexAtOffset(scrollTop);
+          offsetInItem = scrollTop - ctx.sizeCache.getOffset(index);
         }
 
         // Clamp offsetInItem to non-negative (floating point edge cases)
@@ -112,19 +112,19 @@ export const withSnapshots = <
 
         if (compression.isCompressed) {
           // Compressed: reverse the linear mapping
-          const itemHeight = ctx.heightCache.getHeight(safeIndex);
-          const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
+          const itemSize = ctx.sizeCache.getSize(safeIndex);
+          const fraction = itemSize > 0 ? offsetInItem / itemSize : 0;
           scrollPosition =
-            ((safeIndex + fraction) / totalItems) * compression.virtualHeight;
+            ((safeIndex + fraction) / totalItems) * compression.virtualSize;
         } else {
           // Normal: direct offset
-          scrollPosition = ctx.heightCache.getOffset(safeIndex) + offsetInItem;
+          scrollPosition = ctx.sizeCache.getOffset(safeIndex) + offsetInItem;
         }
 
         // Clamp to valid range
         const maxScroll = Math.max(
           0,
-          compression.virtualHeight - ctx.state.viewportState.containerHeight,
+          compression.virtualSize - ctx.state.viewportState.containerSize,
         );
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 

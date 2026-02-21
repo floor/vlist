@@ -4,7 +4,7 @@
  *
  * Compression support is NOT imported here — it's injected via
  * CompressionState parameters. When compression is inactive
- * (the common case), all calculations use simple height-cache math
+ * (the common case), all calculations use simple size-cache math
  * with zero dependency on the compression module.
  *
  * This keeps the builder core lightweight. The withCompression plugin
@@ -13,7 +13,7 @@
  */
 
 import type { Range, ViewportState } from "../types";
-import type { HeightCache } from "./heights";
+import type { SizeCache } from "./sizes";
 
 // =============================================================================
 // Compression State (type only — no runtime import)
@@ -24,11 +24,11 @@ export interface CompressionState {
   /** Whether compression is active */
   isCompressed: boolean;
 
-  /** The actual total height */
-  actualHeight: number;
+  /** The actual total size (uncompressed) */
+  actualSize: number;
 
-  /** The virtual height (capped at MAX_VIRTUAL_HEIGHT) */
-  virtualHeight: number;
+  /** The virtual size (capped at MAX_VIRTUAL_HEIGHT) */
+  virtualSize: number;
 
   /** Compression ratio (1 = no compression, <1 = compressed) */
   ratio: number;
@@ -40,25 +40,25 @@ export interface CompressionState {
  */
 export const NO_COMPRESSION: CompressionState = {
   isCompressed: false,
-  actualHeight: 0,
-  virtualHeight: 0,
+  actualSize: 0,
+  virtualSize: 0,
   ratio: 1,
 };
 
 /**
- * Create a trivial compression state from a height cache.
+ * Create a trivial compression state from a size cache.
  * No compression logic — just reads the total height.
  * For use when the full compression module is not loaded.
  */
 export const getSimpleCompressionState = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): CompressionState => {
-  const h = heightCache.getTotalHeight();
+  const h = sizeCache.getTotalSize();
   return {
     isCompressed: false,
-    actualHeight: h,
-    virtualHeight: h,
+    actualSize: h,
+    virtualSize: h,
     ratio: 1,
   };
 };
@@ -73,9 +73,9 @@ export const getSimpleCompressionState = (
  * virtual.ts provides a simple fallback for non-compressed lists.
  */
 export type VisibleRangeFn = (
-  scrollTop: number,
+  scrollPosition: number,
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
   out: Range,
@@ -86,7 +86,7 @@ export type VisibleRangeFn = (
  */
 export type ScrollToIndexFn = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   containerHeight: number,
   totalItems: number,
   compression: CompressionState,
@@ -98,14 +98,14 @@ export type ScrollToIndexFn = (
 // =============================================================================
 
 /**
- * Calculate visible range using height cache lookups.
+ * Calculate visible range using size cache lookups.
  * Fast path for lists that don't need compression (< ~350 000 items at 48px).
  * Mutates `out` to avoid allocation on the scroll hot path.
  */
 export const simpleVisibleRange: VisibleRangeFn = (
-  scrollTop,
+  scrollPosition,
   containerHeight,
-  heightCache,
+  sizeCache,
   totalItems,
   _compression,
   out,
@@ -116,8 +116,8 @@ export const simpleVisibleRange: VisibleRangeFn = (
     return out;
   }
 
-  const start = heightCache.indexAtOffset(scrollTop);
-  let end = heightCache.indexAtOffset(scrollTop + containerHeight);
+  const start = sizeCache.indexAtOffset(scrollPosition);
+  let end = sizeCache.indexAtOffset(scrollPosition + containerHeight);
   if (end < totalItems - 1) end++;
 
   out.start = Math.max(0, start);
@@ -149,11 +149,11 @@ export const calculateRenderRange = (
 
 /**
  * Simple scroll-to-index calculation (non-compressed).
- * Uses height cache offsets directly.
+ * Uses size cache offsets directly.
  */
 export const simpleScrollToIndex: ScrollToIndexFn = (
   index,
-  heightCache,
+  sizeCache,
   containerHeight,
   totalItems,
   _compression,
@@ -162,19 +162,19 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
   if (totalItems === 0) return 0;
 
   const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
-  const itemOffset = heightCache.getOffset(safeIndex);
-  const itemHeight = heightCache.getHeight(safeIndex);
-  const totalHeight = heightCache.getTotalHeight();
+  const itemOffset = sizeCache.getOffset(safeIndex);
+  const itemSize = sizeCache.getSize(safeIndex);
+  const totalHeight = sizeCache.getTotalSize();
   const maxScroll = Math.max(0, totalHeight - containerHeight);
 
   let position: number;
 
   switch (align) {
     case "center":
-      position = itemOffset - containerHeight / 2 + itemHeight / 2;
+      position = itemOffset - containerHeight / 2 + itemSize / 2;
       break;
     case "end":
-      position = itemOffset - containerHeight + itemHeight;
+      position = itemOffset - containerHeight + itemSize;
       break;
     case "start":
     default:
@@ -191,27 +191,27 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
 
 /**
  * Calculate total content height.
- * Uses compression's virtualHeight when compressed, raw height otherwise.
+ * Uses compression's virtualSize when compressed, raw height otherwise.
  */
-export const calculateTotalHeight = (
+export const calculateTotalSize = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   compression?: CompressionState | null,
 ): number => {
   if (compression && compression.isCompressed) {
-    return compression.virtualHeight;
+    return compression.virtualSize;
   }
-  return heightCache.getTotalHeight();
+  return sizeCache.getTotalSize();
 };
 
 /**
- * Calculate actual total height (without compression cap)
+ * Calculate actual total size (without compression cap)
  */
-export const calculateActualHeight = (
+export const calculateActualSize = (
   _totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): number => {
-  return heightCache.getTotalHeight();
+  return sizeCache.getTotalSize();
 };
 
 /**
@@ -220,9 +220,9 @@ export const calculateActualHeight = (
  */
 export const calculateItemOffset = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ): number => {
-  return heightCache.getOffset(index);
+  return sizeCache.getOffset(index);
 };
 
 // =============================================================================
@@ -233,12 +233,12 @@ export const calculateItemOffset = (
  * Clamp scroll position to valid range
  */
 export const clampScrollPosition = (
-  scrollTop: number,
+  scrollPosition: number,
   totalHeight: number,
   containerHeight: number,
 ): number => {
   const maxScroll = Math.max(0, totalHeight - containerHeight);
-  return Math.max(0, Math.min(scrollTop, maxScroll));
+  return Math.max(0, Math.min(scrollPosition, maxScroll));
 };
 
 /**
@@ -263,7 +263,7 @@ export const getScrollDirection = (
  */
 export const createViewportState = (
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
@@ -275,7 +275,7 @@ export const createViewportState = (
   visibleRangeFn(
     0,
     containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     visibleRange,
@@ -283,10 +283,10 @@ export const createViewportState = (
   calculateRenderRange(visibleRange, overscan, totalItems, renderRange);
 
   return {
-    scrollTop: 0,
-    containerHeight,
-    totalHeight: compression.virtualHeight,
-    actualHeight: compression.actualHeight,
+    scrollPosition: 0,
+    containerSize: containerHeight,
+    totalSize: compression.virtualSize,
+    actualSize: compression.actualSize,
     isCompressed: compression.isCompressed,
     compressionRatio: compression.ratio,
     visibleRange,
@@ -300,17 +300,17 @@ export const createViewportState = (
  */
 export const updateViewportState = (
   state: ViewportState,
-  scrollTop: number,
-  heightCache: HeightCache,
+  scrollPosition: number,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    scrollTop,
-    state.containerHeight,
-    heightCache,
+    scrollPosition,
+    state.containerSize,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -322,7 +322,7 @@ export const updateViewportState = (
     state.renderRange,
   );
 
-  state.scrollTop = scrollTop;
+  state.scrollPosition = scrollPosition;
 
   return state;
 };
@@ -334,16 +334,16 @@ export const updateViewportState = (
 export const updateViewportSize = (
   state: ViewportState,
   containerHeight: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    state.scrollTop,
+    state.scrollPosition,
     containerHeight,
-    heightCache,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -355,9 +355,9 @@ export const updateViewportSize = (
     state.renderRange,
   );
 
-  state.containerHeight = containerHeight;
-  state.totalHeight = compression.virtualHeight;
-  state.actualHeight = compression.actualHeight;
+  state.containerSize = containerHeight;
+  state.totalSize = compression.virtualSize;
+  state.actualSize = compression.actualSize;
   state.isCompressed = compression.isCompressed;
   state.compressionRatio = compression.ratio;
 
@@ -370,16 +370,16 @@ export const updateViewportSize = (
  */
 export const updateViewportItems = (
   state: ViewportState,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   overscan: number,
   compression: CompressionState,
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    state.scrollTop,
-    state.containerHeight,
-    heightCache,
+    state.scrollPosition,
+    state.containerSize,
+    sizeCache,
     totalItems,
     compression,
     state.visibleRange,
@@ -391,8 +391,8 @@ export const updateViewportItems = (
     state.renderRange,
   );
 
-  state.totalHeight = compression.virtualHeight;
-  state.actualHeight = compression.actualHeight;
+  state.totalSize = compression.virtualSize;
+  state.actualSize = compression.actualSize;
   state.isCompressed = compression.isCompressed;
   state.compressionRatio = compression.ratio;
 
@@ -411,7 +411,7 @@ export const updateViewportItems = (
  */
 export const calculateScrollToIndex = (
   index: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   containerHeight: number,
   totalItems: number,
   align: "start" | "center" | "end" = "start",
@@ -420,7 +420,7 @@ export const calculateScrollToIndex = (
 ): number => {
   return scrollToIndexFn(
     index,
-    heightCache,
+    sizeCache,
     containerHeight,
     totalItems,
     compression,

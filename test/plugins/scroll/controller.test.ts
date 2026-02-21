@@ -348,8 +348,8 @@ describe("createScrollController", () => {
         compressed: true,
         compression: {
           isCompressed: true,
-          virtualHeight: 10000,
-          actualHeight: 10000,
+          virtualSize: 10000,
+          actualSize: 10000,
           ratio: 1,
         },
         onScroll: (data) => {
@@ -605,8 +605,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       controller.enableCompression(compression);
@@ -621,8 +621,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       const controller = createScrollController(viewport, {
@@ -644,8 +644,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       const controller = createScrollController(viewport, {
@@ -670,8 +670,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       const controller = createScrollController(viewport, {
@@ -754,8 +754,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       viewport.style.overflow = "visible";
@@ -780,8 +780,8 @@ describe("createScrollController", () => {
       const compression = {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       };
 
       const controller = createScrollController(viewport, {
@@ -811,8 +811,8 @@ describe("createScrollController", () => {
     it("should start in compressed mode when configured", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -888,8 +888,8 @@ describe("createScrollController", () => {
     it("should set overflowX hidden in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1082,8 +1082,8 @@ describe("createScrollController", () => {
       // Enable compression
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
       controller.enableCompression(compression);
@@ -1120,13 +1120,13 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 5000,
-        virtualHeight: 16000000,
+        actualSize: 5000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
       controller.enableCompression(compression);
 
-      // scrollLeft was 400, actualHeight is 5000
+      // scrollLeft was 400, actualSize is 5000
       // ratio = 400/5000 = 0.08
       // maxScroll = 16000000 - 800 = 15999200
       // new position = 0.08 * 15999200 = 1279936
@@ -1173,8 +1173,8 @@ describe("createScrollController", () => {
       // Enable compression — should remove horizontal wheel and add compressed wheel
       const compression = {
         isCompressed: true,
-        actualHeight: 5000,
-        virtualHeight: 16000000,
+        actualSize: 5000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
       controller.enableCompression(compression);
@@ -1207,8 +1207,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1245,8 +1245,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1289,8 +1289,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1347,8 +1347,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1394,8 +1394,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1437,8 +1437,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000,
-        virtualHeight: 16000000,
+        actualSize: 50000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1533,8 +1533,8 @@ describe("createScrollController", () => {
     it("should fire onScroll when scrollTo is called in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1557,8 +1557,8 @@ describe("createScrollController", () => {
     it("should not fire onScroll when scrollTo position is same as current", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1583,8 +1583,8 @@ describe("createScrollController", () => {
     it("should detect up direction in compressed scrollTo", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1607,8 +1607,8 @@ describe("createScrollController", () => {
     it("should clamp scrollTo position to maxScroll in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1619,7 +1619,7 @@ describe("createScrollController", () => {
         onScroll: (data) => scrollData.push(data),
       });
 
-      // maxScroll = virtualHeight - containerHeight = 16000000 - 500 = 15999500
+      // maxScroll = virtualSize - containerHeight = 16000000 - 500 = 15999500
       controller.scrollTo(99999999);
 
       expect(scrollData.length).toBe(1);
@@ -1631,8 +1631,8 @@ describe("createScrollController", () => {
     it("should update getScrollTop in compressed scrollTo", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1651,8 +1651,8 @@ describe("createScrollController", () => {
     it("should track velocity during compressed scrollTo", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1674,8 +1674,8 @@ describe("createScrollController", () => {
     it("should set isScrolling during compressed scrollTo", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1694,8 +1694,8 @@ describe("createScrollController", () => {
     it("should schedule idle check after compressed scrollTo", async () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1730,8 +1730,8 @@ describe("createScrollController", () => {
 
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1748,8 +1748,8 @@ describe("createScrollController", () => {
     it("should update maxScroll when compression changes", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1763,8 +1763,8 @@ describe("createScrollController", () => {
       // Update compression with smaller virtual height
       const newCompression = {
         isCompressed: true,
-        actualHeight: 25000000,
-        virtualHeight: 8000000,
+        actualSize: 25000000,
+        virtualSize: 8000000,
         ratio: 0.32,
       };
 
@@ -1789,8 +1789,8 @@ describe("createScrollController", () => {
     it("should scroll by delta in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1815,8 +1815,8 @@ describe("createScrollController", () => {
     it("should scroll by negative delta (upward) in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1846,8 +1846,8 @@ describe("createScrollController", () => {
     it("should return true when scrolled to max in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1867,8 +1867,8 @@ describe("createScrollController", () => {
     it("should return false when not at bottom in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1893,8 +1893,8 @@ describe("createScrollController", () => {
     it("should return correct percentage in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1917,8 +1917,8 @@ describe("createScrollController", () => {
     it("should return 0 at top in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1935,8 +1935,8 @@ describe("createScrollController", () => {
     it("should return 1 at bottom in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1963,8 +1963,8 @@ describe("createScrollController", () => {
     it("should handle wheel events in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -1991,8 +1991,8 @@ describe("createScrollController", () => {
     it("should clamp wheel scroll to 0 at top", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -2030,8 +2030,8 @@ describe("createScrollController", () => {
     it("should clear idle timeout on destroy", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -2069,8 +2069,8 @@ describe("createScrollController", () => {
     it("should handle destroy in compressed mode", () => {
       const compression = {
         isCompressed: true,
-        actualHeight: 50000000,
-        virtualHeight: 16000000,
+        actualSize: 50000000,
+        virtualSize: 16000000,
         ratio: 0.32,
       };
 
@@ -2136,8 +2136,8 @@ describe("scroll controller stale velocity gap detection", () => {
       compression: {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       },
       onScroll,
     });
@@ -2222,8 +2222,8 @@ describe("scroll controller horizontal mode", () => {
     const compression = {
       isCompressed: true,
       ratio: 0.5,
-      virtualHeight: 16_000_000,
-      actualHeight: 32_000_000,
+      virtualSize: 16_000_000,
+      actualSize: 32_000_000,
     };
 
     // enableCompression should switch to overflow hidden on X axis
@@ -2246,8 +2246,8 @@ describe("scroll controller horizontal mode", () => {
     const compression = {
       isCompressed: true,
       ratio: 0.5,
-      virtualHeight: 16_000_000,
-      actualHeight: 32_000_000,
+      virtualSize: 16_000_000,
+      actualSize: 32_000_000,
     };
 
     controller.enableCompression(compression);
@@ -2269,8 +2269,8 @@ describe("scroll controller horizontal mode", () => {
     const compression = {
       isCompressed: true,
       ratio: 0.5,
-      virtualHeight: 16_000_000,
-      actualHeight: 32_000_000,
+      virtualSize: 16_000_000,
+      actualSize: 32_000_000,
     };
 
     controller.enableCompression(compression);
@@ -2388,8 +2388,8 @@ describe("scroll controller window mode compression", () => {
     const compression = {
       isCompressed: true,
       ratio: 0.5,
-      virtualHeight: 16_000_000,
-      actualHeight: 32_000_000,
+      virtualSize: 16_000_000,
+      actualSize: 32_000_000,
     };
 
     // In window mode, enableCompression should set compressed=true but
@@ -2475,8 +2475,8 @@ describe("scroll controller wheel smoothing", () => {
       compression: {
         isCompressed: true,
         ratio: 0.5,
-        virtualHeight: 16_000_000,
-        actualHeight: 32_000_000,
+        virtualSize: 16_000_000,
+        actualSize: 32_000_000,
       },
       wheel: true,
       onScroll,
@@ -2521,8 +2521,8 @@ describe("scroll/controller — stale velocity gap detection (L191-202)", () => 
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
       wheel: true,
@@ -2551,8 +2551,8 @@ describe("scroll/controller — stale velocity gap detection (L191-202)", () => 
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
       wheel: true,
@@ -2578,8 +2578,8 @@ describe("scroll/controller — stale velocity gap detection (L191-202)", () => 
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
     });
@@ -2619,8 +2619,8 @@ describe("scroll/controller — smoothing in compressed wheel (L379)", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
       wheel: true,
@@ -2650,8 +2650,8 @@ describe("scroll/controller — smoothing in compressed wheel (L379)", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
       wheel: true,
@@ -2694,8 +2694,8 @@ describe("scroll/controller — timeDelta === 0 guard", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
     });
@@ -2731,8 +2731,8 @@ describe("scroll/controller — isTracking reliability", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
     });
@@ -2748,8 +2748,8 @@ describe("scroll/controller — isTracking reliability", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
     });
@@ -2774,8 +2774,8 @@ describe("scroll/controller — isTracking reliability", () => {
       compressed: true,
       compression: {
         isCompressed: true,
-        actualHeight: 10000,
-        virtualHeight: 50000,
+        actualSize: 10000,
+        virtualSize: 50000,
         ratio: 5,
       },
     });
@@ -2845,8 +2845,8 @@ describe("scroll/controller — stale velocity gap with mocked time", () => {
         compressed: true,
         compression: {
           isCompressed: true,
-          actualHeight: 10000,
-          virtualHeight: 50000,
+          actualSize: 10000,
+          virtualSize: 50000,
           ratio: 5,
         },
         wheel: true,
@@ -2903,8 +2903,8 @@ describe("scroll/controller — stale velocity gap with mocked time", () => {
         compressed: true,
         compression: {
           isCompressed: true,
-          actualHeight: 10000,
-          virtualHeight: 50000,
+          actualSize: 10000,
+          virtualSize: 50000,
           ratio: 5,
         },
       });
@@ -2951,8 +2951,8 @@ describe("scroll/controller — stale velocity gap with mocked time", () => {
         compressed: true,
         compression: {
           isCompressed: true,
-          actualHeight: 10000,
-          virtualHeight: 50000,
+          actualSize: 10000,
+          virtualSize: 50000,
           ratio: 5,
         },
       });

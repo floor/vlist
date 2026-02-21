@@ -163,7 +163,7 @@ export const withScale = <
        */
       const enhancedUpdateCompressionMode = (): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.heightCache);
+        const compression = getCompressionState(total, ctx.sizeCache);
 
         if (compression.isCompressed && !compressedModeActive) {
           // Entering compressed mode
@@ -173,7 +173,7 @@ export const withScale = <
           // Set content size to virtual height (not actual height)
           // This is critical - the content div must match the virtual height
           // for scrolling and positioning to work correctly
-          ctx.updateContentSize(compression.virtualHeight);
+          ctx.updateContentSize(compression.virtualSize);
 
           // Replace scroll functions with virtual scroll position.
           // In compressed mode the total height exceeds the browser's DOM
@@ -229,7 +229,7 @@ export const withScale = <
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+              comp.virtualSize - ctx.state.viewportState.containerSize;
 
             targetScrollTop = Math.max(
               0,
@@ -292,7 +292,7 @@ export const withScale = <
             const delta = touchStartY - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualHeight - ctx.state.viewportState.containerHeight;
+              comp.virtualSize - ctx.state.viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -341,7 +341,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualHeight - ctx.state.viewportState.containerHeight;
+                comp.virtualSize - ctx.state.viewportState.containerSize;
 
               let newPos = virtualScrollTop + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -425,16 +425,16 @@ export const withScale = <
 
             // Update scrollbar bounds
             scrollbar.updateBounds(
-              compression.virtualHeight,
-              ctx.state.viewportState.containerHeight,
+              compression.virtualSize,
+              ctx.state.viewportState.containerSize,
             );
 
             // Wire scrollbar into afterScroll
             const scrollbarRef = scrollbar;
             ctx.afterScroll.push(
-              (scrollTop: number, _direction: string): void => {
+              (scrollPosition: number, _direction: string): void => {
                 if (scrollbarRef) {
-                  scrollbarRef.updatePosition(scrollTop);
+                  scrollbarRef.updatePosition(scrollPosition);
                   scrollbarRef.show();
                 }
               },
@@ -445,8 +445,8 @@ export const withScale = <
               if (scrollbarRef) {
                 const comp = ctx.getCachedCompression();
                 scrollbarRef.updateBounds(
-                  comp.virtualHeight,
-                  ctx.state.viewportState.containerHeight,
+                  comp.virtualSize,
+                  ctx.state.viewportState.containerSize,
                 );
               }
             });
@@ -457,20 +457,20 @@ export const withScale = <
           ctx.scrollController.disableCompression();
 
           // Restore content size to actual height
-          ctx.updateContentSize(compression.actualHeight);
+          ctx.updateContentSize(compression.actualSize);
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
           ctx.scrollController.updateConfig({ compression });
 
           // Update content size to new virtual height
-          ctx.updateContentSize(compression.virtualHeight);
+          ctx.updateContentSize(compression.virtualSize);
         }
 
         // Update scrollbar bounds if we have a fallback scrollbar
         if (scrollbar) {
           scrollbar.updateBounds(
-            compression.virtualHeight,
-            ctx.state.viewportState.containerHeight,
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
           );
         }
 
@@ -542,7 +542,7 @@ export const withScale = <
       );
 
       // ── Replace item positioning with compressed version ──
-      // The builder core's positionElementFn uses simple heightCache offsets.
+      // The builder core's positionElementFn uses simple sizeCache offsets.
       // In compressed mode, items must be positioned relative to the viewport.
       //
       // We calculate only the FIRST visible item's position using the
@@ -554,7 +554,7 @@ export const withScale = <
 
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.heightCache);
+        const compression = getCompressionState(total, ctx.sizeCache);
 
         if (compression.isCompressed) {
           const scrollTop = ctx.scrollController.getScrollTop();
@@ -566,9 +566,9 @@ export const withScale = <
               calculateCompressedItemPosition(
                 index,
                 scrollTop,
-                ctx.heightCache as any,
+                ctx.sizeCache as any,
                 total,
-                ctx.state.viewportState.containerHeight,
+                ctx.state.viewportState.containerSize,
                 compression,
               ),
             );
@@ -577,15 +577,15 @@ export const withScale = <
           // Position this item relative to the first item using fixed offsets
           const offset =
             firstItemPosition! +
-            ctx.heightCache.getOffset(index) -
-            ctx.heightCache.getOffset(firstItemIndex!);
+            ctx.sizeCache.getOffset(index) -
+            ctx.sizeCache.getOffset(firstItemIndex!);
 
           const horizontal = ctx.config.horizontal;
           el.style.transform = horizontal
             ? `translateX(${offset}px)`
             : `translateY(${offset}px)`;
         } else {
-          const offset = Math.round(ctx.heightCache.getOffset(index));
+          const offset = Math.round(ctx.sizeCache.getOffset(index));
           const horizontal = ctx.config.horizontal;
           el.style.transform = horizontal
             ? `translateX(${offset}px)`

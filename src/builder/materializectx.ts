@@ -22,8 +22,8 @@ import type {
   Range,
 } from "../types";
 
-import type { HeightCache } from "../rendering/heights";
-import { createHeightCache } from "../rendering/heights";
+import type { SizeCache } from "../rendering/sizes";
+import { createSizeCache } from "../rendering/sizes";
 import type { Emitter } from "../events/emitter";
 
 import type { DOMStructure } from "./dom";
@@ -48,7 +48,7 @@ import type {
  * | Key  | Meaning                |
  * |------|------------------------|
  * | it   | items                  |
- * | hc   | heightCache            |
+ * | hc   | sizeCache              |
  * | ch   | containerHeight        |
  * | cw   | containerWidth         |
  * | id   | isDestroyed            |
@@ -79,8 +79,8 @@ import type {
 export interface MRefs<T extends VListItem = VListItem> {
   /** items */
   it: T[];
-  /** heightCache */
-  hc: HeightCache;
+  /** sizeCache */
+  hc: SizeCache;
   /** containerHeight */
   ch: number;
   /** containerWidth */
@@ -121,14 +121,14 @@ export interface MRefs<T extends VListItem = VListItem> {
   gvr: (
     scrollTop: number,
     cHeight: number,
-    hc: HeightCache,
+    hc: SizeCache,
     total: number,
     out: Range,
   ) => void;
   /** getScrollToPos */
   gsp: (
     index: number,
-    hc: HeightCache,
+    hc: SizeCache,
     cHeight: number,
     total: number,
     align: "start" | "center" | "end",
@@ -165,7 +165,7 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly isHorizontal: boolean;
   readonly classPrefix: string;
   readonly contentSizeHandlers: Array<() => void>;
-  readonly afterScroll: Array<(scrollTop: number, direction: string) => void>;
+  readonly afterScroll: Array<(scrollPosition: number, direction: string) => void>;
   readonly clickHandlers: Array<(event: MouseEvent) => void>;
   readonly keydownHandlers: Array<(event: KeyboardEvent) => void>;
   readonly resizeHandlers: Array<(width: number, height: number) => void>;
@@ -214,7 +214,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     get dom() {
       return dom as any;
     },
-    get heightCache() {
+    get sizeCache() {
       return $.hc as any;
     },
     get emitter() {
@@ -339,16 +339,16 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       const hc = $.hc;
       return {
         isCompressed: false,
-        actualHeight: hc.getTotalHeight(),
-        virtualHeight: hc.getTotalHeight(),
+        actualSize: hc.getTotalSize(),
+        virtualSize: hc.getTotalSize(),
         ratio: 1,
       } as any;
     },
     getCompressionContext() {
       return {
-        scrollTop: $.ls,
+        scrollPosition: $.ls,
         totalItems: $.vtf(),
-        containerHeight: $.ch,
+        containerSize: $.ch,
         rangeStart: renderRange.start,
       } as any;
     },
@@ -379,11 +379,11 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     setVirtualTotalFn(fn: () => number): void {
       $.vtf = fn;
     },
-    rebuildHeightCache(total?: number): void {
+    rebuildSizeCache(total?: number): void {
       $.hc.rebuild(total ?? $.vtf());
     },
-    setHeightConfig(newConfig: number | ((index: number) => number)): void {
-      $.hc = createHeightCache(newConfig, $.vtf());
+    setSizeConfig(newConfig: number | ((index: number) => number)): void {
+      $.hc = createSizeCache(newConfig, $.vtf());
     },
     updateContentSize(totalSize: number): void {
       const size = `${totalSize}px`;
@@ -401,7 +401,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       fn: (
         scrollTop: number,
         cHeight: number,
-        hc: HeightCache,
+        hc: SizeCache,
         total: number,
         out: Range,
       ) => void,
@@ -412,7 +412,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     setScrollToPosFn(
       fn: (
         index: number,
-        hc: HeightCache,
+        hc: SizeCache,
         cHeight: number,
         total: number,
         align: "start" | "center" | "end",
@@ -460,7 +460,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       // Update current dimensions immediately
       $.cw = getter.width();
       $.ch = getter.height();
-      sharedState.viewportState.containerHeight = $.ch;
+      sharedState.viewportState.containerSize = $.ch;
     },
 
     disableViewportResize(): void {
@@ -496,7 +496,7 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     updateContentSize,
   } = deps;
 
-  /** Sync height cache, content size, compression, notify handlers, re-render. */
+  /** Sync size cache, content size, compression, notify handlers, re-render. */
   const syncAfterChange = (): void => {
     $.hc.rebuild($.vtf());
     updateContentSize();
@@ -625,7 +625,7 @@ export const createDefaultScrollProxy = <T extends VListItem = VListItem>(
     isAtTop: () => $.ls <= 2,
     isAtBottom: (threshold = 2) => $.sab(threshold),
     getScrollPercentage: () => {
-      const total = $.hc.getTotalHeight();
+      const total = $.hc.getTotalSize();
       const maxScroll = Math.max(0, total - $.ch);
       return maxScroll > 0 ? $.ls / maxScroll : 0;
     },

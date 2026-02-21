@@ -13,17 +13,17 @@ import type {
 } from "../types";
 
 import type { CompressionState } from "./viewport";
-import type { HeightCache } from "./heights";
+import type { SizeCache } from "./sizes";
 
 /**
  * Optional compression position calculator.
  * Injected by the monolithic factory or the withCompression plugin.
- * When not provided, the renderer uses simple heightCache offsets.
+ * When not provided, the renderer uses simple sizeCache offsets.
  */
 export type CompressedPositionFn = (
   index: number,
   scrollTop: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   totalItems: number,
   containerHeight: number,
   compression: CompressionState,
@@ -37,7 +37,7 @@ export type CompressedPositionFn = (
  */
 export type CompressionStateFn = (
   totalItems: number,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
 ) => CompressionState;
 
 // =============================================================================
@@ -61,9 +61,9 @@ export interface ElementPool {
 
 /** Compression context for positioning */
 export interface CompressionContext {
-  scrollTop: number;
+  scrollPosition: number;
   totalItems: number;
-  containerHeight: number;
+  containerSize: number;
   rangeStart: number;
 }
 
@@ -182,7 +182,7 @@ export const createElementPool = (
 export const createRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
   template: ItemTemplate<T>,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   classPrefix: string,
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
@@ -213,13 +213,13 @@ export const createRenderer = <T extends VListItem = VListItem>(
       return cachedCompression;
     }
     if (compressionFns) {
-      cachedCompression = compressionFns.getState(totalItems, heightCache);
+      cachedCompression = compressionFns.getState(totalItems, sizeCache);
     } else {
-      const h = heightCache.getTotalHeight();
+      const h = sizeCache.getTotalSize();
       cachedCompression = {
         isCompressed: false,
-        actualHeight: h,
-        virtualHeight: h,
+        actualSize: h,
+        virtualSize: h,
         ratio: 1,
       };
     }
@@ -266,12 +266,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
    */
   const applyStaticStyles = (element: HTMLElement, index: number): void => {
     if (horizontal) {
-      element.style.width = `${heightCache.getHeight(index)}px`;
+      element.style.width = `${sizeCache.getSize(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${heightCache.getHeight(index)}px`;
+      element.style.height = `${sizeCache.getSize(index)}px`;
     }
   };
 
@@ -290,17 +290,17 @@ export const createRenderer = <T extends VListItem = VListItem>(
         // Use compression-aware positioning (injected)
         return compressionFns.getPosition(
           index,
-          compressionCtx.scrollTop,
-          heightCache,
+          compressionCtx.scrollPosition,
+          sizeCache,
           compressionCtx.totalItems,
-          compressionCtx.containerHeight,
+          compressionCtx.containerSize,
           compression,
           compressionCtx.rangeStart,
         );
       }
     }
     // Normal positioning (non-compressed or no context)
-    return heightCache.getOffset(index);
+    return sizeCache.getOffset(index);
   };
 
   /**

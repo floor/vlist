@@ -122,11 +122,11 @@ export const withGrid = <T extends VListItem = VListItem>(
       });
 
       // ── Update height config to include gap and inject grid context ──
-      // In grid mode, each row's height in the height cache = itemHeight + gap
+      // In grid mode, each row's size in the size cache = itemSize + gap
       // so that rows are spaced apart vertically. The grid renderer subtracts
       // the gap when sizing the DOM element.
       const itemConfig = rawConfig.item;
-      const baseHeight = (
+      const baseSize = (
         resolvedConfig.horizontal ? itemConfig.width : itemConfig.height
       ) as
         | number
@@ -147,9 +147,9 @@ export const withGrid = <T extends VListItem = VListItem>(
         gap: gridLayout.gap,
       };
 
-      if (typeof baseHeight === "function") {
-        // Height function - inject grid context
-        ctx.setHeightConfig((index: number) => {
+      if (typeof baseSize === "function") {
+        // Size function - inject grid context
+        ctx.setSizeConfig((index: number) => {
           // Calculate grid context
           const innerWidth = gridState.containerWidth - 2; // account for borders
           const totalGaps = (gridState.columns - 1) * gridState.gap;
@@ -167,16 +167,16 @@ export const withGrid = <T extends VListItem = VListItem>(
           };
 
           // Call user's function with context
-          const height = baseHeight(index, context);
-          return height + gridState.gap; // Add gap for row spacing
+          const size = baseSize(index, context);
+          return size + gridState.gap; // Add gap for row spacing
         });
       } else if (gap > 0) {
-        // Fixed height - just add gap
-        ctx.setHeightConfig(baseHeight + gap);
+        // Fixed size - just add gap
+        ctx.setSizeConfig(baseSize + gap);
       }
 
-      // Rebuild height cache with row count
-      ctx.rebuildHeightCache();
+      // Rebuild size cache with row count
+      ctx.rebuildSizeCache();
 
       // ── Add grid CSS class ──
       dom.root.classList.add(`${classPrefix}--grid`);
@@ -192,7 +192,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridRenderer = createGridRenderer<T>(
           dom.items,
           template,
-          ctx.heightCache,
+          ctx.sizeCache,
           gridLayout!,
           classPrefix,
           containerWidth,
@@ -226,14 +226,14 @@ export const withGrid = <T extends VListItem = VListItem>(
           let correctTotalHeight = 0;
           for (let i = 0; i < totalItems; i++) {
             if (gridLayout!.getCol(i) === 0) {
-              const height = ctx.heightCache.getHeight(i);
+              const height = ctx.sizeCache.getSize(i);
               correctTotalHeight += height;
             }
           }
 
-          // Override height cache getTotalHeight to return corrected value
+          // Override size cache getTotalSize to return corrected value
           // This ensures everything (DOM, scrollbar, calculations) uses the correct height
-          ctx.heightCache.getTotalHeight = () => correctTotalHeight;
+          ctx.sizeCache.getTotalSize = () => correctTotalHeight;
 
           // Manually update DOM content height
           ctx.dom.content.style.height = `${correctTotalHeight}px`;
@@ -279,11 +279,11 @@ export const withGrid = <T extends VListItem = VListItem>(
           gridRenderer.updateContainerWidth(containerWidth);
         }
 
-        // Rebuild height cache with new row count
-        ctx.rebuildHeightCache();
+        // Rebuild size cache with new row count
+        ctx.rebuildSizeCache();
 
         // Update content size to reflect new total height
-        ctx.updateContentSize(ctx.heightCache.getTotalHeight());
+        ctx.updateContentSize(ctx.sizeCache.getTotalSize());
 
         // Update compression mode if compression plugin is active
         ctx.updateCompressionMode();
@@ -306,7 +306,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
         // Calculate visible and render ranges (in row space)
         const scrollTop = ctx.scrollController.getScrollTop();
-        const containerHeight = ctx.state.viewportState.containerHeight;
+        const containerHeight = ctx.state.viewportState.containerSize;
         const totalRows = ctx.getVirtualTotal();
 
         // Calculate visible row range
@@ -317,9 +317,9 @@ export const withGrid = <T extends VListItem = VListItem>(
         } else {
           visibleRange.start = Math.max(
             0,
-            ctx.heightCache.indexAtOffset(scrollTop),
+            ctx.sizeCache.indexAtOffset(scrollTop),
           );
-          let visibleEnd = ctx.heightCache.indexAtOffset(
+          let visibleEnd = ctx.sizeCache.indexAtOffset(
             scrollTop + containerHeight,
           );
           if (visibleEnd < totalRows - 1) visibleEnd++;
@@ -334,7 +334,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         };
 
         // Update viewport state
-        ctx.state.viewportState.scrollTop = scrollTop;
+        ctx.state.viewportState.scrollPosition = scrollTop;
         ctx.state.viewportState.visibleRange = visibleRange;
         ctx.state.viewportState.renderRange = renderRange;
 
@@ -401,7 +401,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       // ── Override scrollToIndex to convert item index → row ──
       // (Plugins like selection that scrollToIndex with item indices need this)
-      // The builder core's scrollToIndex already works with the height cache
+      // The builder core's scrollToIndex already works with the size cache
       // which is in row-space, so we just need to ensure the public API
       // scrollToIndex maps item index → row index.
       ctx.methods.set(
@@ -431,8 +431,8 @@ export const withGrid = <T extends VListItem = VListItem>(
 
           const position = calculateScrollToIndex(
             safeRow,
-            ctx.heightCache,
-            ctx.state.viewportState.containerHeight,
+            ctx.sizeCache,
+            ctx.state.viewportState.containerSize,
             totalRows,
             align,
             ctx.getCachedCompression(),

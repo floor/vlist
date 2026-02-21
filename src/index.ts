@@ -72,7 +72,7 @@ export type {
 export {
   createGroupLayout as createSectionLayout,
   buildLayoutItems,
-  createGroupedHeightFn as createSectionedHeightFn,
+  createGroupedSizeFn as createSectionedSizeFn,
   createStickyHeader,
   isGroupHeader as isSectionHeader,
   type GroupsConfig as SectionsConfig,
@@ -94,16 +94,16 @@ export {
   type ItemRange,
 } from "./features/grid";
 
-// Rendering domain (virtual scrolling, height cache, scaling)
+// Rendering domain (virtual scrolling, size cache, scaling)
 export {
-  // Height cache (variable item heights)
-  createHeightCache,
-  type HeightCache,
+  // Size cache (variable item sizes - works for both vertical and horizontal)
+  createSizeCache,
+  type SizeCache,
   // Virtual scrolling calculations
   simpleVisibleRange,
   calculateRenderRange,
-  calculateTotalHeight,
-  calculateActualHeight,
+  calculateTotalSize,
+  calculateActualSize,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,

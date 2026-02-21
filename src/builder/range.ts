@@ -5,17 +5,17 @@
  */
 
 import type { Range } from "../types";
-import type { HeightCache } from "../rendering/heights";
-import { countVisibleItems } from "../rendering/heights";
+import type { SizeCache } from "../rendering/sizes";
+import { countVisibleItems } from "../rendering/sizes";
 
 // =============================================================================
 // Visible Range
 // =============================================================================
 
 export const calcVisibleRange = (
-  scrollTop: number,
+  scrollPosition: number,
   containerHeight: number,
-  hc: HeightCache,
+  hc: SizeCache,
   totalItems: number,
   out: Range,
 ): void => {
@@ -25,7 +25,7 @@ export const calcVisibleRange = (
     return;
   }
 
-  const start = hc.indexAtOffset(scrollTop);
+  const start = hc.indexAtOffset(scrollPosition);
 
   // Use accurate visible item counting (same logic as compressed mode)
   // This ensures we render enough items during fast scrolling
@@ -66,7 +66,7 @@ export const applyOverscan = (
 
 export const calcScrollToPosition = (
   index: number,
-  hc: HeightCache,
+  hc: SizeCache,
   containerHeight: number,
   totalItems: number,
   align: "start" | "center" | "end",
@@ -74,8 +74,8 @@ export const calcScrollToPosition = (
   if (totalItems === 0) return 0;
   const clamped = Math.max(0, Math.min(index, totalItems - 1));
   const offset = hc.getOffset(clamped);
-  const itemH = hc.getHeight(clamped);
-  const maxScroll = Math.max(0, hc.getTotalHeight() - containerHeight);
+  const itemH = hc.getSize(clamped);
+  const maxScroll = Math.max(0, hc.getTotalSize() - containerHeight);
   let pos: number;
   switch (align) {
     case "center":

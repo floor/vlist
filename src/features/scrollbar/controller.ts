@@ -437,7 +437,7 @@ export const createScrollController = (
 
     compressed = true;
     compression = newCompression;
-    maxScroll = newCompression.virtualHeight - containerHeight;
+    maxScroll = newCompression.virtualSize - containerHeight;
 
     // In window mode, compression is purely mathematical — the content div
     // height is set to the virtual height by vlist.ts, and the browser scrolls
@@ -471,8 +471,8 @@ export const createScrollController = (
     const nativePos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
     if (nativePos > 0) {
       const nativeMax = horizontal
-        ? (compression?.actualHeight ?? viewport.scrollWidth)
-        : (compression?.actualHeight ?? viewport.scrollHeight);
+        ? (compression?.actualSize ?? viewport.scrollWidth)
+        : (compression?.actualSize ?? viewport.scrollHeight);
       const ratio = nativePos / nativeMax;
       scrollPosition = ratio * maxScroll;
     }
@@ -521,7 +521,7 @@ export const createScrollController = (
     // Restore scroll position
     if (compression && scrollPosition > 0) {
       const ratio = scrollPosition / maxScroll;
-      const restoredPos = ratio * (compression.actualHeight - containerHeight);
+      const restoredPos = ratio * (compression.actualSize - containerHeight);
       if (horizontal) {
         viewport.scrollLeft = restoredPos;
       } else {
@@ -643,7 +643,7 @@ export const createScrollController = (
   const updateConfig = (newConfig: Partial<ScrollControllerConfig>): void => {
     if (newConfig.compression) {
       compression = newConfig.compression;
-      maxScroll = compression.virtualHeight - containerHeight;
+      maxScroll = compression.virtualSize - containerHeight;
     }
   };
 
@@ -662,7 +662,7 @@ export const createScrollController = (
     containerHeight = height;
     // Recompute maxScroll if we have compression or are in window mode
     if (compression) {
-      maxScroll = compression.virtualHeight - containerHeight;
+      maxScroll = compression.virtualSize - containerHeight;
     } else if (windowMode) {
       // In window mode without compression, maxScroll is derived from
       // the content div height. vlist.ts calls updateConfig with compression
@@ -696,12 +696,12 @@ export const createScrollController = (
   if (windowMode) {
     // Window scroll mode — listen to window, don't manage viewport overflow
     if (compressed && compression) {
-      maxScroll = compression.virtualHeight - containerHeight;
+      maxScroll = compression.virtualSize - containerHeight;
     }
     window.addEventListener("scroll", handleWindowScroll, { passive: true });
   } else if (compressed && compression) {
     // Start in compressed mode
-    maxScroll = compression.virtualHeight - containerHeight;
+    maxScroll = compression.virtualSize - containerHeight;
     if (horizontal) {
       viewport.style.overflowX = "hidden";
     } else {

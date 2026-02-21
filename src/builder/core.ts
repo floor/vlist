@@ -2,7 +2,7 @@
  * vlist/builder — Composable virtual list builder
  *
  * Pure utilities (velocity, DOM, pool, range, scroll) live in sibling files.
- * Height cache and emitter are reused from rendering/ and events/ modules.
+ * Size cache and emitter are reused from rendering/ and events/ modules.
  * Bun.build inlines everything into a single bundle automatically.
  *
  * Plugins compose features *around* the hot path via extension points:
@@ -39,7 +39,7 @@ import {
   updateVelocityTracker,
   MIN_RELIABLE_SAMPLES,
 } from "./velocity";
-import { createHeightCache } from "../rendering/heights";
+import { createSizeCache } from "../rendering/sizes";
 import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
@@ -247,7 +247,7 @@ function materialize<T extends VListItem = VListItem>(
   // Use items array by reference (memory-optimized)
   const initialItemsArray: T[] = initialItems || [];
 
-  const initialHeightCache = createHeightCache(
+  const initialSizeCache = createSizeCache(
     mainAxisSizeConfig,
     initialItemsArray.length,
   );
@@ -258,7 +258,7 @@ function materialize<T extends VListItem = VListItem>(
   // data proxy, scroll proxy) and core.ts read/write the same values.
   const $: MRefs<T> = {
     it: initialItemsArray,
-    hc: initialHeightCache,
+    hc: initialSizeCache,
     ch: dom.viewport.clientHeight,
     cw: dom.viewport.clientWidth,
     id: false,
@@ -282,7 +282,7 @@ function materialize<T extends VListItem = VListItem>(
           dom.viewport.scrollTop = pos;
         },
     sab: (threshold = 2) => {
-      const total = $.hc.getTotalHeight();
+      const total = $.hc.getTotalSize();
       return $.ls + $.ch >= total - threshold;
     },
     sic: false,
@@ -317,10 +317,10 @@ function materialize<T extends VListItem = VListItem>(
   // Shared state object for plugins (defined early so core render can reference it)
   const sharedState: BuilderState = {
     viewportState: {
-      scrollTop: 0,
-      containerHeight: $.ch,
-      totalHeight: $.hc.getTotalHeight(),
-      actualHeight: $.hc.getTotalHeight(),
+      scrollPosition: 0,
+      containerSize: $.ch,
+      totalSize: $.hc.getTotalSize(),
+      actualSize: $.hc.getTotalSize(),
       isCompressed: false,
       compressionRatio: 1,
       visibleRange: { start: 0, end: 0 },
@@ -341,7 +341,9 @@ function materialize<T extends VListItem = VListItem>(
   // Users can implement their own Map if needed for O(1) lookups
 
   // ── Plugin extension points ─────────────────────────────────────
-  const afterScroll: Array<(scrollTop: number, direction: string) => void> = [];
+  const afterScroll: Array<
+    (scrollPosition: number, direction: string) => void
+  > = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
@@ -376,12 +378,12 @@ function materialize<T extends VListItem = VListItem>(
     element.className = baseClass;
 
     if (isHorizontal) {
-      element.style.width = `${$.hc.getHeight(index)}px`;
+      element.style.width = `${$.hc.getSize(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${$.hc.getHeight(index)}px`;
+      element.style.height = `${$.hc.getSize(index)}px`;
     }
 
     element.dataset.index = String(index);
@@ -404,7 +406,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalHeight()}px`;
+    const size = `${$.hc.getTotalSize()}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -470,9 +472,9 @@ function materialize<T extends VListItem = VListItem>(
           applyTemplate(existing, $.at(item, i, itemState));
           existing.dataset.id = newId;
           if (isHorizontal) {
-            existing.style.width = `${$.hc.getHeight(i)}px`;
+            existing.style.width = `${$.hc.getSize(i)}px`;
           } else {
-            existing.style.height = `${$.hc.getHeight(i)}px`;
+            existing.style.height = `${$.hc.getSize(i)}px`;
           }
 
           // Update placeholder class
@@ -538,7 +540,7 @@ function materialize<T extends VListItem = VListItem>(
     // Update viewport state with current scroll position and calculated ranges
     // This is critical for plugins (especially compression + scrollbar) that rely
     // on viewport state being up-to-date
-    sharedState.viewportState.scrollTop = $.ls;
+    sharedState.viewportState.scrollPosition = $.ls;
     sharedState.viewportState.visibleRange.start = visibleRange.start;
     sharedState.viewportState.visibleRange.end = visibleRange.end;
     sharedState.viewportState.renderRange.start = renderRange.start;
@@ -577,7 +579,7 @@ function materialize<T extends VListItem = VListItem>(
     $.ls = scrollTop;
     $.rfn();
 
-    emitter.emit("scroll", { scrollTop, direction });
+    emitter.emit("scroll", { scrollPosition: scrollTop, direction });
 
     // Emit velocity change
     emitter.emit("velocity:change", {
@@ -626,7 +628,7 @@ function materialize<T extends VListItem = VListItem>(
       // Calculate new scroll position
       const newScroll = Math.max(
         0,
-        Math.min(currentScroll + delta, $.hc.getTotalHeight() - $.ch),
+        Math.min(currentScroll + delta, $.hc.getTotalSize() - $.ch),
       );
 
       // Update scroll position
@@ -640,7 +642,7 @@ function materialize<T extends VListItem = VListItem>(
       // Emit scroll event
       const direction: "up" | "down" =
         newScroll >= currentScroll ? "down" : "up";
-      emitter.emit("scroll", { scrollTop: newScroll, direction });
+      emitter.emit("scroll", { scrollPosition: newScroll, direction });
 
       // Update scrolling class
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
@@ -739,7 +741,7 @@ function materialize<T extends VListItem = VListItem>(
 
       if (Math.abs(newMainAxis - $.ch) > 1) {
         $.ch = newMainAxis;
-        sharedState.viewportState.containerHeight = newMainAxis;
+        sharedState.viewportState.containerSize = newMainAxis;
 
         // Only render if already initialized (plugins have run)
         if ($.ii) {
@@ -859,11 +861,11 @@ function materialize<T extends VListItem = VListItem>(
   const prependItems = isReverse
     ? (newItems: T[]): void => {
         const scrollTop = $.sgt();
-        const heightBefore = $.hc.getTotalHeight();
+        const heightBefore = $.hc.getTotalSize();
         const existingItems = [...$.it];
         ctx.dataManager.clear();
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = $.hc.getTotalHeight();
+        const heightAfter = $.hc.getTotalSize();
         const delta = heightAfter - heightBefore;
         if (delta > 0) {
           $.sst(scrollTop + delta);

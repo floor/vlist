@@ -20,7 +20,7 @@ import type {
 import type {
   DOMStructure,
   Renderer,
-  HeightCache,
+  SizeCache,
   CompressionContext,
 } from "../rendering";
 import type { CompressionState } from "../rendering/viewport";
@@ -120,7 +120,7 @@ export interface BuilderState {
 export interface BuilderContext<T extends VListItem = VListItem> {
   // ── Core components (always present) ──────────────────────────
   readonly dom: DOMStructure;
-  readonly heightCache: HeightCache;
+  readonly sizeCache: SizeCache;
   readonly emitter: Emitter<VListEvents<T>>;
   readonly config: ResolvedBuilderConfig;
 
@@ -141,7 +141,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * scroll-triggered render. These are NOT on the hot path —
    * they run after DOM updates are complete.
    */
-  afterScroll: Array<(scrollTop: number, direction: string) => void>;
+  afterScroll: Array<(scrollPosition: number, direction: string) => void>;
 
   // ── Event handler slots ───────────────────────────────────────
   /**
@@ -201,16 +201,15 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   setVirtualTotalFn(fn: () => number): void;
 
   /**
-   * Replace the effective height config.
-   * Used by groups plugin to inject grouped height function and by grid to add gap.
+   * Used by groups plugin to inject grouped size function and by grid to add gap.
    */
-  rebuildHeightCache(total?: number): void;
+  rebuildSizeCache(total?: number): void;
 
   /**
-   * Set a new effective height config function/value.
-   * Plugins that change heights (groups, grid) call this before rebuildHeightCache.
+   * Set a new effective size config function/value.
+   * Plugins that change sizes (groups, grid) call this before rebuildSizeCache.
    */
-  setHeightConfig(config: number | ((index: number) => number)): void;
+  setSizeConfig(config: number | ((index: number) => number)): void;
 
   /**
    * Update content size on the main axis (height for vertical, width for horizontal).
@@ -231,7 +230,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
     fn: (
       scrollTop: number,
       containerHeight: number,
-      hc: HeightCache,
+      sc: SizeCache,
       totalItems: number,
       out: Range,
     ) => void,
@@ -244,7 +243,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   setScrollToPosFn(
     fn: (
       index: number,
-      hc: HeightCache,
+      sc: SizeCache,
       containerHeight: number,
       totalItems: number,
       align: "start" | "center" | "end",

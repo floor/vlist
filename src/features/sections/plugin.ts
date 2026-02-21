@@ -27,7 +27,7 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
 import {
   createGroupLayout,
   buildLayoutItems,
-  createGroupedHeightFn,
+  createGroupedSizeFn,
 } from "./layout";
 
 import { createStickyHeader } from "./sticky";
@@ -129,9 +129,9 @@ export const withSections = <T extends VListItem = VListItem>(
       // Note: sticky headers work with reverse mode!
       // As you scroll up through history, the current section header sticks at top
 
-      // ── Get the base item height ──
+      // ── Get the base item size ──
       const itemConfig = rawConfig.item;
-      const baseHeight = itemConfig.height as
+      const baseSize = itemConfig.height as
         | number
         | ((index: number) => number);
 
@@ -152,13 +152,13 @@ export const withSections = <T extends VListItem = VListItem>(
       // ── Build layout items (items + headers) ──
       layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
-      // ── Create grouped height function ──
-      const groupedHeightFn = createGroupedHeightFn(groupLayout, baseHeight);
+      // ── Create grouped size function ──
+      const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
 
-      // ── Update height config and rebuild height cache ──
-      ctx.setHeightConfig(groupedHeightFn);
+      // ── Update size config and rebuild size cache ──
+      ctx.setSizeConfig(groupedSizeFn);
 
-      ctx.rebuildHeightCache(layoutItems.length);
+      ctx.rebuildSizeCache(layoutItems.length);
 
       // ── Replace data manager items with layout items ──
       ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
@@ -210,7 +210,7 @@ export const withSections = <T extends VListItem = VListItem>(
         const newGridRenderer = createGridRenderer(
           dom.items,
           unifiedTemplate,
-          ctx.heightCache,
+          ctx.sizeCache,
           gridLayout,
           classPrefix,
           ctx.getContainerWidth(),
@@ -234,15 +234,15 @@ export const withSections = <T extends VListItem = VListItem>(
         stickyHeader = createStickyHeader(
           dom.root,
           groupLayout,
-          ctx.heightCache,
+          ctx.sizeCache,
           { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
           classPrefix,
         );
 
         // Wire sticky header into afterScroll
         const stickyRef = stickyHeader;
-        ctx.afterScroll.push((scrollTop: number, _direction: string): void => {
-          stickyRef.update(scrollTop);
+        ctx.afterScroll.push((scrollPosition: number, _direction: string): void => {
+          stickyRef.update(scrollPosition);
         });
 
         // Initialize sticky header
@@ -256,12 +256,9 @@ export const withSections = <T extends VListItem = VListItem>(
         groupLayout.rebuild(originalItems.length);
         layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
-        const newGroupedHeightFn = createGroupedHeightFn(
-          groupLayout,
-          baseHeight,
-        );
-        ctx.setHeightConfig(newGroupedHeightFn);
-        ctx.rebuildHeightCache(layoutItems.length);
+        const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
+        ctx.setSizeConfig(newGroupedSizeFn);
+        ctx.rebuildSizeCache(layoutItems.length);
 
         // Update data manager with new layout items
         ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
@@ -322,8 +319,8 @@ export const withSections = <T extends VListItem = VListItem>(
 
           const position = calculateScrollToIndex(
             layoutIndex,
-            ctx.heightCache,
-            ctx.state.viewportState.containerHeight,
+            ctx.sizeCache,
+            ctx.state.viewportState.containerSize,
             total,
             align,
             ctx.getCachedCompression(),
