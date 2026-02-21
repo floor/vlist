@@ -4,7 +4,7 @@
  */
 
 // Builder Plugin
-export { withSelection, type SelectionPluginConfig } from "./plugin";
+export { withSelection, type SelectionPluginConfig } from "./feature";
 
 // Selection State
 export {

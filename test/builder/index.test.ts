@@ -32,13 +32,13 @@ import { JSDOM } from "jsdom";
 import { vlist } from "../../src/builder/core";
 import type { BuiltVList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
-import { withSelection } from "../../src/features/selection/plugin";
-import { withScrollbar } from "../../src/features/scrollbar/plugin";
-import { withAsync } from "../../src/features/async/plugin";
-import { withScale } from "../../src/features/scale/plugin";
-import { withSnapshots } from "../../src/features/snapshots/plugin";
-import { withGrid } from "../../src/features/grid/plugin";
-import { withSections } from "../../src/features/sections/plugin";
+import { withSelection } from "../../src/features/selection/feature";
+import { withScrollbar } from "../../src/features/scrollbar/feature";
+import { withAsync } from "../../src/features/async/feature";
+import { withScale } from "../../src/features/scale/feature";
+import { withSnapshots } from "../../src/features/snapshots/feature";
+import { withGrid } from "../../src/features/grid/feature";
+import { withSections } from "../../src/features/sections/feature";
 import { isSectionHeader } from "../../src/features/sections";
 
 // =============================================================================

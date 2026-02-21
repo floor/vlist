@@ -4,5 +4,5 @@
  * Entry point for the window scroll plugin.
  */
 
-export { withPage } from "./plugin";
-export type { VListPlugin } from "../../builder/types";
+export { withPage } from "./feature";
+export type { VListFeature } from "../../builder/types";

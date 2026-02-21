@@ -301,21 +301,21 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 }
 
 // =============================================================================
-// VListPlugin — the plugin interface
+// VListFeature — the feature interface
 // =============================================================================
 
 /**
- * VListPlugin — the interface for builder plugins.
+ * VListFeature — the interface for builder features.
  *
- * Each plugin:
+ * Each feature:
  * - Has a unique name (used for deduplication and error messages)
  * - Optionally declares a priority (lower runs first, default: 50)
  * - Implements setup() which receives BuilderContext and wires in handlers/methods
  * - Optionally implements destroy() for cleanup
- * - Optionally declares methods it adds and plugins it conflicts with
+ * - Optionally declares methods it adds and features it conflicts with
  */
-export interface VListPlugin<T extends VListItem = VListItem> {
-  /** Unique plugin name (used for deduplication and error messages) */
+export interface VListFeature<T extends VListItem = VListItem> {
+  /** Unique feature name (used for deduplication and error messages) */
   readonly name: string;
 
   /** Execution priority — lower runs first (default: 50) */
@@ -327,15 +327,21 @@ export interface VListPlugin<T extends VListItem = VListItem> {
   /** Cleanup function — called on destroy */
   destroy?(): void;
 
-  /** Methods this plugin adds to the public API */
+  /** Methods this feature adds to the public API */
   readonly methods?: readonly string[];
 
-  /** Plugins this plugin conflicts with (cannot be combined) */
+  /** Features this feature conflicts with (cannot be combined) */
   readonly conflicts?: readonly string[];
 }
 
-/** Factory function that returns a plugin */
-export type PluginFactory<T extends VListItem = VListItem> = VListPlugin<T>;
+/** Factory function that returns a feature */
+export type FeatureFactory<T extends VListItem = VListItem> = VListFeature<T>;
+
+/** @deprecated Use VListFeature instead */
+export type VListPlugin<T extends VListItem = VListItem> = VListFeature<T>;
+
+/** @deprecated Use FeatureFactory instead */
+export type PluginFactory<T extends VListItem = VListItem> = FeatureFactory<T>;
 
 // =============================================================================
 // VListBuilder — the chainable builder
@@ -343,10 +349,10 @@ export type PluginFactory<T extends VListItem = VListItem> = VListPlugin<T>;
 
 /** Chainable builder interface */
 export interface VListBuilder<T extends VListItem = VListItem> {
-  /** Register a feature plugin. Chainable. */
-  use(plugin: VListPlugin<T>): VListBuilder<T>;
+  /** Register a feature. Chainable. */
+  use(feature: VListFeature<T>): VListBuilder<T>;
 
-  /** Materialize the virtual list. Creates DOM, initializes plugins, returns API. */
+  /** Materialize the virtual list. Creates DOM, initializes features, returns API. */
   build(): BuiltVList<T>;
 }
 

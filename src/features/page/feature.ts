@@ -18,7 +18,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 /**
  * Create a window scroll mode plugin.
@@ -51,7 +51,9 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
  * .build()
  * ```
  */
-export const withPage = <T extends VListItem = VListItem>(): VListPlugin<T> => {
+export const withPage = <
+  T extends VListItem = VListItem,
+>(): VListFeature<T> => {
   let cleanupResize: (() => void) | null = null;
 
   return {

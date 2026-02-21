@@ -20,4 +20,4 @@ export {
   type CompressionState,
 } from "../../rendering/scale";
 
-export { withScale } from "./plugin";
+export { withScale } from "./feature";

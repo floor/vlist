@@ -19,7 +19,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import { createGridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
@@ -62,7 +62,7 @@ export interface GridPluginConfig {
  */
 export const withGrid = <T extends VListItem = VListItem>(
   config: GridPluginConfig,
-): VListPlugin<T> => {
+): VListFeature<T> => {
   // Validate
   if (!config.columns || config.columns < 1) {
     throw new Error(

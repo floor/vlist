@@ -20,7 +20,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import {
   getCompressionState,
@@ -121,7 +121,7 @@ const TOUCH_VELOCITY_WINDOW = 100;
  */
 export const withScale = <
   T extends VListItem = VListItem,
->(): VListPlugin<T> => {
+>(): VListFeature<T> => {
   let scrollbar: Scrollbar | null = null;
   let virtualScrollTop = 0;
   let compressedModeActive = false;

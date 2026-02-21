@@ -1,4 +1,4 @@
-// src/builder/materializectx.ts
+// src/builder/materialize.ts
 /**
  * vlist/builder — Materialize Context Factory
  *
@@ -165,7 +165,9 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly isHorizontal: boolean;
   readonly classPrefix: string;
   readonly contentSizeHandlers: Array<() => void>;
-  readonly afterScroll: Array<(scrollPosition: number, direction: string) => void>;
+  readonly afterScroll: Array<
+    (scrollPosition: number, direction: string) => void
+  >;
   readonly clickHandlers: Array<(event: MouseEvent) => void>;
   readonly keydownHandlers: Array<(event: KeyboardEvent) => void>;
   readonly resizeHandlers: Array<(width: number, height: number) => void>;

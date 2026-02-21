@@ -17,7 +17,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../builder/types";
 
 import { createScrollbar, type Scrollbar } from "./scrollbar";
 
@@ -76,7 +76,7 @@ export interface ScrollbarPluginConfig {
  */
 export const withScrollbar = <T extends VListItem = VListItem>(
   config?: ScrollbarPluginConfig,
-): VListPlugin<T> => {
+): VListFeature<T> => {
   let scrollbar: Scrollbar | null = null;
 
   return {
@@ -114,10 +114,12 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
       // ── Post-scroll: update thumb position ──
       const scrollbarRef = scrollbar;
-      ctx.afterScroll.push((scrollPosition: number, _direction: string): void => {
-        scrollbarRef.updatePosition(scrollPosition);
-        scrollbarRef.show();
-      });
+      ctx.afterScroll.push(
+        (scrollPosition: number, _direction: string): void => {
+          scrollbarRef.updatePosition(scrollPosition);
+          scrollbarRef.show();
+        },
+      );
 
       // ── Resize: update thumb size ──
       ctx.resizeHandlers.push((_width: number, _height: number): void => {
