@@ -1924,17 +1924,20 @@ describe("withGrid plugin", () => {
     }).toThrow("columns must be a positive integer >= 1");
   });
 
-  it("should throw when used with horizontal direction", () => {
-    expect(() => {
-      vlist<TestItem>({
-        container,
-        item: { height: 100, width: 100, template },
-        items: createTestItems(8),
-        orientation: "horizontal",
-      })
-        .use(withGrid({ columns: 4 }))
-        .build();
-    }).toThrow("withGrid cannot be used with orientation: 'horizontal'");
+  it("should work with horizontal orientation", () => {
+    // Horizontal orientation is now supported (though not fully optimized)
+    const list = vlist<TestItem>({
+      container,
+      item: { height: 100, width: 100, template },
+      items: createTestItems(8),
+      orientation: "horizontal",
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+
+    expect(list.element).toBeDefined();
+    expect(list.total).toBe(8);
+    list.destroy();
   });
 
   it("should throw when used with reverse mode", () => {

@@ -81,12 +81,9 @@ export const withGrid = <T extends VListItem = VListItem>(
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      // Validate orientation/reverse constraints
-      if (resolvedConfig.horizontal) {
-        throw new Error(
-          "[vlist/builder] withGrid cannot be used with orientation: 'horizontal'",
-        );
-      }
+      // Validate reverse constraint
+      // Note: horizontal orientation is supported but not fully optimized yet
+      // (items will still use vertical positioning - TODO: add axis swapping)
       if (resolvedConfig.reverse) {
         throw new Error(
           "[vlist/builder] withGrid cannot be used with reverse: true",
