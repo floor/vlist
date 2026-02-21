@@ -323,7 +323,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             const dataState = ctx.dataManager.getState();
             const position = calculateScrollToIndex(
               newFocusIndex,
-              ctx.heightCache,
+              ctx.sizeCache,
               ctx.state.viewportState.containerHeight,
               dataState.total,
               "center",

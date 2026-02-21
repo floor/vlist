@@ -22,8 +22,8 @@ import type {
   Range,
 } from "../types";
 
-import type { HeightCache } from "../rendering/heights";
-import { createHeightCache } from "../rendering/heights";
+import type { SizeCache } from "../rendering/sizes";
+import { createSizeCache } from "../rendering/sizes";
 import type { Emitter } from "../events/emitter";
 
 import type { DOMStructure } from "./dom";
@@ -48,7 +48,7 @@ import type {
  * | Key  | Meaning                |
  * |------|------------------------|
  * | it   | items                  |
- * | hc   | heightCache            |
+ * | hc   | sizeCache              |
  * | ch   | containerHeight        |
  * | cw   | containerWidth         |
  * | id   | isDestroyed            |
@@ -79,8 +79,8 @@ import type {
 export interface MRefs<T extends VListItem = VListItem> {
   /** items */
   it: T[];
-  /** heightCache */
-  hc: HeightCache;
+  /** sizeCache */
+  hc: SizeCache;
   /** containerHeight */
   ch: number;
   /** containerWidth */
@@ -121,14 +121,14 @@ export interface MRefs<T extends VListItem = VListItem> {
   gvr: (
     scrollTop: number,
     cHeight: number,
-    hc: HeightCache,
+    hc: SizeCache,
     total: number,
     out: Range,
   ) => void;
   /** getScrollToPos */
   gsp: (
     index: number,
-    hc: HeightCache,
+    hc: SizeCache,
     cHeight: number,
     total: number,
     align: "start" | "center" | "end",
@@ -214,7 +214,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     get dom() {
       return dom as any;
     },
-    get heightCache() {
+    get sizeCache() {
       return $.hc as any;
     },
     get emitter() {
@@ -379,11 +379,11 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     setVirtualTotalFn(fn: () => number): void {
       $.vtf = fn;
     },
-    rebuildHeightCache(total?: number): void {
+    rebuildSizeCache(total?: number): void {
       $.hc.rebuild(total ?? $.vtf());
     },
-    setHeightConfig(newConfig: number | ((index: number) => number)): void {
-      $.hc = createHeightCache(newConfig, $.vtf());
+    setSizeConfig(newConfig: number | ((index: number) => number)): void {
+      $.hc = createSizeCache(newConfig, $.vtf());
     },
     updateContentSize(totalSize: number): void {
       const size = `${totalSize}px`;
@@ -401,7 +401,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       fn: (
         scrollTop: number,
         cHeight: number,
-        hc: HeightCache,
+        hc: SizeCache,
         total: number,
         out: Range,
       ) => void,
@@ -412,7 +412,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     setScrollToPosFn(
       fn: (
         index: number,
-        hc: HeightCache,
+        hc: SizeCache,
         cHeight: number,
         total: number,
         align: "start" | "center" | "end",

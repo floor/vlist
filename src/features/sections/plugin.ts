@@ -156,9 +156,9 @@ export const withSections = <T extends VListItem = VListItem>(
       const groupedHeightFn = createGroupedHeightFn(groupLayout, baseHeight);
 
       // ── Update height config and rebuild height cache ──
-      ctx.setHeightConfig(groupedHeightFn);
+      ctx.setSizeConfig(groupedHeightFn);
 
-      ctx.rebuildHeightCache(layoutItems.length);
+      ctx.rebuildSizeCache(layoutItems.length);
 
       // ── Replace data manager items with layout items ──
       ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
@@ -210,7 +210,7 @@ export const withSections = <T extends VListItem = VListItem>(
         const newGridRenderer = createGridRenderer(
           dom.items,
           unifiedTemplate,
-          ctx.heightCache,
+          ctx.sizeCache,
           gridLayout,
           classPrefix,
           ctx.getContainerWidth(),
@@ -234,7 +234,7 @@ export const withSections = <T extends VListItem = VListItem>(
         stickyHeader = createStickyHeader(
           dom.root,
           groupLayout,
-          ctx.heightCache,
+          ctx.sizeCache,
           { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
           classPrefix,
         );
@@ -260,8 +260,8 @@ export const withSections = <T extends VListItem = VListItem>(
           groupLayout,
           baseHeight,
         );
-        ctx.setHeightConfig(newGroupedHeightFn);
-        ctx.rebuildHeightCache(layoutItems.length);
+        ctx.setSizeConfig(newGroupedHeightFn);
+        ctx.rebuildSizeCache(layoutItems.length);
 
         // Update data manager with new layout items
         ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
@@ -322,7 +322,7 @@ export const withSections = <T extends VListItem = VListItem>(
 
           const position = calculateScrollToIndex(
             layoutIndex,
-            ctx.heightCache,
+            ctx.sizeCache,
             ctx.state.viewportState.containerHeight,
             total,
             align,

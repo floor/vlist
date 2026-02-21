@@ -19,7 +19,7 @@
  */
 
 import type { GroupLayout, GroupsConfig, StickyHeader } from "./types";
-import type { HeightCache } from "../../rendering/heights";
+import type { HeightCache } from "../../rendering/sizes";
 
 // =============================================================================
 // Factory
@@ -38,7 +38,7 @@ import type { HeightCache } from "../../rendering/heights";
 export const createStickyHeader = (
   root: HTMLElement,
   layout: GroupLayout,
-  heightCache: HeightCache,
+  heightCache: SizeCache,
   config: GroupsConfig,
   classPrefix: string,
 ): StickyHeader => {

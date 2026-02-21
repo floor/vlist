@@ -94,11 +94,14 @@ export {
   type ItemRange,
 } from "./features/grid";
 
-// Rendering domain (virtual scrolling, height cache, scaling)
+// Rendering domain (virtual scrolling, size cache, scaling)
 export {
-  // Height cache (variable item heights)
-  createHeightCache,
-  type HeightCache,
+  // Size cache (variable item sizes - works for both vertical and horizontal)
+  createSizeCache,
+  type SizeCache,
+  // Legacy exports (deprecated - use SizeCache)
+  createSizeCache as createHeightCache,
+  type SizeCache as HeightCache,
   // Virtual scrolling calculations
   simpleVisibleRange,
   calculateRenderRange,

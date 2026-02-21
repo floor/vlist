@@ -106,7 +106,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         pageSize: INITIAL_LOAD_SIZE,
         onStateChange: () => {
           if (ctx.state.isInitialized) {
-            ctx.heightCache.rebuild(ctx.getVirtualTotal());
+            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
             ctx.updateCompressionMode();
 
             // Update compression metadata on viewport state, but do NOT
@@ -127,7 +127,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
-            ctx.heightCache.rebuild(ctx.getVirtualTotal());
+            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
             ctx.forceRender();
             emitter.emit("load:end", { items: loadedItems, total });
           }

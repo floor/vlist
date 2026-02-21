@@ -163,7 +163,7 @@ export const withScale = <
        */
       const enhancedUpdateCompressionMode = (): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.heightCache);
+        const compression = getCompressionState(total, ctx.sizeCache);
 
         if (compression.isCompressed && !compressedModeActive) {
           // Entering compressed mode
@@ -554,7 +554,7 @@ export const withScale = <
 
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.heightCache);
+        const compression = getCompressionState(total, ctx.sizeCache);
 
         if (compression.isCompressed) {
           const scrollTop = ctx.scrollController.getScrollTop();
@@ -566,7 +566,7 @@ export const withScale = <
               calculateCompressedItemPosition(
                 index,
                 scrollTop,
-                ctx.heightCache as any,
+                ctx.sizeCache as any,
                 total,
                 ctx.state.viewportState.containerHeight,
                 compression,
@@ -577,15 +577,15 @@ export const withScale = <
           // Position this item relative to the first item using fixed offsets
           const offset =
             firstItemPosition! +
-            ctx.heightCache.getOffset(index) -
-            ctx.heightCache.getOffset(firstItemIndex!);
+            ctx.sizeCache.getOffset(index) -
+            ctx.sizeCache.getOffset(firstItemIndex!);
 
           const horizontal = ctx.config.horizontal;
           el.style.transform = horizontal
             ? `translateX(${offset}px)`
             : `translateY(${offset}px)`;
         } else {
-          const offset = Math.round(ctx.heightCache.getOffset(index));
+          const offset = Math.round(ctx.sizeCache.getOffset(index));
           const horizontal = ctx.config.horizontal;
           el.style.transform = horizontal
             ? `translateX(${offset}px)`

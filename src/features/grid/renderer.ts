@@ -27,7 +27,7 @@ import {
   calculateCompressedItemPosition,
   type CompressionState,
 } from "../../rendering/scale";
-import type { HeightCache } from "../../rendering/heights";
+import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
 import type { GridLayout } from "./types";
 import { isGroupHeader } from "../sections/types";
@@ -136,7 +136,7 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
  *
  * @param itemsContainer - The DOM element that holds rendered items
  * @param template - Item template function
- * @param heightCache - Height cache operating on ROW indices
+ * @param sizeCache - Height cache operating on ROW indices
  * @param gridLayout - Grid layout for row/col calculations
  * @param classPrefix - CSS class prefix
  * @param initialContainerWidth - Initial container width for column sizing
@@ -146,7 +146,7 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
 export const createGridRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
   template: ItemTemplate<T>,
-  heightCache: HeightCache,
+  sizeCache: SizeCache,
   gridLayout: GridLayout,
   classPrefix: string,
   initialContainerWidth: number,
@@ -172,7 +172,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     if (cachedCompression && cachedTotalRows === totalRows) {
       return cachedCompression;
     }
-    cachedCompression = getCompressionState(totalRows, heightCache);
+    cachedCompression = getCompressionState(totalRows, sizeCache);
     cachedTotalRows = totalRows;
     return cachedCompression;
   };
@@ -235,7 +235,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         return calculateCompressedItemPosition(
           row,
           compressionCtx.scrollTop,
-          heightCache,
+          sizeCache,
           totalRows,
           compressionCtx.containerHeight,
           compression,
@@ -245,7 +245,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     }
 
     // Normal positioning: row offset from height cache
-    return heightCache.getOffset(row);
+    return sizeCache.getOffset(row);
   };
 
   /**
@@ -277,7 +277,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       for (let i = 0; i < itemIndex; i++) {
         const prevItemRow = gridLayout.getRow(i);
         if (prevItemRow < itemRow && !rowsSeen.has(prevItemRow)) {
-          const height = heightCache.getHeight(i);
+          const height = sizeCache.getSize(i);
           offset += height;
           rowsSeen.add(prevItemRow);
         }
@@ -310,11 +310,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     let itemHeight: number;
     if (groupsActive || isHeader) {
       // Grouped grid: height cache is item-based
-      itemHeight = heightCache.getHeight(itemIndex) - gridLayout.gap;
+      itemHeight = sizeCache.getSize(itemIndex) - gridLayout.gap;
     } else {
       // Regular grid: height cache is row-based
       const row = gridLayout.getRow(itemIndex);
-      itemHeight = heightCache.getHeight(row) - gridLayout.gap;
+      itemHeight = sizeCache.getSize(row) - gridLayout.gap;
     }
 
     element.style.width = `${colWidth}px`;

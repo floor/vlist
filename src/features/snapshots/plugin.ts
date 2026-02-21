@@ -84,11 +84,11 @@ export const withSnapshots = <
           const exactIndex = scrollRatio * totalItems;
           index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
           const fraction = exactIndex - index;
-          offsetInItem = fraction * ctx.heightCache.getHeight(index);
+          offsetInItem = fraction * ctx.sizeCache.getSize(index);
         } else {
           // Normal: direct offset lookup
-          index = ctx.heightCache.indexAtOffset(scrollTop);
-          offsetInItem = scrollTop - ctx.heightCache.getOffset(index);
+          index = ctx.sizeCache.indexAtOffset(scrollTop);
+          offsetInItem = scrollTop - ctx.sizeCache.getOffset(index);
         }
 
         // Clamp offsetInItem to non-negative (floating point edge cases)
@@ -112,13 +112,13 @@ export const withSnapshots = <
 
         if (compression.isCompressed) {
           // Compressed: reverse the linear mapping
-          const itemHeight = ctx.heightCache.getHeight(safeIndex);
+          const itemHeight = ctx.sizeCache.getSize(safeIndex);
           const fraction = itemHeight > 0 ? offsetInItem / itemHeight : 0;
           scrollPosition =
             ((safeIndex + fraction) / totalItems) * compression.virtualHeight;
         } else {
           // Normal: direct offset
-          scrollPosition = ctx.heightCache.getOffset(safeIndex) + offsetInItem;
+          scrollPosition = ctx.sizeCache.getOffset(safeIndex) + offsetInItem;
         }
 
         // Clamp to valid range

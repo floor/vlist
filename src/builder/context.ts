@@ -9,7 +9,7 @@
 import type { VListItem, VListEvents, Range, ItemTemplate } from "../types";
 
 // Direct file imports — NOT barrel indexes — so Bun tree-shakes correctly.
-import type { HeightCache } from "../rendering/heights";
+import type { SizeCache } from "../rendering/sizes";
 import type {
   Renderer,
   DOMStructure,
@@ -21,7 +21,7 @@ import {
   getSimpleCompressionState,
 } from "../rendering/viewport";
 
-import { createHeightCache } from "../rendering/heights";
+import { createSizeCache } from "../rendering/sizes";
 import { updateContentHeight, updateContentWidth } from "../rendering/renderer";
 
 import type { SimpleDataManager } from "./data";
@@ -44,13 +44,13 @@ export interface CreateBuilderContextOptions<T extends VListItem = VListItem> {
   rawConfig: BuilderConfig<T>;
   resolvedConfig: ResolvedBuilderConfig;
   dom: DOMStructure;
-  heightCache: HeightCache;
+  sizeCache: SizeCache;
   dataManager: SimpleDataManager<T>;
   scrollController: ScrollController;
   renderer: Renderer<T>;
   emitter: Emitter<VListEvents<T>>;
   initialState: BuilderState;
-  initialHeightConfig: number | ((index: number) => number);
+  initialSizeConfig: number | ((index: number) => number);
 }
 
 /**
@@ -65,7 +65,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
 ): BuilderContext<T> => {
   const { rawConfig, resolvedConfig, dom, emitter, initialState } = options;
 
-  let { heightCache, dataManager, scrollController, renderer } = options;
+  let { sizeCache, dataManager, scrollController, renderer } = options;
 
   // State is mutable and will be updated by the core and plugins
   const state = initialState;
@@ -110,7 +110,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       return state.cachedCompression.state;
     }
 
-    const compression = getSimpleCompressionState(totalItems, heightCache);
+    const compression = getSimpleCompressionState(totalItems, sizeCache);
     state.cachedCompression = { state: compression, totalItems };
     return compression;
   };
@@ -211,7 +211,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
    */
   const updateCompressionMode = (): void => {
     const total = getVirtualTotal();
-    const compression = getSimpleCompressionState(total, heightCache);
+    const compression = getSimpleCompressionState(total, sizeCache);
 
     if (compression.isCompressed && !scrollController.isCompressed()) {
       scrollController.enableCompression(compression);
@@ -238,7 +238,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     const newRenderer = createRenderer<T>(
       dom.items,
       newTemplate,
-      heightCache,
+      sizeCache,
       resolvedConfig.classPrefix,
       () => dataManager.getTotal(),
       resolvedConfig.ariaIdPrefix,
@@ -262,23 +262,23 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     virtualTotalFn = fn;
   };
 
-  const rebuildHeightCache = (total?: number): void => {
+  const rebuildSizeCache = (total?: number): void => {
     const t = total ?? getVirtualTotal();
-    heightCache.rebuild(t);
+    sizeCache.rebuild(t);
   };
 
-  const setHeightConfig = (
+  const setSizeConfig = (
     config: number | ((index: number) => number),
   ): void => {
-    // Recreate height cache with new config
-    // The height cache is referenced by all components, so we rebuild in-place
+    // Recreate size cache with new config
+    // The size cache is referenced by all components, so we rebuild in-place
     // by using the rebuild method which re-computes prefix sums
-    // But if the height *function* changed, we need a new cache instance.
-    // Since heightCache is a local let, we can replace it and update the
+    // But if the size *function* changed, we need a new cache instance.
+    // Since sizeCache is a local let, we can replace it and update the
     // context proxy. Components that captured the old reference will still
     // work until the next rebuild.
-    const newCache = createHeightCache(config, getVirtualTotal());
-    heightCache = newCache;
+    const newCache = createSizeCache(config, getVirtualTotal());
+    sizeCache = newCache;
   };
 
   // ── Build the context object ──────────────────────────────────
@@ -289,8 +289,8 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     get dom() {
       return dom;
     },
-    get heightCache() {
-      return heightCache;
+    get sizeCache() {
+      return sizeCache;
     },
     get emitter() {
       return emitter;
@@ -347,8 +347,8 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     forceRender,
 
     setVirtualTotalFn,
-    rebuildHeightCache,
-    setHeightConfig,
+    rebuildSizeCache,
+    setSizeConfig,
     updateContentSize,
     updateCompressionMode,
 
