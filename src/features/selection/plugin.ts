@@ -324,7 +324,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             const position = calculateScrollToIndex(
               newFocusIndex,
               ctx.sizeCache,
-              ctx.state.viewportState.containerHeight,
+              ctx.state.viewportState.containerSize,
               dataState.total,
               "center",
               ctx.getCachedCompression(),

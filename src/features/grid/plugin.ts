@@ -306,7 +306,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
         // Calculate visible and render ranges (in row space)
         const scrollTop = ctx.scrollController.getScrollTop();
-        const containerHeight = ctx.state.viewportState.containerHeight;
+        const containerHeight = ctx.state.viewportState.containerSize;
         const totalRows = ctx.getVirtualTotal();
 
         // Calculate visible row range
@@ -334,7 +334,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         };
 
         // Update viewport state
-        ctx.state.viewportState.scrollTop = scrollTop;
+        ctx.state.viewportState.scrollPosition = scrollTop;
         ctx.state.viewportState.visibleRange = visibleRange;
         ctx.state.viewportState.renderRange = renderRange;
 
@@ -432,7 +432,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           const position = calculateScrollToIndex(
             safeRow,
             ctx.sizeCache,
-            ctx.state.viewportState.containerHeight,
+            ctx.state.viewportState.containerSize,
             totalRows,
             align,
             ctx.getCachedCompression(),

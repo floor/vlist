@@ -116,12 +116,12 @@ export const withAsync = <T extends VListItem = VListItem>(
             // renderer always recalculates renderRange with the correct
             // installed visibleRangeFn, so we leave that to renderIfNeeded.
             const compression = ctx.getCachedCompression();
-            ctx.state.viewportState.totalHeight = compression.virtualHeight;
-            ctx.state.viewportState.actualHeight = compression.actualHeight;
+            ctx.state.viewportState.totalSize = compression.virtualSize;
+            ctx.state.viewportState.actualSize = compression.actualSize;
             ctx.state.viewportState.isCompressed = compression.isCompressed;
             ctx.state.viewportState.compressionRatio = compression.ratio;
 
-            ctx.updateContentSize(compression.virtualHeight);
+            ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
           }
         },
@@ -203,9 +203,9 @@ export const withAsync = <T extends VListItem = VListItem>(
           } else {
             // Normal mode: trigger "load more" near the BOTTOM
             const distanceFromBottom =
-              ctx.state.viewportState.totalHeight -
+              ctx.state.viewportState.totalSize -
               scrollTop -
-              ctx.state.viewportState.containerHeight;
+              ctx.state.viewportState.containerSize;
 
             if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
               emitter.emit("load:start", {

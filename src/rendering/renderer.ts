@@ -218,8 +218,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
       const h = sizeCache.getTotalSize();
       cachedCompression = {
         isCompressed: false,
-        actualHeight: h,
-        virtualHeight: h,
+        actualSize: h,
+        virtualSize: h,
         ratio: 1,
       };
     }

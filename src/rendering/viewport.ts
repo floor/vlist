@@ -24,11 +24,11 @@ export interface CompressionState {
   /** Whether compression is active */
   isCompressed: boolean;
 
-  /** The actual total height */
-  actualHeight: number;
+  /** The actual total size (uncompressed) */
+  actualSize: number;
 
-  /** The virtual height (capped at MAX_VIRTUAL_HEIGHT) */
-  virtualHeight: number;
+  /** The virtual size (capped at MAX_VIRTUAL_HEIGHT) */
+  virtualSize: number;
 
   /** Compression ratio (1 = no compression, <1 = compressed) */
   ratio: number;
@@ -40,8 +40,8 @@ export interface CompressionState {
  */
 export const NO_COMPRESSION: CompressionState = {
   isCompressed: false,
-  actualHeight: 0,
-  virtualHeight: 0,
+  actualSize: 0,
+  virtualSize: 0,
   ratio: 1,
 };
 
@@ -57,8 +57,8 @@ export const getSimpleCompressionState = (
   const h = sizeCache.getTotalSize();
   return {
     isCompressed: false,
-    actualHeight: h,
-    virtualHeight: h,
+    actualSize: h,
+    virtualSize: h,
     ratio: 1,
   };
 };
@@ -191,23 +191,23 @@ export const simpleScrollToIndex: ScrollToIndexFn = (
 
 /**
  * Calculate total content height.
- * Uses compression's virtualHeight when compressed, raw height otherwise.
+ * Uses compression's virtualSize when compressed, raw height otherwise.
  */
-export const calculateTotalHeight = (
+export const calculateTotalSize = (
   _totalItems: number,
   sizeCache: SizeCache,
   compression?: CompressionState | null,
 ): number => {
   if (compression && compression.isCompressed) {
-    return compression.virtualHeight;
+    return compression.virtualSize;
   }
   return sizeCache.getTotalSize();
 };
 
 /**
- * Calculate actual total height (without compression cap)
+ * Calculate actual total size (without compression cap)
  */
-export const calculateActualHeight = (
+export const calculateActualSize = (
   _totalItems: number,
   sizeCache: SizeCache,
 ): number => {
@@ -283,10 +283,10 @@ export const createViewportState = (
   calculateRenderRange(visibleRange, overscan, totalItems, renderRange);
 
   return {
-    scrollTop: 0,
-    containerHeight,
-    totalHeight: compression.virtualHeight,
-    actualHeight: compression.actualHeight,
+    scrollPosition: 0,
+    containerSize: containerHeight,
+    totalSize: compression.virtualSize,
+    actualSize: compression.actualSize,
     isCompressed: compression.isCompressed,
     compressionRatio: compression.ratio,
     visibleRange,
@@ -309,7 +309,7 @@ export const updateViewportState = (
 ): ViewportState => {
   visibleRangeFn(
     scrollTop,
-    state.containerHeight,
+    state.containerSize,
     sizeCache,
     totalItems,
     compression,
@@ -322,7 +322,7 @@ export const updateViewportState = (
     state.renderRange,
   );
 
-  state.scrollTop = scrollTop;
+  state.scrollPosition = scrollTop;
 
   return state;
 };
@@ -341,7 +341,7 @@ export const updateViewportSize = (
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    state.scrollTop,
+    state.scrollPosition,
     containerHeight,
     sizeCache,
     totalItems,
@@ -355,9 +355,9 @@ export const updateViewportSize = (
     state.renderRange,
   );
 
-  state.containerHeight = containerHeight;
-  state.totalHeight = compression.virtualHeight;
-  state.actualHeight = compression.actualHeight;
+  state.containerSize = containerHeight;
+  state.totalSize = compression.virtualSize;
+  state.actualSize = compression.actualSize;
   state.isCompressed = compression.isCompressed;
   state.compressionRatio = compression.ratio;
 
@@ -377,8 +377,8 @@ export const updateViewportItems = (
   visibleRangeFn: VisibleRangeFn = simpleVisibleRange,
 ): ViewportState => {
   visibleRangeFn(
-    state.scrollTop,
-    state.containerHeight,
+    state.scrollPosition,
+    state.containerSize,
     sizeCache,
     totalItems,
     compression,
@@ -391,8 +391,8 @@ export const updateViewportItems = (
     state.renderRange,
   );
 
-  state.totalHeight = compression.virtualHeight;
-  state.actualHeight = compression.actualHeight;
+  state.totalSize = compression.virtualSize;
+  state.actualSize = compression.actualSize;
   state.isCompressed = compression.isCompressed;
   state.compressionRatio = compression.ratio;
 

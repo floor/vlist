@@ -108,8 +108,8 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       // Set initial bounds
       const compression = ctx.getCachedCompression();
       scrollbar.updateBounds(
-        compression.virtualHeight,
-        ctx.state.viewportState.containerHeight,
+        compression.virtualSize,
+        ctx.state.viewportState.containerSize,
       );
 
       // ── Post-scroll: update thumb position ──
@@ -125,7 +125,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
           const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
             comp.virtualHeight,
-            ctx.state.viewportState.containerHeight,
+            ctx.state.viewportState.containerSize,
           );
         }
       });
@@ -136,7 +136,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
           const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
             comp.virtualHeight,
-            ctx.state.viewportState.containerHeight,
+            ctx.state.viewportState.containerSize,
           );
         }
       });

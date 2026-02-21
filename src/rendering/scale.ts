@@ -6,9 +6,9 @@
  * maximum element height (~16.7M pixels), we "compress" the virtual scroll space.
  *
  * Key concepts:
- * - actualHeight: The true height if all items were rendered
- * - virtualHeight: The capped height used for the scroll container (≤ MAX_VIRTUAL_HEIGHT)
- * - compressionRatio: virtualHeight / actualHeight (1 = no compression, <1 = compressed)
+ * - actualSize: The true height if all items were rendered
+ * - virtualSize: The capped height used for the scroll container (≤ MAX_VIRTUAL_HEIGHT)
+ * - compressionRatio: virtualSize / actualSize (1 = no compression, <1 = compressed)
  *
  * When compressed:
  * - Scroll position maps to item index via ratio, not pixel math
@@ -38,10 +38,10 @@ export interface CompressionState {
   isCompressed: boolean;
 
   /** The actual total height */
-  actualHeight: number;
+  actualSize: number;
 
   /** The virtual height (capped at MAX_VIRTUAL_HEIGHT) */
-  virtualHeight: number;
+  virtualSize: number;
 
   /** Compression ratio (1 = no compression, <1 = compressed) */
   ratio: number;
@@ -55,15 +55,15 @@ export const getCompressionState = (
   _totalItems: number,
   sizeCache: SizeCache,
 ): CompressionState => {
-  const actualHeight = sizeCache.getTotalSize();
-  const isCompressed = actualHeight > MAX_VIRTUAL_HEIGHT;
-  const virtualHeight = isCompressed ? MAX_VIRTUAL_HEIGHT : actualHeight;
-  const ratio = actualHeight > 0 ? virtualHeight / actualHeight : 1;
+  const actualSize = sizeCache.getTotalSize();
+  const isCompressed = actualSize > MAX_VIRTUAL_HEIGHT;
+  const virtualSize = isCompressed ? MAX_VIRTUAL_HEIGHT : actualSize;
+  const ratio = actualSize > 0 ? virtualSize / actualSize : 1;
 
   return {
     isCompressed,
-    actualHeight,
-    virtualHeight,
+    actualSize,
+    virtualSize,
     ratio,
   };
 };
@@ -110,8 +110,8 @@ export const calculateCompressedVisibleRange = (
   }
 
   // Compressed calculation
-  const { virtualHeight } = compression;
-  const scrollRatio = scrollTop / virtualHeight;
+  const { virtualSize } = compression;
+  const scrollRatio = scrollTop / virtualSize;
   const exactIndex = scrollRatio * totalItems;
 
   let start = Math.floor(exactIndex);
@@ -127,7 +127,7 @@ export const calculateCompressedVisibleRange = (
 
   // Near-bottom interpolation
   // This ensures we can reach the actual last items
-  const maxScroll = virtualHeight - containerHeight;
+  const maxScroll = virtualSize - containerHeight;
   const distanceFromBottom = maxScroll - scrollTop;
 
   if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
@@ -220,8 +220,8 @@ export const calculateCompressedItemPosition = (
     return sizeCache.getOffset(index);
   }
 
-  const { virtualHeight } = compression;
-  const maxScroll = virtualHeight - containerHeight;
+  const { virtualSize } = compression;
+  const maxScroll = virtualSize - containerHeight;
   const distanceFromBottom = maxScroll - scrollTop;
 
   // Near-bottom interpolation: ensures we can smoothly reach the last items
@@ -240,7 +240,7 @@ export const calculateCompressedItemPosition = (
       totalItems,
     );
     const firstVisibleAtBottom = Math.max(0, totalItems - itemsAtBottom);
-    const scrollRatio = scrollTop / virtualHeight;
+    const scrollRatio = scrollTop / virtualSize;
     const exactScrollIndex = scrollRatio * totalItems;
 
     // Interpolation factor: 0 at threshold, 1 at bottom
@@ -266,9 +266,9 @@ export const calculateCompressedItemPosition = (
   //
   // Map scrollTop to an actual-space offset via the compression ratio,
   // then position the item relative to that offset.
-  const scrollRatio = scrollTop / virtualHeight;
-  const actualHeight = sizeCache.getTotalSize();
-  const virtualScrollOffset = scrollRatio * actualHeight;
+  const scrollRatio = scrollTop / virtualSize;
+  const actualSize = sizeCache.getTotalSize();
+  const virtualScrollOffset = scrollRatio * actualSize;
 
   return sizeCache.getOffset(index) - virtualScrollOffset;
 };
@@ -304,12 +304,12 @@ export const calculateCompressedScrollToIndex = (
     // Special case: last item with "end" alignment should go to max scroll
     // to avoid gap at bottom due to compression ratio precision
     if (align === "end" && index === totalItems - 1) {
-      return Math.max(0, compression.virtualHeight - containerHeight);
+      return Math.max(0, compression.virtualSize - containerHeight);
     }
 
     // Map index to compressed scroll position
     const ratio = index / totalItems;
-    targetPosition = ratio * compression.virtualHeight;
+    targetPosition = ratio * compression.virtualSize;
   } else {
     // Direct calculation using actual offset
     targetPosition = sizeCache.getOffset(index);
@@ -328,7 +328,7 @@ export const calculateCompressedScrollToIndex = (
   }
 
   // Clamp to valid range
-  const maxScroll = compression.virtualHeight - containerHeight;
+  const maxScroll = compression.virtualSize - containerHeight;
   return Math.max(0, Math.min(targetPosition, maxScroll));
 };
 
@@ -346,7 +346,7 @@ export const calculateIndexFromScrollPosition = (
   if (totalItems === 0) return 0;
 
   if (compression.isCompressed) {
-    const scrollRatio = scrollTop / compression.virtualHeight;
+    const scrollRatio = scrollTop / compression.virtualSize;
     return Math.floor(scrollRatio * totalItems);
   }
 
@@ -395,9 +395,9 @@ export const getCompressionInfo = (
   const compression = getCompressionState(totalItems, sizeCache);
 
   if (!compression.isCompressed) {
-    return `No compression needed (${totalItems} items, ${(compression.actualHeight / 1_000_000).toFixed(2)}M px)`;
+    return `No compression needed (${totalItems} items, ${(compression.actualSize / 1_000_000).toFixed(2)}M px)`;
   }
 
   const ratioPercent = (compression.ratio * 100).toFixed(1);
-  return `Compressed to ${ratioPercent}% (${totalItems} items, ${(compression.actualHeight / 1_000_000).toFixed(1)}M px → ${(compression.virtualHeight / 1_000_000).toFixed(1)}M px virtual)`;
+  return `Compressed to ${ratioPercent}% (${totalItems} items, ${(compression.actualSize / 1_000_000).toFixed(1)}M px → ${(compression.virtualSize / 1_000_000).toFixed(1)}M px virtual)`;
 };

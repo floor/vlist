@@ -102,8 +102,8 @@ export {
   // Virtual scrolling calculations
   simpleVisibleRange,
   calculateRenderRange,
-  calculateTotalHeight,
-  calculateActualHeight,
+  calculateTotalSize,
+  calculateActualSize,
   calculateItemOffset,
   calculateScrollToIndex,
   clampScrollPosition,
