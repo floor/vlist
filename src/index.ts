@@ -99,9 +99,6 @@ export {
   // Size cache (variable item sizes - works for both vertical and horizontal)
   createSizeCache,
   type SizeCache,
-  // Legacy exports (deprecated - use SizeCache)
-  createSizeCache as createHeightCache,
-  type SizeCache as HeightCache,
   // Virtual scrolling calculations
   simpleVisibleRange,
   calculateRenderRange,

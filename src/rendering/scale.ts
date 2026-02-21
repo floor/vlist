@@ -52,7 +52,7 @@ export interface CompressionState {
  * Pure function - no side effects
  */
 export const getCompressionState = (
-  totalItems: number,
+  _totalItems: number,
   sizeCache: SizeCache,
 ): CompressionState => {
   const actualHeight = sizeCache.getTotalSize();
@@ -339,7 +339,7 @@ export const calculateCompressedScrollToIndex = (
  */
 export const calculateIndexFromScrollPosition = (
   scrollTop: number,
-  heightCache: SizeCache,
+  sizeCache: SizeCache,
   totalItems: number,
   compression: CompressionState,
 ): number => {
@@ -366,7 +366,7 @@ export const calculateIndexFromScrollPosition = (
  */
 export const needsCompression = (
   totalItems: number,
-  heightOrCache: number | HeightCache,
+  heightOrCache: number | SizeCache,
 ): boolean => {
   if (typeof heightOrCache === "number") {
     return totalItems * heightOrCache > MAX_VIRTUAL_HEIGHT;
@@ -390,9 +390,9 @@ export const getMaxItemsWithoutCompression = (itemHeight: number): number => {
  */
 export const getCompressionInfo = (
   totalItems: number,
-  heightCache: SizeCache,
+  sizeCache: SizeCache,
 ): string => {
-  const compression = getCompressionState(totalItems, heightCache);
+  const compression = getCompressionState(totalItems, sizeCache);
 
   if (!compression.isCompressed) {
     return `No compression needed (${totalItems} items, ${(compression.actualHeight / 1_000_000).toFixed(2)}M px)`;

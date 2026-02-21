@@ -12,12 +12,6 @@ export {
   type SizeCache,
 } from "./sizes";
 
-// Legacy exports for backward compatibility (deprecated)
-export {
-  createSizeCache as createHeightCache,
-  type SizeCache as HeightCache,
-} from "./sizes";
-
 // Renderer
 export {
   createRenderer,
