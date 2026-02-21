@@ -473,3 +473,365 @@ describe("edge cases", () => {
     expect(layout.getColumnOffset(1, 100)).toBe(75);
   });
 });
+
+// =============================================================================
+// Groups-aware layout (with isHeaderFn)
+// =============================================================================
+
+describe("groups-aware layout with isHeaderFn", () => {
+  // Helper: items 0, 3, 7 are headers
+  const isHeader = (index: number) => index === 0 || index === 3 || index === 7;
+
+  describe("getTotalRows with headers", () => {
+    it("should count headers as separate rows", () => {
+      const layout = createGridLayout({ columns: 3, isHeaderFn: isHeader });
+      // Items: [H0] [1,2] [H3] [4,5,6] [H7] [8,9]
+      // Rows:   0    1     2     3      4    5
+      expect(layout.getTotalRows(10)).toBe(6);
+    });
+
+    it("should handle header at start", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      // Items: [H0] [1,2,3] [4,5,6]
+      // Rows:   0     1       2
+      expect(layout.getTotalRows(7)).toBe(3);
+    });
+
+    it("should handle header in middle forcing new row", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 4,
+      });
+      // Items: [0,1,2] [3] [H4] [5,6,7]
+      // Rows:    0      1    2     3
+      // Item 3 is alone in row 1, then header at row 2
+      expect(layout.getTotalRows(8)).toBe(4);
+    });
+
+    it("should handle consecutive headers", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0 || i === 1,
+      });
+      // Items: [H0] [H1] [2,3,4]
+      // Rows:   0    1     2
+      expect(layout.getTotalRows(5)).toBe(3);
+    });
+
+    it("should handle header at end", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 9,
+      });
+      // Items: [0,1,2] [3,4,5] [6,7,8] [H9]
+      // Rows:    0       1       2       3
+      expect(layout.getTotalRows(10)).toBe(4);
+    });
+
+    it("should handle all items as headers", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: () => true,
+      });
+      // Every item is a header, each gets own row
+      expect(layout.getTotalRows(5)).toBe(5);
+    });
+
+    it("should handle no headers (same as regular grid)", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: () => false,
+      });
+      expect(layout.getTotalRows(10)).toBe(4); // ceil(10/3)
+    });
+
+    it("should handle empty list with headers", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.getTotalRows(0)).toBe(0);
+    });
+  });
+
+  describe("getRow with headers", () => {
+    const layout = createGridLayout({ columns: 3, isHeaderFn: isHeader });
+
+    it("should return row 0 for first header", () => {
+      expect(layout.getRow(0)).toBe(0); // H0 at row 0
+    });
+
+    it("should return row 1 for items after first header", () => {
+      expect(layout.getRow(1)).toBe(1); // Item 1 at row 1
+      expect(layout.getRow(2)).toBe(1); // Item 2 at row 1
+    });
+
+    it("should return row 2 for second header", () => {
+      expect(layout.getRow(3)).toBe(2); // H3 forces new row
+    });
+
+    it("should return row 3 for items after second header", () => {
+      expect(layout.getRow(4)).toBe(3);
+      expect(layout.getRow(5)).toBe(3);
+      expect(layout.getRow(6)).toBe(3);
+    });
+
+    it("should return row 4 for third header", () => {
+      expect(layout.getRow(7)).toBe(4); // H7 at row 4
+    });
+
+    it("should return row 5 for items after third header", () => {
+      expect(layout.getRow(8)).toBe(5);
+      expect(layout.getRow(9)).toBe(5);
+    });
+  });
+
+  describe("getCol with headers", () => {
+    const layout = createGridLayout({ columns: 3, isHeaderFn: isHeader });
+
+    it("should return col 0 for headers", () => {
+      expect(layout.getCol(0)).toBe(0); // H0
+      expect(layout.getCol(3)).toBe(0); // H3
+      expect(layout.getCol(7)).toBe(0); // H7
+    });
+
+    it("should return correct cols for items after first header", () => {
+      expect(layout.getCol(1)).toBe(0); // First item in row
+      expect(layout.getCol(2)).toBe(1); // Second item in row
+    });
+
+    it("should return correct cols for items after second header", () => {
+      expect(layout.getCol(4)).toBe(0);
+      expect(layout.getCol(5)).toBe(1);
+      expect(layout.getCol(6)).toBe(2);
+    });
+
+    it("should return correct cols for items after third header", () => {
+      expect(layout.getCol(8)).toBe(0);
+      expect(layout.getCol(9)).toBe(1);
+    });
+
+    it("should wrap columns correctly within a group", () => {
+      const layout2 = createGridLayout({
+        columns: 2,
+        isHeaderFn: (i) => i === 0,
+      });
+      // Items: [H0] [1,2] [3,4] [5,6]
+      expect(layout2.getCol(1)).toBe(0);
+      expect(layout2.getCol(2)).toBe(1);
+      expect(layout2.getCol(3)).toBe(0); // Wraps to new row
+      expect(layout2.getCol(4)).toBe(1);
+    });
+  });
+
+  describe("getItemRange with headers", () => {
+    const layout = createGridLayout({ columns: 3, isHeaderFn: isHeader });
+
+    it("should return header in first row", () => {
+      const range = layout.getItemRange(0, 0, 10);
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(0); // Only H0
+    });
+
+    it("should return items in row 1", () => {
+      const range = layout.getItemRange(1, 1, 10);
+      expect(range.start).toBe(1);
+      expect(range.end).toBe(2); // Items 1,2
+    });
+
+    it("should return header in row 2", () => {
+      const range = layout.getItemRange(2, 2, 10);
+      expect(range.start).toBe(3);
+      expect(range.end).toBe(3); // Only H3
+    });
+
+    it("should return items in row 3", () => {
+      const range = layout.getItemRange(3, 3, 10);
+      expect(range.start).toBe(4);
+      expect(range.end).toBe(6); // Items 4,5,6
+    });
+
+    it("should return range spanning multiple rows including headers", () => {
+      const range = layout.getItemRange(0, 3, 10);
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(6); // H0, items 1-2, H3, items 4-6
+    });
+
+    it("should return range spanning all rows", () => {
+      const range = layout.getItemRange(0, 5, 10);
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(9); // All items
+    });
+
+    it("should handle empty range before first item", () => {
+      const range = layout.getItemRange(6, 10, 10);
+      // Rows 6-10 don't exist (only 6 rows total)
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(-1);
+    });
+
+    it("should handle range beyond total items", () => {
+      const range = layout.getItemRange(0, 10, 10);
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(9); // Clamped to totalItems-1
+    });
+  });
+
+  describe("getPosition with headers", () => {
+    const layout = createGridLayout({ columns: 3, isHeaderFn: isHeader });
+
+    it("should return correct position for headers", () => {
+      expect(layout.getPosition(0)).toEqual(
+        expect.objectContaining({ row: 0, col: 0 }),
+      );
+      expect(layout.getPosition(3)).toEqual(
+        expect.objectContaining({ row: 2, col: 0 }),
+      );
+      expect(layout.getPosition(7)).toEqual(
+        expect.objectContaining({ row: 4, col: 0 }),
+      );
+    });
+
+    it("should return correct position for regular items", () => {
+      expect(layout.getPosition(1)).toEqual(
+        expect.objectContaining({ row: 1, col: 0 }),
+      );
+      expect(layout.getPosition(2)).toEqual(
+        expect.objectContaining({ row: 1, col: 1 }),
+      );
+      expect(layout.getPosition(4)).toEqual(
+        expect.objectContaining({ row: 3, col: 0 }),
+      );
+      expect(layout.getPosition(5)).toEqual(
+        expect.objectContaining({ row: 3, col: 1 }),
+      );
+    });
+  });
+
+  describe("update config with headers", () => {
+    it("should update columns and affect groups layout", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.columns).toBe(3);
+      expect(layout.getTotalRows(10)).toBe(4); // [H0] [1,2,3] [4,5,6] [7,8,9]
+
+      layout.update({ columns: 2 });
+      expect(layout.columns).toBe(2);
+      expect(layout.getTotalRows(10)).toBe(6); // [H0] [1,2] [3,4] [5,6] [7,8] [9]
+    });
+
+    it("should update gap", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        gap: 8,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.gap).toBe(8);
+
+      layout.update({ gap: 16 });
+      expect(layout.gap).toBe(16);
+      expect(layout.getColumnWidth(800)).toBe(256); // (800 - 2*16) / 3 = 256
+    });
+
+    it("should update isHeaderFn", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.getTotalRows(10)).toBe(4);
+
+      // Update to no headers
+      layout.update({ isHeaderFn: undefined } as any);
+      expect(layout.getTotalRows(10)).toBe(4); // ceil(10/3)
+    });
+
+    it("should update isHeaderFn to different headers", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.getTotalRows(10)).toBe(4);
+
+      // Update to different headers
+      layout.update({ isHeaderFn: (i) => i === 0 || i === 5 } as any);
+      expect(layout.getTotalRows(10)).toBe(6); // [H0] [1,2,3] [4] [H5] [6,7,8] [9]
+    });
+  });
+
+  describe("complex groups scenarios", () => {
+    it("should handle header interrupting partial row", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 2,
+      });
+      // Items: [0,1] [H2] [3,4,5]
+      // Rows:   0     1     2
+      expect(layout.getTotalRows(6)).toBe(3);
+      expect(layout.getRow(0)).toBe(0);
+      expect(layout.getRow(1)).toBe(0);
+      expect(layout.getRow(2)).toBe(1); // Header forces new row
+      expect(layout.getRow(3)).toBe(2);
+    });
+
+    it("should handle multiple headers in sequence", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i >= 2 && i <= 4,
+      });
+      // Items: [0,1] [H2] [H3] [H4] [5,6,7]
+      // Rows:   0     1    2    3     4
+      expect(layout.getTotalRows(8)).toBe(5);
+    });
+
+    it("should handle header as last item", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 5,
+      });
+      // Items: [0,1,2] [3,4] [H5]
+      // Rows:    0       1     2
+      expect(layout.getTotalRows(6)).toBe(3);
+      expect(layout.getRow(5)).toBe(2);
+      expect(layout.getCol(5)).toBe(0);
+    });
+
+    it("should handle single column with headers", () => {
+      const layout = createGridLayout({
+        columns: 1,
+        isHeaderFn: (i) => i === 0 || i === 3,
+      });
+      // Every item gets own row anyway with 1 column
+      // Items: [H0] [1] [2] [H3] [4]
+      // Rows:   0    1   2    3    4
+      expect(layout.getTotalRows(5)).toBe(5);
+    });
+
+    it("should handle empty list with isHeaderFn", () => {
+      const layout = createGridLayout({
+        columns: 3,
+        isHeaderFn: (i) => i === 0,
+      });
+      expect(layout.getTotalRows(0)).toBe(0);
+      const range = layout.getItemRange(0, 0, 0);
+      expect(range.start).toBe(0);
+      expect(range.end).toBe(-1);
+    });
+
+    it("should handle large item count with sparse headers", () => {
+      const layout = createGridLayout({
+        columns: 5,
+        isHeaderFn: (i) => i % 20 === 0, // Headers every 20 items
+      });
+      // 100 items = 5 headers (0, 20, 40, 60, 80)
+      // Each section has 19 regular items after header
+      // 19 items / 5 cols = 4 rows per section
+      // Total: 5 sections * 5 rows = 25 rows
+      expect(layout.getTotalRows(100)).toBe(25);
+    });
+  });
+});

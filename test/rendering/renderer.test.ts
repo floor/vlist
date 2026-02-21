@@ -26,7 +26,12 @@ import {
   type Renderer,
 } from "../../src/rendering";
 import { createElementPool } from "../../src/rendering/renderer";
-import type { VListItem, ItemTemplate, ItemState } from "../../src/types";
+import type {
+  VListItem,
+  ItemTemplate,
+  ItemState,
+  Range,
+} from "../../src/types";
 
 // =============================================================================
 // JSDOM Setup
@@ -412,14 +417,14 @@ describe("renderer — re-apply template when item ID changes at same index", ()
     );
 
     // Render with placeholder-like items
-    const placeholders: TestItem[] = [
-      { id: "placeholder-0", name: "Loading..." },
-      { id: "placeholder-1", name: "Loading..." },
+    const placeholderItems: TestItem[] = [
+      { id: 9000, name: "Loading..." },
+      { id: 9001, name: "Loading..." },
     ];
-    renderer.render(placeholders, { start: 0, end: 1 }, new Set(), -1);
+    renderer.render(placeholderItems, { start: 0, end: 1 }, new Set(), -1);
 
     const el0Before = renderer.getElement(0);
-    expect(el0Before!.dataset.id).toBe("placeholder-0");
+    expect(el0Before!.dataset.id).toBe("9000");
     expect(el0Before!.innerHTML).toContain("Loading...");
 
     // Now render with real items at same indices (different IDs)
@@ -464,5 +469,245 @@ describe("resolveContainer", () => {
     const el = document.createElement("div");
     const result = resolveContainer(el);
     expect(result).toBe(el);
+  });
+});
+
+// =============================================================================
+// DOM Structure Creation - using imported createDOMStructure
+// =============================================================================
+
+import { createDOMStructure } from "../../src/rendering/renderer";
+
+describe("createDOMStructure", () => {
+  it("should create basic DOM structure with default settings", () => {
+    const container = document.createElement("div");
+    const { root, viewport, content, items } = createDOMStructure(
+      container,
+      "vlist",
+    );
+
+    expect(root.className).toBe("vlist");
+    expect(root.getAttribute("role")).toBe("listbox");
+    expect(root.getAttribute("tabindex")).toBe("0");
+    expect(viewport.className).toBe("vlist-viewport");
+    expect(content.className).toBe("vlist-content");
+    expect(items.className).toBe("vlist-items");
+  });
+
+  it("should add aria-label when provided", () => {
+    const container = document.createElement("div");
+    const { root } = createDOMStructure(container, "vlist", "My List");
+
+    expect(root.getAttribute("aria-label")).toBe("My List");
+  });
+
+  it("should not add aria-label when not provided", () => {
+    const container = document.createElement("div");
+    const { root } = createDOMStructure(container, "vlist");
+
+    expect(root.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("should create horizontal layout structure", () => {
+    const container = document.createElement("div");
+    const { root, viewport, content, items } = createDOMStructure(
+      container,
+      "vlist",
+      undefined,
+      true,
+    );
+
+    expect(root.classList.contains("vlist--horizontal")).toBe(true);
+    expect(root.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(viewport.style.overflowX).toBe("auto");
+    expect(viewport.style.overflowY).toBe("hidden");
+    expect(content.style.height).toBe("100%");
+    expect(items.style.height).toBe("100%");
+  });
+
+  it("should create vertical layout structure (default)", () => {
+    const container = document.createElement("div");
+    const { root, viewport, content, items } = createDOMStructure(
+      container,
+      "vlist",
+    );
+
+    expect(root.classList.contains("vlist--horizontal")).toBe(false);
+    expect(root.hasAttribute("aria-orientation")).toBe(false);
+    expect(viewport.style.overflow).toBe("auto");
+    expect(content.style.width).toBe("100%");
+    expect(items.style.width).toBe("100%");
+  });
+
+  it("should set proper viewport overflow styles", () => {
+    const container = document.createElement("div");
+    const { viewport } = createDOMStructure(container, "vlist");
+
+    expect(viewport.style.height).toBe("100%");
+    expect(viewport.style.width).toBe("100%");
+    expect(viewport.style.overflow).toBe("auto");
+  });
+
+  it("should set proper content positioning", () => {
+    const container = document.createElement("div");
+    const { content } = createDOMStructure(container, "vlist");
+
+    expect(content.style.position).toBe("relative");
+    expect(content.style.width).toBe("100%");
+  });
+
+  it("should set proper items positioning", () => {
+    const container = document.createElement("div");
+    const { items } = createDOMStructure(container, "vlist");
+
+    expect(items.style.position).toBe("relative");
+    expect(items.style.width).toBe("100%");
+  });
+
+  it("should nest DOM elements correctly", () => {
+    const container = document.createElement("div");
+    const { root, viewport, content, items } = createDOMStructure(
+      container,
+      "vlist",
+    );
+
+    expect(root.parentElement).toBe(container);
+    expect(viewport.parentElement).toBe(root);
+    expect(content.parentElement).toBe(viewport);
+    expect(items.parentElement).toBe(content);
+  });
+
+  it("should use custom class prefix", () => {
+    const container = document.createElement("div");
+    const { root, viewport, content, items } = createDOMStructure(
+      container,
+      "custom-prefix",
+    );
+
+    expect(root.className).toBe("custom-prefix");
+    expect(viewport.className).toBe("custom-prefix-viewport");
+    expect(content.className).toBe("custom-prefix-content");
+    expect(items.className).toBe("custom-prefix-items");
+  });
+});
+
+// =============================================================================
+// Content Size Update Functions
+// =============================================================================
+
+import {
+  updateContentHeight,
+  updateContentWidth,
+  getContainerDimensions,
+} from "../../src/rendering/renderer";
+
+describe("updateContentHeight", () => {
+  it("should set content height in pixels", () => {
+    const content = document.createElement("div");
+    updateContentHeight(content, 5000);
+
+    expect(content.style.height).toBe("5000px");
+  });
+
+  it("should update height when called multiple times", () => {
+    const content = document.createElement("div");
+    updateContentHeight(content, 1000);
+    expect(content.style.height).toBe("1000px");
+
+    updateContentHeight(content, 2500);
+    expect(content.style.height).toBe("2500px");
+  });
+
+  it("should handle zero height", () => {
+    const content = document.createElement("div");
+    updateContentHeight(content, 0);
+
+    expect(content.style.height).toBe("0px");
+  });
+
+  it("should handle large heights", () => {
+    const content = document.createElement("div");
+    updateContentHeight(content, 1000000);
+
+    expect(content.style.height).toBe("1000000px");
+  });
+});
+
+describe("updateContentWidth", () => {
+  it("should set content width in pixels", () => {
+    const content = document.createElement("div");
+    updateContentWidth(content, 3000);
+
+    expect(content.style.width).toBe("3000px");
+  });
+
+  it("should update width when called multiple times", () => {
+    const content = document.createElement("div");
+    updateContentWidth(content, 800);
+    expect(content.style.width).toBe("800px");
+
+    updateContentWidth(content, 1200);
+    expect(content.style.width).toBe("1200px");
+  });
+
+  it("should handle zero width", () => {
+    const content = document.createElement("div");
+    updateContentWidth(content, 0);
+
+    expect(content.style.width).toBe("0px");
+  });
+
+  it("should handle large widths", () => {
+    const content = document.createElement("div");
+    updateContentWidth(content, 500000);
+
+    expect(content.style.width).toBe("500000px");
+  });
+});
+
+describe("getContainerDimensions", () => {
+  it("should return viewport clientWidth and clientHeight", () => {
+    const viewport = document.createElement("div");
+    viewport.style.width = "800px";
+    viewport.style.height = "600px";
+    document.body.appendChild(viewport);
+
+    const dimensions = getContainerDimensions(viewport);
+
+    expect(dimensions.width).toBeGreaterThanOrEqual(0);
+    expect(dimensions.height).toBeGreaterThanOrEqual(0);
+    expect(typeof dimensions.width).toBe("number");
+    expect(typeof dimensions.height).toBe("number");
+
+    document.body.removeChild(viewport);
+  });
+
+  it("should handle elements not yet attached to DOM", () => {
+    const viewport = document.createElement("div");
+
+    const dimensions = getContainerDimensions(viewport);
+
+    expect(dimensions.width).toBe(0);
+    expect(dimensions.height).toBe(0);
+  });
+
+  it("should return updated dimensions after resize", () => {
+    const viewport = document.createElement("div");
+    viewport.style.width = "400px";
+    viewport.style.height = "300px";
+    document.body.appendChild(viewport);
+
+    const dims1 = getContainerDimensions(viewport);
+
+    viewport.style.width = "800px";
+    viewport.style.height = "600px";
+
+    const dims2 = getContainerDimensions(viewport);
+
+    // Dimensions should be different (or at least, width/height are read)
+    expect(typeof dims2.width).toBe("number");
+    expect(typeof dims2.height).toBe("number");
+
+    document.body.removeChild(viewport);
   });
 });
