@@ -16,7 +16,7 @@ import {
   getMaxItemsWithoutCompression,
   getCompressionInfo,
 } from "../../src/rendering/scale";
-import { createHeightCache } from "../../src/rendering/heights";
+import { createSizeCache } from "../../src/rendering/sizes";
 
 // =============================================================================
 // Constants Tests
@@ -34,7 +34,7 @@ describe("MAX_VIRTUAL_HEIGHT", () => {
 
 describe("getCompressionState", () => {
   it("should not compress small lists", () => {
-    const cache = createHeightCache(40, 1000);
+    const cache = createSizeCache(40, 1000);
     const state = getCompressionState(1000, cache);
 
     expect(state.isCompressed).toBe(false);
@@ -45,7 +45,7 @@ describe("getCompressionState", () => {
 
   it("should compress lists exceeding MAX_VIRTUAL_HEIGHT", () => {
     // 1M items × 40px = 40M pixels > 16M limit
-    const cache = createHeightCache(40, 1_000_000);
+    const cache = createSizeCache(40, 1_000_000);
     const state = getCompressionState(1_000_000, cache);
 
     expect(state.isCompressed).toBe(true);
@@ -58,7 +58,7 @@ describe("getCompressionState", () => {
     const itemHeight = 40;
     const exactItems = MAX_VIRTUAL_HEIGHT / itemHeight; // 400,000 items
 
-    const cache = createHeightCache(itemHeight, exactItems);
+    const cache = createSizeCache(itemHeight, exactItems);
     const state = getCompressionState(exactItems, cache);
 
     expect(state.isCompressed).toBe(false);
@@ -66,7 +66,7 @@ describe("getCompressionState", () => {
   });
 
   it("should handle zero items", () => {
-    const cache = createHeightCache(40, 0);
+    const cache = createSizeCache(40, 0);
     const state = getCompressionState(0, cache);
 
     expect(state.isCompressed).toBe(false);
@@ -76,7 +76,7 @@ describe("getCompressionState", () => {
   });
 
   it("should handle very large lists (10M items)", () => {
-    const cache = createHeightCache(40, 10_000_000);
+    const cache = createSizeCache(40, 10_000_000);
     const state = getCompressionState(10_000_000, cache);
 
     expect(state.isCompressed).toBe(true);
@@ -93,7 +93,7 @@ describe("getCompressionState", () => {
 describe("calculateCompressedVisibleRange", () => {
   describe("without compression", () => {
     it("should calculate correct range at scroll position 0", () => {
-      const cache = createHeightCache(40, 1000);
+      const cache = createSizeCache(40, 1000);
       const compression = getCompressionState(1000, cache);
       const out = { start: 0, end: 0 };
       const range = calculateCompressedVisibleRange(
@@ -112,7 +112,7 @@ describe("calculateCompressedVisibleRange", () => {
     });
 
     it("should calculate correct range when scrolled", () => {
-      const cache = createHeightCache(40, 1000);
+      const cache = createSizeCache(40, 1000);
       const compression = getCompressionState(1000, cache);
       const out = { start: 0, end: 0 };
       const range = calculateCompressedVisibleRange(
@@ -133,7 +133,7 @@ describe("calculateCompressedVisibleRange", () => {
   describe("with compression", () => {
     it("should map scroll position to correct item range", () => {
       // 1M items, compression ratio = 0.4
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const out = { start: 0, end: 0 };
@@ -155,7 +155,7 @@ describe("calculateCompressedVisibleRange", () => {
     });
 
     it("should handle near-bottom interpolation", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const out = { start: 0, end: 0 };
@@ -176,7 +176,7 @@ describe("calculateCompressedVisibleRange", () => {
     });
 
     it("should never exceed totalItems - 1", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const out = { start: 0, end: 0 };
@@ -197,7 +197,7 @@ describe("calculateCompressedVisibleRange", () => {
   });
 
   it("should handle empty list", () => {
-    const cache = createHeightCache(40, 0);
+    const cache = createSizeCache(40, 0);
     const compression = getCompressionState(0, cache);
     const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
@@ -261,7 +261,7 @@ describe("calculateCompressedRenderRange", () => {
 describe("calculateCompressedItemPosition", () => {
   describe("without compression", () => {
     it("should calculate absolute position in content space", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const position = calculateCompressedItemPosition(
         10,
@@ -278,7 +278,7 @@ describe("calculateCompressedItemPosition", () => {
     });
 
     it("should use absolute positioning (scroll handled by container)", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const position = calculateCompressedItemPosition(
         10,
@@ -297,7 +297,7 @@ describe("calculateCompressedItemPosition", () => {
 
   describe("with compression", () => {
     it("should position items relative to virtual scroll index", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
 
@@ -318,7 +318,7 @@ describe("calculateCompressedItemPosition", () => {
     });
 
     it("should position consecutive items with full item height spacing", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const scrollTop = 4_000_000;
@@ -346,7 +346,7 @@ describe("calculateCompressedItemPosition", () => {
     });
 
     it("should handle near-bottom positioning", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const maxScroll = compression.virtualHeight - containerHeight;
@@ -375,7 +375,7 @@ describe("calculateCompressedItemPosition", () => {
 describe("calculateCompressedScrollToIndex", () => {
   describe("without compression", () => {
     it("should scroll to start alignment", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const position = calculateCompressedScrollToIndex(
         10,
@@ -390,7 +390,7 @@ describe("calculateCompressedScrollToIndex", () => {
     });
 
     it("should scroll to center alignment", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const position = calculateCompressedScrollToIndex(
         10,
@@ -406,7 +406,7 @@ describe("calculateCompressedScrollToIndex", () => {
     });
 
     it("should scroll to end alignment", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const position = calculateCompressedScrollToIndex(
         10,
@@ -424,7 +424,7 @@ describe("calculateCompressedScrollToIndex", () => {
 
   describe("with compression", () => {
     it("should map index to compressed scroll position", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
 
@@ -443,7 +443,7 @@ describe("calculateCompressedScrollToIndex", () => {
     });
 
     it("should clamp to valid scroll range", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
 
@@ -463,7 +463,7 @@ describe("calculateCompressedScrollToIndex", () => {
     });
 
     it("should handle first item", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const position = calculateCompressedScrollToIndex(
         0,
@@ -479,7 +479,7 @@ describe("calculateCompressedScrollToIndex", () => {
   });
 
   it("should handle empty list", () => {
-    const cache = createHeightCache(40, 0);
+    const cache = createSizeCache(40, 0);
     const compression = getCompressionState(0, cache);
     const position = calculateCompressedScrollToIndex(
       0,
@@ -501,7 +501,7 @@ describe("calculateCompressedScrollToIndex", () => {
 describe("calculateIndexFromScrollPosition", () => {
   describe("without compression", () => {
     it("should calculate index from scroll position", () => {
-      const cache = createHeightCache(40, 100);
+      const cache = createSizeCache(40, 100);
       const compression = getCompressionState(100, cache);
       const index = calculateIndexFromScrollPosition(
         400,
@@ -516,7 +516,7 @@ describe("calculateIndexFromScrollPosition", () => {
 
   describe("with compression", () => {
     it("should calculate index from compressed scroll position", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
 
       // At 50% scroll (8M), should be around item 500,000
@@ -531,7 +531,7 @@ describe("calculateIndexFromScrollPosition", () => {
     });
 
     it("should handle scroll at start", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const index = calculateIndexFromScrollPosition(
         0,
@@ -544,7 +544,7 @@ describe("calculateIndexFromScrollPosition", () => {
     });
 
     it("should handle scroll at end", () => {
-      const cache = createHeightCache(40, 1_000_000);
+      const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const index = calculateIndexFromScrollPosition(
         compression.virtualHeight,
@@ -558,7 +558,7 @@ describe("calculateIndexFromScrollPosition", () => {
   });
 
   it("should handle empty list", () => {
-    const cache = createHeightCache(40, 0);
+    const cache = createSizeCache(40, 0);
     const compression = getCompressionState(0, cache);
     const index = calculateIndexFromScrollPosition(0, cache, 0, compression);
 
@@ -592,11 +592,11 @@ describe("needsCompression", () => {
     expect(needsCompression(1_000_000, 16)).toBe(false); // 16M exactly
   });
 
-  it("should work with HeightCache", () => {
-    const smallCache = createHeightCache(40, 100);
+  it("should work with SizeCache", () => {
+    const smallCache = createSizeCache(40, 100);
     expect(needsCompression(100, smallCache)).toBe(false);
 
-    const largeCache = createHeightCache(40, 1_000_000);
+    const largeCache = createSizeCache(40, 1_000_000);
     expect(needsCompression(1_000_000, largeCache)).toBe(true);
   });
 });
@@ -616,7 +616,7 @@ describe("getMaxItemsWithoutCompression", () => {
 
 describe("getCompressionInfo", () => {
   it("should describe non-compressed list", () => {
-    const cache = createHeightCache(40, 1000);
+    const cache = createSizeCache(40, 1000);
     const info = getCompressionInfo(1000, cache);
 
     expect(info).toContain("No compression");
@@ -624,7 +624,7 @@ describe("getCompressionInfo", () => {
   });
 
   it("should describe compressed list", () => {
-    const cache = createHeightCache(40, 1_000_000);
+    const cache = createSizeCache(40, 1_000_000);
     const info = getCompressionInfo(1_000_000, cache);
 
     expect(info).toContain("Compressed");
@@ -641,7 +641,7 @@ describe("Compression Integration", () => {
     const totalItems = 1_000_000;
     const itemHeight = 40;
     const containerHeight = 600;
-    const cache = createHeightCache(itemHeight, totalItems);
+    const cache = createSizeCache(itemHeight, totalItems);
     const compression = getCompressionState(totalItems, cache);
 
     // Scroll to item 500,000
@@ -670,7 +670,7 @@ describe("Compression Integration", () => {
     const totalItems = 1_000_000;
     const itemHeight = 40;
     const containerHeight = 600;
-    const cache = createHeightCache(itemHeight, totalItems);
+    const cache = createSizeCache(itemHeight, totalItems);
     const compression = getCompressionState(totalItems, cache);
 
     // Get visible range at middle scroll
@@ -704,7 +704,7 @@ describe("Compression Integration", () => {
     const totalItems = 10_000_000; // 10 million items
     const itemHeight = 40;
     const containerHeight = 600;
-    const cache = createHeightCache(itemHeight, totalItems);
+    const cache = createSizeCache(itemHeight, totalItems);
     const compression = getCompressionState(totalItems, cache);
 
     // Scroll to maximum
@@ -733,7 +733,7 @@ describe("Compression with variable heights", () => {
 
   it("should work with variable heights in non-compressed mode", () => {
     // 100 items: 50×40 + 50×80 = 6000px (well under 16M)
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
 
     expect(compression.isCompressed).toBe(false);
@@ -741,7 +741,7 @@ describe("Compression with variable heights", () => {
   });
 
   it("should calculate correct visible range with variable heights", () => {
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
     const out = { start: 0, end: 0 };
 
@@ -761,7 +761,7 @@ describe("Compression with variable heights", () => {
   });
 
   it("should position variable height items correctly", () => {
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
 
     // Item 0 at offset 0
@@ -799,7 +799,7 @@ describe("Compression with variable heights", () => {
   });
 
   it("should scroll to correct offset for variable height items", () => {
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
 
     // Item 3 starts at 40+80+40 = 160
@@ -815,7 +815,7 @@ describe("Compression with variable heights", () => {
   });
 
   it("should use correct item height for center alignment", () => {
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
 
     // Item 1 (height 80) at offset 40
@@ -844,7 +844,7 @@ describe("Compression with variable heights", () => {
   });
 
   it("should find correct index from scroll position with variable heights", () => {
-    const cache = createHeightCache(alternatingHeight, 100);
+    const cache = createSizeCache(alternatingHeight, 100);
     const compression = getCompressionState(100, cache);
 
     // Offset 120 is the start of item 2
