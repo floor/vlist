@@ -339,8 +339,8 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       const hc = $.hc;
       return {
         isCompressed: false,
-        actualHeight: hc.getTotalHeight(),
-        virtualHeight: hc.getTotalHeight(),
+        actualHeight: hc.getTotalSize(),
+        virtualHeight: hc.getTotalSize(),
         ratio: 1,
       } as any;
     },
@@ -625,7 +625,7 @@ export const createDefaultScrollProxy = <T extends VListItem = VListItem>(
     isAtTop: () => $.ls <= 2,
     isAtBottom: (threshold = 2) => $.sab(threshold),
     getScrollPercentage: () => {
-      const total = $.hc.getTotalHeight();
+      const total = $.hc.getTotalSize();
       const maxScroll = Math.max(0, total - $.ch);
       return maxScroll > 0 ? $.ls / maxScroll : 0;
     },
