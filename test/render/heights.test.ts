@@ -5,48 +5,48 @@
 
 import { describe, it, expect } from "bun:test";
 import {
-  createHeightCache,
+  createSizeCache,
   countVisibleItems,
   countItemsFittingFromBottom,
   getOffsetForVirtualIndex,
-  type HeightCache,
-} from "../../src/rendering/heights";
+  type SizeCache,
+} from "../../src/rendering/sizes";
 
 // =============================================================================
 // Fixed Height Cache
 // =============================================================================
 
-describe("createHeightCache (fixed)", () => {
+describe("createSizeCache (fixed)", () => {
   it("should create a fixed height cache from a number", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     expect(cache.isVariable()).toBe(false);
   });
 
   it("should return correct total item count", () => {
-    const cache = createHeightCache(50, 100);
+    const cache = createSizeCache(50, 100);
     expect(cache.getTotal()).toBe(100);
   });
 
   describe("getOffset", () => {
     it("should return 0 for first item", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.getOffset(0)).toBe(0);
     });
 
     it("should calculate offset using multiplication", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.getOffset(10)).toBe(500);
     });
 
     it("should handle large indices", () => {
-      const cache = createHeightCache(48, 1000);
+      const cache = createSizeCache(48, 1000);
       expect(cache.getOffset(999)).toBe(999 * 48);
     });
   });
 
   describe("getHeight", () => {
     it("should return fixed height for any index", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.getHeight(0)).toBe(50);
       expect(cache.getHeight(50)).toBe(50);
       expect(cache.getHeight(99)).toBe(50);
@@ -55,37 +55,37 @@ describe("createHeightCache (fixed)", () => {
 
   describe("indexAtOffset", () => {
     it("should return 0 for offset 0", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.indexAtOffset(0)).toBe(0);
     });
 
     it("should calculate index using division", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.indexAtOffset(250)).toBe(5);
     });
 
     it("should floor partial items", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.indexAtOffset(275)).toBe(5);
     });
 
     it("should clamp to 0 for negative offsets", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.indexAtOffset(-100)).toBe(0);
     });
 
     it("should clamp to last index for large offsets", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.indexAtOffset(999999)).toBe(99);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(50, 0);
+      const cache = createSizeCache(50, 0);
       expect(cache.indexAtOffset(100)).toBe(0);
     });
 
     it("should handle exact boundary offsets", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // Offset 500 is the start of item 10
       expect(cache.indexAtOffset(500)).toBe(10);
     });
@@ -93,19 +93,19 @@ describe("createHeightCache (fixed)", () => {
 
   describe("getTotalHeight", () => {
     it("should return total * height", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.getTotalHeight()).toBe(5000);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(50, 0);
+      const cache = createSizeCache(50, 0);
       expect(cache.getTotalHeight()).toBe(0);
     });
   });
 
   describe("rebuild", () => {
     it("should update total after rebuild", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(cache.getTotalHeight()).toBe(5000);
 
       cache.rebuild(200);
@@ -114,7 +114,7 @@ describe("createHeightCache (fixed)", () => {
     });
 
     it("should handle rebuild to 0", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       cache.rebuild(0);
       expect(cache.getTotalHeight()).toBe(0);
       expect(cache.getTotal()).toBe(0);
@@ -126,7 +126,7 @@ describe("createHeightCache (fixed)", () => {
 // Variable Height Cache
 // =============================================================================
 
-describe("createHeightCache (variable)", () => {
+describe("createSizeCache (variable)", () => {
   // Simple pattern: alternating 40px and 80px heights
   const alternatingHeight = (index: number) => (index % 2 === 0 ? 40 : 80);
 
@@ -134,25 +134,25 @@ describe("createHeightCache (variable)", () => {
   const headerHeight = (index: number) => (index === 0 ? 64 : 48);
 
   it("should create a variable height cache from a function", () => {
-    const cache = createHeightCache(alternatingHeight, 10);
+    const cache = createSizeCache(alternatingHeight, 10);
     expect(cache.isVariable()).toBe(true);
   });
 
   it("should return correct total item count", () => {
-    const cache = createHeightCache(alternatingHeight, 10);
+    const cache = createSizeCache(alternatingHeight, 10);
     expect(cache.getTotal()).toBe(10);
   });
 
   describe("getOffset", () => {
     it("should return 0 for first item", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getOffset(0)).toBe(0);
     });
 
     it("should compute prefix sum offsets correctly", () => {
       // Heights: [40, 80, 40, 80, 40, 80, 40, 80, 40, 80]
       // Offsets: [0, 40, 120, 160, 240, 280, 360, 400, 480, 520]
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getOffset(0)).toBe(0);
       expect(cache.getOffset(1)).toBe(40);
       expect(cache.getOffset(2)).toBe(120);
@@ -164,7 +164,7 @@ describe("createHeightCache (variable)", () => {
     it("should handle header + items pattern", () => {
       // Heights: [64, 48, 48, 48, ...]
       // Offsets: [0, 64, 112, 160, ...]
-      const cache = createHeightCache(headerHeight, 5);
+      const cache = createSizeCache(headerHeight, 5);
       expect(cache.getOffset(0)).toBe(0);
       expect(cache.getOffset(1)).toBe(64);
       expect(cache.getOffset(2)).toBe(112);
@@ -173,12 +173,12 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should clamp for index <= 0", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getOffset(-1)).toBe(0);
     });
 
     it("should return total height for index >= total", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getOffset(10)).toBe(cache.getTotalHeight());
       expect(cache.getOffset(100)).toBe(cache.getTotalHeight());
     });
@@ -186,7 +186,7 @@ describe("createHeightCache (variable)", () => {
 
   describe("getHeight", () => {
     it("should return correct height for each index", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getHeight(0)).toBe(40);
       expect(cache.getHeight(1)).toBe(80);
       expect(cache.getHeight(2)).toBe(40);
@@ -194,7 +194,7 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should delegate to the height function", () => {
-      const cache = createHeightCache(headerHeight, 5);
+      const cache = createSizeCache(headerHeight, 5);
       expect(cache.getHeight(0)).toBe(64);
       expect(cache.getHeight(1)).toBe(48);
     });
@@ -202,14 +202,14 @@ describe("createHeightCache (variable)", () => {
 
   describe("indexAtOffset", () => {
     it("should return 0 for offset 0", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.indexAtOffset(0)).toBe(0);
     });
 
     it("should find correct item via binary search", () => {
       // Heights: [40, 80, 40, 80, ...]
       // Offsets: [0, 40, 120, 160, 240]
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
 
       // Offset 0 → item 0 (starts at 0)
       expect(cache.indexAtOffset(0)).toBe(0);
@@ -231,7 +231,7 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should handle offset within items (not on boundary)", () => {
-      const cache = createHeightCache(headerHeight, 5);
+      const cache = createSizeCache(headerHeight, 5);
       // Offsets: [0, 64, 112, 160, 208]
       // Offset 32 → within item 0 [0, 64)
       expect(cache.indexAtOffset(32)).toBe(0);
@@ -244,22 +244,22 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should return 0 for negative offsets", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.indexAtOffset(-100)).toBe(0);
     });
 
     it("should return last index for offsets beyond total height", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.indexAtOffset(999999)).toBe(9);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 0);
+      const cache = createSizeCache(alternatingHeight, 0);
       expect(cache.indexAtOffset(100)).toBe(0);
     });
 
     it("should handle single item", () => {
-      const cache = createHeightCache(alternatingHeight, 1);
+      const cache = createSizeCache(alternatingHeight, 1);
       expect(cache.indexAtOffset(0)).toBe(0);
       expect(cache.indexAtOffset(20)).toBe(0);
       expect(cache.indexAtOffset(40)).toBe(0); // at boundary
@@ -268,7 +268,7 @@ describe("createHeightCache (variable)", () => {
 
     it("should handle exact boundary between items", () => {
       // Heights: [40, 80, 40, ...], boundaries at 0, 40, 120, 160
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
 
       // At boundary 40 → start of item 1
       expect(cache.indexAtOffset(40)).toBe(1);
@@ -281,25 +281,25 @@ describe("createHeightCache (variable)", () => {
   describe("getTotalHeight", () => {
     it("should return sum of all heights", () => {
       // 10 items: 5 × 40 + 5 × 80 = 200 + 400 = 600
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(cache.getTotalHeight()).toBe(600);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 0);
+      const cache = createSizeCache(alternatingHeight, 0);
       expect(cache.getTotalHeight()).toBe(0);
     });
 
     it("should handle header pattern", () => {
       // 5 items: 64 + 4 × 48 = 64 + 192 = 256
-      const cache = createHeightCache(headerHeight, 5);
+      const cache = createSizeCache(headerHeight, 5);
       expect(cache.getTotalHeight()).toBe(256);
     });
   });
 
   describe("rebuild", () => {
     it("should rebuild prefix sums with new total", () => {
-      const cache = createHeightCache(alternatingHeight, 5);
+      const cache = createSizeCache(alternatingHeight, 5);
       // 5 items: 40+80+40+80+40 = 280
       expect(cache.getTotalHeight()).toBe(280);
 
@@ -310,14 +310,14 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should handle rebuild to 0", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       cache.rebuild(0);
       expect(cache.getTotal()).toBe(0);
       expect(cache.getTotalHeight()).toBe(0);
     });
 
     it("should maintain correct offsets after rebuild", () => {
-      const cache = createHeightCache(alternatingHeight, 5);
+      const cache = createSizeCache(alternatingHeight, 5);
       cache.rebuild(10);
       // Verify offsets are still correct after rebuild
       expect(cache.getOffset(0)).toBe(0);
@@ -326,7 +326,7 @@ describe("createHeightCache (variable)", () => {
     });
 
     it("should maintain correct binary search after rebuild", () => {
-      const cache = createHeightCache(alternatingHeight, 5);
+      const cache = createSizeCache(alternatingHeight, 5);
       cache.rebuild(10);
       expect(cache.indexAtOffset(40)).toBe(1);
       expect(cache.indexAtOffset(120)).toBe(2);
@@ -342,8 +342,8 @@ describe("Fixed vs Variable consistency", () => {
   const ITEM_HEIGHT = 50;
   const TOTAL = 100;
 
-  const fixedCache = createHeightCache(ITEM_HEIGHT, TOTAL);
-  const variableCache = createHeightCache(() => ITEM_HEIGHT, TOTAL);
+  const fixedCache = createSizeCache(ITEM_HEIGHT, TOTAL);
+  const variableCache = createSizeCache(() => ITEM_HEIGHT, TOTAL);
 
   it("should have same isVariable results", () => {
     expect(fixedCache.isVariable()).toBe(false);
@@ -386,19 +386,19 @@ describe("Fixed vs Variable consistency", () => {
 describe("countVisibleItems", () => {
   describe("fixed heights", () => {
     it("should calculate using ceil division", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // 500 / 50 = 10, ceil = 10
       expect(countVisibleItems(cache, 0, 500, 100)).toBe(10);
     });
 
     it("should ceil for partial items", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // 520 / 50 = 10.4, ceil = 11
       expect(countVisibleItems(cache, 0, 520, 100)).toBe(11);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(50, 0);
+      const cache = createSizeCache(50, 0);
       expect(countVisibleItems(cache, 0, 500, 0)).toBe(0);
     });
   });
@@ -408,7 +408,7 @@ describe("countVisibleItems", () => {
       index % 2 === 0 ? 40 : 80;
 
     it("should count items that fit in container", () => {
-      const cache = createHeightCache(alternatingHeight, 20);
+      const cache = createSizeCache(alternatingHeight, 20);
       // From index 0: heights = [40, 80, 40, 80, ...]
       // 40+80 = 120, +40 = 160, +80 = 240, +40 = 280
       // Container 250px: 40+80+40+80 = 240 (4 items), next 40 would be 280 > 250
@@ -426,7 +426,7 @@ describe("countVisibleItems", () => {
     });
 
     it("should start counting from given index", () => {
-      const cache = createHeightCache(alternatingHeight, 20);
+      const cache = createSizeCache(alternatingHeight, 20);
       // From index 1: heights = [80, 40, 80, 40, ...]
       // 80 < 250, 120 < 250, 200 < 250, 240 < 250, 320 >= 250
       // Count: 5 items (80+40+80+40+80=320, but loop exits when accumulated >= 250)
@@ -439,19 +439,19 @@ describe("countVisibleItems", () => {
     });
 
     it("should not exceed total items", () => {
-      const cache = createHeightCache(alternatingHeight, 3);
+      const cache = createSizeCache(alternatingHeight, 3);
       // Only 3 items total, container is huge
       expect(countVisibleItems(cache, 0, 10000, 3)).toBe(3);
     });
 
     it("should return at least 1 for non-empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // Even with tiny container, return at least 1
       expect(countVisibleItems(cache, 0, 1, 10)).toBeGreaterThanOrEqual(1);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 0);
+      const cache = createSizeCache(alternatingHeight, 0);
       expect(countVisibleItems(cache, 0, 500, 0)).toBe(0);
     });
   });
@@ -464,19 +464,19 @@ describe("countVisibleItems", () => {
 describe("countItemsFittingFromBottom", () => {
   describe("fixed heights", () => {
     it("should calculate using floor division", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // 500 / 50 = 10
       expect(countItemsFittingFromBottom(cache, 500, 100)).toBe(10);
     });
 
     it("should floor for partial items", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // 520 / 50 = 10.4, floor = 10
       expect(countItemsFittingFromBottom(cache, 520, 100)).toBe(10);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(50, 0);
+      const cache = createSizeCache(50, 0);
       expect(countItemsFittingFromBottom(cache, 500, 0)).toBe(0);
     });
   });
@@ -486,7 +486,7 @@ describe("countItemsFittingFromBottom", () => {
       index % 2 === 0 ? 40 : 80;
 
     it("should count items from the bottom that fit", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // Items from end: index 9 (80), 8 (40), 7 (80), 6 (40), 5 (80), ...
       // Container 250: 80+40=120, +80=200, +40=240, +80=320 > 250
       // So 4 items fit (indices 9,8,7,6 = heights 80+40+80+40=240)
@@ -494,13 +494,13 @@ describe("countItemsFittingFromBottom", () => {
     });
 
     it("should handle all items fitting", () => {
-      const cache = createHeightCache(alternatingHeight, 3);
+      const cache = createSizeCache(alternatingHeight, 3);
       // 3 items: 40+80+40 = 160, container 500
       expect(countItemsFittingFromBottom(cache, 500, 3)).toBe(3);
     });
 
     it("should return at least 1 for non-empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // Tiny container, but at least 1
       expect(countItemsFittingFromBottom(cache, 1, 10)).toBeGreaterThanOrEqual(
         1,
@@ -508,7 +508,7 @@ describe("countItemsFittingFromBottom", () => {
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 0);
+      const cache = createSizeCache(alternatingHeight, 0);
       expect(countItemsFittingFromBottom(cache, 500, 0)).toBe(0);
     });
   });
@@ -521,23 +521,23 @@ describe("countItemsFittingFromBottom", () => {
 describe("getOffsetForVirtualIndex", () => {
   describe("fixed heights", () => {
     it("should return integer index * height for integer indices", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(getOffsetForVirtualIndex(cache, 10, 100)).toBe(500);
     });
 
     it("should interpolate for fractional indices", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       // 5.5 → offset(5) + 0.5 * height(5) = 250 + 25 = 275
       expect(getOffsetForVirtualIndex(cache, 5.5, 100)).toBe(275);
     });
 
     it("should return 0 for index 0", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
       expect(getOffsetForVirtualIndex(cache, 0, 100)).toBe(0);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(50, 0);
+      const cache = createSizeCache(50, 0);
       expect(getOffsetForVirtualIndex(cache, 5, 0)).toBe(0);
     });
   });
@@ -547,44 +547,44 @@ describe("getOffsetForVirtualIndex", () => {
       index % 2 === 0 ? 40 : 80;
 
     it("should return correct offset for integer index", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // offset(3) = 40+80+40 = 160
       expect(getOffsetForVirtualIndex(cache, 3, 10)).toBe(160);
     });
 
     it("should interpolate for fractional indices", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // 2.5 → offset(2) + 0.5 * height(2) = 120 + 0.5 * 40 = 140
       expect(getOffsetForVirtualIndex(cache, 2.5, 10)).toBe(140);
     });
 
     it("should interpolate correctly for fractional into large item", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // 1.5 → offset(1) + 0.5 * height(1) = 40 + 0.5 * 80 = 80
       expect(getOffsetForVirtualIndex(cache, 1.5, 10)).toBe(80);
     });
 
     it("should return 0 for index 0", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       expect(getOffsetForVirtualIndex(cache, 0, 10)).toBe(0);
     });
 
     it("should clamp to valid range for large index", () => {
-      const cache = createHeightCache(alternatingHeight, 10);
+      const cache = createSizeCache(alternatingHeight, 10);
       // Index beyond total → clamps to last item
       const result = getOffsetForVirtualIndex(cache, 15, 10);
       expect(result).toBeGreaterThanOrEqual(0);
     });
 
     it("should return 0 for empty list", () => {
-      const cache = createHeightCache(alternatingHeight, 0);
+      const cache = createSizeCache(alternatingHeight, 0);
       expect(getOffsetForVirtualIndex(cache, 5, 0)).toBe(0);
     });
   });
 
   describe("consistency with fixed heights", () => {
     it("should match index * height for fixed caches", () => {
-      const cache = createHeightCache(50, 100);
+      const cache = createSizeCache(50, 100);
 
       // For fixed heights: virtualIndex * height
       expect(getOffsetForVirtualIndex(cache, 0, 100)).toBe(0);
@@ -594,8 +594,8 @@ describe("getOffsetForVirtualIndex", () => {
     });
 
     it("should match for uniform variable heights", () => {
-      const fixedCache = createHeightCache(50, 100);
-      const varCache = createHeightCache(() => 50, 100);
+      const fixedCache = createSizeCache(50, 100);
+      const varCache = createSizeCache(() => 50, 100);
 
       for (const idx of [0, 5, 10.5, 50, 99.9]) {
         expect(getOffsetForVirtualIndex(varCache, idx, 100)).toBeCloseTo(
@@ -613,7 +613,7 @@ describe("getOffsetForVirtualIndex", () => {
 
 describe("Edge cases", () => {
   it("should handle single item list (fixed)", () => {
-    const cache = createHeightCache(50, 1);
+    const cache = createSizeCache(50, 1);
     expect(cache.getOffset(0)).toBe(0);
     expect(cache.getHeight(0)).toBe(50);
     expect(cache.indexAtOffset(0)).toBe(0);
@@ -623,7 +623,7 @@ describe("Edge cases", () => {
   });
 
   it("should handle single item list (variable)", () => {
-    const cache = createHeightCache(() => 100, 1);
+    const cache = createSizeCache(() => 100, 1);
     expect(cache.getOffset(0)).toBe(0);
     expect(cache.getHeight(0)).toBe(100);
     expect(cache.indexAtOffset(0)).toBe(0);
@@ -633,14 +633,14 @@ describe("Edge cases", () => {
   });
 
   it("should handle very large item counts (fixed)", () => {
-    const cache = createHeightCache(48, 1_000_000);
+    const cache = createSizeCache(48, 1_000_000);
     expect(cache.getTotalHeight()).toBe(48_000_000);
     expect(cache.getOffset(500_000)).toBe(24_000_000);
     expect(cache.indexAtOffset(24_000_000)).toBe(500_000);
   });
 
   it("should handle variable heights with all same value", () => {
-    const cache = createHeightCache(() => 48, 1000);
+    const cache = createSizeCache(() => 48, 1000);
     expect(cache.getTotalHeight()).toBe(48_000);
     expect(cache.getOffset(500)).toBe(24_000);
     expect(cache.indexAtOffset(24_000)).toBe(500);
@@ -649,7 +649,7 @@ describe("Edge cases", () => {
   it("should handle variable heights with extreme variation", () => {
     // Some items are 1px, some are 1000px
     const extremeHeight = (i: number) => (i % 10 === 0 ? 1000 : 1);
-    const cache = createHeightCache(extremeHeight, 100);
+    const cache = createSizeCache(extremeHeight, 100);
 
     // 10 large items (1000px each) + 90 small items (1px each) = 10000 + 90 = 10090
     expect(cache.getTotalHeight()).toBe(10090);
@@ -669,7 +669,7 @@ describe("Edge cases", () => {
   it("should correctly rebuild variable cache multiple times", () => {
     let currentSize = 5;
     const heightFn = (i: number) => (i < currentSize ? (i + 1) * 10 : 10);
-    const cache = createHeightCache(heightFn, currentSize);
+    const cache = createSizeCache(heightFn, currentSize);
 
     // Heights: [10, 20, 30, 40, 50] → total = 150
     expect(cache.getTotalHeight()).toBe(150);
@@ -697,7 +697,7 @@ describe("Binary search correctness", () => {
     // Heights: [10, 20, 30, 40, 50]
     // Offsets: [0, 10, 30, 60, 100, 150]
     const heightFn = (i: number) => (i + 1) * 10;
-    const cache = createHeightCache(heightFn, 5);
+    const cache = createSizeCache(heightFn, 5);
 
     // Item 0: [0, 10)
     expect(cache.indexAtOffset(0)).toBe(0);
@@ -731,7 +731,7 @@ describe("Binary search correctness", () => {
 
   it("should be consistent: indexAtOffset(getOffset(i)) === i", () => {
     const heightFn = (i: number) => 20 + (i % 7) * 10; // varying heights
-    const cache = createHeightCache(heightFn, 200);
+    const cache = createSizeCache(heightFn, 200);
 
     for (let i = 0; i < 200; i++) {
       const offset = cache.getOffset(i);
@@ -742,7 +742,7 @@ describe("Binary search correctness", () => {
 
   it("should be consistent: getOffset(indexAtOffset(y)) <= y", () => {
     const heightFn = (i: number) => 30 + (i % 5) * 15;
-    const cache = createHeightCache(heightFn, 100);
+    const cache = createSizeCache(heightFn, 100);
     const totalHeight = cache.getTotalHeight();
 
     for (let y = 0; y < totalHeight; y += 7) {

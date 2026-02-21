@@ -21,7 +21,7 @@ import {
 import { JSDOM } from "jsdom";
 import {
   createRenderer,
-  createHeightCache,
+  createSizeCache,
   resolveContainer,
   type Renderer,
 } from "../../src/rendering";
@@ -100,11 +100,11 @@ describe("renderer getElement and pool stats", () => {
   });
 
   it("should return element for a rendered index via getElement", () => {
-    const heightCache = createHeightCache(40, 20);
+    const sizeCache = createSizeCache(40, 20);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
       undefined,
       "test-0",
@@ -127,11 +127,11 @@ describe("renderer getElement and pool stats", () => {
   });
 
   it("should return undefined from getElement after clear", () => {
-    const heightCache = createHeightCache(40, 10);
+    const sizeCache = createSizeCache(40, 10);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -147,11 +147,11 @@ describe("renderer getElement and pool stats", () => {
   });
 
   it("should return undefined for index that scrolled out of range", () => {
-    const heightCache = createHeightCache(40, 20);
+    const sizeCache = createSizeCache(40, 20);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -170,11 +170,11 @@ describe("renderer getElement and pool stats", () => {
   });
 
   it("should reuse pooled elements when range shifts", () => {
-    const heightCache = createHeightCache(40, 30);
+    const sizeCache = createSizeCache(40, 30);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -208,11 +208,11 @@ describe("renderer updateItem and updateItemClasses", () => {
   });
 
   it("should updateItemClasses on a rendered item", () => {
-    const heightCache = createHeightCache(40, 10);
+    const sizeCache = createSizeCache(40, 10);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -230,11 +230,11 @@ describe("renderer updateItem and updateItemClasses", () => {
   });
 
   it("should updateItem with new data", () => {
-    const heightCache = createHeightCache(40, 10);
+    const sizeCache = createSizeCache(40, 10);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -262,11 +262,11 @@ describe("renderer updateItem and updateItemClasses", () => {
       return div;
     };
 
-    const heightCache = createHeightCache(40, 5);
+    const sizeCache = createSizeCache(40, 5);
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       elementTemplate,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 
@@ -364,12 +364,12 @@ describe("renderer — aria-setsize update when total changes between renders", 
     document.body.appendChild(itemsContainer);
 
     let totalItems = 10;
-    const heightCache = createHeightCache(40, 10);
+    const sizeCache = createSizeCache(40, 10);
 
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       (item) => `<span>${item.name}</span>`,
-      heightCache,
+      sizeCache,
       "vlist",
       () => totalItems,
       "test-list",
@@ -402,12 +402,12 @@ describe("renderer — re-apply template when item ID changes at same index", ()
     const itemsContainer = document.createElement("div");
     document.body.appendChild(itemsContainer);
 
-    const heightCache = createHeightCache(40, 10);
+    const sizeCache = createSizeCache(40, 10);
 
     const renderer = createRenderer<TestItem>(
       itemsContainer,
       (item) => `<span>${item.name}</span>`,
-      heightCache,
+      sizeCache,
       "vlist",
     );
 

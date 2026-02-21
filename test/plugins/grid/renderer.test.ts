@@ -16,7 +16,7 @@ import {
 import { JSDOM } from "jsdom";
 import { createGridRenderer } from "../../../src/features/grid/renderer";
 import { createGridLayout } from "../../../src/features/grid/layout";
-import { createHeightCache } from "../../../src/rendering/heights";
+import { createSizeCache } from "../../../src/rendering/sizes";
 import type { GridRenderer } from "../../../src/features/grid/renderer";
 import type { GridLayout } from "../../../src/features/grid/types";
 import type {
@@ -25,7 +25,7 @@ import type {
   ItemState,
   Range,
 } from "../../../src/types";
-import type { HeightCache } from "../../../src/rendering/heights";
+import type { SizeCache } from "../../../src/rendering/sizes";
 
 // =============================================================================
 // JSDOM Setup
@@ -78,14 +78,14 @@ const createItemsContainer = (): HTMLElement => {
 };
 
 /**
- * Create a mock HeightCache for grid rows.
+ * Create a mock SizeCache for grid rows.
  * In grid mode, height cache operates on ROW indices.
  */
-const createMockHeightCache = (rowHeight: number): HeightCache => ({
+const createMockSizeCache = (rowHeight: number): SizeCache => ({
   getOffset: (index: number): number => index * rowHeight,
-  getHeight: (_index: number): number => rowHeight,
+  getSize: (_index: number): number => rowHeight,
   indexAtOffset: (offset: number): number => Math.floor(offset / rowHeight),
-  getTotalHeight: (): number => 0, // not used directly by grid renderer
+  getTotalSize: (): number => 0, // not used directly by grid renderer
   getTotal: (): number => 0, // not used directly by grid renderer
   rebuild: (_totalItems: number): void => {},
   isVariable: (): boolean => false,
@@ -108,12 +108,12 @@ const template: ItemTemplate<TestItem> = defaultTemplate;
 describe("createGridRenderer", () => {
   let container: HTMLElement;
   let gridLayout: GridLayout;
-  let heightCache: HeightCache;
+  let sizeCache: SizeCache;
 
   beforeEach(() => {
     container = createItemsContainer();
     gridLayout = createGridLayout({ columns: 4, gap: 8 });
-    heightCache = createMockHeightCache(100); // 100px per row (including gap)
+    sizeCache = createMockSizeCache(100); // 100px per row (including gap)
   });
 
   afterEach(() => {
@@ -125,7 +125,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -148,7 +148,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -170,7 +170,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -192,7 +192,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -216,7 +216,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -242,7 +242,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -267,7 +267,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         elementTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -286,7 +286,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -313,7 +313,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -335,7 +335,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -359,7 +359,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -378,7 +378,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -398,7 +398,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -422,7 +422,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -445,7 +445,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -467,7 +467,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -499,7 +499,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -529,7 +529,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -560,7 +560,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         templateMock,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -591,7 +591,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -616,7 +616,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -641,7 +641,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -667,7 +667,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -696,7 +696,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -733,7 +733,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -759,7 +759,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -780,7 +780,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -812,7 +812,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -837,7 +837,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -861,7 +861,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -886,7 +886,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -907,7 +907,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -925,7 +925,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -953,7 +953,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -979,7 +979,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1007,7 +1007,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1031,7 +1031,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1053,7 +1053,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1074,7 +1074,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1103,7 +1103,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1128,7 +1128,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "mylist",
         800,
@@ -1157,7 +1157,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1192,7 +1192,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         singleColLayout,
         "vlist",
         800,
@@ -1223,7 +1223,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         wideLayout,
         "vlist",
         800,
@@ -1246,12 +1246,12 @@ describe("createGridRenderer", () => {
 
     it("should handle grid with gap = 0", () => {
       const noGapLayout = createGridLayout({ columns: 4, gap: 0 });
-      const noGapHeightCache = createMockHeightCache(50); // no gap in row height
+      const noGapSizeCache = createMockSizeCache(50); // no gap in row height
 
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        noGapHeightCache,
+        noGapSizeCache,
         noGapLayout,
         "vlist",
         800,
@@ -1281,7 +1281,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1298,7 +1298,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1320,7 +1320,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         800,
@@ -1350,7 +1350,7 @@ describe("createGridRenderer", () => {
       const renderer = createGridRenderer<TestItem>(
         container,
         defaultTemplate,
-        heightCache,
+        sizeCache,
         gridLayout,
         "vlist",
         0,
@@ -1389,12 +1389,12 @@ describe("grid renderer compressed positioning", () => {
     const totalRows = gridLayout.getTotalRows(totalItems);
     const rowHeight = 50 + 8; // item height + gap
 
-    const heightCache = createHeightCache(rowHeight, totalRows);
+    const sizeCache = createSizeCache(rowHeight, totalRows);
 
     const gridRenderer = createGridRenderer<TestItem>(
       itemsContainer,
       template,
-      heightCache,
+      sizeCache,
       gridLayout,
       "vlist",
       800, // containerWidth
