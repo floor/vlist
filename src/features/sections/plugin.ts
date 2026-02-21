@@ -18,7 +18,7 @@
  * Can be combined with:
  * - withGrid for grouped 2D layouts
  * - reverse: true (sticky header shows current section as you scroll up through history)
- * - direction: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
+ * - orientation: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
  */
 
 import type { VListItem } from "../../types";
@@ -120,7 +120,7 @@ export const withSections = <T extends VListItem = VListItem>(
       const { dom, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      // Note: sticky headers work with both reverse mode and horizontal mode!
+      // Note: sticky headers work with both reverse mode and horizontal orientation!
       // - reverse: true - as you scroll up through history, the current section header sticks at top
       // - horizontal: true - headers stick to left edge and push left when next header approaches
 

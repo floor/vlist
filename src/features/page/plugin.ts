@@ -45,15 +45,13 @@ import type { VListPlugin, BuilderContext } from "../../builder/types";
  * const timeline = vlist({
  *   container: '#timeline',
  *   item: { height: 100, template: renderEvent },
- *   direction: 'horizontal'
+ *   orientation: 'horizontal'
  * })
  * .use(withWindow())
  * .build()
  * ```
  */
-export const withPage = <
-  T extends VListItem = VListItem,
->(): VListPlugin<T> => {
+export const withPage = <T extends VListItem = VListItem>(): VListPlugin<T> => {
   let cleanupResize: (() => void) | null = null;
 
   return {

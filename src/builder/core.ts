@@ -81,13 +81,13 @@ export const vlist = <T extends VListItem = VListItem>(
     throw new Error("[vlist/builder] item configuration is required");
   }
 
-  const isHorizontal = config.direction === "horizontal";
+  const isHorizontal = config.orientation === "horizontal";
   const mainAxisProp = isHorizontal ? "width" : "height";
   const mainAxisValue = isHorizontal ? config.item.width : config.item.height;
 
   if (mainAxisValue == null) {
     throw new Error(
-      `[vlist/builder] item.${mainAxisProp} is required${isHorizontal ? " when direction is 'horizontal'" : ""}`,
+      `[vlist/builder] item.${mainAxisProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
     );
   }
   if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
@@ -213,12 +213,12 @@ function materialize<T extends VListItem = VListItem>(
   if (isHorizontal) {
     if (pluginNames.has("withGrid")) {
       throw new Error(
-        "[vlist/builder] withGrid cannot be used with direction: 'horizontal'",
+        "[vlist/builder] withGrid cannot be used with orientation: 'horizontal'",
       );
     }
     if (pluginNames.has("withGroups")) {
       throw new Error(
-        "[vlist/builder] withGroups cannot be used with direction: 'horizontal'",
+        "[vlist/builder] withGroups cannot be used with orientation: 'horizontal'",
       );
     }
   }
