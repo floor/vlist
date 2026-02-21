@@ -55,16 +55,19 @@ function createTestDOM() {
   const root = document.createElement("div");
   const viewport = document.createElement("div");
   const content = document.createElement("div");
+  const items = document.createElement("div");
 
   root.className = "vlist";
   viewport.className = "vlist__viewport";
   content.className = "vlist__content";
+  items.className = "vlist__items";
 
+  content.appendChild(items);
   viewport.appendChild(content);
   root.appendChild(viewport);
   document.body.appendChild(root);
 
-  return { root, viewport, content };
+  return { root, viewport, content, items };
 }
 
 function createTestRefs(): MRefs<TestItem> {
@@ -97,6 +100,8 @@ function createTestRefs(): MRefs<TestItem> {
     sic: false,
     ii: false,
     vre: true,
+    id: false,
+    la: "",
   };
 }
 
@@ -114,28 +119,17 @@ function createTestDeps(): MDeps<TestItem> {
     dom: testDom,
     emitter,
     resolvedConfig: {
-      itemSize: 50,
       overscan: 2,
-      buffer: 0,
-      direction: "vertical" as const,
-      className: "",
       classPrefix: "vlist",
-      renderMode: "materialize" as const,
-      cache: true,
-      smoothScroll: false,
-      stickyIndices: [],
-      scrollBehavior: "smooth" as const,
-      throttle: 16,
-      template: (item: TestItem) => `<div>${item.name}</div>`,
-      getItemId: (item: TestItem) => item.id,
-      windowScroll: false,
-      compression: false,
-      compressionThreshold: 1000,
-      scrollTarget: null,
-      resizeObserver: true,
-      scrollThrottle: 16,
+      reverse: false,
+      wrap: false,
+      horizontal: false,
+      ariaIdPrefix: "vlist",
     },
-    rawConfig: {},
+    rawConfig: {
+      container: testDom.root,
+      item: (item: TestItem) => `<div>${item.name}</div>`,
+    } as any,
     rendered,
     pool,
     sharedState: {
@@ -149,20 +143,21 @@ function createTestDeps(): MDeps<TestItem> {
         cursor: undefined,
       },
       viewportState: {
-        scrollTop: 0,
-        scrollPercentage: 0,
+        scrollPosition: 0,
         containerSize: 500,
-        isAtTop: true,
-        isAtBottom: false,
-        isScrolling: false,
-        velocity: 0,
+        totalSize: 0,
+        actualSize: 0,
+        isCompressed: false,
+        compressionRatio: 1,
+        visibleRange: { start: 0, end: 0 },
+        renderRange: { start: 0, end: 0 },
       },
       renderState: {
         range: { start: 0, end: 0 },
         visibleRange: { start: 0, end: 0 },
         renderedCount: 0,
       },
-    },
+    } as any,
     isHorizontal: false,
     classPrefix: "vlist",
     contentSizeHandlers: [],
@@ -171,7 +166,7 @@ function createTestDeps(): MDeps<TestItem> {
     keydownHandlers: [],
     resizeHandlers: [],
     destroyHandlers: [],
-    methods: {},
+    methods: new Map<string, Function>(),
     onScrollFrame: () => {},
     resizeObserver: {
       observe: () => {},
@@ -179,9 +174,14 @@ function createTestDeps(): MDeps<TestItem> {
       disconnect: () => {},
     } as any,
     renderRange: { start: 0, end: 0 },
-    itemState: undefined,
-    applyTemplate: (el: HTMLElement, html: string) => {
-      el.innerHTML = html;
+    itemState: { selected: false, focused: false },
+    applyTemplate: (el: HTMLElement, result: string | HTMLElement) => {
+      if (typeof result === "string") {
+        el.innerHTML = result;
+      } else {
+        el.innerHTML = "";
+        el.appendChild(result);
+      }
     },
     updateContentSize: () => {},
   };
@@ -363,7 +363,7 @@ describe("createMaterializeCtx - Renderer", () => {
     const deps = createTestDeps();
     const ctx = createMaterializeCtx(refs, deps);
 
-    expect(ctx.renderer.getElement(999)).toBe(null);
+    expect(ctx.renderer.getElement(999) as any).toBe(null);
   });
 });
 
@@ -381,7 +381,7 @@ describe("createMaterializeCtx - Data Manager", () => {
     ctx.dataManager = mockDM as any;
 
     expect(refs.dm).toBe(mockDM);
-    expect(ctx.dataManager).toBe(mockDM);
+    expect(ctx.dataManager).toBe(mockDM as any);
   });
 
   it("should allow replacing dataManager", () => {
@@ -393,10 +393,10 @@ describe("createMaterializeCtx - Data Manager", () => {
     const dm2 = { id: 2 };
 
     ctx.dataManager = dm1 as any;
-    expect(ctx.dataManager).toBe(dm1);
+    expect(ctx.dataManager).toBe(dm1 as any);
 
     ctx.replaceDataManager(dm2 as any);
-    expect(ctx.dataManager).toBe(dm2);
+    expect(ctx.dataManager).toBe(dm2 as any);
     expect(refs.dm).toBe(dm2);
   });
 });
@@ -415,7 +415,7 @@ describe("createMaterializeCtx - Scroll Controller", () => {
     ctx.scrollController = mockSC as any;
 
     expect(refs.sc).toBe(mockSC);
-    expect(ctx.scrollController).toBe(mockSC);
+    expect(ctx.scrollController).toBe(mockSC as any);
   });
 
   it("should allow replacing scrollController", () => {
@@ -427,10 +427,10 @@ describe("createMaterializeCtx - Scroll Controller", () => {
     const sc2 = { id: 2 };
 
     ctx.scrollController = sc1 as any;
-    expect(ctx.scrollController).toBe(sc1);
+    expect(ctx.scrollController).toBe(sc1 as any);
 
     ctx.replaceScrollController(sc2 as any);
-    expect(ctx.scrollController).toBe(sc2);
+    expect(ctx.scrollController).toBe(sc2 as any);
     expect(refs.sc).toBe(sc2);
   });
 });
@@ -484,13 +484,13 @@ describe("createMaterializeCtx - Template", () => {
     const ctx = createMaterializeCtx(refs, deps);
 
     const item: TestItem = { id: 1, name: "Test" };
-    const originalResult = refs.at(item, 0, undefined);
+    const originalResult = refs.at(item, 0, undefined as any);
 
     const newTemplate = (item: TestItem) =>
       `<span class="new">${item.name}</span>`;
     ctx.replaceTemplate(newTemplate as any);
 
-    const newResult = refs.at(item, 0, undefined);
+    const newResult = refs.at(item, 0, undefined as any);
     expect(newResult).not.toBe(originalResult);
     expect(newResult).toContain('class="new"');
   });
@@ -686,7 +686,7 @@ describe("createMaterializeCtx - Compression", () => {
     refs.vtf = () => 100;
     refs.ch = 600;
     const deps = createTestDeps();
-    deps.renderRange = { start: 10, end: 20 };
+    (deps as any).renderRange = { start: 10, end: 20 };
     const ctx = createMaterializeCtx(refs, deps);
 
     const compressionCtx = ctx.getCompressionContext();
@@ -769,15 +769,15 @@ describe("createMaterializeCtx - invalidateRendered", () => {
 
     const el1 = document.createElement("div");
     const el2 = document.createElement("div");
-    deps.dom.content.appendChild(el1);
-    deps.dom.content.appendChild(el2);
+    deps.dom.items.appendChild(el1);
+    deps.dom.items.appendChild(el2);
     deps.rendered.set(0, el1);
     deps.rendered.set(1, el2);
 
     ctx.invalidateRendered();
 
     expect(deps.rendered.size).toBe(0);
-    expect(deps.dom.content.children.length).toBe(0);
+    expect(deps.dom.items.children.length).toBe(0);
   });
 
   it("should release elements back to pool", () => {
@@ -787,7 +787,7 @@ describe("createMaterializeCtx - invalidateRendered", () => {
 
     const el = deps.pool.acquire();
     el.textContent = "test";
-    deps.dom.content.appendChild(el);
+    deps.dom.items.appendChild(el);
     deps.rendered.set(0, el);
 
     ctx.invalidateRendered();
@@ -872,7 +872,7 @@ describe("createMaterializeCtx - Content Size", () => {
   it("should update content height in vertical mode", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
-    deps.isHorizontal = false;
+    (deps as any).isHorizontal = false;
     const ctx = createMaterializeCtx(refs, deps);
 
     ctx.updateContentSize(2000);
@@ -883,7 +883,7 @@ describe("createMaterializeCtx - Content Size", () => {
   it("should update content width in horizontal mode", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
-    deps.isHorizontal = true;
+    (deps as any).isHorizontal = true;
     const ctx = createMaterializeCtx(refs, deps);
 
     ctx.updateContentSize(3000);
@@ -976,7 +976,7 @@ describe("createMaterializeCtx - Viewport Resize", () => {
     refs.vre = true;
     const deps = createTestDeps();
     let unobserved = false;
-    deps.resizeObserver = {
+    (deps as any).resizeObserver = {
       observe: () => {},
       unobserve: () => {
         unobserved = true;
@@ -996,7 +996,7 @@ describe("createMaterializeCtx - Viewport Resize", () => {
     refs.vre = false;
     const deps = createTestDeps();
     let unobserved = false;
-    deps.resizeObserver = {
+    (deps as any).resizeObserver = {
       observe: () => {},
       unobserve: () => {
         unobserved = true;
@@ -1315,7 +1315,7 @@ describe("createDefaultScrollProxy", () => {
 
   it("should check if at bottom", () => {
     const refs = createTestRefs();
-    refs.sab = (threshold: number) => threshold === 5;
+    refs.sab = (threshold?: number) => threshold === 5;
     const deps = createTestDeps();
     const proxy = createDefaultScrollProxy(refs, deps);
 

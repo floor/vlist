@@ -9,7 +9,7 @@ import { withGrid } from "../../../src/features/grid/feature";
 import { createGridLayout } from "../../../src/features/grid/layout";
 import { createGridRenderer } from "../../../src/features/grid/renderer";
 import { createSizeCache } from "../../../src/rendering/sizes";
-import type { VListItem, VListPlugin } from "../../../src/types";
+import type { VListItem } from "../../../src/types";
 import type { BuilderContext } from "../../../src/builder/types";
 
 // =============================================================================
@@ -89,31 +89,15 @@ function createMockContext(): BuilderContext<TestItem> {
       emit: () => {},
     } as any,
     config: {
-      itemSize: 50,
       overscan: 2,
-      buffer: 0,
-      direction: "vertical" as const,
-      className: "",
       classPrefix: "vlist",
-      renderMode: "materialize" as const,
-      cache: true,
-      smoothScroll: false,
-      stickyIndices: [],
-      scrollBehavior: "smooth" as const,
-      throttle: 16,
-      template: (item: TestItem) => `<div>${item.name}</div>`,
-      getItemId: (item: TestItem) => item.id,
-      windowScroll: false,
-      compression: false,
-      compressionThreshold: 1000,
-      scrollTarget: null,
-      resizeObserver: true,
-      scrollThrottle: 16,
       reverse: false,
+      wrap: false,
       horizontal: false,
       ariaIdPrefix: "vlist",
     },
     rawConfig: {
+      container: document.createElement("div"),
       items: items,
       item: {
         height: 50,
@@ -155,17 +139,14 @@ function createMockContext(): BuilderContext<TestItem> {
         cursor: undefined,
       },
       viewportState: {
-        scrollTop: 0,
-        scrollPercentage: 0,
-        containerSize: 500,
-        isAtTop: true,
-        isAtBottom: false,
-        isScrolling: false,
-        velocity: 0,
         scrollPosition: 0,
+        containerSize: 500,
+        totalSize: 0,
+        actualSize: 0,
+        isCompressed: false,
+        compressionRatio: 1,
         visibleRange: { start: 0, end: 0 },
         renderRange: { start: 0, end: 0 },
-        isCompressed: false,
       },
       renderState: {
         range: { start: 0, end: 0 },
@@ -174,7 +155,7 @@ function createMockContext(): BuilderContext<TestItem> {
       },
       lastRenderRange: { start: -1, end: -1 },
       isDestroyed: false,
-    },
+    } as any,
     getContainerWidth: () => 800,
     afterScroll: [],
     clickHandlers: [],
@@ -300,7 +281,7 @@ describe("withGrid - Setup", () => {
   it("should throw error if reverse is true", () => {
     const plugin = withGrid({ columns: 4 });
     const ctx = createMockContext();
-    ctx.config.reverse = true;
+    (ctx.config as any).reverse = true;
 
     expect(() => {
       plugin.setup!(ctx);
@@ -790,7 +771,7 @@ describe("withGrid - Edge Cases", () => {
   it("should handle horizontal orientation", () => {
     const plugin = withGrid({ columns: 4 });
     const ctx = createMockContext();
-    ctx.config.horizontal = true;
+    (ctx.config as any).horizontal = true;
 
     plugin.setup!(ctx);
 
@@ -820,11 +801,11 @@ describe("withGrid - Integration", () => {
     const ctx = createMockContext();
 
     let rangeChangeEmitted = false;
-    ctx.emitter.emit = (event: string) => {
+    ctx.emitter.emit = ((event: string) => {
       if (event === "range:change") {
         rangeChangeEmitted = true;
       }
-    };
+    }) as any;
 
     plugin.setup!(ctx);
     ctx.forceRender();

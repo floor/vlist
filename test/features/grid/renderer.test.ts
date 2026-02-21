@@ -711,8 +711,8 @@ describe("createGridRenderer", () => {
 
       // Update positions with a compression context (no compression active)
       renderer.updatePositions({
-        scrollTop: 0,
-        containerHeight: 600,
+        scrollPosition: 0,
+        containerSize: 600,
         totalItems: 2, // totalRows in grid mode
         rangeStart: 0,
       });
@@ -1405,9 +1405,9 @@ describe("grid renderer compressed positioning", () => {
 
     // Render with compression context (simulating a compressed scroll state)
     const compressionCtx = {
-      scrollTop: 5_000_000,
-      totalItems: totalRows,
-      containerHeight: 500,
+      scrollPosition: 5000000,
+      totalItems: 100010, // totalRows
+      containerSize: 500,
       rangeStart: 100000,
     };
 

@@ -223,8 +223,8 @@ describe("resolveScrollArgs", () => {
       align: "center",
       behavior: "smooth",
       duration: 500,
-      extra: "ignored" as any,
-    });
+      extra: "ignored",
+    } as any);
 
     expect(result.align).toBe("center");
     expect(result.behavior).toBe("smooth");
