@@ -1,6 +1,6 @@
 # vlist
 
-Lightweight, high-performance virtual list with zero dependencies and optimal tree-shaking.
+Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
@@ -12,11 +12,18 @@ Lightweight, high-performance virtual list with zero dependencies and optimal tr
 - **8–12 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable plugins with perfect tree-shaking
 - **Grid, sections, async, selection, scale** — all opt-in
-- **Horizontal, reverse, page-scroll, wrap** — every layout mode
+- **Horizontal & vertical** — semantically correct orientation support
+- **Reverse, page-scroll, wrap** — every layout mode
 - **Accessible** — WAI-ARIA, keyboard navigation, screen-reader friendly
 - **React, Vue, Svelte** — framework adapters available
 
 **30+ interactive examples → [vlist.dev](https://vlist.dev)**
+
+## v0.9.0 Highlights
+
+- ✨ **Dimension-agnostic API** — semantically correct terminology for both orientations
+- 🎯 **Horizontal sections** — sticky headers work in horizontal carousels
+- 📐 **`orientation` not `direction`** — clearer, more intuitive configuration
 
 ## Installation
 
@@ -166,7 +173,8 @@ const list = vlist({
 | Pattern | Key options |
 |---------|------------|
 | **Chat UI** | `reverse: true` + `withSections({ sticky: false })` |
-| **Horizontal carousel** | `direction: 'horizontal'`, `item.width` |
+| **Horizontal carousel** | `orientation: 'horizontal'`, `item.width` |
+| **Horizontal sections** | `orientation: 'horizontal'` + `withSections()` |
 | **Page-level scroll** | `withPage()` |
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
@@ -225,7 +233,7 @@ const list = vlist(config).use(...plugins).build()
 `list.on()` returns an unsubscribe function. You can also use `list.off(event, handler)`.
 
 ```typescript
-list.on('scroll', ({ scrollPosition, direction }) => {})
+list.on('scroll', ({ scrollPosition, direction }) => {})  // v0.9.0: scrollPosition (was scrollTop)
 list.on('range:change', ({ range }) => {})
 list.on('item:click', ({ item, index, event }) => {})
 list.on('item:dblclick', ({ item, index, event }) => {})
@@ -289,6 +297,27 @@ import '@floor/vlist/styles/extras'    // optional enhancements
 ```
 
 Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--selected`, `.vlist-scrollbar` selectors. See [vlist.dev](https://vlist.dev) for theming examples.
+
+## Architecture
+
+### Dimension-Agnostic Design (v0.9.0)
+
+vlist uses semantically correct terminology that works for both vertical and horizontal orientations:
+
+```typescript
+// ✅ Correct: Works for both orientations
+sizeCache.getSize(index)       // Returns height OR width
+state.scrollPosition           // scrollTop OR scrollLeft
+state.containerSize            // height OR width
+
+// Previously (v0.8.2): Semantically wrong in horizontal mode
+heightCache.getHeight(index)   // ❌ Returned WIDTH in horizontal!
+state.scrollTop                // ❌ Stored scrollLEFT!
+```
+
+This makes the codebase clearer and eliminates semantic confusion when working with horizontal lists.
+
+**Migration from v0.8.2:** See [v0.9.0 Migration Guide](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
 
 ## Performance
 
@@ -357,9 +386,24 @@ const list: VList<Photo> = vlist<Photo>({
 
 [MIT](LICENSE)
 
+## Changelog
+
+### v0.9.0 (January 2025)
+
+**Breaking Changes:**
+- Renamed `direction` → `orientation` for semantic clarity
+- Renamed `HeightCache` → `SizeCache` and all related APIs
+- Renamed `scrollTop` → `scrollPosition` in ViewportState and events
+- See [Migration Guide](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
+
+**New Features:**
+- Horizontal orientation support for sections plugin
+- Complete dimension-agnostic architecture
+
 ## Links
 
 - **Docs & Examples:** [vlist.dev](https://vlist.dev)
+- **Migration Guide:** [v0.9.0 Migration](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
 - **GitHub:** [github.com/floor/vlist](https://github.com/floor/vlist)
 - **NPM:** [@floor/vlist](https://www.npmjs.com/package/@floor/vlist)
 - **Issues:** [GitHub Issues](https://github.com/floor/vlist/issues)
