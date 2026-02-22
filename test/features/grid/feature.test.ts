@@ -217,6 +217,7 @@ function createMockContext(): BuilderContext<TestItem> {
     getScrollTarget: () => window as any,
     setContainerDimensions: () => {},
     disableViewportResize: () => {},
+    disableWheelHandler: () => {},
   };
 
   return ctx;
