@@ -20,6 +20,8 @@ import type {
   Range,
 } from "../types";
 
+import type { ScrollConfig } from "../types";
+
 import type {
   BuilderConfig,
   BuilderContext,
@@ -163,8 +165,10 @@ function materialize<T extends VListItem = VListItem>(
     scroll: scrollConfig,
   } = config;
 
-  const wheelEnabled = scrollConfig?.wheel ?? true;
-  const wrapEnabled = scrollConfig?.wrap ?? false;
+  const scrollCfg: ScrollConfig | undefined = scrollConfig;
+
+  const wheelEnabled = scrollCfg?.wheel ?? true;
+  const wrapEnabled = scrollCfg?.wrap ?? false;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
   const mainAxisSizeConfig = mainAxisValue;
@@ -236,7 +240,7 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Apply scroll config to viewport ─────────────────────────────
   // Handle scroll.wheel: false - disable mouse wheel scrolling
-  if (scrollConfig?.wheel === false) {
+  if (scrollCfg?.wheel === false) {
     if (isHorizontal) {
       dom.viewport.style.overflowX = "hidden";
     } else {
@@ -245,7 +249,7 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   // Handle scroll.scrollbar: "none" - hide scrollbar completely
-  if (scrollConfig?.scrollbar === "none") {
+  if (scrollCfg?.scrollbar === "none") {
     dom.viewport.classList.add(`${classPrefix}-viewport--no-scrollbar`);
   }
 
@@ -613,7 +617,7 @@ function materialize<T extends VListItem = VListItem>(
         velocity: 0,
         reliable: false,
       });
-    }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+    }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
   // Wheel handler (can be disabled via config)
@@ -666,7 +670,7 @@ function materialize<T extends VListItem = VListItem>(
         $.vt.velocity = 0;
         $.vt.sampleCount = 0;
         emitter.emit("velocity:change", { velocity: 0, reliable: false });
-      }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+      }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
     $.wh = wheelHandler;
     dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
