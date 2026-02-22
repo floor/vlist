@@ -298,6 +298,13 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * (window resize is used instead).
    */
   disableViewportResize(): void;
+
+  /**
+   * Disable the wheel handler attached to the viewport.
+   * Used by window mode feature where wheel events should trigger native
+   * window scrolling instead of manual scroll position updates.
+   */
+  disableWheelHandler(): void;
 }
 
 // =============================================================================

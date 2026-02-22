@@ -69,6 +69,16 @@ export const withPage = <
       dom.root.style.overflow = "visible";
       dom.root.style.height = "auto";
 
+      // CRITICAL: Remove viewport overflow to prevent double scrolling
+      // The viewport was set to "overflow: auto" during DOM creation,
+      // which causes both window AND viewport to handle scroll events
+      if (config.horizontal) {
+        dom.viewport.style.overflowX = "visible";
+        dom.viewport.style.overflowY = "visible";
+      } else {
+        dom.viewport.style.overflow = "visible";
+      }
+
       // Don't hide scrollbar (window controls it)
       dom.viewport.classList.remove(
         `${config.classPrefix}-viewport--custom-scrollbar`,
@@ -77,6 +87,13 @@ export const withPage = <
       // ── 2. Disable viewport ResizeObserver ─────────────────────
       // Viewport size reflects content, not visible area
       ctx.disableViewportResize();
+
+      // ── 2b. Disable wheel handler ──────────────────────────────
+      // CRITICAL: Remove wheel handler to prevent scroll conflicts
+      // The wheel handler intercepts wheel events on viewport and manually
+      // updates scroll position, which conflicts with window scroll mode
+      // where we want native browser scrolling behavior
+      ctx.disableWheelHandler();
 
       // ── 3. Set window as scroll target ─────────────────────────
       ctx.setScrollTarget(window);
