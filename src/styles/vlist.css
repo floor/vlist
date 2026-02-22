@@ -479,3 +479,13 @@
 .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
+/* Hide scrollbar completely when scroll.scrollbar: "none" is configured */
+.vlist-viewport--no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+
+.vlist-viewport--no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
+}

@@ -234,6 +234,21 @@ function materialize<T extends VListItem = VListItem>(
     isHorizontal,
   );
 
+  // ── Apply scroll config to viewport ─────────────────────────────
+  // Handle scroll.wheel: false - disable mouse wheel scrolling
+  if (scrollConfig?.wheel === false) {
+    if (isHorizontal) {
+      dom.viewport.style.overflowX = "hidden";
+    } else {
+      dom.viewport.style.overflow = "hidden";
+    }
+  }
+
+  // Handle scroll.scrollbar: "none" - hide scrollbar completely
+  if (scrollConfig?.scrollbar === "none") {
+    dom.viewport.classList.add(`${classPrefix}-viewport--no-scrollbar`);
+  }
+
   // ── Create core components ──────────────────────────────────────
   const emitter = createEmitter<VListEvents<T>>();
 
