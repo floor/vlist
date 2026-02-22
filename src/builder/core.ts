@@ -291,6 +291,7 @@ function materialize<T extends VListItem = VListItem>(
     at: itemConfig.template as ItemTemplate<T>,
     vre: true,
     st: dom.viewport as HTMLElement | Window,
+    wh: null,
     gcw: () => $.cw,
     gch: () => $.ch,
   };
@@ -652,6 +653,7 @@ function materialize<T extends VListItem = VListItem>(
         emitter.emit("velocity:change", { velocity: 0, reliable: false });
       }, scrollConfig?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
+    $.wh = wheelHandler;
     dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
   } else if (isHorizontal && wheelEnabled) {
     // Horizontal mode: convert vertical wheel to horizontal scroll
@@ -660,6 +662,7 @@ function materialize<T extends VListItem = VListItem>(
       event.preventDefault();
       dom.viewport.scrollLeft += event.deltaY;
     };
+    $.wh = wheelHandler;
     dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
   }
 
@@ -982,8 +985,8 @@ function materialize<T extends VListItem = VListItem>(
     $.st.removeEventListener("scroll", onScrollFrame);
     resizeObserver.disconnect();
 
-    if (wheelHandler) {
-      dom.viewport.removeEventListener("wheel", wheelHandler);
+    if ($.wh) {
+      dom.viewport.removeEventListener("wheel", $.wh);
     }
     if (idleTimer) clearTimeout(idleTimer);
 

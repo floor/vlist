@@ -141,6 +141,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   vre: boolean;
   /** scrollTarget */
   st: HTMLElement | Window;
+  /** wheelHandler - for features to disable wheel handling if needed */
+  wh: ((e: WheelEvent) => void) | null;
   /** getContainerWidth */
   gcw: () => number;
   /** getContainerHeight */
@@ -469,6 +471,13 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       if ($.vre) {
         $.vre = false;
         resizeObserver.unobserve(dom.viewport);
+      }
+    },
+
+    disableWheelHandler(): void {
+      if ($.wh) {
+        dom.viewport.removeEventListener("wheel", $.wh);
+        $.wh = null;
       }
     },
   };
