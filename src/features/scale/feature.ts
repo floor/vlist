@@ -123,18 +123,18 @@ export const withScale = <
   T extends VListItem = VListItem,
 >(): VListFeature<T> => {
   let scrollbar: Scrollbar | null = null;
-  let virtualScrollTop = 0;
+  let virtualScrollPosition = 0;
   let compressedModeActive = false;
 
   // Smooth scroll state — shared across the feature closure so that
   // external scroll position changes (scrollbar drag, scrollToIndex)
   // can cancel an in-flight animation and stay in sync.
-  let targetScrollTop = 0;
+  let targetScrollPosition = 0;
   let smoothScrollId: number | null = null;
 
   // Touch scroll state — tracks finger position and velocity for
   // compressed-mode touch scrolling (iOS Safari, Android, etc.).
-  let touchStartY = 0;
+  let touchStartPos = 0;
   let touchScrollStart = 0;
   let momentumId: number | null = null;
   let touchSamples: Array<{ time: number; y: number }> = [];
@@ -180,14 +180,14 @@ export const withScale = <
           // scrollTop limit, so we store the position in a variable and
           // bypass native scroll entirely.
           //
-          // The setter also keeps targetScrollTop in sync and cancels any
+          // The setter also keeps targetScrollPosition in sync and cancels any
           // in-flight smooth scroll animation so that external position
           // changes (scrollbar drag, scrollToIndex) take effect immediately.
           ctx.setScrollFns(
-            () => virtualScrollTop,
+            () => virtualScrollPosition,
             (pos: number) => {
-              virtualScrollTop = pos;
-              targetScrollTop = pos;
+              virtualScrollPosition = pos;
+              targetScrollPosition = pos;
               if (smoothScrollId !== null) {
                 cancelAnimationFrame(smoothScrollId);
                 smoothScrollId = null;
@@ -197,27 +197,35 @@ export const withScale = <
 
           // ── Smooth scroll tick ──────────────────────────────────────────
           // Called on each animation frame while the scroll is converging
-          // toward targetScrollTop. Produces intermediate positions that
+          // toward targetScrollPosition. Produces intermediate positions that
           // prevent exact item-height-aligned jumps (the Firefox bug).
           const smoothScrollTick = (): void => {
-            const diff = targetScrollTop - virtualScrollTop;
+            const diff = targetScrollPosition - virtualScrollPosition;
 
             if (Math.abs(diff) < SNAP_THRESHOLD) {
               // Close enough — snap to target and stop animating
-              virtualScrollTop = targetScrollTop;
+              virtualScrollPosition = targetScrollPosition;
               smoothScrollId = null;
             } else {
               // Move a fraction of the remaining distance
-              virtualScrollTop += diff * LERP_FACTOR;
+              virtualScrollPosition += diff * LERP_FACTOR;
+              
+              // Clamp virtualScrollPosition to valid range to prevent scrolling beyond maxScroll
+              // This is critical when user keeps scrolling at the bottom - targetScrollPosition
+              // gets clamped to maxScroll, but virtualScrollPosition can drift beyond it during lerp
+              const comp = ctx.getCachedCompression();
+              const maxScroll = comp.virtualSize - ctx.state.viewportState.containerSize;
+              virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
+              
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
             }
 
-            ctx.scrollController.scrollTo(virtualScrollTop);
+            ctx.scrollController.scrollTo(virtualScrollPosition);
           };
 
           // ── Wheel handler ───────────────────────────────────────────────
-          // Instead of immediately applying deltaY to virtualScrollTop, we
-          // accumulate it in targetScrollTop and let the lerp animation
+          // Instead of immediately applying deltaY to virtualScrollPosition, we
+          // accumulate it in targetScrollPosition and let the lerp animation
           // converge over a few frames. This:
           //   1. Breaks exact item-height alignment (fixes Firefox bug)
           //   2. Coalesces multiple wheel events per frame (better perf)
@@ -231,9 +239,9 @@ export const withScale = <
             const maxScroll =
               comp.virtualSize - ctx.state.viewportState.containerSize;
 
-            targetScrollTop = Math.max(
+            targetScrollPosition = Math.max(
               0,
-              Math.min(targetScrollTop + e.deltaY, maxScroll),
+              Math.min(targetScrollPosition + e.deltaY, maxScroll),
             );
 
             // Start animation loop if not already running
@@ -268,8 +276,8 @@ export const withScale = <
             if (!touch) return;
             const y = horizontal ? touch.clientX : touch.clientY;
 
-            touchStartY = y;
-            touchScrollStart = virtualScrollTop;
+            touchStartPos = y;
+            touchScrollStart = virtualScrollPosition;
             touchSamples = [{ time: performance.now(), y }];
           };
 
@@ -289,7 +297,7 @@ export const withScale = <
             }
 
             // Delta: finger moving UP (negative dy) should scroll DOWN (positive delta)
-            const delta = touchStartY - y;
+            const delta = touchStartPos - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
               comp.virtualSize - ctx.state.viewportState.containerSize;
@@ -299,8 +307,8 @@ export const withScale = <
               Math.min(touchScrollStart + delta, maxScroll),
             );
 
-            virtualScrollTop = newPos;
-            targetScrollTop = newPos;
+            virtualScrollPosition = newPos;
+            targetScrollPosition = newPos;
             ctx.scrollController.scrollTo(newPos);
           };
 
@@ -343,7 +351,7 @@ export const withScale = <
               const maxScroll =
                 comp.virtualSize - ctx.state.viewportState.containerSize;
 
-              let newPos = virtualScrollTop + frameVelocity;
+              let newPos = virtualScrollPosition + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
 
               // Stop at edges
@@ -351,15 +359,15 @@ export const withScale = <
                 (newPos <= 0 && frameVelocity < 0) ||
                 (newPos >= maxScroll && frameVelocity > 0)
               ) {
-                virtualScrollTop = newPos;
-                targetScrollTop = newPos;
+                virtualScrollPosition = newPos;
+                targetScrollPosition = newPos;
                 ctx.scrollController.scrollTo(newPos);
                 momentumId = null;
                 return;
               }
 
-              virtualScrollTop = newPos;
-              targetScrollTop = newPos;
+              virtualScrollPosition = newPos;
+              targetScrollPosition = newPos;
               ctx.scrollController.scrollTo(newPos);
 
               momentumId = requestAnimationFrame(momentumTick);
