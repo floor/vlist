@@ -154,9 +154,9 @@ export const withAsync = <T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
-            // Don't call forceRender here - onStateChange already called renderIfNeeded()
-            // Calling forceRender causes a duplicate render which triggers the scroll
-            // system's afterScroll callback, leading to duplicate requests
+            // Force render to replace placeholders with actual data immediately
+            // This is necessary so the DOM shows loaded items instead of placeholders
+            ctx.forceRender();
             emitter.emit("load:end", { items: loadedItems, total });
           }
         },
@@ -353,8 +353,18 @@ export const withAsync = <T extends VListItem = VListItem>(
         emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
         await ctx.dataManager.loadInitial();
 
-        // No need to call forceRender here - onStateChange already called it
-        // and rendered the newly loaded data
+        // Force a render to immediately show placeholders (good UX while
+        // the API responds) and to guarantee viewportState.renderRange
+        // reflects the correct visible range — including compressed mode.
+        ctx.forceRender();
+
+        // After reload, ensure the currently visible range is loaded.
+        // Without this, if the user is scrolled past the initial page,
+        // placeholders are never replaced because no scroll event fires.
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end > 0) {
+          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+        }
       });
 
       // ── Load initial data (if autoLoad is enabled) ──
