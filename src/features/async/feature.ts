@@ -118,16 +118,16 @@ export const withAsync = <T extends VListItem = VListItem>(
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
         adapter,
-        initialTotal: total,
+        ...(total !== undefined && { initialTotal: total }),
         // Use chunkSize for pageSize to avoid loading multiple chunks initially
         // If chunkSize is 25 but pageSize is 50, loadInitial() loads 2 chunks = 2 requests
         pageSize: storage?.chunkSize ?? INITIAL_LOAD_SIZE,
-        storage: storage
-          ? {
-              chunkSize: storage.chunkSize,
-              maxCachedItems: storage.maxCachedItems,
-            }
-          : undefined,
+        ...(storage && {
+          storage: {
+            ...(storage.chunkSize !== undefined && { chunkSize: storage.chunkSize }),
+            ...(storage.maxCachedItems !== undefined && { maxCachedItems: storage.maxCachedItems }),
+          },
+        }),
         onStateChange: () => {
           if (ctx.state.isInitialized) {
             const newTotal = ctx.getVirtualTotal();
