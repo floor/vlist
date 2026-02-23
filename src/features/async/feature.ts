@@ -118,7 +118,9 @@ export const withAsync = <T extends VListItem = VListItem>(
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
         adapter,
-        pageSize: INITIAL_LOAD_SIZE,
+        // Use chunkSize for pageSize to avoid loading multiple chunks initially
+        // If chunkSize is 25 but pageSize is 50, loadInitial() loads 2 chunks = 2 requests
+        pageSize: storage?.chunkSize ?? INITIAL_LOAD_SIZE,
         storage: storage
           ? {
               chunkSize: storage.chunkSize,
@@ -127,7 +129,9 @@ export const withAsync = <T extends VListItem = VListItem>(
           : undefined,
         onStateChange: () => {
           if (ctx.state.isInitialized) {
-            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
+            const newTotal = ctx.getVirtualTotal();
+            console.log('[vlist-async] onStateChange - rebuilding size cache with total:', newTotal);
+            ctx.sizeCache.rebuild(newTotal);
             ctx.updateCompressionMode();
 
             // Update compression metadata on viewport state, but do NOT
@@ -142,14 +146,17 @@ export const withAsync = <T extends VListItem = VListItem>(
             ctx.state.viewportState.isCompressed = compression.isCompressed;
             ctx.state.viewportState.compressionRatio = compression.ratio;
 
+            console.log('[vlist-async] onStateChange - updating content size:', compression.virtualSize);
             ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
+            console.log('[vlist-async] onStateChange - render complete, scrollbar should update');
           }
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
-            ctx.sizeCache.rebuild(ctx.getVirtualTotal());
-            ctx.forceRender();
+            // Don't call forceRender here - onStateChange already called renderIfNeeded()
+            // Calling forceRender causes a duplicate render which triggers the scroll
+            // system's afterScroll callback, leading to duplicate requests
             emitter.emit("load:end", { items: loadedItems, total });
           }
         },
@@ -333,32 +340,21 @@ export const withAsync = <T extends VListItem = VListItem>(
         pendingRange = null;
 
         // Clear all rendered DOM elements so the renderer recreates them
-        // from scratch. Without this, items whose ID hasn't changed
+        // from scratch. Without this, items whose ID didn't change
         // (e.g. same index → same id after switching data source) would
         // keep their old template content due to the ID-match optimisation.
         ctx.invalidateRendered();
 
-        // If nothing is loaded yet (total is 0), trigger initial load instead of reload
-        // This happens when autoLoad: false and reload() is called before any data loaded
-        if (ctx.dataManager.getTotal() === 0 && ctx.dataManager.getCached() === 0) {
-          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
-          await ctx.dataManager.loadInitial();
-        } else {
-          await ctx.dataManager.reload();
-        }
+        // Clear old data and reset total to 0
+        await ctx.dataManager.reload();
 
-        // Force a render to immediately show placeholders (good UX while
-        // the API responds) and to guarantee viewportState.renderRange
-        // reflects the correct visible range — including compressed mode.
-        ctx.forceRender();
+        // Load initial data first (this will update total and trigger onStateChange)
+        // The onStateChange callback will call forceRender automatically when data arrives
+        emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+        await ctx.dataManager.loadInitial();
 
-        // After reload, ensure the currently visible range is loaded.
-        // Without this, if the user is scrolled past the initial page,
-        // placeholders are never replaced because no scroll event fires.
-        const { renderRange } = ctx.state.viewportState;
-        if (renderRange.end > 0) {
-          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
-        }
+        // No need to call forceRender here - onStateChange already called it
+        // and rendered the newly loaded data
       });
 
       // ── Load initial data (if autoLoad is enabled) ──

@@ -652,6 +652,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     // which avoids a wasted request to offset=0 when the viewport
     // is scrolled elsewhere.
     storage.clear();
+    storage.setTotal(0); // Reset total to 0 so scrollbar updates correctly
     idToIndex.clear();
     if (placeholders) placeholders.clear();
     activeLoads.clear();
