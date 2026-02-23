@@ -6,3 +6,4 @@
  */
 
 export { withSnapshots } from "./feature";
+export type { SnapshotConfig } from "./feature";

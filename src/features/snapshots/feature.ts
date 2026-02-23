@@ -21,6 +21,36 @@ import type { VListItem, ScrollSnapshot } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
 
 // =============================================================================
+// Config
+// =============================================================================
+
+/** Configuration for the snapshots feature. */
+export interface SnapshotConfig {
+  /**
+   * Snapshot to restore automatically after `build()` completes.
+   *
+   * When provided, `restoreScroll(restore)` is scheduled via
+   * `queueMicrotask` — it runs right after `.build()` returns but
+   * before the browser paints, so the user never sees position 0.
+   *
+   * ```ts
+   * const saved = sessionStorage.getItem('scroll');
+   * const snapshot = saved ? JSON.parse(saved) : undefined;
+   *
+   * const list = vlist({ ... })
+   *   .use(withAsync({
+   *     adapter,
+   *     autoLoad: !snapshot,                 // skip autoLoad when restoring
+   *     total: snapshot?.total,              // from snapshot — no hardcoded constant needed
+   *   }))
+   *   .use(withSnapshots({ restore: snapshot })) // auto-restores after build()
+   *   .build();
+   * ```
+   */
+  restore?: ScrollSnapshot;
+}
+
+// =============================================================================
 // Feature Factory
 // =============================================================================
 
@@ -46,9 +76,11 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
  * if (saved) list.restoreScroll(saved)
  * ```
  */
-export const withSnapshots = <
-  T extends VListItem = VListItem,
->(): VListFeature<T> => {
+export const withSnapshots = <T extends VListItem = VListItem>(
+  config?: SnapshotConfig,
+): VListFeature<T> => {
+  const restoreSnapshot = config?.restore;
+
   return {
     name: "withSnapshots",
     priority: 50,
@@ -70,7 +102,7 @@ export const withSnapshots = <
           getSelected && getSelected().length > 0 ? getSelected() : undefined;
 
         if (totalItems === 0) {
-          const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0 };
+          const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0, total: 0 };
           if (selectedIds) snapshot.selectedIds = selectedIds;
           return snapshot;
         }
@@ -94,19 +126,25 @@ export const withSnapshots = <
         // Clamp offsetInItem to non-negative (floating point edge cases)
         offsetInItem = Math.max(0, offsetInItem);
 
-        const snapshot: ScrollSnapshot = { index, offsetInItem };
+        const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
         if (selectedIds) snapshot.selectedIds = selectedIds;
         return snapshot;
       });
 
       // ── restoreScroll ──
-      ctx.methods.set("restoreScroll", (snapshot: ScrollSnapshot): void => {
+      const restoreScroll = (snapshot: ScrollSnapshot): void => {
         const { index, offsetInItem, selectedIds } = snapshot;
         const totalItems = ctx.getVirtualTotal();
 
         // If total is 0, we cannot restore scroll position yet.
-        // The caller should provide initialTotal when creating the list.
+        // The caller should provide initialTotal when creating the list
+        // (or include total in the snapshot via withAsync({ total: snapshot?.total })).
         if (totalItems === 0) {
+          return;
+        }
+
+        // Guard against corrupt snapshot data (NaN, undefined parsed from JSON)
+        if (!Number.isFinite(index) || !Number.isFinite(offsetInItem)) {
           return;
         }
 
@@ -188,7 +226,20 @@ export const withSnapshots = <
             });
           }
         }
-      });
+      };
+
+      ctx.methods.set("restoreScroll", restoreScroll);
+
+      // ── Auto-restore ──
+      // If a restore snapshot was provided via config, schedule restoration
+      // via queueMicrotask. This runs right after build() returns (all
+      // synchronous setup, isInitialized=true, initial render) but before
+      // the browser paints — so the user never sees position 0.
+      if (restoreSnapshot) {
+        queueMicrotask(() => {
+          restoreScroll(restoreSnapshot);
+        });
+      }
     },
   };
 };

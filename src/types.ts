@@ -341,6 +341,9 @@ export interface ScrollSnapshot {
   /** Pixel offset within the first visible item (how far it's scrolled off) */
   offsetInItem: number;
 
+  /** Total item count at snapshot time (used by restore to set sizeCache) */
+  total?: number;
+
   /** Selected item IDs (optional, included for convenience) */
   selectedIds?: Array<string | number>;
 }
