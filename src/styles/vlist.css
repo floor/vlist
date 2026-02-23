@@ -217,7 +217,7 @@
 
 /* Item replaced state - fade in when placeholder is replaced with real data */
 .vlist-item--replaced {
-    animation: animation: fade-in 0.3s ease-out;
+    animation: fade-in 0.3s ease-out;
 }
 
 /* Placeholder item styling */

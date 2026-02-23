@@ -38,6 +38,12 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
   /** Async data source (required) */
   adapter: VListAdapter<T>;
 
+  /** Total number of items (optional - if not provided, adapter must return it) */
+  total?: number;
+
+  /** Whether to automatically load initial data. Default: true */
+  autoLoad?: boolean;
+
   /** Loading behavior configuration */
   loading?: {
     /** Velocity threshold above which data loading is skipped (px/ms). Default: 25 */
@@ -83,7 +89,7 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
 export const withAsync = <T extends VListItem = VListItem>(
   config: DataFeatureConfig<T>,
 ): VListFeature<T> => {
-  const { adapter, loading } = config;
+  const { adapter, loading, total, autoLoad = true } = config;
   const cancelLoadThreshold =
     loading?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;
   const preloadThreshold =
@@ -317,7 +323,14 @@ export const withAsync = <T extends VListItem = VListItem>(
         // keep their old template content due to the ID-match optimisation.
         ctx.invalidateRendered();
 
-        await ctx.dataManager.reload();
+        // If nothing is loaded yet (total is 0), trigger initial load instead of reload
+        // This happens when autoLoad: false and reload() is called before any data loaded
+        if (ctx.dataManager.getTotal() === 0 && ctx.dataManager.getCached() === 0) {
+          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+          await ctx.dataManager.loadInitial();
+        } else {
+          await ctx.dataManager.reload();
+        }
 
         // Force a render to immediately show placeholders (good UX while
         // the API responds) and to guarantee viewportState.renderRange
@@ -333,11 +346,16 @@ export const withAsync = <T extends VListItem = VListItem>(
         }
       });
 
-      // ── Load initial data ──
-      emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
-      ctx.dataManager.loadInitial().catch((error) => {
-        emitter.emit("error", { error, context: "loadInitial" });
-      });
+      // ── Load initial data (if autoLoad is enabled) ──
+      if (autoLoad) {
+        emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+        ctx.dataManager.loadInitial().catch((error) => {
+          emitter.emit("error", { error, context: "loadInitial" });
+        });
+      } else if (total !== undefined) {
+        // If autoLoad is disabled but total is provided, set it so the vlist knows the size
+        ctx.dataManager.setTotal(total);
+      }
     },
   };
 };
