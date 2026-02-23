@@ -640,6 +640,9 @@ export interface VList<T extends VListItem = VListItem> {
   /** Reload data (clears and re-fetches if using adapter) */
   reload: () => Promise<void>;
 
+  /** Load data for the currently visible range without resetting (used by restoreScroll) */
+  loadVisibleRange: () => Promise<void>;
+
   // Configuration methods
   /** Update configuration without recreating the instance */
   update: (config: Partial<VListUpdateConfig>) => void;

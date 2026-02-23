@@ -102,12 +102,31 @@ export const withSnapshots = <
       // ── restoreScroll ──
       ctx.methods.set("restoreScroll", (snapshot: ScrollSnapshot): void => {
         const { index, offsetInItem, selectedIds } = snapshot;
-        const compression = ctx.getCachedCompression();
         const totalItems = ctx.getVirtualTotal();
 
-        if (totalItems === 0) return;
+        // If total is 0, we cannot restore scroll position yet.
+        // The caller should provide initialTotal when creating the list.
+        if (totalItems === 0) {
+          return;
+        }
 
+        // ── Ensure sizeCache, compression, and content size are current ──
+        // When withAsync has autoLoad:false + initialTotal, the total is set
+        // during setup() before isInitialized is true. The onStateChange
+        // callback (which rebuilds sizeCache) is gated by isInitialized, so
+        // sizeCache may still have total=0. Rebuild it now so compression
+        // and virtualSize calculations use the correct total.
+        const sizeCacheTotal = ctx.sizeCache.getTotal();
+        if (sizeCacheTotal !== totalItems) {
+          ctx.sizeCache.rebuild(totalItems);
+          ctx.updateCompressionMode();
+          const freshCompression = ctx.getCachedCompression();
+          ctx.updateContentSize(freshCompression.virtualSize);
+        }
+
+        const compression = ctx.getCachedCompression();
         const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
+
         let scrollPosition: number;
 
         if (compression.isCompressed) {
@@ -118,13 +137,15 @@ export const withSnapshots = <
             ((safeIndex + fraction) / totalItems) * compression.virtualSize;
         } else {
           // Normal: direct offset
-          scrollPosition = ctx.sizeCache.getOffset(safeIndex) + offsetInItem;
+          const offset = ctx.sizeCache.getOffset(safeIndex);
+          scrollPosition = offset + offsetInItem;
         }
 
         // Clamp to valid range
+        const containerSize = ctx.state.viewportState.containerSize;
         const maxScroll = Math.max(
           0,
-          compression.virtualSize - ctx.state.viewportState.containerSize,
+          compression.virtualSize - containerSize,
         );
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
@@ -137,6 +158,34 @@ export const withSnapshots = <
             | undefined;
           if (selectFn) {
             selectFn(...selectedIds);
+          }
+        }
+
+        // If async feature provides loadVisibleRange, use it to load data
+        // at the restored position without resetting the total/data.
+        // This avoids the problem where reload() resets total to 0, which
+        // shrinks the content, resets scrollTop to 0, and then loads from
+        // offset 0 instead of the restored position.
+        const loadVisibleFn = ctx.methods.get("loadVisibleRange") as
+          | (() => Promise<void>)
+          | undefined;
+
+        if (loadVisibleFn) {
+          // Wait a frame for the scroll position to settle and the viewport
+          // state to update, then load visible data.
+          requestAnimationFrame(() => {
+            loadVisibleFn();
+          });
+        } else {
+          // Fallback: if there's a reload method but no loadVisibleRange
+          // (shouldn't happen with current withAsync, but defensive).
+          const reloadFn = ctx.methods.get("reload") as
+            | (() => Promise<void>)
+            | undefined;
+          if (reloadFn) {
+            requestAnimationFrame(() => {
+              reloadFn();
+            });
           }
         }
       });
