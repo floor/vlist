@@ -715,6 +715,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     setItems(initialItems, 0, initialTotal ?? initialItems.length);
   } else if (initialTotal !== undefined) {
     storage.setTotal(initialTotal);
+    notifyStateChange();
   }
 
   // ==========================================================================

@@ -254,7 +254,7 @@ describe("withAsync - Factory", () => {
 
     expect(plugin.name).toBe("withAsync");
     expect(plugin.priority).toBe(20);
-    expect(plugin.methods).toEqual(["reload"]);
+    expect(plugin.methods).toEqual(["reload", "loadVisibleRange"]);
   });
 
   it("should accept loading configuration", () => {

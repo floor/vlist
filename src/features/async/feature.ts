@@ -109,7 +109,7 @@ export const withAsync = <T extends VListItem = VListItem>(
     name: "withAsync",
     priority: 20,
 
-    methods: ["reload"] as const,
+    methods: ["reload", "loadVisibleRange"] as const,
 
     setup(ctx: BuilderContext<T>): void {
       const { emitter } = ctx;
@@ -118,6 +118,7 @@ export const withAsync = <T extends VListItem = VListItem>(
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
         adapter,
+        initialTotal: total,
         // Use chunkSize for pageSize to avoid loading multiple chunks initially
         // If chunkSize is 25 but pageSize is 50, loadInitial() loads 2 chunks = 2 requests
         pageSize: storage?.chunkSize ?? INITIAL_LOAD_SIZE,
@@ -130,7 +131,6 @@ export const withAsync = <T extends VListItem = VListItem>(
         onStateChange: () => {
           if (ctx.state.isInitialized) {
             const newTotal = ctx.getVirtualTotal();
-            console.log('[vlist-async] onStateChange - rebuilding size cache with total:', newTotal);
             ctx.sizeCache.rebuild(newTotal);
             ctx.updateCompressionMode();
 
@@ -146,10 +146,8 @@ export const withAsync = <T extends VListItem = VListItem>(
             ctx.state.viewportState.isCompressed = compression.isCompressed;
             ctx.state.viewportState.compressionRatio = compression.ratio;
 
-            console.log('[vlist-async] onStateChange - updating content size:', compression.virtualSize);
             ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
-            console.log('[vlist-async] onStateChange - render complete, scrollbar should update');
           }
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
@@ -332,6 +330,28 @@ export const withAsync = <T extends VListItem = VListItem>(
       });
       emitter.on("load:end", () => {
         ctx.dom.root.removeAttribute("aria-busy");
+      });
+
+      // ── Register loadVisibleRange method ──
+      // Loads data for the currently visible range without resetting total or
+      // clearing existing data. Used by restoreScroll to load data at a
+      // restored scroll position without the destructive reset that reload()
+      // performs (which sets total=0, shrinks content, and resets scrollTop).
+      ctx.methods.set("loadVisibleRange", async (): Promise<void> => {
+        lastEnsuredRange = null;
+        pendingRange = null;
+
+        // Force render so renderRange reflects the current scroll position
+        ctx.forceRender();
+
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end > 0) {
+          emitter.emit("load:start", {
+            offset: renderRange.start,
+            limit: renderRange.end - renderRange.start + 1,
+          });
+          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+        }
       });
 
       // ── Register reload method ──
