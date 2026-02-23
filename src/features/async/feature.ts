@@ -44,6 +44,15 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
   /** Whether to automatically load initial data. Default: true */
   autoLoad?: boolean;
 
+  /** Storage configuration */
+  storage?: {
+    /** Number of items per chunk. Default: 100 */
+    chunkSize?: number;
+
+    /** Maximum cached items before eviction. Default: 10000 */
+    maxCachedItems?: number;
+  };
+
   /** Loading behavior configuration */
   loading?: {
     /** Velocity threshold above which data loading is skipped (px/ms). Default: 25 */
@@ -89,7 +98,7 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
 export const withAsync = <T extends VListItem = VListItem>(
   config: DataFeatureConfig<T>,
 ): VListFeature<T> => {
-  const { adapter, loading, total, autoLoad = true } = config;
+  const { adapter, loading, storage, total, autoLoad = true } = config;
   const cancelLoadThreshold =
     loading?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;
   const preloadThreshold =
@@ -110,6 +119,12 @@ export const withAsync = <T extends VListItem = VListItem>(
       const newDataManager = createDataManager<T>({
         adapter,
         pageSize: INITIAL_LOAD_SIZE,
+        storage: storage
+          ? {
+              chunkSize: storage.chunkSize,
+              maxCachedItems: storage.maxCachedItems,
+            }
+          : undefined,
         onStateChange: () => {
           if (ctx.state.isInitialized) {
             ctx.sizeCache.rebuild(ctx.getVirtualTotal());
