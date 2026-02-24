@@ -595,7 +595,7 @@ describe("clear", () => {
 
 describe("reset", () => {
   it("should clear and notify state change", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(10),
       onStateChange,
@@ -616,19 +616,19 @@ describe("reset", () => {
 
 describe("onStateChange callback", () => {
   it("should fire on setItems", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({ onStateChange });
 
     dm.setItems(createTestItems(5));
 
     expect(onStateChange).toHaveBeenCalledTimes(1);
-    const state = onStateChange.mock.calls[0]![0];
+    const state = (onStateChange.mock.calls[0] as any[])[0];
     expect(state.total).toBe(5);
     expect(state.cached).toBe(5);
   });
 
   it("should fire on updateItem", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(3),
       onStateChange,
@@ -641,7 +641,7 @@ describe("onStateChange callback", () => {
   });
 
   it("should not fire on failed updateItem", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(3),
       onStateChange,
@@ -654,7 +654,7 @@ describe("onStateChange callback", () => {
   });
 
   it("should fire on removeItem", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(3),
       onStateChange,
@@ -667,7 +667,7 @@ describe("onStateChange callback", () => {
   });
 
   it("should not fire on failed removeItem", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(3),
       onStateChange,
@@ -680,7 +680,7 @@ describe("onStateChange callback", () => {
   });
 
   it("should fire on reset", () => {
-    const onStateChange = mock(() => {});
+    const onStateChange = mock((_state: any) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(3),
       onStateChange,
@@ -704,21 +704,21 @@ describe("onStateChange callback", () => {
 
 describe("onItemsLoaded callback", () => {
   it("should fire on setItems with items, offset, total", () => {
-    const onItemsLoaded = mock(() => {});
+    const onItemsLoaded = mock((..._args: any[]) => {});
     const dm = createSimpleDataManager<TestItem>({ onItemsLoaded });
 
     const items = createTestItems(5);
     dm.setItems(items);
 
     expect(onItemsLoaded).toHaveBeenCalledTimes(1);
-    const [loadedItems, offset, total] = onItemsLoaded.mock.calls[0]!;
-    expect(loadedItems).toBe(items);
-    expect(offset).toBe(0);
-    expect(total).toBe(5);
+    const args = onItemsLoaded.mock.calls[0] as any[];
+    expect(args[0]).toBe(items);
+    expect(args[1]).toBe(0);
+    expect(args[2]).toBe(5);
   });
 
   it("should fire with correct offset for partial set", () => {
-    const onItemsLoaded = mock(() => {});
+    const onItemsLoaded = mock((..._args: any[]) => {});
     const dm = createSimpleDataManager<TestItem>({
       initialItems: createTestItems(5),
       onItemsLoaded,
@@ -729,21 +729,21 @@ describe("onItemsLoaded callback", () => {
     dm.setItems(moreItems, 5);
 
     expect(onItemsLoaded).toHaveBeenCalledTimes(1);
-    const [loadedItems, offset, total] = onItemsLoaded.mock.calls[0]!;
-    expect(loadedItems).toBe(moreItems);
-    expect(offset).toBe(5);
-    expect(total).toBe(8);
+    const args = onItemsLoaded.mock.calls[0] as any[];
+    expect(args[0]).toBe(moreItems);
+    expect(args[1]).toBe(5);
+    expect(args[2]).toBe(8);
   });
 
   it("should fire with explicit total when provided", () => {
-    const onItemsLoaded = mock(() => {});
+    const onItemsLoaded = mock((..._args: any[]) => {});
     const dm = createSimpleDataManager<TestItem>({ onItemsLoaded });
 
     const items = createTestItems(5);
     dm.setItems(items, 0, 200);
 
-    const [, , total] = onItemsLoaded.mock.calls[0]!;
-    expect(total).toBe(200);
+    const args = onItemsLoaded.mock.calls[0] as any[];
+    expect(args[2]).toBe(200);
   });
 });
 

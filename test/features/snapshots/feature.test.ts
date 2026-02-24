@@ -286,7 +286,7 @@ function createMockContext(
 
 describe("withSnapshots - Factory", () => {
   it("should create a feature with correct name and priority", () => {
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
 
     expect(feature.name).toBe("withSnapshots");
     expect(feature.priority).toBe(50);
@@ -299,21 +299,21 @@ describe("withSnapshots - Factory", () => {
       offsetInItem: 10,
       total: 1000,
     };
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
 
     expect(feature).toBeDefined();
     expect(feature.setup).toBeFunction();
   });
 
   it("should accept empty config", () => {
-    const feature = withSnapshots({});
+    const feature = withSnapshots<TestItem>({});
 
     expect(feature).toBeDefined();
     expect(feature.setup).toBeFunction();
   });
 
   it("should accept no arguments", () => {
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
 
     expect(feature).toBeDefined();
     expect(feature.setup).toBeFunction();
@@ -327,7 +327,7 @@ describe("withSnapshots - Factory", () => {
 describe("withSnapshots - Setup", () => {
   it("should register getScrollSnapshot method", () => {
     const ctx = createMockContext();
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     expect(ctx.methods.has("getScrollSnapshot")).toBe(true);
@@ -336,7 +336,7 @@ describe("withSnapshots - Setup", () => {
 
   it("should register restoreScroll method", () => {
     const ctx = createMockContext();
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     expect(ctx.methods.has("restoreScroll")).toBe(true);
@@ -351,7 +351,7 @@ describe("withSnapshots - Setup", () => {
 describe("withSnapshots - getScrollSnapshot", () => {
   it("should return index 0 and offsetInItem 0 when totalItems is 0", () => {
     const ctx = createMockContext({ totalItems: 0 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -371,7 +371,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
       scrollTop: 500,
       itemHeight: 48,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -388,7 +388,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
       scrollTop: 0,
       itemHeight: 48,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -405,7 +405,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
       scrollTop: 0,
       itemHeight: 48,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -416,7 +416,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
 
   it("should include total in snapshot", () => {
     const ctx = createMockContext({ totalItems: 1000000 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -430,7 +430,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
     // Pre-register a getSelected method
     ctx.methods.set("getSelected", () => [5, 10, 15]);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -443,7 +443,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
     const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
     ctx.methods.set("getSelected", () => []);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -456,7 +456,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
     const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
     // No getSelected method registered
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -483,7 +483,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
       actualSize,
       compressionRatio: virtualSize / actualSize,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -503,7 +503,7 @@ describe("withSnapshots - getScrollSnapshot", () => {
 describe("withSnapshots - restoreScroll", () => {
   it("should do nothing when totalItems is 0", () => {
     const ctx = createMockContext({ totalItems: 0 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -521,7 +521,7 @@ describe("withSnapshots - restoreScroll", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -540,7 +540,7 @@ describe("withSnapshots - restoreScroll", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -560,7 +560,7 @@ describe("withSnapshots - restoreScroll", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -577,7 +577,7 @@ describe("withSnapshots - restoreScroll", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
     ctx.methods.set("select", selectFn);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -591,7 +591,7 @@ describe("withSnapshots - restoreScroll", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
     ctx.methods.set("select", selectFn);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -603,7 +603,7 @@ describe("withSnapshots - restoreScroll", () => {
   it("should not crash when no select method exists", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -622,7 +622,7 @@ describe("withSnapshots - restoreScroll", () => {
 describe("withSnapshots - NaN Guard", () => {
   it("should do nothing when index is NaN", () => {
     const ctx = createMockContext({ totalItems: 100 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -634,7 +634,7 @@ describe("withSnapshots - NaN Guard", () => {
 
   it("should do nothing when offsetInItem is NaN", () => {
     const ctx = createMockContext({ totalItems: 100 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -646,7 +646,7 @@ describe("withSnapshots - NaN Guard", () => {
 
   it("should do nothing when index is Infinity", () => {
     const ctx = createMockContext({ totalItems: 100 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -658,7 +658,7 @@ describe("withSnapshots - NaN Guard", () => {
 
   it("should do nothing when offsetInItem is -Infinity", () => {
     const ctx = createMockContext({ totalItems: 100 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -683,7 +683,7 @@ describe("withSnapshots - sizeCache Rebuild", () => {
       containerSize: 600,
       sizeCacheTotal: 0, // Stale!
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -704,7 +704,7 @@ describe("withSnapshots - sizeCache Rebuild", () => {
       itemHeight: 48,
       sizeCacheTotal: 100, // Already correct
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -732,7 +732,7 @@ describe("withSnapshots - sizeCache Rebuild", () => {
       virtualSize,
       actualSize: virtualSize,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -757,7 +757,7 @@ describe("withSnapshots - loadVisibleRange", () => {
     ctx.methods.set("loadVisibleRange", loadVisibleFn);
     ctx.methods.set("reload", reloadFn);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -777,7 +777,7 @@ describe("withSnapshots - loadVisibleRange", () => {
     // Only reload, no loadVisibleRange
     ctx.methods.set("reload", reloadFn);
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -792,7 +792,7 @@ describe("withSnapshots - loadVisibleRange", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
     // No async methods registered at all
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -816,7 +816,7 @@ describe("withSnapshots - Auto-Restore", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const snapshot: ScrollSnapshot = { index: 10, offsetInItem: 20, total: 100 };
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
     // queueMicrotask runs after current synchronous code
@@ -830,7 +830,7 @@ describe("withSnapshots - Auto-Restore", () => {
   it("should NOT schedule restore when no config provided", async () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
@@ -842,7 +842,7 @@ describe("withSnapshots - Auto-Restore", () => {
   it("should NOT schedule restore when restore is undefined", async () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
-    const feature = withSnapshots({ restore: undefined });
+    const feature = withSnapshots<TestItem>({ restore: undefined });
     feature.setup(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
@@ -864,7 +864,7 @@ describe("withSnapshots - Auto-Restore", () => {
       offsetInItem: 10,
       total: 1000000,
     };
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
@@ -880,7 +880,7 @@ describe("withSnapshots - Auto-Restore", () => {
     ctx.methods.set("loadVisibleRange", loadVisibleFn);
 
     const snapshot: ScrollSnapshot = { index: 5, offsetInItem: 0, total: 100 };
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
     // Wait for queueMicrotask + requestAnimationFrame
@@ -893,7 +893,7 @@ describe("withSnapshots - Auto-Restore", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const snapshot = { index: NaN, offsetInItem: 0 } as ScrollSnapshot;
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
@@ -907,7 +907,7 @@ describe("withSnapshots - Auto-Restore", () => {
     const ctx = createMockContext({ totalItems: 0 });
 
     const snapshot: ScrollSnapshot = { index: 50, offsetInItem: 10, total: 1000 };
-    const feature = withSnapshots({ restore: snapshot });
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
@@ -935,7 +935,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
       scrollTop,
       containerSize: 500,
     });
-    const saveFeature = withSnapshots();
+    const saveFeature = withSnapshots<TestItem>();
     saveFeature.setup(saveCtx);
 
     const getSnapshot = saveCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -947,7 +947,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
       itemHeight,
       containerSize: 500,
     });
-    const restoreFeature = withSnapshots();
+    const restoreFeature = withSnapshots<TestItem>();
     restoreFeature.setup(restoreCtx);
 
     const restore = restoreCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -961,7 +961,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
 
   it("should preserve total through save/restore", () => {
     const ctx = createMockContext({ totalItems: 50000, scrollTop: 1000 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -981,7 +981,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
       scrollTop: 0,
     });
     saveCtx.methods.set("getSelected", () => [3, 7, 11]);
-    const saveFeature = withSnapshots();
+    const saveFeature = withSnapshots<TestItem>();
     saveFeature.setup(saveCtx);
 
     const getSnapshot = saveCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
@@ -994,7 +994,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
     const restoreCtx = createMockContext({ totalItems, itemHeight });
     restoreCtx.methods.set("select", selectFn);
 
-    const restoreFeature = withSnapshots();
+    const restoreFeature = withSnapshots<TestItem>();
     restoreFeature.setup(restoreCtx);
 
     const restore = restoreCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -1011,7 +1011,7 @@ describe("withSnapshots - Save/Restore Roundtrip", () => {
 describe("withSnapshots - Edge Cases", () => {
   it("should handle index 0 with offset 0", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -1028,7 +1028,7 @@ describe("withSnapshots - Edge Cases", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -1042,7 +1042,7 @@ describe("withSnapshots - Edge Cases", () => {
 
   it("should handle negative index by clamping to 0", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -1059,7 +1059,7 @@ describe("withSnapshots - Edge Cases", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
@@ -1086,7 +1086,7 @@ describe("withSnapshots - Edge Cases", () => {
       itemHeight: 48,
       containerSize: 500,
     });
-    const feature = withSnapshots();
+    const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;

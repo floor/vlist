@@ -1121,7 +1121,7 @@ describe("withAsync - Reload Method", () => {
     const ensureRangeSpy = mock(() => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
 
     // Trigger a scroll to set lastEnsuredRange
     const scrollHandler = ctx.afterScroll[0];
@@ -1151,7 +1151,7 @@ describe("withAsync - Reload Method", () => {
     const ctx = createMockContext();
     plugin.setup(ctx);
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
     await reloadFn();
 
     expect(ctx.invalidateRendered).toHaveBeenCalled();
@@ -1169,7 +1169,7 @@ describe("withAsync - Reload Method", () => {
     const reloadSpy = mock(() => Promise.resolve());
     dataManager.reload = reloadSpy;
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
     await reloadFn();
 
     expect(reloadSpy).toHaveBeenCalled();
@@ -1182,7 +1182,7 @@ describe("withAsync - Reload Method", () => {
     const ctx = createMockContext();
     plugin.setup(ctx);
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
     await reloadFn();
 
     expect(ctx.forceRender).toHaveBeenCalled();
@@ -1202,7 +1202,7 @@ describe("withAsync - Reload Method", () => {
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
     await reloadFn();
 
     expect(ensureRangeSpy).toHaveBeenCalledWith(20, 30);
@@ -1222,7 +1222,7 @@ describe("withAsync - Reload Method", () => {
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
-    const reloadFn = ctx.methods.get("reload");
+    const reloadFn = ctx.methods.get("reload")!;
     await reloadFn();
 
     expect(ensureRangeSpy).not.toHaveBeenCalled();

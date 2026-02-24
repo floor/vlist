@@ -232,7 +232,7 @@ function createMockContext(): BuilderContext<TestItem> {
 
 describe("withScrollbar — Factory", () => {
   it("should create a feature with correct name and priority", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
 
     expect(feature.name).toBe("withScrollbar");
     expect(feature.priority).toBe(30);
@@ -240,32 +240,32 @@ describe("withScrollbar — Factory", () => {
   });
 
   it("should accept empty config", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     expect(feature).toBeDefined();
   });
 
   it("should accept autoHide config", () => {
-    const feature = withScrollbar({ autoHide: false });
+    const feature = withScrollbar<TestItem>({ autoHide: false });
     expect(feature).toBeDefined();
   });
 
   it("should accept autoHideDelay config", () => {
-    const feature = withScrollbar({ autoHideDelay: 2000 });
+    const feature = withScrollbar<TestItem>({ autoHideDelay: 2000 });
     expect(feature).toBeDefined();
   });
 
   it("should accept minThumbSize config", () => {
-    const feature = withScrollbar({ minThumbSize: 50 });
+    const feature = withScrollbar<TestItem>({ minThumbSize: 50 });
     expect(feature).toBeDefined();
   });
 
   it("should accept showOnHover config", () => {
-    const feature = withScrollbar({ showOnHover: false });
+    const feature = withScrollbar<TestItem>({ showOnHover: false });
     expect(feature).toBeDefined();
   });
 
   it("should accept combined config", () => {
-    const feature = withScrollbar({
+    const feature = withScrollbar<TestItem>({
       autoHide: true,
       autoHideDelay: 1500,
       minThumbSize: 40,
@@ -282,7 +282,7 @@ describe("withScrollbar — Factory", () => {
 
 describe("withScrollbar — Setup", () => {
   it("should add custom-scrollbar CSS class to viewport", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -293,7 +293,7 @@ describe("withScrollbar — Setup", () => {
   });
 
   it("should register an afterScroll handler", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.afterScroll.length).toBe(0);
@@ -304,7 +304,7 @@ describe("withScrollbar — Setup", () => {
   });
 
   it("should register a destroy handler", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.destroyHandlers.length).toBe(0);
@@ -315,7 +315,7 @@ describe("withScrollbar — Setup", () => {
   });
 
   it("should register a resize handler", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.resizeHandlers.length).toBe(0);
@@ -326,7 +326,7 @@ describe("withScrollbar — Setup", () => {
   });
 
   it("should not add any public methods", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -336,7 +336,7 @@ describe("withScrollbar — Setup", () => {
   });
 
   it("should run destroy handler without error", () => {
-    const feature = withScrollbar();
+    const feature = withScrollbar<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
