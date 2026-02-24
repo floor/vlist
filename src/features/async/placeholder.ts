@@ -24,7 +24,7 @@ import {
 
 /** Placeholder configuration */
 export interface PlaceholderConfig {
-  /** Character used for masking text (default: '█') */
+  /** Character used for masking text (default: 'x') */
   maskCharacter?: string;
 
   /** Maximum items to sample for length profiling (default: 20) */
