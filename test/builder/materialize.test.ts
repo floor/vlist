@@ -102,6 +102,7 @@ function createTestRefs(): MRefs<TestItem> {
     vre: true,
     id: false,
     la: "",
+    wh: null,
   };
 }
 
