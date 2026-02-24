@@ -953,9 +953,10 @@ describe("createMaterializeCtx - Container Dimensions", () => {
     expect(refs.ch).toBe(768);
   });
 
-  it("should update shared state container size", () => {
+  it("should use height as container size in vertical mode", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
+    (deps as any).isHorizontal = false;
     const ctx = createMaterializeCtx(refs, deps);
 
     ctx.setContainerDimensions({
@@ -963,7 +964,23 @@ describe("createMaterializeCtx - Container Dimensions", () => {
       height: () => 600,
     });
 
+    // Vertical mode: main axis is vertical → containerSize = height
     expect(deps.sharedState.viewportState.containerSize).toBe(600);
+  });
+
+  it("should use width as container size in horizontal mode", () => {
+    const refs = createTestRefs();
+    const deps = createTestDeps();
+    (deps as any).isHorizontal = true;
+    const ctx = createMaterializeCtx(refs, deps);
+
+    ctx.setContainerDimensions({
+      width: () => 800,
+      height: () => 600,
+    });
+
+    // Horizontal mode: main axis is horizontal → containerSize = width
+    expect(deps.sharedState.viewportState.containerSize).toBe(800);
   });
 });
 

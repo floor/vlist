@@ -353,7 +353,7 @@ function materialize<T extends VListItem = VListItem>(
   const sharedState: BuilderState = {
     viewportState: {
       scrollPosition: 0,
-      containerSize: $.ch,
+      containerSize: isHorizontal ? $.cw : $.ch,
       totalSize: $.hc.getTotalSize(),
       actualSize: $.hc.getTotalSize(),
       isCompressed: false,
