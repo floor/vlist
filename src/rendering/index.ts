@@ -12,6 +12,12 @@ export {
   type SizeCache,
 } from "./sizes";
 
+// Measured Size Cache (auto-measurement for Mode B)
+export {
+  createMeasuredSizeCache,
+  type MeasuredSizeCache,
+} from "./measured";
+
 // Renderer
 export {
   createRenderer,
