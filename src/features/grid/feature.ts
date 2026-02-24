@@ -402,11 +402,34 @@ export const withGrid = <T extends VListItem = VListItem>(
       ctx.setRenderFns(gridRenderIfNeeded, gridForceRender);
 
       // ── Resize: update cross-axis cell sizes ──
+      const isDynamicSize = typeof baseSize === "function";
+
       ctx.resizeHandlers.push((width: number, height: number): void => {
+        // Use the cross-axis dimension: width for vertical, height for horizontal
+        const crossAxisSize = isHorizontal ? height : width;
+
+        // Always update grid state (used by dynamic height functions)
+        gridState.containerWidth = crossAxisSize;
+
         if (gridRenderer) {
-          // Use the cross-axis dimension: width for vertical, height for horizontal
-          const crossAxisSize = isHorizontal ? height : width;
           gridRenderer.updateContainerWidth(crossAxisSize);
+        }
+
+        // Dynamic heights depend on containerWidth via the grid context,
+        // so the size cache must be rebuilt when the cross-axis changes.
+        if (isDynamicSize) {
+          ctx.rebuildSizeCache();
+          ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+          ctx.updateCompressionMode();
+
+          for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
+            ctx.contentSizeHandlers[i]!();
+          }
+
+          if (gridRenderer) {
+            gridRenderer.clear();
+          }
+          ctx.forceRender();
         }
       });
 
