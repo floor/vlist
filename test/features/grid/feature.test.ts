@@ -230,7 +230,7 @@ function createMockContext(): BuilderContext<TestItem> {
 
 describe("withGrid - Factory", () => {
   it("should create a plugin with name and priority", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
 
     expect(plugin.name).toBe("withGrid");
     expect(plugin.priority).toBe(10);
@@ -239,29 +239,29 @@ describe("withGrid - Factory", () => {
 
   it("should throw error if columns is not provided", () => {
     expect(() => {
-      withGrid({} as any);
+      withGrid<TestItem>({} as any);
     }).toThrow("columns must be a positive integer");
   });
 
   it("should throw error if columns is less than 1", () => {
     expect(() => {
-      withGrid({ columns: 0 });
+      withGrid<TestItem>({ columns: 0 });
     }).toThrow("columns must be a positive integer");
   });
 
   it("should throw error if columns is negative", () => {
     expect(() => {
-      withGrid({ columns: -5 });
+      withGrid<TestItem>({ columns: -5 });
     }).toThrow("columns must be a positive integer");
   });
 
   it("should accept valid columns configuration", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept gap configuration", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     expect(plugin).toBeDefined();
   });
 });
@@ -272,7 +272,7 @@ describe("withGrid - Factory", () => {
 
 describe("withGrid - Setup", () => {
   it("should add grid CSS class to root", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -281,7 +281,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should throw error if reverse is true", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     (ctx.config as any).reverse = true;
 
@@ -291,7 +291,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should set virtual total function", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -301,7 +301,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should calculate correct rows for non-divisible items", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.dataManager.getTotal = () => 101;
 
@@ -312,7 +312,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should register resize handler", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -321,7 +321,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should expose _getGridLayout method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -332,7 +332,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should expose _getGridConfig method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -341,7 +341,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should expose _replaceGridRenderer method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -350,7 +350,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should expose _updateGridLayoutForGroups method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -359,7 +359,7 @@ describe("withGrid - Setup", () => {
   });
 
   it("should expose updateGrid method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -374,7 +374,7 @@ describe("withGrid - Setup", () => {
 
 describe("withGrid - Configuration", () => {
   it("should support gap configuration", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -386,7 +386,7 @@ describe("withGrid - Configuration", () => {
   });
 
   it("should default gap to 0 if not provided", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -398,7 +398,7 @@ describe("withGrid - Configuration", () => {
   });
 
   it("should detect groups in items", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.rawConfig.items = [
       { id: 0, name: "Header", __groupHeader: true } as any,
@@ -415,7 +415,7 @@ describe("withGrid - Configuration", () => {
   });
 
   it("should not add isHeaderFn if no groups detected", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -433,7 +433,7 @@ describe("withGrid - Configuration", () => {
 
 describe("withGrid - updateGrid", () => {
   it("should update columns", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -446,7 +446,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should throw error if columns is invalid", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -467,7 +467,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should update gap", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -482,7 +482,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should throw error if gap is negative", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -495,7 +495,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should update both columns and gap", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -511,7 +511,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should trigger content size handlers", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     let handlerCalled = false;
@@ -528,7 +528,7 @@ describe("withGrid - updateGrid", () => {
   });
 
   it("should accept zero gap", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -552,7 +552,7 @@ describe("withGrid - updateGrid", () => {
 
 describe("withGrid - Render Functions", () => {
   it("should replace render functions", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     const originalRenderIfNeeded = ctx.renderIfNeeded;
@@ -567,7 +567,7 @@ describe("withGrid - Render Functions", () => {
   });
 
   it("should not render if destroyed", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -585,7 +585,7 @@ describe("withGrid - Render Functions", () => {
   });
 
   it("should call force render without errors", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -598,7 +598,7 @@ describe("withGrid - Render Functions", () => {
   });
 
   it("should handle zero total rows gracefully", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.dataManager.getTotal = () => 0;
 
@@ -610,7 +610,7 @@ describe("withGrid - Render Functions", () => {
   });
 
   it("should handle zero container height gracefully", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.state.viewportState.containerSize = 0;
 
@@ -628,7 +628,7 @@ describe("withGrid - Render Functions", () => {
 
 describe("withGrid - Resize Handler", () => {
   it("should handle resize events", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -642,7 +642,7 @@ describe("withGrid - Resize Handler", () => {
   });
 
   it("should handle resize without errors", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -655,7 +655,7 @@ describe("withGrid - Resize Handler", () => {
   });
 
   it("should rebuild size cache on resize when using dynamic height function", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     // Use a dynamic height function
@@ -692,7 +692,7 @@ describe("withGrid - Resize Handler", () => {
   });
 
   it("should not rebuild size cache on resize when using fixed height", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     // Use a fixed height (number, not function)
@@ -718,7 +718,7 @@ describe("withGrid - Resize Handler", () => {
   });
 
   it("should update gridState.containerWidth on resize in vertical mode", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
 
     // Use a dynamic height function so setSizeConfig captures the wrapper
@@ -750,14 +750,14 @@ describe("withGrid - Resize Handler", () => {
   });
 
   it("should update gridState.containerWidth on resize in horizontal mode", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
     (ctx.config as any).horizontal = true;
 
     Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
 
     // Use a dynamic width function (horizontal mode uses item.width)
-    ctx.rawConfig.item.width = (_index: number, context: any) => {
+    (ctx.rawConfig.item as any).width = (_index: number, context: any) => {
       return context ? context.columnWidth * 1.333 : 200;
     };
 
@@ -787,7 +787,7 @@ describe("withGrid - Resize Handler", () => {
 
 describe("withGrid - Groups Support", () => {
   it("should support _updateGridLayoutForGroups method", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -802,7 +802,7 @@ describe("withGrid - Groups Support", () => {
   });
 
   it("should update content height when updating for groups", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -825,7 +825,7 @@ describe("withGrid - Groups Support", () => {
 
 describe("withGrid - Dynamic Size Function", () => {
   it("should support dynamic size function", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.rawConfig.item.height = (index: number) => 50 + index * 10;
 
@@ -835,7 +835,7 @@ describe("withGrid - Dynamic Size Function", () => {
   });
 
   it("should support dynamic size with grid context", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     let receivedContext: any = null;
@@ -857,7 +857,7 @@ describe("withGrid - Dynamic Size Function", () => {
 
 describe("withGrid - Edge Cases", () => {
   it("should handle single column (degrades to list)", () => {
-    const plugin = withGrid({ columns: 1 });
+    const plugin = withGrid<TestItem>({ columns: 1 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -867,7 +867,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should handle large column count", () => {
-    const plugin = withGrid({ columns: 50 });
+    const plugin = withGrid<TestItem>({ columns: 50 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -877,7 +877,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should handle column count larger than items", () => {
-    const plugin = withGrid({ columns: 200 });
+    const plugin = withGrid<TestItem>({ columns: 200 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);
@@ -887,7 +887,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should handle empty items list", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.dataManager.getTotal = () => 0;
 
@@ -897,7 +897,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should handle horizontal orientation", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     (ctx.config as any).horizontal = true;
 
@@ -907,7 +907,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should use viewport height as cross-axis size in horizontal mode", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
     (ctx.config as any).horizontal = true;
 
@@ -936,7 +936,7 @@ describe("withGrid - Edge Cases", () => {
   });
 
   it("should pass viewport height to renderer on resize in horizontal mode", () => {
-    const plugin = withGrid({ columns: 4, gap: 8 });
+    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
     const ctx = createMockContext();
     (ctx.config as any).horizontal = true;
 
@@ -971,7 +971,7 @@ describe("withGrid - Edge Cases", () => {
 
 describe("withGrid - Integration", () => {
   it("should work with compression context", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
     ctx.state.viewportState.isCompressed = true;
 
@@ -983,7 +983,7 @@ describe("withGrid - Integration", () => {
   });
 
   it("should emit range:change event on render", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     let rangeChangeEmitted = false;
@@ -1000,7 +1000,7 @@ describe("withGrid - Integration", () => {
   });
 
   it("should update viewport state on render", () => {
-    const plugin = withGrid({ columns: 4 });
+    const plugin = withGrid<TestItem>({ columns: 4 });
     const ctx = createMockContext();
 
     plugin.setup!(ctx);

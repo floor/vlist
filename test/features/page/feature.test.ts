@@ -147,9 +147,7 @@ function createMockContext(
       items: testItems,
       item: {
         height: 50,
-        template: (el: HTMLElement, item: TestItem) => {
-          el.textContent = item.name;
-        },
+        template: (item: TestItem) => `<div>${item.name}</div>`,
       },
     },
     renderer: {

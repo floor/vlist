@@ -123,9 +123,7 @@ function createMockContext(): BuilderContext<TestItem> {
       items: testItems,
       item: {
         height: 50,
-        template: (el: HTMLElement, item: TestItem) => {
-          el.textContent = item.name;
-        },
+        template: (item: TestItem) => `<div>${item.name}</div>`,
       },
     },
     renderer: {
@@ -244,7 +242,7 @@ function createMockContext(): BuilderContext<TestItem> {
 
 describe("withSelection — Factory", () => {
   it("should create a feature with correct name and priority", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
 
     expect(feature.name).toBe("withSelection");
     expect(feature.priority).toBe(50);
@@ -252,29 +250,29 @@ describe("withSelection — Factory", () => {
   });
 
   it("should accept empty config (defaults to single mode)", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     expect(feature).toBeDefined();
   });
 
   it("should accept single mode config", () => {
-    const feature = withSelection({ mode: "single" });
+    const feature = withSelection<TestItem>({ mode: "single" });
     expect(feature).toBeDefined();
   });
 
   it("should accept multiple mode config", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     expect(feature).toBeDefined();
   });
 
   it("should accept none mode config", () => {
-    const feature = withSelection({ mode: "none" });
+    const feature = withSelection<TestItem>({ mode: "none" });
     expect(feature).toBeDefined();
   });
 
   it("should accept initialSelection config", () => {
-    const feature = withSelection({
+    const feature = withSelection<TestItem>({
       mode: "multiple",
-      initialSelection: [1, 2, 3],
+      initial: [1, 2, 3],
     });
     expect(feature).toBeDefined();
   });
@@ -286,7 +284,7 @@ describe("withSelection — Factory", () => {
 
 describe("withSelection — Setup", () => {
   it("should register a click handler", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.clickHandlers.length).toBe(0);
@@ -297,7 +295,7 @@ describe("withSelection — Setup", () => {
   });
 
   it("should register a keydown handler", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.keydownHandlers.length).toBe(0);
@@ -308,7 +306,7 @@ describe("withSelection — Setup", () => {
   });
 
   it("should register a destroy handler", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     expect(ctx.destroyHandlers.length).toBe(0);
@@ -319,7 +317,7 @@ describe("withSelection — Setup", () => {
   });
 
   it("should run destroy handler without error", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -336,7 +334,7 @@ describe("withSelection — Setup", () => {
 
 describe("withSelection — Methods", () => {
   it("should register select method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -346,7 +344,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register deselect method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -356,7 +354,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register toggleSelect method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -366,7 +364,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register selectAll method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -376,7 +374,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register clearSelection method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -386,7 +384,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register getSelected method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -396,7 +394,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register getSelectedItems method", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -406,7 +404,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("should register exactly 7 public methods", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -415,7 +413,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("getSelected should return empty array initially", () => {
-    const feature = withSelection();
+    const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -427,7 +425,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("select should add items to selection (variadic args)", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -446,7 +444,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("deselect should remove items from selection (variadic args)", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -474,9 +472,9 @@ describe("withSelection — Methods", () => {
   });
 
   it("clearSelection should remove all items from selection", () => {
-    const feature = withSelection({
+    const feature = withSelection<TestItem>({
       mode: "multiple",
-      initialSelection: [1, 2, 3],
+      initial: [1, 2, 3],
     });
     const ctx = createMockContext();
 
@@ -492,7 +490,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("toggleSelect should toggle item in selection", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -514,7 +512,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("select in single mode should replace previous selection", () => {
-    const feature = withSelection({ mode: "single" });
+    const feature = withSelection<TestItem>({ mode: "single" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -534,7 +532,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("selectAll should select all items in multiple mode", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -550,7 +548,7 @@ describe("withSelection — Methods", () => {
   });
 
   it("selectAll should be a no-op in single mode", () => {
-    const feature = withSelection({ mode: "single" });
+    const feature = withSelection<TestItem>({ mode: "single" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -571,7 +569,7 @@ describe("withSelection — Methods", () => {
 
 describe("withSelection — ARIA", () => {
   it("should add a live region element to the DOM for announcements", () => {
-    const feature = withSelection({ mode: "multiple" });
+    const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -582,7 +580,7 @@ describe("withSelection — ARIA", () => {
   });
 
   it("should create live region with aria-live=polite and sr-only styling", () => {
-    const feature = withSelection({ mode: "single" });
+    const feature = withSelection<TestItem>({ mode: "single" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -599,7 +597,7 @@ describe("withSelection — ARIA", () => {
 
 describe("withSelection — None Mode", () => {
   it("should still register methods in none mode", () => {
-    const feature = withSelection({ mode: "none" });
+    const feature = withSelection<TestItem>({ mode: "none" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
@@ -610,7 +608,7 @@ describe("withSelection — None Mode", () => {
   });
 
   it("select should be a no-op in none mode", () => {
-    const feature = withSelection({ mode: "none" });
+    const feature = withSelection<TestItem>({ mode: "none" });
     const ctx = createMockContext();
 
     feature.setup!(ctx);
