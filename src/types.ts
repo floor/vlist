@@ -625,7 +625,7 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   "load:start": { offset: number; limit: number };
 
   /** Data loading completed */
-  "load:end": { items: T[]; total?: number };
+  "load:end": { items: T[]; total?: number; offset?: number };
 
   /** Error occurred */
   error: { error: Error; context: string };

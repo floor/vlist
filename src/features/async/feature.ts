@@ -155,7 +155,7 @@ export const withAsync = <T extends VListItem = VListItem>(
             // Force render to replace placeholders with actual data immediately
             // This is necessary so the DOM shows loaded items instead of placeholders
             ctx.forceRender();
-            emitter.emit("load:end", { items: loadedItems, total });
+            emitter.emit("load:end", { items: loadedItems, total, offset: _offset });
           }
         },
       });
