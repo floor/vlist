@@ -203,7 +203,8 @@ function createMockContext(): BuilderContext<TestItem> {
       sizeCache.rebuild(total ?? virtualTotalFn());
     },
     setSizeConfig: (config) => {
-      // Mock implementation
+      // Store for tests that need to inspect the wrapped size function
+      (ctx as any)._lastSizeConfig = config;
     },
     updateContentSize: (totalSize) => {
       testDom.content.style.height = `${totalSize}px`;
@@ -651,6 +652,132 @@ describe("withGrid - Resize Handler", () => {
     expect(() => {
       resizeHandler!(1024, 768);
     }).not.toThrow();
+  });
+
+  it("should rebuild size cache on resize when using dynamic height function", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+
+    // Use a dynamic height function
+    ctx.rawConfig.item.height = (index: number, context: any) => {
+      return context ? context.columnWidth * 0.75 : 200;
+    };
+
+    let rebuildCount = 0;
+    const originalRebuild = ctx.rebuildSizeCache;
+    ctx.rebuildSizeCache = (total?: number) => {
+      rebuildCount++;
+      originalRebuild(total);
+    };
+
+    let contentSizeUpdated = false;
+    const originalUpdateContentSize = ctx.updateContentSize;
+    ctx.updateContentSize = (totalSize: number) => {
+      contentSizeUpdated = true;
+      originalUpdateContentSize(totalSize);
+    };
+
+    plugin.setup!(ctx);
+
+    // Reset counters after setup (setup also calls rebuildSizeCache)
+    rebuildCount = 0;
+    contentSizeUpdated = false;
+
+    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
+    resizeHandler!(1200, 600);
+
+    // Dynamic heights: size cache should be rebuilt
+    expect(rebuildCount).toBeGreaterThan(0);
+    expect(contentSizeUpdated).toBe(true);
+  });
+
+  it("should not rebuild size cache on resize when using fixed height", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+
+    // Use a fixed height (number, not function)
+    ctx.rawConfig.item.height = 200;
+
+    let rebuildCount = 0;
+    const originalRebuild = ctx.rebuildSizeCache;
+    ctx.rebuildSizeCache = (total?: number) => {
+      rebuildCount++;
+      originalRebuild(total);
+    };
+
+    plugin.setup!(ctx);
+
+    // Reset after setup
+    rebuildCount = 0;
+
+    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
+    resizeHandler!(1200, 600);
+
+    // Fixed heights: no size cache rebuild needed
+    expect(rebuildCount).toBe(0);
+  });
+
+  it("should update gridState.containerWidth on resize in vertical mode", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+
+    // Use a dynamic height function so setSizeConfig captures the wrapper
+    ctx.rawConfig.item.height = (_index: number, context: any) => {
+      return context ? context.columnWidth * 0.75 : 200;
+    };
+
+    plugin.setup!(ctx);
+
+    // Get the captured wrapper function
+    const wrappedSizeFn = (ctx as any)._lastSizeConfig as (index: number) => number;
+    expect(typeof wrappedSizeFn).toBe("function");
+
+    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
+    resizeHandler!(1200, 600);
+
+    // Call the wrapper to inspect what context it builds
+    // In vertical mode, gridState.containerWidth should be 1200 (the width)
+    // columnWidth = (1200 - 2 - 3*8) / 4 = 274.5
+    wrappedSizeFn(0);
+
+    // Verify indirectly: the wrapper uses gridState.containerWidth internally.
+    // If containerWidth = 1200, columnWidth = (1200 - 2 - 24) / 4 = 293.5
+    // height = 293.5 * 0.75 = 220.125, + gap 8 = 228.125
+    const result = wrappedSizeFn(0);
+    const expectedColWidth = (1200 - 2 - (4 - 1) * 8) / 4;
+    const expectedSize = expectedColWidth * 0.75 + 8; // + gap
+    expect(result).toBeCloseTo(expectedSize, 0);
+  });
+
+  it("should update gridState.containerWidth on resize in horizontal mode", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+    (ctx.config as any).horizontal = true;
+
+    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
+
+    // Use a dynamic width function (horizontal mode uses item.width)
+    ctx.rawConfig.item.width = (_index: number, context: any) => {
+      return context ? context.columnWidth * 1.333 : 200;
+    };
+
+    plugin.setup!(ctx);
+
+    // Get the captured wrapper function
+    const wrappedSizeFn = (ctx as any)._lastSizeConfig as (index: number) => number;
+    expect(typeof wrappedSizeFn).toBe("function");
+
+    // Resize: height changes to 600
+    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 600, configurable: true });
+    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
+    resizeHandler!(1200, 600);
+
+    // In horizontal mode, gridState.containerWidth should be 600 (the height)
+    // columnWidth = (600 - 2 - 24) / 4 = 143.5
+    const result = wrappedSizeFn(0);
+    const expectedColWidth = (600 - 2 - (4 - 1) * 8) / 4;
+    const expectedSize = expectedColWidth * 1.333 + 8; // + gap
+    expect(result).toBeCloseTo(expectedSize, 0);
   });
 });
 
