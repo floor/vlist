@@ -137,6 +137,7 @@ function createMockContext(): BuilderContext<TestItem> {
     } as any,
     dataManager: {
       getTotal: () => testItems.length,
+      getCached: () => testItems.length,
       getItem: (index: number) => testItems[index],
       getItemsInRange: (start: number, end: number) =>
         testItems.slice(start, end + 1),
