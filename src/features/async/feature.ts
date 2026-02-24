@@ -324,6 +324,37 @@ export const withAsync = <T extends VListItem = VListItem>(
         }
       });
 
+      // ── Network recovery: reload visible placeholders when back online ──
+      // When the network fails, placeholders stay in place because no scroll
+      // event fires to retrigger fetching. Listening to the browser's `online`
+      // event lets us re-ensure the visible range as soon as connectivity
+      // returns. ensureRange already skips fully-loaded ranges, so this only
+      // fetches chunks that actually failed.
+      const handleOnline = (): void => {
+        if (ctx.state.isDestroyed) return;
+
+        // Reset so the afterScroll logic doesn't think we already loaded it
+        lastEnsuredRange = null;
+
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end > 0) {
+          ctx.dataManager
+            .ensureRange(renderRange.start, renderRange.end)
+            .catch((error) => {
+              emitter.emit("error", { error, context: "ensureRange" });
+            });
+        }
+
+        // Also flush any range that was pending when the network dropped
+        loadPendingRange();
+      };
+
+      window.addEventListener("online", handleOnline);
+
+      ctx.destroyHandlers.push(() => {
+        window.removeEventListener("online", handleOnline);
+      });
+
       // ── ARIA: aria-busy for loading state ──
       emitter.on("load:start", () => {
         ctx.dom.root.setAttribute("aria-busy", "true");
