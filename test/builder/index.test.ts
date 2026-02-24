@@ -553,7 +553,7 @@ describe("builder validation", () => {
         container,
         item: { height: undefined as any, template },
       });
-    }).toThrow("[vlist/builder] item.height is required");
+    }).toThrow("[vlist/builder] item.height or item.estimatedHeight is required");
   });
 
   it("should throw when item height is zero or negative", () => {

@@ -42,6 +42,7 @@ import {
   MIN_RELIABLE_SAMPLES,
 } from "./velocity";
 import { createSizeCache } from "../rendering/sizes";
+import { createMeasuredSizeCache, type MeasuredSizeCache } from "../rendering/measured";
 import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
@@ -85,25 +86,40 @@ export const vlist = <T extends VListItem = VListItem>(
 
   const isHorizontal = config.orientation === "horizontal";
   const mainAxisProp = isHorizontal ? "width" : "height";
+  const estimatedProp = isHorizontal ? "estimatedWidth" : "estimatedHeight";
   const mainAxisValue = isHorizontal ? config.item.width : config.item.height;
+  const estimatedSize = isHorizontal
+    ? config.item.estimatedWidth
+    : config.item.estimatedHeight;
 
-  if (mainAxisValue == null) {
+  // Mode priority: explicit size (Mode A) > estimated size (Mode B)
+  if (mainAxisValue == null && estimatedSize == null) {
     throw new Error(
-      `[vlist/builder] item.${mainAxisProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
+      `[vlist/builder] item.${mainAxisProp} or item.${estimatedProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
     );
   }
-  if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
-    throw new Error(
-      `[vlist/builder] item.${mainAxisProp} must be a positive number`,
-    );
-  }
-  if (
-    typeof mainAxisValue !== "number" &&
-    typeof mainAxisValue !== "function"
-  ) {
-    throw new Error(
-      `[vlist/builder] item.${mainAxisProp} must be a number or a function (index) => number`,
-    );
+  if (mainAxisValue != null) {
+    // Mode A validation
+    if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
+      throw new Error(
+        `[vlist/builder] item.${mainAxisProp} must be a positive number`,
+      );
+    }
+    if (
+      typeof mainAxisValue !== "number" &&
+      typeof mainAxisValue !== "function"
+    ) {
+      throw new Error(
+        `[vlist/builder] item.${mainAxisProp} must be a number or a function (index) => number`,
+      );
+    }
+  } else if (estimatedSize != null) {
+    // Mode B validation
+    if (typeof estimatedSize !== "number" || estimatedSize <= 0) {
+      throw new Error(
+        `[vlist/builder] item.${estimatedProp} must be a positive number`,
+      );
+    }
   }
   if (!config.item.template) {
     throw new Error("[vlist/builder] item.template is required");
@@ -136,7 +152,8 @@ export const vlist = <T extends VListItem = VListItem>(
         config,
         features,
         isHorizontal,
-        mainAxisValue as number | ((index: number) => number),
+        mainAxisValue as (number | ((index: number) => number) | null),
+        estimatedSize ?? null,
       );
     },
   };
@@ -152,7 +169,8 @@ function materialize<T extends VListItem = VListItem>(
   config: BuilderConfig<T>,
   features: Map<string, VListFeature<T>>,
   isHorizontal: boolean,
-  mainAxisValue: number | ((index: number) => number),
+  mainAxisValue: number | ((index: number) => number) | null,
+  estimatedSizeValue: number | null,
 ): BuiltVList<T> {
   // ── Resolve config ──────────────────────────────────────────────
   const {
@@ -171,7 +189,8 @@ function materialize<T extends VListItem = VListItem>(
   const wrapEnabled = scrollCfg?.wrap ?? false;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
-  const mainAxisSizeConfig = mainAxisValue;
+  const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
+  const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
   // Detect mobile devices once at creation time - preserve native touch scrolling
   const isMobile =
@@ -259,10 +278,12 @@ function materialize<T extends VListItem = VListItem>(
   // Use items array by reference (memory-optimized)
   const initialItemsArray: T[] = initialItems || [];
 
-  const initialSizeCache = createSizeCache(
-    mainAxisSizeConfig,
-    initialItemsArray.length,
-  );
+  const initialSizeCache = measurementEnabled
+    ? createMeasuredSizeCache(
+        estimatedSizeValue!,
+        initialItemsArray.length,
+      )
+    : createSizeCache(mainAxisSizeConfig, initialItemsArray.length);
   const pool = createElementPool();
 
   // ── Shared mutable refs ($) ─────────────────────────────────────
@@ -321,6 +342,7 @@ function materialize<T extends VListItem = VListItem>(
   // Local-only mutable state (not needed by extracted factories)
   let animationFrameId: number | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let isScrolling = false;
 
   // Reusable range objects (no allocation on scroll)
   const visibleRange: Range = { start: 0, end: 0 };
@@ -347,6 +369,150 @@ function materialize<T extends VListItem = VListItem>(
 
   // Rendered item tracking
   const rendered = new Map<number, HTMLElement>();
+
+  // ── Mode B: Measurement tracking ───────────────────────────────
+  // Maps observed elements back to their item index for ResizeObserver callback
+  const measuredElementToIndex = measurementEnabled
+    ? new WeakMap<Element, number>()
+    : null;
+  const measuredCache = measurementEnabled
+    ? (initialSizeCache as MeasuredSizeCache)
+    : null;
+
+  // Item measurement ResizeObserver (Mode B only)
+  let itemResizeObserver: ResizeObserver | null = null;
+
+  // Scroll correction accumulated within a single ResizeObserver batch,
+  // then applied immediately at the end of that batch (Direction C).
+  // Works for both vertical (scrollTop) and horizontal (scrollLeft).
+  let pendingScrollDelta = 0;
+  let pendingContentSizeUpdate = false;
+
+  /**
+   * Mode B: flush deferred content size update on scroll idle.
+   * Scroll correction is applied immediately in the ResizeObserver callback
+   * (Direction C) so only content size needs flushing here — this keeps the
+   * scrollbar stable during active scrolling while avoiding the glitch caused
+   * by large accumulated corrections on idle.
+   *
+   * Axis-neutral: works for both vertical and horizontal orientations.
+   */
+  const flushMeasurements = (): void => {
+    if (!measurementEnabled) return;
+
+    if (pendingContentSizeUpdate) {
+      // Check if user is at the scroll end before content size changes
+      // (bottom for vertical, right edge for horizontal)
+      const scroll = $.sgt();
+      const maxScroll = isHorizontal
+        ? dom.viewport.scrollWidth - dom.viewport.clientWidth
+        : dom.viewport.scrollHeight - dom.viewport.clientHeight;
+      const wasAtEnd = maxScroll > 0 && scroll >= maxScroll - 2;
+
+      updateContentSize();
+      pendingContentSizeUpdate = false;
+
+      // Stay at end: content grew but scroll position was clamped to old max
+      if (wasAtEnd) {
+        const newMax = Math.max(0, $.hc.getTotalSize() - (isHorizontal ? $.cw : $.ch));
+        if (newMax > scroll) {
+          $.sst(newMax);
+          $.ls = newMax;
+          $.rfn();
+        }
+      }
+    }
+  };
+
+  if (measurementEnabled && measuredCache && measuredElementToIndex) {
+    itemResizeObserver = new ResizeObserver((entries) => {
+      if ($.id) return;
+
+      let hasNewMeasurements = false;
+      const firstVisible = visibleRange.start;
+
+      for (const entry of entries) {
+        const index = measuredElementToIndex.get(entry.target);
+        if (index === undefined) continue;
+
+        const newSize = isHorizontal
+          ? entry.borderBoxSize[0]!.inlineSize
+          : entry.borderBoxSize[0]!.blockSize;
+
+        if (!measuredCache.isMeasured(index)) {
+          const oldSize = measuredCache.getSize(index);
+          measuredCache.setMeasuredSize(index, newSize);
+          hasNewMeasurements = true;
+
+          // Track scroll correction for above-viewport items
+          if (index < firstVisible && newSize !== oldSize) {
+            pendingScrollDelta += newSize - oldSize;
+          }
+
+          // Stop observing — size is now known
+          itemResizeObserver!.unobserve(entry.target as Element);
+
+          // Set explicit size on the element now that it's measured
+          const el = entry.target as HTMLElement;
+          if (isHorizontal) {
+            el.style.width = `${newSize}px`;
+          } else {
+            el.style.height = `${newSize}px`;
+          }
+        }
+      }
+
+      if (!hasNewMeasurements) return;
+
+      // Rebuild prefix sums so item positions are correct
+      measuredCache.rebuild($.vtf());
+      $.hc = measuredCache;
+
+      // Direction C: always apply scroll correction immediately.
+      // Per-batch corrections are small (one batch of items) and masked by
+      // the user's own scroll motion during active scrolling.  This avoids
+      // the glitch caused by accumulating a large delta and applying it all
+      // at once on scroll idle.
+      if (pendingScrollDelta !== 0) {
+        const currentScroll = $.sgt();
+        $.sst(currentScroll + pendingScrollDelta);
+        $.ls = currentScroll + pendingScrollDelta;
+        pendingScrollDelta = 0;
+      }
+
+      // Content size: defer during scrolling for scrollbar stability
+      // (changing content height while the user drags the scrollbar thumb
+      // causes the thumb proportions to shift under their finger).
+      if (isScrolling) {
+        pendingContentSizeUpdate = true;
+      } else {
+        // Check if user is at the scroll end before content size changes
+        // (bottom for vertical, right edge for horizontal)
+        const scrollBeforeResize = $.sgt();
+        const maxScrollBeforeResize = isHorizontal
+          ? dom.viewport.scrollWidth - dom.viewport.clientWidth
+          : dom.viewport.scrollHeight - dom.viewport.clientHeight;
+        const wasAtEnd = maxScrollBeforeResize > 0 && scrollBeforeResize >= maxScrollBeforeResize - 2;
+
+        updateContentSize();
+        pendingContentSizeUpdate = false;
+
+        // Stay at end: content grew but scroll position was clamped to old max
+        if (wasAtEnd) {
+          const newMax = Math.max(0, $.hc.getTotalSize() - (isHorizontal ? $.cw : $.ch));
+          if (newMax > scrollBeforeResize) {
+            $.sst(newMax);
+            $.ls = newMax;
+          }
+        }
+      }
+
+      // Reposition items with corrected prefix sums
+      lastRenderRange.start = -1;
+      lastRenderRange.end = -1;
+      $.rfn();
+    });
+  }
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
 
@@ -390,13 +556,27 @@ function materialize<T extends VListItem = VListItem>(
     const element = pool.acquire();
     element.className = baseClass;
 
+    // Mode B: unmeasured items get no explicit size so ResizeObserver can
+    // measure the real content height. Measured items use their known size.
+    const shouldConstrainSize =
+      !measurementEnabled ||
+      (measuredCache && measuredCache.isMeasured(index));
+
     if (isHorizontal) {
-      element.style.width = `${$.hc.getSize(index)}px`;
+      if (shouldConstrainSize) {
+        element.style.width = `${$.hc.getSize(index)}px`;
+      } else {
+        element.style.width = "";
+      }
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
       }
     } else {
-      element.style.height = `${$.hc.getSize(index)}px`;
+      if (shouldConstrainSize) {
+        element.style.height = `${$.hc.getSize(index)}px`;
+      } else {
+        element.style.height = "";
+      }
     }
 
     element.dataset.index = String(index);
@@ -469,6 +649,10 @@ function materialize<T extends VListItem = VListItem>(
     // Add / update items in range
     const fragment = document.createDocumentFragment();
     const newElements: Array<{ index: number; element: HTMLElement }> = [];
+    const newlyRenderedForMeasurement: Array<{
+      index: number;
+      element: HTMLElement;
+    }> = [];
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
       const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
@@ -485,10 +669,18 @@ function materialize<T extends VListItem = VListItem>(
 
           applyTemplate(existing, $.at(item, i, itemState));
           existing.dataset.id = newId;
+          // Mode B: unconstrain unmeasured items for ResizeObserver measurement
+          const shouldConstrain =
+            !measurementEnabled ||
+            (measuredCache && measuredCache.isMeasured(i));
           if (isHorizontal) {
-            existing.style.width = `${$.hc.getSize(i)}px`;
+            existing.style.width = shouldConstrain
+              ? `${$.hc.getSize(i)}px`
+              : "";
           } else {
-            existing.style.height = `${$.hc.getSize(i)}px`;
+            existing.style.height = shouldConstrain
+              ? `${$.hc.getSize(i)}px`
+              : "";
           }
 
           // Update placeholder class
@@ -520,6 +712,7 @@ function materialize<T extends VListItem = VListItem>(
         }
       } else {
         const element = renderItem(i, item);
+        newlyRenderedForMeasurement.push({ index: i, element });
 
         // Selection state for new elements
         const isSelected = $.ss.has(item.id);
@@ -541,6 +734,23 @@ function materialize<T extends VListItem = VListItem>(
       dom.items.appendChild(fragment);
       for (const { index, element } of newElements) {
         rendered.set(index, element);
+      }
+    }
+
+    // Mode B: observe newly rendered items for auto-measurement immediately.
+    // ResizeObserver fires asynchronously; the callback defers content size
+    // updates and scroll correction until scroll idle for scrollbar stability.
+    if (
+      measurementEnabled &&
+      itemResizeObserver &&
+      measuredCache &&
+      measuredElementToIndex
+    ) {
+      for (const { index, element } of newlyRenderedForMeasurement) {
+        if (!measuredCache.isMeasured(index)) {
+          measuredElementToIndex.set(element, index);
+          itemResizeObserver.observe(element);
+        }
       }
     }
 
@@ -589,6 +799,7 @@ function materialize<T extends VListItem = VListItem>(
     if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
       dom.root.classList.add(`${classPrefix}--scrolling`);
     }
+    isScrolling = true;
 
     $.ls = scrollTop;
     $.rfn();
@@ -610,6 +821,7 @@ function materialize<T extends VListItem = VListItem>(
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       dom.root.classList.remove(`${classPrefix}--scrolling`);
+      isScrolling = false;
       // Reset velocity to 0 when idle
       $.vt.velocity = 0;
       $.vt.sampleCount = 0;
@@ -617,6 +829,8 @@ function materialize<T extends VListItem = VListItem>(
         velocity: 0,
         reliable: false,
       });
+      // Mode B: flush deferred content size + scroll correction
+      flushMeasurements();
     }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
@@ -662,14 +876,18 @@ function materialize<T extends VListItem = VListItem>(
       if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
         dom.root.classList.add(`${classPrefix}--scrolling`);
       }
+      isScrolling = true;
 
       // Idle detection
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         dom.root.classList.remove(`${classPrefix}--scrolling`);
+        isScrolling = false;
         $.vt.velocity = 0;
         $.vt.sampleCount = 0;
         emitter.emit("velocity:change", { velocity: 0, reliable: false });
+        // Mode B: flush deferred content size + scroll correction
+        flushMeasurements();
       }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
     $.wh = wheelHandler;
@@ -1003,6 +1221,10 @@ function materialize<T extends VListItem = VListItem>(
     dom.root.removeEventListener("keydown", handleKeydown);
     $.st.removeEventListener("scroll", onScrollFrame);
     resizeObserver.disconnect();
+    if (itemResizeObserver) {
+      itemResizeObserver.disconnect();
+      itemResizeObserver = null;
+    }
 
     if ($.wh) {
       dom.viewport.removeEventListener("wheel", $.wh);

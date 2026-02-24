@@ -99,6 +99,9 @@ export {
   // Size cache (variable item sizes - works for both vertical and horizontal)
   createSizeCache,
   type SizeCache,
+  // Measured size cache (auto-measurement for Mode B)
+  createMeasuredSizeCache,
+  type MeasuredSizeCache,
   // Virtual scrolling calculations
   simpleVisibleRange,
   calculateRenderRange,

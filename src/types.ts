@@ -127,6 +127,37 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    */
   width?: number | ((index: number) => number);
 
+  /**
+   * Estimated item height for auto-measurement (Mode B — vertical scrolling)
+   *
+   * When set, vlist renders items using this estimated size, measures their
+   * actual DOM height after render via ResizeObserver, caches the result,
+   * and adjusts scroll position to prevent visual jumps.
+   *
+   * Use this for content with unknown heights: variable-length text,
+   * images with unknown aspect ratios, mixed-media feeds, etc.
+   *
+   * Takes precedence only when `height` is not set — if both are provided,
+   * `height` wins (Mode A) and `estimatedHeight` is ignored.
+   *
+   * Ignored when `orientation` is `'horizontal'`.
+   */
+  estimatedHeight?: number;
+
+  /**
+   * Estimated item width for auto-measurement (Mode B — horizontal scrolling)
+   *
+   * Horizontal equivalent of `estimatedHeight`. When set, vlist renders items
+   * using this estimated width, measures actual DOM width after render,
+   * caches the result, and adjusts scroll position to prevent visual jumps.
+   *
+   * Takes precedence only when `width` is not set — if both are provided,
+   * `width` wins (Mode A) and `estimatedWidth` is ignored.
+   *
+   * Only used when `orientation` is `'horizontal'`.
+   */
+  estimatedWidth?: number;
+
   /** Template function to render each item */
   template: ItemTemplate<T>;
 }
