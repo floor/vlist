@@ -30,7 +30,6 @@ export {
 // Placeholder
 export {
   createPlaceholderManager,
-  replacePlaceholders,
   type PlaceholderManager,
   type PlaceholderConfig,
 } from "./placeholder";

@@ -82,7 +82,7 @@ export const DEFAULT_SCROLLBAR_MIN_THUMB_SIZE = 30;
 // =============================================================================
 
 /** Default character used for masking text in placeholders */
-export const DEFAULT_MASK_CHARACTER = "█";
+export const DEFAULT_MASK_CHARACTER = "x";
 
 /** Maximum items to sample for placeholder structure analysis */
 export const DEFAULT_MAX_SAMPLE_SIZE = 20;

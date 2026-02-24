@@ -3,13 +3,20 @@
  * Smart placeholder generation for loading states
  *
  * Key features:
- * - Analyzes loaded data to generate realistic placeholders
- * - Supports masked text with configurable character
- * - Random length variance for natural appearance
- * - Efficient placeholder detection
+ * - Captures per-item field lengths from the first loaded batch
+ * - Cycles through real data profiles for natural size variance
+ * - Same item template renders both real and placeholder items
+ * - Renderer adds CSS class for visual styling (no JS branching needed)
  */
 
 import type { VListItem } from "../../types";
+
+import {
+  PLACEHOLDER_FLAG,
+  PLACEHOLDER_ID_PREFIX,
+  DEFAULT_MASK_CHARACTER,
+  DEFAULT_MAX_SAMPLE_SIZE,
+} from "../../constants";
 
 // =============================================================================
 // Types
@@ -17,35 +24,19 @@ import type { VListItem } from "../../types";
 
 /** Placeholder configuration */
 export interface PlaceholderConfig {
-  /** Enable placeholder generation (default: true) */
-  enabled?: boolean;
-
   /** Character used for masking text (default: '█') */
   maskCharacter?: string;
 
-  /** Add random variance to text lengths (default: true) */
-  randomVariance?: boolean;
-
-  /** Maximum items to sample for structure analysis (default: 20) */
+  /** Maximum items to sample for length profiling (default: 20) */
   maxSampleSize?: number;
-
-  /** Custom placeholder generator */
-  customGenerator?: (index: number) => VListItem;
 }
 
-/** Field structure detected from data */
-interface FieldStructure {
-  /** Minimum length observed */
-  minLength: number;
-
-  /** Maximum length observed */
-  maxLength: number;
-
-  /** Average length observed */
-  avgLength: number;
-
-  /** Field type detected */
-  type: "string" | "number" | "boolean" | "object" | "array";
+/**
+ * Per-item length profile captured from a real data item.
+ * Maps field name → character length of its string representation.
+ */
+interface LengthProfile {
+  [field: string]: number;
 }
 
 /** Placeholder manager instance */
@@ -62,45 +53,33 @@ export interface PlaceholderManager<T extends VListItem = VListItem> {
   /** Generate multiple placeholder items */
   generateRange: (start: number, end: number) => T[];
 
-  /** Check if an item is a placeholder */
-  isPlaceholder: (item: unknown) => boolean;
-
-  /** Get the placeholder flag key */
-  getPlaceholderKey: () => string;
-
   /** Clear analyzed structure */
   clear: () => void;
 }
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const DEFAULT_MASK_CHARACTER = "█";
-const DEFAULT_MAX_SAMPLE_SIZE = 20;
-const PLACEHOLDER_FLAG = "_isPlaceholder";
-const PLACEHOLDER_ID_PREFIX = "__placeholder_";
 
 // =============================================================================
 // Placeholder Manager
 // =============================================================================
 
 /**
- * Create a placeholder manager
+ * Create a placeholder manager that generates realistic placeholder items
+ * by capturing per-item field lengths from the first loaded data batch.
+ *
+ * Placeholders carry the same field names as real items, filled with
+ * mask characters sized to match actual data. The renderer detects
+ * placeholders via the `_isPlaceholder` flag and applies a CSS class
+ * — no template branching required.
  */
 export const createPlaceholderManager = <T extends VListItem = VListItem>(
   config: PlaceholderConfig = {},
 ): PlaceholderManager<T> => {
   const {
-    enabled = true,
     maskCharacter = DEFAULT_MASK_CHARACTER,
-    randomVariance = true,
     maxSampleSize = DEFAULT_MAX_SAMPLE_SIZE,
-    customGenerator,
   } = config;
 
   // State
-  let fieldStructures: Map<string, FieldStructure> | null = null;
+  let lengthProfiles: LengthProfile[] = [];
   let hasAnalyzed = false;
   let idCounter = 0;
 
@@ -109,81 +88,37 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   // ==========================================================================
 
   /**
-   * Analyze data structure from sample items
+   * Capture per-item field lengths from the first loaded batch.
+   * Each sampled item produces one LengthProfile that records the
+   * string length of every non-internal field. When generating
+   * placeholder #N, we cycle through these profiles so that size
+   * variance mirrors the real data distribution.
    */
   const analyzeStructure = (items: T[]): void => {
-    if (!enabled || hasAnalyzed || items.length === 0) {
-      return;
-    }
+    if (hasAnalyzed || items.length === 0) return;
 
-    const structures = new Map<string, FieldStructure>();
-    const fieldStats = new Map<
-      string,
-      { lengths: number[]; types: Set<string> }
-    >();
-
-    // Sample items for analysis
     const sampleSize = Math.min(items.length, maxSampleSize);
 
     for (let i = 0; i < sampleSize; i++) {
       const item = items[i];
       if (!item || typeof item !== "object") continue;
 
-      // Analyze each field
+      const profile: LengthProfile = {};
+
       for (const [field, value] of Object.entries(item)) {
-        // Skip internal fields
-        if (field.startsWith("_") || field === "id") {
-          continue;
-        }
+        // Skip internal fields and id
+        if (field.startsWith("_") || field === "id") continue;
 
-        if (!fieldStats.has(field)) {
-          fieldStats.set(field, { lengths: [], types: new Set() });
-        }
+        profile[field] = String(value ?? "").length;
+      }
 
-        const stats = fieldStats.get(field)!;
-        const valueType = Array.isArray(value) ? "array" : typeof value;
-        stats.types.add(valueType);
-
-        // Track string lengths
-        if (typeof value === "string") {
-          stats.lengths.push(value.length);
-        } else if (value !== null && value !== undefined) {
-          stats.lengths.push(String(value).length);
-        }
+      // Only store profiles that have at least one field —
+      // id-only items produce empty profiles which aren't useful
+      if (Object.keys(profile).length > 0) {
+        lengthProfiles.push(profile);
       }
     }
 
-    // Calculate statistics for each field
-    for (const [field, stats] of fieldStats) {
-      if (stats.lengths.length === 0) continue;
-
-      const minLength = Math.min(...stats.lengths);
-      const maxLength = Math.max(...stats.lengths);
-      const avgLength = Math.round(
-        stats.lengths.reduce((sum, len) => sum + len, 0) / stats.lengths.length,
-      );
-
-      // Determine primary type
-      let primaryType: FieldStructure["type"] = "string";
-      if (stats.types.has("number") && stats.types.size === 1) {
-        primaryType = "number";
-      } else if (stats.types.has("boolean") && stats.types.size === 1) {
-        primaryType = "boolean";
-      } else if (stats.types.has("array")) {
-        primaryType = "array";
-      } else if (stats.types.has("object") && !stats.types.has("string")) {
-        primaryType = "object";
-      }
-
-      structures.set(field, {
-        minLength,
-        maxLength,
-        avgLength,
-        type: primaryType,
-      });
-    }
-
-    fieldStructures = structures;
     hasAnalyzed = true;
   };
 
@@ -197,74 +132,28 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   // ==========================================================================
 
   /**
-   * Generate masked text with optional variance
-   */
-  const generateMaskedText = (structure: FieldStructure): string => {
-    let length = structure.avgLength;
-
-    if (randomVariance && structure.minLength !== structure.maxLength) {
-      // Random length within range
-      length = Math.floor(
-        Math.random() * (structure.maxLength - structure.minLength + 1) +
-          structure.minLength,
-      );
-
-      // Add slight additional variance
-      if (Math.random() < 0.3) {
-        length = Math.max(1, length + Math.floor(Math.random() * 3) - 1);
-      }
-    }
-
-    return maskCharacter.repeat(Math.max(1, length));
-  };
-
-  /**
-   * Generate a single placeholder item
+   * Generate a single placeholder item.
+   * Uses the length profile at `index % profiles.length` so each
+   * placeholder has a unique but realistic field size distribution.
    */
   const generate = (index: number): T => {
-    // Use custom generator if provided
-    if (customGenerator) {
-      const item = customGenerator(index);
-      return {
-        ...item,
-        [PLACEHOLDER_FLAG]: true,
-      } as unknown as T;
-    }
-
-    // Create base placeholder
     const placeholder: Record<string, unknown> = {
       id: `${PLACEHOLDER_ID_PREFIX}${idCounter++}`,
       [PLACEHOLDER_FLAG]: true,
       _index: index,
     };
 
-    // If no structure analyzed, create basic placeholder
-    if (!fieldStructures || fieldStructures.size === 0) {
+    // No profiles yet — basic fallback
+    if (lengthProfiles.length === 0) {
       placeholder.label = maskCharacter.repeat(12);
       return placeholder as T;
     }
 
-    // Generate fields based on analyzed structure
-    for (const [field, structure] of fieldStructures) {
-      switch (structure.type) {
-        case "string":
-          placeholder[field] = generateMaskedText(structure);
-          break;
-        case "number":
-          placeholder[field] = 0;
-          break;
-        case "boolean":
-          placeholder[field] = false;
-          break;
-        case "array":
-          placeholder[field] = [];
-          break;
-        case "object":
-          placeholder[field] = {};
-          break;
-        default:
-          placeholder[field] = generateMaskedText(structure);
-      }
+    // Cycle through captured profiles
+    const profile = lengthProfiles[index % lengthProfiles.length]!;
+
+    for (const [field, length] of Object.entries(profile)) {
+      placeholder[field] = maskCharacter.repeat(Math.max(1, length));
     }
 
     return placeholder as T;
@@ -284,26 +173,6 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   };
 
   // ==========================================================================
-  // Detection
-  // ==========================================================================
-
-  /**
-   * Check if an item is a placeholder
-   */
-  const isPlaceholder = (item: unknown): boolean => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
-
-    return (item as Record<string, unknown>)[PLACEHOLDER_FLAG] === true;
-  };
-
-  /**
-   * Get the placeholder flag key
-   */
-  const getPlaceholderKey = (): string => PLACEHOLDER_FLAG;
-
-  // ==========================================================================
   // Lifecycle
   // ==========================================================================
 
@@ -311,7 +180,7 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
    * Clear analyzed structure
    */
   const clear = (): void => {
-    fieldStructures = null;
+    lengthProfiles = [];
     hasAnalyzed = false;
     idCounter = 0;
   };
@@ -325,8 +194,6 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
     hasAnalyzedStructure,
     generate,
     generateRange,
-    isPlaceholder,
-    getPlaceholderKey,
     clear,
   };
 };
@@ -336,7 +203,7 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
 // =============================================================================
 
 /**
- * Check if an item is a placeholder (standalone function)
+ * Check if an item is a placeholder
  */
 export const isPlaceholderItem = (item: unknown): boolean => {
   if (!item || typeof item !== "object") {
@@ -368,30 +235,4 @@ export const countRealItems = <T extends VListItem>(
   }
 
   return count;
-};
-
-/**
- * Replace placeholders in a sparse array with real items
- */
-export const replacePlaceholders = <T extends VListItem>(
-  target: (T | undefined)[],
-  items: T[],
-  offset: number,
-): number => {
-  let replacedCount = 0;
-
-  for (let i = 0; i < items.length; i++) {
-    const targetIndex = offset + i;
-    const currentItem = target[targetIndex];
-
-    // Only replace if current is placeholder or undefined
-    if (currentItem === undefined || isPlaceholderItem(currentItem)) {
-      target[targetIndex] = items[i];
-      if (isPlaceholderItem(currentItem)) {
-        replacedCount++;
-      }
-    }
-  }
-
-  return replacedCount;
 };
