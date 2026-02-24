@@ -112,18 +112,68 @@ export const withSelection = <T extends VListItem = VListItem>(
       }
 
       // ── ID → index map for O(1) lookups (selection feature only) ──
+      // Incrementally indexed: items are added as they load via the load:end
+      // event, avoiding a full 0..total scan that would generate millions of
+      // placeholders when using sparse/async data.
       const idToIndexMap = new Map<string | number, number>();
 
       const rebuildIdIndex = (): void => {
         idToIndexMap.clear();
         const total = ctx.dataManager.getTotal();
-        for (let i = 0; i < total; i++) {
-          const item = ctx.dataManager.getItem(i);
-          if (item) idToIndexMap.set(item.id, i);
+        const cached = ctx.dataManager.getCached();
+
+        // Nothing cached — skip entirely (common for async data at setup)
+        if (cached === 0) return;
+
+        // Fast path: all items are in memory (SimpleDataManager or fully cached).
+        // Safe to iterate 0..total without placeholder overhead.
+        if (cached >= total) {
+          for (let i = 0; i < total; i++) {
+            const item = ctx.dataManager.getItem(i);
+            if (item) idToIndexMap.set(item.id, i);
+          }
+          return;
+        }
+
+        // Sparse path: only a fraction of items are loaded. Iterate via
+        // storage loaded ranges to avoid an O(total) scan that would touch
+        // millions of unloaded indices and generate placeholder objects.
+        const storage = ctx.dataManager.getStorage();
+        if (storage && typeof (storage as any).getLoadedRanges === "function") {
+          const ranges = (storage as any).getLoadedRanges() as Array<{ start: number; end: number }>;
+          for (const range of ranges) {
+            for (let i = range.start; i <= range.end; i++) {
+              const item = ctx.dataManager.getItem(i);
+              if (item) idToIndexMap.set(item.id, i);
+            }
+          }
         }
       };
 
-      // Build initial index
+      // Incrementally index newly loaded items via load:end event.
+      // Items arrive in small batches (25-50) with a known offset, so
+      // indexing is O(batch_size) — no scanning required.
+      emitter.on(
+        "load:end",
+        ({ items: loadedItems, offset }: { items: T[]; offset?: number }) => {
+          if (!loadedItems || loadedItems.length === 0) return;
+
+          if (offset !== undefined) {
+            // Fast path: offset known — direct index assignment
+            for (let i = 0; i < loadedItems.length; i++) {
+              const item = loadedItems[i];
+              if (item && item.id !== undefined) {
+                idToIndexMap.set(item.id, offset + i);
+              }
+            }
+          } else {
+            // Fallback: no offset (e.g. SimpleDataManager) — full rebuild
+            rebuildIdIndex();
+          }
+        },
+      );
+
+      // Build initial index (no-op when nothing is cached yet, e.g. async)
       rebuildIdIndex();
 
       // ── Wrap existing render functions to inject selection state ──
