@@ -1273,6 +1273,116 @@ describe("createGridRenderer", () => {
   });
 
   // ===========================================================================
+  // Horizontal mode
+  // ===========================================================================
+
+  describe("horizontal mode", () => {
+    it("should swap CSS width and height in horizontal mode", () => {
+      const renderer = createGridRenderer<TestItem>(
+        container,
+        defaultTemplate,
+        sizeCache,
+        gridLayout,
+        "vlist",
+        800,
+        undefined,
+        undefined,
+        true, // isHorizontal
+      );
+
+      const items = createTestItems(4);
+      renderer.render(items, { start: 0, end: 3 }, new Set(), -1);
+
+      // columnWidth = (800 - 3*8) / 4 = 194
+      // rowHeight from cache = 100, minus gap 8 = 92
+      // In horizontal mode, CSS dimensions are swapped:
+      //   style.width  = itemHeight (main axis = horizontal) = 92px
+      //   style.height = colWidth   (cross axis = vertical)  = 194px
+      const el0 = container.querySelector("[data-index='0']") as HTMLElement;
+      expect(el0.style.width).toBe("92px");
+      expect(el0.style.height).toBe("194px");
+
+      renderer.destroy();
+    });
+
+    it("should produce landscape 4:3 ratio when item.width encodes 4:3", () => {
+      // Simulate what the photo-album example does:
+      // colWidth = 192, item.width = 192 * (4/3) + gap = 264
+      // The size cache returns item.width (264) for the row,
+      // so itemHeight = 264 - 8 = 256 (horizontal extent)
+      // colWidth = 192 (vertical extent)
+      // Visual ratio = 256 / 192 = 1.333 = 4:3 ✓
+      const landscapeGap = 8;
+      const landscapeLayout = createGridLayout({ columns: 4, gap: landscapeGap });
+      const colWidth = 192;
+      const containerW = colWidth * 4 + landscapeGap * 3; // 792
+      const itemWidth = Math.round(colWidth * (4 / 3) + landscapeGap); // 264
+      const landscapeSizeCache = createMockSizeCache(itemWidth); // returns 264 per row
+
+      const renderer = createGridRenderer<TestItem>(
+        container,
+        defaultTemplate,
+        landscapeSizeCache,
+        landscapeLayout,
+        "vlist",
+        containerW,
+        undefined,
+        undefined,
+        true, // isHorizontal
+      );
+
+      const items = createTestItems(4);
+      renderer.render(items, { start: 0, end: 3 }, new Set(), -1);
+
+      const el0 = container.querySelector("[data-index='0']") as HTMLElement;
+      const cssWidth = parseInt(el0.style.width, 10); // horizontal extent (main axis)
+      const cssHeight = parseInt(el0.style.height, 10); // vertical extent (cross axis)
+
+      // CSS width should be greater than CSS height (landscape)
+      expect(cssWidth).toBeGreaterThan(cssHeight);
+
+      // Ratio should be ~4:3
+      const ratio = cssWidth / cssHeight;
+      expect(ratio).toBeGreaterThan(1.3);
+      expect(ratio).toBeLessThan(1.4);
+
+      renderer.destroy();
+    });
+
+    it("should swap transform axes in horizontal mode", () => {
+      const renderer = createGridRenderer<TestItem>(
+        container,
+        defaultTemplate,
+        sizeCache,
+        gridLayout,
+        "vlist",
+        800,
+        undefined,
+        undefined,
+        true, // isHorizontal
+      );
+
+      const items = createTestItems(8);
+      renderer.render(items, { start: 0, end: 7 }, new Set(), -1);
+
+      // Item 0: col 0, row 0 → translate(y=0, x=0) → translate(0, 0)
+      const el0 = container.querySelector("[data-index='0']") as HTMLElement;
+      expect(el0.style.transform).toBe("translate(0px, 0px)");
+
+      // Item 1: col 1, row 0 → translate(y=0, x=202)
+      // col 1 offset = 1 * (194 + 8) = 202
+      const el1 = container.querySelector("[data-index='1']") as HTMLElement;
+      expect(el1.style.transform).toBe("translate(0px, 202px)");
+
+      // Item 4: col 0, row 1 → translate(y=100, x=0)
+      const el4 = container.querySelector("[data-index='4']") as HTMLElement;
+      expect(el4.style.transform).toBe("translate(100px, 0px)");
+
+      renderer.destroy();
+    });
+  });
+
+  // ===========================================================================
   // Edge cases
   // ===========================================================================
 

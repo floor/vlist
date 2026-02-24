@@ -323,8 +323,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       itemHeight = sizeCache.getSize(row) - gridLayout.gap;
     }
 
-    element.style.width = `${colWidth}px`;
-    element.style.height = `${itemHeight}px`;
+    if (isHorizontal) {
+      // In horizontal mode, swap CSS dimensions so they match their visual role:
+      //   style.width  → horizontal extent (scroll direction = main axis)
+      //   style.height → vertical extent   (cross axis)
+      element.style.width = `${itemHeight}px`;
+      element.style.height = `${colWidth}px`;
+    } else {
+      element.style.width = `${colWidth}px`;
+      element.style.height = `${itemHeight}px`;
+    }
   };
 
   /**
