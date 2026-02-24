@@ -82,13 +82,19 @@ export const withGrid = <T extends VListItem = VListItem>(
       const { classPrefix } = resolvedConfig;
 
       // Validate reverse constraint
-      // Note: horizontal orientation is supported but not fully optimized yet
-      // (items will still use vertical positioning - TODO: add axis swapping)
       if (resolvedConfig.reverse) {
         throw new Error(
           "[vlist/builder] withGrid cannot be used with reverse: true",
         );
       }
+
+      const isHorizontal = resolvedConfig.horizontal;
+
+      // Helper: get cross-axis container dimension.
+      // In vertical mode the cross-axis is horizontal (viewport width).
+      // In horizontal mode the cross-axis is vertical (viewport height).
+      const getCrossAxisSize = (): number =>
+        isHorizontal ? dom.viewport.clientHeight : ctx.getContainerWidth();
 
       // ── Create grid layout ──
       // Check if groups feature will be active (items contain group headers)
@@ -138,8 +144,9 @@ export const withGrid = <T extends VListItem = VListItem>(
           ) => number);
 
       // Store mutable grid state for dynamic height calculation
+      // containerWidth here means "cross-axis container dimension"
       const gridState = {
-        containerWidth: ctx.getContainerWidth(),
+        containerWidth: getCrossAxisSize(),
         columns: gridLayout.columns,
         gap: gridLayout.gap,
       };
@@ -178,9 +185,9 @@ export const withGrid = <T extends VListItem = VListItem>(
       // ── Add grid CSS class ──
       dom.root.classList.add(`${classPrefix}--grid`);
 
-      // ── Get container width for grid renderer ──
-      // Use ctx.getContainerWidth() which reflects the ResizeObserver-detected width
-      const containerWidth = ctx.getContainerWidth();
+      // ── Get cross-axis container size for grid renderer ──
+      // In vertical mode this is the viewport width; in horizontal mode the viewport height.
+      const containerWidth = getCrossAxisSize();
 
       // ── Create grid renderer ──
       const template = rawConfig.item.template;
@@ -270,8 +277,8 @@ export const withGrid = <T extends VListItem = VListItem>(
           gridLayout.update(gridConfig);
         }
 
-        // Update grid state for height function
-        const containerWidth = ctx.getContainerWidth();
+        // Update grid state for size function (cross-axis dimension)
+        const containerWidth = getCrossAxisSize();
         gridState.containerWidth = containerWidth;
         gridState.columns = gridConfig.columns;
         gridState.gap = gridConfig.gap ?? 0;
@@ -394,10 +401,12 @@ export const withGrid = <T extends VListItem = VListItem>(
       // Replace the core's render functions with our grid-aware versions
       ctx.setRenderFns(gridRenderIfNeeded, gridForceRender);
 
-      // ── Resize: update column widths ──
-      ctx.resizeHandlers.push((width: number, _height: number): void => {
+      // ── Resize: update cross-axis cell sizes ──
+      ctx.resizeHandlers.push((width: number, height: number): void => {
         if (gridRenderer) {
-          gridRenderer.updateContainerWidth(width);
+          // Use the cross-axis dimension: width for vertical, height for horizontal
+          const crossAxisSize = isHorizontal ? height : width;
+          gridRenderer.updateContainerWidth(crossAxisSize);
         }
       });
 

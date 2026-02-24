@@ -778,6 +778,64 @@ describe("withGrid - Edge Cases", () => {
 
     expect(ctx.dom.root.classList.contains("vlist--grid")).toBe(true);
   });
+
+  it("should use viewport height as cross-axis size in horizontal mode", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+    (ctx.config as any).horizontal = true;
+
+    // Set viewport dimensions: width=1000, height=400
+    // In horizontal mode, the cross-axis is vertical, so columns should
+    // divide the height (400), not the width (1000).
+    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
+    ctx.getContainerWidth = () => 1000;
+
+    plugin.setup!(ctx);
+
+    // Trigger a render so items get sized
+    ctx.state.viewportState.containerSize = 1000;
+    ctx.forceRender();
+
+    // Check a rendered element's cross-axis size (style.height in horizontal mode).
+    // colWidth = (400 - 3*8) / 4 = 94
+    const el = ctx.dom.items.querySelector("[data-index]") as HTMLElement;
+    if (el) {
+      // Cross-axis = style.height in horizontal mode
+      const crossSize = parseFloat(el.style.height);
+      // Should be based on viewport height (400), not width (1000)
+      // (400 - 24) / 4 = 94
+      expect(crossSize).toBe(94);
+    }
+  });
+
+  it("should pass viewport height to renderer on resize in horizontal mode", () => {
+    const plugin = withGrid({ columns: 4, gap: 8 });
+    const ctx = createMockContext();
+    (ctx.config as any).horizontal = true;
+
+    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
+
+    plugin.setup!(ctx);
+
+    // Simulate a resize — width changes to 1200, height changes to 600
+    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
+
+    // Render some items first so we can inspect them after resize
+    ctx.state.viewportState.containerSize = 1200;
+    ctx.forceRender();
+
+    // Now resize: the handler should use height (600), not width (1200)
+    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 600, configurable: true });
+    resizeHandler!(1200, 600);
+    ctx.forceRender();
+
+    const el = ctx.dom.items.querySelector("[data-index]") as HTMLElement;
+    if (el) {
+      const crossSize = parseFloat(el.style.height);
+      // Should be based on new height: (600 - 24) / 4 = 144
+      expect(crossSize).toBe(144);
+    }
+  });
 });
 
 // =============================================================================
