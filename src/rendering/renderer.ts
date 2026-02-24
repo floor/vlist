@@ -15,6 +15,8 @@ import type {
 import type { CompressionState } from "./viewport";
 import type { SizeCache } from "./sizes";
 
+import { PLACEHOLDER_ID_PREFIX } from "../constants";
+
 /**
  * Optional compression position calculator.
  * Injected by the monolithic factory or the withCompression feature.
@@ -322,6 +324,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
   const baseClass = `${classPrefix}-item`;
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
+  const placeholderClass = `${classPrefix}-item--placeholder`;
+  const replacedClass = `${classPrefix}-item--replaced`;
 
   /**
    * Apply base class to element (called once when element is created)
@@ -384,6 +388,12 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
     // Apply state-dependent classes (selected, focused)
     applyClasses(element, isSelected, isFocused);
+
+    // Placeholder class — detected via ID prefix
+    if (String(item.id).startsWith(PLACEHOLDER_ID_PREFIX)) {
+      element.classList.add(placeholderClass);
+    }
+
     positionElement(element, index, compressionCtx);
 
     return element;
@@ -448,6 +458,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
         const itemChanged = existingId !== newId;
 
         if (itemChanged) {
+          const wasPlaceholder = existingId?.startsWith(PLACEHOLDER_ID_PREFIX);
+          const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+
           // Re-apply template when item data changes (placeholder -> real data)
           const state = getItemState(isSelected, isFocused);
           const result = template(item, i, state);
@@ -455,6 +468,17 @@ export const createRenderer = <T extends VListItem = VListItem>(
           existing.element.dataset.id = newId;
           // Update height in case variable heights differ for the new item
           applyStaticStyles(existing.element, i);
+
+          // Toggle placeholder class
+          existing.element.classList.toggle(placeholderClass, isPlaceholder);
+
+          // Fade-in animation when placeholder is replaced with real data
+          if (wasPlaceholder && !isPlaceholder) {
+            existing.element.classList.add(replacedClass);
+            setTimeout(() => {
+              existing.element.classList.remove(replacedClass);
+            }, 300);
+          }
         }
 
         // Always update classes, selection state, and position
