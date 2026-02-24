@@ -464,7 +464,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       // Update current dimensions immediately
       $.cw = getter.width();
       $.ch = getter.height();
-      sharedState.viewportState.containerSize = $.ch;
+      sharedState.viewportState.containerSize = isHorizontal ? $.cw : $.ch;
     },
 
     disableViewportResize(): void {
