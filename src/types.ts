@@ -74,6 +74,23 @@ export interface GridConfig {
   gap?: number;
 }
 
+/** Masonry configuration for createVList */
+export interface MasonryConfig {
+  /**
+   * Number of cross-axis divisions (columns in vertical, rows in horizontal).
+   * Items flow into the shortest column/row.
+   *
+   * Must be a positive integer ≥ 1.
+   */
+  columns: number;
+
+  /**
+   * Gap between masonry items in pixels (default: 0).
+   * Applied both horizontally and vertically.
+   */
+  gap?: number;
+}
+
 // =============================================================================
 // Configuration
 // =============================================================================
