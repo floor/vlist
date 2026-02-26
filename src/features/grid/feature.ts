@@ -26,6 +26,13 @@ import { createGridRenderer, type GridRenderer } from "./renderer";
 import type { GridLayout } from "./types";
 
 // =============================================================================
+// Shared constants
+// =============================================================================
+
+/** Cached empty Set — avoids allocation on every scroll frame when no selection */
+const EMPTY_ID_SET: Set<string | number> = new Set();
+
+// =============================================================================
 // Feature Config
 // =============================================================================
 
@@ -309,6 +316,23 @@ export const withGrid = <T extends VListItem = VListItem>(
         ctx.forceRender();
       });
 
+      // ── Scroll state for early-exit guard ──
+      // When scroll position + container size are identical to last frame,
+      // all downstream work (range calc, renderer diffing) is skipped.
+      let lastScrollPosition = -1;
+      let lastContainerSize = -1;
+      let forceNextRender = true; // first render must always run
+
+      // ── Precomputed overscan value ──
+      const overscan = resolvedConfig.overscan ?? 3;
+
+      // ── Mutable range objects — reused across frames (no allocation) ──
+      const visibleRange = { start: 0, end: 0 };
+      const renderRange = { start: 0, end: 0 };
+
+      // ── Cached item range from last full render (for tick()) ──
+      const lastItemRange = { start: 0, end: -1 };
+
       // ── Override render functions to convert row range → item range ──
       const gridRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
@@ -316,10 +340,22 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Calculate visible and render ranges (in row space)
         const scrollTop = ctx.scrollController.getScrollTop();
         const containerHeight = ctx.state.viewportState.containerSize;
+
+        // ── Early exit: skip all work when nothing changed ──
+        if (
+          !forceNextRender &&
+          scrollTop === lastScrollPosition &&
+          containerHeight === lastContainerSize
+        ) {
+          return;
+        }
+        lastScrollPosition = scrollTop;
+        lastContainerSize = containerHeight;
+        forceNextRender = false;
+
         const totalRows = ctx.getVirtualTotal();
 
-        // Calculate visible row range
-        const visibleRange = { start: 0, end: 0 };
+        // Calculate visible row range (mutate in place)
         if (totalRows === 0 || containerHeight === 0) {
           visibleRange.start = 0;
           visibleRange.end = 0;
@@ -335,25 +371,29 @@ export const withGrid = <T extends VListItem = VListItem>(
           visibleRange.end = Math.min(totalRows - 1, Math.max(0, visibleEnd));
         }
 
-        // Apply overscan
-        const overscan = resolvedConfig.overscan ?? 3;
-        const renderRange = {
-          start: Math.max(0, visibleRange.start - overscan),
-          end: Math.min(totalRows - 1, visibleRange.end + overscan),
-        };
+        // Apply overscan (mutate in place)
+        renderRange.start = Math.max(0, visibleRange.start - overscan);
+        renderRange.end = Math.min(totalRows - 1, visibleRange.end + overscan);
 
-        // Update viewport state
-        ctx.state.viewportState.scrollPosition = scrollTop;
-        ctx.state.viewportState.visibleRange = visibleRange;
-        ctx.state.viewportState.renderRange = renderRange;
+        // Update viewport state — mutate in place to avoid object allocation
+        const viewportState = ctx.state.viewportState;
+        viewportState.scrollPosition = scrollTop;
+        viewportState.visibleRange.start = visibleRange.start;
+        viewportState.visibleRange.end = visibleRange.end;
+        viewportState.renderRange.start = renderRange.start;
+        viewportState.renderRange.end = renderRange.end;
 
         const lastRange = ctx.state.lastRenderRange;
-        const isCompressed = ctx.state.viewportState.isCompressed;
+        const isCompressed = viewportState.isCompressed;
 
         if (
           renderRange.start === lastRange.start &&
           renderRange.end === lastRange.end
         ) {
+          // Range unchanged — still tick the grace clock so items that
+          // left the range on a previous frame are eventually released.
+          // Pass the last item range so tick() keeps in-range items alive.
+          gridRenderer!.tick(lastItemRange);
           if (isCompressed) {
             gridRenderer!.updatePositions(ctx.getCompressionContext());
           }
@@ -381,20 +421,28 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridRenderer!.render(
           items,
           itemRange,
-          new Set(), // selection — overridden by selection feature if present
+          EMPTY_ID_SET, // selection — overridden by selection feature if present
           -1,
           compressionCtx,
         );
 
-        ctx.state.lastRenderRange = { ...renderRange };
-        emitter.emit("range:change", { range: renderRange });
+        // Cache the item range for tick() calls when range is unchanged
+        lastItemRange.start = itemRange.start;
+        lastItemRange.end = itemRange.end;
+
+        // Mutate lastRenderRange in place — emit only when changed
+        lastRange.start = renderRange.start;
+        lastRange.end = renderRange.end;
+        emitter.emit("range:change", { range: { start: renderRange.start, end: renderRange.end } });
       };
 
       const gridForceRender = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        // Reset last range to force re-render
-        ctx.state.lastRenderRange = { start: -1, end: -1 };
+        // Reset last range and force flag to ensure re-render
+        ctx.state.lastRenderRange.start = -1;
+        ctx.state.lastRenderRange.end = -1;
+        forceNextRender = true;
         gridRenderIfNeeded();
       };
 

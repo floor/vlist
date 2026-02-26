@@ -2069,8 +2069,15 @@ describe("withGrid plugin", () => {
     const firstMax = Math.max(...indices);
     expect(firstMax).toBeLessThan(60); // Still near top
 
-    // Scroll down
+    // Scroll down — use slightly different positions to advance the renderer
+    // frame counter past the release grace period (RELEASE_GRACE = 2).
+    // Items last seen at frame N are released when frameCounter - N > 2,
+    // so we need 4 renders after the initial to guarantee expiry.
+    // Identical positions trigger the early-exit guard, so we nudge by 1px.
     simulateScroll(list, 2000);
+    simulateScroll(list, 2001);
+    simulateScroll(list, 2002);
+    simulateScroll(list, 2003);
     flush();
 
     indices = getRenderedIndices(list);
@@ -2098,8 +2105,11 @@ describe("withGrid plugin", () => {
     const firstMin = Math.min(...indices);
     const firstMax = Math.max(...indices);
 
-    // Scroll down by 500px
+    // Scroll down by 500px — nudge positions to flush release grace period
     simulateScroll(list, 500);
+    simulateScroll(list, 501);
+    simulateScroll(list, 502);
+    simulateScroll(list, 503);
     flush();
 
     indices = getRenderedIndices(list);
@@ -2110,8 +2120,11 @@ describe("withGrid plugin", () => {
     expect(secondMin).toBeGreaterThan(firstMin);
     expect(secondMax).toBeGreaterThan(firstMax);
 
-    // Scroll down more
+    // Scroll down more — nudge positions to flush release grace period
     simulateScroll(list, 1500);
+    simulateScroll(list, 1501);
+    simulateScroll(list, 1502);
+    simulateScroll(list, 1503);
     flush();
 
     indices = getRenderedIndices(list);
@@ -2138,8 +2151,11 @@ describe("withGrid plugin", () => {
     let indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
 
-    // Scroll down
+    // Scroll down — nudge positions to flush release grace period
     simulateScroll(list, 1000);
+    simulateScroll(list, 1001);
+    simulateScroll(list, 1002);
+    simulateScroll(list, 1003);
     flush();
 
     indices = getRenderedIndices(list);
@@ -2192,7 +2208,11 @@ describe("withGrid plugin", () => {
     const scrollPositions = [0, 1000, 3000, 5000];
 
     for (const scrollTop of scrollPositions) {
+      // Nudge positions to flush release grace period
       simulateScroll(list, scrollTop);
+      simulateScroll(list, scrollTop + 1);
+      simulateScroll(list, scrollTop + 2);
+      simulateScroll(list, scrollTop + 3);
       flush();
 
       const indices = getRenderedIndices(list);
