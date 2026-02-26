@@ -63,32 +63,6 @@ const DEFAULT_OVERSCAN = 3;
 const DEFAULT_CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 
-/**
- * Number of render cycles to keep an item alive after it leaves the render range.
- * Prevents boundary thrashing: items near the overscan edge aren't recycled
- * on small scroll deltas, preserving DOM element hover state and avoiding
- * CSS transition replays.
- */
-const RELEASE_GRACE = 2;
-
-// =============================================================================
-// Tracked rendered item — change-tracking fields for skip-if-unchanged
-// =============================================================================
-
-export interface TrackedItem {
-  element: HTMLElement;
-  /** Item id at last render (to detect data changes / placeholder replacement) */
-  lastItemId: string | number;
-  /** Selected state at last render */
-  lastSelected: boolean;
-  /** Focused state at last render */
-  lastFocused: boolean;
-  /** Computed offset at last render (to detect position changes) */
-  lastOffset: number;
-  /** Render frame when this item was last in the render range */
-  lastSeenFrame: number;
-}
-
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
 // =============================================================================
@@ -394,16 +368,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   // Rendered item tracking
-  const rendered = new Map<number, TrackedItem>();
-
-  // Frame counter for release grace period
-  let frameCounter = 0;
-
-  // Pre-computed class names for toggle operations (avoid string concat on hot path)
-  const selectedClass = `${classPrefix}-item--selected`;
-  const focusedClass = `${classPrefix}-item--focused`;
-  const placeholderClass = `${classPrefix}-item--placeholder`;
-  const replacedClass = `${classPrefix}-item--replaced`;
+  const rendered = new Map<number, HTMLElement>();
 
   // ── Mode B: Measurement tracking ───────────────────────────────
   // Maps observed elements back to their item index for ResizeObserver callback
@@ -565,6 +530,22 @@ function materialize<T extends VListItem = VListItem>(
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
 
+  // ── Cached selection getter references ──
+  // Resolved lazily on first render frame. The selection feature registers
+  // _getSelectedIds / _getFocusedIndex on ctx.methods at priority 50,
+  // which runs before the initial render. Caching the function references
+  // avoids a Map.get() on every scroll frame.
+  let selectionIdsGetter: (() => Set<string | number>) | null = null;
+  let selectionFocusGetter: (() => number) | null = null;
+  let selectionGettersResolved = false;
+
+  const resolveSelectionGetters = (): void => {
+    if (selectionGettersResolved) return;
+    selectionGettersResolved = true;
+    selectionIdsGetter = (methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    selectionFocusGetter = (methods.get("_getFocusedIndex") as (() => number)) ?? null;
+  };
+
   // ── Rendering ───────────────────────────────────────────────────
 
   const applyTemplate = (
@@ -587,12 +568,7 @@ function materialize<T extends VListItem = VListItem>(
   // Set initial position function on refs
   $.pef = positionElement;
 
-  const renderItem = (
-    index: number,
-    item: T,
-    isSelected: boolean,
-    isFocused: boolean,
-  ): TrackedItem => {
+  const renderItem = (index: number, item: T): HTMLElement => {
     const element = pool.acquire();
     element.className = baseClass;
 
@@ -621,7 +597,7 @@ function materialize<T extends VListItem = VListItem>(
 
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
-    element.ariaSelected = isSelected ? "true" : "false";
+    element.ariaSelected = "false";
     element.id = `${ariaIdPrefix}-item-${index}`;
     $.la = String($.vtf());
     element.setAttribute("aria-setsize", $.la);
@@ -630,34 +606,12 @@ function materialize<T extends VListItem = VListItem>(
     // Add placeholder class if this is a placeholder item
     const isPlaceholder = String(item.id).startsWith("__placeholder_");
     if (isPlaceholder) {
-      element.classList.add(placeholderClass);
-    }
-
-    // Apply selection/focus classes on new elements
-    if (isSelected) {
-      element.classList.add(selectedClass);
-    }
-    if (isFocused) {
-      element.classList.add(focusedClass);
+      element.classList.add(`${classPrefix}-item--placeholder`);
     }
 
     applyTemplate(element, $.at(item, index, itemState));
-
-    const offset = Math.round($.hc.getOffset(index));
-    if (isHorizontal) {
-      element.style.transform = `translateX(${offset}px)`;
-    } else {
-      element.style.transform = `translateY(${offset}px)`;
-    }
-
-    return {
-      element,
-      lastItemId: item.id,
-      lastSelected: isSelected,
-      lastFocused: isFocused,
-      lastOffset: offset,
-      lastSeenFrame: frameCounter,
-    };
+    $.pef(element, index);
+    return element;
   };
 
   const updateContentSize = (): void => {
@@ -669,61 +623,21 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
-  // ── Cached selection getter references ──────────────────────────
-  // Resolved lazily on first render frame. The selection feature registers
-  // _getSelectedIds / _getFocusedIndex on ctx.methods at priority 50,
-  // which runs before the initial $.rfn() call. Caching the function
-  // references avoids a Map.get() on every scroll frame.
-  let selectionIdsGetter: (() => Set<string | number>) | null = null;
-  let selectionFocusGetter: (() => number) | null = null;
-  let selectionGettersResolved = false;
-
-  const resolveSelectionGetters = (): void => {
-    if (selectionGettersResolved) return;
-    selectionGettersResolved = true;
-    selectionIdsGetter = (methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    selectionFocusGetter = (methods.get("_getFocusedIndex") as (() => number)) ?? null;
-  };
-
   // ── Main render function ────────────────────────────────────────
   // This is the hot path — called on every scroll-triggered range change.
-  //
-  // Optimizations vs. naive approach:
-  // - Release grace period: items outside the range keep their DOM element for
-  //   RELEASE_GRACE extra render cycles, preventing hover blink and CSS
-  //   transition replay on boundary items.
-  // - Change tracking: template re-evaluation, class toggles, position updates,
-  //   and aria writes are all skipped when the tracked state hasn't changed.
-  // - Lazy DocumentFragment: only allocated when new items actually enter the
-  //   viewport — zero allocation on scroll-only frames.
 
   const coreRenderIfNeeded = (): void => {
     if ($.id) return;
 
-    frameCounter++;
+    // Resolve selection getters lazily (selection feature registers them at setup)
+    resolveSelectionGetters();
+    const selectedIds = selectionIdsGetter ? selectionIdsGetter() : $.ss;
+    const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : $.fi;
 
     const total = $.vtf();
     const containerSize = isHorizontal ? $.cw : $.ch;
     $.gvr($.ls, containerSize, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
-
-    // Release items outside new range, with grace period to prevent
-    // boundary thrashing (hover blink, CSS transition replay).
-    // Items that just left the render range keep their DOM element for
-    // RELEASE_GRACE extra render cycles — if they re-enter, the same
-    // element is reused with :hover state intact.
-    // This runs BEFORE the early-exit guard so that stale items are
-    // cleaned up even on frames where the render range is unchanged
-    // (the frame counter still advances, eventually expiring the grace).
-    for (const [index, tracked] of rendered) {
-      if (index >= renderRange.start && index <= renderRange.end) {
-        tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
-        tracked.element.remove();
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
 
     if (
       renderRange.start === lastRenderRange.start &&
@@ -732,14 +646,9 @@ function materialize<T extends VListItem = VListItem>(
       // In compressed mode, items must be repositioned even when range is unchanged
       // because their positions are relative to the viewport, not absolute
       if ($.sic) {
-        // Reposition only in-range items (unconditional — compression
-        // changes offsets unpredictably, so offset tracking doesn't help here).
-        // Grace-period items outside the range are about to expire and don't
-        // need repositioning — skipping them avoids wasted $.pef calls.
-        for (const [index, tracked] of rendered) {
-          if (index >= renderRange.start && index <= renderRange.end) {
-            $.pef(tracked.element, index);
-          }
+        // Reposition all currently rendered items
+        for (const [index, element] of rendered) {
+          $.pef(element, index);
         }
       }
       return;
@@ -749,117 +658,111 @@ function materialize<T extends VListItem = VListItem>(
     const setSizeChanged = currentSetSize !== $.la;
     $.la = currentSetSize;
 
-    // Add / update items in range — lazy fragment for batched DOM insertion
-    let fragment: DocumentFragment | null = null;
-    let newlyRenderedForMeasurement: Array<{
+    // Remove items outside new range
+    for (const [index, element] of rendered) {
+      if (index < renderRange.start || index > renderRange.end) {
+        element.remove();
+        pool.release(element);
+        rendered.delete(index);
+      }
+    }
+
+    // Add / update items in range
+    const fragment = document.createDocumentFragment();
+    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+    const newlyRenderedForMeasurement: Array<{
       index: number;
       element: HTMLElement;
-    }> | null = null;
-
-    // Read selection state — prefer live getters from selection feature,
-    // fall back to $.ss / $.fi (which default to empty Set / -1).
-    resolveSelectionGetters();
-    const selectedIds = selectionIdsGetter ? selectionIdsGetter() : $.ss;
-    const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : $.fi;
+    }> = [];
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
       const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
       if (!item) continue;
 
-      const isSelected = selectedIds.has(item.id);
-      const isFocused = i === focusedIndex;
       const existing = rendered.get(i);
-
       if (existing) {
-        // ── Fast path: skip work when nothing changed ──
-        const idChanged = existing.lastItemId !== item.id;
-        const selectedChanged = existing.lastSelected !== isSelected;
-        const focusedChanged = existing.lastFocused !== isFocused;
-
-        if (idChanged) {
-          const existingId = String(existing.lastItemId);
-          const newId = String(item.id);
+        const existingId = existing.dataset.id;
+        const newId = String(item.id);
+        if (existingId !== newId) {
           // Check if we're replacing a placeholder (ID starts with __placeholder_)
-          const wasPlaceholder = existingId.startsWith("__placeholder_");
+          const wasPlaceholder = existingId?.startsWith("__placeholder_");
           const isPlaceholder = newId.startsWith("__placeholder_");
 
-          applyTemplate(existing.element, $.at(item, i, itemState));
-          existing.element.dataset.id = newId;
+          applyTemplate(existing, $.at(item, i, itemState));
+          existing.dataset.id = newId;
           // Mode B: unconstrain unmeasured items for ResizeObserver measurement
           const shouldConstrain =
             !measurementEnabled ||
             (measuredCache && measuredCache.isMeasured(i));
           if (isHorizontal) {
-            existing.element.style.width = shouldConstrain
+            existing.style.width = shouldConstrain
               ? `${$.hc.getSize(i)}px`
               : "";
           } else {
-            existing.element.style.height = shouldConstrain
+            existing.style.height = shouldConstrain
               ? `${$.hc.getSize(i)}px`
               : "";
           }
 
-          // Toggle placeholder class
-          existing.element.classList.toggle(placeholderClass, isPlaceholder);
-
-          // Fade-in animation when placeholder is replaced with real data
+          // Update placeholder class
+          if (isPlaceholder) {
+            existing.classList.add(`${classPrefix}-item--placeholder`);
+          } else {
+            existing.classList.remove(`${classPrefix}-item--placeholder`);
+          }
+          // Add --replaced class for fade-in animation when placeholder is replaced
           if (wasPlaceholder && !isPlaceholder) {
-            existing.element.classList.add(replacedClass);
+            existing.classList.add(`${classPrefix}-item--replaced`);
             // Remove class after animation completes to allow reuse
             setTimeout(() => {
-              existing.element.classList.remove(replacedClass);
+              existing.classList.remove(`${classPrefix}-item--replaced`);
             }, 300);
           }
-
-          existing.lastItemId = item.id;
         }
+        $.pef(existing, i);
 
-        // Class + aria updates only when selection/focus changed
-        if (idChanged || selectedChanged || focusedChanged) {
-          existing.element.classList.toggle(selectedClass, isSelected);
-          existing.element.classList.toggle(focusedClass, isFocused);
-          existing.element.ariaSelected = isSelected ? "true" : "false";
-          existing.lastSelected = isSelected;
-          existing.lastFocused = isFocused;
-        }
+        // Selection class updates
+        const isSelected = selectedIds.has(item.id);
+        const isFocused = i === focusedIndex;
+        existing.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+        existing.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+        existing.ariaSelected = isSelected ? "true" : "false";
 
-        // Position update only when offset changed
-        const offset = Math.round($.hc.getOffset(i));
-        if (existing.lastOffset !== offset) {
-          $.pef(existing.element, i);
-          existing.lastOffset = offset;
-        }
-
-        // Update aria-setsize on existing items only when total changed (rare)
         if (setSizeChanged) {
-          existing.element.setAttribute("aria-setsize", $.la);
+          existing.setAttribute("aria-setsize", $.la);
         }
       } else {
-        // Render new item — collect in fragment for batched insertion
-        const tracked = renderItem(i, item, isSelected, isFocused);
+        const element = renderItem(i, item);
+        newlyRenderedForMeasurement.push({ index: i, element });
 
-        // Mode B: track for ResizeObserver measurement
-        if (measurementEnabled) {
-          if (!newlyRenderedForMeasurement) newlyRenderedForMeasurement = [];
-          newlyRenderedForMeasurement.push({ index: i, element: tracked.element });
+        // Selection state for new elements
+        const isSelected = selectedIds.has(item.id);
+        const isFocused = i === focusedIndex;
+        if (isSelected) {
+          element.classList.add(`${classPrefix}-item--selected`);
+          element.ariaSelected = "true";
+        }
+        if (isFocused) {
+          element.classList.add(`${classPrefix}-item--focused`);
         }
 
-        if (!fragment) fragment = document.createDocumentFragment();
-        fragment.appendChild(tracked.element);
-        rendered.set(i, tracked);
+        fragment.appendChild(element);
+        newElements.push({ index: i, element });
       }
     }
 
-    // Single DOM insertion for all new elements — minimizes reflows
-    if (fragment) {
+    if (newElements.length > 0) {
       dom.items.appendChild(fragment);
+      for (const { index, element } of newElements) {
+        rendered.set(index, element);
+      }
     }
 
     // Mode B: observe newly rendered items for auto-measurement immediately.
     // ResizeObserver fires asynchronously; the callback defers content size
     // updates and scroll correction until scroll idle for scrollbar stability.
     if (
-      newlyRenderedForMeasurement &&
+      measurementEnabled &&
       itemResizeObserver &&
       measuredCache &&
       measuredElementToIndex
@@ -896,11 +799,6 @@ function materialize<T extends VListItem = VListItem>(
   const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
-    // Advance frame counter past grace window so the next render flushes
-    // all stale items immediately. Force renders signal "the world changed"
-    // (setItems, reload, invalidate) — keeping grace-period ghosts would
-    // leave orphan DOM nodes visible after data is cleared.
-    frameCounter += RELEASE_GRACE + 1;
     $.rfn();
   };
 
@@ -1363,9 +1261,9 @@ function materialize<T extends VListItem = VListItem>(
 
     cancelScroll();
 
-    for (const [, tracked] of rendered) {
-      tracked.element.remove();
-      pool.release(tracked.element);
+    for (const [, element] of rendered) {
+      element.remove();
+      pool.release(element);
     }
     rendered.clear();
     pool.clear();
@@ -1427,7 +1325,7 @@ function materialize<T extends VListItem = VListItem>(
     destroy,
   };
 
-  // Merge feature methods (skip core methods already on api, and internal _-prefixed methods)
+  // Merge feature methods
   for (const [name, fn] of methods) {
     if (
       name.charCodeAt(0) === 95 || // '_' — internal methods (e.g. _getSelectedIds)
