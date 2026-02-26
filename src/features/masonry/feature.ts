@@ -259,10 +259,9 @@ export const withMasonry = <T extends VListItem = VListItem>(
         const viewportState = ctx.state.viewportState;
         viewportState.scrollPosition = scrollPosition;
 
-        const firstIndex = visiblePlacements.length > 0 ? visiblePlacements[0]!.index : 0;
-        const lastIndex = visiblePlacements.length > 0
-          ? visiblePlacements[visiblePlacements.length - 1]!.index
-          : 0;
+        const vLen = visiblePlacements.length;
+        const firstIndex = vLen > 0 ? visiblePlacements[0]!.index : 0;
+        const lastIndex = vLen > 0 ? visiblePlacements[vLen - 1]!.index : 0;
 
         viewportState.visibleRange.start = firstIndex;
         viewportState.visibleRange.end = lastIndex;
@@ -308,54 +307,24 @@ export const withMasonry = <T extends VListItem = VListItem>(
       };
 
       // Intercept all data mutation methods to recalculate layout
-      const dm = ctx.dataManager;
-
-      if (typeof dm.setItems === "function") {
-        const originalSetItems = dm.setItems.bind(dm);
-        dm.setItems = (items: T[]) => {
-          originalSetItems(items);
-          handleDataChange();
-        };
-      }
-
-      if (typeof (dm as any).appendItems === "function") {
-        const originalAppendItems = (dm as any).appendItems.bind(dm);
-        (dm as any).appendItems = (items: T[]) => {
-          originalAppendItems(items);
-          handleDataChange();
-        };
-      }
-
-      if (typeof (dm as any).prependItems === "function") {
-        const originalPrependItems = (dm as any).prependItems.bind(dm);
-        (dm as any).prependItems = (items: T[]) => {
-          originalPrependItems(items);
-          handleDataChange();
-        };
-      }
-
-      if (typeof (dm as any).updateItem === "function") {
-        const originalUpdateItem = (dm as any).updateItem.bind(dm);
-        (dm as any).updateItem = (index: number, item: T) => {
-          originalUpdateItem(index, item);
-          handleDataChange();
-        };
-      }
-
-      if (typeof (dm as any).removeItem === "function") {
-        const originalRemoveItem = (dm as any).removeItem.bind(dm);
-        (dm as any).removeItem = (index: number) => {
-          originalRemoveItem(index);
-          handleDataChange();
-        };
-      }
+      const dm = ctx.dataManager as any;
+      const intercept = (method: string): void => {
+        if (typeof dm[method] !== "function") return;
+        const original = dm[method].bind(dm);
+        dm[method] = (...args: any[]) => { original(...args); handleDataChange(); };
+      };
+      intercept("setItems");
+      intercept("appendItems");
+      intercept("prependItems");
+      intercept("updateItem");
+      intercept("removeItem");
 
       // ── Scroll to index (map to item position) ──
       ctx.methods.set("scrollToIndex", (index: number, align?: string, behavior?: ScrollBehavior) => {
         const placement = cachedPlacements[index];
         if (!placement) return;
 
-        const mainAxisPosition = placement.position.y;
+        const mainAxisPosition = placement.y;
         const containerSize = ctx.state.viewportState.containerSize;
 
         let scrollTarget = mainAxisPosition;

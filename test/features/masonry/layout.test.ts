@@ -47,83 +47,6 @@ describe("createMasonryLayout", () => {
 });
 
 // =============================================================================
-// getCrossAxisSize
-// =============================================================================
-
-describe("getCrossAxisSize", () => {
-  it("should divide container evenly with no gap", () => {
-    const layout = createMasonryLayout({ columns: 4, containerSize: 800 });
-    expect(layout.getCrossAxisSize()).toBe(200);
-  });
-
-  it("should account for gaps between columns", () => {
-    // containerSize = 800, columns = 4, gap = 8
-    // totalGap = 3 * 8 = 24, available = 776, colWidth = 194
-    const layout = createMasonryLayout({ columns: 4, gap: 8, containerSize: 800 });
-    expect(layout.getCrossAxisSize()).toBe(194);
-  });
-
-  it("should handle 1 column (no gaps applied)", () => {
-    const layout = createMasonryLayout({ columns: 1, gap: 10, containerSize: 500 });
-    // totalGap = 0 * 10 = 0, available = 500
-    expect(layout.getCrossAxisSize()).toBe(500);
-  });
-
-  it("should handle 2 columns with gap", () => {
-    // containerSize = 400, columns = 2, gap = 16
-    // totalGap = 1 * 16 = 16, available = 384, colWidth = 192
-    const layout = createMasonryLayout({ columns: 2, gap: 16, containerSize: 400 });
-    expect(layout.getCrossAxisSize()).toBe(192);
-  });
-
-  it("should return 0 for 0 container size", () => {
-    const layout = createMasonryLayout({ columns: 4, containerSize: 0 });
-    expect(layout.getCrossAxisSize()).toBe(0);
-  });
-
-  it("should clamp to 0 if gap exceeds container", () => {
-    const layout = createMasonryLayout({ columns: 4, gap: 1000, containerSize: 100 });
-    expect(layout.getCrossAxisSize()).toBe(0);
-  });
-});
-
-// =============================================================================
-// getCrossAxisOffset
-// =============================================================================
-
-describe("getCrossAxisOffset", () => {
-  it("should return 0 for lane 0", () => {
-    const layout = createMasonryLayout({ columns: 4, containerSize: 800 });
-    expect(layout.getCrossAxisOffset(0)).toBe(0);
-  });
-
-  it("should return correct offsets for each lane (no gap)", () => {
-    const layout = createMasonryLayout({ columns: 4, containerSize: 800 });
-    // colWidth = 200
-    expect(layout.getCrossAxisOffset(0)).toBe(0);
-    expect(layout.getCrossAxisOffset(1)).toBe(200);
-    expect(layout.getCrossAxisOffset(2)).toBe(400);
-    expect(layout.getCrossAxisOffset(3)).toBe(600);
-  });
-
-  it("should return correct offsets with gap", () => {
-    const layout = createMasonryLayout({ columns: 4, gap: 8, containerSize: 800 });
-    // colWidth = 194, stride = 194 + 8 = 202
-    expect(layout.getCrossAxisOffset(0)).toBe(0);
-    expect(layout.getCrossAxisOffset(1)).toBe(202);
-    expect(layout.getCrossAxisOffset(2)).toBe(404);
-    expect(layout.getCrossAxisOffset(3)).toBe(606);
-  });
-
-  it("should handle 2 columns with gap", () => {
-    const layout = createMasonryLayout({ columns: 2, gap: 16, containerSize: 400 });
-    // colWidth = 192, stride = 192 + 16 = 208
-    expect(layout.getCrossAxisOffset(0)).toBe(0);
-    expect(layout.getCrossAxisOffset(1)).toBe(208);
-  });
-});
-
-// =============================================================================
 // calculateLayout — shortest-lane algorithm
 // =============================================================================
 
@@ -146,20 +69,20 @@ describe("calculateLayout", () => {
     const placements = layout.calculateLayout(6, () => 100);
 
     // First three items → one per column at y=0
-    expect(placements[0]!.position.lane).toBe(0);
-    expect(placements[0]!.position.y).toBe(0);
-    expect(placements[1]!.position.lane).toBe(1);
-    expect(placements[1]!.position.y).toBe(0);
-    expect(placements[2]!.position.lane).toBe(2);
-    expect(placements[2]!.position.y).toBe(0);
+    expect(placements[0]!.lane).toBe(0);
+    expect(placements[0]!.y).toBe(0);
+    expect(placements[1]!.lane).toBe(1);
+    expect(placements[1]!.y).toBe(0);
+    expect(placements[2]!.lane).toBe(2);
+    expect(placements[2]!.y).toBe(0);
 
     // Second row → starts from lane 0 again (all lanes equal)
-    expect(placements[3]!.position.lane).toBe(0);
-    expect(placements[3]!.position.y).toBe(100);
-    expect(placements[4]!.position.lane).toBe(1);
-    expect(placements[4]!.position.y).toBe(100);
-    expect(placements[5]!.position.lane).toBe(2);
-    expect(placements[5]!.position.y).toBe(100);
+    expect(placements[3]!.lane).toBe(0);
+    expect(placements[3]!.y).toBe(100);
+    expect(placements[4]!.lane).toBe(1);
+    expect(placements[4]!.y).toBe(100);
+    expect(placements[5]!.lane).toBe(2);
+    expect(placements[5]!.y).toBe(100);
   });
 
   it("should place items in shortest lane with variable heights", () => {
@@ -172,17 +95,17 @@ describe("calculateLayout", () => {
 
     const placements = layout.calculateLayout(4, (i) => heights[i]!);
 
-    expect(placements[0]!.position.lane).toBe(0);
-    expect(placements[0]!.position.y).toBe(0);
+    expect(placements[0]!.lane).toBe(0);
+    expect(placements[0]!.y).toBe(0);
 
-    expect(placements[1]!.position.lane).toBe(1);
-    expect(placements[1]!.position.y).toBe(0);
+    expect(placements[1]!.lane).toBe(1);
+    expect(placements[1]!.y).toBe(0);
 
-    expect(placements[2]!.position.lane).toBe(1);
-    expect(placements[2]!.position.y).toBe(100);
+    expect(placements[2]!.lane).toBe(1);
+    expect(placements[2]!.y).toBe(100);
 
-    expect(placements[3]!.position.lane).toBe(1);
-    expect(placements[3]!.position.y).toBe(200);
+    expect(placements[3]!.lane).toBe(1);
+    expect(placements[3]!.y).toBe(200);
   });
 
   it("should include gap in y offset between items in same lane", () => {
@@ -194,9 +117,9 @@ describe("calculateLayout", () => {
 
     const placements = layout.calculateLayout(3, (i) => heights[i]!);
 
-    expect(placements[0]!.position.y).toBe(0);
-    expect(placements[1]!.position.y).toBe(0);
-    expect(placements[2]!.position.y).toBe(110); // 100 + 10 gap
+    expect(placements[0]!.y).toBe(0);
+    expect(placements[1]!.y).toBe(0);
+    expect(placements[2]!.y).toBe(110); // 100 + 10 gap
   });
 
   it("should set correct x coordinates based on lane", () => {
@@ -204,9 +127,9 @@ describe("calculateLayout", () => {
     // colWidth = 100
     const placements = layout.calculateLayout(3, () => 50);
 
-    expect(placements[0]!.position.x).toBe(0);
-    expect(placements[1]!.position.x).toBe(100);
-    expect(placements[2]!.position.x).toBe(200);
+    expect(placements[0]!.x).toBe(0);
+    expect(placements[1]!.x).toBe(100);
+    expect(placements[2]!.x).toBe(200);
   });
 
   it("should set correct x coordinates with gap", () => {
@@ -215,9 +138,9 @@ describe("calculateLayout", () => {
     // stride = 93.33 + 10 = 103.33
     const placements = layout.calculateLayout(3, () => 50);
 
-    expect(placements[0]!.position.x).toBe(0);
-    expect(placements[1]!.position.x).toBeCloseTo(103.33, 1);
-    expect(placements[2]!.position.x).toBeCloseTo(206.67, 1);
+    expect(placements[0]!.x).toBe(0);
+    expect(placements[1]!.x).toBeCloseTo(103.33, 1);
+    expect(placements[2]!.x).toBeCloseTo(206.67, 1);
   });
 
   it("should set correct crossSize on each placement", () => {
@@ -264,9 +187,9 @@ describe("calculateLayout", () => {
 
     // All items in lane 0, stacked vertically
     for (let i = 0; i < 4; i++) {
-      expect(placements[i]!.position.lane).toBe(0);
-      expect(placements[i]!.position.x).toBe(0);
-      expect(placements[i]!.position.y).toBe(i * 100);
+      expect(placements[i]!.lane).toBe(0);
+      expect(placements[i]!.x).toBe(0);
+      expect(placements[i]!.y).toBe(i * 100);
     }
   });
 
@@ -274,9 +197,9 @@ describe("calculateLayout", () => {
     const layout = createMasonryLayout({ columns: 1, gap: 10, containerSize: 400 });
     const placements = layout.calculateLayout(3, () => 100);
 
-    expect(placements[0]!.position.y).toBe(0);
-    expect(placements[1]!.position.y).toBe(110); // 100 + 10
-    expect(placements[2]!.position.y).toBe(220); // 210 + 10
+    expect(placements[0]!.y).toBe(0);
+    expect(placements[1]!.y).toBe(110); // 100 + 10
+    expect(placements[2]!.y).toBe(220); // 210 + 10
   });
 
   it("should handle more columns than items", () => {
@@ -284,13 +207,13 @@ describe("calculateLayout", () => {
     const placements = layout.calculateLayout(3, () => 100);
 
     // Each item gets its own lane
-    expect(placements[0]!.position.lane).toBe(0);
-    expect(placements[1]!.position.lane).toBe(1);
-    expect(placements[2]!.position.lane).toBe(2);
+    expect(placements[0]!.lane).toBe(0);
+    expect(placements[1]!.lane).toBe(1);
+    expect(placements[2]!.lane).toBe(2);
 
     // All at y=0
     for (const p of placements) {
-      expect(p.position.y).toBe(0);
+      expect(p.y).toBe(0);
     }
   });
 
@@ -300,9 +223,9 @@ describe("calculateLayout", () => {
 
     expect(placements).toHaveLength(1);
     expect(placements[0]!.index).toBe(0);
-    expect(placements[0]!.position.lane).toBe(0);
-    expect(placements[0]!.position.x).toBe(0);
-    expect(placements[0]!.position.y).toBe(0);
+    expect(placements[0]!.lane).toBe(0);
+    expect(placements[0]!.x).toBe(0);
+    expect(placements[0]!.y).toBe(0);
     expect(placements[0]!.size).toBe(250);
     expect(placements[0]!.crossSize).toBe(200);
   });
@@ -320,8 +243,8 @@ describe("calculateLayout", () => {
 
     // All lanes should be 0-3
     for (const p of placements) {
-      expect(p.position.lane).toBeGreaterThanOrEqual(0);
-      expect(p.position.lane).toBeLessThan(4);
+      expect(p.lane).toBeGreaterThanOrEqual(0);
+      expect(p.lane).toBeLessThan(4);
     }
   });
 });
@@ -336,7 +259,7 @@ describe("calculateLayout - tie-breaking", () => {
     // All heights equal → first 3 fill lanes 0,1,2
     // Item 3 should go to lane 0 (first shortest)
     const placements = layout.calculateLayout(4, () => 100);
-    expect(placements[3]!.position.lane).toBe(0);
+    expect(placements[3]!.lane).toBe(0);
   });
 });
 
@@ -462,8 +385,8 @@ describe("getVisibleItems", () => {
     // Scroll to middle
     const visible = layout.getVisibleItems(placements, 400, 800);
     for (const p of visible) {
-      const itemEnd = p.position.y + p.size;
-      const itemStart = p.position.y;
+      const itemEnd = p.y + p.size;
+      const itemStart = p.y;
       // Item must overlap [400, 800]
       expect(itemEnd).toBeGreaterThan(400);
       expect(itemStart).toBeLessThan(800);
@@ -551,10 +474,12 @@ describe("update", () => {
 
   it("should affect cross-axis size after update", () => {
     const layout = createMasonryLayout({ columns: 4, containerSize: 800 });
-    expect(layout.getCrossAxisSize()).toBe(200);
+    const p1 = layout.calculateLayout(1, () => 100);
+    expect(p1[0]!.crossSize).toBe(200);
 
     layout.update({ containerSize: 400 });
-    expect(layout.getCrossAxisSize()).toBe(100);
+    const p2 = layout.calculateLayout(1, () => 100);
+    expect(p2[0]!.crossSize).toBe(100);
   });
 
   it("should produce different layout after column update", () => {
@@ -588,10 +513,10 @@ describe("calculateLayout - complex scenarios", () => {
 
     const placements = layout.calculateLayout(4, (i) => heights[i]!);
 
-    expect(placements[0]!.position).toEqual({ x: 0, y: 0, lane: 0 });
-    expect(placements[1]!.position).toEqual({ x: 200, y: 0, lane: 1 });
-    expect(placements[2]!.position).toEqual({ x: 200, y: 100, lane: 1 });
-    expect(placements[3]!.position).toEqual({ x: 0, y: 200, lane: 0 });
+    expect(placements[0]!).toMatchObject({ x: 0, y: 0, lane: 0 });
+    expect(placements[1]!).toMatchObject({ x: 200, y: 0, lane: 1 });
+    expect(placements[2]!).toMatchObject({ x: 200, y: 100, lane: 1 });
+    expect(placements[3]!).toMatchObject({ x: 0, y: 200, lane: 0 });
   });
 
   it("should pack items into shortest lane across 3 columns", () => {
@@ -607,12 +532,12 @@ describe("calculateLayout - complex scenarios", () => {
 
     const placements = layout.calculateLayout(5, (i) => heights[i]!);
 
-    expect(placements[0]!.position.lane).toBe(0);
-    expect(placements[1]!.position.lane).toBe(1);
-    expect(placements[2]!.position.lane).toBe(2);
-    expect(placements[3]!.position.lane).toBe(0);
-    expect(placements[4]!.position.lane).toBe(0); // lane 0 ties with lane 2, first wins
-    expect(placements[4]!.position.y).toBe(150);
+    expect(placements[0]!.lane).toBe(0);
+    expect(placements[1]!.lane).toBe(1);
+    expect(placements[2]!.lane).toBe(2);
+    expect(placements[3]!.lane).toBe(0);
+    expect(placements[4]!.lane).toBe(0); // lane 0 ties with lane 2, first wins
+    expect(placements[4]!.y).toBe(150);
   });
 
   it("should handle items with height 0", () => {
@@ -621,7 +546,7 @@ describe("calculateLayout - complex scenarios", () => {
 
     // All heights 0 → all at y=0 in round-robin
     for (const p of placements) {
-      expect(p.position.y).toBe(0);
+      expect(p.y).toBe(0);
       expect(p.size).toBe(0);
     }
   });
@@ -699,22 +624,19 @@ describe("round-trip: layout → visibility → all items found", () => {
 describe("edge cases", () => {
   it("should handle containerSize of 1", () => {
     const layout = createMasonryLayout({ columns: 2, containerSize: 1 });
-    const crossSize = layout.getCrossAxisSize();
-    expect(crossSize).toBe(0.5);
-
     const placements = layout.calculateLayout(2, () => 100);
     expect(placements).toHaveLength(2);
+    expect(placements[0]!.crossSize).toBe(0.5);
   });
 
   it("should handle very large column count with small container", () => {
     const layout = createMasonryLayout({ columns: 100, containerSize: 100 });
-    const crossSize = layout.getCrossAxisSize();
-    expect(crossSize).toBe(1); // 100 / 100
-
     const placements = layout.calculateLayout(5, () => 50);
+    expect(placements[0]!.crossSize).toBe(1); // 100 / 100
+
     // 5 items each in their own lane
     for (let i = 0; i < 5; i++) {
-      expect(placements[i]!.position.lane).toBe(i);
+      expect(placements[i]!.lane).toBe(i);
     }
   });
 
@@ -723,9 +645,9 @@ describe("edge cases", () => {
     const placements = layout.calculateLayout(3, () => 10);
 
     // Items: y=0..10, y=510..520, y=1020..1030
-    expect(placements[0]!.position.y).toBe(0);
-    expect(placements[1]!.position.y).toBe(510);
-    expect(placements[2]!.position.y).toBe(1020);
+    expect(placements[0]!.y).toBe(0);
+    expect(placements[1]!.y).toBe(510);
+    expect(placements[2]!.y).toBe(1020);
   });
 
   it("should maintain item order within indices", () => {
