@@ -1338,8 +1338,11 @@ describe("performance — virtualization bounds", () => {
     }
 
     const renderedCount = getRenderedIndices(list).length;
-    // Grid with 4 columns renders 4x items per row, but still bounded
-    expect(renderedCount).toBeLessThan(80);
+    // Grid with 4 columns renders 4x items per row, but still bounded.
+    // Release grace period (RELEASE_GRACE = 2) keeps items from the last
+    // 2 render cycles briefly in the DOM to prevent hover blink and CSS
+    // transition replays, so the bound is higher than without grace.
+    expect(renderedCount).toBeLessThan(120);
     expect(renderedCount).toBeGreaterThan(0);
 
     list.destroy();

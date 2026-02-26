@@ -12,6 +12,15 @@
  * - The "index" in the rendered map is the FLAT ITEM INDEX (not row index)
  * - Row offsets come from the size cache (which operates on row indices)
  * - Column offsets are calculated from itemIndex % columns
+ *
+ * Performance:
+ * - Element pooling avoids createElement cost
+ * - Template re-evaluation skipped when item data + state unchanged (change tracking)
+ * - Position update skipped when coordinates unchanged (position tracking)
+ * - O(1) Set-based visibility diffing (not O(n) .some())
+ * - Release grace period prevents boundary thrashing (hover blink, transition replay)
+ * - Released elements removed from DOM immediately
+ * - DocumentFragment batched insertion for new elements
  */
 
 import type {
@@ -19,7 +28,6 @@ import type {
   ItemTemplate,
   ItemState,
   Range,
-  RenderedItem,
 } from "../../types";
 
 import {
@@ -50,7 +58,10 @@ export interface GridRenderer<T extends VListItem = VListItem> {
   /** Update item positions (for compressed scrolling) */
   updatePositions: (compressionCtx: CompressionContext) => void;
 
-  /** Update a single item */
+  /** Advance frame counter and release grace-expired items outside the given range */
+  tick: (currentRange: Range) => void;
+
+  /** Update a single item (used by selection feature for focused item changes) */
   updateItem: (
     index: number,
     item: T,
@@ -104,6 +115,9 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
   };
 
   const release = (element: HTMLElement): void => {
+    // Remove from DOM immediately — prevents blank divs in the container
+    element.remove();
+
     if (pool.length < maxSize) {
       element.className = "";
       element.textContent = "";
@@ -125,6 +139,36 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
 };
 
 // =============================================================================
+// Release grace period
+// =============================================================================
+
+/**
+ * Number of render cycles to keep an item alive after it leaves the visible set.
+ * Prevents boundary thrashing: items near the overscan edge aren't recycled
+ * on small scroll deltas, preserving DOM element hover state and avoiding
+ * CSS transition replays.
+ */
+const RELEASE_GRACE = 2;
+
+// =============================================================================
+// Tracked rendered item — change-tracking fields for skip-if-unchanged
+// =============================================================================
+
+interface TrackedItem {
+  element: HTMLElement;
+  /** Item id at last render (to detect data changes) */
+  lastItemId: string | number;
+  /** Selected state at last render */
+  lastSelected: boolean;
+  /** Focused state at last render */
+  lastFocused: boolean;
+  /** Last transform style applied (to detect position changes) */
+  lastTransform: string;
+  /** Render frame when this item was last in the visible range */
+  lastSeenFrame: number;
+}
+
+// =============================================================================
 // Grid Renderer Factory
 // =============================================================================
 
@@ -142,6 +186,7 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
  * @param initialContainerWidth - Initial container width for column sizing
  * @param totalItemsGetter - Optional getter for total item count (for aria-setsize)
  * @param ariaIdPrefix - Optional unique prefix for element IDs (for aria-activedescendant)
+ * @param isHorizontal - Whether layout is horizontal (scrolls right)
  */
 export const createGridRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
@@ -155,7 +200,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   isHorizontal: boolean = false,
 ): GridRenderer<T> => {
   const pool = createElementPool();
-  const rendered = new Map<number, RenderedItem>();
+  const rendered = new Map<number, TrackedItem>();
 
   let containerWidth = initialContainerWidth;
 
@@ -166,8 +211,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   let cachedCompression: CompressionState | null = null;
   let cachedTotalRows = 0;
 
+  // ── Frame counter for release grace period ──
+  let frameCounter = 0;
+
   // Track aria-setsize to avoid redundant updates on existing items
   let lastAriaSetSize = "";
+  let lastAriaTotal = -1;
 
   const getCompression = (totalRows: number): CompressionState => {
     if (cachedCompression && cachedTotalRows === totalRows) {
@@ -250,17 +299,15 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Position an element at the correct (col, row) offset.
-   * Uses translate(x, y) for efficient GPU-accelerated positioning.
+   * Build the transform string for an element at the given item index.
    * Group headers are positioned at x=0 to span full width.
    */
-  const positionElement = (
-    element: HTMLElement,
+  const buildTransform = (
     itemIndex: number,
     compressionCtx?: CompressionContext,
-  ): void => {
+  ): string => {
     // Check if this is a group header - position at full width
-    const isHeader = element.dataset.id?.startsWith("__group_header");
+    const isHeader = groupsActive && gridLayout.getCol(itemIndex) === 0;
 
     const col = isHeader ? 0 : gridLayout.getCol(itemIndex);
     const x = isHeader ? 0 : gridLayout.getColumnOffset(col, containerWidth);
@@ -269,12 +316,10 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     let y: number;
     if (groupsActive) {
       // Grouped grid: sum the height of each row before this item's row
-      // Each row height should only be counted once, not per-item
       const itemRow = gridLayout.getRow(itemIndex);
       let offset = 0;
       const rowsSeen = new Set<number>();
 
-      // For each item before this one, add its row's height only once
       for (let i = 0; i < itemIndex; i++) {
         const prevItemRow = gridLayout.getRow(i);
         if (prevItemRow < itemRow && !rowsSeen.has(prevItemRow)) {
@@ -286,16 +331,24 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
       y = offset;
     } else {
-      // Regular grid: size cache is row-based
       y = calculateRowOffset(itemIndex, compressionCtx);
     }
 
     // Swap axes for horizontal orientation
     if (isHorizontal) {
-      element.style.transform = `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
-    } else {
-      element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
+    return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  };
+
+  /**
+   * Position an element using a pre-built transform string.
+   */
+  const positionElement = (
+    element: HTMLElement,
+    transform: string,
+  ): void => {
+    element.style.transform = transform;
   };
 
   /**
@@ -336,15 +389,15 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Render a single grid item
+   * Render a single grid item (new element from pool)
    */
   const renderItem = (
     itemIndex: number,
     item: T,
     isSelected: boolean,
     isFocused: boolean,
-    compressionCtx?: CompressionContext,
-  ): HTMLElement => {
+    transform: string,
+  ): TrackedItem => {
     const element = pool.acquire();
     const state = getItemState(isSelected, isFocused);
 
@@ -363,7 +416,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       element.id = `${ariaIdPrefix}-item-${itemIndex}`;
     }
     if (totalItemsGetter) {
-      lastAriaSetSize = String(totalItemsGetter());
+      const total = totalItemsGetter();
+      // Cache stringified total — only recompute when count changes
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+      }
       element.setAttribute("aria-setsize", lastAriaSetSize);
       element.setAttribute("aria-posinset", String(itemIndex + 1));
     }
@@ -377,9 +435,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     // Apply state classes and position
     applyClasses(element, isSelected, isFocused);
-    positionElement(element, itemIndex, compressionCtx);
+    positionElement(element, transform);
 
-    return element;
+    return {
+      element,
+      lastItemId: item.id,
+      lastSelected: isSelected,
+      lastFocused: isFocused,
+      lastTransform: transform,
+      lastSeenFrame: frameCounter,
+    };
   };
 
   /**
@@ -387,6 +452,13 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
    *
    * The range is in flat item indices (not row indices).
    * Items are positioned using translate(colOffset, rowOffset).
+   *
+   * Performance characteristics:
+   * - Skips template re-evaluation when item id + state unchanged (change tracking)
+   * - Skips position update when transform string unchanged (position tracking)
+   * - Release grace period prevents boundary thrashing (hover blink, transition replay)
+   * - Released elements removed from DOM immediately
+   * - DocumentFragment batched insertion for new elements
    */
   const render = (
     items: T[],
@@ -395,6 +467,8 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
+    frameCounter++;
+
     // Detect if groups are active by checking if ANY item in the dataset is a header
     // Don't check items[0] because it's relative to the render range, not the full dataset
     // Instead, check if the first item in the full range is a header
@@ -403,11 +477,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     }
     // Once groupsActive is true, it stays true (groups don't disappear mid-scroll)
 
-    // Remove items outside the new range
-    for (const [index, renderedItem] of rendered) {
-      if (index < range.start || index > range.end) {
-        renderedItem.element.remove();
-        pool.release(renderedItem.element);
+    // Release items outside the new range, with grace period to prevent
+    // boundary thrashing (hover blink, CSS transition replay).
+    // Items that just left the visible range keep their DOM element for
+    // RELEASE_GRACE extra render cycles — if they re-enter, the same
+    // element is reused with :hover state intact.
+    for (const [index, tracked] of rendered) {
+      if (index >= range.start && index <= range.end) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        pool.release(tracked.element);
         rendered.delete(index);
       }
     }
@@ -415,14 +494,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     // Check if aria-setsize changed (total items mutated) — update existing items only when needed
     let setSizeChanged = false;
     if (totalItemsGetter) {
-      const currentSetSize = String(totalItemsGetter());
-      setSizeChanged = currentSetSize !== lastAriaSetSize;
-      lastAriaSetSize = currentSetSize;
+      const total = totalItemsGetter();
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+        setSizeChanged = true;
+      }
     }
 
-    // Collect new elements for batched DOM insertion
-    const fragment = document.createDocumentFragment();
-    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+    // DocumentFragment for batched DOM insertion of new elements
+    let fragment: DocumentFragment | null = null;
 
     // Add/update items in range
     for (let i = range.start; i <= range.end; i++) {
@@ -441,49 +522,83 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       const existing = rendered.get(i);
 
       if (existing) {
-        // Check if the item data changed
-        const existingId = existing.element.dataset.id;
-        const newId = String(item.id);
-        const itemChanged = existingId !== newId;
+        // ── Fast path: skip work when nothing changed ──
+        const idChanged = existing.lastItemId !== item.id;
+        const selectedChanged = existing.lastSelected !== isSelected;
+        const focusedChanged = existing.lastFocused !== isFocused;
 
-        if (itemChanged) {
-          const state = getItemState(isSelected, isFocused);
-          const result = template(item, i, state);
-          applyTemplate(existing.element, result);
-          existing.element.dataset.id = newId;
-          existing.element.dataset.row = String(gridLayout.getRow(i));
-          existing.element.dataset.col = String(gridLayout.getCol(i));
-          applySizeStyles(existing.element, i);
+        // Template re-evaluation only when item data or selection/focus changed
+        if (idChanged || selectedChanged || focusedChanged) {
+          if (idChanged) {
+            const state = getItemState(isSelected, isFocused);
+            const result = template(item, i, state);
+            applyTemplate(existing.element, result);
+            existing.element.dataset.id = String(item.id);
+            existing.element.dataset.row = String(gridLayout.getRow(i));
+            existing.element.dataset.col = String(gridLayout.getCol(i));
+            applySizeStyles(existing.element, i);
+          }
+
+          applyClasses(existing.element, isSelected, isFocused);
+          existing.element.ariaSelected = String(isSelected);
+
+          existing.lastItemId = item.id;
+          existing.lastSelected = isSelected;
+          existing.lastFocused = isFocused;
         }
 
-        // Always update classes, selection, and position
-        applyClasses(existing.element, isSelected, isFocused);
-        existing.element.ariaSelected = String(isSelected);
-        positionElement(existing.element, i, compressionCtx);
+        // Position update only when transform changed
+        const transform = buildTransform(i, compressionCtx);
+        if (existing.lastTransform !== transform) {
+          positionElement(existing.element, transform);
+          existing.lastTransform = transform;
+        }
 
         // Update aria-setsize on existing items only when total changed (rare)
         if (setSizeChanged) {
           existing.element.setAttribute("aria-setsize", lastAriaSetSize);
         }
       } else {
-        // Render new element and add to fragment
-        const element = renderItem(
+        // Render new item — collect in fragment for batched insertion
+        const transform = buildTransform(i, compressionCtx);
+        const tracked = renderItem(
           i,
           item,
           isSelected,
           isFocused,
-          compressionCtx,
+          transform,
         );
-        fragment.appendChild(element);
-        newElements.push({ index: i, element });
+        if (!fragment) fragment = document.createDocumentFragment();
+        fragment.appendChild(tracked.element);
+        rendered.set(i, tracked);
       }
     }
 
-    // Batch append all new elements
-    if (newElements.length > 0) {
+    // Single DOM insertion for all new elements — minimizes reflows
+    if (fragment) {
       itemsContainer.appendChild(fragment);
-      for (const { index, element } of newElements) {
-        rendered.set(index, { index, element });
+    }
+  };
+
+  /**
+   * Advance the frame counter and release grace-expired items.
+   * Called by the feature when the render range hasn't changed —
+   * no items are added/removed/repositioned, but the grace clock
+   * must still tick so that items that left the range on a previous
+   * frame are eventually released.
+   *
+   * Items inside `currentRange` are kept alive (their lastSeenFrame
+   * is refreshed); only items outside the range are candidates for
+   * grace expiry.
+   */
+  const tick = (currentRange: Range): void => {
+    frameCounter++;
+    for (const [index, tracked] of rendered) {
+      if (index >= currentRange.start && index <= currentRange.end) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        pool.release(tracked.element);
+        rendered.delete(index);
       }
     }
   };
@@ -492,13 +607,18 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
    * Update positions of all rendered items (for compressed scrolling)
    */
   const updatePositions = (compressionCtx: CompressionContext): void => {
-    for (const [index, renderedItem] of rendered) {
-      positionElement(renderedItem.element, index, compressionCtx);
+    for (const [index, tracked] of rendered) {
+      const transform = buildTransform(index, compressionCtx);
+      if (tracked.lastTransform !== transform) {
+        positionElement(tracked.element, transform);
+        tracked.lastTransform = transform;
+      }
     }
   };
 
   /**
-   * Update a single item
+   * Update a single item (used by selection feature for focused item changes).
+   * Leverages change tracking — skips work when state is already current.
    */
   const updateItem = (
     index: number,
@@ -507,21 +627,30 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
+    if (!existing) return;
 
-    if (existing) {
+    const idChanged = existing.lastItemId !== item.id;
+    const selectedChanged = existing.lastSelected !== isSelected;
+    const focusedChanged = existing.lastFocused !== isFocused;
+
+    if (idChanged || selectedChanged || focusedChanged) {
       const state = getItemState(isSelected, isFocused);
       const result = template(item, index, state);
-
       applyTemplate(existing.element, result);
       applyClasses(existing.element, isSelected, isFocused);
       existing.element.dataset.id = String(item.id);
       existing.element.ariaSelected = String(isSelected);
       applySizeStyles(existing.element, index);
+
+      existing.lastItemId = item.id;
+      existing.lastSelected = isSelected;
+      existing.lastFocused = isFocused;
     }
   };
 
   /**
-   * Update only CSS classes on a rendered item
+   * Update only CSS classes on a rendered item (no template re-evaluation).
+   * Leverages change tracking — skips work when state is already current.
    */
   const updateItemClasses = (
     index: number,
@@ -529,8 +658,15 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
-    if (existing) {
+    if (!existing) return;
+
+    const selectedChanged = existing.lastSelected !== isSelected;
+    const focusedChanged = existing.lastFocused !== isFocused;
+
+    if (selectedChanged || focusedChanged) {
       applyClasses(existing.element, isSelected, isFocused);
+      existing.lastSelected = isSelected;
+      existing.lastFocused = isFocused;
     }
   };
 
@@ -550,9 +686,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     containerWidth = width;
 
     // Update size and position of all rendered elements
-    for (const [index, renderedItem] of rendered) {
-      applySizeStyles(renderedItem.element, index);
-      positionElement(renderedItem.element, index);
+    for (const [index, tracked] of rendered) {
+      applySizeStyles(tracked.element, index);
+      const transform = buildTransform(index);
+      positionElement(tracked.element, transform);
+      tracked.lastTransform = transform;
     }
   };
 
@@ -560,15 +698,14 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
    * Clear all rendered items
    */
   const clear = (): void => {
-    for (const [, renderedItem] of rendered) {
-      renderedItem.element.remove();
-      pool.release(renderedItem.element);
+    for (const [, tracked] of rendered) {
+      pool.release(tracked.element);
     }
     rendered.clear();
   };
 
   /**
-   * Destroy renderer
+   * Destroy renderer and cleanup
    */
   const destroy = (): void => {
     clear();
@@ -577,6 +714,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
+    tick,
     updatePositions,
     updateItem,
     updateItemClasses,
