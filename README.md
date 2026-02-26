@@ -4,14 +4,14 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
-[![tests](https://img.shields.io/badge/tests-1181%20passing-brightgreen)](https://github.com/floor/vlist)
+[![tests](https://img.shields.io/badge/tests-2268%20passing-brightgreen)](https://github.com/floor/vlist)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
 - **8–12 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
-- **Builder API** — composable plugins with perfect tree-shaking
-- **Grid, sections, async, selection, scale** — all opt-in
+- **Builder API** — composable features with perfect tree-shaking
+- **Grid, masonry, sections, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
 - **Reverse, page-scroll, wrap** — every layout mode
 - **Accessible** — WAI-ARIA, keyboard navigation, screen-reader friendly
@@ -19,12 +19,13 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 **30+ interactive examples → [vlist.dev](https://vlist.dev)**
 
-## v0.9.0 Highlights
+## v1.0.0 Highlights
 
+- 🧱 **Masonry layout** — Pinterest-style shortest-lane placement via `withMasonry()`
+- ⚡ **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
 - ✨ **Dimension-agnostic API** — semantically correct terminology for both orientations
 - 🎯 **Horizontal sections** — sticky headers work in horizontal carousels
 - 🎨 **Horizontal grid layouts** — 2D grids work in both orientations
-- 📐 **`orientation` not `direction`** — clearer, more intuitive configuration
 
 ## Installation
 
@@ -80,10 +81,11 @@ const list = vlist({
 
 ### Plugins
 
-| Plugin | Size | Description |
-|--------|------|-------------|
+| Feature | Size | Description |
+|---------|------|-------------|
 | **Base** | 7.7 KB | Core virtualization |
 | `withGrid()` | +4.0 KB | 2D grid layout |
+| `withMasonry()` | +2.9 KB | Pinterest-style masonry layout |
 | `withSections()` | +4.6 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +5.3 KB | Lazy loading with adapters |
 | `withSelection()` | +2.3 KB | Single/multiple selection + keyboard nav |
@@ -177,6 +179,7 @@ const list = vlist({
 | **Horizontal carousel** | `orientation: 'horizontal'`, `item.width` |
 | **Horizontal sections** | `orientation: 'horizontal'` + `withSections()` |
 | **Horizontal grid** | `orientation: 'horizontal'` + `withGrid()` |
+| **Masonry** | `withMasonry({ columns: 4, gap: 16 })` |
 | **Page-level scroll** | `withPage()` |
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
@@ -266,6 +269,7 @@ Each plugin's config is fully typed — hover in your IDE for details.
 
 ```typescript
 withGrid({ columns: 4, gap: 16 })
+withMasonry({ columns: 4, gap: 16 })
 withSections({ getGroupForIndex, headerHeight, headerTemplate, sticky?: true })
 withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
@@ -382,7 +386,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (1739 tests) and `bun run build` before submitting
+2. Run `bun test` (2268 tests) and `bun run build` before submitting
 
 ## License
 
@@ -390,18 +394,7 @@ const list: VList<Photo> = vlist<Photo>({
 
 ## Changelog
 
-### v0.9.0 (January 2025)
-
-**Breaking Changes:**
-- Renamed `direction` → `orientation` for semantic clarity
-- Renamed `HeightCache` → `SizeCache` and all related APIs
-- Renamed `scrollTop` → `scrollPosition` in ViewportState and events
-- See [Migration Guide](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
-
-**New Features:**
-- Horizontal orientation support for grid and sections plugins
-- Complete dimension-agnostic architecture
-- Proper axis swapping for horizontal 2D grids
+See [CHANGELOG.md](https://vlist.dev/docs/CHANGELOG.md) for the full release history. A simplified [changelog.txt](./changelog.txt) is also available.
 
 ## Links
 

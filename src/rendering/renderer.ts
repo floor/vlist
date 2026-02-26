@@ -9,7 +9,6 @@ import type {
   ItemTemplate,
   ItemState,
   Range,
-  RenderedItem,
 } from "../types";
 
 import type { CompressionState } from "./viewport";
@@ -174,6 +173,36 @@ export const createElementPool = (
 };
 
 // =============================================================================
+// Release grace period
+// =============================================================================
+
+/**
+ * Number of render cycles to keep an item alive after it leaves the visible range.
+ * Prevents boundary thrashing: items near the overscan edge aren't recycled
+ * on small scroll deltas, preserving DOM element hover state and avoiding
+ * CSS transition replays.
+ */
+const RELEASE_GRACE = 2;
+
+// =============================================================================
+// Tracked rendered item — change-tracking fields for skip-if-unchanged
+// =============================================================================
+
+interface TrackedItem {
+  element: HTMLElement;
+  /** Item id at last render (to detect data changes / placeholder replacement) */
+  lastItemId: string | number;
+  /** Selected state at last render */
+  lastSelected: boolean;
+  /** Focused state at last render */
+  lastFocused: boolean;
+  /** Computed offset at last render (to detect position changes) */
+  lastOffset: number;
+  /** Render frame when this item was last in the visible range */
+  lastSeenFrame: number;
+}
+
+// =============================================================================
 // Renderer
 // =============================================================================
 
@@ -196,14 +225,18 @@ export const createRenderer = <T extends VListItem = VListItem>(
   },
 ): Renderer<T> => {
   const pool = createElementPool("div");
-  const rendered = new Map<number, RenderedItem>();
+  const rendered = new Map<number, TrackedItem>();
 
   // Cache compression state to avoid recalculating
   let cachedCompression: CompressionState | null = null;
   let cachedTotalItems = 0;
 
+  // Frame counter for release grace period
+  let frameCounter = 0;
+
   // Track aria-setsize to avoid redundant updates on existing items
   let lastAriaSetSize = "";
+  let lastAriaTotal = -1;
 
   /**
    * Get or update compression state.
@@ -305,21 +338,6 @@ export const createRenderer = <T extends VListItem = VListItem>(
     return sizeCache.getOffset(index);
   };
 
-  /**
-   * Position an element at the correct offset (transform only)
-   * Static styles should already be applied via applyStaticStyles
-   */
-  const positionElement = (
-    element: HTMLElement,
-    index: number,
-    compressionCtx?: CompressionContext,
-  ): void => {
-    const offset = calculateOffset(index, compressionCtx);
-    element.style.transform = horizontal
-      ? `translateX(${Math.round(offset)}px)`
-      : `translateY(${Math.round(offset)}px)`;
-  };
-
   // Pre-computed class names for toggle operations
   const baseClass = `${classPrefix}-item`;
   const selectedClass = `${classPrefix}-item--selected`;
@@ -348,7 +366,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Render a single item
+   * Render a single item — returns a TrackedItem for change tracking.
    */
   const renderItem = (
     index: number,
@@ -356,7 +374,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
     compressionCtx?: CompressionContext,
-  ): HTMLElement => {
+  ): TrackedItem => {
     const element = pool.acquire();
     const state = getItemState(isSelected, isFocused);
 
@@ -377,7 +395,11 @@ export const createRenderer = <T extends VListItem = VListItem>(
       element.id = `${ariaIdPrefix}-item-${index}`;
     }
     if (totalItemsGetter) {
-      lastAriaSetSize = String(totalItemsGetter());
+      const total = totalItemsGetter();
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+      }
       element.setAttribute("aria-setsize", lastAriaSetSize);
       element.setAttribute("aria-posinset", String(index + 1));
     }
@@ -394,19 +416,32 @@ export const createRenderer = <T extends VListItem = VListItem>(
       element.classList.add(placeholderClass);
     }
 
-    positionElement(element, index, compressionCtx);
+    const offset = calculateOffset(index, compressionCtx);
+    element.style.transform = horizontal
+      ? `translateX(${Math.round(offset)}px)`
+      : `translateY(${Math.round(offset)}px)`;
 
-    return element;
+    return {
+      element,
+      lastItemId: item.id,
+      lastSelected: isSelected,
+      lastFocused: isFocused,
+      lastOffset: offset,
+      lastSeenFrame: frameCounter,
+    };
   };
 
   /**
-   * Render items for a range
-   * Supports compression context for large lists
+   * Render items for a range.
    *
-   * Uses DocumentFragment batching to minimize DOM operations:
-   * - Collects all new elements in a fragment
-   * - Appends them in a single DOM operation
-   * - Reduces layout thrashing during fast scrolling
+   * Optimizations vs. naive approach:
+   * - Release grace period: items outside the range keep their DOM element for
+   *   RELEASE_GRACE extra render cycles, preventing hover blink and CSS
+   *   transition replay on boundary items.
+   * - Change tracking: template re-evaluation, class toggles, position updates,
+   *   and aria writes are all skipped when the tracked state hasn't changed.
+   * - Lazy DocumentFragment: only allocated when new items actually enter the
+   *   viewport — zero allocation on scroll-only frames.
    */
   const render = (
     items: T[],
@@ -415,11 +450,19 @@ export const createRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
-    // Remove items outside the new range
-    for (const [index, renderedItem] of rendered) {
-      if (index < range.start || index > range.end) {
-        renderedItem.element.remove();
-        pool.release(renderedItem.element);
+    frameCounter++;
+
+    // Release items outside the new range, with grace period to prevent
+    // boundary thrashing (hover blink, CSS transition replay).
+    // Items that just left the visible range keep their DOM element for
+    // RELEASE_GRACE extra render cycles — if they re-enter, the same
+    // element is reused with :hover state intact.
+    for (const [index, tracked] of rendered) {
+      if (index >= range.start && index <= range.end) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        tracked.element.remove();
+        pool.release(tracked.element);
         rendered.delete(index);
       }
     }
@@ -427,18 +470,16 @@ export const createRenderer = <T extends VListItem = VListItem>(
     // Check if aria-setsize changed (total items mutated) — update existing items only when needed
     let setSizeChanged = false;
     if (totalItemsGetter) {
-      const currentSetSize = String(totalItemsGetter());
-      setSizeChanged = currentSetSize !== lastAriaSetSize;
-      lastAriaSetSize = currentSetSize;
+      const total = totalItemsGetter();
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+        setSizeChanged = true;
+      }
     }
 
-    // Collect new elements for batched DOM insertion
-    // Using DocumentFragment batching to minimize DOM operations:
-    // - Collects all new elements in a fragment
-    // - Appends them in a single DOM operation
-    // - Reduces layout thrashing during fast scrolling
-    const fragment = document.createDocumentFragment();
-    const newElements: Array<{ index: number; element: HTMLElement }> = [];
+    // DocumentFragment for batched DOM insertion — only allocated when needed
+    let fragment: DocumentFragment | null = null;
 
     // Add/update items in range
     for (let i = range.start; i <= range.end; i++) {
@@ -452,13 +493,15 @@ export const createRenderer = <T extends VListItem = VListItem>(
       const existing = rendered.get(i);
 
       if (existing) {
-        // Check if the item ID changed (e.g., placeholder replaced with real data)
-        const existingId = existing.element.dataset.id;
-        const newId = String(item.id);
-        const itemChanged = existingId !== newId;
+        // ── Fast path: skip work when nothing changed ──
+        const idChanged = existing.lastItemId !== item.id;
+        const selectedChanged = existing.lastSelected !== isSelected;
+        const focusedChanged = existing.lastFocused !== isFocused;
 
-        if (itemChanged) {
-          const wasPlaceholder = existingId?.startsWith(PLACEHOLDER_ID_PREFIX);
+        if (idChanged) {
+          const existingId = String(existing.lastItemId);
+          const newId = String(item.id);
+          const wasPlaceholder = existingId.startsWith(PLACEHOLDER_ID_PREFIX);
           const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
 
           // Re-apply template when item data changes (placeholder -> real data)
@@ -479,53 +522,73 @@ export const createRenderer = <T extends VListItem = VListItem>(
               existing.element.classList.remove(replacedClass);
             }, 300);
           }
+
+          existing.lastItemId = item.id;
         }
 
-        // Always update classes, selection state, and position
-        applyClasses(existing.element, isSelected, isFocused);
-        existing.element.ariaSelected = String(isSelected);
-        positionElement(existing.element, i, compressionCtx);
+        // Class + aria updates only when selection/focus changed
+        if (idChanged || selectedChanged || focusedChanged) {
+          applyClasses(existing.element, isSelected, isFocused);
+          existing.element.ariaSelected = String(isSelected);
+          existing.lastSelected = isSelected;
+          existing.lastFocused = isFocused;
+        }
+
+        // Position update only when offset changed
+        const offset = calculateOffset(i, compressionCtx);
+        if (existing.lastOffset !== offset) {
+          existing.element.style.transform = horizontal
+            ? `translateX(${Math.round(offset)}px)`
+            : `translateY(${Math.round(offset)}px)`;
+          existing.lastOffset = offset;
+        }
 
         // Update aria-setsize on existing items only when total changed (rare)
         if (setSizeChanged) {
           existing.element.setAttribute("aria-setsize", lastAriaSetSize);
         }
       } else {
-        // Render new element and add to fragment (not directly to DOM)
-        const element = renderItem(
+        // Render new item — collect in fragment for batched insertion
+        const tracked = renderItem(
           i,
           item,
           isSelected,
           isFocused,
           compressionCtx,
         );
-        fragment.appendChild(element);
-        newElements.push({ index: i, element });
+        if (!fragment) fragment = document.createDocumentFragment();
+        fragment.appendChild(tracked.element);
+        rendered.set(i, tracked);
       }
     }
 
-    // Batch append all new elements in a single DOM operation
-    if (newElements.length > 0) {
+    // Single DOM insertion for all new elements — minimizes reflows
+    if (fragment) {
       itemsContainer.appendChild(fragment);
-      // Register elements in rendered map after DOM insertion
-      for (const { index, element } of newElements) {
-        rendered.set(index, { index, element });
-      }
     }
   };
 
   /**
-   * Update positions of all rendered items (for compressed scrolling)
-   * Call this on scroll when using compression
+   * Update positions of all rendered items (for compressed scrolling).
+   * Leverages change tracking — skips items whose offset hasn't changed.
    */
   const updatePositions = (compressionCtx: CompressionContext): void => {
-    for (const [index, renderedItem] of rendered) {
-      positionElement(renderedItem.element, index, compressionCtx);
+    for (const [index, tracked] of rendered) {
+      const offset = calculateOffset(index, compressionCtx);
+      if (tracked.lastOffset !== offset) {
+        tracked.element.style.transform = horizontal
+          ? `translateX(${Math.round(offset)}px)`
+          : `translateY(${Math.round(offset)}px)`;
+        tracked.lastOffset = offset;
+      }
     }
   };
 
   /**
-   * Update a single item
+   * Update a single item (explicit API call).
+   * Always re-applies the template because the caller signals that the item
+   * data has changed — even when the id stays the same (e.g. name update).
+   * Updates TrackedItem fields so subsequent scroll frames skip redundant work.
    */
   const updateItem = (
     index: number,
@@ -534,21 +597,24 @@ export const createRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
+    if (!existing) return;
 
-    if (existing) {
-      const state = getItemState(isSelected, isFocused);
-      const result = template(item, index, state);
+    const state = getItemState(isSelected, isFocused);
+    const result = template(item, index, state);
 
-      applyTemplate(existing.element, result);
-      applyClasses(existing.element, isSelected, isFocused);
-      existing.element.dataset.id = String(item.id);
-      existing.element.ariaSelected = String(isSelected);
-    }
+    applyTemplate(existing.element, result);
+    applyClasses(existing.element, isSelected, isFocused);
+    existing.element.dataset.id = String(item.id);
+    existing.element.ariaSelected = String(isSelected);
+
+    existing.lastItemId = item.id;
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
   };
 
   /**
-   * Update only CSS classes on a rendered item (no template re-evaluation)
-   * Used for focus-only changes where template content hasn't changed
+   * Update only CSS classes on a rendered item (no template re-evaluation).
+   * Leverages change tracking — skips work when state is already current.
    */
   const updateItemClasses = (
     index: number,
@@ -556,8 +622,15 @@ export const createRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
-    if (existing) {
+    if (!existing) return;
+
+    const selectedChanged = existing.lastSelected !== isSelected;
+    const focusedChanged = existing.lastFocused !== isFocused;
+
+    if (selectedChanged || focusedChanged) {
       applyClasses(existing.element, isSelected, isFocused);
+      existing.lastSelected = isSelected;
+      existing.lastFocused = isFocused;
     }
   };
 
@@ -572,9 +645,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
    * Clear all rendered items
    */
   const clear = (): void => {
-    for (const [, renderedItem] of rendered) {
-      renderedItem.element.remove();
-      pool.release(renderedItem.element);
+    for (const [, tracked] of rendered) {
+      tracked.element.remove();
+      pool.release(tracked.element);
     }
     rendered.clear();
   };

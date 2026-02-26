@@ -20,10 +20,19 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolveScrollArgs } from "../../builder/scroll";
+import { calculateScrollToIndex } from "../../rendering";
 
 import { createGridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
 import type { GridLayout } from "./types";
+
+// =============================================================================
+// Shared constants
+// =============================================================================
+
+/** Cached empty Set — avoids allocation on every scroll frame when no selection */
+const EMPTY_ID_SET: Set<string | number> = new Set();
 
 // =============================================================================
 // Feature Config
@@ -309,6 +318,36 @@ export const withGrid = <T extends VListItem = VListItem>(
         ctx.forceRender();
       });
 
+      // ── Cached selection getter references ──
+      // Resolved lazily on first render frame. The selection feature registers
+      // _getSelectedIds / _getFocusedIndex on ctx.methods at priority 50,
+      // which runs before the initial render. Caching the function references
+      // avoids a Map.get() on every scroll frame.
+      let selectionIdsGetter: (() => Set<string | number>) | null = null;
+      let selectionFocusGetter: (() => number) | null = null;
+      let selectionGettersResolved = false;
+
+      const resolveSelectionGetters = (): void => {
+        if (selectionGettersResolved) return;
+        selectionGettersResolved = true;
+        selectionIdsGetter = (ctx.methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+        selectionFocusGetter = (ctx.methods.get("_getFocusedIndex") as (() => number)) ?? null;
+      };
+
+      // ── Scroll state for early-exit guard ──
+      // When scroll position + container size are identical to last frame,
+      // all downstream work (range calc, renderer diffing) is skipped.
+      let lastScrollPosition = -1;
+      let lastContainerSize = -1;
+      let forceNextRender = true; // first render must always run
+
+      // ── Precomputed overscan value ──
+      const overscan = resolvedConfig.overscan ?? 3;
+
+      // ── Mutable range objects — reused across frames (no allocation) ──
+      const visibleRange = { start: 0, end: 0 };
+      const renderRange = { start: 0, end: 0 };
+
       // ── Override render functions to convert row range → item range ──
       const gridRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
@@ -316,10 +355,22 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Calculate visible and render ranges (in row space)
         const scrollTop = ctx.scrollController.getScrollTop();
         const containerHeight = ctx.state.viewportState.containerSize;
+
+        // ── Early exit: skip all work when nothing changed ──
+        if (
+          !forceNextRender &&
+          scrollTop === lastScrollPosition &&
+          containerHeight === lastContainerSize
+        ) {
+          return;
+        }
+        lastScrollPosition = scrollTop;
+        lastContainerSize = containerHeight;
+        forceNextRender = false;
+
         const totalRows = ctx.getVirtualTotal();
 
-        // Calculate visible row range
-        const visibleRange = { start: 0, end: 0 };
+        // Calculate visible row range (mutate in place)
         if (totalRows === 0 || containerHeight === 0) {
           visibleRange.start = 0;
           visibleRange.end = 0;
@@ -335,30 +386,20 @@ export const withGrid = <T extends VListItem = VListItem>(
           visibleRange.end = Math.min(totalRows - 1, Math.max(0, visibleEnd));
         }
 
-        // Apply overscan
-        const overscan = resolvedConfig.overscan ?? 3;
-        const renderRange = {
-          start: Math.max(0, visibleRange.start - overscan),
-          end: Math.min(totalRows - 1, visibleRange.end + overscan),
-        };
+        // Apply overscan (mutate in place)
+        renderRange.start = Math.max(0, visibleRange.start - overscan);
+        renderRange.end = Math.min(totalRows - 1, visibleRange.end + overscan);
 
-        // Update viewport state
-        ctx.state.viewportState.scrollPosition = scrollTop;
-        ctx.state.viewportState.visibleRange = visibleRange;
-        ctx.state.viewportState.renderRange = renderRange;
+        // Update viewport state — mutate in place to avoid object allocation
+        const viewportState = ctx.state.viewportState;
+        viewportState.scrollPosition = scrollTop;
+        viewportState.visibleRange.start = visibleRange.start;
+        viewportState.visibleRange.end = visibleRange.end;
+        viewportState.renderRange.start = renderRange.start;
+        viewportState.renderRange.end = renderRange.end;
 
         const lastRange = ctx.state.lastRenderRange;
-        const isCompressed = ctx.state.viewportState.isCompressed;
-
-        if (
-          renderRange.start === lastRange.start &&
-          renderRange.end === lastRange.end
-        ) {
-          if (isCompressed) {
-            gridRenderer!.updatePositions(ctx.getCompressionContext());
-          }
-          return;
-        }
+        const isCompressed = viewportState.isCompressed;
 
         // Convert row range to flat item range
         const totalItems = ctx.dataManager.getTotal();
@@ -377,24 +418,41 @@ export const withGrid = <T extends VListItem = VListItem>(
           ? ctx.getCompressionContext()
           : undefined;
 
-        // Pass ITEM range to grid renderer (it positions by item index)
+        // Read selection state — prefer live getters from selection feature,
+        // fall back to EMPTY_ID_SET / -1 when no selection feature is present.
+        resolveSelectionGetters();
+        const selectedIds = selectionIdsGetter ? selectionIdsGetter() : EMPTY_ID_SET;
+        const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : -1;
+
+        // Always call render() — the renderer's change tracking makes unchanged
+        // items a no-op (skips template, class, and position updates). This
+        // eliminates the need for a separate tick() path: the grace-period
+        // release loop inside render() advances the frame counter on every call,
+        // so items that left the range are eventually released even when the
+        // row-level range is unchanged.
         gridRenderer!.render(
           items,
           itemRange,
-          new Set(), // selection — overridden by selection feature if present
-          -1,
+          selectedIds,
+          focusedIndex,
           compressionCtx,
         );
 
-        ctx.state.lastRenderRange = { ...renderRange };
-        emitter.emit("range:change", { range: renderRange });
+        // Emit range:change only when range actually changed
+        if (lastRange.start !== renderRange.start || lastRange.end !== renderRange.end) {
+          lastRange.start = renderRange.start;
+          lastRange.end = renderRange.end;
+          emitter.emit("range:change", { range: { start: renderRange.start, end: renderRange.end } });
+        }
       };
 
       const gridForceRender = (): void => {
         if (ctx.state.isDestroyed) return;
 
-        // Reset last range to force re-render
-        ctx.state.lastRenderRange = { start: -1, end: -1 };
+        // Reset last range and force flag to ensure re-render
+        ctx.state.lastRenderRange.start = -1;
+        ctx.state.lastRenderRange.end = -1;
+        forceNextRender = true;
         gridRenderIfNeeded();
       };
 
@@ -510,46 +568,3 @@ export const withGrid = <T extends VListItem = VListItem>(
   };
 };
 
-// =============================================================================
-// Helpers (duplicated from builder/core.ts to keep feature self-contained)
-// =============================================================================
-
-import { calculateScrollToIndex } from "../../rendering";
-
-const DEFAULT_SMOOTH_DURATION = 300;
-
-const resolveScrollArgs = (
-  alignOrOptions?:
-    | "start"
-    | "center"
-    | "end"
-    | {
-        align?: "start" | "center" | "end";
-        behavior?: "auto" | "smooth";
-        duration?: number;
-      },
-): {
-  align: "start" | "center" | "end";
-  behavior: "auto" | "smooth";
-  duration: number;
-} => {
-  if (typeof alignOrOptions === "string") {
-    return {
-      align: alignOrOptions as "start" | "center" | "end",
-      behavior: "auto",
-      duration: DEFAULT_SMOOTH_DURATION,
-    };
-  }
-  if (alignOrOptions && typeof alignOrOptions === "object") {
-    return {
-      align: alignOrOptions.align ?? "start",
-      behavior: alignOrOptions.behavior ?? "auto",
-      duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
-    };
-  }
-  return {
-    align: "start",
-    behavior: "auto",
-    duration: DEFAULT_SMOOTH_DURATION,
-  };
-};

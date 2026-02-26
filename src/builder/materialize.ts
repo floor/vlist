@@ -28,6 +28,7 @@ import type { Emitter } from "../events/emitter";
 
 import type { DOMStructure } from "./dom";
 import type { createElementPool } from "./pool";
+import type { TrackedItem } from "./core";
 
 import type {
   BuilderConfig,
@@ -159,7 +160,7 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly emitter: Emitter<VListEvents<T>>;
   readonly resolvedConfig: ResolvedBuilderConfig;
   readonly rawConfig: BuilderConfig<T>;
-  readonly rendered: Map<number, HTMLElement>;
+  readonly rendered: Map<number, TrackedItem>;
   readonly pool: ReturnType<typeof createElementPool>;
   readonly itemState: ItemState;
   readonly sharedState: BuilderState;
@@ -254,15 +255,18 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
           isSelected: boolean,
           isFocused: boolean,
         ): void => {
-          const el = rendered.get(index);
-          if (!el) return;
-          el.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-          el.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-          el.ariaSelected = isSelected ? "true" : "false";
+          const tracked = rendered.get(index);
+          if (!tracked) return;
+          tracked.element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+          tracked.element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+          tracked.element.ariaSelected = isSelected ? "true" : "false";
+          // Sync tracked state so the render loop knows selection was applied out-of-band
+          tracked.lastSelected = isSelected;
+          tracked.lastFocused = isFocused;
         },
         updatePositions: () => {},
         updateItem: () => {},
-        getElement: (index: number) => rendered.get(index) ?? null,
+        getElement: (index: number) => rendered.get(index)?.element ?? null,
         clear: () => {},
         destroy: () => {},
       } as any;
@@ -363,9 +367,9 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       $.ffn();
     },
     invalidateRendered(): void {
-      for (const [, element] of rendered) {
-        element.remove();
-        pool.release(element);
+      for (const [, tracked] of rendered) {
+        tracked.element.remove();
+        pool.release(tracked.element);
       }
       rendered.clear();
     },
@@ -576,11 +580,15 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       const item = items[index];
       if (!item) return false;
       items[index] = { ...item, ...updates } as T;
-      // Re-render if visible
-      const el = rendered.get(index);
-      if (el) {
-        applyTemplate(el, $.at(items[index]!, index, itemState));
-        el.dataset.id = String(items[index]!.id);
+      // Re-render if visible — updateItem is an explicit API call signaling
+      // data changed, so always re-apply template even when id is unchanged
+      // (e.g. a name update on the same record).
+      const tracked = rendered.get(index);
+      if (tracked) {
+        applyTemplate(tracked.element, $.at(items[index]!, index, itemState));
+        tracked.element.dataset.id = String(items[index]!.id);
+        // Sync tracked id so subsequent scroll frames benefit from change tracking
+        tracked.lastItemId = items[index]!.id;
       }
       return true;
     },

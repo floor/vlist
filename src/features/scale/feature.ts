@@ -407,7 +407,7 @@ export const withScale = <
           // Check if withScrollbar feature already created one by looking for
           // the scrollbar track element
           const hasScrollbarTrack = dom.viewport.querySelector(
-            `.${classPrefix}-scrollbar-track`,
+            `.${classPrefix}-scrollbar`,
           );
 
           if (!hasScrollbarTrack) {
