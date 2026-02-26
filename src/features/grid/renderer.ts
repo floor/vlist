@@ -58,9 +58,6 @@ export interface GridRenderer<T extends VListItem = VListItem> {
   /** Update item positions (for compressed scrolling) */
   updatePositions: (compressionCtx: CompressionContext) => void;
 
-  /** Advance frame counter and release grace-expired items outside the given range */
-  tick: (currentRange: Range) => void;
-
   /** Update a single item (used by selection feature for focused item changes) */
   updateItem: (
     index: number,
@@ -581,29 +578,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Advance the frame counter and release grace-expired items.
-   * Called by the feature when the render range hasn't changed —
-   * no items are added/removed/repositioned, but the grace clock
-   * must still tick so that items that left the range on a previous
-   * frame are eventually released.
-   *
-   * Items inside `currentRange` are kept alive (their lastSeenFrame
-   * is refreshed); only items outside the range are candidates for
-   * grace expiry.
-   */
-  const tick = (currentRange: Range): void => {
-    frameCounter++;
-    for (const [index, tracked] of rendered) {
-      if (index >= currentRange.start && index <= currentRange.end) {
-        tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
-  };
-
-  /**
    * Update positions of all rendered items (for compressed scrolling)
    */
   const updatePositions = (compressionCtx: CompressionContext): void => {
@@ -714,7 +688,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
-    tick,
     updatePositions,
     updateItem,
     updateItemClasses,
