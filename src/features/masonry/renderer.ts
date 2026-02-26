@@ -10,6 +10,13 @@
  * - Each item can have different height/width
  * - No row alignment - items flow into shortest column/row
  * - Visibility determined by checking each item's absolute position
+ *
+ * Performance:
+ * - Element pooling avoids createElement cost
+ * - Template re-evaluation skipped when item data + state unchanged
+ * - O(1) Set-based visibility diffing (not O(n) .some())
+ * - Release grace period prevents boundary thrashing (hover blink, transition replay)
+ * - Released elements removed from DOM immediately
  */
 
 import type {
@@ -25,11 +32,14 @@ import type { ItemPlacement } from "./types";
 // Types
 // =============================================================================
 
+/** Item lookup function — avoids sparse array allocation on every frame */
+export type GetItemFn<T> = (index: number) => T | undefined;
+
 /** Masonry renderer instance */
 export interface MasonryRenderer<T extends VListItem = VListItem> {
   /** Render visible items using pre-calculated placements */
   render: (
-    items: T[],
+    getItem: GetItemFn<T>,
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
@@ -87,6 +97,9 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
   };
 
   const release = (element: HTMLElement): void => {
+    // Remove from DOM immediately — prevents blank divs in the container
+    element.remove();
+
     if (pool.length < maxSize) {
       element.className = "";
       element.textContent = "";
@@ -105,6 +118,42 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
 
   return { acquire, release, clear };
 };
+
+// =============================================================================
+// Release grace period
+// =============================================================================
+
+/**
+ * Number of render cycles to keep an item alive after it leaves the visible set.
+ * Prevents boundary thrashing: items near the overscan edge aren't recycled
+ * on small scroll deltas, preserving DOM element hover state and avoiding
+ * CSS transition replays.
+ */
+const RELEASE_GRACE = 2;
+
+// =============================================================================
+// Tracked rendered item — extends RenderedItem with change-tracking fields
+// =============================================================================
+
+interface TrackedItem extends RenderedItem {
+  /** Item id at last render (to detect data changes) */
+  lastItemId: string | number;
+
+  /** Selected state at last render */
+  lastSelected: boolean;
+
+  /** Focused state at last render */
+  lastFocused: boolean;
+
+  /** Placement Y at last render (to detect position changes) */
+  lastY: number;
+
+  /** Placement X at last render */
+  lastX: number;
+
+  /** Render frame when this item was last in the visible set */
+  lastSeenFrame: number;
+}
 
 // =============================================================================
 // Masonry Renderer Factory
@@ -129,10 +178,17 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   ariaIdPrefix?: string,
 ): MasonryRenderer<T> => {
   const pool = createElementPool();
-  const rendered = new Map<number, RenderedItem>();
+  const rendered = new Map<number, TrackedItem>();
+
+  // ── Reusable visibleSet — cleared and repopulated each frame (no allocation) ──
+  const visibleSet = new Set<number>();
+
+  // ── Frame counter for release grace period ──
+  let frameCounter = 0;
 
   // Track aria-setsize to avoid redundant updates
   let lastAriaSetSize = "";
+  let lastAriaTotal = -1;
 
   // Reusable item state to avoid allocation per render
   const reusableItemState: ItemState = { selected: false, focused: false };
@@ -213,7 +269,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Render a single masonry item
+   * Render a single masonry item (new element from pool)
    */
   const renderItem = (
     itemIndex: number,
@@ -221,7 +277,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     placement: ItemPlacement,
     isSelected: boolean,
     isFocused: boolean,
-  ): HTMLElement => {
+  ): TrackedItem => {
     const element = pool.acquire();
     const state = getItemState(isSelected, isFocused);
 
@@ -239,7 +295,12 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       element.id = `${ariaIdPrefix}-item-${itemIndex}`;
     }
     if (totalItemsGetter) {
-      lastAriaSetSize = String(totalItemsGetter());
+      const total = totalItemsGetter();
+      // Cache stringified total — only recompute when count changes
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+      }
       element.setAttribute("aria-setsize", lastAriaSetSize);
       element.setAttribute("aria-posinset", String(itemIndex + 1));
     }
@@ -255,31 +316,64 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     applyClasses(element, isSelected, isFocused);
     positionElement(element, placement);
 
-    return element;
+    return {
+      element,
+      index: itemIndex,
+      lastItemId: item.id,
+      lastSelected: isSelected,
+      lastFocused: isFocused,
+      lastY: placement.position.y,
+      lastX: placement.position.x,
+      lastSeenFrame: frameCounter,
+    };
   };
 
   /**
    * Render visible items using pre-calculated placements.
+   *
+   * Performance characteristics:
+   * - Uses Set for O(1) visibility check (not O(n) .some())
+   * - Skips template re-evaluation when item id + state unchanged
+   * - Only updates position when coordinates changed
+   * - Released elements removed from DOM immediately
    */
   const render = (
-    items: T[],
+    getItem: GetItemFn<T>,
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
   ): void => {
-    // Release items no longer visible
-    for (const [index, { element }] of rendered) {
-      const isStillVisible = placements.some((p) => p.index === index);
-      if (!isStillVisible) {
-        pool.release(element);
+    frameCounter++;
+
+    // Repopulate reusable visibleSet — O(k) clear + O(k) add, no allocation
+    visibleSet.clear();
+    for (let i = 0; i < placements.length; i++) {
+      visibleSet.add(placements[i]!.index);
+    }
+
+    // Release items no longer visible, with grace period to prevent
+    // boundary thrashing (hover blink, CSS transition replay).
+    // Items that just left the visible set keep their DOM element for
+    // RELEASE_GRACE extra render cycles — if they re-enter, the same
+    // element is reused with :hover state intact.
+    for (const [index, tracked] of rendered) {
+      if (visibleSet.has(index)) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        pool.release(tracked.element);
         rendered.delete(index);
       }
     }
 
+    // DocumentFragment for batched DOM insertion of new elements
+    // (matches core renderer and grid renderer patterns)
+    let fragment: DocumentFragment | null = null;
+
     // Render new or update existing items
-    for (const placement of placements) {
+    for (let pi = 0; pi < placements.length; pi++) {
+      const placement = placements[pi]!;
       const itemIndex = placement.index;
-      const item = items[itemIndex];
+      const item = getItem(itemIndex);
       if (!item) continue;
 
       const isSelected = selectedIds.has(item.id);
@@ -288,28 +382,54 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       const existing = rendered.get(itemIndex);
 
       if (existing) {
-        // Update existing item (state might have changed)
-        const state = getItemState(isSelected, isFocused);
-        const result = template(item, itemIndex, state);
-        applyTemplate(existing.element, result);
-        applyClasses(existing.element, isSelected, isFocused);
-        positionElement(existing.element, placement);
+        // ── Fast path: skip work when nothing changed ──
+        const idChanged = existing.lastItemId !== item.id;
+        const selectedChanged = existing.lastSelected !== isSelected;
+        const focusedChanged = existing.lastFocused !== isFocused;
+        const posChanged =
+          existing.lastY !== placement.position.y ||
+          existing.lastX !== placement.position.x;
 
-        // Update data attributes
-        existing.element.dataset.id = String(item.id);
-        existing.element.ariaSelected = String(isSelected);
+        // Template re-evaluation only when item data or selection/focus changed
+        if (idChanged || selectedChanged || focusedChanged) {
+          const state = getItemState(isSelected, isFocused);
+          const result = template(item, itemIndex, state);
+          applyTemplate(existing.element, result);
+          applyClasses(existing.element, isSelected, isFocused);
+
+          // Update data attributes
+          existing.element.dataset.id = String(item.id);
+          existing.element.ariaSelected = String(isSelected);
+
+          existing.lastItemId = item.id;
+          existing.lastSelected = isSelected;
+          existing.lastFocused = isFocused;
+        }
+
+        // Position update only when coordinates changed
+        if (posChanged) {
+          positionElement(existing.element, placement);
+          existing.lastY = placement.position.y;
+          existing.lastX = placement.position.x;
+        }
       } else {
-        // Render new item
-        const element = renderItem(
+        // Render new item — collect in fragment for batched insertion
+        const tracked = renderItem(
           itemIndex,
           item,
           placement,
           isSelected,
           isFocused,
         );
-        itemsContainer.appendChild(element);
-        rendered.set(itemIndex, { element, index: itemIndex });
+        if (!fragment) fragment = document.createDocumentFragment();
+        fragment.appendChild(tracked.element);
+        rendered.set(itemIndex, tracked);
       }
+    }
+
+    // Single DOM insertion for all new elements — minimizes reflows
+    if (fragment) {
+      itemsContainer.appendChild(fragment);
     }
   };
 
@@ -335,6 +455,14 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     // Update data attributes
     existing.element.dataset.id = String(item.id);
     existing.element.ariaSelected = String(isSelected);
+
+    // Update tracking
+    existing.lastItemId = item.id;
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
+    existing.lastY = placement.position.y;
+    existing.lastX = placement.position.x;
+    existing.lastSeenFrame = frameCounter;
   };
 
   /**
@@ -350,6 +478,9 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
     applyClasses(existing.element, isSelected, isFocused);
     existing.element.ariaSelected = String(isSelected);
+
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
   };
 
   /**

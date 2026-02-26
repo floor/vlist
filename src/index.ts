@@ -103,6 +103,7 @@ export {
   type MasonryLayout,
   type MasonryPosition,
   type MasonryRenderer,
+  type GetItemFn,
   type ItemPlacement,
 } from "./features/masonry";
 

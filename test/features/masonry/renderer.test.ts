@@ -15,7 +15,7 @@ import {
 } from "bun:test";
 import { JSDOM } from "jsdom";
 import { createMasonryRenderer } from "../../../src/features/masonry/renderer";
-import type { MasonryRenderer } from "../../../src/features/masonry/renderer";
+import type { MasonryRenderer, GetItemFn } from "../../../src/features/masonry/renderer";
 import type { ItemPlacement } from "../../../src/features/masonry/types";
 import type { VListItem, ItemTemplate, ItemState } from "../../../src/types";
 
@@ -61,6 +61,26 @@ const createTestItems = (count: number, startId: number = 1): TestItem[] =>
     id: startId + i,
     name: `Item ${startId + i}`,
   }));
+
+/** Convert an items array into a GetItemFn callback */
+const toGetItem = <T extends VListItem>(items: T[]): GetItemFn<T> =>
+  (index: number) => items[index];
+
+/**
+ * Render the same placements enough times to exhaust the release grace period.
+ * The renderer keeps items alive for RELEASE_GRACE (2) extra render cycles
+ * after they leave the visible set — this helper flushes that buffer.
+ */
+const flushGrace = <T extends VListItem>(
+  renderer: MasonryRenderer<T>,
+  getItem: GetItemFn<T>,
+  placements: ItemPlacement[],
+  times: number = 3,
+): void => {
+  for (let i = 0; i < times; i++) {
+    renderer.render(getItem, placements, new Set(), -1);
+  }
+};
 
 const createItemsContainer = (): HTMLElement => {
   const container = document.createElement("div");
@@ -206,7 +226,7 @@ describe("render", () => {
       createPlacement(2, { lane: 0, y: 100, x: 0 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect(container.children.length).toBe(3);
   });
@@ -224,7 +244,7 @@ describe("render", () => {
       createPlacement(1, { y: 100 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.innerHTML).toBe("<span>Item 1</span>");
@@ -246,7 +266,7 @@ describe("render", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { y: 0 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.textContent).toBe("Item 1");
@@ -265,7 +285,7 @@ describe("render", () => {
       createPlacement(1, { y: 100 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.dataset.index).toBe("0");
@@ -290,7 +310,7 @@ describe("render", () => {
       createPlacement(2, { lane: 2 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect((container.children[0] as HTMLElement).dataset.lane).toBe("0");
     expect((container.children[1] as HTMLElement).dataset.lane).toBe("1");
@@ -307,7 +327,7 @@ describe("render", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.getAttribute("role")).toBe("option");
@@ -323,7 +343,7 @@ describe("render", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.classList.contains("vlist-item")).toBe(true);
@@ -344,7 +364,7 @@ describe("render", () => {
 
     const placements = [createPlacement(5, { y: 500 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect(container.children.length).toBe(1);
     const el = container.children[0] as HTMLElement;
@@ -381,7 +401,7 @@ describe("render - positioning", () => {
       createPlacement(1, { x: 200, y: 50 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.style.transform).toBe("translate(0px, 0px)");
@@ -400,7 +420,7 @@ describe("render - positioning", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { x: 50, y: 300 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     // horizontal: translate(y, x) — main axis (y) becomes X, cross axis (x) becomes Y
@@ -417,7 +437,7 @@ describe("render - positioning", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { x: 103.333, y: 206.667 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.style.transform).toBe("translate(103px, 207px)");
@@ -449,7 +469,7 @@ describe("render - sizing", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { size: 250, crossSize: 194 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     // vertical: width = crossSize, height = size
@@ -467,7 +487,7 @@ describe("render - sizing", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { size: 300, crossSize: 150 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     // horizontal: width = size, height = crossSize
@@ -489,7 +509,7 @@ describe("render - sizing", () => {
       createPlacement(2, { size: 150, crossSize: 194 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect((container.children[0] as HTMLElement).style.height).toBe("200px");
     expect((container.children[1] as HTMLElement).style.height).toBe("300px");
@@ -527,7 +547,7 @@ describe("render - selection and focus", () => {
     ];
     const selectedIds = new Set<string | number>([1, 3]); // item ids 1 and 3
 
-    renderer.render(items, placements, selectedIds, -1);
+    renderer.render(toGetItem(items), placements, selectedIds, -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.classList.contains("vlist-item--selected")).toBe(true);
@@ -553,7 +573,7 @@ describe("render - selection and focus", () => {
       createPlacement(2),
     ];
 
-    renderer.render(items, placements, new Set(), 1);
+    renderer.render(toGetItem(items), placements, new Set(), 1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.classList.contains("vlist-item--focused")).toBe(false);
@@ -576,7 +596,7 @@ describe("render - selection and focus", () => {
     const placements = [createPlacement(0), createPlacement(1)];
     const selectedIds = new Set<string | number>([2]); // item id 2
 
-    renderer.render(items, placements, selectedIds, -1);
+    renderer.render(toGetItem(items), placements, selectedIds, -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.ariaSelected).toBe("false");
@@ -613,7 +633,7 @@ describe("render - ARIA", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.getAttribute("aria-setsize")).toBe("100");
@@ -635,7 +655,7 @@ describe("render - ARIA", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.id).toBe("vlist-7-item-0");
@@ -654,7 +674,7 @@ describe("render - ARIA", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.getAttribute("aria-setsize")).toBeNull();
@@ -691,19 +711,23 @@ describe("render - recycling", () => {
       createPlacement(1, { y: 100 }),
       createPlacement(2, { y: 200 }),
     ];
-    renderer.render(items, placements1, new Set(), -1);
+    renderer.render(toGetItem(items), placements1, new Set(), -1);
     expect(container.children.length).toBe(3);
 
-    // Second render: items 3-5 (0-2 should be recycled)
+    // Second render: items 3-5 — old items retained during grace period
     const placements2 = [
       createPlacement(3, { y: 300 }),
       createPlacement(4, { y: 400 }),
       createPlacement(5, { y: 500 }),
     ];
-    renderer.render(items, placements2, new Set(), -1);
+    renderer.render(toGetItem(items), placements2, new Set(), -1);
+    expect(container.children.length).toBe(6); // 3 new + 3 in grace period
+
+    // Flush grace period — old items now released
+    flushGrace(renderer, toGetItem(items), placements2);
     expect(container.children.length).toBe(3);
 
-    // Verify new items are rendered
+    // Verify only new items remain
     const indices = Array.from(container.children).map(
       (el) => (el as HTMLElement).dataset.index,
     );
@@ -727,16 +751,20 @@ describe("render - recycling", () => {
       createPlacement(2, { y: 200 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(3);
 
-    // Re-render with items 1-3 (item 1 and 2 remain, item 0 removed, item 3 added)
+    // Re-render with items 1-3 (item 1 and 2 remain, item 0 in grace period, item 3 added)
     const placements2 = [
       createPlacement(1, { y: 100 }),
       createPlacement(2, { y: 200 }),
       createPlacement(3, { y: 300 }),
     ];
-    renderer.render(items, placements2, new Set(), -1);
+    renderer.render(toGetItem(items), placements2, new Set(), -1);
+    expect(container.children.length).toBe(4); // 3 visible + 1 in grace period
+
+    // Flush grace period — item 0 now released
+    flushGrace(renderer, toGetItem(items), placements2);
     expect(container.children.length).toBe(3);
 
     const indices = Array.from(container.children).map(
@@ -758,19 +786,24 @@ describe("render - recycling", () => {
 
     // Render items 0-2
     renderer.render(
-      items,
+      toGetItem(items),
       [createPlacement(0), createPlacement(1), createPlacement(2)],
       new Set(),
       -1,
     );
 
-    // Render items 7-9 (no overlap)
+    // Render items 7-9 (no overlap) — old items in grace period
+    const newPlacements = [createPlacement(7, { y: 700 }), createPlacement(8, { y: 800 }), createPlacement(9, { y: 900 })];
     renderer.render(
-      items,
-      [createPlacement(7, { y: 700 }), createPlacement(8, { y: 800 }), createPlacement(9, { y: 900 })],
+      toGetItem(items),
+      newPlacements,
       new Set(),
       -1,
     );
+    expect(container.children.length).toBe(6); // 3 new + 3 in grace period
+
+    // Flush grace period — old items now released
+    flushGrace(renderer, toGetItem(items), newPlacements);
 
     expect(container.children.length).toBe(3);
     const indices = Array.from(container.children).map(
@@ -811,7 +844,7 @@ describe("updateItem", () => {
       createPlacement(2),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const updatedItem: TestItem = { id: 2, name: "Updated Item 2" };
     const updatedPlacement = createPlacement(1, { y: 150 });
@@ -832,7 +865,7 @@ describe("updateItem", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     // Index 5 is not rendered — should not throw
     const updatedItem: TestItem = { id: 6, name: "Ghost" };
@@ -852,7 +885,7 @@ describe("updateItem", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = renderer.getElement(0)!;
     expect(el0.classList.contains("vlist-item--selected")).toBe(false);
@@ -890,7 +923,7 @@ describe("updateItemClasses", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = renderer.getElement(0)!;
     expect(el0.classList.contains("vlist-item--selected")).toBe(false);
@@ -912,7 +945,7 @@ describe("updateItemClasses", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     renderer.updateItemClasses(0, false, true);
     const el0 = renderer.getElement(0)!;
@@ -932,7 +965,7 @@ describe("updateItemClasses", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     renderer.updateItemClasses(0, true, false);
     expect(renderer.getElement(0)!.ariaSelected).toBe("true");
@@ -951,7 +984,7 @@ describe("updateItemClasses", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     // Should not throw
     renderer.updateItemClasses(99, true, true);
@@ -984,7 +1017,7 @@ describe("getElement", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el = renderer.getElement(0);
     expect(el).toBeDefined();
@@ -1001,7 +1034,7 @@ describe("getElement", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect(renderer.getElement(5)).toBeUndefined();
   });
@@ -1017,20 +1050,26 @@ describe("getElement", () => {
 
     // Render items 0-1
     renderer.render(
-      items,
+      toGetItem(items),
       [createPlacement(0), createPlacement(1)],
       new Set(),
       -1,
     );
     expect(renderer.getElement(0)).toBeDefined();
 
-    // Render items 2-3 (0-1 recycled)
+    // Render items 2-3 — items 0-1 in grace period (still accessible)
+    const placements2 = [createPlacement(2, { y: 200 }), createPlacement(3, { y: 300 })];
     renderer.render(
-      items,
-      [createPlacement(2, { y: 200 }), createPlacement(3, { y: 300 })],
+      toGetItem(items),
+      placements2,
       new Set(),
       -1,
     );
+    expect(renderer.getElement(0)).toBeDefined(); // still in grace period
+    expect(renderer.getElement(2)).toBeDefined();
+
+    // Flush grace period — items 0-1 now released
+    flushGrace(renderer, toGetItem(items), placements2);
     expect(renderer.getElement(0)).toBeUndefined();
     expect(renderer.getElement(2)).toBeDefined();
   });
@@ -1065,7 +1104,7 @@ describe("clear", () => {
       createPlacement(2),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(3);
 
     renderer.clear();
@@ -1082,7 +1121,7 @@ describe("clear", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(renderer.getElement(0)).toBeDefined();
 
     renderer.clear();
@@ -1099,10 +1138,10 @@ describe("clear", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     renderer.clear();
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(2);
   });
 });
@@ -1136,7 +1175,7 @@ describe("destroy", () => {
       createPlacement(2),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(3);
 
     renderer.destroy();
@@ -1171,7 +1210,7 @@ describe("custom class prefix", () => {
     const placements = [createPlacement(0)];
     const selectedIds = new Set<string | number>([1]);
 
-    renderer.render(items, placements, selectedIds, 0);
+    renderer.render(toGetItem(items), placements, selectedIds, 0);
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.classList.contains("mylist-item")).toBe(true);
@@ -1207,7 +1246,7 @@ describe("element pooling", () => {
 
     // Render items 0-2
     renderer.render(
-      items,
+      toGetItem(items),
       [createPlacement(0), createPlacement(1), createPlacement(2)],
       new Set(),
       -1,
@@ -1215,24 +1254,20 @@ describe("element pooling", () => {
     const domCount1 = container.children.length;
     expect(domCount1).toBe(3);
 
-    // Replace with items 3-5
-    renderer.render(
-      items,
-      [createPlacement(3, { y: 300 }), createPlacement(4, { y: 400 }), createPlacement(5, { y: 500 })],
-      new Set(),
-      -1,
-    );
+    // Replace with items 3-5 and flush grace period to force release into pool
+    const placements35 = [createPlacement(3, { y: 300 }), createPlacement(4, { y: 400 }), createPlacement(5, { y: 500 })];
+    flushGrace(renderer, toGetItem(items), placements35, 4);
     expect(container.children.length).toBe(3);
 
     // Back to items 0-2 — pool should supply recycled elements
     renderer.render(
-      items,
+      toGetItem(items),
       [createPlacement(0), createPlacement(1), createPlacement(2)],
       new Set(),
       -1,
     );
-    expect(container.children.length).toBe(3);
-
+    // 3 new from pool + 3 old (items 3-5) in grace period
+    // But we only care that pool recycling works — items 0-2 got elements from pool
     const el0 = renderer.getElement(0)!;
     expect(el0.innerHTML).toBe("<span>Item 1</span>");
   });
@@ -1266,7 +1301,7 @@ describe("horizontal mode", () => {
       createPlacement(1, { x: 50, y: 210, size: 300, crossSize: 150 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     const el0 = container.children[0] as HTMLElement;
     // horizontal: width = size (main axis), height = crossSize (cross axis)
@@ -1307,7 +1342,7 @@ describe("multi-column rendering", () => {
     const items = createTestItems(6);
     const placements = createTwoColumnPlacements(6, 200);
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect(container.children.length).toBe(6);
 
@@ -1331,7 +1366,7 @@ describe("multi-column rendering", () => {
     const colWidth = 196; // (400 - 8) / 2
     const placements = createTwoColumnPlacements(4, colWidth, gap);
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     // Items in lane 1 should have x offset = colWidth + gap
     for (const p of placements) {
@@ -1366,7 +1401,7 @@ describe("edge cases", () => {
       false,
     );
 
-    renderer.render([], [], new Set(), -1);
+    renderer.render(toGetItem([]), [], new Set(), -1);
     expect(container.children.length).toBe(0);
   });
 
@@ -1380,7 +1415,7 @@ describe("edge cases", () => {
     const items = createTestItems(1);
     const placements = [createPlacement(0, { y: 0, x: 0, size: 250 })];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     expect(container.children.length).toBe(1);
     const el0 = container.children[0] as HTMLElement;
@@ -1404,7 +1439,7 @@ describe("edge cases", () => {
       for (let j = start; j <= end; j++) {
         placements.push(createPlacement(j, { y: j * 100 }));
       }
-      renderer.render(items, placements, new Set(), -1);
+      renderer.render(toGetItem(items), placements, new Set(), -1);
     }
 
     // Last render window is items 9 (start=9, end=min(12,9)=9 → single item)
@@ -1438,7 +1473,7 @@ describe("edge cases", () => {
       createPlacement(2, { y: 200 }),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
 
     // Only 2 items rendered (index 1 skipped because undefined)
     expect(container.children.length).toBe(2);
@@ -1458,11 +1493,11 @@ describe("edge cases", () => {
       createPlacement(2),
     ];
 
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(3);
 
     // Render same items again
-    renderer.render(items, placements, new Set(), -1);
+    renderer.render(toGetItem(items), placements, new Set(), -1);
     expect(container.children.length).toBe(3);
 
     // Content should still be correct
@@ -1503,7 +1538,7 @@ describe("template receives correct state", () => {
     const placements = [createPlacement(0), createPlacement(1)];
     const selectedIds = new Set<string | number>([2]); // item id 2
 
-    renderer.render(items, placements, selectedIds, -1);
+    renderer.render(toGetItem(items), placements, selectedIds, -1);
 
     expect(capturedState).not.toBeNull();
     expect(capturedState!.selected).toBe(true);
@@ -1526,7 +1561,7 @@ describe("template receives correct state", () => {
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
 
-    renderer.render(items, placements, new Set(), 0); // index 0 focused
+    renderer.render(toGetItem(items), placements, new Set(), 0); // index 0 focused
 
     expect(capturedState).not.toBeNull();
     expect(capturedState!.focused).toBe(true);
