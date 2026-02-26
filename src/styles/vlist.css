@@ -31,7 +31,7 @@
    CSS Custom Properties (Design Tokens)
    ============================================================================= */
 
-:root {
+[data-theme-mode="light"] {
     /* Colors - Light Mode */
     --vlist-bg: #ffffff;
     --vlist-bg-hover: #f9fafb;
@@ -60,28 +60,13 @@
     /* Transitions */
     --vlist-transition-duration: 150ms;
     --vlist-transition-timing: ease-in-out;
-}
 
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --vlist-bg: #111827;
-        --vlist-bg-hover: #1f2937;
-        --vlist-bg-selected: rgba(59, 130, 246, 0.2);
-        --vlist-bg-selected-hover: rgba(59, 130, 246, 0.3);
-        --vlist-border: #374151;
-        --vlist-border-selected: #3b82f6;
-        --vlist-text: #f9fafb;
-        --vlist-text-muted: #9ca3af;
-        --vlist-scrollbar-thumb: #4b5563;
-        --vlist-scrollbar-thumb-hover: #6b7280;
-        --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-        --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
-    }
+    /* Placeholder */
+    --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
 /* Dark Mode Class Override */
-.dark {
+[data-theme-mode="dark"] {
     --vlist-bg: #111827;
     --vlist-bg-hover: #1f2937;
     --vlist-bg-selected: rgba(59, 130, 246, 0.2);
@@ -90,10 +75,13 @@
     --vlist-border-selected: #3b82f6;
     --vlist-text: #f9fafb;
     --vlist-text-muted: #9ca3af;
+    --vlist-scrollbar-width: 8px;
     --vlist-scrollbar-thumb: #4b5563;
     --vlist-scrollbar-thumb-hover: #6b7280;
     --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
     --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-custom-thumb-radius: 4px;
+    --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
 /* =============================================================================
@@ -409,8 +397,64 @@
 }
 
 /* =============================================================================
-   Custom Scrollbar (for compressed mode)
+   Masonry Layout
    ============================================================================= */
+
+/* Masonry modifier on root */
+.vlist--masonry .vlist-items {
+    contain: layout style;
+}
+
+/* Masonry item — positioned absolutely with translate(x, y) */
+.vlist-masonry-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
+    background-color: var(--vlist-bg);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--vlist-transition-duration)
+        var(--vlist-transition-timing);
+    contain: content;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Override the default list item styles — masonry items do NOT stretch full width */
+.vlist--masonry .vlist-item {
+    right: auto;
+    border-bottom: none;
+}
+
+/* Suppress transitions during active scroll for better performance */
+.vlist--scrolling .vlist-masonry-item {
+    transition: none;
+}
+
+/* Masonry item hover state */
+.vlist-masonry-item:hover {
+    background-color: var(--vlist-bg-hover);
+}
+
+/* Masonry item selected state */
+.vlist-masonry-item.vlist-item--selected {
+    background-color: var(--vlist-bg-selected);
+}
+
+.vlist-masonry-item.vlist-item--selected:hover {
+    background-color: var(--vlist-bg-selected-hover);
+}
+
+/* Masonry item focused state */
+.vlist-masonry-item.vlist-item--focused-visible {
+    outline: 2px solid var(--vlist-focus-ring);
+    outline-offset: -2px;
+    z-index: 1;
+}
 
 /* =============================================================================
    Horizontal Mode
