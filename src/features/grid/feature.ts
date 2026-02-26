@@ -318,6 +318,22 @@ export const withGrid = <T extends VListItem = VListItem>(
         ctx.forceRender();
       });
 
+      // ── Cached selection getter references ──
+      // Resolved lazily on first render frame. The selection feature registers
+      // _getSelectedIds / _getFocusedIndex on ctx.methods at priority 50,
+      // which runs before the initial render. Caching the function references
+      // avoids a Map.get() on every scroll frame.
+      let selectionIdsGetter: (() => Set<string | number>) | null = null;
+      let selectionFocusGetter: (() => number) | null = null;
+      let selectionGettersResolved = false;
+
+      const resolveSelectionGetters = (): void => {
+        if (selectionGettersResolved) return;
+        selectionGettersResolved = true;
+        selectionIdsGetter = (ctx.methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+        selectionFocusGetter = (ctx.methods.get("_getFocusedIndex") as (() => number)) ?? null;
+      };
+
       // ── Scroll state for early-exit guard ──
       // When scroll position + container size are identical to last frame,
       // all downstream work (range calc, renderer diffing) is skipped.
@@ -419,12 +435,18 @@ export const withGrid = <T extends VListItem = VListItem>(
           ? ctx.getCompressionContext()
           : undefined;
 
+        // Read selection state — prefer live getters from selection feature,
+        // fall back to EMPTY_ID_SET / -1 when no selection feature is present.
+        resolveSelectionGetters();
+        const selectedIds = selectionIdsGetter ? selectionIdsGetter() : EMPTY_ID_SET;
+        const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : -1;
+
         // Pass ITEM range to grid renderer (it positions by item index)
         gridRenderer!.render(
           items,
           itemRange,
-          EMPTY_ID_SET, // selection — overridden by selection feature if present
-          -1,
+          selectedIds,
+          focusedIndex,
           compressionCtx,
         );
 

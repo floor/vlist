@@ -9,10 +9,16 @@
  * - Keyboard handler on root — ArrowUp/Down for focus, Space/Enter for toggle
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
- * - Render integration — passes selection state to render pipeline
+ * - Render integration — registers internal getters (_getSelectedIds,
+ *   _getFocusedIndex) so renderers read real selection state directly,
+ *   eliminating the previous querySelectorAll-based DOM bypass.
  *
  * Added methods: select, deselect, toggleSelect, selectAll, clearSelection,
  *                getSelected, getSelectedItems
+ *
+ * Internal methods (for renderer integration, not public API):
+ *   _getSelectedIds  — returns the live Set<string|number> of selected IDs
+ *   _getFocusedIndex  — returns the current focused index
  *
  * Added events: item:click, selection:change
  */
@@ -176,67 +182,33 @@ export const withSelection = <T extends VListItem = VListItem>(
       // Build initial index (no-op when nothing is cached yet, e.g. async)
       rebuildIdIndex();
 
-      // ── Wrap existing render functions to inject selection state ──
-      // We capture the current renderIfNeeded (which may have been set by
-      // grid/groups features) and wrap it. After rendering, we update
-      // selection classes on the rendered elements.
+      // ── Register internal getters for renderer integration ──
+      // These allow the core/grid/masonry renderers to read real selection
+      // state directly, instead of receiving EMPTY_ID_SET and having this
+      // feature overwrite classes via querySelectorAll after every frame.
+      //
+      // The getters return live references — no allocation per frame.
+      // Renderers resolve these once (lazily, on first render) and cache
+      // the function reference.
+      ctx.methods.set("_getSelectedIds", (): Set<string | number> => {
+        return selectionState.selected;
+      });
 
-      // Capture the current render functions BEFORE we replace them
-      // This avoids infinite recursion since we get the actual function refs
-      const {
-        renderIfNeeded: previousRenderIfNeeded,
-        forceRender: previousForceRender,
-      } = ctx.getRenderFns();
+      ctx.methods.set("_getFocusedIndex", (): number => {
+        return selectionState.focusedIndex;
+      });
 
-      // Helper to apply selection classes to rendered items
-      const applySelectionClasses = (): void => {
-        const rendered = ctx.dom.items.querySelectorAll("[data-index]");
-        rendered.forEach((el) => {
-          const element = el as HTMLElement;
-          const id = element.dataset.id;
-          if (id !== undefined) {
-            // Try to parse as number first, fall back to string
-            const itemId = /^\d+$/.test(id) ? parseInt(id, 10) : id;
-            const isSelected = selectionState.selected.has(itemId);
-            const index = parseInt(element.dataset.index ?? "-1", 10);
-            const isFocused = index === selectionState.focusedIndex;
+      // ── Capture force render for triggering re-renders on selection change ──
+      // We do NOT wrap renderIfNeeded — the renderers now read our state
+      // directly via the getters above. We only need forceRender to trigger
+      // a full re-render when selection state changes (click, API call).
+      const { forceRender: capturedForceRender } = ctx.getRenderFns();
 
-            element.classList.toggle(
-              `${classPrefix}-item--selected`,
-              isSelected,
-            );
-            element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-            element.ariaSelected = isSelected ? "true" : "false";
-          }
-        });
-      };
-
-      const renderWithSelection = (): void => {
-        if (ctx.state.isDestroyed) return;
-
-        // Call the previous render function (grid's or core's)
-        previousRenderIfNeeded();
-
-        // Apply selection classes to whatever was rendered
-        applySelectionClasses();
-      };
-
-      const forceRenderWithSelection = (): void => {
-        if (ctx.state.isDestroyed) return;
-
-        // Call the previous force render
-        previousForceRender();
-
-        // Apply selection classes to whatever was rendered
-        applySelectionClasses();
-      };
-
-      // Replace the render functions via setRenderFns
-      ctx.setRenderFns(renderWithSelection, forceRenderWithSelection);
-
-      // ── Helper: apply selection and emit selection change ──
-      const renderAndEmit = (): void => {
-        applySelectionClasses();
+      // ── Helper: force render + emit selection change ──
+      const forceRenderAndEmit = (): void => {
+        // Force render — renderers will pick up the new selection state
+        // via _getSelectedIds / _getFocusedIndex getters
+        capturedForceRender();
 
         // O(1) lookup using ID → index map
         const getItemByIdFn = (id: string | number): T | undefined => {
@@ -304,8 +276,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         // Toggle selection
         selectionState = toggleSelection(selectionState, item.id, mode);
 
-        // Re-render with selection
-        renderAndEmit();
+        // Re-render with new selection state + emit
+        forceRenderAndEmit();
       });
 
       // ── Keyboard handler ──
@@ -419,19 +391,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             }
           } else {
             // Full re-render for selection changes (Space/Enter)
-            forceRenderWithSelection();
-
-            // O(1) lookup using ID → index map
-            const getItemByIdFn = (id: string | number): T | undefined => {
-              const index = idToIndexMap.get(id);
-              if (index === undefined) return undefined;
-              return ctx.dataManager.getItem(index);
-            };
-
-            emitter.emit("selection:change", {
-              selected: getSelectedIds(selectionState),
-              items: getSelectedItems(selectionState, getItemByIdFn),
-            });
+            forceRenderAndEmit();
           }
         }
       });
@@ -439,17 +399,17 @@ export const withSelection = <T extends VListItem = VListItem>(
       // ── Register public methods ──
       ctx.methods.set("select", (...ids: Array<string | number>): void => {
         selectionState = selectItems(selectionState, ids, mode);
-        renderAndEmit();
+        forceRenderAndEmit();
       });
 
       ctx.methods.set("deselect", (...ids: Array<string | number>): void => {
         selectionState = deselectItems(selectionState, ids);
-        renderAndEmit();
+        forceRenderAndEmit();
       });
 
       ctx.methods.set("toggleSelect", (id: string | number): void => {
         selectionState = toggleSelection(selectionState, id, mode);
-        renderAndEmit();
+        forceRenderAndEmit();
       });
 
       ctx.methods.set("selectAll", (): void => {
@@ -457,30 +417,12 @@ export const withSelection = <T extends VListItem = VListItem>(
         const allItems = ctx.getAllLoadedItems();
         selectionState = selectAll(selectionState, allItems, mode);
         rebuildIdIndex(); // Ensure index is current
-        renderAndEmit();
+        forceRenderAndEmit();
       });
 
       ctx.methods.set("clearSelection", (): void => {
         selectionState = clearSelection(selectionState);
-
-        const { renderRange, isCompressed } = ctx.state.viewportState;
-        const items = ctx.getItemsForRange(renderRange);
-        const compressionCtx = isCompressed
-          ? ctx.getCompressionContext()
-          : undefined;
-
-        ctx.renderer.render(
-          items,
-          renderRange,
-          selectionState.selected,
-          selectionState.focusedIndex,
-          compressionCtx,
-        );
-
-        emitter.emit("selection:change", {
-          selected: [],
-          items: [],
-        });
+        forceRenderAndEmit();
       });
 
       ctx.methods.set("getSelected", (): Array<string | number> => {
