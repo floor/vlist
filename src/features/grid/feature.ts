@@ -20,6 +20,8 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolveScrollArgs } from "../../builder/scroll";
+import { calculateScrollToIndex } from "../../rendering";
 
 import { createGridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
@@ -558,46 +560,3 @@ export const withGrid = <T extends VListItem = VListItem>(
   };
 };
 
-// =============================================================================
-// Helpers (duplicated from builder/core.ts to keep feature self-contained)
-// =============================================================================
-
-import { calculateScrollToIndex } from "../../rendering";
-
-const DEFAULT_SMOOTH_DURATION = 300;
-
-const resolveScrollArgs = (
-  alignOrOptions?:
-    | "start"
-    | "center"
-    | "end"
-    | {
-        align?: "start" | "center" | "end";
-        behavior?: "auto" | "smooth";
-        duration?: number;
-      },
-): {
-  align: "start" | "center" | "end";
-  behavior: "auto" | "smooth";
-  duration: number;
-} => {
-  if (typeof alignOrOptions === "string") {
-    return {
-      align: alignOrOptions as "start" | "center" | "end",
-      behavior: "auto",
-      duration: DEFAULT_SMOOTH_DURATION,
-    };
-  }
-  if (alignOrOptions && typeof alignOrOptions === "object") {
-    return {
-      align: alignOrOptions.align ?? "start",
-      behavior: alignOrOptions.behavior ?? "auto",
-      duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
-    };
-  }
-  return {
-    align: "start",
-    behavior: "auto",
-    duration: DEFAULT_SMOOTH_DURATION,
-  };
-};
