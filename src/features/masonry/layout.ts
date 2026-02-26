@@ -72,16 +72,6 @@ export const createMasonryLayout = (
   let visiblePool: ItemPlacement[] = [];
 
   /**
-   * Calculate cross-axis size (column width in vertical, row height in horizontal).
-   */
-  const getCrossAxisSize = (): number => crossAxisSize;
-
-  /**
-   * Calculate the cross-axis offset for a given lane.
-   */
-  const getCrossAxisOffset = (lane: number): number => laneOffsets[lane] ?? 0;
-
-  /**
    * Find the index of the shortest lane.
    * Returns the lane with minimum accumulated size.
    */
@@ -141,14 +131,12 @@ export const createMasonryLayout = (
       // Position: use precomputed lane offset, current lane accumulator
       const mainOffset = laneSizes[lane]!;
 
-      // Create placement
+      // Create placement (flat structure — no nested position object)
       placements[i] = {
         index: i,
-        position: {
-          x: laneOffsets[lane]!,
-          y: mainOffset,
-          lane,
-        },
+        x: laneOffsets[lane]!,
+        y: mainOffset,
+        lane,
         size: itemSize,
         crossSize: crossAxisSize,
       };
@@ -198,11 +186,10 @@ export const createMasonryLayout = (
     const laneSizes: number[] = new Array(columns).fill(0);
 
     for (const placement of placements) {
-      const lane = placement.position.lane;
-      const extent = placement.position.y + placement.size;
-      const currentSize = laneSizes[lane]!;
+      const extent = placement.y + placement.size;
+      const currentSize = laneSizes[placement.lane]!;
       if (extent > currentSize) {
-        laneSizes[lane] = extent;
+        laneSizes[placement.lane] = extent;
       }
     }
 
@@ -250,7 +237,7 @@ export const createMasonryLayout = (
       while (lo < hi) {
         const mid = (lo + hi) >>> 1;
         const p = placements[laneIndices[mid]!]!;
-        if (p.position.y + p.size <= mainAxisStart) {
+        if (p.y + p.size <= mainAxisStart) {
           lo = mid + 1;
         } else {
           hi = mid;
@@ -261,7 +248,7 @@ export const createMasonryLayout = (
       for (let j = lo; j < laneLen; j++) {
         const p = placements[laneIndices[j]!]!;
         // Once the item's top edge is past the viewport bottom, stop
-        if (p.position.y >= mainAxisEnd) break;
+        if (p.y >= mainAxisEnd) break;
         visiblePool.push(p);
       }
     }
@@ -281,10 +268,9 @@ export const createMasonryLayout = (
     const visible: ItemPlacement[] = [];
 
     for (const placement of placements) {
-      const itemStart = placement.position.y;
-      const itemEnd = itemStart + placement.size;
+      const itemEnd = placement.y + placement.size;
 
-      if (itemEnd > mainAxisStart && itemStart < mainAxisEnd) {
+      if (itemEnd > mainAxisStart && placement.y < mainAxisEnd) {
         visible.push(placement);
       }
     }
@@ -335,7 +321,5 @@ export const createMasonryLayout = (
     calculateLayout,
     getTotalSize,
     getVisibleItems,
-    getCrossAxisSize,
-    getCrossAxisOffset,
   };
 };

@@ -23,7 +23,6 @@ import type {
   VListItem,
   ItemTemplate,
   ItemState,
-  RenderedItem,
 } from "../../types";
 
 import type { ItemPlacement } from "./types";
@@ -43,22 +42,6 @@ export interface MasonryRenderer<T extends VListItem = VListItem> {
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
-  ) => void;
-
-  /** Update a single item */
-  updateItem: (
-    index: number,
-    item: T,
-    placement: ItemPlacement,
-    isSelected: boolean,
-    isFocused: boolean,
-  ) => void;
-
-  /** Update only CSS classes on a rendered item (no template re-evaluation) */
-  updateItemClasses: (
-    index: number,
-    isSelected: boolean,
-    isFocused: boolean,
   ) => void;
 
   /** Get rendered item element by flat item index */
@@ -132,25 +115,21 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
 const RELEASE_GRACE = 2;
 
 // =============================================================================
-// Tracked rendered item — extends RenderedItem with change-tracking fields
+// Tracked rendered item — change-tracking fields for skip-if-unchanged
 // =============================================================================
 
-interface TrackedItem extends RenderedItem {
+interface TrackedItem {
+  element: HTMLElement;
   /** Item id at last render (to detect data changes) */
   lastItemId: string | number;
-
   /** Selected state at last render */
   lastSelected: boolean;
-
   /** Focused state at last render */
   lastFocused: boolean;
-
   /** Placement Y at last render (to detect position changes) */
   lastY: number;
-
   /** Placement X at last render */
   lastX: number;
-
   /** Render frame when this item was last in the visible set */
   lastSeenFrame: number;
 }
@@ -238,13 +217,10 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element: HTMLElement,
     placement: ItemPlacement,
   ): void => {
-    const { x, y } = placement.position;
-
-    // Swap axes for horizontal orientation
     if (isHorizontal) {
-      element.style.transform = `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
+      element.style.transform = `translate(${Math.round(placement.y)}px, ${Math.round(placement.x)}px)`;
     } else {
-      element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      element.style.transform = `translate(${Math.round(placement.x)}px, ${Math.round(placement.y)}px)`;
     }
   };
 
@@ -255,16 +231,12 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element: HTMLElement,
     placement: ItemPlacement,
   ): void => {
-    const { size, crossSize } = placement;
-
     if (isHorizontal) {
-      // Horizontal: main axis = width, cross axis = height
-      element.style.width = `${size}px`;
-      element.style.height = `${crossSize}px`;
+      element.style.width = `${placement.size}px`;
+      element.style.height = `${placement.crossSize}px`;
     } else {
-      // Vertical: main axis = height, cross axis = width
-      element.style.width = `${crossSize}px`;
-      element.style.height = `${size}px`;
+      element.style.width = `${placement.crossSize}px`;
+      element.style.height = `${placement.size}px`;
     }
   };
 
@@ -287,7 +259,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     // Set data attributes
     element.dataset.index = String(itemIndex);
     element.dataset.id = String(item.id);
-    element.dataset.lane = String(placement.position.lane);
+    element.dataset.lane = String(placement.lane);
     element.ariaSelected = String(isSelected);
 
     // ARIA: positional context for screen readers
@@ -318,12 +290,11 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
     return {
       element,
-      index: itemIndex,
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastY: placement.position.y,
-      lastX: placement.position.x,
+      lastY: placement.y,
+      lastX: placement.x,
       lastSeenFrame: frameCounter,
     };
   };
@@ -335,6 +306,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
    * - Uses Set for O(1) visibility check (not O(n) .some())
    * - Skips template re-evaluation when item id + state unchanged
    * - Only updates position when coordinates changed
+   * - Release grace period prevents boundary thrashing
    * - Released elements removed from DOM immediately
    */
   const render = (
@@ -387,8 +359,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
         const posChanged =
-          existing.lastY !== placement.position.y ||
-          existing.lastX !== placement.position.x;
+          existing.lastY !== placement.y ||
+          existing.lastX !== placement.x;
 
         // Template re-evaluation only when item data or selection/focus changed
         if (idChanged || selectedChanged || focusedChanged) {
@@ -409,8 +381,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // Position update only when coordinates changed
         if (posChanged) {
           positionElement(existing.element, placement);
-          existing.lastY = placement.position.y;
-          existing.lastX = placement.position.x;
+          existing.lastY = placement.y;
+          existing.lastX = placement.x;
         }
       } else {
         // Render new item — collect in fragment for batched insertion
@@ -434,63 +406,6 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Update a single item (when data changes).
-   */
-  const updateItem = (
-    index: number,
-    item: T,
-    placement: ItemPlacement,
-    isSelected: boolean,
-    isFocused: boolean,
-  ): void => {
-    const existing = rendered.get(index);
-    if (!existing) return;
-
-    const state = getItemState(isSelected, isFocused);
-    const result = template(item, index, state);
-    applyTemplate(existing.element, result);
-    applyClasses(existing.element, isSelected, isFocused);
-    positionElement(existing.element, placement);
-
-    // Update data attributes
-    existing.element.dataset.id = String(item.id);
-    existing.element.ariaSelected = String(isSelected);
-
-    // Update tracking
-    existing.lastItemId = item.id;
-    existing.lastSelected = isSelected;
-    existing.lastFocused = isFocused;
-    existing.lastY = placement.position.y;
-    existing.lastX = placement.position.x;
-    existing.lastSeenFrame = frameCounter;
-  };
-
-  /**
-   * Update only CSS classes (for selection/focus changes).
-   */
-  const updateItemClasses = (
-    index: number,
-    isSelected: boolean,
-    isFocused: boolean,
-  ): void => {
-    const existing = rendered.get(index);
-    if (!existing) return;
-
-    applyClasses(existing.element, isSelected, isFocused);
-    existing.element.ariaSelected = String(isSelected);
-
-    existing.lastSelected = isSelected;
-    existing.lastFocused = isFocused;
-  };
-
-  /**
-   * Get rendered element by index.
-   */
-  const getElement = (index: number): HTMLElement | undefined => {
-    return rendered.get(index)?.element;
-  };
-
-  /**
    * Clear all rendered items.
    */
   const clear = (): void => {
@@ -511,9 +426,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
-    updateItem,
-    updateItemClasses,
-    getElement,
+    getElement: (index: number): HTMLElement | undefined => rendered.get(index)?.element,
     clear,
     destroy,
   };

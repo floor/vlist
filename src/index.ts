@@ -101,7 +101,6 @@ export {
   createMasonryRenderer,
   type MasonryConfig,
   type MasonryLayout,
-  type MasonryPosition,
   type MasonryRenderer,
   type GetItemFn,
   type ItemPlacement,

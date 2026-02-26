@@ -16,6 +16,5 @@ export { createMasonryRenderer, type MasonryRenderer, type GetItemFn } from "./r
 export type {
   MasonryConfig,
   MasonryLayout,
-  MasonryPosition,
   ItemPlacement,
 } from "./types";

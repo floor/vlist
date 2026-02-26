@@ -112,11 +112,9 @@ const createPlacement = (
   }>,
 ): ItemPlacement => ({
   index,
-  position: {
-    x: options?.x ?? 0,
-    y: options?.y ?? index * 100,
-    lane: options?.lane ?? 0,
-  },
+  x: options?.x ?? 0,
+  y: options?.y ?? index * 100,
+  lane: options?.lane ?? 0,
   size: options?.size ?? 100,
   crossSize: options?.crossSize ?? 200,
 });
@@ -141,7 +139,9 @@ const createTwoColumnPlacements = (
 
     placements.push({
       index: i,
-      position: { x, y, lane },
+      x,
+      y,
+      lane,
       size,
       crossSize: colWidth,
     });
@@ -176,9 +176,6 @@ describe("createMasonryRenderer", () => {
     );
 
     expect(renderer.render).toBeInstanceOf(Function);
-    expect(renderer.updateItem).toBeInstanceOf(Function);
-    expect(renderer.updateItemClasses).toBeInstanceOf(Function);
-    expect(renderer.getElement).toBeInstanceOf(Function);
     expect(renderer.clear).toBeInstanceOf(Function);
     expect(renderer.destroy).toBeInstanceOf(Function);
   });
@@ -816,183 +813,6 @@ describe("render - recycling", () => {
 });
 
 // =============================================================================
-// updateItem
-// =============================================================================
-
-describe("updateItem", () => {
-  let container: HTMLElement;
-
-  beforeEach(() => {
-    container = createItemsContainer();
-  });
-
-  afterEach(() => {
-    container.remove();
-  });
-
-  it("should update a single rendered item", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(3);
-    const placements = [
-      createPlacement(0),
-      createPlacement(1),
-      createPlacement(2),
-    ];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    const updatedItem: TestItem = { id: 2, name: "Updated Item 2" };
-    const updatedPlacement = createPlacement(1, { y: 150 });
-    renderer.updateItem(1, updatedItem, updatedPlacement, false, false);
-
-    const el1 = renderer.getElement(1)!;
-    expect(el1.innerHTML).toBe("<span>Updated Item 2</span>");
-    expect(el1.style.transform).toBe("translate(0px, 150px)");
-  });
-
-  it("should be a no-op for non-rendered index", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(2);
-    const placements = [createPlacement(0), createPlacement(1)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    // Index 5 is not rendered — should not throw
-    const updatedItem: TestItem = { id: 6, name: "Ghost" };
-    renderer.updateItem(5, updatedItem, createPlacement(5), false, false);
-
-    // Nothing changed
-    expect(container.children.length).toBe(2);
-  });
-
-  it("should update selection and focus state on item update", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(1);
-    const placements = [createPlacement(0)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    const el0 = renderer.getElement(0)!;
-    expect(el0.classList.contains("vlist-item--selected")).toBe(false);
-    expect(el0.classList.contains("vlist-item--focused")).toBe(false);
-
-    renderer.updateItem(0, items[0]!, placements[0]!, true, true);
-
-    expect(el0.classList.contains("vlist-item--selected")).toBe(true);
-    expect(el0.classList.contains("vlist-item--focused")).toBe(true);
-  });
-});
-
-// =============================================================================
-// updateItemClasses
-// =============================================================================
-
-describe("updateItemClasses", () => {
-  let container: HTMLElement;
-
-  beforeEach(() => {
-    container = createItemsContainer();
-  });
-
-  afterEach(() => {
-    container.remove();
-  });
-
-  it("should toggle selected class", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(1);
-    const placements = [createPlacement(0)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    const el0 = renderer.getElement(0)!;
-    expect(el0.classList.contains("vlist-item--selected")).toBe(false);
-
-    renderer.updateItemClasses(0, true, false);
-    expect(el0.classList.contains("vlist-item--selected")).toBe(true);
-
-    renderer.updateItemClasses(0, false, false);
-    expect(el0.classList.contains("vlist-item--selected")).toBe(false);
-  });
-
-  it("should toggle focused class", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(1);
-    const placements = [createPlacement(0)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    renderer.updateItemClasses(0, false, true);
-    const el0 = renderer.getElement(0)!;
-    expect(el0.classList.contains("vlist-item--focused")).toBe(true);
-
-    renderer.updateItemClasses(0, false, false);
-    expect(el0.classList.contains("vlist-item--focused")).toBe(false);
-  });
-
-  it("should update aria-selected attribute", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(1);
-    const placements = [createPlacement(0)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    renderer.updateItemClasses(0, true, false);
-    expect(renderer.getElement(0)!.ariaSelected).toBe("true");
-
-    renderer.updateItemClasses(0, false, false);
-    expect(renderer.getElement(0)!.ariaSelected).toBe("false");
-  });
-
-  it("should be a no-op for non-rendered index", () => {
-    const renderer = createMasonryRenderer<TestItem>(
-      container,
-      defaultTemplate,
-      "vlist",
-      false,
-    );
-    const items = createTestItems(1);
-    const placements = [createPlacement(0)];
-
-    renderer.render(toGetItem(items), placements, new Set(), -1);
-
-    // Should not throw
-    renderer.updateItemClasses(99, true, true);
-    expect(container.children.length).toBe(1);
-  });
-});
-
-// =============================================================================
 // getElement
 // =============================================================================
 
@@ -1349,7 +1169,7 @@ describe("multi-column rendering", () => {
     // Verify each item is in its correct lane
     for (let i = 0; i < 6; i++) {
       const el = renderer.getElement(i)!;
-      expect(el.dataset.lane).toBe(String(placements[i]!.position.lane));
+      expect(el.dataset.lane).toBe(String(placements[i]!.lane));
       expect(el.dataset.index).toBe(String(i));
     }
   });
@@ -1370,7 +1190,7 @@ describe("multi-column rendering", () => {
 
     // Items in lane 1 should have x offset = colWidth + gap
     for (const p of placements) {
-      if (p.position.lane === 1) {
+      if (p.lane === 1) {
         const el = renderer.getElement(p.index)!;
         expect(el.style.transform).toContain(`${colWidth + gap}px`);
       }

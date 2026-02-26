@@ -16,25 +16,19 @@ export type { MasonryConfig };
 // Masonry Layout
 // =============================================================================
 
-/** Position of an item in absolute coordinates */
-export interface MasonryPosition {
-  /** X coordinate in pixels */
-  x: number;
-
-  /** Y coordinate in pixels */
-  y: number;
-
-  /** Cross-axis division index (column in vertical, row in horizontal) */
-  lane: number;
-}
-
-/** Cached item placement information */
+/** Cached item placement — flat structure for minimal allocation and fast access */
 export interface ItemPlacement {
   /** Item index */
   index: number;
 
-  /** Absolute position */
-  position: MasonryPosition;
+  /** X coordinate in pixels (cross-axis offset) */
+  x: number;
+
+  /** Y coordinate in pixels (main-axis offset) */
+  y: number;
+
+  /** Cross-axis division index (column in vertical, row in horizontal) */
+  lane: number;
 
   /** Item size in main axis (height in vertical, width in horizontal) */
   size: number;
@@ -95,16 +89,4 @@ export interface MasonryLayout {
     mainAxisStart: number,
     mainAxisEnd: number,
   ) => ItemPlacement[];
-
-  /**
-   * Calculate cross-axis size (column width in vertical, row height in horizontal).
-   * crossAxisSize = (containerSize - (columns - 1) * gap) / columns
-   */
-  getCrossAxisSize: () => number;
-
-  /**
-   * Calculate the offset for a given lane (column/row) in the cross axis.
-   * offset = lane * (crossAxisSize + gap)
-   */
-  getCrossAxisOffset: (lane: number) => number;
 }
