@@ -669,6 +669,22 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
+  // ── Cached selection getter references ──────────────────────────
+  // Resolved lazily on first render frame. The selection feature registers
+  // _getSelectedIds / _getFocusedIndex on ctx.methods at priority 50,
+  // which runs before the initial $.rfn() call. Caching the function
+  // references avoids a Map.get() on every scroll frame.
+  let selectionIdsGetter: (() => Set<string | number>) | null = null;
+  let selectionFocusGetter: (() => number) | null = null;
+  let selectionGettersResolved = false;
+
+  const resolveSelectionGetters = (): void => {
+    if (selectionGettersResolved) return;
+    selectionGettersResolved = true;
+    selectionIdsGetter = (methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    selectionFocusGetter = (methods.get("_getFocusedIndex") as (() => number)) ?? null;
+  };
+
   // ── Main render function ────────────────────────────────────────
   // This is the hot path — called on every scroll-triggered range change.
   //
@@ -740,12 +756,18 @@ function materialize<T extends VListItem = VListItem>(
       element: HTMLElement;
     }> | null = null;
 
+    // Read selection state — prefer live getters from selection feature,
+    // fall back to $.ss / $.fi (which default to empty Set / -1).
+    resolveSelectionGetters();
+    const selectedIds = selectionIdsGetter ? selectionIdsGetter() : $.ss;
+    const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : $.fi;
+
     for (let i = renderRange.start; i <= renderRange.end; i++) {
       const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
       if (!item) continue;
 
-      const isSelected = $.ss.has(item.id);
-      const isFocused = i === $.fi;
+      const isSelected = selectedIds.has(item.id);
+      const isFocused = i === focusedIndex;
       const existing = rendered.get(i);
 
       if (existing) {
@@ -1405,9 +1427,10 @@ function materialize<T extends VListItem = VListItem>(
     destroy,
   };
 
-  // Merge feature methods
+  // Merge feature methods (skip core methods already on api, and internal _-prefixed methods)
   for (const [name, fn] of methods) {
     if (
+      name.charCodeAt(0) === 95 || // '_' — internal methods (e.g. _getSelectedIds)
       name === "setItems" ||
       name === "appendItems" ||
       name === "prependItems" ||
