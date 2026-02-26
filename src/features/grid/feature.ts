@@ -348,9 +348,6 @@ export const withGrid = <T extends VListItem = VListItem>(
       const visibleRange = { start: 0, end: 0 };
       const renderRange = { start: 0, end: 0 };
 
-      // ── Cached item range from last full render (for tick()) ──
-      const lastItemRange = { start: 0, end: -1 };
-
       // ── Override render functions to convert row range → item range ──
       const gridRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
@@ -404,20 +401,6 @@ export const withGrid = <T extends VListItem = VListItem>(
         const lastRange = ctx.state.lastRenderRange;
         const isCompressed = viewportState.isCompressed;
 
-        if (
-          renderRange.start === lastRange.start &&
-          renderRange.end === lastRange.end
-        ) {
-          // Range unchanged — still tick the grace clock so items that
-          // left the range on a previous frame are eventually released.
-          // Pass the last item range so tick() keeps in-range items alive.
-          gridRenderer!.tick(lastItemRange);
-          if (isCompressed) {
-            gridRenderer!.updatePositions(ctx.getCompressionContext());
-          }
-          return;
-        }
-
         // Convert row range to flat item range
         const totalItems = ctx.dataManager.getTotal();
         const itemRange = gridLayout!.getItemRange(
@@ -441,7 +424,12 @@ export const withGrid = <T extends VListItem = VListItem>(
         const selectedIds = selectionIdsGetter ? selectionIdsGetter() : EMPTY_ID_SET;
         const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : -1;
 
-        // Pass ITEM range to grid renderer (it positions by item index)
+        // Always call render() — the renderer's change tracking makes unchanged
+        // items a no-op (skips template, class, and position updates). This
+        // eliminates the need for a separate tick() path: the grace-period
+        // release loop inside render() advances the frame counter on every call,
+        // so items that left the range are eventually released even when the
+        // row-level range is unchanged.
         gridRenderer!.render(
           items,
           itemRange,
@@ -450,14 +438,12 @@ export const withGrid = <T extends VListItem = VListItem>(
           compressionCtx,
         );
 
-        // Cache the item range for tick() calls when range is unchanged
-        lastItemRange.start = itemRange.start;
-        lastItemRange.end = itemRange.end;
-
-        // Mutate lastRenderRange in place — emit only when changed
-        lastRange.start = renderRange.start;
-        lastRange.end = renderRange.end;
-        emitter.emit("range:change", { range: { start: renderRange.start, end: renderRange.end } });
+        // Emit range:change only when range actually changed
+        if (lastRange.start !== renderRange.start || lastRange.end !== renderRange.end) {
+          lastRange.start = renderRange.start;
+          lastRange.end = renderRange.end;
+          emitter.emit("range:change", { range: { start: renderRange.start, end: renderRange.end } });
+        }
       };
 
       const gridForceRender = (): void => {
