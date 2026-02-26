@@ -22,6 +22,14 @@
  * - Item sizes must be deterministic (no dynamic content sizing)
  *
  * Can be combined with withSelection for selectable masonry layouts.
+ *
+ * Performance:
+ * - Early exit when scroll position + container size unchanged (zero work per redundant frame)
+ * - Cached empty Set for no-selection case (zero allocation per frame)
+ * - Viewport state mutated in place (no object creation per frame)
+ * - Cached getItem closure (no closure allocation per frame)
+ * - Items passed to renderer via data manager reference (no sparse array)
+ * - All data mutation methods intercepted for layout recalculation
  */
 
 import type { VListItem } from "../../types";
@@ -43,6 +51,13 @@ export interface MasonryFeatureConfig {
   /** Gap between items in pixels (default: 0) */
   gap?: number;
 }
+
+// =============================================================================
+// Shared constants
+// =============================================================================
+
+/** Cached empty Set — avoids allocation on every scroll frame when no selection */
+const EMPTY_ID_SET: Set<string | number> = new Set();
 
 // =============================================================================
 // Feature Factory
@@ -116,10 +131,10 @@ export const withMasonry = <T extends VListItem = VListItem>(
 
       masonryLayout = createMasonryLayout(masonryConfig);
 
-      // ── Item configuration ──
+      // ── Item size configuration ──
       const item = rawConfig.item;
-      const itemSizeFn = typeof item.height === "function" 
-        ? item.height 
+      const itemSizeFn = typeof item.height === "function"
+        ? item.height
         : (_index: number) => item.height as number;
 
       // For horizontal mode, use width if provided
@@ -132,7 +147,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // ── Calculate layout (on initialization and when data changes) ──
       const calculateLayout = (): void => {
         const totalItems = ctx.dataManager.getTotal();
-        
+
         cachedPlacements = masonryLayout!.calculateLayout(
           totalItems,
           (index: number) => {
@@ -164,69 +179,109 @@ export const withMasonry = <T extends VListItem = VListItem>(
         resolvedConfig.ariaIdPrefix,
       );
 
+      // ── Cached selection method references ──
+      // Resolved once after setup, avoiding Map.get() on every frame
+      let selectedIdsGetter: (() => Set<string | number>) | null = null;
+      let focusedIndexGetter: (() => number) | null = null;
+      let selectionMethodsResolved = false;
+
+      const resolveSelectionMethods = (): void => {
+        if (selectionMethodsResolved) return;
+        selectionMethodsResolved = true;
+        selectedIdsGetter = (ctx.methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+        focusedIndexGetter = (ctx.methods.get("_getFocusedIndex") as (() => number)) ?? null;
+      };
+
+      // ── Cached getItem closure — created once, not per frame ──
+      const getItem = (index: number): T | undefined =>
+        ctx.dataManager.getItem(index) as T | undefined;
+
+      // ── Scroll state for early-exit guard ──
+      // When scroll position + container size are identical to last frame,
+      // all downstream work (binary search, renderer diffing) is skipped.
+      let lastScrollPosition = -1;
+      let lastContainerSize = -1;
+      let forceNextRender = true; // first render must always run
+
+      // ── Precomputed overscan value ──
+      const overscanPx = (resolvedConfig.overscan ?? 3) * 100;
+
       // ── Override render functions ──
       const masonryRenderIfNeeded = (): void => {
         if (ctx.state.isDestroyed) return;
 
+        // Resolve selection method references on first render
+        // (selection feature may set up after masonry)
+        resolveSelectionMethods();
+
         // Calculate visible range in main axis
         const scrollPosition = ctx.scrollController.getScrollTop();
         const containerSize = ctx.state.viewportState.containerSize;
-        const overscan = resolvedConfig.overscan ?? 3;
+
+        // ── Early exit: skip all work when nothing changed ──
+        if (
+          !forceNextRender &&
+          scrollPosition === lastScrollPosition &&
+          containerSize === lastContainerSize
+        ) {
+          return;
+        }
+        lastScrollPosition = scrollPosition;
+        lastContainerSize = containerSize;
+        forceNextRender = false;
 
         // Main axis range with overscan
-        const mainAxisStart = Math.max(0, scrollPosition - overscan * 100);
-        const mainAxisEnd = scrollPosition + containerSize + overscan * 100;
+        const mainAxisStart = Math.max(0, scrollPosition - overscanPx);
+        const mainAxisEnd = scrollPosition + containerSize + overscanPx;
 
-        // Get visible items
+        // Get visible items from layout (O(k * log(n/k)) with binary search)
         const visiblePlacements = masonryLayout!.getVisibleItems(
           cachedPlacements,
           mainAxisStart,
           mainAxisEnd,
         );
 
-        // Get items data — sparse array indexed by global position
-        // so the renderer can access items[placement.index] correctly
-        const items: T[] = [];
-        for (const placement of visiblePlacements) {
-          const item = ctx.dataManager.getItem(placement.index);
-          if (item) items[placement.index] = item;
-        }
-
-        // Get selection state
-        const selectedIdsGetter = ctx.methods.get("_getSelectedIds") as (() => Set<string | number>) | undefined;
-        const selectedIds = selectedIdsGetter ? selectedIdsGetter() : new Set<string | number>();
-        const focusedIndexGetter = ctx.methods.get("_getFocusedIndex") as (() => number) | undefined;
+        // Get selection state — use cached empty set to avoid allocation
+        const selectedIds = selectedIdsGetter ? selectedIdsGetter() : EMPTY_ID_SET;
         const focusedIndex = focusedIndexGetter ? focusedIndexGetter() : -1;
 
-        // Render
-        if (masonryRenderer && items.length > 0) {
+        // Render visible items — pass cached getItem closure (no allocation)
+        if (masonryRenderer && visiblePlacements.length > 0) {
           masonryRenderer.render(
-            items,
+            getItem,
             visiblePlacements,
             selectedIds,
             focusedIndex,
           );
         }
 
-        // Update viewport state
-        ctx.state.viewportState.scrollPosition = scrollPosition;
-        ctx.state.viewportState.visibleRange = {
-          start: visiblePlacements[0]?.index ?? 0,
-          end: visiblePlacements[visiblePlacements.length - 1]?.index ?? 0,
-        };
-        ctx.state.viewportState.renderRange = ctx.state.viewportState.visibleRange;
+        // Update viewport state — mutate in place to avoid object allocation
+        const viewportState = ctx.state.viewportState;
+        viewportState.scrollPosition = scrollPosition;
+
+        const firstIndex = visiblePlacements.length > 0 ? visiblePlacements[0]!.index : 0;
+        const lastIndex = visiblePlacements.length > 0
+          ? visiblePlacements[visiblePlacements.length - 1]!.index
+          : 0;
+
+        viewportState.visibleRange.start = firstIndex;
+        viewportState.visibleRange.end = lastIndex;
+        viewportState.renderRange.start = firstIndex;
+        viewportState.renderRange.end = lastIndex;
 
         // Emit range change if changed
         const lastRange = ctx.state.lastRenderRange;
-        const newRange = ctx.state.viewportState.renderRange;
-        if (lastRange.start !== newRange.start || lastRange.end !== newRange.end) {
-          ctx.state.lastRenderRange = newRange;
-          emitter.emit("range:change", { range: newRange });
+        if (lastRange.start !== firstIndex || lastRange.end !== lastIndex) {
+          lastRange.start = firstIndex;
+          lastRange.end = lastIndex;
+          emitter.emit("range:change", { range: { start: firstIndex, end: lastIndex } });
         }
       };
 
       const masonryForceRender = (): void => {
-        ctx.state.lastRenderRange = { start: -1, end: -1 };
+        ctx.state.lastRenderRange.start = -1;
+        ctx.state.lastRenderRange.end = -1;
+        forceNextRender = true;
         masonryRenderIfNeeded();
       };
 
@@ -236,7 +291,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // ── Handle resize ──
       const handleResize = (width: number, height: number): void => {
         const newContainerSize = isHorizontal ? height : width;
-        
+
         if (masonryLayout && masonryLayout.containerSize !== newContainerSize) {
           masonryLayout.update({ containerSize: newContainerSize });
           calculateLayout();
@@ -252,31 +307,67 @@ export const withMasonry = <T extends VListItem = VListItem>(
         masonryForceRender();
       };
 
-      // Override data manager methods to recalculate layout
-      const originalSetItems = ctx.dataManager.setItems.bind(ctx.dataManager);
-      ctx.dataManager.setItems = (items: T[]) => {
-        originalSetItems(items);
-        handleDataChange();
-      };
+      // Intercept all data mutation methods to recalculate layout
+      const dm = ctx.dataManager;
+
+      if (typeof dm.setItems === "function") {
+        const originalSetItems = dm.setItems.bind(dm);
+        dm.setItems = (items: T[]) => {
+          originalSetItems(items);
+          handleDataChange();
+        };
+      }
+
+      if (typeof (dm as any).appendItems === "function") {
+        const originalAppendItems = (dm as any).appendItems.bind(dm);
+        (dm as any).appendItems = (items: T[]) => {
+          originalAppendItems(items);
+          handleDataChange();
+        };
+      }
+
+      if (typeof (dm as any).prependItems === "function") {
+        const originalPrependItems = (dm as any).prependItems.bind(dm);
+        (dm as any).prependItems = (items: T[]) => {
+          originalPrependItems(items);
+          handleDataChange();
+        };
+      }
+
+      if (typeof (dm as any).updateItem === "function") {
+        const originalUpdateItem = (dm as any).updateItem.bind(dm);
+        (dm as any).updateItem = (index: number, item: T) => {
+          originalUpdateItem(index, item);
+          handleDataChange();
+        };
+      }
+
+      if (typeof (dm as any).removeItem === "function") {
+        const originalRemoveItem = (dm as any).removeItem.bind(dm);
+        (dm as any).removeItem = (index: number) => {
+          originalRemoveItem(index);
+          handleDataChange();
+        };
+      }
 
       // ── Scroll to index (map to item position) ──
       ctx.methods.set("scrollToIndex", (index: number, align?: string, behavior?: ScrollBehavior) => {
         const placement = cachedPlacements[index];
         if (!placement) return;
 
-        const mainAxisPosition = placement.position.y; // y for vertical, will be swapped for horizontal
+        const mainAxisPosition = placement.position.y;
         const containerSize = ctx.state.viewportState.containerSize;
-        
+
         let scrollTarget = mainAxisPosition;
-        
+
         if (align === "center") {
           scrollTarget = mainAxisPosition - containerSize / 2 + placement.size / 2;
         } else if (align === "end") {
           scrollTarget = mainAxisPosition - containerSize + placement.size;
         }
-        
+
         scrollTarget = Math.max(0, scrollTarget);
-        
+
         ctx.scrollController.scrollTo(scrollTarget, behavior === "smooth");
       });
 

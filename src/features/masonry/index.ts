@@ -10,7 +10,7 @@ export { withMasonry, type MasonryFeatureConfig } from "./feature";
 export { createMasonryLayout } from "./layout";
 
 // Renderer
-export { createMasonryRenderer, type MasonryRenderer } from "./renderer";
+export { createMasonryRenderer, type MasonryRenderer, type GetItemFn } from "./renderer";
 
 // Types
 export type {
