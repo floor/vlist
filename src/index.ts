@@ -16,6 +16,7 @@ export { withScrollbar } from "./features/scrollbar";
 export { withPage } from "./features/page";
 export { withSections } from "./features/sections";
 export { withGrid } from "./features/grid";
+export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
 
@@ -93,6 +94,17 @@ export {
   type GridRenderer,
   type ItemRange,
 } from "./features/grid";
+
+// Masonry domain (Pinterest-style layout)
+export {
+  createMasonryLayout,
+  createMasonryRenderer,
+  type MasonryConfig,
+  type MasonryLayout,
+  type MasonryRenderer,
+  type GetItemFn,
+  type ItemPlacement,
+} from "./features/masonry";
 
 // Rendering domain (virtual scrolling, size cache, scaling)
 export {

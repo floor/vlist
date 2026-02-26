@@ -1,0 +1,266 @@
+vlist — full changelog
+v1.0.0 → initial commit
+303 commits · 25 days · Feb 2–26, 2026
+
+
+2026-02-26
+
+  feat(masonry): add masonry layout feature with shortest-lane placement
+  perf(masonry): optimize scroll hot path and fix boundary thrashing
+  perf(grid): apply feature optimization playbook
+  perf(renderer): apply patterns 9-11 — grace period, change tracking, lazy fragment
+  perf(builder): apply patterns 9-11 to core inlined renderer
+  perf(selection): feed selection state through render pipeline instead of DOM bypass
+  refactor(masonry): reduce bundle weight — flatten types, remove dead code
+  refactor(grid): remove tick() — always call render(), rely on change tracking
+
+  → v1.0.0
+
+
+2026-02-25
+
+  fix(scale): correct scrollbar detection to prevent duplicates
+  test(selection): add missing getCached method to dataManager mock
+
+
+2026-02-24
+
+  feat(placeholder): per-item length profiles from first batch, CSS-driven skeleton
+  feat(rendering): add Mode B auto-measurement with MeasuredSizeCache
+  feat(async): reload visible placeholders on network recovery
+  perf(selection): avoid O(total) rebuildIdIndex with async data
+  fix(grid): swap CSS width/height in horizontal mode for correct aspect ratio
+  fix(grid): use cross-axis container dimension for horizontal grid sizing
+  fix(grid): rebuild size cache on resize for dynamic height functions
+  fix(core): use main-axis dimension for containerSize in horizontal mode
+  test: add Phase 1 + Phase 2 integration, memory, and performance tests (+184 tests)
+  test(builder): add comprehensive SimpleDataManager tests
+
+  → v0.9.6, v0.9.7, v0.9.8, v0.9.9
+
+
+2026-02-23
+
+  feat(async): add autoLoad option to defer initial data loading
+  feat(async): add storage config option for chunk size control
+  feat(snapshots): add restore config, total in snapshot, NaN guard, tests
+  fix(async): prevent duplicate requests on reload and optimize initial load
+  fix(async): restore placeholder replacement in onItemsLoaded and reload
+  fix(snapshots): restore scroll position with async autoLoad:false
+
+  → v0.9.5
+
+
+2026-02-22
+
+  feat(scroll): implement scroll.wheel and scroll.scrollbar config options
+  refactor: complete plugin → feature terminology migration
+  fix(page): prevent scroll conflicts in window scroll mode
+  fix(scale): prevent scroll beyond bottom + rename variables for horizontal support
+
+  → v0.9.2, v0.9.3, v0.9.4
+
+
+2026-02-21
+
+  BREAKING: direction → orientation for semantic clarity
+  BREAKING: HeightCache → SizeCache — all height-specific APIs renamed
+  BREAKING: scrollTop → scrollPosition in ViewportState and events
+
+  feat(sections): add horizontal mode support
+  feat(grid): allow horizontal orientation
+  refactor(core): add SizeCache implementation and tests
+  refactor(core): update entire codebase to use SizeCache
+  refactor(breaking): remove HeightCache backward compatibility
+  refactor(cleanup): systematically rename all height references to size
+  refactor(viewport): update ViewportState and CompressionState to use size terminology
+  refactor: rename plugin to feature for consistency
+  fix(types): complete dimension-agnostic refactoring — all tests passing
+  fix(events): complete scroll event API migration to scrollPosition
+  fix(grid): swap axes for horizontal orientation positioning
+  test: enhance coverage to 97.54% with comprehensive tests
+
+  → v0.9.0, v0.9.1
+
+
+2026-02-20
+
+  fix(core): add wheel interception for Chrome/Safari to prevent scroll race condition
+  fix(core): disable wheel interception on mobile devices
+  fix(selection): restore O(1) ID lookups to prevent selectAll freeze
+  refactor(core): remove browser detection from wheel handler — apply to all browsers
+
+  → v0.8.1, v0.8.2
+
+
+2026-02-19
+
+  feat(builder): add memory optimization config flags (then make default)
+  fix(scale): smooth scroll interpolation to fix Firefox compressed scroll-up bug
+  fix(scale): add touch scroll support for compressed mode on iOS/mobile
+  fix(async): reload now clears DOM, shows placeholders, and loads only visible range
+  fix(async): prevent endless loadMore cascade at bottom of sparse lists
+  fix(builder): add missing invalidateRendered stub to simplified context
+  fix(builder): remove array copying from setItems()
+  fix(range): use accurate visible item counting to prevent blank areas during fast scroll
+  refactor(builder): decompose core.ts with refs-object pattern
+  refactor(builder): use short keys on refs object to reduce bundle size
+  refactor: remove deprecated core files, simplify build
+
+  → v0.7.4, v0.7.5, v0.7.6, v0.7.7, v0.8.0
+
+
+2026-02-18
+
+  feat: move framework adapters to separate packages (vlist-react, vlist-vue, vlist-svelte)
+  feat: remove createVList from public API — builder-only entry point
+  feat(animation): add placeholder pulse and smooth fade-in on replacement
+  refactor(core): move full.ts to vlist.ts as main entry point
+
+  → v0.7.0, v0.7.1, v0.7.2, v0.7.3
+
+
+2026-02-17
+
+  refactor: rename plugins/ to features/ and render/ to rendering/
+  refactor: reorganize core files into core/ directory
+  refactor: simplify exports — builder-only API
+  fix(builder): show native scrollbars by default
+
+  → v0.6.0, v0.6.1, v0.6.2
+
+
+2026-02-16
+
+  feat(core): add double-click support and grid+groups combination
+  feat(grid): support full-width group headers in grid layout
+  feat(grid): implement groups-aware grid layout algorithm
+  feat(grid): full groups support with proper layout and positioning
+  feat(groups): allow sticky headers with reverse mode
+  feat(groups): implement smooth scrolling in scrollToIndex override
+  fix(grid): correct total height calculation for grid+groups combination
+  fix(types): fix TypeScript errors in builder and plugins (43→19→0 errors)
+  fix(tests): fix spread operator bug destroying getters
+  fix(package): correct TypeScript declaration paths for Bundlephobia
+  fix(package): add default export conditions and reorder exports
+  fix(build): smart line-breaking for esbuild-wasm compatibility
+  fix(adapters): use relative imports in React, Vue, and Svelte adapters
+  refactor(tests): reorganize test structure to match src/ organization
+
+  → v0.5.1, v0.5.2
+
+
+2026-02-15
+
+  feat(plugin): extract window scroll mode to plugin
+  feat: add ultra-lightweight core-light entry point (4.9 KB)
+  fix(grid): update scroll height after dynamic column change
+  refactor(types): fix circular dependencies
+  refactor: organize all plugins under src/plugins/ folder
+  perf(constants): reduce cancel load velocity threshold from 25 to 15 px/ms
+
+  → v0.5.0
+
+
+2026-02-14
+
+  refactor(core): make builder pattern the default entry point
+  refactor(builder): remove legacy monolithic implementation and fix horizontal/window modes
+  feat(builder): add built-in velocity tracking with circular buffer
+
+
+2026-02-13
+
+  fix(grid): calculate visible/render range for scroll virtualization
+  fix(builder): sync viewport state and scrollbar bounds with compression
+  fix(compression): eliminate gap at bottom when scrolled to end
+  fix(core,builder): update lastScrollTop before rendering in all scroll operations
+
+
+2026-02-12
+
+  feat(scroll): add hover zone for scrollbar discovery and remove will-change
+  feat(builder): self-contained composable builder with plugin system
+
+
+2026-02-11
+
+  test: consolidate coverage tests and fix gaps to reach 99.94%
+  refactor(data): remove dead concurrent dedup guard in loadRange
+
+
+2026-02-10
+
+  feat(adapters): add React, Vue, and Svelte framework adapters
+  feat(reverse): add reverse mode for chat-style UIs
+  feat(scroll): implement scroll config with wheel control and custom scrollbar
+  feat(scroll): add scroll.wrap for circular navigation
+  feat(scroll): add horizontal scrolling support
+  feat(a11y): aria-setsize, aria-posinset, aria-activedescendant, aria-busy, live region
+  test: improve coverage to 94.78% funcs / 95.86% lines (+262 tests)
+  refactor: move sandbox and docs to vlist.dev
+
+
+2026-02-09
+
+  feat(groups): add sticky headers / grouped lists
+  feat(grid): add 2D grid layout mode
+  feat(grid): apply gap between rows, use real photos, aspect-ratio height
+  feat(render): add variable item height support (Mode A)
+  feat(scroll): smooth scrollToIndex animation + shrink bundle with sub-module exports
+  feat(scroll): add window/document scrolling support
+  feat(scroll): configurable idle timeout
+  feat(scroll): add scroll position save/restore
+  perf(render): zero-allocation scroll hot path with in-place range mutation
+  perf(scroll): RAF-throttle native scroll handler
+  perf(css): add CSS containment and scroll transition suppression
+  perf(speed): batch Date.now() in sparse storage and mutate focusedIndex in-place
+  perf(render): targeted focus update and cheaper pool release
+  perf(size): split CSS into core/extras, CSS-only positioning, re-export range functions
+  perf(speed): use direct getters instead of getState() on hot paths
+  perf: minify CSS, add gzip compression to dev server
+  fix: add aria-label support for listbox accessibility
+  fix(scroll): velocity-based load cancellation for scrollbar drag
+  fix(handlers): gate loadMore with velocity check to prevent spurious requests
+  fix(render): fix phantom item on empty list
+
+  → v0.3.1
+
+
+2026-02-05
+
+  refactor(api): group itemHeight and template under item config
+  refactor(sandbox): rename examples to sandbox with improved DX
+  refactor: improve build, serve, and package.json
+
+
+2026-02-04
+
+  feat: performance optimizations and configurable preloading
+  perf(selection): use O(k) lookup instead of O(n) filtering for getSelectedItems
+  fix(styles): show focus outline only for keyboard navigation
+
+
+2026-02-03
+
+  feat(scroll): add velocity-based load cancellation
+  feat(loading): add configurable chunk preloading based on scroll direction
+  fix(scroll): load pending range immediately when velocity drops below threshold
+  fix(scroll): fix velocity tracker reset and missing range calculation
+  perf(render): add DocumentFragment batching and optimize attribute setting
+  perf: add reusable ItemState, ResizeObserver, and circular buffer velocity tracker
+
+
+2026-02-02 — initial commit
+
+  initial commit
+  feat(compression): add support for 1M+ items via manual wheel scrolling
+  feat(scrollbar): add custom scrollbar for compressed mode
+  refactor: restructure to domain-driven architecture
+  refactor: extract context, handlers, and methods from vlist.ts
+  fix: resolve typecheck errors and runtime ctx initialization issue
+  fix(render): replace placeholders with real data when items load
+  perf: optimize bundle size and add size toggle to million-items example
+  perf(vlist): optimize rendering and scroll performance
+
+  → v0.2.0

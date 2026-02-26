@@ -404,13 +404,16 @@ describe("withSelection — Methods", () => {
     expect(typeof ctx.methods.get("getSelectedItems")).toBe("function");
   });
 
-  it("should register exactly 7 public methods", () => {
+  it("should register 7 public + 2 internal methods", () => {
     const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
 
-    expect(ctx.methods.size).toBe(7);
+    // 7 public methods + 2 internal getters (_getSelectedIds, _getFocusedIndex)
+    expect(ctx.methods.size).toBe(9);
+    expect(ctx.methods.has("_getSelectedIds")).toBe(true);
+    expect(ctx.methods.has("_getFocusedIndex")).toBe(true);
   });
 
   it("getSelected should return empty array initially", () => {

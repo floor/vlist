@@ -59,6 +59,24 @@ afterAll(() => {
 // Test Types & Helpers
 // =============================================================================
 
+/**
+ * Flush the release grace period by calling render() multiple times.
+ * Items that left the visible range are kept for RELEASE_GRACE (2) extra
+ * render cycles — this helper advances past that window.
+ */
+const flushGrace = <T extends VListItem>(
+  renderer: GridRenderer<T>,
+  items: T[],
+  range: Range,
+  times: number = 3,
+): void => {
+  for (let i = 0; i < times; i++) {
+    renderer.render(items, range, new Set(), -1);
+  }
+};
+
+// =============================================================================
+
 interface TestItem extends VListItem {
   id: number;
   name: string;
@@ -479,8 +497,11 @@ describe("createGridRenderer", () => {
       renderer.render(items.slice(0, 8), { start: 0, end: 7 }, new Set(), -1);
       expect(container.querySelectorAll("[data-index]").length).toBe(8);
 
-      // Render items 4-11 (removes 0-3, keeps 4-7, adds 8-11)
+      // Render items 4-11 (items 0-3 enter grace period, keeps 4-7, adds 8-11)
       renderer.render(items.slice(4, 12), { start: 4, end: 11 }, new Set(), -1);
+
+      // Flush grace period — items 0-3 now released
+      flushGrace(renderer, items.slice(4, 12), { start: 4, end: 11 });
 
       // Items 0-3 should be removed
       expect(container.querySelector("[data-index='0']")).toBeNull();
@@ -936,8 +957,11 @@ describe("createGridRenderer", () => {
       renderer.render(items.slice(0, 8), { start: 0, end: 7 }, new Set(), -1);
       expect(renderer.getElement(0)).toBeTruthy();
 
-      // Move range so item 0 is removed
+      // Move range so item 0 enters grace period
       renderer.render(items.slice(4, 12), { start: 4, end: 11 }, new Set(), -1);
+
+      // Flush grace period — item 0 now released
+      flushGrace(renderer, items.slice(4, 12), { start: 4, end: 11 });
       expect(renderer.getElement(0)).toBeUndefined();
 
       renderer.destroy();
