@@ -11,6 +11,7 @@ import {
   createDefaultScrollProxy,
 } from "../../src/builder/materialize";
 import type { MRefs, MDeps } from "../../src/builder/materialize";
+import type { TrackedItem } from "../../src/builder/core";
 import { createSizeCache } from "../../src/rendering/sizes";
 import { createElementPool } from "../../src/builder/pool";
 import type { VListItem, Range } from "../../src/types";
@@ -106,9 +107,21 @@ function createTestRefs(): MRefs<TestItem> {
   };
 }
 
+/** Helper to wrap a bare HTMLElement in a TrackedItem for test mocks. */
+function tracked(element: HTMLElement, overrides?: Partial<TrackedItem>): TrackedItem {
+  return {
+    element,
+    lastItemId: overrides?.lastItemId ?? "",
+    lastSelected: overrides?.lastSelected ?? false,
+    lastFocused: overrides?.lastFocused ?? false,
+    lastOffset: overrides?.lastOffset ?? 0,
+    lastSeenFrame: overrides?.lastSeenFrame ?? 0,
+  };
+}
+
 function createTestDeps(): MDeps<TestItem> {
   const testDom = createTestDOM();
-  const rendered = new Map<number, HTMLElement>();
+  const rendered = new Map<number, TrackedItem>();
   const pool = createElementPool();
   const emitter = {
     on: () => {},
@@ -305,7 +318,7 @@ describe("createMaterializeCtx - Renderer", () => {
     const ctx = createMaterializeCtx(refs, deps);
 
     const el = document.createElement("div");
-    deps.rendered.set(0, el);
+    deps.rendered.set(0, tracked(el));
 
     ctx.renderer.updateItemClasses(0, true, false);
 
@@ -320,7 +333,7 @@ describe("createMaterializeCtx - Renderer", () => {
     const ctx = createMaterializeCtx(refs, deps);
 
     const el = document.createElement("div");
-    deps.rendered.set(0, el);
+    deps.rendered.set(0, tracked(el));
 
     ctx.renderer.updateItemClasses(0, false, true);
 
@@ -354,7 +367,7 @@ describe("createMaterializeCtx - Renderer", () => {
     const ctx = createMaterializeCtx(refs, deps);
 
     const el = document.createElement("div");
-    deps.rendered.set(5, el);
+    deps.rendered.set(5, tracked(el));
 
     expect(ctx.renderer.getElement(5)).toBe(el);
   });
@@ -772,8 +785,8 @@ describe("createMaterializeCtx - invalidateRendered", () => {
     const el2 = document.createElement("div");
     deps.dom.items.appendChild(el1);
     deps.dom.items.appendChild(el2);
-    deps.rendered.set(0, el1);
-    deps.rendered.set(1, el2);
+    deps.rendered.set(0, tracked(el1));
+    deps.rendered.set(1, tracked(el2));
 
     ctx.invalidateRendered();
 
@@ -789,7 +802,7 @@ describe("createMaterializeCtx - invalidateRendered", () => {
     const el = deps.pool.acquire();
     el.textContent = "test";
     deps.dom.items.appendChild(el);
-    deps.rendered.set(0, el);
+    deps.rendered.set(0, tracked(el));
 
     ctx.invalidateRendered();
 

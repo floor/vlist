@@ -1318,7 +1318,12 @@ describe("performance — virtualization bounds", () => {
     }
 
     const renderedCount = getRenderedIndices(list).length;
-    expect(renderedCount).toBeLessThan(20);
+    // Release grace period (RELEASE_GRACE = 2) keeps items from the last
+    // 2 render cycles briefly in the DOM to prevent hover blink and CSS
+    // transition replays, so the bound is higher than without grace.
+    // With height=50, container=400px: ~14 items per range + up to ~20
+    // grace-period items from the previous 2 frames = ~34 max.
+    expect(renderedCount).toBeLessThan(40);
     expect(renderedCount).toBeGreaterThan(0);
 
     list.destroy();
