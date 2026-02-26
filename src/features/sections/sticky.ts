@@ -136,24 +136,29 @@ export const createStickyHeader = (
       return;
     }
 
-    // Find which group header is at or above the current scroll position.
-    // Walk backward from the last group whose header offset <= scrollPosition.
-    let activeGroupIdx = 0;
-
-    for (let i = groups.length - 1; i >= 0; i--) {
-      const headerOffset = sizeCache.getOffset(groups[i]!.headerLayoutIndex);
-      if (headerOffset <= scrollPosition) {
-        activeGroupIdx = i;
-        break;
-      }
-    }
-
-    // Edge case: if scrollPosition is before the first header, show the first group
+    // Edge case: if scrollPosition is before the first header, hide
     const firstHeaderOffset = sizeCache.getOffset(groups[0]!.headerLayoutIndex);
     if (scrollPosition < firstHeaderOffset) {
       hide();
       return;
     }
+
+    // Binary search: find the last group whose header offset <= scrollPosition.
+    // Groups are sorted by headerLayoutIndex, and sizeCache.getOffset is
+    // monotonically increasing, so offsets are sorted too — O(log g).
+    let lo = 0;
+    let hi = groups.length - 1;
+
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (sizeCache.getOffset(groups[mid]!.headerLayoutIndex) <= scrollPosition) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    const activeGroupIdx = lo;
 
     // Show the sticky header for the active group
     if (!isVisible) {

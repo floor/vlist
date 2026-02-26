@@ -166,7 +166,15 @@ describe("renderer getElement and pool stats", () => {
     renderer.render(items.slice(0, 10), { start: 0, end: 9 }, new Set(), -1);
     expect(renderer.getElement(0)).toBeTruthy();
 
-    // Render second batch (item 0 is out of range and should be released)
+    // Render second batch — item 0 leaves the range but is kept alive by
+    // the release grace period (RELEASE_GRACE = 2 frames).
+    renderer.render(items.slice(10, 20), { start: 10, end: 19 }, new Set(), -1);
+    expect(renderer.getElement(0)).toBeTruthy(); // still alive (grace frame 1)
+    expect(renderer.getElement(10)).toBeTruthy();
+
+    // Flush grace period: 2 more render calls advance the frame counter
+    // past the grace threshold so item 0 is finally released.
+    renderer.render(items.slice(10, 20), { start: 10, end: 19 }, new Set(), -1);
     renderer.render(items.slice(10, 20), { start: 10, end: 19 }, new Set(), -1);
     expect(renderer.getElement(0)).toBeUndefined();
     expect(renderer.getElement(10)).toBeTruthy();
