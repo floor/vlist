@@ -190,6 +190,25 @@ const simulateScroll = (
   viewport.dispatchEvent(new dom.window.Event("scroll"));
 };
 
+/**
+ * Advance the builder core's frame counter past the release grace period
+ * (RELEASE_GRACE = 2) by dispatching multiple scroll events at slightly
+ * different positions. Items that left the render range are kept alive for
+ * 2 extra render cycles — this helper flushes that window so tests can
+ * assert exact rendered ranges.
+ *
+ * Uses 1px nudges so the early-exit guard (unchanged scroll position)
+ * doesn't skip the render.
+ */
+const flushGraceViaScroll = (
+  list: BuiltVList<TestItem>,
+  scrollTop: number,
+): void => {
+  simulateScroll(list, scrollTop + 1);
+  simulateScroll(list, scrollTop + 2);
+  simulateScroll(list, scrollTop + 3);
+};
+
 /** Create a mock async adapter that resolves immediately */
 const createMockAdapter = (totalItems: number): VListAdapter<TestItem> => ({
   read: mock(async ({ offset, limit }) => {
@@ -502,8 +521,11 @@ describe("builder core", () => {
     const indicesBefore = getRenderedIndices(list);
     const maxBefore = Math.max(...indicesBefore);
 
-    // Scroll far enough to see different items
+    // Scroll far enough to see different items.
+    // Multiple scroll events advance the frame counter past the release
+    // grace period (RELEASE_GRACE = 2) so old items are flushed from DOM.
     simulateScroll(list, 4000);
+    flushGraceViaScroll(list, 4000);
 
     const indicesAfter = getRenderedIndices(list);
     const minAfter = Math.min(...indicesAfter);
@@ -1068,6 +1090,10 @@ describe("withScale plugin", () => {
 
     const targetIndex = 250_000;
     list.scrollToIndex(targetIndex, "center");
+    // Flush release grace period — scrollToIndex triggers one render via
+    // the scale feature's wrapped $.sst, but old items persist for 2 extra
+    // frames. Nudge scroll position to advance past the grace window.
+    flushGraceViaScroll(list, list.getScrollPosition());
 
     const indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
@@ -1090,6 +1116,7 @@ describe("withScale plugin", () => {
       .build();
 
     list.scrollToIndex(499_999, "end");
+    flushGraceViaScroll(list, list.getScrollPosition());
 
     const indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
@@ -1166,6 +1193,7 @@ describe("withScale plugin", () => {
     // Scroll to middle - this should trigger range updates
     const targetIndex = 250_000;
     list.scrollToIndex(targetIndex, "center");
+    flushGraceViaScroll(list, list.getScrollPosition());
 
     // Range change event should have fired
     expect(rangeChanged).toBe(true);
@@ -1391,6 +1419,7 @@ describe("plugin combinations", () => {
     // - Viewport state is synced (needed for compression calculations)
     // - Scrollbar bounds are correct (thumb position calculated from bounds)
     list.scrollToIndex(250_000, "center");
+    flushGraceViaScroll(list, list.getScrollPosition());
 
     // Should render items near middle (not stuck at top)
     indices = getRenderedIndices(list);
