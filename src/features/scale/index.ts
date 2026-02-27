@@ -7,6 +7,7 @@
  */
 
 export {
+  MAX_VIRTUAL_SIZE,
   MAX_VIRTUAL_HEIGHT,
   getCompressionState,
   needsCompression,

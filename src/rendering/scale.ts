@@ -1,13 +1,13 @@
 /**
  * vlist - Compression Module
- * Pure functions for handling large lists that exceed browser height limits
+ * Pure functions for handling large lists that exceed browser size limits
  *
- * When a list's total height (totalItems × itemHeight) exceeds the browser's
- * maximum element height (~16.7M pixels), we "compress" the virtual scroll space.
+ * When a list's total size (sum of all item sizes) exceeds the browser's
+ * maximum element size (~16.7M pixels), we "compress" the virtual scroll space.
  *
  * Key concepts:
- * - actualSize: The true height if all items were rendered
- * - virtualSize: The capped height used for the scroll container (≤ MAX_VIRTUAL_HEIGHT)
+ * - actualSize: The true size if all items were rendered
+ * - virtualSize: The capped size used for the scroll container (≤ MAX_VIRTUAL_SIZE)
  * - compressionRatio: virtualSize / actualSize (1 = no compression, <1 = compressed)
  *
  * When compressed:
@@ -17,7 +17,7 @@
  */
 
 import type { Range } from "../types";
-import { MAX_VIRTUAL_HEIGHT } from "../constants";
+import { MAX_VIRTUAL_SIZE } from "../constants";
 import type { SizeCache } from "./sizes";
 import {
   countVisibleItems,
@@ -26,7 +26,10 @@ import {
 } from "./sizes";
 
 // Re-export for convenience
-export { MAX_VIRTUAL_HEIGHT };
+export { MAX_VIRTUAL_SIZE };
+
+/** @deprecated Use MAX_VIRTUAL_SIZE instead */
+export const MAX_VIRTUAL_HEIGHT = MAX_VIRTUAL_SIZE;
 
 // =============================================================================
 // Compression State
@@ -37,10 +40,10 @@ export interface CompressionState {
   /** Whether compression is active */
   isCompressed: boolean;
 
-  /** The actual total height */
+  /** The actual total size (uncompressed) */
   actualSize: number;
 
-  /** The virtual height (capped at MAX_VIRTUAL_HEIGHT) */
+  /** The virtual size (capped at MAX_VIRTUAL_SIZE) */
   virtualSize: number;
 
   /** Compression ratio (1 = no compression, <1 = compressed) */
@@ -56,8 +59,8 @@ export const getCompressionState = (
   sizeCache: SizeCache,
 ): CompressionState => {
   const actualSize = sizeCache.getTotalSize();
-  const isCompressed = actualSize > MAX_VIRTUAL_HEIGHT;
-  const virtualSize = isCompressed ? MAX_VIRTUAL_HEIGHT : actualSize;
+  const isCompressed = actualSize > MAX_VIRTUAL_SIZE;
+  const virtualSize = isCompressed ? MAX_VIRTUAL_SIZE : actualSize;
   const ratio = actualSize > 0 ? virtualSize / actualSize : 1;
 
   return {
@@ -369,9 +372,9 @@ export const needsCompression = (
   heightOrCache: number | SizeCache,
 ): boolean => {
   if (typeof heightOrCache === "number") {
-    return totalItems * heightOrCache > MAX_VIRTUAL_HEIGHT;
+    return totalItems * heightOrCache > MAX_VIRTUAL_SIZE;
   }
-  return heightOrCache.getTotalSize() > MAX_VIRTUAL_HEIGHT;
+  return heightOrCache.getTotalSize() > MAX_VIRTUAL_SIZE;
 };
 
 /**
@@ -381,7 +384,7 @@ export const needsCompression = (
  */
 export const getMaxItemsWithoutCompression = (itemSize: number): number => {
   if (itemSize <= 0) return 0;
-  return Math.floor(MAX_VIRTUAL_HEIGHT / itemSize);
+  return Math.floor(MAX_VIRTUAL_SIZE / itemSize);
 };
 
 /**

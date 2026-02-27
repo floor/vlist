@@ -34,7 +34,7 @@ export const DEFAULT_PAGE_SIZE = 50;
  * Velocity threshold above which data loading is cancelled (px/ms)
  * When scrolling faster than this, we skip loading data since the user
  * is likely scrolling quickly past content they don't want to see.
- * Default: 25 px/ms (same as mtrl-addons viewport)
+ * Default: 5 px/ms
  */
 export const CANCEL_LOAD_VELOCITY_THRESHOLD = 5;
 
@@ -59,10 +59,13 @@ export const PRELOAD_ITEMS_AHEAD = 50;
 // =============================================================================
 
 /**
- * Maximum virtual height in pixels
+ * Maximum virtual size in pixels along the main axis
  * Most browsers support ~16.7M pixels, we use 16M for safety margin
  */
-export const MAX_VIRTUAL_HEIGHT = 16_000_000;
+export const MAX_VIRTUAL_SIZE = 16_000_000;
+
+/** @deprecated Use MAX_VIRTUAL_SIZE instead */
+export const MAX_VIRTUAL_HEIGHT = MAX_VIRTUAL_SIZE;
 
 // =============================================================================
 // Scrollbar

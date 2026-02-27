@@ -55,7 +55,7 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
 
   /** Loading behavior configuration */
   loading?: {
-    /** Velocity threshold above which data loading is skipped (px/ms). Default: 25 */
+    /** Velocity threshold above which data loading is skipped (px/ms). Default: 5 */
     cancelThreshold?: number;
 
     /** Velocity threshold for preloading (px/ms). Default: 2 */

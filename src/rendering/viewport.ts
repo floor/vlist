@@ -27,7 +27,7 @@ export interface CompressionState {
   /** The actual total size (uncompressed) */
   actualSize: number;
 
-  /** The virtual size (capped at MAX_VIRTUAL_HEIGHT) */
+  /** The virtual size (capped at MAX_VIRTUAL_SIZE) */
   virtualSize: number;
 
   /** Compression ratio (1 = no compression, <1 = compressed) */

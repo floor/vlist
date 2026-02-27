@@ -96,8 +96,8 @@ export interface MasonryConfig {
 // =============================================================================
 
 /** Item-specific configuration */
-/** Context provided to height function in grid mode */
-export interface GridHeightContext {
+/** Context provided to size function in grid mode */
+export interface GridSizeContext {
   /** Current container width */
   containerWidth: number;
   /** Number of columns */
@@ -108,16 +108,19 @@ export interface GridHeightContext {
   columnWidth: number;
 }
 
+/** @deprecated Use GridSizeContext instead */
+export type GridHeightContext = GridSizeContext;
+
 export interface ItemConfig<T extends VListItem = VListItem> {
   /**
-   * Item height in pixels (required for vertical scrolling, cross-axis size for horizontal)
+   * Item size in pixels along the main axis (required for vertical scrolling, cross-axis size for horizontal)
    *
-   * - `number` — Fixed height for all items (fast path, zero overhead)
-   * - `(index: number) => number` — Variable height per item (prefix-sum based lookups)
-   * - `(index: number, context?: GridHeightContext) => number` — Dynamic height based on grid state
+   * - `number` — Fixed size for all items (fast path, zero overhead)
+   * - `(index: number) => number` — Variable size per item (prefix-sum based lookups)
+   * - `(index: number, context?: GridSizeContext) => number` — Dynamic size based on grid state
    *
-   * In grid mode, the height function receives grid context as a second parameter,
-   * allowing you to calculate height based on column width to maintain aspect ratios:
+   * In grid mode, the size function receives grid context as a second parameter,
+   * allowing you to calculate size based on column width to maintain aspect ratios:
    *
    * ```ts
    * height: (index, context) => {
@@ -131,7 +134,7 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    * Required when `orientation` is `'vertical'` (default).
    * Optional when `orientation` is `'horizontal'` (used as cross-axis size).
    */
-  height?: number | ((index: number, context?: GridHeightContext) => number);
+  height?: number | ((index: number, context?: GridSizeContext) => number);
 
   /**
    * Item width in pixels (required for horizontal scrolling)
