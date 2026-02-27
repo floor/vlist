@@ -28,7 +28,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../../src/builder/core";
-import type { BuiltVList } from "../../../src/builder/types";
+import type { VList } from "../../../src/builder/types";
 import type { VListItem } from "../../../src/types";
 import { withScale } from "../../../src/features/scale/feature";
 
@@ -272,14 +272,14 @@ const createContainer = (): HTMLElement => {
 };
 
 /** Get the viewport element from a built list. */
-const getViewport = (list: BuiltVList<TestItem>): HTMLElement => {
+const getViewport = (list: VList<TestItem>): HTMLElement => {
   const vp = list.element.querySelector(".vlist-viewport") as HTMLElement;
   if (!vp) throw new Error("Viewport element not found");
   return vp;
 };
 
 /** Collect rendered data-index values from a list's DOM. */
-const getRenderedIndices = (list: BuiltVList<TestItem>): number[] => {
+const getRenderedIndices = (list: VList<TestItem>): number[] => {
   const elements = list.element.querySelectorAll("[data-index]");
   return Array.from(elements).map((el) =>
     parseInt((el as HTMLElement).dataset.index!, 10),
@@ -356,7 +356,7 @@ const simulateHorizontalTouchDrag = (
 
 describe("withScale touch scrolling", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();

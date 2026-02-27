@@ -29,7 +29,7 @@ import type { ScrollController } from "../features/scrollbar/controller";
 import type { Emitter } from "../events";
 
 // =============================================================================
-// Builder Configuration (subset of VListConfig without feature-specific options)
+// Builder Configuration
 // =============================================================================
 
 /** Configuration accepted by the builder's vlist() factory */
@@ -354,15 +354,22 @@ export interface VListBuilder<T extends VListItem = VListItem> {
   use(feature: VListFeature<T>): VListBuilder<T>;
 
   /** Materialize the virtual list. Creates DOM, initializes features, returns API. */
-  build(): BuiltVList<T>;
+  build(): VList<T>;
 }
 
 // =============================================================================
-// BuiltVList — the return type from .build()
+// VList — the return type from .build()
 // =============================================================================
 
-/** Base API always available from builder (data methods, scroll methods, events, lifecycle) */
-export interface BuiltVList<T extends VListItem = VListItem> {
+/**
+ * VList instance API — returned by `vlist(config).build()`.
+ *
+ * Always-available methods (data, scroll, events, lifecycle) are required.
+ * Feature methods (selection, snapshots, grid, etc.) are optional —
+ * they exist on the instance only when the corresponding feature is
+ * registered via `.use()`.
+ */
+export interface VList<T extends VListItem = VListItem> {
   /** The root DOM element */
   readonly element: HTMLElement;
 
