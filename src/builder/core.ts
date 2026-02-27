@@ -29,7 +29,7 @@ import type {
   ResolvedBuilderConfig,
   VListFeature,
   VListBuilder,
-  BuiltVList,
+  VList,
 } from "./types";
 
 // Re-export CompressionState type from viewport for features that need it
@@ -143,7 +143,7 @@ export const vlist = <T extends VListItem = VListItem>(
       return builder;
     },
 
-    build(): BuiltVList<T> {
+    build(): VList<T> {
       if (built) {
         throw new Error("[vlist/builder] .build() can only be called once");
       }
@@ -171,7 +171,7 @@ function materialize<T extends VListItem = VListItem>(
   isHorizontal: boolean,
   mainAxisValue: number | ((index: number) => number) | null,
   estimatedSizeValue: number | null,
-): BuiltVList<T> {
+): VList<T> {
   // ── Resolve config ──────────────────────────────────────────────
   const {
     item: itemConfig,
@@ -1274,7 +1274,7 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Assemble public API ─────────────────────────────────────────
 
-  const api: BuiltVList<T> = {
+  const api: VList<T> = {
     get element() {
       return dom.root;
     },

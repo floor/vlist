@@ -25,7 +25,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
-import type { BuiltVList } from "../../src/builder/types";
+import type { VList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
 import { withSelection } from "../../src/features/selection/feature";
 import { withScrollbar } from "../../src/features/scrollbar/feature";
@@ -175,7 +175,7 @@ const createContainer = (): HTMLElement => {
   return container;
 };
 
-const simulateScroll = (list: BuiltVList<any>, scrollTop: number): void => {
+const simulateScroll = (list: VList<any>, scrollTop: number): void => {
   const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
   if (!viewport) return;
   viewport.scrollTop = scrollTop;

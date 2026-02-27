@@ -30,7 +30,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
-import type { BuiltVList } from "../../src/builder/types";
+import type { VList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
 import { withSelection } from "../../src/features/selection/feature";
 import { withScrollbar } from "../../src/features/scrollbar/feature";
@@ -168,7 +168,7 @@ const createContainer = (): HTMLElement => {
 };
 
 /** Collect rendered data-index values from a list's DOM */
-const getRenderedIndices = (list: BuiltVList<TestItem>): number[] => {
+const getRenderedIndices = (list: VList<TestItem>): number[] => {
   const elements = list.element.querySelectorAll("[data-index]");
   return Array.from(elements).map((el) =>
     parseInt((el as HTMLElement).dataset.index!, 10),
@@ -181,7 +181,7 @@ const getRenderedIndices = (list: BuiltVList<TestItem>): number[] => {
  * programmatically, so we must dispatch manually.
  */
 const simulateScroll = (
-  list: BuiltVList<TestItem>,
+  list: VList<TestItem>,
   scrollTop: number,
 ): void => {
   const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
@@ -201,7 +201,7 @@ const simulateScroll = (
  * doesn't skip the render.
  */
 const flushGraceViaScroll = (
-  list: BuiltVList<TestItem>,
+  list: VList<TestItem>,
   scrollTop: number,
 ): void => {
   simulateScroll(list, scrollTop + 1);
@@ -230,7 +230,7 @@ const flush = () => new Promise<void>((r) => setTimeout(r, 10));
 
 describe("builder core", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -660,7 +660,7 @@ describe("builder validation", () => {
 
 describe("withSelection plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -814,7 +814,7 @@ describe("withSelection plugin", () => {
 
 describe("withScrollbar plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -895,7 +895,7 @@ describe("withScrollbar plugin", () => {
 
 describe("withAsync plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1015,7 +1015,7 @@ describe("withAsync plugin", () => {
 
 describe("withScale plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1260,7 +1260,7 @@ describe("withScale plugin", () => {
 
 describe("withSnapshots plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1332,7 +1332,7 @@ describe("withSnapshots plugin", () => {
 
 describe("plugin combinations", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1568,7 +1568,7 @@ describe("plugin combinations", () => {
 
 describe("builder reverse mode", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1620,7 +1620,7 @@ describe("builder reverse mode", () => {
 
 describe("builder scroll config", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1686,7 +1686,7 @@ describe("builder scroll config", () => {
 
 describe("builder horizontal mode", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1731,7 +1731,7 @@ describe("builder horizontal mode", () => {
 
 describe("withGrid plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -2258,7 +2258,7 @@ describe("withGrid plugin", () => {
 
 describe("withGrid plugin combinations", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -2516,7 +2516,7 @@ const headerTemplate = (key: string, _groupIndex: number): HTMLElement => {
 
 describe("withSections plugin", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -3171,7 +3171,7 @@ describe("withSections plugin", () => {
 
 describe("withSections plugin combinations", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -3357,7 +3357,7 @@ describe("withSections plugin combinations", () => {
 
 describe("withSections layout logic", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -3501,7 +3501,7 @@ describe("withSections layout logic", () => {
 
 describe("withSections sticky header behavior", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -3653,7 +3653,7 @@ describe("withSections sticky header behavior", () => {
 
 describe("withSections template rendering", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -3789,7 +3789,7 @@ describe("withSections template rendering", () => {
 
 describe("withSections scroll behavior", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem> | null = null;
+  let list: VList<GroupedTestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4076,7 +4076,7 @@ describe("withSections destroy behavior", () => {
 
 describe("withAsync plugin velocity-aware loading", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4393,7 +4393,7 @@ describe("withAsync plugin velocity-aware loading", () => {
 
 describe("builder core edge cases", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4535,7 +4535,7 @@ describe("builder core edge cases", () => {
 
 describe("builder core reverse mode data operations", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4641,7 +4641,7 @@ describe("builder core reverse mode data operations", () => {
 
 describe("withGrid plugin additional coverage", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4745,7 +4745,7 @@ describe("withGrid plugin additional coverage", () => {
 
 describe("withScrollbar plugin additional coverage", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -4821,7 +4821,7 @@ describe("withScrollbar plugin additional coverage", () => {
 
 describe("withSnapshots plugin compression mode", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5064,7 +5064,7 @@ describe("withSnapshots plugin compression mode", () => {
 
 describe("builder core event handling", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5170,7 +5170,7 @@ describe("builder core event handling", () => {
 
 describe("builder core scroll methods", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5266,7 +5266,7 @@ describe("builder core scroll methods", () => {
 
 describe("withScale plugin additional coverage", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5401,7 +5401,7 @@ describe("withScale plugin additional coverage", () => {
 
 describe("withAsync plugin reverse mode", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5458,7 +5458,7 @@ describe("withAsync plugin reverse mode", () => {
 
 describe("withSelection plugin edge cases", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -5587,7 +5587,7 @@ describe("withSelection plugin edge cases", () => {
 
 describe("withSelection plugin keyboard navigation", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
