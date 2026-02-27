@@ -23,8 +23,6 @@ export { withSnapshots } from "./features/snapshots";
 // Core Types
 export type {
   // Core types
-  VList,
-  VListConfig,
   VListItem,
   VListEvents,
 
@@ -63,7 +61,7 @@ export type {
 // Builder types
 export type {
   VListBuilder,
-  BuiltVList,
+  VList,
   BuilderConfig,
   VListFeature,
   BuilderContext,

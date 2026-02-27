@@ -16,7 +16,7 @@ import { JSDOM } from "jsdom";
 import { vlist } from "../../../src/builder/core";
 import { withAsync } from "../../../src/features/async/feature";
 import type { VListItem, VListAdapter } from "../../../src/types";
-import type { BuiltVList } from "../../../src/builder/types";
+import type { VList } from "../../../src/builder/types";
 
 // =============================================================================
 // JSDOM Setup
@@ -153,7 +153,7 @@ async function waitForAsync(ms: number = 100): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function simulateScroll(list: BuiltVList<TestItem>, scrollTop: number): void {
+function simulateScroll(list: VList<TestItem>, scrollTop: number): void {
   const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
   if (viewport) {
     viewport.scrollTop = scrollTop;
@@ -167,7 +167,7 @@ function simulateScroll(list: BuiltVList<TestItem>, scrollTop: number): void {
 
 describe("Async Adapter: Loading State Transitions", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -267,7 +267,7 @@ describe("Async Adapter: Loading State Transitions", () => {
 
 describe("Async Adapter: Error Recovery", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
   let consoleErrorSpy: any;
 
   beforeEach(() => {
@@ -360,7 +360,7 @@ describe("Async Adapter: Error Recovery", () => {
 
 describe("Async Adapter: Race Conditions", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -448,7 +448,7 @@ describe("Async Adapter: Race Conditions", () => {
 
 describe("Async Adapter: Loading Transitions", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -521,7 +521,7 @@ describe("Async Adapter: Loading Transitions", () => {
 
 describe("Async Adapter: Memory Management", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -622,7 +622,7 @@ describe("Async Adapter: Memory Management", () => {
 
 describe("Async Adapter: Edge Cases", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
