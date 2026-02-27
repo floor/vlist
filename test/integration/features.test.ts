@@ -27,7 +27,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
-import type { BuiltVList } from "../../src/builder/types";
+import type { VList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
 import { withSelection } from "../../src/features/selection/feature";
 import { withScrollbar } from "../../src/features/scrollbar/feature";
@@ -178,14 +178,14 @@ const createContainer = (): HTMLElement => {
   return container;
 };
 
-const getRenderedIndices = (list: BuiltVList<any>): number[] => {
+const getRenderedIndices = (list: VList<any>): number[] => {
   const elements = list.element.querySelectorAll("[data-index]");
   return Array.from(elements).map((el) =>
     parseInt((el as HTMLElement).dataset.index!, 10),
   );
 };
 
-const simulateScroll = (list: BuiltVList<any>, scrollTop: number): void => {
+const simulateScroll = (list: VList<any>, scrollTop: number): void => {
   const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
   if (!viewport) return;
   viewport.scrollTop = scrollTop;
@@ -220,7 +220,7 @@ const createGroupedItems = (count: number): GroupedTestItem[] => {
 
 describe("integration — double-click events", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -354,7 +354,7 @@ describe("integration — double-click events", () => {
 
 describe("integration — horizontal mode", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -442,7 +442,7 @@ describe("integration — horizontal mode", () => {
 
 describe("integration — wrap mode scrollToIndex", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -680,7 +680,7 @@ describe("integration — feature conflict detection", () => {
 
 describe("integration — group header click skip", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem>;
+  let list: VList<GroupedTestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -818,7 +818,7 @@ describe("integration — group header click skip", () => {
 
 describe("integration — scrollbar content size updates", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -902,7 +902,7 @@ describe("integration — scrollbar content size updates", () => {
 
 describe("integration — scroll config wheel disabled", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -947,7 +947,7 @@ describe("integration — scroll config wheel disabled", () => {
 
 describe("integration — scroll idle detection", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1147,7 +1147,7 @@ describe("integration — cross-feature destroy ordering", () => {
 
 describe("integration — async + snapshots", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1202,7 +1202,7 @@ describe("integration — async + snapshots", () => {
 
 describe("integration — async + selection", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1283,7 +1283,7 @@ describe("integration — async + selection", () => {
 
 describe("integration — grid + selection", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1369,7 +1369,7 @@ describe("integration — grid + selection", () => {
 
 describe("integration — reverse + selection", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1420,7 +1420,7 @@ describe("integration — reverse + selection", () => {
 
 describe("integration — reverse + snapshots", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1473,7 +1473,7 @@ describe("integration — reverse + snapshots", () => {
 
 describe("integration — scale + selection", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1525,7 +1525,7 @@ describe("integration — scale + selection", () => {
 
 describe("integration — scale + scrollbar + snapshots", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1586,7 +1586,7 @@ describe("integration — scale + scrollbar + snapshots", () => {
 
 describe("integration — event subscription edge cases", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1683,7 +1683,7 @@ describe("integration — event subscription edge cases", () => {
 
 describe("integration — sections + grid combined", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem>;
+  let list: VList<GroupedTestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1791,7 +1791,7 @@ describe("integration — sections + grid combined", () => {
 
 describe("integration — sections sticky header scroll", () => {
   let container: HTMLElement;
-  let list: BuiltVList<GroupedTestItem>;
+  let list: VList<GroupedTestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1862,7 +1862,7 @@ describe("integration — sections sticky header scroll", () => {
 
 describe("integration — data operations with features", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -1985,7 +1985,7 @@ describe("integration — data operations with features", () => {
 
 describe("integration — reverse mode data operations with features", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2042,7 +2042,7 @@ describe("integration — reverse mode data operations with features", () => {
 
 describe("integration — custom class prefix with features", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2103,7 +2103,7 @@ describe("integration — custom class prefix with features", () => {
 
 describe("integration — async + grid", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2159,7 +2159,7 @@ describe("integration — async + grid", () => {
 
 describe("integration — velocity events with compression", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2217,7 +2217,7 @@ describe("integration — velocity events with compression", () => {
 
 describe("integration — ARIA attributes with features", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2299,7 +2299,7 @@ describe("integration — ARIA attributes with features", () => {
 
 describe("integration — scroll config scrollbar none", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2330,7 +2330,7 @@ describe("integration — scroll config scrollbar none", () => {
 
 describe("integration — grid with variable height", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
@@ -2380,7 +2380,7 @@ describe("integration — grid with variable height", () => {
 
 describe("integration — concurrent operations", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem>;
+  let list: VList<TestItem>;
 
   beforeEach(() => {
     container = createContainer();
