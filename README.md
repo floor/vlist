@@ -9,7 +9,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **8–12 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~8 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, sections, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -19,13 +19,14 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 **30+ interactive examples → [vlist.dev](https://vlist.dev)**
 
-## v1.0.0 Highlights
+## Highlights
 
-- 🧱 **Masonry layout** — Pinterest-style shortest-lane placement via `withMasonry()`
-- ⚡ **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
-- ✨ **Dimension-agnostic API** — semantically correct terminology for both orientations
-- 🎯 **Horizontal sections** — sticky headers work in horizontal carousels
-- 🎨 **Horizontal grid layouts** — 2D grids work in both orientations
+
+- **Dimension-agnostic API** — semantically correct terminology for both orientations
+- **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
+- **Horizontal sections** — sticky headers work in horizontal carousels
+- **Horizontal grid layouts** — 2D grids work in both orientations
+- **Masonry** — shortest-lane placement via `withMasonry()`
 
 ## Installation
 
@@ -79,20 +80,20 @@ const list = vlist({
   .build()
 ```
 
-### Plugins
+### Features
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 7.7 KB | Core virtualization |
-| `withGrid()` | +4.0 KB | 2D grid layout |
-| `withMasonry()` | +2.9 KB | Pinterest-style masonry layout |
-| `withSections()` | +4.6 KB | Grouped lists with sticky/inline headers |
-| `withAsync()` | +5.3 KB | Lazy loading with adapters |
-| `withSelection()` | +2.3 KB | Single/multiple selection + keyboard nav |
-| `withScale()` | +2.2 KB | 1M+ items via scroll compression |
-| `withScrollbar()` | +1.0 KB | Custom scrollbar UI |
-| `withPage()` | +0.9 KB | Document-level scrolling |
-| `withSnapshots()` | included | Scroll save/restore |
+| **Base** | 8.1 KB | Core virtualization |
+| `withGrid()` | +3.8 KB | 2D grid layout |
+| `withMasonry()` | +2.3 KB | Pinterest-style masonry layout |
+| `withSections()` | +4.1 KB | Grouped lists with sticky/inline headers |
+| `withAsync()` | +3.9 KB | Lazy loading with adapters |
+| `withSelection()` | +1.6 KB | Single/multiple selection + keyboard nav |
+| `withScale()` | +2.6 KB | 1M+ items via scroll compression |
+| `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
+| `withPage()` | +0.4 KB | Document-level scrolling |
+| `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
 ## Examples
 
@@ -190,7 +191,7 @@ See **[vlist.dev](https://vlist.dev)** for live demos of each.
 ## API
 
 ```typescript
-const list = vlist(config).use(...plugins).build()
+const list = vlist(config).use(...features).build()
 ```
 
 ### Data
@@ -212,7 +213,11 @@ const list = vlist(config).use(...plugins).build()
 | `list.scrollToIndex(i, opts?)` | With `{ align, behavior: 'smooth', duration }` |
 | `list.cancelScroll()` | Cancel smooth scroll animation |
 | `list.getScrollPosition()` | Current scroll offset |
-| `list.getVisibleRange()` | `{ start, end }` of visible indices |
+
+### Snapshots (with `withSnapshots()`)
+
+| Method | Description |
+|--------|-------------|
 | `list.getScrollSnapshot()` | Save scroll state (for SPA navigation) |
 | `list.restoreScroll(snapshot)` | Restore saved scroll state |
 
@@ -220,11 +225,11 @@ const list = vlist(config).use(...plugins).build()
 
 | Method | Description |
 |--------|-------------|
-| `list.selectItem(id)` | Select item |
-| `list.deselectItem(id)` | Deselect item |
-| `list.toggleSelection(id)` | Toggle |
+| `list.select(...ids)` | Select item(s) |
+| `list.deselect(...ids)` | Deselect item(s) |
+| `list.toggleSelect(id)` | Toggle |
 | `list.selectAll()` / `list.clearSelection()` | Bulk operations |
-| `list.getSelectedIds()` | Array of selected IDs |
+| `list.getSelected()` | Array of selected IDs |
 | `list.getSelectedItems()` | Array of selected items |
 
 ### Grid (with `withGrid()`)
@@ -263,9 +268,9 @@ list.on('velocity:change', ({ velocity, reliable }) => {})
 list.destroy()
 ```
 
-## Plugin Configuration
+## Feature Configuration
 
-Each plugin's config is fully typed — hover in your IDE for details.
+Each feature's config is fully typed — hover in your IDE for details.
 
 ```typescript
 withGrid({ columns: 4, gap: 16 })
@@ -288,9 +293,10 @@ Full configuration reference → **[vlist.dev](https://vlist.dev)**
 | React | [`vlist-react`](https://github.com/floor/vlist-react) | 0.6 KB gzip |
 | Vue | [`vlist-vue`](https://github.com/floor/vlist-vue) | 0.6 KB gzip |
 | Svelte | [`vlist-svelte`](https://github.com/floor/vlist-svelte) | 0.5 KB gzip |
+| SolidJS | [`vlist-solidjs`](https://github.com/floor/vlist-solidjs) | 0.5 KB gzip |
 
 ```bash
-npm install @floor/vlist vlist-react   # or vlist-vue / vlist-svelte
+npm install @floor/vlist vlist-react   # or vlist-vue / vlist-svelte / vlist-solidjs
 ```
 
 Each adapter README has setup examples and API docs.
@@ -331,11 +337,10 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 7.7 KB |
-| + Grid | 11.7 KB |
-| + Sections | 12.3 KB |
-| + Async | 13.5 KB |
-| All plugins | ~16 KB |
+| Base only | 8.1 KB |
+| + Grid | 11.9 KB |
+| + Sections | 12.2 KB |
+| + Async | 12.0 KB |
 
 ### Memory Efficiency
 

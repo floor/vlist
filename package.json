@@ -52,6 +52,7 @@
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "size": "bun run scripts/measure-size.ts",
     "prepublishOnly": "bun run build --types"
   },
   "bugs": {
