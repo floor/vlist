@@ -23,7 +23,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
-import type { BuiltVList } from "../../src/builder/types";
+import type { VList } from "../../src/builder/types";
 import type { VListItem } from "../../src/types";
 
 // =============================================================================
@@ -208,7 +208,7 @@ const createContainer = (): HTMLElement => {
   return container;
 };
 
-const getRenderedIndices = (list: BuiltVList<TestItem>): number[] => {
+const getRenderedIndices = (list: VList<TestItem>): number[] => {
   const elements = list.element.querySelectorAll("[data-index]");
   return Array.from(elements).map((el) =>
     parseInt((el as HTMLElement).dataset.index!, 10),
@@ -216,7 +216,7 @@ const getRenderedIndices = (list: BuiltVList<TestItem>): number[] => {
 };
 
 const getRenderedElements = (
-  list: BuiltVList<TestItem>,
+  list: VList<TestItem>,
 ): Map<number, HTMLElement> => {
   const map = new Map<number, HTMLElement>();
   const elements = list.element.querySelectorAll("[data-index]");
@@ -227,14 +227,14 @@ const getRenderedElements = (
   return map;
 };
 
-const getContentElement = (list: BuiltVList<TestItem>): HTMLElement =>
+const getContentElement = (list: VList<TestItem>): HTMLElement =>
   list.element.querySelector(".vlist-content") as HTMLElement;
 
-const getViewportElement = (list: BuiltVList<TestItem>): HTMLElement =>
+const getViewportElement = (list: VList<TestItem>): HTMLElement =>
   list.element.querySelector(".vlist-viewport") as HTMLElement;
 
 const simulateScroll = (
-  list: BuiltVList<TestItem>,
+  list: VList<TestItem>,
   scrollTop: number,
 ): void => {
   const viewport = getViewportElement(list);
@@ -249,7 +249,7 @@ const simulateScroll = (
 
 describe("Mode B: estimatedHeight config", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -439,7 +439,7 @@ describe("Mode B: estimatedHeight config", () => {
 
 describe("Mode B: scroll correction (Direction C)", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -546,7 +546,7 @@ describe("Mode B: scroll correction (Direction C)", () => {
 
 describe("Mode B: content size", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -623,7 +623,7 @@ describe("Mode B: content size", () => {
 
 describe("Mode B: horizontal mode (estimatedWidth)", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -748,7 +748,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
 
 describe("Mode B: config precedence and validation", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -842,7 +842,7 @@ describe("Mode B: config precedence and validation", () => {
 
 describe("Mode B: scrollToIndex", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -917,7 +917,7 @@ describe("Mode B: scrollToIndex", () => {
 
 describe("Mode B: variable measured sizes", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1036,7 +1036,7 @@ describe("Mode B: variable measured sizes", () => {
 
 describe("Mode B: ARIA attributes", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();
@@ -1086,7 +1086,7 @@ describe("Mode B: ARIA attributes", () => {
 
 describe("Mode B: interaction with scroll events", () => {
   let container: HTMLElement;
-  let list: BuiltVList<TestItem> | null = null;
+  let list: VList<TestItem> | null = null;
 
   beforeEach(() => {
     container = createContainer();

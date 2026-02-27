@@ -28,7 +28,7 @@ export { vlist } from "./core";
 export type {
   // Builder API
   VListBuilder,
-  BuiltVList,
+  VList,
   BuilderConfig,
 
   // Feature system
