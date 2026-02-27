@@ -56,6 +56,10 @@ export type {
   // Events
   EventHandler,
   Unsubscribe,
+
+  // Grid (axis-neutral name + deprecated alias)
+  GridSizeContext,
+  GridHeightContext,
 } from "./types";
 
 // Builder types
@@ -125,6 +129,7 @@ export {
   getRangeCount,
   diffRanges,
   // Scale utilities (for handling 1M+ items)
+  MAX_VIRTUAL_SIZE,
   MAX_VIRTUAL_HEIGHT,
   getCompressionState as getScaleState,
   getCompression as getScale,
