@@ -67,6 +67,7 @@ export type {
   VListBuilder,
   VList,
   BuilderConfig,
+  VListConfig,
   VListFeature,
   BuilderContext,
 } from "./builder";
