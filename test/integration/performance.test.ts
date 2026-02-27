@@ -24,7 +24,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
-import type { BuiltVList } from "../../src/builder/types";
+import type { VList } from "../../src/builder/types";
 import type { VListItem, VListAdapter } from "../../src/types";
 import { withSelection } from "../../src/features/selection/feature";
 import { withScrollbar } from "../../src/features/scrollbar/feature";
@@ -174,14 +174,14 @@ const createContainer = (): HTMLElement => {
   return container;
 };
 
-const getRenderedIndices = (list: BuiltVList<any>): number[] => {
+const getRenderedIndices = (list: VList<any>): number[] => {
   const elements = list.element.querySelectorAll("[data-index]");
   return Array.from(elements).map((el) =>
     parseInt((el as HTMLElement).dataset.index!, 10),
   );
 };
 
-const simulateScroll = (list: BuiltVList<any>, scrollTop: number): void => {
+const simulateScroll = (list: VList<any>, scrollTop: number): void => {
   const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
   if (!viewport) return;
   viewport.scrollTop = scrollTop;
@@ -247,7 +247,7 @@ describe("performance — initialization", () => {
 
   it("should initialize 10K items in under 100ms", () => {
     const items = createTestItems(10_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
@@ -263,7 +263,7 @@ describe("performance — initialization", () => {
 
   it("should initialize 100K items in under 500ms", () => {
     const items = createTestItems(100_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
@@ -279,7 +279,7 @@ describe("performance — initialization", () => {
 
   it("should initialize 1M items with compression in under 2000ms", () => {
     const items = createTestItems(1_000_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
@@ -297,7 +297,7 @@ describe("performance — initialization", () => {
 
   it("should initialize 10K items with selection + scrollbar in under 100ms", () => {
     const items = createTestItems(10_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
@@ -316,7 +316,7 @@ describe("performance — initialization", () => {
 
   it("should initialize 10K items with grid in under 100ms", () => {
     const items = createTestItems(10_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
@@ -334,7 +334,7 @@ describe("performance — initialization", () => {
 
   it("should initialize grouped list with 10K items in under 200ms", () => {
     const items = createGroupedItems(10_000);
-    let list: BuiltVList<GroupedTestItem>;
+    let list: VList<GroupedTestItem>;
 
     const elapsed = measure(() => {
       list = vlist<GroupedTestItem>({
@@ -358,7 +358,7 @@ describe("performance — initialization", () => {
 
   it("should initialize with all features in under 200ms", () => {
     const items = createTestItems(10_000);
-    let list: BuiltVList<TestItem>;
+    let list: VList<TestItem>;
 
     const elapsed = measure(() => {
       list = vlist<TestItem>({
