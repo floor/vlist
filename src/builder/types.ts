@@ -14,6 +14,11 @@ import type {
   Unsubscribe,
   ScrollToOptions,
   ScrollSnapshot,
+  VListAdapter,
+  GridConfig,
+  GroupsConfig,
+  SelectionConfig,
+  ScrollbarOptions,
 } from "../types";
 
 // Direct file imports — NOT barrel indexes — so Bun tree-shakes correctly.
@@ -76,6 +81,55 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
     /** External scroll element for window scrolling */
     element?: Window;
   };
+}
+
+// =============================================================================
+// Adapter Convenience Config
+// =============================================================================
+
+/**
+ * Extended configuration accepted by framework adapters (React, Vue, Svelte, SolidJS).
+ *
+ * Adds convenience fields that adapters translate into `.use(withX())` calls
+ * automatically. For the core builder, use `BuilderConfig` directly.
+ */
+export interface VListConfig<T extends VListItem = VListItem>
+  extends Omit<BuilderConfig<T>, "scroll"> {
+  /** Scroll behavior configuration — extends core scroll config with scrollbar shorthand. */
+  scroll?: BuilderConfig["scroll"] & {
+    /** Scrollbar mode (shorthand — same as top-level `scrollbar`). */
+    scrollbar?: "native" | "none" | ScrollbarOptions;
+  };
+
+  /** Layout mode (default: list). Set to `'grid'` with `grid` config to enable `withGrid()`. */
+  layout?: "list" | "grid";
+
+  /** Grid configuration — used when `layout` is `'grid'`. */
+  grid?: GridConfig;
+
+  /** Async data adapter — enables `withAsync()`. Omit `items` when using an adapter. */
+  adapter?: VListAdapter<T>;
+
+  /** Loading behavior for async adapter. */
+  loading?: {
+    /** Velocity threshold above which data loading is skipped (px/ms). Default: 5 */
+    cancelThreshold?: number;
+
+    /** Velocity threshold for preloading (px/ms). Default: 2 */
+    preloadThreshold?: number;
+
+    /** Number of items to preload in scroll direction. Default: 50 */
+    preloadAhead?: number;
+  };
+
+  /** Section grouping configuration — enables `withSections()`. */
+  groups?: GroupsConfig;
+
+  /** Selection configuration — enables `withSelection()`. */
+  selection?: SelectionConfig;
+
+  /** Top-level scrollbar shorthand (alternative to `scroll.scrollbar`). */
+  scrollbar?: "native" | "none" | ScrollbarOptions;
 }
 
 // =============================================================================

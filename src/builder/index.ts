@@ -30,6 +30,7 @@ export type {
   VListBuilder,
   VList,
   BuilderConfig,
+  VListConfig,
 
   // Feature system
   VListFeature,
