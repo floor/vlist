@@ -5,6 +5,13 @@ v1.0.0 → initial commit
 
 2026-03-01
 
+  fix(table): center resize handle on column border with pseudo-element
+
+  → v1.2.2
+
+
+2026-03-01
+
   feat(table): add withTable feature — virtualized data table with columns, resize, sort
   fix(builder): skip only undefined items in render loop, not falsy values
   fix(table): reset inherited vlist-item border-bottom on table rows
