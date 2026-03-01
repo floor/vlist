@@ -31,6 +31,7 @@ const scenarios: Scenario[] = [
   { name: "withScrollbar", imports: ["vlist", "withScrollbar"] },
   { name: "withPage", imports: ["vlist", "withPage"] },
   { name: "withSnapshots", imports: ["vlist", "withSnapshots"] },
+  { name: "withTable", imports: ["vlist", "withTable"] },
 ];
 
 // ── Build & measure ───────────────────────────────────────────────
