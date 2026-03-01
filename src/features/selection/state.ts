@@ -21,6 +21,7 @@ export const createSelectionState = (
 ): SelectionState => ({
   selected: new Set(initial ?? []),
   focusedIndex: -1,
+  focusVisible: false,
 });
 
 // =============================================================================

@@ -107,8 +107,13 @@
 }
 
 .vlist:focus-visible {
-    outline: 2px solid var(--vlist-focus-ring);
-    outline-offset: 2px;
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: -2px;
+}
+
+/* Hide container outline when an item is focused — the item ring is enough */
+.vlist:has(.vlist-item--focused):focus-visible {
+    outline: none;
 }
 
 /* Viewport (scrollable area) */
@@ -160,7 +165,6 @@
     right: 0;
     display: flex;
     align-items: center;
-    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
     border-bottom: 1px solid var(--vlist-border);
     background-color: var(--vlist-bg);
     cursor: pointer;
@@ -197,8 +201,8 @@
 }
 
 /* Item focused state (keyboard navigation) */
-.vlist-item--focused-visible {
-    outline: 2px solid var(--vlist-focus-ring);
+.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
     outline-offset: -2px;
     z-index: 1;
 }
@@ -390,8 +394,8 @@
 }
 
 /* Grid item focused state */
-.vlist-grid-item.vlist-item--focused-visible {
-    outline: 2px solid var(--vlist-focus-ring);
+.vlist-grid-item.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
     outline-offset: -2px;
     z-index: 1;
 }
@@ -450,8 +454,8 @@
 }
 
 /* Masonry item focused state */
-.vlist-masonry-item.vlist-item--focused-visible {
-    outline: 2px solid var(--vlist-focus-ring);
+.vlist-masonry-item.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
     outline-offset: -2px;
     z-index: 1;
 }

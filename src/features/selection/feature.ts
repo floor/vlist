@@ -195,7 +195,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       });
 
       ctx.methods.set("_getFocusedIndex", (): number => {
-        return selectionState.focusedIndex;
+        return selectionState.focusVisible ? selectionState.focusedIndex : -1;
       });
 
       // ── Capture force render for triggering re-renders on selection change ──
@@ -245,6 +245,52 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
       });
 
+      // ── Focus handler — activate first/last-focused item on keyboard Tab ──
+      // Uses :focus-visible to detect keyboard focus — no extra listeners needed.
+      const onFocusIn = (): void => {
+        if (ctx.state.isDestroyed) return;
+        if (!dom.root.matches(":focus-visible")) return;
+
+        const totalItems = ctx.dataManager.getTotal();
+        if (totalItems === 0) return;
+
+        // Restore previous focus position, or start at 0
+        const idx =
+          selectionState.focusedIndex >= 0
+            ? Math.min(selectionState.focusedIndex, totalItems - 1)
+            : 0;
+
+        selectionState = setFocusedIndex(selectionState, idx);
+        selectionState.focusVisible = true;
+
+        dom.root.setAttribute(
+          "aria-activedescendant",
+          `${ariaIdPrefix}-item-${idx}`,
+        );
+
+        ctx.scrollController.scrollTo(
+          calculateScrollToIndex(
+            idx,
+            ctx.sizeCache,
+            ctx.state.viewportState.containerSize,
+            ctx.dataManager.getState().total,
+            "center",
+            ctx.getCachedCompression(),
+          ),
+        );
+
+        const item = ctx.dataManager.getItem(idx);
+        if (item) {
+          ctx.renderer.updateItemClasses(
+            idx,
+            selectionState.selected.has(item.id),
+            true,
+          );
+        }
+      };
+
+      dom.root.addEventListener("focusin", onFocusIn);
+
       // ── Click handler ──
       ctx.clickHandlers.push((event: MouseEvent): void => {
         if (ctx.state.isDestroyed) return;
@@ -264,8 +310,9 @@ export const withSelection = <T extends VListItem = VListItem>(
         // Emit click event
         emitter.emit("item:click", { item, index, event });
 
-        // Update focused index
+        // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
+        selectionState.focusVisible = false;
 
         // ARIA: update aria-activedescendant
         dom.root.setAttribute(
@@ -294,24 +341,28 @@ export const withSelection = <T extends VListItem = VListItem>(
         switch (event.key) {
           case "ArrowUp":
             newState = moveFocusUp(selectionState, totalItems);
+            newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "ArrowDown":
             newState = moveFocusDown(selectionState, totalItems);
+            newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "Home":
             newState = moveFocusToFirst(selectionState, totalItems);
+            newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "End":
             newState = moveFocusToLast(selectionState, totalItems);
+            newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
@@ -328,6 +379,7 @@ export const withSelection = <T extends VListItem = VListItem>(
                   focusedItem.id,
                   mode,
                 );
+                newState.focusVisible = true;
               }
               handled = true;
             }
@@ -444,6 +496,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (liveRef && liveRef.parentNode) {
           liveRef.remove();
         }
+        dom.root.removeEventListener("focusin", onFocusIn);
       });
     },
 

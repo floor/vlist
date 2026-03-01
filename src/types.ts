@@ -343,6 +343,9 @@ export interface SelectionState {
 
   /** Currently focused item index (-1 if none) */
   focusedIndex: number;
+
+  /** Whether the focus ring should be visible (true for keyboard, false for mouse) */
+  focusVisible: boolean;
 }
 
 // =============================================================================
