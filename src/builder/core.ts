@@ -1075,6 +1075,63 @@ function materialize<T extends VListItem = VListItem>(
     feature.setup(ctx);
   }
 
+  // ── Baseline keyboard navigation (when no selection feature) ────
+  // Provides Tab-to-focus-first-item and Arrow/Home/End focus movement
+  // as required by the WAI-ARIA listbox pattern. When withSelection is
+  // present it registers _getFocusedIndex and owns all focus behaviour.
+
+  if (!methods.has("_getFocusedIndex")) {
+    let coreFocus = -1;
+    const focusedClass = `${classPrefix}-item--focused`;
+
+    const moveFocus = (prev: number, next: number): void => {
+      const total = $.vtf();
+      if (next < 0 || next >= total) return;
+      coreFocus = next;
+
+      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${next}`);
+
+      // Scroll into view + re-render
+      const size = isHorizontal ? $.cw : $.ch;
+      $.sst($.gsp(next, $.hc, size, total, "center"));
+      $.ls = $.st.scrollTop;
+      $.rfn();
+
+      // Swap focused class via rendered map (no DOM query)
+      if (prev >= 0 && prev !== next) rendered.get(prev)?.classList.remove(focusedClass);
+      rendered.get(next)?.classList.add(focusedClass);
+    };
+
+    // Tab into list → activate first (or last-focused) item
+    const onFocusIn = (): void => {
+      if ($.id) return;
+      if (!dom.root.matches(":focus-visible")) return;
+      const total = $.vtf();
+      if (total === 0) return;
+      moveFocus(-1, coreFocus >= 0 ? Math.min(coreFocus, total - 1) : 0);
+    };
+    dom.root.addEventListener("focusin", onFocusIn);
+
+    keydownHandlers.push((event: KeyboardEvent): void => {
+      if ($.id) return;
+      const total = $.vtf();
+      if (total === 0) return;
+      const p = coreFocus;
+      let n = p;
+      switch (event.key) {
+        case "ArrowUp":   n = p <= 0 ? total - 1 : p - 1; break;
+        case "ArrowDown": n = p >= total - 1 ? 0 : p + 1; break;
+        case "Home":      n = 0; break;
+        case "End":       n = total - 1; break;
+        default: return;
+      }
+      event.preventDefault();
+      moveFocus(p, n);
+    });
+
+    destroyHandlers.push(() => dom.root.removeEventListener("focusin", onFocusIn));
+  }
+
   // ── Mark initialized ────────────────────────────────────────────
   $.ii = true;
   ctx.state.isInitialized = true;
