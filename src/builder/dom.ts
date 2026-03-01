@@ -49,6 +49,7 @@ export const createDOMStructure = (
 
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
+  viewport.setAttribute("tabindex", "-1");
   if (horizontal) {
     viewport.style.overflowX = "auto";
     viewport.style.overflowY = "hidden";
