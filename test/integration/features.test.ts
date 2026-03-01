@@ -9,7 +9,7 @@
  * - Group header click skip (core.ts L922)
  * - Scrollbar content size handler (scrollbar/feature.ts L125-131)
  * - Viewport getSimpleCompressionState (viewport.ts L53-62)
- * - Sections + scroll interaction
+ * - Groups + scroll interaction
  * - Cross-feature destroy ordering
  * - Scroll idle detection and class toggling
  */
@@ -35,8 +35,8 @@ import { withAsync } from "../../src/features/async/feature";
 import { withScale } from "../../src/features/scale/feature";
 import { withSnapshots } from "../../src/features/snapshots/feature";
 import { withGrid } from "../../src/features/grid/feature";
-import { withSections } from "../../src/features/sections/feature";
-import { isSectionHeader } from "../../src/features/sections";
+import { withGroups } from "../../src/features/groups/feature";
+import { isGroupHeader } from "../../src/features/groups";
 
 // =============================================================================
 // JSDOM Setup
@@ -699,7 +699,7 @@ describe("integration — group header click skip", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -743,7 +743,7 @@ describe("integration — group header click skip", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -780,7 +780,7 @@ describe("integration — group header click skip", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1069,7 +1069,7 @@ describe("integration — cross-feature destroy ordering", () => {
     expect(root.parentElement).toBeNull();
   });
 
-  it("should destroy all features cleanly in sections + scrollbar + selection", () => {
+  it("should destroy all features cleanly in groups + scrollbar + selection", () => {
     const items = createGroupedItems(30);
     const list = vlist<GroupedTestItem>({
       container,
@@ -1077,7 +1077,7 @@ describe("integration — cross-feature destroy ordering", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1678,10 +1678,10 @@ describe("integration — event subscription edge cases", () => {
 });
 
 // =============================================================================
-// Sections + Grid Combined
+// Groups + Grid Combined
 // =============================================================================
 
-describe("integration — sections + grid combined", () => {
+describe("integration — groups + grid combined", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem>;
 
@@ -1694,7 +1694,7 @@ describe("integration — sections + grid combined", () => {
     container.remove();
   });
 
-  it("should combine sections with grid layout", () => {
+  it("should combine groups with grid layout", () => {
     const items = createGroupedItems(24);
     list = vlist<GroupedTestItem>({
       container,
@@ -1702,7 +1702,7 @@ describe("integration — sections + grid combined", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1724,7 +1724,7 @@ describe("integration — sections + grid combined", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1738,7 +1738,7 @@ describe("integration — sections + grid combined", () => {
     expect(headers.length).toBeGreaterThan(0);
   });
 
-  it("should handle sections + grid + selection", () => {
+  it("should handle groups + grid + selection", () => {
     const items = createGroupedItems(20);
     list = vlist<GroupedTestItem>({
       container,
@@ -1746,7 +1746,7 @@ describe("integration — sections + grid combined", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1762,7 +1762,7 @@ describe("integration — sections + grid combined", () => {
     expect(selected.length).toBe(1);
   });
 
-  it("should destroy sections + grid cleanly", () => {
+  it("should destroy groups + grid cleanly", () => {
     const items = createGroupedItems(20);
     list = vlist<GroupedTestItem>({
       container,
@@ -1770,7 +1770,7 @@ describe("integration — sections + grid combined", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1786,10 +1786,10 @@ describe("integration — sections + grid combined", () => {
 });
 
 // =============================================================================
-// Sections with Sticky Header + Scroll
+// Groups with Sticky Header + Scroll
 // =============================================================================
 
-describe("integration — sections sticky header scroll", () => {
+describe("integration — groups sticky header scroll", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem>;
 
@@ -1810,7 +1810,7 @@ describe("integration — sections sticky header scroll", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -1840,7 +1840,7 @@ describe("integration — sections sticky header scroll", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,

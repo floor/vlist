@@ -1,6 +1,6 @@
 /**
  * vlist/groups - Builder Feature
- * Adds grouped lists with sticky section headers.
+ * Adds grouped lists with sticky headers.
  *
  * Priority: 10 (runs first — transforms item list and height function before rendering)
  *
@@ -71,8 +71,7 @@ export interface GroupsFeatureConfig {
  * Adds grouped lists with sticky section headers.
  *
  * ```ts
- * import { vlist } from 'vlist/builder'
- * import { withGroups } from 'vlist/groups'
+ * import { vlist, withGroups } from '@floor/vlist'
  *
  * const contacts = vlist({
  *   container: '#contacts',
@@ -92,7 +91,7 @@ export interface GroupsFeatureConfig {
  * .build()
  * ```
  */
-export const withSections = <T extends VListItem = VListItem>(
+export const withGroups = <T extends VListItem = VListItem>(
   config: GroupsFeatureConfig,
 ): VListFeature<T> => {
   // Validate
@@ -114,7 +113,7 @@ export const withSections = <T extends VListItem = VListItem>(
   let layoutItems: Array<T | GroupHeaderItem> = [];
 
   return {
-    name: "withSections",
+    name: "withGroups",
     priority: 10,
 
     setup(ctx: BuilderContext<T>): void {

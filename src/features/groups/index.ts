@@ -4,7 +4,7 @@
  */
 
 // Builder Feature
-export { withSections, type GroupsFeatureConfig } from "./feature";
+export { withGroups, type GroupsFeatureConfig } from "./feature";
 
 // Types
 export type {
@@ -16,7 +16,7 @@ export type {
   StickyHeader,
 } from "./types";
 
-export { isGroupHeader, isGroupHeader as isSectionHeader } from "./types";
+export { isGroupHeader } from "./types";
 
 // Layout
 export {

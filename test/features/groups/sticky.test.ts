@@ -1,14 +1,14 @@
 /**
- * vlist - Sections Sticky Header Tests
+ * vlist - Groups Sticky Header Tests
  *
- * NOTE: The sticky header system (src/features/sections/sticky.ts) is tested
+ * NOTE: The sticky header system (src/features/groups/sticky.ts) is tested
  * through multiple layers:
  *
- * - sections/layout.test.ts (47 tests, 328 assertions) — section layout math
+ * - groups/layout.test.ts (47 tests, 328 assertions) — group layout math
  *   that drives header positioning calculations
  * - builder/index.test.ts (233 tests) — builder integration tests that exercise
- *   sticky headers via withSections({ stickyHeaders: true })
- * - sections/feature.test.ts — feature integration tests that verify afterScroll
+ *   sticky headers via withGroups({ stickyHeaders: true })
+ * - groups/feature.test.ts — feature integration tests that verify afterScroll
  *   handler registration and destroy cleanup for sticky headers
  *
  * Coverage: 86.07% lines, 100% functions.
@@ -24,9 +24,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createStickyHeader } from "../../../src/features/sections/sticky";
+import { createStickyHeader } from "../../../src/features/groups/sticky";
 import { createSizeCache } from "../../../src/rendering/sizes";
-import type { GroupLayout } from "../../../src/features/sections/types";
+import type { GroupLayout } from "../../../src/features/groups/types";
 
 // =============================================================================
 // JSDOM Setup

@@ -122,7 +122,7 @@ export interface VListConfig<T extends VListItem = VListItem>
     preloadAhead?: number;
   };
 
-  /** Section grouping configuration — enables `withSections()`. */
+  /** Section grouping configuration — enables `withGroups()`. */
   groups?: GroupsConfig;
 
   /** Selection configuration — enables `withSelection()`. */
