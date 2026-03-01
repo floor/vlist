@@ -160,28 +160,38 @@ export const withGrid = <T extends VListItem = VListItem>(
         gap: gridLayout.gap,
       };
 
+      // Reusable context object — mutated in place per call, single
+      // allocation for the lifetime of the list. The static fields
+      // (containerWidth … totalColumns) are the same for every item in
+      // a build pass; recomputing them is a handful of arithmetic ops
+      // — cheaper than the branch-prediction cost of a dirty check.
+      const gridContext = {
+        containerWidth: 0,
+        columns: 0,
+        gap: 0,
+        columnWidth: 0,
+        row: 0,
+        column: 0,
+        totalRows: 0,
+        totalColumns: 0,
+      };
+
       if (typeof baseSize === "function") {
         // Size function - inject grid context
         ctx.setSizeConfig((index: number) => {
-          // Calculate grid context
-          const innerWidth = gridState.containerWidth - 2; // account for borders
+          const innerWidth = gridState.containerWidth - 2;
           const totalGaps = (gridState.columns - 1) * gridState.gap;
-          const columnWidth = (innerWidth - totalGaps) / gridState.columns;
 
-          const context: any = {
-            containerWidth: gridState.containerWidth,
-            columns: gridState.columns,
-            gap: gridState.gap,
-            columnWidth,
-            row: gridLayout!.getRow(index),
-            column: gridLayout!.getCol(index),
-            totalRows: gridLayout!.getTotalRows(ctx.dataManager.getTotal()),
-            totalColumns: gridState.columns,
-          };
+          gridContext.containerWidth = gridState.containerWidth;
+          gridContext.columns = gridState.columns;
+          gridContext.gap = gridState.gap;
+          gridContext.columnWidth = (innerWidth - totalGaps) / gridState.columns;
+          gridContext.row = gridLayout!.getRow(index);
+          gridContext.column = gridLayout!.getCol(index);
+          gridContext.totalRows = gridLayout!.getTotalRows(ctx.dataManager.getTotal());
+          gridContext.totalColumns = gridState.columns;
 
-          // Call user's function with context
-          const size = baseSize(index, context);
-          return size + gridState.gap; // Add gap for row spacing
+          return baseSize(index, gridContext) + gridState.gap;
         });
       } else if (gap > 0) {
         // Fixed size - just add gap
@@ -196,9 +206,9 @@ export const withGrid = <T extends VListItem = VListItem>(
       // This means getTotalSize() includes a trailing gap after the last row.
       // We subtract it so there's no extra space at the bottom of the grid.
       if (gap > 0) {
-        const originalGetTotalSize = ctx.sizeCache.getTotalSize.bind(ctx.sizeCache);
+        const origGetTotalSize = ctx.sizeCache.getTotalSize;
         ctx.sizeCache.getTotalSize = (): number => {
-          const total = originalGetTotalSize();
+          const total = origGetTotalSize();
           return total > 0 ? total - gridState.gap : 0;
         };
       }

@@ -278,12 +278,24 @@ function materialize<T extends VListItem = VListItem>(
   // Use items array by reference (memory-optimized)
   const initialItemsArray: T[] = initialItems || [];
 
+  // When grid or masonry features are active and the size config is a function,
+  // skip the initial build (total=0). These features replace the size cache in
+  // setup() with a wrapped function that injects grid context. Building the
+  // initial cache with the raw user function would crash because it expects
+  // context (e.g. columnWidth) that only the feature provides.
+  const featureReplacesSizeCache =
+    typeof mainAxisSizeConfig === "function" &&
+    (features.has("withGrid") || features.has("withMasonry"));
+
   const initialSizeCache = measurementEnabled
     ? createMeasuredSizeCache(
         estimatedSizeValue!,
         initialItemsArray.length,
       )
-    : createSizeCache(mainAxisSizeConfig, initialItemsArray.length);
+    : createSizeCache(
+        mainAxisSizeConfig,
+        featureReplacesSizeCache ? 0 : initialItemsArray.length,
+      );
   const pool = createElementPool();
 
   // ── Shared mutable refs ($) ─────────────────────────────────────
