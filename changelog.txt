@@ -1,10 +1,36 @@
 vlist — full changelog
 v1.0.0 → initial commit
-303 commits · 25 days · Feb 2–26, 2026
+318 commits · 28 days · Feb 2 – Mar 1, 2026
+
+
+2026-03-01
+
+  feat(a11y): keyboard focus, focus-visible, and baseline navigation
+  feat(selection): scope hover highlight and pointer cursor behind --selectable class
+  feat(grid,masonry): responsive resize with context injection
+  fix(a11y): clear focus ring on blur and remove viewport from tab order
+  fix(grid): remove trailing gap at bottom of grid
+  fix(core): defer initial size cache build when grid/masonry will replace it
+  refactor: rename withSections to withGroups
+
+  → v1.2.0
+
+
+2026-02-27
+
+  BREAKING: BuiltVList type removed — use VList instead
+
+  feat(types): add VListConfig type for framework adapters
+  refactor(types): rename BuiltVList to VList, remove legacy types
+  refactor: rename MAX_VIRTUAL_HEIGHT → MAX_VIRTUAL_SIZE, GridHeightContext → GridSizeContext
+  docs(readme): update feature sizes, fix API method names, add size script
+
+  → v1.1.0, v1.1.2
 
 
 2026-02-26
 
+  fix(builder): revert core inlined renderer optimizations causing positioning bug
   feat(masonry): add masonry layout feature with shortest-lane placement
   perf(masonry): optimize scroll hot path and fix boundary thrashing
   perf(grid): apply feature optimization playbook
@@ -14,7 +40,7 @@ v1.0.0 → initial commit
   refactor(masonry): reduce bundle weight — flatten types, remove dead code
   refactor(grid): remove tick() — always call render(), rely on change tracking
 
-  → v1.0.0
+  → v1.0.0, v1.0.1
 
 
 2026-02-25

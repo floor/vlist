@@ -143,7 +143,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // Reusable context object — mutated in place once per layout pass.
       // Single allocation for the lifetime of the list.
       const masonryContext = {
-        containerSize: 0,
+        containerWidth: 0,
         columns: 0,
         gap: 0,
         columnWidth: 0,
@@ -153,8 +153,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // For number configs the wrapper is a trivial constant return.
       const sizeFn: (index: number) => number =
         typeof rawSizeFn === "function"
-          ? (index: number): number =>
-              (rawSizeFn as (i: number, ctx: typeof masonryContext) => number)(index, masonryContext)
+          ? (index: number): number => rawSizeFn(index, masonryContext)
           : () => rawSizeFn as number;
 
       // ── Calculate layout (on initialization and when data changes) ──
@@ -164,11 +163,11 @@ export const withMasonry = <T extends VListItem = VListItem>(
         // Refresh context once before the O(n) layout loop.
         // Arithmetic is cheaper than a dirty-check branch per item.
         const ml = masonryLayout!;
-        masonryContext.containerSize = ml.containerSize;
+        masonryContext.containerWidth = ml.containerSize;
         masonryContext.columns = ml.columns;
         masonryContext.gap = ml.gap;
         const totalGap = (ml.columns - 1) * ml.gap;
-        masonryContext.columnWidth = Math.max(0, (ml.containerSize - totalGap) / ml.columns);
+        masonryContext.columnWidth = Math.max(0, (masonryContext.containerWidth - totalGap) / ml.columns);
 
         cachedPlacements = ml.calculateLayout(
           totalItems,
