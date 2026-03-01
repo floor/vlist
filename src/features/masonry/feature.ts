@@ -132,27 +132,47 @@ export const withMasonry = <T extends VListItem = VListItem>(
       masonryLayout = createMasonryLayout(masonryConfig);
 
       // ── Item size configuration ──
+      // When the user provides a function, inject masonry context (columnWidth,
+      // columns, gap, containerSize) so heights can be expressed relative to
+      // the current column width — identical pattern to the grid feature.
       const item = rawConfig.item;
-      const itemSizeFn = typeof item.height === "function"
-        ? item.height
-        : (_index: number) => item.height as number;
+      const rawSizeFn = isHorizontal && rawConfig.item.width
+        ? rawConfig.item.width
+        : item.height;
 
-      // For horizontal mode, use width if provided
-      const getItemSize = isHorizontal && rawConfig.item.width
-        ? (typeof rawConfig.item.width === "function"
-          ? rawConfig.item.width
-          : (_index: number) => rawConfig.item.width as number)
-        : itemSizeFn;
+      // Reusable context object — mutated in place once per layout pass.
+      // Single allocation for the lifetime of the list.
+      const masonryContext = {
+        containerSize: 0,
+        columns: 0,
+        gap: 0,
+        columnWidth: 0,
+      };
+
+      // Size function hoisted once — captures masonryContext by reference.
+      // For number configs the wrapper is a trivial constant return.
+      const sizeFn: (index: number) => number =
+        typeof rawSizeFn === "function"
+          ? (index: number): number =>
+              (rawSizeFn as (i: number, ctx: typeof masonryContext) => number)(index, masonryContext)
+          : () => rawSizeFn as number;
 
       // ── Calculate layout (on initialization and when data changes) ──
       const calculateLayout = (): void => {
         const totalItems = ctx.dataManager.getTotal();
 
-        cachedPlacements = masonryLayout!.calculateLayout(
+        // Refresh context once before the O(n) layout loop.
+        // Arithmetic is cheaper than a dirty-check branch per item.
+        const ml = masonryLayout!;
+        masonryContext.containerSize = ml.containerSize;
+        masonryContext.columns = ml.columns;
+        masonryContext.gap = ml.gap;
+        const totalGap = (ml.columns - 1) * ml.gap;
+        masonryContext.columnWidth = Math.max(0, (ml.containerSize - totalGap) / ml.columns);
+
+        cachedPlacements = ml.calculateLayout(
           totalItems,
-          (index: number) => {
-            return getItemSize(index) as number;
-          },
+          sizeFn,
         );
 
         // Update total size
@@ -294,6 +314,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
         if (masonryLayout && masonryLayout.containerSize !== newContainerSize) {
           masonryLayout.update({ containerSize: newContainerSize });
           calculateLayout();
+          if (masonryRenderer) masonryRenderer.clear();
           masonryForceRender();
         }
       };
