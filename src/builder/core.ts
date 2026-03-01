@@ -1106,7 +1106,7 @@ function materialize<T extends VListItem = VListItem>(
       // Scroll into view + re-render
       const size = isHorizontal ? $.cw : $.ch;
       $.sst($.gsp(next, $.hc, size, total, "center"));
-      $.ls = $.st.scrollTop;
+      $.ls = $.sgt();
       $.rfn();
 
       // Swap focused class via rendered map (no DOM query)

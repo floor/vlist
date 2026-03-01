@@ -16,6 +16,7 @@ import type {
   ScrollSnapshot,
   VListAdapter,
   GridConfig,
+  MasonryConfig,
   GroupsConfig,
   SelectionConfig,
   ScrollbarOptions,
@@ -101,11 +102,14 @@ export interface VListConfig<T extends VListItem = VListItem>
     scrollbar?: "native" | "none" | ScrollbarOptions;
   };
 
-  /** Layout mode (default: list). Set to `'grid'` with `grid` config to enable `withGrid()`. */
-  layout?: "list" | "grid";
+  /** Layout mode (default: list). Set to `'grid'` or `'masonry'` with matching config. */
+  layout?: "list" | "grid" | "masonry";
 
   /** Grid configuration — used when `layout` is `'grid'`. */
   grid?: GridConfig;
+
+  /** Masonry configuration — used when `layout` is `'masonry'`. */
+  masonry?: MasonryConfig;
 
   /** Async data adapter — enables `withAsync()`. Omit `items` when using an adapter. */
   adapter?: VListAdapter<T>;

@@ -2,19 +2,21 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
+**v1.2.0** — [Changelog](./changelog.txt)
+
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
-[![tests](https://img.shields.io/badge/tests-2268%20passing-brightgreen)](https://github.com/floor/vlist)
+[![tests](https://img.shields.io/badge/tests-2268_passing-brightgreen)](https://github.com/floor/vlist)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~8 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~8.4 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
 - **Reverse, page-scroll, wrap** — every layout mode
-- **Accessible** — WAI-ARIA, keyboard navigation, screen-reader friendly
+- **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader friendly
 - **React, Vue, Svelte** — framework adapters available
 
 **30+ interactive examples → [vlist.dev](https://vlist.dev)**
@@ -27,6 +29,8 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Horizontal groups** — sticky headers work in horizontal carousels
 - **Horizontal grid layouts** — 2D grids work in both orientations
 - **Masonry** — shortest-lane placement via `withMasonry()`
+- **Keyboard accessible** — focus-visible outlines, arrow/Home/End navigation, Tab support
+- **Responsive grid & masonry** — context-injected `columnWidth` auto-recalculates on resize
 
 ## Installation
 
@@ -84,12 +88,12 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 8.1 KB | Core virtualization |
-| `withGrid()` | +3.8 KB | 2D grid layout |
-| `withMasonry()` | +2.3 KB | Pinterest-style masonry layout |
+| **Base** | 8.4 KB | Core virtualization |
+| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
+| `withMasonry()` | +2.4 KB | Pinterest-style masonry layout |
 | `withGroups()` | +4.1 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +3.9 KB | Lazy loading with adapters |
-| `withSelection()` | +1.6 KB | Single/multiple selection + keyboard nav |
+| `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
 | `withPage()` | +0.4 KB | Document-level scrolling |
@@ -337,10 +341,10 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 8.1 KB |
-| + Grid | 11.9 KB |
-| + Groups | 12.2 KB |
-| + Async | 12.0 KB |
+| Base only | 8.4 KB |
+| + Grid | 12.3 KB |
+| + Groups | 12.6 KB |
+| + Async | 12.4 KB |
 
 ### Memory Efficiency
 
