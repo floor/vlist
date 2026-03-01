@@ -325,7 +325,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     root.style.cursor = "col-resize";
 
     // Highlight the active resize handle
-    target.style.borderColor = "var(--vlist-border-selected, #3b82f6)";
+    target.classList.add(`${classPrefix}-table-header-resize--active`);
 
     // Capture pointer for tracking outside the element
     target.setPointerCapture(e.pointerId);
@@ -364,7 +364,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
 
     // Reset drag handle highlight
-    target.style.borderColor = "transparent";
+    target.classList.remove(`${classPrefix}-table-header-resize--active`);
 
     // Reset cursor
     root.classList.remove(`${classPrefix}--col-resizing`);
