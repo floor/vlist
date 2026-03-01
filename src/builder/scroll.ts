@@ -3,7 +3,7 @@
  * vlist/builder — Scroll Utilities
  * Easing, scroll-argument resolution, and smooth scroll animation.
  *
- * Shared by builder/core.ts, grid feature, and sections feature to
+ * Shared by builder/core.ts, grid feature, and groups feature to
  * avoid duplicating ~70 lines of scroll helpers in each consumer.
  */
 

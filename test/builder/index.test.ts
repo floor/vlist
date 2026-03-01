@@ -38,8 +38,8 @@ import { withAsync } from "../../src/features/async/feature";
 import { withScale } from "../../src/features/scale/feature";
 import { withSnapshots } from "../../src/features/snapshots/feature";
 import { withGrid } from "../../src/features/grid/feature";
-import { withSections } from "../../src/features/sections/feature";
-import { isSectionHeader } from "../../src/features/sections";
+import { withGroups } from "../../src/features/groups/feature";
+import { isGroupHeader } from "../../src/features/groups";
 
 // =============================================================================
 // JSDOM Setup
@@ -2454,7 +2454,7 @@ describe("withGrid plugin combinations", () => {
 });
 
 // =============================================================================
-// withSections Plugin
+// withGroups Plugin
 // =============================================================================
 
 /** Test item with a group field for grouped list tests */
@@ -2514,7 +2514,7 @@ const headerTemplate = (key: string, _groupIndex: number): HTMLElement => {
   return el;
 };
 
-describe("withSections plugin", () => {
+describe("withGroups plugin", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -2539,7 +2539,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2560,7 +2560,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2582,7 +2582,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2607,7 +2607,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2630,7 +2630,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2652,7 +2652,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2680,7 +2680,7 @@ describe("withSections plugin", () => {
       items: currentItems,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "Z",
           headerHeight: 32,
           headerTemplate,
@@ -2710,7 +2710,7 @@ describe("withSections plugin", () => {
       items: currentItems,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "A",
           headerHeight: 32,
           headerTemplate,
@@ -2738,7 +2738,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2760,7 +2760,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2782,7 +2782,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2798,7 +2798,7 @@ describe("withSections plugin", () => {
     expect(returnedItems.length).toBe(items.length);
 
     // None of the returned items should be headers
-    const headers = returnedItems.filter((item: any) => isSectionHeader(item));
+    const headers = returnedItems.filter((item: any) => isGroupHeader(item));
     expect(headers.length).toBe(0);
   });
 
@@ -2811,7 +2811,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2834,7 +2834,7 @@ describe("withSections plugin", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: undefined as any,
             headerHeight: 32,
             headerTemplate,
@@ -2854,7 +2854,7 @@ describe("withSections plugin", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 0,
             headerTemplate,
@@ -2870,7 +2870,7 @@ describe("withSections plugin", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: -10,
             headerTemplate,
@@ -2890,7 +2890,7 @@ describe("withSections plugin", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate: undefined as any,
@@ -2902,7 +2902,7 @@ describe("withSections plugin", () => {
   it("should work with horizontal orientation", () => {
     const items = createGroupedItems(6);
 
-    // Horizontal orientation should be supported for withSections
+    // Horizontal orientation should be supported for withGroups
     // (sticky headers stick to left edge instead of top)
     const list = vlist<GroupedTestItem>({
       container,
@@ -2911,7 +2911,7 @@ describe("withSections plugin", () => {
       orientation: "horizontal",
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -2935,7 +2935,7 @@ describe("withSections plugin", () => {
         reverse: true,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2954,7 +2954,7 @@ describe("withSections plugin", () => {
         reverse: true,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2978,7 +2978,7 @@ describe("withSections plugin", () => {
         reverse: true,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i) => items[i]!.group,
             headerHeight: 32,
             headerTemplate,
@@ -2999,7 +2999,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3025,7 +3025,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3052,7 +3052,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (_i) => "A",
           headerHeight: 32,
           headerTemplate,
@@ -3073,7 +3073,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: () => "A",
           headerHeight: 32,
           headerTemplate,
@@ -3102,7 +3102,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3127,7 +3127,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate: (key) => `<div class="string-header">${key}</div>`,
@@ -3151,7 +3151,7 @@ describe("withSections plugin", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3166,10 +3166,10 @@ describe("withSections plugin", () => {
 });
 
 // =============================================================================
-// withSections Plugin Combinations
+// withGroups Plugin Combinations
 // =============================================================================
 
-describe("withSections plugin combinations", () => {
+describe("withGroups plugin combinations", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -3194,7 +3194,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3221,7 +3221,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3245,7 +3245,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3275,7 +3275,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3304,7 +3304,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3329,7 +3329,7 @@ describe("withSections plugin combinations", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3352,10 +3352,10 @@ describe("withSections plugin combinations", () => {
 });
 
 // =============================================================================
-// withSections Layout Logic (Unit Tests)
+// withGroups Layout Logic (Unit Tests)
 // =============================================================================
 
-describe("withSections layout logic", () => {
+describe("withGroups layout logic", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -3388,7 +3388,7 @@ describe("withSections layout logic", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3414,7 +3414,7 @@ describe("withSections layout logic", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3445,7 +3445,7 @@ describe("withSections layout logic", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3477,7 +3477,7 @@ describe("withSections layout logic", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 30,
           headerTemplate,
@@ -3496,10 +3496,10 @@ describe("withSections layout logic", () => {
 });
 
 // =============================================================================
-// withSections Sticky Header Behavior
+// withGroups Sticky Header Behavior
 // =============================================================================
 
-describe("withSections sticky header behavior", () => {
+describe("withGroups sticky header behavior", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -3524,7 +3524,7 @@ describe("withSections sticky header behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3549,7 +3549,7 @@ describe("withSections sticky header behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3573,7 +3573,7 @@ describe("withSections sticky header behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight,
           headerTemplate,
@@ -3609,7 +3609,7 @@ describe("withSections sticky header behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3632,7 +3632,7 @@ describe("withSections sticky header behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3648,10 +3648,10 @@ describe("withSections sticky header behavior", () => {
 });
 
 // =============================================================================
-// withSections Template Rendering
+// withGroups Template Rendering
 // =============================================================================
 
-describe("withSections template rendering", () => {
+describe("withGroups template rendering", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -3679,7 +3679,7 @@ describe("withSections template rendering", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3704,7 +3704,7 @@ describe("withSections template rendering", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3729,7 +3729,7 @@ describe("withSections template rendering", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3760,7 +3760,7 @@ describe("withSections template rendering", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate: (key, groupIndex) => {
@@ -3784,10 +3784,10 @@ describe("withSections template rendering", () => {
 });
 
 // =============================================================================
-// withSections Scroll Behavior
+// withGroups Scroll Behavior
 // =============================================================================
 
-describe("withSections scroll behavior", () => {
+describe("withGroups scroll behavior", () => {
   let container: HTMLElement;
   let list: VList<GroupedTestItem> | null = null;
 
@@ -3812,7 +3812,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3832,7 +3832,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3852,7 +3852,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3872,7 +3872,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3894,7 +3894,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3916,7 +3916,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3942,7 +3942,7 @@ describe("withSections scroll behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -3970,10 +3970,10 @@ describe("withSections scroll behavior", () => {
 });
 
 // =============================================================================
-// withSections Destroy Behavior
+// withGroups Destroy Behavior
 // =============================================================================
 
-describe("withSections destroy behavior", () => {
+describe("withGroups destroy behavior", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
@@ -3993,7 +3993,7 @@ describe("withSections destroy behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -4024,7 +4024,7 @@ describe("withSections destroy behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,
@@ -4048,7 +4048,7 @@ describe("withSections destroy behavior", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i) => items[i]!.group,
           headerHeight: 32,
           headerTemplate,

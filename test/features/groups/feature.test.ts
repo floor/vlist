@@ -1,23 +1,23 @@
 /**
- * vlist - Sections Feature Tests
- * Tests for withSections: factory, setup wiring, DOM class, handlers, methods,
+ * vlist - Groups Feature Tests
+ * Tests for withGroups: factory, setup wiring, DOM class, handlers, methods,
  * sticky header creation.
  *
- * NOTE: The underlying section components are tested separately:
- * - sections/layout.test.ts (47 tests, 328 assertions) — section layout math
- * - sections/sticky.test.ts — sticky header behavior
+ * NOTE: The underlying group components are tested separately:
+ * - groups/layout.test.ts (47 tests, 328 assertions) — group layout math
+ * - groups/sticky.test.ts — sticky header behavior
  *
- * This file tests the feature integration layer (withSections) that wires
+ * This file tests the feature integration layer (withGroups) that wires
  * group layout, sticky headers, and template dispatch into the builder context.
  *
  * Coverage: 85.22% lines, 82.61% functions.
- * Uncovered lines are complex section reflow paths and edge cases in
+ * Uncovered lines are complex group reflow paths and edge cases in
  * dynamic group recalculation.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { withSections } from "../../../src/features/sections/feature";
+import { withGroups } from "../../../src/features/groups/feature";
 import { createSizeCache } from "../../../src/rendering/sizes";
 import type { VListItem } from "../../../src/types";
 import type { BuilderContext } from "../../../src/builder/types";
@@ -234,24 +234,24 @@ function createMockContext(): BuilderContext<TestItem> {
 }
 
 // =============================================================================
-// withSections — Factory Tests
+// withGroups — Factory Tests
 // =============================================================================
 
-describe("withSections — Factory", () => {
+describe("withGroups — Factory", () => {
   it("should create a feature with correct name and priority", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: (key) => `<div>${key}</div>`,
     });
 
-    expect(feature.name).toBe("withSections");
+    expect(feature.name).toBe("withGroups");
     expect(feature.priority).toBe(10);
     expect(typeof feature.setup).toBe("function");
   });
 
   it("should require getGroupForIndex function", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -260,7 +260,7 @@ describe("withSections — Factory", () => {
   });
 
   it("should accept sticky option", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -270,7 +270,7 @@ describe("withSections — Factory", () => {
   });
 
   it("should accept sticky disabled", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -281,12 +281,12 @@ describe("withSections — Factory", () => {
 });
 
 // =============================================================================
-// withSections — Setup Tests
+// withGroups — Setup Tests
 // =============================================================================
 
-describe("withSections — Setup", () => {
+describe("withGroups — Setup", () => {
   it("should add grouped CSS class to root", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -299,7 +299,7 @@ describe("withSections — Setup", () => {
   });
 
   it("should register a destroy handler", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -314,7 +314,7 @@ describe("withSections — Setup", () => {
   });
 
   it("should register an afterScroll handler for sticky headers", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -331,7 +331,7 @@ describe("withSections — Setup", () => {
 
   it("should replace the template (unified template dispatches headers vs items)", () => {
     let templateReplaced = false;
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -348,7 +348,7 @@ describe("withSections — Setup", () => {
 
   it("should replace the size config (headers vs items have different heights)", () => {
     let sizeConfigReplaced = false;
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",
@@ -364,7 +364,7 @@ describe("withSections — Setup", () => {
   });
 
   it("should run destroy handler without error", () => {
-    const feature = withSections<TestItem>({
+    const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       headerHeight: 40,
       headerTemplate: () => "Header",

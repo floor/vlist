@@ -33,7 +33,7 @@ import { withAsync } from "../../src/features/async/feature";
 import { withScale } from "../../src/features/scale/feature";
 import { withSnapshots } from "../../src/features/snapshots/feature";
 import { withGrid } from "../../src/features/grid/feature";
-import { withSections } from "../../src/features/sections/feature";
+import { withGroups } from "../../src/features/groups/feature";
 
 // =============================================================================
 // JSDOM Setup
@@ -282,7 +282,7 @@ describe("memory — DOM cleanup after destroy", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,
@@ -418,7 +418,7 @@ describe("memory — create/destroy cycles", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i: number) => items[i]?.group ?? "",
             headerHeight: 30,
             headerTemplate,
@@ -1071,7 +1071,7 @@ describe("memory — double destroy safety", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,

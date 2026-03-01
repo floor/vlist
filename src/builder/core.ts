@@ -234,9 +234,9 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   if (isHorizontal) {
-    // Note: withGrid and withGroups/withSections both support horizontal orientation
+    // Note: withGrid and withGroups both support horizontal orientation
     // - withGrid: items use vertical positioning (TODO: add axis swapping for optimization)
-    // - withGroups/withSections: sticky headers stick to left edge instead of top
+    // - withGroups: sticky headers stick to left edge instead of top
   }
   if (isReverse) {
     if (featureNames.has("withGrid")) {

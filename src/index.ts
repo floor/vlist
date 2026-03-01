@@ -14,7 +14,7 @@ export { withScale } from "./features/scale";
 export { withAsync } from "./features/async";
 export { withScrollbar } from "./features/scrollbar";
 export { withPage } from "./features/page";
-export { withSections } from "./features/sections";
+export { withGroups } from "./features/groups";
 export { withGrid } from "./features/grid";
 export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
@@ -72,20 +72,20 @@ export type {
   BuilderContext,
 } from "./builder";
 
-// Sections domain (grouped lists with headers)
+// Groups domain (grouped lists with headers)
 export {
-  createGroupLayout as createSectionLayout,
+  createGroupLayout,
   buildLayoutItems,
-  createGroupedSizeFn as createSectionedSizeFn,
+  createGroupedSizeFn,
   createStickyHeader,
-  isGroupHeader as isSectionHeader,
-  type GroupsConfig as SectionsConfig,
-  type GroupBoundary as SectionBoundary,
+  isGroupHeader,
+  type GroupsConfig,
+  type GroupBoundary,
   type LayoutEntry,
-  type GroupHeaderItem as SectionHeaderItem,
-  type GroupLayout as SectionLayout,
+  type GroupHeaderItem,
+  type GroupLayout,
   type StickyHeader,
-} from "./features/sections";
+} from "./features/groups";
 
 // Grid domain (2D grid/card layout)
 export {
