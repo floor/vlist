@@ -108,15 +108,13 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
     }
 
     if (pool.length < maxSize) {
-      // Reset for reuse — clear dynamic attributes and child elements
+      // Reset for reuse — clear dynamic attributes and child elements.
       // Child clearing is critical: when column count changes, reused
       // elements must not carry stale cells from a previous layout.
       element.className = "";
       element.removeAttribute("data-id");
       element.removeAttribute("data-index");
       element.removeAttribute("aria-selected");
-      element.removeAttribute("aria-setsize");
-      element.removeAttribute("aria-posinset");
       element.removeAttribute("aria-rowindex");
       element.removeAttribute("role");
       element.style.cssText = "";
@@ -163,8 +161,8 @@ interface TrackedRow {
   /** Last focused state */
   lastFocused: boolean;
 
-  /** Last translateY value */
-  lastTransform: string;
+  /** Last translateY offset in pixels (numeric for fast comparison) */
+  lastOffset: number;
 
   /** Frame counter when last seen in render range */
   lastSeenFrame: number;
@@ -203,6 +201,16 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   let frameCounter = 0;
   let lastAriaSetSize = -1;
   let currentLayout = layout;
+
+  // =========================================================================
+  // Helpers
+  // =========================================================================
+
+  /** Toggle aria-selected attribute — avoids repeating the pattern 5 times */
+  const setAriaSelected = (el: HTMLElement, selected: boolean): void => {
+    if (selected) el.setAttribute("aria-selected", "true");
+    else el.removeAttribute("aria-selected");
+  };
 
   // =========================================================================
   // CSS Classes (precomputed)
@@ -348,11 +356,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       lastAriaSetSize = total;
     }
 
-    if (isSelected) {
-      element.setAttribute("aria-selected", "true");
-    } else {
-      element.removeAttribute("aria-selected");
-    }
+    setAriaSelected(element, isSelected);
 
     // Create cells
     const cells = ensureCells(element, []);
@@ -377,8 +381,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
     // Position row via translateY from size cache
     const offset = sizeCache.getOffset(index);
-    const transform = `translateY(${offset}px)`;
-    element.style.transform = transform;
+    element.style.transform = `translateY(${offset}px)`;
 
     return {
       element,
@@ -387,7 +390,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastTransform: transform,
+      lastOffset: offset,
       lastSeenFrame: frameCounter,
     };
   };
@@ -463,32 +466,23 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
           applyRowClasses(existing.element, isSelected, isFocused);
           existing.element.setAttribute("data-id", String(item.id));
-          if (isSelected) {
-            existing.element.setAttribute("aria-selected", "true");
-          } else {
-            existing.element.removeAttribute("aria-selected");
-          }
+          setAriaSelected(existing.element, isSelected);
           existing.lastItemId = item.id;
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
         } else if (selectedChanged || focusedChanged) {
           // Same item — only update classes/aria if state changed
           applyRowClasses(existing.element, isSelected, isFocused);
-          if (isSelected) {
-            existing.element.setAttribute("aria-selected", "true");
-          } else {
-            existing.element.removeAttribute("aria-selected");
-          }
+          setAriaSelected(existing.element, isSelected);
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
         }
 
-        // Position update only when transform changed
+        // Position update only when offset changed (numeric comparison — no string allocation)
         const offset = sizeCache.getOffset(i);
-        const transform = `translateY(${offset}px)`;
-        if (existing.lastTransform !== transform) {
-          existing.element.style.transform = transform;
-          existing.lastTransform = transform;
+        if (existing.lastOffset !== offset) {
+          existing.lastOffset = offset;
+          existing.element.style.transform = `translateY(${offset}px)`;
         }
 
         // Update row height (variable heights may have changed)
@@ -551,11 +545,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       }
 
       applyRowClasses(existing.element, isSelected, isFocused);
-      if (isSelected) {
-        existing.element.setAttribute("aria-selected", "true");
-      } else {
-        existing.element.removeAttribute("aria-selected");
-      }
+      setAriaSelected(existing.element, isSelected);
       existing.lastSelected = isSelected;
       existing.lastFocused = isFocused;
     }
@@ -577,11 +567,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
     if (selectedChanged || focusedChanged) {
       applyRowClasses(existing.element, isSelected, isFocused);
-      if (isSelected) {
-        existing.element.setAttribute("aria-selected", "true");
-      } else {
-        existing.element.removeAttribute("aria-selected");
-      }
+      setAriaSelected(existing.element, isSelected);
       existing.lastSelected = isSelected;
       existing.lastFocused = isFocused;
     }

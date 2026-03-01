@@ -119,7 +119,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   let cells: HTMLElement[] = [];
   let resizeHandles: HTMLElement[] = [];
-  let sortIndicators: HTMLElement[] = [];
+  let sortIndicators: (HTMLElement | null)[] = [];
   let isVisible = true;
   let currentSortKey: string | null = null;
   let currentSortDirection: "asc" | "desc" = "asc";
@@ -169,16 +169,17 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
     cell.appendChild(content);
 
-    // Sort indicator (hidden by default — opacity controlled via CSS + inline toggle)
-    const sortIndicator = document.createElement("span");
-    sortIndicator.className = `${classPrefix}-table-header-sort`;
-    sortIndicator.setAttribute("aria-hidden", "true");
-    cell.appendChild(sortIndicator);
-    sortIndicators.push(sortIndicator);
-
-    // Sortable modifier class
+    // Sort indicator — only created for sortable columns (avoids unnecessary DOM nodes)
     if (col.def.sortable) {
+      const sortIndicator = document.createElement("span");
+      sortIndicator.className = `${classPrefix}-table-header-sort`;
+      sortIndicator.setAttribute("aria-hidden", "true");
+      cell.appendChild(sortIndicator);
+      sortIndicators.push(sortIndicator);
       cell.classList.add(`${classPrefix}-table-header-cell--sortable`);
+    } else {
+      // Keep index alignment with columns array
+      sortIndicators.push(null);
     }
 
     // Resize handle (at right edge)
@@ -269,7 +270,9 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     const columns = currentLayout.columns;
 
     for (let i = 0; i < sortIndicators.length && i < columns.length; i++) {
-      const indicator = sortIndicators[i]!;
+      const indicator = sortIndicators[i];
+      if (!indicator) continue;
+
       const col = columns[i]!;
 
       if (col.def.key === key && key !== null) {
