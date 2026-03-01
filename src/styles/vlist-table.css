@@ -61,7 +61,6 @@
     align-items: center;
     height: 100%;
     box-sizing: border-box;
-    overflow: hidden;
     flex-shrink: 0;
     user-select: none;
     padding-left: var(--vlist-item-padding-x, 0.75rem);
@@ -117,27 +116,44 @@
 .vlist-table-header-resize {
     position: absolute;
     top: 0;
-    right: 0;
+    right: -3px;
     bottom: 0;
-    width: 6px;
+    width: 5px;
     cursor: col-resize;
     z-index: 2;
     touch-action: none;
-    border-right: 2px solid transparent;
     opacity: 0;
-    transition:
-        opacity 0.15s ease,
-        border-color 0.15s ease;
+    transition: opacity 0.15s ease;
+}
+
+/* Centered visual line */
+.vlist-table-header-resize::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background-color: var(--vlist-border, #e5e7eb);
+    transition: background-color 0.15s ease;
 }
 
 .vlist-table-header-cell:hover .vlist-table-header-resize {
     opacity: 1;
-    border-right-color: var(--vlist-border, #e5e7eb);
 }
 
-.vlist-table-header-resize:hover {
+.vlist-table-header-resize:hover::after {
+    background-color: var(--vlist-focus-ring, #3b82f6);
+}
+
+/* Active drag state (toggled via JS) */
+.vlist-table-header-resize--active {
     opacity: 1;
-    border-right-color: var(--vlist-focus-ring, #3b82f6) !important;
+}
+
+.vlist-table-header-resize--active::after {
+    background-color: var(--vlist-border-selected, #3b82f6);
 }
 
 /* Cursor override during column resize */
@@ -265,12 +281,10 @@
     background-color: var(--vlist-bg-hover, #1f2937);
 }
 
-[data-theme-mode="dark"] .vlist-table-header-resize:hover {
-    border-right-color: var(--vlist-focus-ring, #3b82f6) !important;
+[data-theme-mode="dark"] .vlist-table-header-resize::after {
+    background-color: var(--vlist-border, #374151);
 }
 
-[data-theme-mode="dark"]
-    .vlist-table-header-cell:hover
-    .vlist-table-header-resize {
-    border-right-color: var(--vlist-border, #374151);
+[data-theme-mode="dark"] .vlist-table-header-resize:hover::after {
+    background-color: var(--vlist-focus-ring, #3b82f6);
 }
