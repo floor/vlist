@@ -35,6 +35,7 @@
       "default": "./dist/index.js"
     },
     "./styles": "./dist/vlist.css",
+    "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
     "./package.json": "./package.json"
   },
