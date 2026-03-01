@@ -191,6 +191,18 @@ export const withGrid = <T extends VListItem = VListItem>(
       // Rebuild size cache with row count
       ctx.rebuildSizeCache();
 
+      // ── Fix trailing gap ──
+      // Each row's cached size = itemSize + gap (for row spacing).
+      // This means getTotalSize() includes a trailing gap after the last row.
+      // We subtract it so there's no extra space at the bottom of the grid.
+      if (gap > 0) {
+        const originalGetTotalSize = ctx.sizeCache.getTotalSize.bind(ctx.sizeCache);
+        ctx.sizeCache.getTotalSize = (): number => {
+          const total = originalGetTotalSize();
+          return total > 0 ? total - gridState.gap : 0;
+        };
+      }
+
       // ── Add grid CSS class ──
       dom.root.classList.add(`${classPrefix}--grid`);
 
