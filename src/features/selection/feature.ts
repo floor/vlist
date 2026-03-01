@@ -294,6 +294,35 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       dom.root.addEventListener("focusin", onFocusIn);
 
+      // ── Blur handler — clear focus ring when focus leaves the list ──
+      const onFocusOut = (e: FocusEvent): void => {
+        if (ctx.state.isDestroyed) return;
+
+        // If the new focus target is still inside the root, ignore
+        const related = e.relatedTarget as Node | null;
+        if (related && dom.root.contains(related)) return;
+
+        // Clear the visual focus ring
+        const prevIdx = selectionState.focusedIndex;
+        selectionState.focusVisible = false;
+
+        dom.root.removeAttribute("aria-activedescendant");
+
+        // Remove the focused class from the previously focused item
+        if (prevIdx >= 0) {
+          const prevItem = ctx.dataManager.getItem(prevIdx);
+          if (prevItem) {
+            ctx.renderer.updateItemClasses(
+              prevIdx,
+              selectionState.selected.has(prevItem.id),
+              false,
+            );
+          }
+        }
+      };
+
+      dom.root.addEventListener("focusout", onFocusOut);
+
       // ── Click handler ──
       ctx.clickHandlers.push((event: MouseEvent): void => {
         if (ctx.state.isDestroyed) return;
@@ -500,6 +529,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           liveRef.remove();
         }
         dom.root.removeEventListener("focusin", onFocusIn);
+        dom.root.removeEventListener("focusout", onFocusOut);
       });
     },
 

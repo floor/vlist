@@ -1112,6 +1112,19 @@ function materialize<T extends VListItem = VListItem>(
     };
     dom.root.addEventListener("focusin", onFocusIn);
 
+    // Blur — clear focus ring when focus leaves the list
+    const onFocusOut = (e: FocusEvent): void => {
+      if ($.id) return;
+      const related = e.relatedTarget as Node | null;
+      if (related && dom.root.contains(related)) return;
+
+      if (coreFocus >= 0) {
+        rendered.get(coreFocus)?.classList.remove(focusedClass);
+      }
+      dom.root.removeAttribute("aria-activedescendant");
+    };
+    dom.root.addEventListener("focusout", onFocusOut);
+
     keydownHandlers.push((event: KeyboardEvent): void => {
       if ($.id) return;
       const total = $.vtf();
@@ -1129,7 +1142,10 @@ function materialize<T extends VListItem = VListItem>(
       moveFocus(p, n);
     });
 
-    destroyHandlers.push(() => dom.root.removeEventListener("focusin", onFocusIn));
+    destroyHandlers.push(() => {
+      dom.root.removeEventListener("focusin", onFocusIn);
+      dom.root.removeEventListener("focusout", onFocusOut);
+    });
   }
 
   // ── Mark initialized ────────────────────────────────────────────
