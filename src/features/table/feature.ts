@@ -174,8 +174,14 @@ export const withTable = <T extends VListItem = VListItem>(
       // Rebuild size cache with the new height config
       ctx.rebuildSizeCache();
 
-      // ── Add table CSS class ──
+      // ── Add table CSS classes ──
       dom.root.classList.add(`${classPrefix}--table`);
+      if (rowBorders) {
+        dom.root.classList.add(`${classPrefix}--table-row-borders`);
+      }
+      if (columnBorders) {
+        dom.root.classList.add(`${classPrefix}--table-col-borders`);
+      }
       // Set role to grid (more appropriate for tables than listbox)
       dom.root.setAttribute("role", "grid");
       dom.root.setAttribute("aria-colcount", String(config.columns.length));
@@ -274,8 +280,6 @@ export const withTable = <T extends VListItem = VListItem>(
         config.columns,
         classPrefix,
         resolvedConfig.ariaIdPrefix,
-        columnBorders,
-        rowBorders,
         () => ctx.dataManager.getTotal(),
       );
 

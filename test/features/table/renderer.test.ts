@@ -71,8 +71,6 @@ function createTestRenderer(opts: {
   columns?: TableColumn<TestItem>[];
   totalItems?: number;
   rowHeight?: number;
-  columnBorders?: boolean;
-  rowBorders?: boolean;
 } = {}) {
   const columns = opts.columns ?? [
     col("name", { width: 200 }),
@@ -98,8 +96,6 @@ function createTestRenderer(opts: {
     columns,
     "vlist",
     "vlist",
-    opts.columnBorders ?? false,
-    opts.rowBorders ?? true,
     () => totalItems,
   );
 
@@ -305,30 +301,33 @@ describe("render", () => {
 
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
+    // Row borders are now applied via CSS class on the root element
+    // (.vlist--table-row-borders .vlist-table-row), not inline styles.
+    // The renderer no longer sets border styles — verify no inline border.
     const row = container.querySelector(".vlist-table-row") as HTMLElement;
-    expect(row.style.borderBottom).toContain("1px solid");
+    expect(row.style.borderBottom).toBe("");
 
     container.remove();
   });
 
-  it("should apply column borders when enabled", () => {
-    const { renderer, container } = createTestRenderer({ columnBorders: true });
+  it("should not apply column borders inline (handled via CSS class on root)", () => {
+    const { renderer, container } = createTestRenderer();
     const items = makeItems(1);
 
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
+    // Column borders are now applied via CSS class on the root element
+    // (.vlist--table-col-borders .vlist-table-cell), not inline styles.
     const cells = container.querySelectorAll(".vlist-table-cell");
-    // First two cells should have right border (not the last one)
-    expect((cells[0] as HTMLElement).style.borderRight).toContain("1px solid");
-    expect((cells[1] as HTMLElement).style.borderRight).toContain("1px solid");
-    // Last cell should NOT have a right border
-    expect((cells[2] as HTMLElement).style.borderRight).toBe("");
+    for (const cell of cells) {
+      expect((cell as HTMLElement).style.borderRight).toBe("");
+    }
 
     container.remove();
   });
 
-  it("should not apply column borders when disabled", () => {
-    const { renderer, container } = createTestRenderer({ columnBorders: false });
+  it("should not set inline border styles on cells", () => {
+    const { renderer, container } = createTestRenderer();
     const items = makeItems(1);
 
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
@@ -785,19 +784,21 @@ describe("destroy", () => {
 // =============================================================================
 
 describe("cell alignment", () => {
-  it("should apply left alignment by default", () => {
+  it("should apply left alignment by default (no alignment class)", () => {
     const { renderer, container } = createTestRenderer();
     const items = makeItems(1);
 
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
     const cell = container.querySelector(".vlist-table-cell") as HTMLElement;
-    expect(cell.style.textAlign).toBe("left");
+    // Left alignment is the default — no modifier class needed
+    expect(cell.classList.contains("vlist-table-cell--center")).toBe(false);
+    expect(cell.classList.contains("vlist-table-cell--right")).toBe(false);
 
     container.remove();
   });
 
-  it("should apply center alignment", () => {
+  it("should apply center alignment via CSS class", () => {
     const columns: TableColumn<TestItem>[] = [
       col("name", { width: 200, align: "center" }),
     ];
@@ -808,12 +809,13 @@ describe("cell alignment", () => {
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
     const cell = container.querySelector(".vlist-table-cell") as HTMLElement;
-    expect(cell.style.textAlign).toBe("center");
+    expect(cell.classList.contains("vlist-table-cell--center")).toBe(true);
+    expect(cell.classList.contains("vlist-table-cell--right")).toBe(false);
 
     container.remove();
   });
 
-  it("should apply right alignment", () => {
+  it("should apply right alignment via CSS class", () => {
     const columns: TableColumn<TestItem>[] = [
       col("name", { width: 200, align: "right" }),
     ];
@@ -824,7 +826,8 @@ describe("cell alignment", () => {
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
     const cell = container.querySelector(".vlist-table-cell") as HTMLElement;
-    expect(cell.style.textAlign).toBe("right");
+    expect(cell.classList.contains("vlist-table-cell--right")).toBe(true);
+    expect(cell.classList.contains("vlist-table-cell--center")).toBe(false);
 
     container.remove();
   });

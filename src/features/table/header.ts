@@ -86,30 +86,13 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   element.setAttribute("role", "row");
   element.setAttribute("aria-rowindex", "1");
 
-  // Positioning
-  element.style.position = "absolute";
-  element.style.top = "0";
-  element.style.left = "0";
-  element.style.right = "0";
-  element.style.zIndex = "5";
+  // Only dynamic style — height comes from config
   element.style.height = `${headerHeight}px`;
-  element.style.overflow = "hidden";
-  element.style.display = "flex";
-  element.style.alignItems = "stretch";
-  element.style.boxSizing = "border-box";
-  element.style.willChange = "scroll-position";
-  element.style.contain = "layout style";
 
   // Scroll container inside the header — this is what we scroll in sync
   // with the viewport for horizontal scrolling.
   const scrollContainer = document.createElement("div");
   scrollContainer.className = `${classPrefix}-table-header-scroll`;
-  scrollContainer.style.position = "relative";
-  scrollContainer.style.display = "flex";
-  scrollContainer.style.alignItems = "stretch";
-  scrollContainer.style.height = "100%";
-  scrollContainer.style.minWidth = "100%";
-  scrollContainer.style.flexShrink = "0";
   element.appendChild(scrollContainer);
 
   // Insert header as first child of root (above viewport)
@@ -124,6 +107,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   viewport.style.left = "0";
   viewport.style.right = "0";
   viewport.style.bottom = "0";
+  // Clear the height: 100% set by createDOMStructure — with absolute
+  // positioning and all four insets, height is determined by top/bottom.
+  // Keeping height: 100% would make the viewport overflow the root by
+  // headerHeight pixels (100% of parent + top offset).
+  viewport.style.height = "auto";
 
   // =========================================================================
   // State
@@ -157,32 +145,17 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cell.setAttribute("aria-colindex", String(colIndex + 1));
     cell.dataset.columnKey = col.def.key;
 
-    // Flex layout for content + sort indicator
-    cell.style.position = "relative";
-    cell.style.display = "flex";
-    cell.style.alignItems = "center";
-    cell.style.height = "100%";
-    cell.style.boxSizing = "border-box";
-    cell.style.overflow = "hidden";
-    cell.style.flexShrink = "0";
-    cell.style.userSelect = "none";
-
-    // Text alignment
-    const align = col.def.align ?? "left";
+    // Alignment modifier class (left is the default — no class needed)
+    const align = col.def.align;
     if (align === "center") {
-      cell.style.justifyContent = "center";
+      cell.classList.add(`${classPrefix}-table-header-cell--center`);
     } else if (align === "right") {
-      cell.style.justifyContent = "flex-end";
+      cell.classList.add(`${classPrefix}-table-header-cell--right`);
     }
 
     // Content wrapper
     const content = document.createElement("div");
     content.className = `${classPrefix}-table-header-content`;
-    content.style.overflow = "hidden";
-    content.style.textOverflow = "ellipsis";
-    content.style.whiteSpace = "nowrap";
-    content.style.flex = "1";
-    content.style.minWidth = "0";
 
     // Render label
     const label = col.def.header
@@ -196,21 +169,15 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
     cell.appendChild(content);
 
-    // Sort indicator (hidden by default)
+    // Sort indicator (hidden by default — opacity controlled via CSS + inline toggle)
     const sortIndicator = document.createElement("span");
     sortIndicator.className = `${classPrefix}-table-header-sort`;
-    sortIndicator.style.marginLeft = "4px";
-    sortIndicator.style.flexShrink = "0";
-    sortIndicator.style.opacity = "0";
-    sortIndicator.style.fontSize = "0.7em";
-    sortIndicator.style.transition = "opacity 0.15s ease";
     sortIndicator.setAttribute("aria-hidden", "true");
     cell.appendChild(sortIndicator);
     sortIndicators.push(sortIndicator);
 
-    // Sortable cursor
+    // Sortable modifier class
     if (col.def.sortable) {
-      cell.style.cursor = "pointer";
       cell.classList.add(`${classPrefix}-table-header-cell--sortable`);
     }
 
@@ -218,17 +185,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     if (col.resizable) {
       const handle = document.createElement("div");
       handle.className = `${classPrefix}-table-header-resize`;
-      handle.style.position = "absolute";
-      handle.style.top = "0";
-      handle.style.right = "0";
-      handle.style.bottom = "0";
-      handle.style.width = "6px";
-      handle.style.cursor = "col-resize";
-      handle.style.zIndex = "2";
-      handle.style.touchAction = "none";
-      // Visible affordance line
-      handle.style.borderRight = "2px solid transparent";
-      handle.style.transition = "border-color 0.15s ease";
       handle.dataset.resizeIndex = String(colIndex);
 
       cell.appendChild(handle);
