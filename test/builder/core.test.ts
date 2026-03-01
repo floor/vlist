@@ -9,7 +9,7 @@
  * - Feature registration and priority ordering
  * - .build() lifecycle (resolve config → create DOM → create components → run features → wire events)
  * - All built-in features (withSelection, withScrollbar, withAsync, withScale,
- *   withSnapshots, withGrid, withSections) and their combinations
+ *   withSnapshots, withGrid, withGroups) and their combinations
  * - Reverse mode, horizontal mode, scroll config, keyboard navigation
  * - Template rendering, velocity-aware loading, sticky headers
  * - Grid scroll virtualization integration

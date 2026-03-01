@@ -32,7 +32,7 @@ import { withAsync } from "../../src/features/async/feature";
 import { withScale } from "../../src/features/scale/feature";
 import { withSnapshots } from "../../src/features/snapshots/feature";
 import { withGrid } from "../../src/features/grid/feature";
-import { withSections } from "../../src/features/sections/feature";
+import { withGroups } from "../../src/features/groups/feature";
 
 // =============================================================================
 // JSDOM Setup
@@ -343,7 +343,7 @@ describe("performance — initialization", () => {
         items,
       })
         .use(
-          withSections({
+          withGroups({
             getGroupForIndex: (i: number) => items[i]?.group ?? "",
             headerHeight: 30,
             headerTemplate,
@@ -800,7 +800,7 @@ describe("performance — destroy", () => {
       items,
     })
       .use(
-        withSections({
+        withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
           headerHeight: 30,
           headerTemplate,

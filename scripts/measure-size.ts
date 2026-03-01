@@ -24,7 +24,7 @@ const scenarios: Scenario[] = [
   { name: "Base", imports: ["vlist"] },
   { name: "withGrid", imports: ["vlist", "withGrid"] },
   { name: "withMasonry", imports: ["vlist", "withMasonry"] },
-  { name: "withSections", imports: ["vlist", "withSections"] },
+  { name: "withGroups", imports: ["vlist", "withGroups"] },
   { name: "withAsync", imports: ["vlist", "withAsync"] },
   { name: "withSelection", imports: ["vlist", "withSelection"] },
   { name: "withScale", imports: ["vlist", "withScale"] },

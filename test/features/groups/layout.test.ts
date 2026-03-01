@@ -8,10 +8,10 @@ import {
   createGroupLayout,
   buildLayoutItems,
   createGroupedSizeFn,
-} from "../../../src/features/sections/layout";
-import { isGroupHeader } from "../../../src/features/sections/types";
+} from "../../../src/features/groups/layout";
+import { isGroupHeader } from "../../../src/features/groups/types";
 import type { VListItem } from "../../../src/types";
-import type { GroupsConfig } from "../../../src/features/sections/types";
+import type { GroupsConfig } from "../../../src/features/groups/types";
 
 // =============================================================================
 // Test Data Helpers

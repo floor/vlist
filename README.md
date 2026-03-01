@@ -11,7 +11,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
 - **~8 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
-- **Grid, masonry, sections, async, selection, scale** — all opt-in
+- **Grid, masonry, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
 - **Reverse, page-scroll, wrap** — every layout mode
 - **Accessible** — WAI-ARIA, keyboard navigation, screen-reader friendly
@@ -24,7 +24,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Dimension-agnostic API** — semantically correct terminology for both orientations
 - **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
-- **Horizontal sections** — sticky headers work in horizontal carousels
+- **Horizontal groups** — sticky headers work in horizontal carousels
 - **Horizontal grid layouts** — 2D grids work in both orientations
 - **Masonry** — shortest-lane placement via `withMasonry()`
 
@@ -63,7 +63,7 @@ list.on('item:click', ({ item }) => console.log(item))
 Start with the base, add only what you need:
 
 ```typescript
-import { vlist, withGrid, withSections, withSelection } from '@floor/vlist'
+import { vlist, withGrid, withGroups, withSelection } from '@floor/vlist'
 
 const list = vlist({
   container: '#app',
@@ -71,7 +71,7 @@ const list = vlist({
   item: { height: 200, template: renderPhoto },
 })
   .use(withGrid({ columns: 4, gap: 16 }))
-  .use(withSections({
+  .use(withGroups({
     getGroupForIndex: (i) => photos[i].category,
     headerHeight: 40,
     headerTemplate: (cat) => `<h2>${cat}</h2>`,
@@ -87,7 +87,7 @@ const list = vlist({
 | **Base** | 8.1 KB | Core virtualization |
 | `withGrid()` | +3.8 KB | 2D grid layout |
 | `withMasonry()` | +2.3 KB | Pinterest-style masonry layout |
-| `withSections()` | +4.1 KB | Grouped lists with sticky/inline headers |
+| `withGroups()` | +4.1 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +3.9 KB | Lazy loading with adapters |
 | `withSelection()` | +1.6 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
@@ -125,7 +125,7 @@ const gallery = vlist({
 ### Sticky Headers
 
 ```typescript
-import { vlist, withSections } from '@floor/vlist'
+import { vlist, withGroups } from '@floor/vlist'
 
 const contacts = vlist({
   container: '#contacts',
@@ -135,7 +135,7 @@ const contacts = vlist({
     template: (contact) => `<div>${contact.name}</div>`,
   },
 })
-  .use(withSections({
+  .use(withGroups({
     getGroupForIndex: (i) => sortedContacts[i].lastName[0].toUpperCase(),
     headerHeight: 36,
     headerTemplate: (letter) => `<div class="header">${letter}</div>`,
@@ -176,9 +176,9 @@ const list = vlist({
 
 | Pattern | Key options |
 |---------|------------|
-| **Chat UI** | `reverse: true` + `withSections({ sticky: false })` |
+| **Chat UI** | `reverse: true` + `withGroups({ sticky: false })` |
 | **Horizontal carousel** | `orientation: 'horizontal'`, `item.width` |
-| **Horizontal sections** | `orientation: 'horizontal'` + `withSections()` |
+| **Horizontal groups** | `orientation: 'horizontal'` + `withGroups()` |
 | **Horizontal grid** | `orientation: 'horizontal'` + `withGrid()` |
 | **Masonry** | `withMasonry({ columns: 4, gap: 16 })` |
 | **Page-level scroll** | `withPage()` |
@@ -275,7 +275,7 @@ Each feature's config is fully typed — hover in your IDE for details.
 ```typescript
 withGrid({ columns: 4, gap: 16 })
 withMasonry({ columns: 4, gap: 16 })
-withSections({ getGroupForIndex, headerHeight, headerTemplate, sticky?: true })
+withGroups({ getGroupForIndex, headerHeight, headerTemplate, sticky?: true })
 withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
 withScale()                           // no config — auto-activates at 16.7M px
@@ -339,7 +339,7 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 |---------------|---------|
 | Base only | 8.1 KB |
 | + Grid | 11.9 KB |
-| + Sections | 12.2 KB |
+| + Groups | 12.2 KB |
 | + Async | 12.0 KB |
 
 ### Memory Efficiency
