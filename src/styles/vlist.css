@@ -167,7 +167,7 @@
     align-items: center;
     border-bottom: 1px solid var(--vlist-border);
     background-color: var(--vlist-bg);
-    cursor: pointer;
+    cursor: default;
     user-select: none;
     opacity: 1;
     transition:
@@ -184,8 +184,13 @@
     transition: none;
 }
 
-/* Item hover state */
-.vlist-item:hover {
+/* Pointer cursor (only when selection is active) */
+.vlist--selectable .vlist-item {
+    cursor: pointer;
+}
+
+/* Item hover state (only when selection is active) */
+.vlist--selectable .vlist-item:hover {
     background-color: var(--vlist-bg-hover);
 }
 
@@ -196,7 +201,7 @@
     /* padding-left: calc(var(--vlist-item-padding-x) - 4px); */
 }
 
-.vlist-item--selected:hover {
+.vlist--selectable .vlist-item--selected:hover {
     background-color: var(--vlist-bg-selected-hover);
 }
 
@@ -359,7 +364,7 @@
     justify-content: center;
     padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
     background-color: var(--vlist-bg);
-    cursor: pointer;
+    cursor: default;
     user-select: none;
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
@@ -379,8 +384,13 @@
     transition: none;
 }
 
-/* Grid item hover state */
-.vlist-grid-item:hover {
+/* Grid item pointer cursor (only when selection is active) */
+.vlist--selectable .vlist-grid-item {
+    cursor: pointer;
+}
+
+/* Grid item hover state (only when selection is active) */
+.vlist--selectable .vlist-grid-item:hover {
     background-color: var(--vlist-bg-hover);
 }
 
@@ -389,7 +399,7 @@
     background-color: var(--vlist-bg-selected);
 }
 
-.vlist-grid-item.vlist-item--selected:hover {
+.vlist--selectable .vlist-grid-item.vlist-item--selected:hover {
     background-color: var(--vlist-bg-selected-hover);
 }
 
@@ -419,7 +429,7 @@
     justify-content: center;
     padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
     background-color: var(--vlist-bg);
-    cursor: pointer;
+    cursor: default;
     user-select: none;
     transition: background-color var(--vlist-transition-duration)
         var(--vlist-transition-timing);
@@ -439,8 +449,13 @@
     transition: none;
 }
 
-/* Masonry item hover state */
-.vlist-masonry-item:hover {
+/* Masonry item pointer cursor (only when selection is active) */
+.vlist--selectable .vlist-masonry-item {
+    cursor: pointer;
+}
+
+/* Masonry item hover state (only when selection is active) */
+.vlist--selectable .vlist-masonry-item:hover {
     background-color: var(--vlist-bg-hover);
 }
 
@@ -449,7 +464,7 @@
     background-color: var(--vlist-bg-selected);
 }
 
-.vlist-masonry-item.vlist-item--selected:hover {
+.vlist--selectable .vlist-masonry-item.vlist-item--selected:hover {
     background-color: var(--vlist-bg-selected-hover);
 }
 
