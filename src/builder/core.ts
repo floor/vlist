@@ -689,7 +689,7 @@ function materialize<T extends VListItem = VListItem>(
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
       const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
-      if (!item) continue;
+      if (item === undefined) continue;
 
       const existing = rendered.get(i);
       if (existing) {
