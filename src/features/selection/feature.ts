@@ -117,6 +117,9 @@ export const withSelection = <T extends VListItem = VListItem>(
         return;
       }
 
+      // ── Add selectable CSS class ──
+      dom.root.classList.add(`${classPrefix}--selectable`);
+
       // ── ID → index map for O(1) lookups (selection feature only) ──
       // Incrementally indexed: items are added as they load via the load:end
       // event, avoiding a full 0..total scan that would generate millions of
