@@ -195,8 +195,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   _columns: TableColumn<T>[],
   classPrefix: string,
   ariaIdPrefix: string,
-  columnBorders: boolean,
-  rowBorders: boolean,
   getTotalItems: () => number,
 ): TableRendererInstance<T> => {
   const pool = createElementPool();
@@ -214,6 +212,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
   const cellClass = `${classPrefix}-table-cell`;
+  const cellCenterClass = `${classPrefix}-table-cell--center`;
+  const cellRightClass = `${classPrefix}-table-cell--right`;
 
   // =========================================================================
   // Cell Template Application
@@ -266,14 +266,13 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const applyCellAlign = (cell: HTMLElement, col: ResolvedColumn<T>): void => {
     const align = col.def.align;
     if (align === "center") {
-      cell.style.textAlign = "center";
-      cell.style.justifyContent = "center";
+      cell.classList.add(cellCenterClass);
+      cell.classList.remove(cellRightClass);
     } else if (align === "right") {
-      cell.style.textAlign = "right";
-      cell.style.justifyContent = "flex-end";
+      cell.classList.add(cellRightClass);
+      cell.classList.remove(cellCenterClass);
     } else {
-      cell.style.textAlign = "left";
-      cell.style.justifyContent = "flex-start";
+      cell.classList.remove(cellCenterClass, cellRightClass);
     }
   };
 
@@ -302,15 +301,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       } else {
         cell = document.createElement("div");
         cell.className = cellClass;
-        cell.style.position = "absolute";
-        cell.style.top = "0";
-        cell.style.bottom = "0";
-        cell.style.display = "flex";
-        cell.style.alignItems = "center";
-        cell.style.boxSizing = "border-box";
-        cell.style.overflow = "hidden";
-        cell.style.whiteSpace = "nowrap";
-        cell.style.textOverflow = "ellipsis";
         rowElement.appendChild(cell);
       }
       cells.push(cell);
@@ -336,24 +326,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   ): TrackedRow => {
     const element = pool.acquire();
 
-    // Row base styles
-    element.style.position = "absolute";
-    element.style.top = "0";
-    element.style.left = "0";
+    // Dynamic row styles (width, height, transform are per-row)
     element.style.width = `${currentLayout.totalWidth}px`;
-    element.style.display = "flex";
-    element.style.boxSizing = "border-box";
-    element.style.contain = "content";
-    element.style.willChange = "transform";
 
     // Row height from size cache
     const height = sizeCache.getSize(index);
     element.style.height = `${height}px`;
-
-    // Row borders
-    if (rowBorders) {
-      element.style.borderBottom = "1px solid var(--vlist-border, #e5e7eb)";
-    }
 
     // Apply classes
     applyRowClasses(element, isSelected, isFocused);
@@ -384,23 +362,14 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       const cell = cells[i]!;
       const col = cols[i]!;
 
-      // Position and size
+      // Dynamic per-column styles (position and size)
       cell.style.left = `${col.offset}px`;
       cell.style.width = `${col.width}px`;
       cell.setAttribute("role", "gridcell");
       cell.setAttribute("aria-colindex", String(i + 1));
 
-      // Alignment
+      // Alignment (CSS class toggle)
       applyCellAlign(cell, col);
-
-      // Column borders
-      if (columnBorders && i < cols.length - 1) {
-        cell.style.borderRight = "1px solid var(--vlist-border, #e5e7eb)";
-      }
-
-      // Padding
-      cell.style.paddingLeft = "var(--vlist-item-padding-x, 0.75rem)";
-      cell.style.paddingRight = "var(--vlist-item-padding-x, 0.75rem)";
 
       // Content
       applyCellTemplate(cell, item, col, index);
