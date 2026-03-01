@@ -5,6 +5,17 @@ v1.0.0 → initial commit
 
 2026-03-01
 
+  feat(table): add withTable feature — virtualized data table with columns, resize, sort
+  fix(builder): skip only undefined items in render loop, not falsy values
+  fix(table): reset inherited vlist-item border-bottom on table rows
+  refactor(table): move inline styles to dedicated CSS file
+  refactor(table): micro-optimizations for runtime performance
+
+  → v1.2.1
+
+
+2026-03-01
+
   feat(a11y): keyboard focus, focus-visible, and baseline navigation
   feat(selection): scope hover highlight and pointer cursor behind --selectable class
   feat(grid,masonry): responsive resize with context injection
