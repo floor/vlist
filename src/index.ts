@@ -19,6 +19,7 @@ export { withGrid } from "./features/grid";
 export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
+export { withTable } from "./features/table";
 
 // Core Types
 export type {
@@ -97,6 +98,23 @@ export {
   type GridRenderer,
   type ItemRange,
 } from "./features/grid";
+
+// Table domain (data table with columns, resizable headers)
+export {
+  createTableLayout,
+  createTableHeader,
+  createTableRenderer,
+  type TableConfig,
+  type TableColumn,
+  type TableLayout,
+  type TableHeader,
+  type TableRenderer,
+  type TableRendererInstance,
+  type ResolvedColumn,
+  type ColumnResizeEvent,
+  type ColumnSortEvent,
+  type ColumnClickEvent,
+} from "./features/table";
 
 // Masonry domain (Pinterest-style layout)
 export {
