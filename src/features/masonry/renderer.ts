@@ -130,6 +130,10 @@ interface TrackedItem {
   lastY: number;
   /** Placement X at last render */
   lastX: number;
+  /** Item size (main axis) at last render */
+  lastSize: number;
+  /** Cross-axis size at last render (to detect resize) */
+  lastCrossSize: number;
   /** Render frame when this item was last in the visible set */
   lastSeenFrame: number;
 }
@@ -295,6 +299,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       lastFocused: isFocused,
       lastY: placement.y,
       lastX: placement.x,
+      lastSize: placement.size,
+      lastCrossSize: placement.crossSize,
       lastSeenFrame: frameCounter,
     };
   };
@@ -361,6 +367,9 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         const posChanged =
           existing.lastY !== placement.y ||
           existing.lastX !== placement.x;
+        const sizeChanged =
+          existing.lastSize !== placement.size ||
+          existing.lastCrossSize !== placement.crossSize;
 
         // Template re-evaluation only when item data or selection/focus changed
         if (idChanged || selectedChanged || focusedChanged) {
@@ -376,6 +385,13 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           existing.lastItemId = item.id;
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
+        }
+
+        // Size update when cross-axis or main-axis size changed (e.g. container resize)
+        if (sizeChanged) {
+          applySizeStyles(existing.element, placement);
+          existing.lastSize = placement.size;
+          existing.lastCrossSize = placement.crossSize;
         }
 
         // Position update only when coordinates changed
