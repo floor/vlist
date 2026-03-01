@@ -702,6 +702,7 @@ export const createDOMStructure = (
   // Viewport (scrollable container)
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
+  viewport.setAttribute("tabindex", "-1");
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
