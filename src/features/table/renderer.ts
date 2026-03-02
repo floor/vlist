@@ -194,6 +194,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   classPrefix: string,
   ariaIdPrefix: string,
   getTotalItems: () => number,
+  striped?: boolean,
 ): TableRendererInstance<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedRow>();
@@ -222,6 +223,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const cellClass = `${classPrefix}-table-cell`;
   const cellCenterClass = `${classPrefix}-table-cell--center`;
   const cellRightClass = `${classPrefix}-table-cell--right`;
+  const oddClass = `${classPrefix}-item--odd`;
 
   // =========================================================================
   // Cell Template Application
@@ -255,10 +257,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
    */
   const applyRowClasses = (
     element: HTMLElement,
+    index: number,
     isSelected: boolean,
     isFocused: boolean,
   ): void => {
     let className = rowClass;
+    if (striped && (index & 1) === 1) className += ` ${oddClass}`;
     if (isSelected) className += ` ${selectedClass}`;
     if (isFocused) className += ` ${focusedClass}`;
     element.className = className;
@@ -332,6 +336,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
   ): TrackedRow => {
+    // Note: applyRowClasses (called below) handles the striped odd class
     const element = pool.acquire();
 
     // Dynamic row styles (width, height, transform are per-row)
@@ -342,7 +347,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     element.style.height = `${height}px`;
 
     // Apply classes
-    applyRowClasses(element, isSelected, isFocused);
+    applyRowClasses(element, index, isSelected, isFocused);
 
     // ARIA attributes
     element.setAttribute("role", "row");
@@ -464,7 +469,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
             applyCellTemplate(existing.cells[c]!, item, cols[c]!, i);
           }
-          applyRowClasses(existing.element, isSelected, isFocused);
+          applyRowClasses(existing.element, i, isSelected, isFocused);
           existing.element.setAttribute("data-id", String(item.id));
           setAriaSelected(existing.element, isSelected);
           existing.lastItemId = item.id;
@@ -472,7 +477,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           existing.lastFocused = isFocused;
         } else if (selectedChanged || focusedChanged) {
           // Same item — only update classes/aria if state changed
-          applyRowClasses(existing.element, isSelected, isFocused);
+          applyRowClasses(existing.element, i, isSelected, isFocused);
           setAriaSelected(existing.element, isSelected);
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
@@ -544,7 +549,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
         existing.lastItemId = item.id;
       }
 
-      applyRowClasses(existing.element, isSelected, isFocused);
+      applyRowClasses(existing.element, index, isSelected, isFocused);
       setAriaSelected(existing.element, isSelected);
       existing.lastSelected = isSelected;
       existing.lastFocused = isFocused;
@@ -566,7 +571,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const focusedChanged = existing.lastFocused !== isFocused;
 
     if (selectedChanged || focusedChanged) {
-      applyRowClasses(existing.element, isSelected, isFocused);
+      applyRowClasses(existing.element, index, isSelected, isFocused);
       setAriaSelected(existing.element, isSelected);
       existing.lastSelected = isSelected;
       existing.lastFocused = isFocused;

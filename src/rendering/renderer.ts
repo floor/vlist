@@ -223,6 +223,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     getState: CompressionStateFn;
     getPosition: CompressedPositionFn;
   },
+  striped?: boolean,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, TrackedItem>();
@@ -344,6 +345,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   const focusedClass = `${classPrefix}-item--focused`;
   const placeholderClass = `${classPrefix}-item--placeholder`;
   const replacedClass = `${classPrefix}-item--replaced`;
+  const oddClass = `${classPrefix}-item--odd`;
 
   /**
    * Apply base class to element (called once when element is created)
@@ -415,6 +417,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
     if (String(item.id).startsWith(PLACEHOLDER_ID_PREFIX)) {
       element.classList.add(placeholderClass);
     }
+
+    // Striped: toggle odd class based on logical index (not DOM order)
+    if (striped) element.classList.toggle(oddClass, (index & 1) === 1);
 
     const offset = calculateOffset(index, compressionCtx);
     element.style.transform = horizontal
