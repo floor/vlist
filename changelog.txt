@@ -5,6 +5,13 @@ initial commit → latest
 
 2026-03-02
 
+  fix(scroll): skip core wheel handler when compression is active (withScale owns scroll)
+
+  → v1.2.5
+
+
+2026-03-02
+
   fix(async): add deceleration debounce to prevent excessive API requests during momentum scroll
   fix(scroll): use actual DOM scroll limit in wheel handler instead of logical total size
   fix(scroll): reset velocity to zero when wheel events hit scroll boundary
