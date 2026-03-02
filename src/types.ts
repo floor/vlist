@@ -178,6 +178,22 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    */
   estimatedWidth?: number;
 
+  /**
+   * Add a `.vlist-item--odd` class on odd-indexed items for zebra-stripe styling.
+   *
+   * Virtual lists recycle DOM elements out of document order, so CSS
+   * `:nth-child(even/odd)` does not match the logical item index.
+   * When enabled, vlist toggles the class based on the real item index,
+   * giving you a reliable CSS hook:
+   *
+   * ```css
+   * .vlist-item--odd { background: #fafafb; }
+   * ```
+   *
+   * Default: `false` (no extra work on the render hot path).
+   */
+  striped?: boolean;
+
   /** Template function to render each item */
   template: ItemTemplate<T>;
 }

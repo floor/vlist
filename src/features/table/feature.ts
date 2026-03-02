@@ -281,6 +281,7 @@ export const withTable = <T extends VListItem = VListItem>(
         classPrefix,
         resolvedConfig.ariaIdPrefix,
         () => ctx.dataManager.getTotal(),
+        ctx.rawConfig.item?.striped,
       );
 
       // ── Cached selection getter references ──
