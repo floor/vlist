@@ -245,6 +245,8 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       resolvedConfig.ariaIdPrefix,
       resolvedConfig.horizontal,
       undefined,
+      undefined,
+      rawConfig.item?.striped,
     );
     renderer = newRenderer;
   };

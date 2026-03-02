@@ -527,6 +527,8 @@ function materialize<T extends VListItem = VListItem>(
   }
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
+  const striped = itemConfig.striped === true;
+  const oddClass = `${classPrefix}-item--odd`;
 
   // No ID → index map (removed for memory efficiency)
   // Users can implement their own Map if needed for O(1) lookups
@@ -620,6 +622,9 @@ function materialize<T extends VListItem = VListItem>(
     if (isPlaceholder) {
       element.classList.add(`${classPrefix}-item--placeholder`);
     }
+
+    // Striped: toggle odd class based on logical index (not DOM order)
+    if (striped) element.classList.toggle(oddClass, (index & 1) === 1);
 
     applyTemplate(element, $.at(item, index, itemState));
     $.pef(element, index);

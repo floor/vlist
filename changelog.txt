@@ -1,6 +1,11 @@
 vlist — full changelog
-v1.0.0 → initial commit
-318 commits · 28 days · Feb 2 – Mar 1, 2026
+initial commit → latest
+319 commits · 29 days · Feb 2 – Mar 2, 2026
+
+
+2026-03-02
+
+  fix(a11y): move role=listbox from root to items container
 
 
 2026-03-01
