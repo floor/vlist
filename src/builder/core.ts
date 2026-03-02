@@ -885,6 +885,13 @@ function materialize<T extends VListItem = VListItem>(
   if (wheelEnabled && !isHorizontal && !isMobile) {
     // Intercept wheel events and handle scroll manually
     wheelHandler = (event: WheelEvent): void => {
+      // When compression is active (withScale), the scale feature has its
+      // own wheel handler that manages virtual scroll position with smooth
+      // interpolation. The core handler must not run — it would compute
+      // maxScroll from DOM dimensions (much smaller than the virtual space)
+      // and reset the scroll position to near-zero.
+      if (sharedState.viewportState.isCompressed) return;
+
       // When the viewport has horizontal overflow (e.g. table with wide
       // columns) and the user is scrolling horizontally (trackpad or
       // shift+wheel), let the browser handle it natively so horizontal
@@ -907,9 +914,9 @@ function materialize<T extends VListItem = VListItem>(
       const currentScroll = $.sgt();
       const delta = event.deltaY;
 
-      // Use the actual DOM scroll limit, not $.hc.getTotalSize(). With
-      // compression (withScale), the logical total size can be much larger
-      // than the real content element size the browser enforces.
+      // Use the actual DOM scroll limit — this matches what the browser
+      // enforces for scrollTop, avoiding sub-pixel mismatches with
+      // $.hc.getTotalSize() when content size updates are pending.
       const maxScroll = dom.viewport.scrollHeight - dom.viewport.clientHeight;
 
       // Calculate new scroll position
