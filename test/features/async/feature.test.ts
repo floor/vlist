@@ -139,14 +139,18 @@ function createMockContext(config?: {
       destroy: mock(() => {}),
     } as any,
     dataManager: {} as any, // Will be replaced by plugin
-    scrollController: {
-      getScrollTop: mock(() => 0),
-      scrollTo: mock(() => {}),
-      isAtTop: mock(() => true),
-      isAtBottom: mock(() => false),
-      getVelocity: mock(() => config?.velocity ?? 0),
-      isTracking: mock(() => config?.isTracking ?? true),
-    } as any,
+    scrollController: (() => {
+      let scrollPos = 0;
+      return {
+        getScrollTop: mock(() => scrollPos),
+        setScrollTop: (pos: number) => { scrollPos = pos; },
+        scrollTo: mock(() => {}),
+        isAtTop: mock(() => scrollPos <= 0),
+        isAtBottom: mock(() => false),
+        getVelocity: mock(() => config?.velocity ?? 0),
+        isTracking: mock(() => config?.isTracking ?? true),
+      };
+    })() as any,
     state: {
       dataState: {
         total: 0,
@@ -498,16 +502,136 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     const scrollHandler = ctx.afterScroll[0];
 
-    // First scroll: high velocity, queues range
+    // First scroll: high velocity, queues range (mid-scroll, not at edge)
+    (ctx.scrollController as any).setScrollTop(100);
     scrollHandler(100, "down");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(ensureRangeSpy).not.toHaveBeenCalled();
 
-    // Update velocity to slow
+    // Update velocity to below threshold but still decelerating (> 0.5)
     (ctx.scrollController.getVelocity as any).mockReturnValue(10);
 
-    // Second scroll: velocity dropped, should load pending range
+    // Second scroll: velocity dropped below cancel threshold, but still
+    // in deceleration phase — should NOT load immediately to avoid
+    // request bursts during momentum scroll deceleration
+    (ctx.scrollController as any).setScrollTop(200);
+    scrollHandler(200, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Drop velocity to near-zero (< 0.5) — scroll has settled
+    (ctx.scrollController.getVelocity as any).mockReturnValue(0);
+
+    // Third scroll: velocity negligible, exits deceleration phase
+    // and loads the pending range
+    (ctx.scrollController as any).setScrollTop(210);
+    scrollHandler(210, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).toHaveBeenCalled();
+  });
+
+  it("should load pending range after deceleration timer fires", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 25 },
+    });
+
+    // Start with high velocity
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    plugin.setup(ctx);
+
+    // Get the captured data manager and spy on ensureRange
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+
+    // First scroll: high velocity, queues range (mid-scroll, not at edge)
+    (ctx.scrollController as any).setScrollTop(100);
     scrollHandler(100, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Drop below threshold but still decelerating — change renderRange
+    // so range change detection fires and the deceleration timer starts
+    (ctx.scrollController.getVelocity as any).mockReturnValue(3);
+    ctx.state.viewportState.renderRange = { start: 20, end: 30 };
+    (ctx.scrollController as any).setScrollTop(200);
+    scrollHandler(200, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Wait for deceleration settle timer (120ms) — should fire without
+    // needing velocity to reach zero
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(ensureRangeSpy).toHaveBeenCalled();
+  });
+
+  it("should load immediately when hitting scroll boundary during fast scroll", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 25 },
+    });
+
+    // Start with high velocity
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    plugin.setup(ctx);
+
+    // Get the captured data manager and spy on ensureRange
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+
+    // First scroll: high velocity mid-scroll, queues range
+    (ctx.scrollController as any).setScrollTop(500);
+    ctx.state.viewportState.renderRange = { start: 50, end: 60 };
+    scrollHandler(500, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Second scroll: still high velocity but we've hit the bottom boundary.
+    // Should flush immediately — no point deferring when scroll can't continue.
+    (ctx.scrollController.isAtBottom as any).mockReturnValue(true);
+    (ctx.scrollController as any).setScrollTop(4500);
+    ctx.state.viewportState.renderRange = { start: 90, end: 99 };
+    scrollHandler(4500, "down");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).toHaveBeenCalled();
+  });
+
+  it("should load immediately when hitting top boundary during fast scroll up", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 25 },
+    });
+
+    // Start mid-scroll with high velocity
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+
+    // First scroll: high velocity mid-scroll, queues range
+    (ctx.scrollController as any).setScrollTop(500);
+    ctx.state.viewportState.renderRange = { start: 50, end: 60 };
+    scrollHandler(500, "up");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Second scroll: hit the top boundary — should flush immediately
+    (ctx.scrollController as any).setScrollTop(0);
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(0, "up");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(ensureRangeSpy).toHaveBeenCalled();
   });

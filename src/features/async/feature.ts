@@ -167,6 +167,28 @@ export const withAsync = <T extends VListItem = VListItem>(
       let lastEnsuredRange: Range | null = null;
       let pendingRange: Range | null = null;
       let previousVelocity = 0;
+      let wasAboveThreshold = false;
+      let decelerationTimer: ReturnType<typeof setTimeout> | null = null;
+      const DECELERATION_SETTLE_MS = 120;
+
+      /**
+       * Reset all deceleration-related state. Called when exiting the
+       * deceleration phase for any reason (velocity near-zero, scroll
+       * boundary hit, re-acceleration, or idle timeout).
+       *
+       * @param clearLastRange - also null out lastEnsuredRange so the
+       *   rangeChanged check re-evaluates the current renderRange.
+       *   Pass true when the pending range may be stale.
+       */
+      const resetDeceleration = (clearLastRange = false): void => {
+        wasAboveThreshold = false;
+        pendingRange = null;
+        if (clearLastRange) lastEnsuredRange = null;
+        if (decelerationTimer !== null) {
+          clearTimeout(decelerationTimer);
+          decelerationTimer = null;
+        }
+      };
 
       /**
        * Load the pending range if any (called on idle)
@@ -191,25 +213,47 @@ export const withAsync = <T extends VListItem = VListItem>(
           const velocityReliable = ctx.scrollController.isTracking();
 
           // Only allow loading when velocity tracker is reliable and below threshold
-          const canLoad =
+          let canLoad =
             velocityReliable && currentVelocity <= cancelLoadThreshold;
 
-          // Check if velocity just dropped below threshold — load pending range immediately
-          if (
-            pendingRange &&
-            previousVelocity > cancelLoadThreshold &&
-            currentVelocity <= cancelLoadThreshold
-          ) {
-            const range = pendingRange;
-            pendingRange = null;
-            ctx.dataManager
-              .ensureRange(range.start, range.end)
-              .catch((error) => {
-                emitter.emit("error", { error, context: "ensureRange" });
-              });
+          // Track when we transition from above-threshold to below-threshold.
+          // During deceleration the velocity drops gradually, and the render
+          // range still changes rapidly. Instead of firing ensureRange on
+          // every frame, we enter a "deceleration settling" phase that defers
+          // loading until the scroll stabilises (no new frame for
+          // DECELERATION_SETTLE_MS) or velocity drops to near-zero.
+          if (previousVelocity > cancelLoadThreshold && currentVelocity <= cancelLoadThreshold) {
+            wasAboveThreshold = true;
+          } else if (wasAboveThreshold && currentVelocity > cancelLoadThreshold) {
+            // Velocity went back above threshold — a new fast scroll gesture,
+            // not deceleration anymore.
+            resetDeceleration();
+          }
+
+          // Exit deceleration phase once velocity is negligible.
+          // Don't eagerly load pendingRange here — the rangeChanged block
+          // below will see canLoad && !isDecelerating and fire ensureRange
+          // for the *current* renderRange, which is more accurate than the
+          // potentially stale pendingRange saved on a previous frame.
+          if (wasAboveThreshold && currentVelocity < 0.5) {
+            resetDeceleration(true);
           }
 
           previousVelocity = currentVelocity;
+
+          // Detect scroll boundary — when we've hit the top or bottom,
+          // the scroll can't continue so deferring loads is pointless.
+          // Override velocity gating and flush immediately.
+          const atEdge =
+            ctx.scrollController.isAtTop() ||
+            ctx.scrollController.isAtBottom();
+
+          if (atEdge && (wasAboveThreshold || pendingRange)) {
+            resetDeceleration(true);
+            canLoad = true;
+          }
+
+          const isDecelerating = wasAboveThreshold && currentVelocity > 0.5;
 
           // ── Check for infinite scroll (load more) ──
           if (
@@ -262,8 +306,13 @@ export const withAsync = <T extends VListItem = VListItem>(
               end: renderRange.end,
             };
 
-            if (canLoad) {
+            if (canLoad && !isDecelerating) {
+              // Velocity is low and stable — load immediately
               pendingRange = null;
+              if (decelerationTimer !== null) {
+                clearTimeout(decelerationTimer);
+                decelerationTimer = null;
+              }
 
               // Calculate preload range based on scroll direction and velocity
               let loadStart = renderRange.start;
@@ -282,11 +331,26 @@ export const withAsync = <T extends VListItem = VListItem>(
                 emitter.emit("error", { error, context: "ensureRange" });
               });
             } else {
-              // Scrolling too fast — save range for loading when idle
+              // Either scrolling too fast OR decelerating from a fast scroll.
+              // Save the range and defer loading until scroll settles.
               pendingRange = {
                 start: renderRange.start,
                 end: renderRange.end,
               };
+
+              // During deceleration, use a short timer to catch the moment
+              // the range stops changing. This avoids waiting for full idle
+              // (200ms) while still preventing per-frame request bursts.
+              if (isDecelerating) {
+                if (decelerationTimer !== null) {
+                  clearTimeout(decelerationTimer);
+                }
+                decelerationTimer = setTimeout(() => {
+                  decelerationTimer = null;
+                  loadPendingRange();
+                  resetDeceleration();
+                }, DECELERATION_SETTLE_MS);
+              }
             }
           }
         },
@@ -311,17 +375,21 @@ export const withAsync = <T extends VListItem = VListItem>(
           }
           idleTimer = setTimeout(() => {
             idleTimer = null;
+            // Scroll has fully stopped — load pending data then reset
+            // deceleration state so the next gesture starts clean.
             loadPendingRange();
+            resetDeceleration();
           }, idleMs);
         },
       );
 
-      // Clean up idle timer on destroy
+      // Clean up timers on destroy
       ctx.destroyHandlers.push(() => {
         if (idleTimer !== null) {
           clearTimeout(idleTimer);
           idleTimer = null;
         }
+        resetDeceleration();
       });
 
       // ── Network recovery: reload visible placeholders when back online ──
