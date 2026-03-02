@@ -117,44 +117,45 @@ describe("createDOMStructure", () => {
     expect(items.className).toBe("my-list-items");
   });
 
-  it("should set listbox role and tabindex on root", () => {
+  it("should set listbox role on items and tabindex on root", () => {
     const container = document.createElement("div");
-    const { root } = createDOMStructure(container, "vlist");
+    const { root, items } = createDOMStructure(container, "vlist");
 
-    expect(root.getAttribute("role")).toBe("listbox");
+    expect(root.getAttribute("role")).toBeNull();
     expect(root.getAttribute("tabindex")).toBe("0");
+    expect(items.getAttribute("role")).toBe("listbox");
   });
 
   it("should add aria-label when provided", () => {
     const container = document.createElement("div");
-    const { root } = createDOMStructure(container, "vlist", "My List");
+    const { items } = createDOMStructure(container, "vlist", "My List");
 
-    expect(root.getAttribute("aria-label")).toBe("My List");
+    expect(items.getAttribute("aria-label")).toBe("My List");
   });
 
   it("should not add aria-label when not provided", () => {
     const container = document.createElement("div");
-    const { root } = createDOMStructure(container, "vlist");
+    const { items } = createDOMStructure(container, "vlist");
 
-    expect(root.hasAttribute("aria-label")).toBe(false);
+    expect(items.hasAttribute("aria-label")).toBe(false);
   });
 
   it("should configure vertical mode by default", () => {
     const container = document.createElement("div");
-    const { root, viewport, content } = createDOMStructure(
+    const { root, viewport, content, items } = createDOMStructure(
       container,
       "vlist",
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(false);
-    expect(root.hasAttribute("aria-orientation")).toBe(false);
+    expect(items.hasAttribute("aria-orientation")).toBe(false);
     expect(viewport.style.overflow).toBe("auto");
     expect(content.style.width).toBe("100%");
   });
 
   it("should configure horizontal mode when specified", () => {
     const container = document.createElement("div");
-    const { root, viewport } = createDOMStructure(
+    const { root, viewport, items } = createDOMStructure(
       container,
       "vlist",
       undefined,
@@ -162,7 +163,7 @@ describe("createDOMStructure", () => {
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(true);
-    expect(root.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(items.getAttribute("aria-orientation")).toBe("horizontal");
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
   });

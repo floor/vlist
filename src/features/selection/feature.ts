@@ -372,14 +372,14 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         switch (event.key) {
           case "ArrowUp":
-            newState = moveFocusUp(selectionState, totalItems);
+            newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "ArrowDown":
-            newState = moveFocusDown(selectionState, totalItems);
+            newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;

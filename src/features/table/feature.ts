@@ -183,8 +183,8 @@ export const withTable = <T extends VListItem = VListItem>(
         dom.root.classList.add(`${classPrefix}--table-col-borders`);
       }
       // Set role to grid (more appropriate for tables than listbox)
-      dom.root.setAttribute("role", "grid");
-      dom.root.setAttribute("aria-colcount", String(config.columns.length));
+      dom.items.setAttribute("role", "grid");
+      dom.items.setAttribute("aria-colcount", String(config.columns.length));
 
       // ── Resolve initial column widths ──
       const containerWidth = ctx.getContainerWidth();
@@ -585,8 +585,8 @@ export const withTable = <T extends VListItem = VListItem>(
         dom.content.style.minWidth = "";
         dom.items.style.minWidth = "";
         dom.root.classList.remove(`${classPrefix}--table`);
-        dom.root.setAttribute("role", "listbox"); // Restore default role
-        dom.root.removeAttribute("aria-colcount");
+        dom.items.setAttribute("role", "listbox"); // Restore default role
+        dom.items.removeAttribute("aria-colcount");
       });
     },
 
