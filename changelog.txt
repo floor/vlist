@@ -1,11 +1,14 @@
 vlist — full changelog
 initial commit → latest
-319 commits · 29 days · Feb 2 – Mar 2, 2026
+321 commits · 29 days · Feb 2 – Mar 2, 2026
 
 
 2026-03-02
 
+  feat(item): add striped option for reliable zebra-stripe styling
   fix(a11y): move role=listbox from root to items container
+
+  → v1.2.3
 
 
 2026-03-01
