@@ -19,7 +19,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader friendly
 - **React, Vue, Svelte** — framework adapters available
 
-**30+ interactive examples → [vlist.dev](https://vlist.dev)**
+**14+ interactive examples → [vlist.dev](https://vlist.dev)**
 
 ## Highlights
 
@@ -220,6 +220,7 @@ const list = vlist({
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
 | **Variable heights** | `item: { height: (index) => heights[index] }` |
+| **Zebra striping** | `item: { striped: true }` + `.vlist-item--odd { background: #fafafb }` |
 
 See **[vlist.dev](https://vlist.dev)** for live demos of each.
 
