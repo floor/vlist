@@ -907,11 +907,30 @@ function materialize<T extends VListItem = VListItem>(
       const currentScroll = $.sgt();
       const delta = event.deltaY;
 
+      // Use the actual DOM scroll limit, not $.hc.getTotalSize(). With
+      // compression (withScale), the logical total size can be much larger
+      // than the real content element size the browser enforces.
+      const maxScroll = dom.viewport.scrollHeight - dom.viewport.clientHeight;
+
       // Calculate new scroll position
       const newScroll = Math.max(
         0,
-        Math.min(currentScroll + delta, $.hc.getTotalSize() - $.ch),
+        Math.min(currentScroll + delta, maxScroll),
       );
+
+      // When clamped at a boundary (top or bottom), the scroll position
+      // didn't actually change. Reset velocity immediately — the list
+      // isn't moving — and skip the full scroll cycle. Use 1px tolerance
+      // to handle sub-pixel rounding between our calculation and the
+      // browser's actual scroll limit.
+      if (Math.abs(newScroll - currentScroll) < 1) {
+        if ($.vt.velocity !== 0) {
+          $.vt.velocity = 0;
+          $.vt.sampleCount = 0;
+          emitter.emit("velocity:change", { velocity: 0, reliable: false });
+        }
+        return;
+      }
 
       // Update scroll position
       $.sst(newScroll);
