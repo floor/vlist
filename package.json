@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
