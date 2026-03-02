@@ -42,10 +42,7 @@ export const createDOMStructure = (
   const root = document.createElement("div");
   root.className = classPrefix;
   if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
-  root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
-  if (ariaLabel) root.setAttribute("aria-label", ariaLabel);
-  if (horizontal) root.setAttribute("aria-orientation", "horizontal");
 
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
@@ -71,6 +68,9 @@ export const createDOMStructure = (
 
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
+  items.setAttribute("role", "listbox");
+  if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
+  if (horizontal) items.setAttribute("aria-orientation", "horizontal");
   items.style.position = "relative";
   if (horizontal) {
     items.style.height = "100%";

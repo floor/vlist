@@ -470,7 +470,7 @@ describe("builder core", () => {
     list = null;
   });
 
-  it("should set ARIA attributes on the root", () => {
+  it("should set ARIA attributes on items container and tabindex on root", () => {
     list = vlist<TestItem>({
       container,
       item: { height: 40, template },
@@ -478,8 +478,10 @@ describe("builder core", () => {
       ariaLabel: "Test list",
     }).build();
 
-    expect(list.element.getAttribute("role")).toBe("listbox");
-    expect(list.element.getAttribute("aria-label")).toBe("Test list");
+    const items = list.element.querySelector(".vlist-items");
+    expect(items).not.toBeNull();
+    expect(items!.getAttribute("role")).toBe("listbox");
+    expect(items!.getAttribute("aria-label")).toBe("Test list");
     expect(list.element.getAttribute("tabindex")).toBe("0");
   });
 
@@ -1708,7 +1710,9 @@ describe("builder horizontal mode", () => {
     }).build();
 
     expect(list.element).toBeDefined();
-    expect(list.element.getAttribute("aria-orientation")).toBe("horizontal");
+    const items = list.element.querySelector(".vlist-items");
+    expect(items).not.toBeNull();
+    expect(items!.getAttribute("aria-orientation")).toBe("horizontal");
   });
 
   it("should render items in horizontal mode", () => {
