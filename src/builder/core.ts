@@ -885,7 +885,23 @@ function materialize<T extends VListItem = VListItem>(
   if (wheelEnabled && !isHorizontal && !isMobile) {
     // Intercept wheel events and handle scroll manually
     wheelHandler = (event: WheelEvent): void => {
+      // When the viewport has horizontal overflow (e.g. table with wide
+      // columns) and the user is scrolling horizontally (trackpad or
+      // shift+wheel), let the browser handle it natively so horizontal
+      // scrolling works. Only intercept predominantly-vertical gestures.
+      const hasHorizontalOverflow = dom.viewport.scrollWidth > dom.viewport.clientWidth;
+      if (hasHorizontalOverflow && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        // Pure horizontal gesture — let the browser scroll natively
+        return;
+      }
+
       event.preventDefault();
+
+      // Forward any horizontal delta to the viewport so trackpad diagonal
+      // gestures still move the content sideways (table horizontal scroll).
+      if (hasHorizontalOverflow && event.deltaX !== 0) {
+        dom.viewport.scrollLeft += event.deltaX;
+      }
 
       // Get current scroll position
       const currentScroll = $.sgt();

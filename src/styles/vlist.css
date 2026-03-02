@@ -35,8 +35,8 @@
     /* Colors - Light Mode */
     --vlist-bg: #ffffff;
     --vlist-bg-hover: #f9fafb;
-    --vlist-bg-selected: #eff6ff;
-    --vlist-bg-selected-hover: #dbeafe;
+    --vlist-bg-selected: #dbeafe;
+    --vlist-bg-selected-hover: #eff6ff;
     --vlist-border: #e5e7eb;
     --vlist-border-selected: #3b82f6;
     --vlist-text: #111827;
@@ -69,8 +69,8 @@
 [data-theme-mode="dark"] {
     --vlist-bg: #111827;
     --vlist-bg-hover: #1f2937;
-    --vlist-bg-selected: rgba(59, 130, 246, 0.2);
-    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.3);
+    --vlist-bg-selected: rgba(59, 130, 246, 0.3);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
     --vlist-border: #374151;
     --vlist-border-selected: #3b82f6;
     --vlist-text: #f9fafb;
@@ -165,7 +165,6 @@
     right: 0;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid var(--vlist-border);
     background-color: var(--vlist-bg);
     cursor: default;
     user-select: none;

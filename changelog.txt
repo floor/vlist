@@ -5,6 +5,12 @@ initial commit → latest
 
 2026-03-02
 
+  fix(scroll): allow horizontal scrolling in wheel handler for tables with wide columns
+  style(css): swap selected/selected-hover colors to correct visual hierarchy
+  style(css): remove default border-bottom from list items
+  style(table): remove last-child border-right override on table column borders
+  test(scroll): add 6 tests for horizontal scroll wheel passthrough
+
   feat(item): add striped option for reliable zebra-stripe styling
   fix(a11y): move role=listbox from root to items container
 
