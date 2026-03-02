@@ -258,10 +258,6 @@
     border-right: 1px solid var(--vlist-border, #e5e7eb);
 }
 
-.vlist--table-col-borders .vlist-table-cell:last-child {
-    border-right: none;
-}
-
 /* Column borders — header cells */
 .vlist--table-col-borders .vlist-table-header-cell {
     border-right-color: var(--vlist-border, #e5e7eb);
