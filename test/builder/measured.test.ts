@@ -649,7 +649,9 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
     }).build();
 
     expect(list.element).toBeDefined();
-    expect(list.element.getAttribute("aria-orientation")).toBe("horizontal");
+    const items = list.element.querySelector(".vlist-items");
+    expect(items).not.toBeNull();
+    expect(items!.getAttribute("aria-orientation")).toBe("horizontal");
     expect(list.total).toBe(50);
   });
 
@@ -1053,7 +1055,7 @@ describe("Mode B: ARIA attributes", () => {
     container.remove();
   });
 
-  it("should set ARIA attributes on the root", () => {
+  it("should set ARIA attributes on items container", () => {
     list = vlist<TestItem>({
       container,
       item: { estimatedHeight: 100, template },
@@ -1061,8 +1063,10 @@ describe("Mode B: ARIA attributes", () => {
       ariaLabel: "Measured list",
     }).build();
 
-    expect(list.element.getAttribute("role")).toBe("listbox");
-    expect(list.element.getAttribute("aria-label")).toBe("Measured list");
+    const items = list.element.querySelector(".vlist-items");
+    expect(items).not.toBeNull();
+    expect(items!.getAttribute("role")).toBe("listbox");
+    expect(items!.getAttribute("aria-label")).toBe("Measured list");
   });
 
   it("should set ARIA attributes on rendered items", () => {

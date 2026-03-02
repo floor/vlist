@@ -2228,7 +2228,7 @@ describe("integration — ARIA attributes with features", () => {
     container.remove();
   });
 
-  it("should set ARIA role on root with selection", () => {
+  it("should set ARIA role on items container with selection", () => {
     list = vlist<TestItem>({
       container,
       item: { height: 50, template },
@@ -2238,9 +2238,10 @@ describe("integration — ARIA attributes with features", () => {
       .use(withSelection({ mode: "single" }))
       .build();
 
-    const root = list.element;
-    expect(root.getAttribute("role")).toBe("listbox");
-    expect(root.getAttribute("aria-label")).toBe("Test list");
+    const items = list.element.querySelector(".vlist-items");
+    expect(items).not.toBeNull();
+    expect(items!.getAttribute("role")).toBe("listbox");
+    expect(items!.getAttribute("aria-label")).toBe("Test list");
   });
 
   it("should include ARIA live region with selection plugin", () => {

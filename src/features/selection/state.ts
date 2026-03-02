@@ -147,7 +147,7 @@ export const setFocusedIndex = (
 export const moveFocusUp = (
   state: SelectionState,
   totalItems: number,
-  wrap: boolean = true,
+  wrap: boolean = false,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
@@ -168,7 +168,7 @@ export const moveFocusUp = (
 export const moveFocusDown = (
   state: SelectionState,
   totalItems: number,
-  wrap: boolean = true,
+  wrap: boolean = false,
 ): SelectionState => {
   if (totalItems === 0) return state;
 

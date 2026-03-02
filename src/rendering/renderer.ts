@@ -687,16 +687,10 @@ export const createDOMStructure = (
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
-  root.setAttribute("role", "listbox");
   root.setAttribute("tabindex", "0");
-
-  if (ariaLabel) {
-    root.setAttribute("aria-label", ariaLabel);
-  }
 
   if (horizontal) {
     root.classList.add(`${classPrefix}--horizontal`);
-    root.setAttribute("aria-orientation", "horizontal");
   }
 
   // Viewport (scrollable container)
@@ -729,6 +723,9 @@ export const createDOMStructure = (
   // Items container (holds rendered items)
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
+  items.setAttribute("role", "listbox");
+  if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
+  if (horizontal) items.setAttribute("aria-orientation", "horizontal");
   items.style.position = "relative";
 
   if (horizontal) {

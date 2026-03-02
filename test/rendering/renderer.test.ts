@@ -495,8 +495,8 @@ describe("createDOMStructure", () => {
     );
 
     expect(root.className).toBe("vlist");
-    expect(root.getAttribute("role")).toBe("listbox");
     expect(root.getAttribute("tabindex")).toBe("0");
+    expect(items.getAttribute("role")).toBe("listbox");
     expect(viewport.className).toBe("vlist-viewport");
     expect(content.className).toBe("vlist-content");
     expect(items.className).toBe("vlist-items");
@@ -504,16 +504,16 @@ describe("createDOMStructure", () => {
 
   it("should add aria-label when provided", () => {
     const container = document.createElement("div");
-    const { root } = createDOMStructure(container, "vlist", "My List");
+    const { items } = createDOMStructure(container, "vlist", "My List");
 
-    expect(root.getAttribute("aria-label")).toBe("My List");
+    expect(items.getAttribute("aria-label")).toBe("My List");
   });
 
   it("should not add aria-label when not provided", () => {
     const container = document.createElement("div");
-    const { root } = createDOMStructure(container, "vlist");
+    const { items } = createDOMStructure(container, "vlist");
 
-    expect(root.hasAttribute("aria-label")).toBe(false);
+    expect(items.hasAttribute("aria-label")).toBe(false);
   });
 
   it("should create horizontal layout structure", () => {
@@ -526,7 +526,7 @@ describe("createDOMStructure", () => {
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(true);
-    expect(root.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(items.getAttribute("aria-orientation")).toBe("horizontal");
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
     expect(content.style.height).toBe("100%");
@@ -541,7 +541,7 @@ describe("createDOMStructure", () => {
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(false);
-    expect(root.hasAttribute("aria-orientation")).toBe(false);
+    expect(items.hasAttribute("aria-orientation")).toBe(false);
     expect(viewport.style.overflow).toBe("auto");
     expect(content.style.width).toBe("100%");
     expect(items.style.width).toBe("100%");
