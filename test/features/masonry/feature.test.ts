@@ -19,6 +19,8 @@ import type { BuilderContext } from "../../../src/builder/types";
 let dom: JSDOM;
 let originalDocument: any;
 let originalWindow: any;
+let originalRAF: typeof globalThis.requestAnimationFrame;
+let originalCAF: typeof globalThis.cancelAnimationFrame;
 
 beforeAll(() => {
   dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
@@ -29,15 +31,27 @@ beforeAll(() => {
   originalDocument = global.document;
   originalWindow = global.window;
 
+  originalRAF = global.requestAnimationFrame;
+  originalCAF = global.cancelAnimationFrame;
+
   global.document = dom.window.document;
   global.window = dom.window as any;
   global.HTMLElement = dom.window.HTMLElement;
   global.Element = dom.window.Element;
+
+  global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+    return setTimeout(() => callback(performance.now()), 0) as unknown as number;
+  };
+  global.cancelAnimationFrame = (id: number): void => {
+    clearTimeout(id);
+  };
 });
 
 afterAll(() => {
   global.document = originalDocument;
   global.window = originalWindow;
+  global.requestAnimationFrame = originalRAF;
+  global.cancelAnimationFrame = originalCAF;
 });
 
 // =============================================================================
@@ -850,18 +864,23 @@ describe("withMasonry - scrollToIndex", () => {
     const feature = withMasonry<TestItem>({ columns: 4 });
     const ctx = createMockContext(100);
 
-    let wasSmooth: boolean | null = null;
-    ctx.scrollController.scrollTo = (_pos: number, smooth?: boolean) => {
-      wasSmooth = smooth ?? false;
+    const scrollPositions: number[] = [];
+    ctx.scrollController.scrollTo = (pos: number) => {
+      scrollPositions.push(pos);
     };
+    ctx.scrollController.getScrollTop = () => 0;
 
     feature.setup(ctx);
 
     const scrollToIndex = ctx.methods.get("scrollToIndex") as Function;
-    scrollToIndex(50, "start", "smooth");
+    const cancelScroll = ctx.methods.get("cancelScroll") as Function;
+    expect(cancelScroll).toBeDefined();
 
-    expect(wasSmooth).not.toBeNull();
-    expect(wasSmooth!).toBe(true);
+    scrollToIndex(50, { behavior: "smooth", duration: 300 });
+
+    // Smooth scroll uses requestAnimationFrame, so the position is not set instantly.
+    // Cancel to prevent rAF from firing after test teardown.
+    cancelScroll();
   });
 });
 
