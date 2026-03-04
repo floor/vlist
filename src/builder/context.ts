@@ -86,6 +86,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   const afterScroll: Array<
     (scrollPosition: number, direction: string) => void
   > = [];
+  const idleHandlers: Array<() => void> = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
@@ -329,6 +330,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     state,
 
     afterScroll,
+    idleHandlers,
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
