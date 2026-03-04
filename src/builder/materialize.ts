@@ -167,6 +167,7 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly isHorizontal: boolean;
   readonly classPrefix: string;
   readonly contentSizeHandlers: Array<() => void>;
+  readonly idleHandlers: Array<() => void>;
   readonly afterScroll: Array<
     (scrollPosition: number, direction: string) => void
   >;
@@ -203,6 +204,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     isHorizontal,
     classPrefix,
     contentSizeHandlers,
+    idleHandlers,
     afterScroll,
     clickHandlers,
     keydownHandlers,
@@ -293,6 +295,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
 
     afterScroll,
+    idleHandlers,
     clickHandlers,
     keydownHandlers,
     resizeHandlers,

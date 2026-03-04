@@ -15,6 +15,7 @@ import type { CompressionState } from "./viewport";
 import type { SizeCache } from "./sizes";
 
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
+import { sortRenderedDOM } from "./sort";
 
 /**
  * Optional compression position calculator.
@@ -107,6 +108,13 @@ export interface Renderer<T extends VListItem = VListItem> {
 
   /** Get rendered item element by index */
   getElement: (index: number) => HTMLElement | undefined;
+
+  /**
+   * Reorder DOM children to match logical item order (by data-index).
+   * Called on scroll idle so screen readers encounter items in the correct
+   * sequence. Items are position:absolute so visual layout is unaffected.
+   */
+  sortDOM: () => void;
 
   /** Clear all rendered items */
   clear: () => void;
@@ -647,6 +655,20 @@ export const createRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
+   * Reorder DOM children so they follow logical data-index order.
+   * Called on scroll idle for accessibility — screen readers traverse
+   * DOM order, not visual (transform) order. Since items are
+   * position:absolute, this has zero visual impact.
+   */
+  const sortDOM = (): void => {
+    sortRenderedDOM(
+      itemsContainer,
+      rendered.keys(),
+      (key) => rendered.get(key)?.element,
+    );
+  };
+
+  /**
    * Clear all rendered items
    */
   const clear = (): void => {
@@ -671,6 +693,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     updateItem,
     updateItemClasses,
     getElement,
+    sortDOM,
     clear,
     destroy,
   };

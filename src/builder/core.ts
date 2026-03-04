@@ -48,6 +48,7 @@ import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
 import { easeInOutQuad, resolveScrollArgs } from "./scroll";
+import { sortRenderedDOM } from "../rendering/sort";
 import {
   createMaterializeCtx,
   createDefaultDataProxy,
@@ -382,6 +383,20 @@ function materialize<T extends VListItem = VListItem>(
   // Rendered item tracking
   const rendered = new Map<number, HTMLElement>();
 
+  /**
+   * Reorder DOM children so they follow logical data-index order.
+   * Called on scroll idle for accessibility — screen readers traverse
+   * DOM order, not visual (transform) order. Since items are
+   * position:absolute, this has zero visual impact.
+   */
+  const sortDOMChildren = (): void => {
+    sortRenderedDOM(
+      dom.items,
+      rendered.keys(),
+      (key) => rendered.get(key),
+    );
+  };
+
   // ── Mode B: Measurement tracking ───────────────────────────────
   // Maps observed elements back to their item index for ResizeObserver callback
   const measuredElementToIndex = measurementEnabled
@@ -537,6 +552,7 @@ function materialize<T extends VListItem = VListItem>(
   const afterScroll: Array<
     (scrollPosition: number, direction: string) => void
   > = [];
+  const idleHandlers: Array<() => void> = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
@@ -869,6 +885,13 @@ function materialize<T extends VListItem = VListItem>(
       });
       // Mode B: flush deferred content size + scroll correction
       flushMeasurements();
+      // Accessibility: reorder DOM children to match logical order
+      // so screen readers encounter items in the correct sequence
+      sortDOMChildren();
+      // Feature idle handlers (e.g. grid/masonry DOM reorder)
+      for (let i = 0; i < idleHandlers.length; i++) {
+        idleHandlers[i]!();
+      }
     }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
@@ -968,6 +991,12 @@ function materialize<T extends VListItem = VListItem>(
         emitter.emit("velocity:change", { velocity: 0, reliable: false });
         // Mode B: flush deferred content size + scroll correction
         flushMeasurements();
+        // Accessibility: reorder DOM children to match logical order
+        sortDOMChildren();
+        // Feature idle handlers (e.g. grid/masonry DOM reorder)
+        for (let i = 0; i < idleHandlers.length; i++) {
+          idleHandlers[i]!();
+        }
       }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
     $.wh = wheelHandler;
@@ -1095,6 +1124,7 @@ function materialize<T extends VListItem = VListItem>(
     isHorizontal,
     classPrefix,
     contentSizeHandlers,
+    idleHandlers,
     afterScroll,
     clickHandlers,
     keydownHandlers,

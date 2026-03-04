@@ -201,6 +201,14 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    */
   afterScroll: Array<(scrollPosition: number, direction: string) => void>;
 
+  // ── Idle actions ──────────────────────────────────────────────
+  /**
+   * Features register callbacks that run when scrolling becomes idle.
+   * Use this for deferred work that should not run on the hot scroll path
+   * (e.g. reordering DOM children for accessibility).
+   */
+  idleHandlers: Array<() => void>;
+
   // ── Event handler slots ───────────────────────────────────────
   /**
    * Features register handlers for user interaction events.

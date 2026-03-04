@@ -392,6 +392,11 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // ── Initial layout calculation ──
       calculateLayout();
 
+      // ── Accessibility: reorder DOM on scroll idle ──
+      ctx.idleHandlers.push(() => {
+        if (masonryRenderer) masonryRenderer.sortDOM();
+      });
+
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
         cancelScroll();

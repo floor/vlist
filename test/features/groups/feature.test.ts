@@ -176,6 +176,7 @@ function createMockContext(): BuilderContext<TestItem> {
     } as any,
     getContainerWidth: () => 400,
     afterScroll: [],
+    idleHandlers: [],
     clickHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],

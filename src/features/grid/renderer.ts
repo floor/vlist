@@ -39,6 +39,7 @@ import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
 import type { GridLayout } from "./types";
 import { isGroupHeader } from "../groups/types";
+import { sortRenderedDOM } from "../../rendering/sort";
 
 // =============================================================================
 // Types
@@ -75,6 +76,13 @@ export interface GridRenderer<T extends VListItem = VListItem> {
 
   /** Get rendered item element by flat item index */
   getElement: (index: number) => HTMLElement | undefined;
+
+  /**
+   * Reorder DOM children to match logical item order (by data-index).
+   * Called on scroll idle so screen readers encounter items in the correct
+   * sequence. Items are position:absolute so visual layout is unaffected.
+   */
+  sortDOM: () => void;
 
   /** Update container width (call on resize) */
   updateContainerWidth: (width: number) => void;
@@ -669,6 +677,20 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
+   * Reorder DOM children so they follow logical data-index order.
+   * Called on scroll idle for accessibility — screen readers traverse
+   * DOM order, not visual (transform) order. Since items are
+   * position:absolute, this has zero visual impact.
+   */
+  const sortDOM = (): void => {
+    sortRenderedDOM(
+      itemsContainer,
+      rendered.keys(),
+      (key) => rendered.get(key)?.element,
+    );
+  };
+
+  /**
    * Clear all rendered items
    */
   const clear = (): void => {
@@ -692,6 +714,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     updateItem,
     updateItemClasses,
     getElement,
+    sortDOM,
     updateContainerWidth,
     clear,
     destroy,
