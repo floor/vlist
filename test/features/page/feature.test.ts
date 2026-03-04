@@ -203,6 +203,7 @@ function createMockContext(
     } as any,
     getContainerWidth: () => 400,
     afterScroll: [],
+    idleHandlers: [],
     clickHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],

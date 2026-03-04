@@ -163,6 +163,7 @@ function createTestDeps(): MDeps<TestItem> {
     isHorizontal: false,
     classPrefix: "vlist",
     contentSizeHandlers: [],
+    idleHandlers: [],
     afterScroll: [],
     clickHandlers: [],
     keydownHandlers: [],

@@ -576,6 +576,11 @@ export const withGrid = <T extends VListItem = VListItem>(
       // ── Override snapshot methods for grid if snapshots feature is present ──
       // This is handled by the snapshots feature which checks for grid
 
+      // ── Accessibility: reorder DOM on scroll idle ──
+      ctx.idleHandlers.push(() => {
+        if (gridRenderer) gridRenderer.sortDOM();
+      });
+
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
         cancelScroll();

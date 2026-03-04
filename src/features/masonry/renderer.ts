@@ -26,6 +26,7 @@ import type {
 } from "../../types";
 
 import type { ItemPlacement } from "./types";
+import { sortRenderedDOM } from "../../rendering/sort";
 
 // =============================================================================
 // Types
@@ -46,6 +47,13 @@ export interface MasonryRenderer<T extends VListItem = VListItem> {
 
   /** Get rendered item element by flat item index */
   getElement: (index: number) => HTMLElement | undefined;
+
+  /**
+   * Reorder DOM children to match logical item order (by data-index).
+   * Called on scroll idle so screen readers encounter items in the correct
+   * sequence. Items are position:absolute so visual layout is unaffected.
+   */
+  sortDOM: () => void;
 
   /** Clear all rendered items */
   clear: () => void;
@@ -440,9 +448,24 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     pool.clear();
   };
 
+  /**
+   * Reorder DOM children so they follow logical data-index order.
+   * Called on scroll idle for accessibility — screen readers traverse
+   * DOM order, not visual (transform) order. Since items are
+   * position:absolute, this has zero visual impact.
+   */
+  const sortDOM = (): void => {
+    sortRenderedDOM(
+      itemsContainer,
+      rendered.keys(),
+      (key) => rendered.get(key)?.element,
+    );
+  };
+
   return {
     render,
     getElement: (index: number): HTMLElement | undefined => rendered.get(index)?.element,
+    sortDOM,
     clear,
     destroy,
   };

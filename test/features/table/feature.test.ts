@@ -183,6 +183,7 @@ function createMockContext(overrides?: {
     } as any,
     getContainerWidth: () => 800,
     afterScroll: [],
+    idleHandlers: [],
     clickHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],

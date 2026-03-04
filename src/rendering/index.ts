@@ -18,6 +18,9 @@ export {
   type MeasuredSizeCache,
 } from "./measured";
 
+// DOM Sort (accessibility — reorder children on scroll idle)
+export { sortRenderedDOM } from "./sort";
+
 // Renderer
 export {
   createRenderer,
