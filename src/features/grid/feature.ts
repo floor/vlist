@@ -20,7 +20,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
-import { resolveScrollArgs } from "../../builder/scroll";
+import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 import { calculateScrollToIndex } from "../../rendering";
 
 import { createGridLayout } from "./layout";
@@ -513,6 +513,14 @@ export const withGrid = <T extends VListItem = VListItem>(
         }
       });
 
+      // ── Smooth scroll support ──
+      const { animateScroll, cancelScroll } = createSmoothScroll(
+        ctx.scrollController,
+        ctx.renderIfNeeded,
+      );
+
+      ctx.methods.set("cancelScroll", cancelScroll);
+
       // ── Override scrollToIndex to convert item index → row ──
       // (Features like selection that scrollToIndex with item indices need this)
       // The builder core's scrollToIndex already works with the size cache
@@ -534,9 +542,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         ): void => {
           // Convert item index to row index
           const rowIndex = Math.floor(index / config.columns);
-          // Call the base scrollToIndex (which the builder core provides)
-          // We need to call it directly on the scroll controller
-          const { align, behavior } = resolveScrollArgs(alignOrOptions);
+          const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
 
           const dataState = ctx.dataManager.getState();
           const totalRows = gridLayout!.getTotalRows(dataState.total);
@@ -553,10 +559,9 @@ export const withGrid = <T extends VListItem = VListItem>(
           );
 
           if (behavior === "smooth") {
-            // For smooth scrolling, just do instant for now
-            // (the builder core's animateScroll is local to core.ts)
-            ctx.scrollController.scrollTo(position);
+            animateScroll(ctx.scrollController.getScrollTop(), position, duration);
           } else {
+            cancelScroll();
             ctx.scrollController.scrollTo(position);
           }
         },
@@ -573,6 +578,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
+        cancelScroll();
         if (gridRenderer) {
           gridRenderer.destroy();
           gridRenderer = null;

@@ -1,6 +1,15 @@
 vlist — full changelog
 initial commit → latest
-321 commits · 29 days · Feb 2 – Mar 2, 2026
+321 commits · 29 days · Feb 2 – Mar 4, 2026
+
+
+2026-03-04
+
+  fix(grid,masonry): implement smooth scrollToIndex using createSmoothScroll
+  fix(grid,masonry): cancel scroll animation on destroy to prevent rAF on torn-down DOM
+  test(masonry): update scrollToIndex test for options object API, add rAF/cAF mocks
+
+  → v1.2.6
 
 
 2026-03-02

@@ -34,6 +34,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
@@ -340,31 +341,60 @@ export const withMasonry = <T extends VListItem = VListItem>(
       intercept("removeItem");
 
       // ── Scroll to index (map to item position) ──
-      ctx.methods.set("scrollToIndex", (index: number, align?: string, behavior?: ScrollBehavior) => {
-        const placement = cachedPlacements[index];
-        if (!placement) return;
+      const { animateScroll, cancelScroll } = createSmoothScroll(
+        ctx.scrollController,
+        ctx.renderIfNeeded,
+      );
 
-        const mainAxisPosition = placement.y;
-        const containerSize = ctx.state.viewportState.containerSize;
+      ctx.methods.set("cancelScroll", cancelScroll);
 
-        let scrollTarget = mainAxisPosition;
+      ctx.methods.set(
+        "scrollToIndex",
+        (
+          index: number,
+          alignOrOptions?:
+            | "start"
+            | "center"
+            | "end"
+            | {
+                align?: "start" | "center" | "end";
+                behavior?: "auto" | "smooth";
+                duration?: number;
+              },
+        ): void => {
+          const placement = cachedPlacements[index];
+          if (!placement) return;
 
-        if (align === "center") {
-          scrollTarget = mainAxisPosition - containerSize / 2 + placement.size / 2;
-        } else if (align === "end") {
-          scrollTarget = mainAxisPosition - containerSize + placement.size;
-        }
+          const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
 
-        scrollTarget = Math.max(0, scrollTarget);
+          const mainAxisPosition = placement.y;
+          const containerSize = ctx.state.viewportState.containerSize;
 
-        ctx.scrollController.scrollTo(scrollTarget, behavior === "smooth");
-      });
+          let scrollTarget = mainAxisPosition;
+
+          if (align === "center") {
+            scrollTarget = mainAxisPosition - containerSize / 2 + placement.size / 2;
+          } else if (align === "end") {
+            scrollTarget = mainAxisPosition - containerSize + placement.size;
+          }
+
+          scrollTarget = Math.max(0, scrollTarget);
+
+          if (behavior === "smooth") {
+            animateScroll(ctx.scrollController.getScrollTop(), scrollTarget, duration);
+          } else {
+            cancelScroll();
+            ctx.scrollController.scrollTo(scrollTarget);
+          }
+        },
+      );
 
       // ── Initial layout calculation ──
       calculateLayout();
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
+        cancelScroll();
         if (masonryRenderer) {
           masonryRenderer.destroy();
         }
