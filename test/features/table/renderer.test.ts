@@ -72,6 +72,7 @@ function createTestRenderer(opts: {
   totalItems?: number;
   rowHeight?: number;
   striped?: boolean;
+  rowBorders?: boolean;
 } = {}) {
   const columns = opts.columns ?? [
     col("name", { width: 200 }),
