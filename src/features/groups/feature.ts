@@ -177,7 +177,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         return userTemplate(item as T, index, state);
       }) as typeof userTemplate;
 
-      // ── Check if grid feature has exposed its layout ──
+      // ── Check if grid or table feature has exposed its layout ──
       const getGridLayout = ctx.methods.get("_getGridLayout") as
         | (() => any)
         | undefined;
@@ -187,6 +187,20 @@ export const withGroups = <T extends VListItem = VListItem>(
       const updateGridLayoutForGroups = ctx.methods.get(
         "_updateGridLayoutForGroups",
       ) as ((isHeaderFn: (index: number) => boolean) => void) | undefined;
+
+      // Table integration hooks
+      const getTableLayout = ctx.methods.get("_getTableLayout") as
+        | (() => any)
+        | undefined;
+      const updateTableForGroups = ctx.methods.get("_updateTableForGroups") as
+        | ((
+            isHeaderFn: (item: any) => boolean,
+            headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+          ) => void)
+        | undefined;
+      const getTableHeaderHeight = ctx.methods.get("_getTableHeaderHeight") as
+        | (() => number)
+        | undefined;
 
       if (getGridLayout && replaceGridRenderer) {
         // Grid renderer is active - make grid layout groups-aware
@@ -215,11 +229,23 @@ export const withGroups = <T extends VListItem = VListItem>(
 
         // Use grid feature's method to replace its renderer instance
         replaceGridRenderer(newGridRenderer);
+      } else if (getTableLayout && updateTableForGroups) {
+        // Table renderer is active — tell it about group headers.
+        // The table renderer handles the rendering internally via
+        // renderGroupHeaderRow(), so we just pass the check function
+        // and the header template. No need to replace the renderer.
+        updateTableForGroups(
+          (item: any) => isGroupHeader(item),
+          config.headerTemplate,
+        );
       } else {
         // Replace the template with the unified version
         // This works with the materialize inlined renderer
         ctx.replaceTemplate(unifiedTemplate);
       }
+
+      // ── Store table header height for sticky offset ──
+      const tableHeaderHeight = getTableHeaderHeight ? getTableHeaderHeight() : 0;
 
       // ── Add grouped CSS class ──
       dom.root.classList.add(`${classPrefix}--grouped`);
@@ -233,6 +259,7 @@ export const withGroups = <T extends VListItem = VListItem>(
           { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
           classPrefix,
           resolvedConfig.horizontal,
+          tableHeaderHeight,
         );
 
         // Wire sticky header into afterScroll

@@ -37,6 +37,7 @@ import type {
 
 import type { SizeCache } from "../../rendering/sizes";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
+import type { GroupHeaderItem } from "../groups/types";
 
 // =============================================================================
 // Types
@@ -72,6 +73,12 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
 
   /** Update cell positions and widths after column resize */
   updateColumnLayout: (layout: TableLayout<T>) => void;
+
+  /** Set the group header check function (called by withGroups integration) */
+  setGroupHeaderFn: (
+    fn: ((item: T) => boolean) | null,
+    template: ((key: string, groupIndex: number) => HTMLElement | string) | null,
+  ) => void;
 
   /** Clear all rendered rows */
   clear: () => void;
@@ -152,6 +159,9 @@ interface TrackedRow {
   /** Item index in the data array */
   index: number;
 
+  /** Whether this row is a group header (fast flag — avoids DOM queries) */
+  isGroupHeader: boolean;
+
   /** Last rendered item ID (for change detection) */
   lastItemId: string | number;
 
@@ -163,6 +173,9 @@ interface TrackedRow {
 
   /** Last translateY offset in pixels (numeric for fast comparison) */
   lastOffset: number;
+
+  /** Last height in pixels (for change detection) */
+  lastHeight: number;
 
   /** Frame counter when last seen in render range */
   lastSeenFrame: number;
@@ -188,7 +201,7 @@ interface TrackedRow {
  */
 export const createTableRenderer = <T extends VListItem = VListItem>(
   container: HTMLElement,
-  sizeCache: SizeCache,
+  getSizeCache: () => SizeCache,
   layout: TableLayout<T>,
   _columns: TableColumn<T>[],
   classPrefix: string,
@@ -202,6 +215,20 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   let frameCounter = 0;
   let lastAriaSetSize = -1;
   let currentLayout = layout;
+
+  // ── Group header support ──
+  // When groups are active, the renderer needs to handle group header
+  // pseudo-items differently: full-width row, no cells, custom template.
+  let groupHeaderFn: ((item: T) => boolean) | null = null;
+  let groupHeaderTemplate: ((key: string, groupIndex: number) => HTMLElement | string) | null = null;
+
+  const setGroupHeaderFn = (
+    fn: ((item: T) => boolean) | null,
+    template: ((key: string, groupIndex: number) => HTMLElement | string) | null,
+  ): void => {
+    groupHeaderFn = fn;
+    groupHeaderTemplate = template;
+  };
 
   // =========================================================================
   // Helpers
@@ -224,6 +251,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const cellCenterClass = `${classPrefix}-table-cell--center`;
   const cellRightClass = `${classPrefix}-table-cell--right`;
   const oddClass = `${classPrefix}-item--odd`;
+  const groupHeaderRowClass = `${classPrefix}-item ${classPrefix}-table-row ${classPrefix}-table-group-header`;
+  const groupHeaderContentClass = `${classPrefix}-table-group-header-content`;
 
   // =========================================================================
   // Cell Template Application
@@ -327,6 +356,71 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
+   * Render a group header row: full-width, no cells, custom template.
+   */
+  const renderGroupHeaderRow = (
+    item: T,
+    index: number,
+    sc: SizeCache,
+  ): TrackedRow => {
+    const element = pool.acquire();
+    const headerItem = item as unknown as GroupHeaderItem;
+
+    // Full-width row
+    element.style.width = `${currentLayout.totalWidth}px`;
+
+    // Row height from size cache (uses headerHeight via grouped size fn)
+    const height = sc.getSize(index);
+    element.style.height = `${height}px`;
+
+    // CSS class — distinct from data rows
+    element.className = groupHeaderRowClass;
+
+    // ARIA — group header is presentational, not a data row
+    element.setAttribute("role", "presentation");
+    element.setAttribute("data-id", String(item.id));
+    element.setAttribute("data-index", String(index));
+    element.removeAttribute("aria-selected");
+    element.removeAttribute("aria-rowindex");
+
+    // Clear any leftover cells from pooled element reuse
+    element.replaceChildren();
+
+    // Create the single content container
+    const content = document.createElement("div");
+    content.className = groupHeaderContentClass;
+
+    // Render the group header template
+    if (groupHeaderTemplate) {
+      const result = groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex);
+      if (typeof result === "string") {
+        content.innerHTML = result;
+      } else {
+        content.appendChild(result);
+      }
+    }
+
+    element.appendChild(content);
+
+    // Position via translateY
+    const offset = sc.getOffset(index);
+    element.style.transform = `translateY(${offset}px)`;
+
+    return {
+      element,
+      cells: [],  // No cells for group headers
+      index,
+      isGroupHeader: true,
+      lastItemId: item.id,
+      lastSelected: false,
+      lastFocused: false,
+      lastOffset: offset,
+      lastHeight: height,
+      lastSeenFrame: frameCounter,
+    };
+  };
+
+  /**
    * Render a full row: create element, set cells, apply state.
    * Returns a TrackedRow for the rendered map.
    */
@@ -335,6 +429,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     index: number,
     isSelected: boolean,
     isFocused: boolean,
+    sc: SizeCache,
   ): TrackedRow => {
     // Note: applyRowClasses (called below) handles the striped odd class
     const element = pool.acquire();
@@ -343,7 +438,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     element.style.width = `${currentLayout.totalWidth}px`;
 
     // Row height from size cache
-    const height = sizeCache.getSize(index);
+    const height = sc.getSize(index);
     element.style.height = `${height}px`;
 
     // Apply classes
@@ -385,17 +480,19 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     }
 
     // Position row via translateY from size cache
-    const offset = sizeCache.getOffset(index);
+    const offset = sc.getOffset(index);
     element.style.transform = `translateY(${offset}px)`;
 
     return {
       element,
       cells,
       index,
+      isGroupHeader: false,
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
       lastOffset: offset,
+      lastHeight: height,
       lastSeenFrame: frameCounter,
     };
   };
@@ -445,6 +542,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     // DocumentFragment for batched DOM insertion of new elements
     let fragment: DocumentFragment | null = null;
 
+    // Resolve size cache once per frame (not per item)
+    const sc = getSizeCache();
+
     // Render each item in range
     for (let i = range.start; i <= range.end; i++) {
       // Items array is 0-indexed relative to range.start
@@ -455,57 +555,112 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       const isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
 
+      // ── Check if this item is a group header ──
+      const isHeader = groupHeaderFn ? groupHeaderFn(item) : false;
+
       const existing = rendered.get(i);
 
       if (existing) {
-        // ── Fast path: skip work when nothing changed ──
-        const idChanged = existing.lastItemId !== item.id;
-        const selectedChanged = existing.lastSelected !== isSelected;
-        const focusedChanged = existing.lastFocused !== isFocused;
+        // ── Check if row type changed (data row ↔ group header) ──
+        if (existing.isGroupHeader !== isHeader) {
+          // Type changed — release old element, create new one
+          pool.release(existing.element);
+          rendered.delete(i);
+          const tracked = isHeader
+            ? renderGroupHeaderRow(item, i, sc)
+            : renderRow(item, i, isSelected, isFocused, sc);
+          rendered.set(i, tracked);
+          if (!fragment) fragment = document.createDocumentFragment();
+          fragment.appendChild(tracked.element);
+          continue;
+        }
 
-        if (idChanged) {
-          // Different item at this index — full re-render of cells
-          const cols = currentLayout.columns;
-          for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
-            applyCellTemplate(existing.cells[c]!, item, cols[c]!, i);
+        if (isHeader) {
+          // ── Group header fast path ──
+          const idChanged = existing.lastItemId !== item.id;
+          if (idChanged) {
+            // Different group header — re-render content
+            const headerItem = item as unknown as GroupHeaderItem;
+            const content = existing.element.firstElementChild as HTMLElement;
+            if (content && groupHeaderTemplate) {
+              const result = groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex);
+              if (typeof result === "string") {
+                content.innerHTML = result;
+              } else {
+                content.replaceChildren(result);
+              }
+            }
+            existing.element.setAttribute("data-id", String(item.id));
+            existing.lastItemId = item.id;
           }
-          applyRowClasses(existing.element, i, isSelected, isFocused);
-          existing.element.setAttribute("data-id", String(item.id));
-          setAriaSelected(existing.element, isSelected);
-          existing.lastItemId = item.id;
-          existing.lastSelected = isSelected;
-          existing.lastFocused = isFocused;
-        } else if (selectedChanged || focusedChanged) {
-          // Same item — only update classes/aria if state changed
-          applyRowClasses(existing.element, i, isSelected, isFocused);
-          setAriaSelected(existing.element, isSelected);
-          existing.lastSelected = isSelected;
-          existing.lastFocused = isFocused;
+
+          // Position update
+          const offset = sc.getOffset(i);
+          if (existing.lastOffset !== offset) {
+            existing.lastOffset = offset;
+            existing.element.style.transform = `translateY(${offset}px)`;
+          }
+
+          // Height update (only when changed)
+          const height = sc.getSize(i);
+          if (existing.lastHeight !== height) {
+            existing.lastHeight = height;
+            existing.element.style.height = `${height}px`;
+          }
+
+          existing.lastSeenFrame = frameCounter;
+        } else {
+          // ── Data row path (existing logic) ──
+          const idChanged = existing.lastItemId !== item.id;
+          const selectedChanged = existing.lastSelected !== isSelected;
+          const focusedChanged = existing.lastFocused !== isFocused;
+
+          if (idChanged) {
+            // Different item at this index — full re-render of cells
+            const cols = currentLayout.columns;
+            for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
+              applyCellTemplate(existing.cells[c]!, item, cols[c]!, i);
+            }
+            applyRowClasses(existing.element, i, isSelected, isFocused);
+            existing.element.setAttribute("data-id", String(item.id));
+            setAriaSelected(existing.element, isSelected);
+            existing.lastItemId = item.id;
+            existing.lastSelected = isSelected;
+            existing.lastFocused = isFocused;
+          } else if (selectedChanged || focusedChanged) {
+            // Same item — only update classes/aria if state changed
+            applyRowClasses(existing.element, i, isSelected, isFocused);
+            setAriaSelected(existing.element, isSelected);
+            existing.lastSelected = isSelected;
+            existing.lastFocused = isFocused;
+          }
+
+          // Position update only when offset changed (numeric comparison — no string allocation)
+          const offset = sc.getOffset(i);
+          if (existing.lastOffset !== offset) {
+            existing.lastOffset = offset;
+            existing.element.style.transform = `translateY(${offset}px)`;
+          }
+
+          // Update row height only when changed
+          const height = sc.getSize(i);
+          if (existing.lastHeight !== height) {
+            existing.lastHeight = height;
+            existing.element.style.height = `${height}px`;
+          }
+
+          // Update ARIA set size if changed
+          if (setSizeChanged) {
+            existing.element.setAttribute("aria-rowindex", String(i + 2));
+          }
+
+          existing.lastSeenFrame = frameCounter;
         }
-
-        // Position update only when offset changed (numeric comparison — no string allocation)
-        const offset = sizeCache.getOffset(i);
-        if (existing.lastOffset !== offset) {
-          existing.lastOffset = offset;
-          existing.element.style.transform = `translateY(${offset}px)`;
-        }
-
-        // Update row height (variable heights may have changed)
-        const height = sizeCache.getSize(i);
-        existing.element.style.height = `${height}px`;
-
-        // Update row width if layout changed
-        existing.element.style.width = `${currentLayout.totalWidth}px`;
-
-        // Update ARIA set size if changed
-        if (setSizeChanged) {
-          existing.element.setAttribute("aria-rowindex", String(i + 2));
-        }
-
-        existing.lastSeenFrame = frameCounter;
       } else {
         // New row — create and collect in fragment for batched insertion
-        const tracked = renderRow(item, i, isSelected, isFocused);
+        const tracked = isHeader
+          ? renderGroupHeaderRow(item, i, sc)
+          : renderRow(item, i, isSelected, isFocused, sc);
         rendered.set(i, tracked);
 
         if (!fragment) fragment = document.createDocumentFragment();
@@ -534,6 +689,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   ): void => {
     const existing = rendered.get(index);
     if (!existing) return;
+
+    // Group headers are not selectable — skip state updates
+    if (existing.isGroupHeader) return;
 
     const idChanged = existing.lastItemId !== item.id;
     const selectedChanged = existing.lastSelected !== isSelected;
@@ -567,6 +725,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const existing = rendered.get(index);
     if (!existing) return;
 
+    // Group headers are not selectable — skip state updates
+    if (existing.isGroupHeader) return;
+
     const selectedChanged = existing.lastSelected !== isSelected;
     const focusedChanged = existing.lastFocused !== isFocused;
 
@@ -591,15 +752,17 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const cols = layout.columns;
 
     for (const [, tracked] of rendered) {
-      // Update row width
+      // Update row width (applies to both data rows and group headers)
       tracked.element.style.width = `${layout.totalWidth}px`;
 
-      // Update each cell's position and width
-      for (let i = 0; i < tracked.cells.length && i < cols.length; i++) {
-        const cell = tracked.cells[i]!;
-        const col = cols[i]!;
-        cell.style.left = `${col.offset}px`;
-        cell.style.width = `${col.width}px`;
+      // Update each cell's position and width (skip group headers — no cells)
+      if (tracked.cells.length > 0) {
+        for (let i = 0; i < tracked.cells.length && i < cols.length; i++) {
+          const cell = tracked.cells[i]!;
+          const col = cols[i]!;
+          cell.style.left = `${col.offset}px`;
+          cell.style.width = `${col.width}px`;
+        }
       }
     }
   };
@@ -649,6 +812,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     updateItemClasses,
     getElement,
     updateColumnLayout,
+    setGroupHeaderFn,
     clear,
     destroy,
   };

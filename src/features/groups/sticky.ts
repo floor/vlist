@@ -43,6 +43,7 @@ export const createStickyHeader = (
   config: GroupsConfig,
   classPrefix: string,
   horizontal: boolean = false,
+  stickyOffset: number = 0,
 ): StickyHeader => {
   // =========================================================================
   // DOM Setup
@@ -64,10 +65,12 @@ export const createStickyHeader = (
     // Horizontal mode: stick to left edge
     element.style.top = "0";
     element.style.bottom = "0";
-    element.style.left = "0";
+    element.style.left = stickyOffset ? `${stickyOffset}px` : "0";
   } else {
     // Vertical mode: stick to top edge
-    element.style.top = "0";
+    // When used with a table, stickyOffset = table header height,
+    // so the sticky group header sits below the column header row.
+    element.style.top = stickyOffset ? `${stickyOffset}px` : "0";
     element.style.left = "0";
     element.style.right = "0";
   }
