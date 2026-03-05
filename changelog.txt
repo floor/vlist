@@ -1,6 +1,22 @@
 vlist — full changelog
 initial commit → latest
-321 commits · 29 days · Feb 2 – Mar 4, 2026
+330 commits · 30 days · Feb 2 – Mar 5, 2026
+
+
+2026-03-05
+
+  feat(table): add withGroups compatibility for grouped data tables
+  feat(table): group header row rendering (full-width, no cells, custom template)
+  feat(table): expose _replaceTableRenderer, _updateTableForGroups, _getTableHeaderHeight hooks
+  feat(groups): table-aware code path alongside existing grid path
+  feat(groups): stickyOffset param for positioning below table column header
+  style(table): .vlist-table-group-header styles, z-index layering, dark mode
+  perf(table): sizeCache getter instead of captured reference (fixes stale ref after groups rebuild)
+  perf(table): TrackedRow.isGroupHeader flag (replaces classList.contains on hot path)
+  perf(table): lastHeight tracking, hoisted getSizeCache, removed per-frame width writes
+  test(table): 22 new tests for group header rendering, type transitions, change tracking
+
+  → v1.2.8
 
 
 2026-03-04
