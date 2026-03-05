@@ -71,6 +71,7 @@ function createTestRenderer(opts: {
   columns?: TableColumn<TestItem>[];
   totalItems?: number;
   rowHeight?: number;
+  striped?: boolean;
 } = {}) {
   const columns = opts.columns ?? [
     col("name", { width: 200 }),
@@ -97,6 +98,7 @@ function createTestRenderer(opts: {
     "vlist",
     "vlist",
     () => totalItems,
+    opts.striped,
   );
 
   return { container, sizeCache, layout, renderer, columns };
@@ -1497,6 +1499,347 @@ describe("group headers", () => {
       expect(renderer.getElement(0)!.classList.contains("vlist-table-group-header")).toBe(true);
       expect(renderer.getElement(1)).toBeDefined();
       expect(renderer.getElement(1)!.classList.contains("vlist-table-row")).toBe(true);
+
+      container.remove();
+    });
+  });
+});
+
+// =============================================================================
+// Striped Tests
+// =============================================================================
+
+describe("striped", () => {
+  describe("basic striping", () => {
+    it("should add odd class to odd-indexed rows when striped is enabled", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(10);
+
+      renderer.render(items, { start: 0, end: 9 }, EMPTY_SET, -1);
+
+      // Even indices (0, 2, 4, 6, 8) — no odd class
+      for (const i of [0, 2, 4, 6, 8]) {
+        const el = renderer.getElement(i)!;
+        expect(el.classList.contains("vlist-item--odd")).toBe(false);
+      }
+
+      // Odd indices (1, 3, 5, 7, 9) — have odd class
+      for (const i of [1, 3, 5, 7, 9]) {
+        const el = renderer.getElement(i)!;
+        expect(el.classList.contains("vlist-item--odd")).toBe(true);
+      }
+
+      container.remove();
+    });
+
+    it("should not add odd class when striped is disabled (default)", () => {
+      const { renderer, container } = createTestRenderer();
+      const items = makeItems(10);
+
+      renderer.render(items, { start: 0, end: 9 }, EMPTY_SET, -1);
+
+      for (let i = 0; i <= 9; i++) {
+        const el = renderer.getElement(i)!;
+        expect(el.classList.contains("vlist-item--odd")).toBe(false);
+      }
+
+      container.remove();
+    });
+
+    it("should not add odd class when striped is explicitly false", () => {
+      const { renderer, container } = createTestRenderer({ striped: false });
+      const items = makeItems(6);
+
+      renderer.render(items, { start: 0, end: 5 }, EMPTY_SET, -1);
+
+      for (let i = 0; i <= 5; i++) {
+        const el = renderer.getElement(i)!;
+        expect(el.classList.contains("vlist-item--odd")).toBe(false);
+      }
+
+      container.remove();
+    });
+  });
+
+  describe("striping with selection and focus", () => {
+    it("should preserve odd class alongside selected class", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+      const selected = new Set<string | number>([1, 3]);
+
+      renderer.render(items, { start: 0, end: 3 }, selected, -1);
+
+      // Index 1: odd + selected
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el1.classList.contains("vlist-item--selected")).toBe(true);
+
+      // Index 2: even + not selected
+      const el2 = renderer.getElement(2)!;
+      expect(el2.classList.contains("vlist-item--odd")).toBe(false);
+      expect(el2.classList.contains("vlist-item--selected")).toBe(false);
+
+      // Index 3: odd + selected
+      const el3 = renderer.getElement(3)!;
+      expect(el3.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el3.classList.contains("vlist-item--selected")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should preserve odd class alongside focused class", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, 1);
+
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el1.classList.contains("vlist-item--focused")).toBe(true);
+
+      // Index 0: even + not focused
+      const el0 = renderer.getElement(0)!;
+      expect(el0.classList.contains("vlist-item--odd")).toBe(false);
+      expect(el0.classList.contains("vlist-item--focused")).toBe(false);
+
+      container.remove();
+    });
+  });
+
+  describe("striping on re-render and update", () => {
+    it("should maintain correct striping when item ID changes at same index", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // Replace item at index 1 with a different item
+      const newItems = [...items];
+      newItems[1] = { id: 99, name: "New User", email: "new@test.com", role: "admin" };
+
+      renderer.render(newItems, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // Index 1 is still odd — striping based on index, not item identity
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+
+      // Index 0 is still even
+      const el0 = renderer.getElement(0)!;
+      expect(el0.classList.contains("vlist-item--odd")).toBe(false);
+
+      container.remove();
+    });
+
+    it("should maintain correct striping when selection changes", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+
+      // First render: no selection
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+      expect(renderer.getElement(1)!.classList.contains("vlist-item--odd")).toBe(true);
+      expect(renderer.getElement(1)!.classList.contains("vlist-item--selected")).toBe(false);
+
+      // Re-render: select index 1
+      const selected = new Set<string | number>([1]);
+      renderer.render(items, { start: 0, end: 3 }, selected, -1);
+
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el1.classList.contains("vlist-item--selected")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should maintain correct striping after updateItem", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // updateItem with selection change
+      renderer.updateItem(1, items[1]!, true, false);
+
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el1.classList.contains("vlist-item--selected")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should maintain correct striping after updateItemClasses", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(4);
+
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // updateItemClasses with focus change
+      renderer.updateItemClasses(1, false, true);
+
+      const el1 = renderer.getElement(1)!;
+      expect(el1.classList.contains("vlist-item--odd")).toBe(true);
+      expect(el1.classList.contains("vlist-item--focused")).toBe(true);
+
+      container.remove();
+    });
+  });
+
+  describe("striping with scrolling ranges", () => {
+    it("should apply correct striping for offset ranges", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(100);
+
+      // Render a range starting at index 50
+      renderer.render(items.slice(50, 60), { start: 50, end: 59 }, EMPTY_SET, -1);
+
+      // Index 50: even — no odd class
+      expect(renderer.getElement(50)!.classList.contains("vlist-item--odd")).toBe(false);
+
+      // Index 51: odd — has odd class
+      expect(renderer.getElement(51)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      // Index 52: even
+      expect(renderer.getElement(52)!.classList.contains("vlist-item--odd")).toBe(false);
+
+      // Index 53: odd
+      expect(renderer.getElement(53)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should update striping correctly when scrolling to new range", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(100);
+
+      // First render at 0-9
+      renderer.render(items.slice(0, 10), { start: 0, end: 9 }, EMPTY_SET, -1);
+      expect(renderer.getElement(0)!.classList.contains("vlist-item--odd")).toBe(false);
+      expect(renderer.getElement(1)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      // Scroll to 10-19
+      renderer.render(items.slice(10, 20), { start: 10, end: 19 }, EMPTY_SET, -1);
+      expect(renderer.getElement(10)!.classList.contains("vlist-item--odd")).toBe(false);
+      expect(renderer.getElement(11)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      container.remove();
+    });
+  });
+
+  describe("striping with group headers", () => {
+    it("should not apply striped class to group header rows", () => {
+      const columns: TableColumn<GroupTestItem>[] = [
+        { key: "name", label: "Name", width: 200 },
+        { key: "email", label: "Email", width: 300 },
+        { key: "role", label: "Role", width: 100 },
+      ];
+
+      const totalItems = 8;
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+
+      const groupedSizeFn = (index: number): number => {
+        return (index === 0 || index === 4) ? HEADER_HEIGHT : ROW_HEIGHT;
+      };
+
+      const sizeCache = createSizeCache(groupedSizeFn, totalItems);
+      const layout = createTableLayout<GroupTestItem>(columns, 50, Infinity, true);
+      layout.resolve(800);
+
+      const renderer = createTableRenderer<GroupTestItem>(
+        container,
+        () => sizeCache,
+        layout,
+        columns,
+        "vlist",
+        "vlist",
+        () => totalItems,
+        true, // striped
+      );
+
+      renderer.setGroupHeaderFn(
+        (item) => !!(item as any).__groupHeader,
+        (key, _groupIndex) => `<span class="group-label">${key}</span>`,
+      );
+
+      const items = makeGroupedItems();
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Group headers (index 0, 4) should NOT have the odd class
+      const header0 = renderer.getElement(0)!;
+      expect(header0.classList.contains("vlist-table-group-header")).toBe(true);
+      expect(header0.classList.contains("vlist-item--odd")).toBe(false);
+
+      const header4 = renderer.getElement(4)!;
+      expect(header4.classList.contains("vlist-table-group-header")).toBe(true);
+      expect(header4.classList.contains("vlist-item--odd")).toBe(false);
+
+      // Data rows at odd indices should still have the odd class
+      const row1 = renderer.getElement(1)!;
+      expect(row1.classList.contains("vlist-item--odd")).toBe(true);
+
+      const row3 = renderer.getElement(3)!;
+      expect(row3.classList.contains("vlist-item--odd")).toBe(true);
+
+      const row5 = renderer.getElement(5)!;
+      expect(row5.classList.contains("vlist-item--odd")).toBe(true);
+
+      // Data rows at even indices should not have the odd class
+      const row2 = renderer.getElement(2)!;
+      expect(row2.classList.contains("vlist-item--odd")).toBe(false);
+
+      const row6 = renderer.getElement(6)!;
+      expect(row6.classList.contains("vlist-item--odd")).toBe(false);
+
+      container.remove();
+    });
+  });
+
+  describe("striping after clear and re-render", () => {
+    it("should reapply striping correctly after clear", () => {
+      const { renderer, container } = createTestRenderer({ striped: true });
+      const items = makeItems(6);
+
+      renderer.render(items, { start: 0, end: 5 }, EMPTY_SET, -1);
+      renderer.clear();
+      renderer.render(items, { start: 0, end: 5 }, EMPTY_SET, -1);
+
+      expect(renderer.getElement(0)!.classList.contains("vlist-item--odd")).toBe(false);
+      expect(renderer.getElement(1)!.classList.contains("vlist-item--odd")).toBe(true);
+      expect(renderer.getElement(2)!.classList.contains("vlist-item--odd")).toBe(false);
+      expect(renderer.getElement(3)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should not leak odd class when pooled element reused at different parity index", () => {
+      const { renderer, container } = createTestRenderer({ striped: true, totalItems: 20 });
+      const items = makeItems(20);
+
+      // Render range 0-3 — index 1 and 3 get odd class
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+      expect(renderer.getElement(1)!.classList.contains("vlist-item--odd")).toBe(true);
+      expect(renderer.getElement(3)!.classList.contains("vlist-item--odd")).toBe(true);
+
+      // Scroll far away so old elements are released back to pool after grace period
+      renderer.render(items.slice(10, 14), { start: 10, end: 13 }, EMPTY_SET, -1);
+      // Tick past grace period (3 frames)
+      renderer.render(items.slice(10, 14), { start: 10, end: 13 }, EMPTY_SET, -1);
+      renderer.render(items.slice(10, 14), { start: 10, end: 13 }, EMPTY_SET, -1);
+      renderer.render(items.slice(10, 14), { start: 10, end: 13 }, EMPTY_SET, -1);
+
+      // Old elements (indices 0-3) should be released to pool now
+      expect(renderer.getElement(0)).toBeUndefined();
+      expect(renderer.getElement(1)).toBeUndefined();
+
+      // Scroll to 14-17 — pooled elements reused at new indices
+      renderer.render(items.slice(14, 18), { start: 14, end: 17 }, EMPTY_SET, -1);
+
+      // Even indices should NOT have odd class (even if the pooled element previously was odd)
+      expect(renderer.getElement(14)!.classList.contains("vlist-item--odd")).toBe(false);
+      expect(renderer.getElement(16)!.classList.contains("vlist-item--odd")).toBe(false);
+
+      // Odd indices should have odd class
+      expect(renderer.getElement(15)!.classList.contains("vlist-item--odd")).toBe(true);
+      expect(renderer.getElement(17)!.classList.contains("vlist-item--odd")).toBe(true);
 
       container.remove();
     });
