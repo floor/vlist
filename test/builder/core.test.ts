@@ -90,6 +90,7 @@ afterAll(() => {
 interface TestItem {
   id: number;
   name: string;
+  [key: string]: unknown;
 }
 
 const createTestItems = (count: number): TestItem[] =>
