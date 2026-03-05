@@ -2,16 +2,16 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.2.7** — [Changelog](./changelog.txt)
+**v1.2.8** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
-[![tests](https://img.shields.io/badge/tests-2456_passing-brightgreen)](https://github.com/floor/vlist)
+[![tests](https://img.shields.io/badge/tests-2478_passing-brightgreen)](https://github.com/floor/vlist)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~8.5 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~8.7 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -24,7 +24,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 ## Highlights
 
 
-- **Data table** — virtualized columns with resize, sort, and horizontal scroll via `withTable()`
+- **Data table** — virtualized columns with resize, sort, horizontal scroll, and grouped sections via `withTable()`
 - **Dimension-agnostic API** — semantically correct terminology for both orientations
 - **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
 - **Horizontal groups** — sticky headers work in horizontal carousels
@@ -89,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 8.4 KB | Core virtualization |
-| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
-| `withMasonry()` | +2.4 KB | Pinterest-style masonry layout |
-| `withGroups()` | +4.1 KB | Grouped lists with sticky/inline headers |
-| `withAsync()` | +3.9 KB | Lazy loading with adapters |
-| `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
+| **Base** | 8.7 KB | Core virtualization |
+| `withGrid()` | +4.0 KB | 2D grid layout with context injection |
+| `withMasonry()` | +2.6 KB | Pinterest-style masonry layout |
+| `withGroups()` | +4.2 KB | Grouped lists with sticky/inline headers |
+| `withAsync()` | +4.0 KB | Lazy loading with adapters |
+| `withSelection()` | +1.8 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +4.4 KB | Data table with columns, resize, sort |
+| `withTable()` | +4.9 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
@@ -215,6 +215,7 @@ const list = vlist({
 | **Horizontal groups** | `orientation: 'horizontal'` + `withGroups()` |
 | **Horizontal grid** | `orientation: 'horizontal'` + `withGrid()` |
 | **Data table** | `withTable({ columns, rowHeight, resizable })` |
+| **Grouped table** | `withTable({ columns, rowHeight })` + `withGroups({ ... })` |
 | **Masonry** | `withMasonry({ columns: 4, gap: 16 })` |
 | **Page-level scroll** | `withPage()` |
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
@@ -390,11 +391,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 8.5 KB |
-| + Grid | 12.4 KB |
-| + Groups | 12.7 KB |
-| + Async | 12.4 KB |
-| + Table | 12.9 KB |
+| Base only | 8.7 KB |
+| + Grid | 12.8 KB |
+| + Groups | 12.9 KB |
+| + Async | 12.7 KB |
+| + Table | 13.6 KB |
 
 ### Memory Efficiency
 
@@ -445,7 +446,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (2456 tests) and `bun run build` before submitting
+2. Run `bun test` (2478 tests) and `bun run build` before submitting
 
 ## License
 
