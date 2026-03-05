@@ -275,7 +275,7 @@ export const withTable = <T extends VListItem = VListItem>(
       // ── Create table renderer ──
       tableRenderer = createTableRenderer<T>(
         dom.items,
-        ctx.sizeCache,
+        () => ctx.sizeCache,
         tableLayout,
         config.columns,
         classPrefix,
@@ -561,6 +561,35 @@ export const withTable = <T extends VListItem = VListItem>(
        * Get the table layout (for advanced usage / internal).
        */
       ctx.methods.set("_getTableLayout", () => tableLayout);
+
+      /**
+       * Replace the table renderer instance (for groups feature integration).
+       * The groups feature calls this to swap in a groups-aware renderer.
+       */
+      ctx.methods.set("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
+        tableRenderer = newRenderer;
+      });
+
+      /**
+       * Tell the table renderer about group header items.
+       * The groups feature calls this so the renderer can distinguish
+       * group headers from data rows and render them full-width.
+       */
+      ctx.methods.set("_updateTableForGroups", (
+        isHeaderFn: (item: T) => boolean,
+        headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+      ) => {
+        if (tableRenderer) {
+          tableRenderer.setGroupHeaderFn(isHeaderFn, headerTemplate);
+        }
+      });
+
+      /**
+       * Get the table column header height (for sticky group header offset).
+       * The groups feature needs this to position its sticky header below
+       * the table's column header row.
+       */
+      ctx.methods.set("_getTableHeaderHeight", () => headerHeight);
 
       // ── Content size handlers ──
       // When data changes, update content width too

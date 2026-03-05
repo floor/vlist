@@ -264,6 +264,39 @@
 }
 
 /* =============================================================================
+   Group Headers (withTable + withGroups)
+   ============================================================================= */
+
+/* Group header row — spans full table width, no cells */
+.vlist-table-group-header {
+    display: flex;
+    align-items: center;
+    background-color: var(--vlist-bg, #ffffff);
+    cursor: default;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Group header content container */
+.vlist-table-group-header-content {
+    flex: 1;
+    min-width: 0;
+    padding-left: var(--vlist-item-padding-x, 0.75rem);
+    padding-right: var(--vlist-item-padding-x, 0.75rem);
+}
+
+/* Row borders — group headers get a top border, not bottom */
+.vlist--table-row-borders .vlist-table-group-header {
+    border-bottom: none;
+    border-top: 1px solid var(--vlist-border, #e5e7eb);
+}
+
+/* Sticky group header sits below the table column header */
+.vlist--table.vlist--grouped .vlist-sticky-header {
+    z-index: 4;
+}
+
+/* =============================================================================
    Dark Mode
    ============================================================================= */
 
@@ -283,4 +316,12 @@
 
 [data-theme-mode="dark"] .vlist-table-header-resize:hover::after {
     background-color: var(--vlist-focus-ring, #3b82f6);
+}
+
+[data-theme-mode="dark"] .vlist-table-group-header {
+    background-color: var(--vlist-bg, #111827);
+}
+
+[data-theme-mode="dark"] .vlist--table-row-borders .vlist-table-group-header {
+    border-top-color: var(--vlist-border, #374151);
 }

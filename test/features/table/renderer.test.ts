@@ -91,7 +91,7 @@ function createTestRenderer(opts: {
 
   const renderer = createTableRenderer<TestItem>(
     container,
-    sizeCache as any,
+    () => sizeCache as any,
     layout,
     columns,
     "vlist",
@@ -945,5 +945,560 @@ describe("incremental rendering", () => {
     expect(container.querySelectorAll(".vlist-table-row").length).toBe(0);
 
     container.remove();
+  });
+});
+
+// =============================================================================
+// Group Header Tests
+// =============================================================================
+
+/**
+ * Helper: create a renderer with group headers enabled.
+ *
+ * Simulates what happens when withGroups is active:
+ * - A grouped size function (headers = 32px, rows = 40px)
+ * - A size cache built for layout items (data + headers interleaved)
+ * - setGroupHeaderFn configured on the renderer
+ *
+ * Layout for 6 data items in 2 groups of 3:
+ *   [header-A, item0, item1, item2, header-B, item3, item4, item5]
+ *   index: 0       1     2     3       4        5     6     7
+ */
+
+interface GroupTestItem extends VListItem {
+  id: string | number;
+  name: string;
+  email: string;
+  role: string;
+  __groupHeader?: true;
+  groupKey?: string;
+  groupIndex?: number;
+}
+
+const HEADER_HEIGHT = 32;
+const ROW_HEIGHT = 40;
+
+function makeGroupHeader(groupIndex: number, key: string): GroupTestItem {
+  return {
+    id: `__group_header_${groupIndex}`,
+    name: "",
+    email: "",
+    role: "",
+    __groupHeader: true,
+    groupKey: key,
+    groupIndex,
+  };
+}
+
+function makeGroupedItems(): GroupTestItem[] {
+  // Layout: [headerA, item0, item1, item2, headerB, item3, item4, item5]
+  return [
+    makeGroupHeader(0, "Admins"),
+    { id: 0, name: "Alice", email: "alice@test.com", role: "admin" },
+    { id: 1, name: "Bob", email: "bob@test.com", role: "admin" },
+    { id: 2, name: "Carol", email: "carol@test.com", role: "admin" },
+    makeGroupHeader(1, "Users"),
+    { id: 3, name: "Dave", email: "dave@test.com", role: "user" },
+    { id: 4, name: "Eve", email: "eve@test.com", role: "user" },
+    { id: 5, name: "Frank", email: "frank@test.com", role: "user" },
+  ];
+}
+
+function createGroupedRenderer() {
+  const columns: TableColumn<GroupTestItem>[] = [
+    { key: "name", label: "Name", width: 200 },
+    { key: "email", label: "Email", width: 300 },
+    { key: "role", label: "Role", width: 100 },
+  ];
+
+  const totalItems = 8; // 6 data + 2 headers
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+
+  // Grouped size function: headers get HEADER_HEIGHT, data rows get ROW_HEIGHT
+  const groupedSizeFn = (index: number): number => {
+    return (index === 0 || index === 4) ? HEADER_HEIGHT : ROW_HEIGHT;
+  };
+
+  const sizeCache = createSizeCache(groupedSizeFn, totalItems);
+
+  const layout = createTableLayout<GroupTestItem>(columns, 50, Infinity, true);
+  layout.resolve(800);
+
+  const renderer = createTableRenderer<GroupTestItem>(
+    container,
+    () => sizeCache,
+    layout,
+    columns,
+    "vlist",
+    "vlist",
+    () => totalItems,
+  );
+
+  // Configure group header detection + template
+  renderer.setGroupHeaderFn(
+    (item) => !!(item as any).__groupHeader,
+    (key, _groupIndex) => `<span class="group-label">${key}</span>`,
+  );
+
+  return { container, sizeCache, layout, renderer, columns };
+}
+
+describe("group headers", () => {
+  describe("setGroupHeaderFn", () => {
+    it("should accept a header check function and template", () => {
+      const { renderer, container } = createTestRenderer();
+
+      // Should not throw
+      renderer.setGroupHeaderFn(
+        () => false,
+        (key) => `<span>${key}</span>`,
+      );
+
+      // Should also accept null to clear
+      renderer.setGroupHeaderFn(null, null);
+
+      container.remove();
+    });
+  });
+
+  describe("rendering group header rows", () => {
+    it("should render group headers as full-width rows without cells", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Index 0 = header A
+      const headerEl = renderer.getElement(0);
+      expect(headerEl).toBeDefined();
+      expect(headerEl!.classList.contains("vlist-table-group-header")).toBe(true);
+
+      // No cells inside the header row
+      expect(headerEl!.querySelectorAll(".vlist-table-cell").length).toBe(0);
+
+      // Has a single content container
+      expect(headerEl!.querySelectorAll(".vlist-table-group-header-content").length).toBe(1);
+
+      container.remove();
+    });
+
+    it("should render the header template content", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      const content = headerEl.querySelector(".vlist-table-group-header-content")!;
+      expect(content.innerHTML).toContain("Admins");
+
+      const headerEl2 = renderer.getElement(4)!;
+      const content2 = headerEl2.querySelector(".vlist-table-group-header-content")!;
+      expect(content2.innerHTML).toContain("Users");
+
+      container.remove();
+    });
+
+    it("should use headerHeight for group header rows", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      expect(headerEl.style.height).toBe(`${HEADER_HEIGHT}px`);
+
+      // Data row should use ROW_HEIGHT
+      const dataEl = renderer.getElement(1)!;
+      expect(dataEl.style.height).toBe(`${ROW_HEIGHT}px`);
+
+      container.remove();
+    });
+
+    it("should set role=presentation on group headers", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      expect(headerEl.getAttribute("role")).toBe("presentation");
+
+      // Data rows should have role=row
+      const dataEl = renderer.getElement(1)!;
+      expect(dataEl.getAttribute("role")).toBe("row");
+
+      container.remove();
+    });
+
+    it("should not set aria-selected on group headers", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+      const selected = new Set<string | number>(["__group_header_0"]);
+
+      renderer.render(items, { start: 0, end: 7 }, selected, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      expect(headerEl.hasAttribute("aria-selected")).toBe(false);
+
+      container.remove();
+    });
+  });
+
+  describe("mixed data rows and group headers", () => {
+    it("should render both data rows and group headers in the same range", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // 2 headers + 6 data rows = 8 total elements
+      let headerCount = 0;
+      let dataCount = 0;
+      for (let i = 0; i <= 7; i++) {
+        const el = renderer.getElement(i);
+        expect(el).toBeDefined();
+        if (el!.classList.contains("vlist-table-group-header")) {
+          headerCount++;
+        } else if (el!.classList.contains("vlist-table-row")) {
+          dataCount++;
+        }
+      }
+      expect(headerCount).toBe(2);
+      expect(dataCount).toBe(6);
+
+      container.remove();
+    });
+
+    it("should render data row cells correctly alongside group headers", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Index 1 = first data row (Alice)
+      const dataEl = renderer.getElement(1)!;
+      const cells = dataEl.querySelectorAll(".vlist-table-cell");
+      expect(cells.length).toBe(3); // name, email, role
+
+      container.remove();
+    });
+
+    it("should position rows correctly with mixed heights", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Index 0: header A at offset 0
+      const h0 = renderer.getElement(0)!;
+      expect(h0.style.transform).toBe("translateY(0px)");
+
+      // Index 1: first data row at offset HEADER_HEIGHT (32)
+      const d1 = renderer.getElement(1)!;
+      expect(d1.style.transform).toBe(`translateY(${HEADER_HEIGHT}px)`);
+
+      // Index 4: header B at offset 32 + 3*40 = 152
+      const h4 = renderer.getElement(4)!;
+      const expectedOffset = HEADER_HEIGHT + 3 * ROW_HEIGHT;
+      expect(h4.style.transform).toBe(`translateY(${expectedOffset}px)`);
+
+      container.remove();
+    });
+  });
+
+  describe("type transitions", () => {
+    it("should replace a data row with a group header when type changes at same index", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      // First render: index 0 is a group header
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      const originalEl = renderer.getElement(0)!;
+      expect(originalEl.classList.contains("vlist-table-group-header")).toBe(true);
+
+      // Create new items where index 0 is a data row (no groups)
+      const noGroupItems: GroupTestItem[] = [
+        { id: 100, name: "Zack", email: "z@test.com", role: "admin" },
+        ...items.slice(1),
+      ];
+
+      // Temporarily disable group headers
+      renderer.setGroupHeaderFn(null, null);
+      renderer.render(noGroupItems, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const newEl = renderer.getElement(0)!;
+      // Should now be a data row, not a header
+      expect(newEl.classList.contains("vlist-table-group-header")).toBe(false);
+      expect(newEl.classList.contains("vlist-table-row")).toBe(true);
+
+      container.remove();
+    });
+
+    it("should replace a group header with a data row when setGroupHeaderFn is cleared", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+      expect(renderer.getElement(0)!.classList.contains("vlist-table-group-header")).toBe(true);
+
+      // Clear group headers and re-render
+      renderer.setGroupHeaderFn(null, null);
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // Index 0 should now be a regular row (group header item rendered as data row)
+      expect(renderer.getElement(0)!.classList.contains("vlist-table-group-header")).toBe(false);
+
+      container.remove();
+    });
+  });
+
+  describe("updateItem with group headers", () => {
+    it("should be a no-op for group header rows", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      const htmlBefore = headerEl.innerHTML;
+
+      // updateItem should skip group headers gracefully
+      renderer.updateItem(0, items[0]!, true, false);
+
+      // Content should be unchanged — no selection class applied
+      expect(headerEl.innerHTML).toBe(htmlBefore);
+      expect(headerEl.classList.contains("vlist-item--selected")).toBe(false);
+
+      container.remove();
+    });
+
+    it("should still work for data rows when groups are active", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Update a data row (index 1 = Alice)
+      renderer.updateItem(1, items[1]!, true, false);
+
+      const dataEl = renderer.getElement(1)!;
+      expect(dataEl.classList.contains("vlist-item--selected")).toBe(true);
+
+      container.remove();
+    });
+  });
+
+  describe("updateItemClasses with group headers", () => {
+    it("should be a no-op for group header rows", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      const classBefore = headerEl.className;
+
+      renderer.updateItemClasses(0, true, true);
+
+      // Classes should be unchanged — no selected/focused applied
+      expect(headerEl.className).toBe(classBefore);
+
+      container.remove();
+    });
+
+    it("should still work for data rows when groups are active", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      renderer.updateItemClasses(1, false, true);
+
+      const dataEl = renderer.getElement(1)!;
+      expect(dataEl.classList.contains("vlist-item--focused")).toBe(true);
+
+      container.remove();
+    });
+  });
+
+  describe("updateColumnLayout with group headers", () => {
+    it("should update row width for both data rows and group headers", () => {
+      const { renderer, container, layout } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Resize a column
+      layout.resizeColumn(0, 300); // name: 200 → 300
+
+      renderer.updateColumnLayout(layout);
+
+      const headerEl = renderer.getElement(0)!;
+      const dataEl = renderer.getElement(1)!;
+
+      // Both should have the new total width
+      expect(headerEl.style.width).toBe(dataEl.style.width);
+      expect(headerEl.style.width).toBe(`${layout.totalWidth}px`);
+
+      container.remove();
+    });
+
+    it("should update cell positions on data rows but not create cells on headers", () => {
+      const { renderer, container, layout } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      layout.resizeColumn(0, 300);
+      renderer.updateColumnLayout(layout);
+
+      // Header should still have no cells
+      const headerEl = renderer.getElement(0)!;
+      expect(headerEl.querySelectorAll(".vlist-table-cell").length).toBe(0);
+
+      // Data row cells should have updated positions
+      const dataEl = renderer.getElement(1)!;
+      const cells = dataEl.querySelectorAll(".vlist-table-cell");
+      expect(cells.length).toBe(3);
+
+      container.remove();
+    });
+  });
+
+  describe("sizeCache getter pattern", () => {
+    it("should use updated sizeCache when reference changes", () => {
+      const columns: TableColumn<GroupTestItem>[] = [
+        { key: "name", label: "Name", width: 200 },
+        { key: "email", label: "Email", width: 300 },
+        { key: "role", label: "Role", width: 100 },
+      ];
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+
+      // Start with a flat sizeCache (all rows = 40px)
+      let sizeCache = createSizeCache(40, 8);
+
+      const layout = createTableLayout<GroupTestItem>(columns, 50, Infinity, true);
+      layout.resolve(800);
+
+      const renderer = createTableRenderer<GroupTestItem>(
+        container,
+        () => sizeCache, // Getter — always returns current ref
+        layout,
+        columns,
+        "vlist",
+        "vlist",
+        () => 8,
+      );
+
+      const items = makeGroupedItems();
+
+      // Render with flat sizes (no groups yet)
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const elBefore = renderer.getElement(0)!;
+      expect(elBefore.style.height).toBe("40px"); // Flat height
+
+      // Now swap to a grouped sizeCache (headers = 32px)
+      const groupedSizeFn = (index: number): number => {
+        return (index === 0 || index === 4) ? HEADER_HEIGHT : ROW_HEIGHT;
+      };
+      sizeCache = createSizeCache(groupedSizeFn, 8);
+
+      // Enable group headers
+      renderer.setGroupHeaderFn(
+        (item) => !!(item as any).__groupHeader,
+        (key) => `<span>${key}</span>`,
+      );
+
+      // Clear and re-render with new sizeCache
+      renderer.clear();
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const elAfter = renderer.getElement(0)!;
+      expect(elAfter.style.height).toBe(`${HEADER_HEIGHT}px`); // Grouped height
+
+      container.remove();
+    });
+  });
+
+  describe("group header change tracking", () => {
+    it("should skip re-rendering when same group header is at same index", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      const headerEl = renderer.getElement(0)!;
+      const contentHtml = headerEl.querySelector(".vlist-table-group-header-content")!.innerHTML;
+
+      // Re-render same items — header should be reused
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      const headerEl2 = renderer.getElement(0)!;
+
+      // Same DOM element
+      expect(headerEl2).toBe(headerEl);
+      // Content unchanged
+      expect(headerEl2.querySelector(".vlist-table-group-header-content")!.innerHTML).toBe(contentHtml);
+
+      container.remove();
+    });
+
+    it("should re-render content when group header ID changes at same index", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      // Replace the header at index 0 with a different group (different groupIndex → different ID).
+      // In real usage, changing groups rebuilds the entire layout with new IDs.
+      const newItems = [...items];
+      newItems[0] = makeGroupHeader(99, "Managers");
+
+      renderer.render(newItems, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      const content = headerEl.querySelector(".vlist-table-group-header-content")!;
+      expect(content.innerHTML).toContain("Managers");
+
+      container.remove();
+    });
+  });
+
+  describe("clear and destroy with group headers", () => {
+    it("should clear all rows including group headers", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      expect(container.children.length).toBe(8);
+
+      renderer.clear();
+
+      // All elements should be removed
+      expect(container.children.length).toBe(0);
+      expect(renderer.getElement(0)).toBeUndefined();
+      expect(renderer.getElement(1)).toBeUndefined();
+
+      container.remove();
+    });
+
+    it("should be able to re-render after clear", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      renderer.clear();
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      expect(renderer.getElement(0)).toBeDefined();
+      expect(renderer.getElement(0)!.classList.contains("vlist-table-group-header")).toBe(true);
+      expect(renderer.getElement(1)).toBeDefined();
+      expect(renderer.getElement(1)!.classList.contains("vlist-table-row")).toBe(true);
+
+      container.remove();
+    });
   });
 });
