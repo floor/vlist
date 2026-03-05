@@ -188,6 +188,11 @@
     transition: none;
 }
 
+/* Striped rows (toggled via item.striped: true → .vlist-item--odd class) */
+.vlist-table-row.vlist-item--odd {
+    background-color: var(--vlist-bg-striped, var(--vlist-bg-hover, #f9fafb));
+}
+
 /* Table row hover (only when selection is active) */
 .vlist--selectable .vlist-table-row {
     cursor: pointer;
