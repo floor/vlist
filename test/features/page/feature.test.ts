@@ -453,6 +453,36 @@ describe("withPage — Scroll Position Functions", () => {
     expect(() => setTop(0)).not.toThrow();
   });
 
+  it("getTop should use rect.left in horizontal mode", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext({ horizontal: true });
+    const mocks = getMocks(ctx);
+
+    feature.setup!(ctx);
+
+    const getTop = mocks.setScrollFns.mock.calls[0]![0] as () => number;
+    const position = getTop();
+
+    expect(typeof position).toBe("number");
+    // In JSDOM, getBoundingClientRect().left = 0, so Math.max(0, -0) = 0
+    expect(position).toBe(0);
+  });
+
+  it("setTop should use window.scrollTo with horizontal args in horizontal mode", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext({ horizontal: true });
+    const mocks = getMocks(ctx);
+
+    feature.setup!(ctx);
+
+    const setTop = mocks.setScrollFns.mock.calls[0]![1] as (
+      pos: number,
+    ) => void;
+
+    // Should not throw — window.scrollTo is a no-op in JSDOM
+    expect(() => setTop(200)).not.toThrow();
+  });
+
   it("container dimensions width() and height() should return numbers", () => {
     const feature = withPage<TestItem>();
     const ctx = createMockContext();
@@ -516,6 +546,106 @@ describe("withPage — Handler Registration", () => {
 });
 
 // =============================================================================
+// withPage — Window Resize Handler
+// =============================================================================
+
+describe("withPage — Window Resize Handler", () => {
+  it("should emit resize event and call resizeHandlers on window resize", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    const resizeHandler = mock(() => {});
+    ctx.resizeHandlers.push(resizeHandler);
+
+    feature.setup!(ctx);
+
+    // Simulate a meaningful window resize (change > 1px)
+    Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
+    Object.defineProperty(window, "innerWidth", { value: 1200, configurable: true });
+    window.dispatchEvent(new dom.window.Event("resize"));
+
+    expect(emitSpy).toHaveBeenCalledWith("resize", { width: 1200, height: 900 });
+    expect(resizeHandler).toHaveBeenCalledWith(1200, 900);
+
+    // State should be updated
+    expect(ctx.state.viewportState.containerSize).toBe(900);
+
+    // Cleanup
+    feature.destroy!();
+
+    // Restore defaults
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+  });
+
+  it("should skip tiny resize changes (≤ 1px)", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    feature.setup!(ctx);
+
+    // Record current innerHeight (set during setup)
+    const currentHeight = window.innerHeight;
+
+    // Simulate a tiny change (≤ 1px)
+    Object.defineProperty(window, "innerHeight", {
+      value: currentHeight + 1,
+      configurable: true,
+    });
+    window.dispatchEvent(new dom.window.Event("resize"));
+
+    // Should NOT emit resize — change is exactly 1px which is ≤ threshold
+    expect(emitSpy).not.toHaveBeenCalledWith("resize", expect.anything());
+
+    // Cleanup
+    feature.destroy!();
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should call renderIfNeeded after resize", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+    const renderSpy = mock(() => {});
+    (ctx as any).renderIfNeeded = renderSpy;
+
+    feature.setup!(ctx);
+
+    // Simulate a meaningful resize
+    Object.defineProperty(window, "innerHeight", { value: 1200, configurable: true });
+    window.dispatchEvent(new dom.window.Event("resize"));
+
+    expect(renderSpy).toHaveBeenCalled();
+
+    // Cleanup
+    feature.destroy!();
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should handle horizontal resize using width as main axis", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext({ horizontal: true });
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    feature.setup!(ctx);
+
+    // Simulate a meaningful width change
+    Object.defineProperty(window, "innerWidth", { value: 2000, configurable: true });
+    window.dispatchEvent(new dom.window.Event("resize"));
+
+    expect(emitSpy).toHaveBeenCalledWith("resize", expect.objectContaining({ width: 2000 }));
+
+    // Cleanup
+    feature.destroy!();
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+  });
+});
+
+// =============================================================================
 // withPage — Destroy Cleanup
 // =============================================================================
 
@@ -544,5 +674,49 @@ describe("withPage — Destroy Cleanup", () => {
         handler();
       }
     }).not.toThrow();
+  });
+
+  it("should clean up via feature.destroy()", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // feature.destroy() should not throw and should clean up the resize listener
+    expect(() => feature.destroy!()).not.toThrow();
+  });
+
+  it("should be safe to call feature.destroy() multiple times", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(() => {
+      feature.destroy!();
+      feature.destroy!();
+    }).not.toThrow();
+  });
+
+  it("should stop listening to window resize after destroy", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    feature.setup!(ctx);
+    feature.destroy!();
+
+    // Reset spy
+    emitSpy.mockClear();
+
+    // Simulate resize after destroy
+    Object.defineProperty(window, "innerHeight", { value: 1500, configurable: true });
+    window.dispatchEvent(new dom.window.Event("resize"));
+
+    // Should not emit — listener was removed
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 });
