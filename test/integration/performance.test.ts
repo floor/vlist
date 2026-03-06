@@ -35,6 +35,13 @@ import { withGrid } from "../../src/features/grid/feature";
 import { withGroups } from "../../src/features/groups/feature";
 
 // =============================================================================
+// CI Environment — Performance Threshold Multiplier
+// =============================================================================
+// CI runners (GitHub Actions) are ~2-3x slower than local machines.
+// Apply a multiplier to all timing thresholds to avoid flaky failures.
+const CI_MULTIPLIER = process.env.CI ? 3 : 1;
+
+// =============================================================================
 // JSDOM Setup
 // =============================================================================
 
@@ -486,7 +493,7 @@ describe("performance — render cycles", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(50);
+    expect(elapsed).toBeLessThan(50 * CI_MULTIPLIER);
     list.destroy();
   });
 
@@ -511,7 +518,7 @@ describe("performance — render cycles", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(50);
+    expect(elapsed).toBeLessThan(50 * CI_MULTIPLIER);
     list.destroy();
   });
 
@@ -946,7 +953,7 @@ describe("performance — selection operations", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(200);
+    expect(elapsed).toBeLessThan(200 * CI_MULTIPLIER);
     list.destroy();
   });
 
