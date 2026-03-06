@@ -28,9 +28,6 @@ import {
 // Re-export for convenience
 export { MAX_VIRTUAL_SIZE };
 
-/** @deprecated Use MAX_VIRTUAL_SIZE instead */
-export const MAX_VIRTUAL_HEIGHT = MAX_VIRTUAL_SIZE;
-
 // =============================================================================
 // Compression State
 // =============================================================================

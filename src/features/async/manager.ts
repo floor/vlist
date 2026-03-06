@@ -168,7 +168,7 @@ export interface DataManager<T extends VListItem = VListItem> {
 // Constants
 // =============================================================================
 
-const DEFAULT_PAGE_SIZE = 50;
+const LOAD_SIZE = 50;
 
 // =============================================================================
 // Data Manager Implementation
@@ -186,7 +186,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     initialTotal,
     storage: storageConfig,
     placeholder: placeholderConfig,
-    pageSize = DEFAULT_PAGE_SIZE,
+    pageSize = LOAD_SIZE,
     onStateChange,
     onItemsLoaded,
     onItemsEvicted,

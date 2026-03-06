@@ -8,7 +8,7 @@ import {
   easeInOutQuad,
   resolveScrollArgs,
   createSmoothScroll,
-  DEFAULT_SMOOTH_DURATION,
+  SMOOTH_DURATION,
 } from "../../src/builder/scroll";
 
 // =============================================================================
@@ -94,7 +94,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("start");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should resolve string argument as align", () => {
@@ -102,7 +102,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("center");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should resolve 'start' string", () => {
@@ -110,7 +110,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("start");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should resolve 'end' string", () => {
@@ -118,7 +118,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("end");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should resolve object with all properties", () => {
@@ -138,7 +138,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("start");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should use defaults for undefined object properties", () => {
@@ -150,7 +150,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("start");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should override only specified properties", () => {
@@ -160,7 +160,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("end");
     expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should handle custom duration only", () => {
@@ -180,7 +180,7 @@ describe("resolveScrollArgs", () => {
 
     expect(result.align).toBe("start");
     expect(result.behavior).toBe("smooth");
-    expect(result.duration).toBe(DEFAULT_SMOOTH_DURATION);
+    expect(result.duration).toBe(SMOOTH_DURATION);
   });
 
   it("should handle all custom values", () => {
@@ -275,10 +275,10 @@ describe("Scroll utilities integration", () => {
 // =============================================================================
 
 describe("Constants", () => {
-  it("should export DEFAULT_SMOOTH_DURATION", () => {
-    expect(DEFAULT_SMOOTH_DURATION).toBeDefined();
-    expect(DEFAULT_SMOOTH_DURATION).toBeGreaterThan(0);
-    expect(DEFAULT_SMOOTH_DURATION).toBe(300);
+  it("should export SMOOTH_DURATION", () => {
+    expect(SMOOTH_DURATION).toBeDefined();
+    expect(SMOOTH_DURATION).toBeGreaterThan(0);
+    expect(SMOOTH_DURATION).toBe(300);
   });
 });
 

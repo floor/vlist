@@ -138,9 +138,9 @@ export interface SparseStorage<T extends VListItem = VListItem> {
 // Constants
 // =============================================================================
 
-const DEFAULT_CHUNK_SIZE = 100;
-const DEFAULT_MAX_CACHED_ITEMS = 5000;
-const DEFAULT_EVICTION_BUFFER = 200;
+const CHUNK_SIZE = 100;
+const MAX_CACHED_ITEMS = 5000;
+const EVICTION_BUFFER = 200;
 
 // =============================================================================
 // Sparse Storage Implementation
@@ -153,9 +153,9 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
   config: SparseStorageConfig = {},
 ): SparseStorage<T> => {
   const {
-    chunkSize = DEFAULT_CHUNK_SIZE,
-    maxCachedItems = DEFAULT_MAX_CACHED_ITEMS,
-    evictionBuffer = DEFAULT_EVICTION_BUFFER,
+    chunkSize = CHUNK_SIZE,
+    maxCachedItems = MAX_CACHED_ITEMS,
+    evictionBuffer = EVICTION_BUFFER,
     onEvict,
   } = config;
 
