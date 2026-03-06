@@ -1,6 +1,17 @@
 vlist — full changelog
 initial commit → latest
-330 commits · 30 days · Feb 2 – Mar 5, 2026
+330 commits · 30 days · Feb 2 – Mar 6, 2026
+
+
+2026-03-06
+
+  fix(core): replace UA sniffing with pointer:coarse capability detection
+  fix(table): add missing TestItem generic to withTable call in sort test
+  docs(contributing): rewrite to match v1.x builder/feature architecture
+  chore(ci): add GitHub Actions workflow (typecheck, test, build, bundle size)
+  test: improve coverage to 97% functions / 99.13% lines (+450 tests, 2719 total)
+
+  → v1.3.0
 
 
 2026-03-06
