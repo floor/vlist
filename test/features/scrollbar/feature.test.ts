@@ -347,4 +347,75 @@ describe("withScrollbar — Setup", () => {
       handler();
     }
   });
+
+  it("should register a contentSizeHandlers handler", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    expect(ctx.contentSizeHandlers.length).toBe(0);
+
+    feature.setup!(ctx);
+
+    expect(ctx.contentSizeHandlers.length).toBeGreaterThan(0);
+  });
+});
+
+// =============================================================================
+// withScrollbar — Resize Handler
+// =============================================================================
+
+describe("withScrollbar — Resize Handler", () => {
+  it("should update scrollbar bounds on resize", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Trigger resize handler — should not throw
+    expect(ctx.resizeHandlers.length).toBeGreaterThan(0);
+    expect(() => ctx.resizeHandlers[0]!(500, 800)).not.toThrow();
+  });
+
+  it("should update scrollbar bounds on content size change", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Trigger contentSizeHandlers — should not throw
+    expect(ctx.contentSizeHandlers.length).toBeGreaterThan(0);
+    expect(() => ctx.contentSizeHandlers[0]!()).not.toThrow();
+  });
+});
+
+// =============================================================================
+// withScrollbar — Feature Destroy
+// =============================================================================
+
+describe("withScrollbar — Feature Destroy", () => {
+  it("should clean up via feature.destroy()", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(() => feature.destroy!()).not.toThrow();
+  });
+
+  it("should be safe to call feature.destroy() multiple times", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(() => {
+      feature.destroy!();
+      feature.destroy!();
+    }).not.toThrow();
+  });
+
+  it("should be safe to call feature.destroy() without setup", () => {
+    const feature = withScrollbar<TestItem>();
+    expect(() => feature.destroy!()).not.toThrow();
+  });
 });

@@ -3,10 +3,11 @@
  * Tests for scroll utility functions: easing and argument resolution
  */
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll, beforeEach } from "bun:test";
 import {
   easeInOutQuad,
   resolveScrollArgs,
+  createSmoothScroll,
   DEFAULT_SMOOTH_DURATION,
 } from "../../src/builder/scroll";
 
@@ -278,5 +279,184 @@ describe("Constants", () => {
     expect(DEFAULT_SMOOTH_DURATION).toBeDefined();
     expect(DEFAULT_SMOOTH_DURATION).toBeGreaterThan(0);
     expect(DEFAULT_SMOOTH_DURATION).toBe(300);
+  });
+});
+
+// =============================================================================
+// createSmoothScroll Tests
+// =============================================================================
+
+describe("createSmoothScroll", () => {
+  // Use synchronous rAF for deterministic tests
+  let originalRAF: typeof requestAnimationFrame;
+  let originalCAF: typeof cancelAnimationFrame;
+  let rafCallbacks: Array<{ id: number; cb: FrameRequestCallback }>;
+  let nextId: number;
+
+  beforeAll(() => {
+    originalRAF = globalThis.requestAnimationFrame;
+    originalCAF = globalThis.cancelAnimationFrame;
+    rafCallbacks = [];
+    nextId = 1;
+
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+      const id = nextId++;
+      rafCallbacks.push({ id, cb });
+      return id;
+    };
+
+    globalThis.cancelAnimationFrame = (id: number): void => {
+      rafCallbacks = rafCallbacks.filter((r) => r.id !== id);
+    };
+  });
+
+  beforeEach(() => {
+    rafCallbacks = [];
+    nextId = 1;
+  });
+
+  afterAll(() => {
+    globalThis.requestAnimationFrame = originalRAF;
+    globalThis.cancelAnimationFrame = originalCAF;
+  });
+
+  /** Flush all pending rAF callbacks with the given timestamp */
+  function flushRAF(now: number) {
+    const pending = [...rafCallbacks];
+    rafCallbacks = [];
+    for (const { cb } of pending) {
+      cb(now);
+    }
+  }
+
+  it("should jump directly when distance < 1px", () => {
+    const scrollTo = mock(() => {});
+    const renderFn = mock(() => {});
+    const controller = { scrollTo, getScrollTop: () => 0 };
+
+    const { animateScroll } = createSmoothScroll(controller, renderFn);
+
+    animateScroll(100, 100.5, 300);
+
+    // Should jump immediately without rAF
+    expect(scrollTo).toHaveBeenCalledWith(100.5);
+    expect(renderFn).not.toHaveBeenCalled();
+    expect(rafCallbacks.length).toBe(0);
+  });
+
+  it("should animate over multiple frames", () => {
+    const positions: number[] = [];
+    const scrollTo = mock((pos: number) => positions.push(pos));
+    const renderFn = mock(() => {});
+    const controller = { scrollTo, getScrollTop: () => 0 };
+
+    const { animateScroll } = createSmoothScroll(controller, renderFn);
+
+    // Mock performance.now to return a known start time
+    const startTime = 1000;
+    const originalPerfNow = performance.now;
+    performance.now = () => startTime;
+
+    animateScroll(0, 1000, 300);
+
+    performance.now = originalPerfNow;
+
+    // First rAF should be queued
+    expect(rafCallbacks.length).toBe(1);
+
+    // Simulate mid-animation frame (t=0.5 → 150ms elapsed)
+    flushRAF(startTime + 150);
+
+    expect(scrollTo).toHaveBeenCalled();
+    expect(renderFn).toHaveBeenCalled();
+    // Should still be animating (another rAF queued)
+    expect(rafCallbacks.length).toBe(1);
+
+    // Position at t=0.5: easeInOutQuad(0.5) = 0.5, so pos = 500
+    expect(positions[0]).toBeCloseTo(500, 0);
+
+    // Simulate final frame (t=1.0 → 300ms elapsed)
+    flushRAF(startTime + 300);
+
+    // Should have reached the target
+    expect(positions[positions.length - 1]).toBe(1000);
+    // No more rAFs queued (animation complete)
+    expect(rafCallbacks.length).toBe(0);
+  });
+
+  it("should cancel previous animation when starting a new one", () => {
+    const scrollTo = mock(() => {});
+    const renderFn = mock(() => {});
+    const controller = { scrollTo, getScrollTop: () => 0 };
+
+    const startTime = 2000;
+    const originalPerfNow = performance.now;
+    performance.now = () => startTime;
+
+    const { animateScroll } = createSmoothScroll(controller, renderFn);
+
+    animateScroll(0, 500, 300);
+    expect(rafCallbacks.length).toBe(1);
+
+    // Start a new animation — should cancel the first
+    animateScroll(0, 1000, 300);
+    expect(rafCallbacks.length).toBe(1); // Old one cancelled, new one queued
+
+    performance.now = originalPerfNow;
+  });
+
+  it("cancelScroll should stop the animation", () => {
+    const scrollTo = mock(() => {});
+    const renderFn = mock(() => {});
+    const controller = { scrollTo, getScrollTop: () => 0 };
+
+    const startTime = 3000;
+    const originalPerfNow = performance.now;
+    performance.now = () => startTime;
+
+    const { animateScroll, cancelScroll } = createSmoothScroll(controller, renderFn);
+
+    animateScroll(0, 1000, 300);
+    expect(rafCallbacks.length).toBe(1);
+
+    cancelScroll();
+    expect(rafCallbacks.length).toBe(0);
+
+    performance.now = originalPerfNow;
+  });
+
+  it("cancelScroll should be safe to call when no animation is running", () => {
+    const controller = { scrollTo: mock(() => {}), getScrollTop: () => 0 };
+    const { cancelScroll } = createSmoothScroll(controller, () => {});
+
+    expect(() => cancelScroll()).not.toThrow();
+  });
+
+  it("should apply easing during animation", () => {
+    const positions: number[] = [];
+    const scrollTo = mock((pos: number) => positions.push(pos));
+    const controller = { scrollTo, getScrollTop: () => 0 };
+
+    const startTime = 4000;
+    const originalPerfNow = performance.now;
+    performance.now = () => startTime;
+
+    const { animateScroll } = createSmoothScroll(controller, () => {});
+
+    animateScroll(0, 1000, 400);
+
+    // Quarter way: t=0.25, easeInOutQuad(0.25) = 0.125, pos = 125
+    flushRAF(startTime + 100);
+    expect(positions[0]).toBeCloseTo(125, 0);
+
+    // Three-quarter way: t=0.75, easeInOutQuad(0.75) = 0.875, pos = 875
+    flushRAF(startTime + 300);
+    expect(positions[1]).toBeCloseTo(875, 0);
+
+    // Complete
+    flushRAF(startTime + 400);
+    expect(positions[2]).toBe(1000);
+
+    performance.now = originalPerfNow;
   });
 });

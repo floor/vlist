@@ -379,4 +379,102 @@ describe("withGroups — Setup", () => {
       handler();
     }
   });
+
+  it("should use table integration when _updateTableForGroups is available", () => {
+    let tableUpdated = false;
+    let passedIsHeaderFn: ((item: any) => boolean) | null = null;
+
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+      headerHeight: 40,
+      headerTemplate: (key) => `<div>${key}</div>`,
+    });
+    const ctx = createMockContext();
+
+    // Mock table layout integration methods
+    ctx.methods.set("_getTableLayout", () => ({}));
+    ctx.methods.set("_updateTableForGroups", (isHeaderFn: any, headerTpl: any) => {
+      tableUpdated = true;
+      passedIsHeaderFn = isHeaderFn;
+    });
+
+    // Ensure replaceTemplate is NOT called (table handles rendering)
+    let templateReplaced = false;
+    ctx.replaceTemplate = () => { templateReplaced = true; };
+
+    feature.setup!(ctx);
+
+    expect(tableUpdated).toBe(true);
+    expect(templateReplaced).toBe(false);
+    expect(passedIsHeaderFn).not.toBeNull();
+  });
+
+  it("should use grid integration when _getGridLayout and _replaceGridRenderer are available", () => {
+    let gridRendererReplaced = false;
+    let gridLayoutUpdated = false;
+
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+      headerHeight: 40,
+      headerTemplate: (key) => `<div>${key}</div>`,
+    });
+    const ctx = createMockContext();
+
+    // Mock grid integration methods
+    ctx.methods.set("_getGridLayout", () => ({
+      getColumns: () => 3,
+      getColumnWidth: () => 133,
+      isHeaderRow: () => false,
+      getRowForIndex: () => 0,
+      getColumnForIndex: () => 0,
+      getTotalRows: () => 10,
+    }));
+    ctx.methods.set("_replaceGridRenderer", (renderer: any) => {
+      gridRendererReplaced = true;
+    });
+    ctx.methods.set("_updateGridLayoutForGroups", (isHeaderFn: any) => {
+      gridLayoutUpdated = true;
+    });
+
+    // Ensure replaceTemplate is NOT called (grid renderer handles it)
+    let templateReplaced = false;
+    ctx.replaceTemplate = () => { templateReplaced = true; };
+
+    feature.setup!(ctx);
+
+    expect(gridLayoutUpdated).toBe(true);
+    expect(gridRendererReplaced).toBe(true);
+    expect(templateReplaced).toBe(false);
+  });
+});
+
+// =============================================================================
+// withGroups — Feature Destroy
+// =============================================================================
+
+describe("withGroups — Feature Destroy", () => {
+  it("should clean up sticky header via feature.destroy()", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+      headerHeight: 40,
+      headerTemplate: () => "Header",
+      sticky: true,
+    });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // feature.destroy() should clean up the sticky header
+    expect(() => feature.destroy!()).not.toThrow();
+  });
+
+  it("should be safe to call feature.destroy() without setup", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+      headerHeight: 40,
+      headerTemplate: () => "Header",
+    });
+
+    expect(() => feature.destroy!()).not.toThrow();
+  });
 });
