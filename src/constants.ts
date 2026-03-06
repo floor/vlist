@@ -4,7 +4,7 @@
  */
 
 // =============================================================================
-// Virtual Scrolling
+// Core
 // =============================================================================
 
 /** Default number of extra items to render outside viewport */
@@ -14,7 +14,7 @@ export const OVERSCAN = 3;
 export const CLASS_PREFIX = "vlist";
 
 // =============================================================================
-// Data Loading
+// Async Loading
 // =============================================================================
 
 /** Distance from bottom (in pixels) to trigger infinite scroll */
@@ -26,9 +26,8 @@ export const INITIAL_LOAD_SIZE = 50;
 /** Default load size for data manager */
 export const LOAD_SIZE = 50;
 
-// =============================================================================
-// Velocity-Based Loading
-// =============================================================================
+/** Number of extra items to preload ahead of scroll direction */
+export const PRELOAD_AHEAD = 50;
 
 /**
  * Velocity threshold above which data loading is cancelled (px/ms)
@@ -44,15 +43,8 @@ export const LOAD_VELOCITY_THRESHOLD = 5;
  */
 export const PRELOAD_VELOCITY_THRESHOLD = 2;
 
-/**
- * Number of extra items to preload ahead of scroll direction
- * Only applies when velocity is between PRELOAD_VELOCITY_THRESHOLD and
- * LOAD_VELOCITY_THRESHOLD.
- */
-export const PRELOAD_AHEAD = 50;
-
 // =============================================================================
-// Compression (Large Lists)
+// Scale
 // =============================================================================
 
 /**
@@ -60,6 +52,16 @@ export const PRELOAD_AHEAD = 50;
  * Most browsers support ~16.7M pixels, we use 16M for safety margin
  */
 export const MAX_VIRTUAL_SIZE = 16_000_000;
+
+// =============================================================================
+// Scrolling
+// =============================================================================
+
+/** Idle timeout for scroll detection (ms) */
+export const SCROLL_IDLE_TIMEOUT = 150;
+
+/** Default wheel sensitivity multiplier */
+export const WHEEL_SENSITIVITY = 1;
 
 // =============================================================================
 // Scrollbar
@@ -73,6 +75,19 @@ export const SCROLLBAR_AUTO_HIDE_DELAY = 1000;
 
 /** Default minimum thumb size in pixels */
 export const SCROLLBAR_MIN_THUMB_SIZE = 30;
+
+// =============================================================================
+// Sparse Storage
+// =============================================================================
+
+/** Default chunk size for sparse storage */
+export const CHUNK_SIZE = 100;
+
+/** Default maximum cached items before eviction */
+export const MAX_CACHED_ITEMS = 10_000;
+
+/** Buffer for eviction (keep extra items around visible range) */
+export const EVICTION_BUFFER = 500;
 
 // =============================================================================
 // Placeholder
@@ -89,26 +104,3 @@ export const PLACEHOLDER_FLAG = "_isPlaceholder";
 
 /** Prefix for placeholder item IDs */
 export const PLACEHOLDER_ID_PREFIX = "__placeholder_";
-
-// =============================================================================
-// Sparse Storage
-// =============================================================================
-
-/** Default chunk size for sparse storage */
-export const CHUNK_SIZE = 100;
-
-/** Default maximum cached items before eviction */
-export const MAX_CACHED_ITEMS = 10_000;
-
-/** Buffer for eviction (keep extra items around visible range) */
-export const EVICTION_BUFFER = 500;
-
-// =============================================================================
-// Scroll
-// =============================================================================
-
-/** Idle timeout for scroll detection (ms) */
-export const SCROLL_IDLE_TIMEOUT = 150;
-
-/** Default wheel sensitivity multiplier */
-export const WHEEL_SENSITIVITY = 1;
