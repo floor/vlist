@@ -337,23 +337,33 @@ describe("withTable - Setup", () => {
     cleanupCtx(ctx);
   });
 
-  it("should set role=grid on items", () => {
+  it("should set role=grid on root", () => {
     const feature = withTable({ columns: testColumns, rowHeight: 40 });
     const ctx = createMockContext();
 
     feature.setup(ctx);
 
-    expect(ctx.dom.items.getAttribute("role")).toBe("grid");
+    expect(ctx.dom.root.getAttribute("role")).toBe("grid");
     cleanupCtx(ctx);
   });
 
-  it("should set aria-colcount on items", () => {
+  it("should set role=rowgroup on items", () => {
     const feature = withTable({ columns: testColumns, rowHeight: 40 });
     const ctx = createMockContext();
 
     feature.setup(ctx);
 
-    expect(ctx.dom.items.getAttribute("aria-colcount")).toBe("3");
+    expect(ctx.dom.items.getAttribute("role")).toBe("rowgroup");
+    cleanupCtx(ctx);
+  });
+
+  it("should set aria-colcount on root", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    expect(ctx.dom.root.getAttribute("aria-colcount")).toBe("3");
     cleanupCtx(ctx);
   });
 
@@ -1165,12 +1175,14 @@ describe("withTable - Destroy", () => {
     const ctx = createMockContext();
 
     feature.setup(ctx);
-    expect(ctx.dom.items.getAttribute("role")).toBe("grid");
+    expect(ctx.dom.root.getAttribute("role")).toBe("grid");
+    expect(ctx.dom.items.getAttribute("role")).toBe("rowgroup");
 
     for (const handler of ctx.destroyHandlers) {
       handler();
     }
 
+    expect(ctx.dom.root.getAttribute("role")).toBeNull();
     expect(ctx.dom.items.getAttribute("role")).toBe("listbox");
     cleanupCtx(ctx);
   });
@@ -1180,13 +1192,13 @@ describe("withTable - Destroy", () => {
     const ctx = createMockContext();
 
     feature.setup(ctx);
-    expect(ctx.dom.items.getAttribute("aria-colcount")).toBe("3");
+    expect(ctx.dom.root.getAttribute("aria-colcount")).toBe("3");
 
     for (const handler of ctx.destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.items.getAttribute("aria-colcount")).toBeNull();
+    expect(ctx.dom.root.getAttribute("aria-colcount")).toBeNull();
     cleanupCtx(ctx);
   });
 

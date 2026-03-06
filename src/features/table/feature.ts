@@ -182,9 +182,34 @@ export const withTable = <T extends VListItem = VListItem>(
       if (columnBorders) {
         dom.root.classList.add(`${classPrefix}--table-col-borders`);
       }
-      // Set role to grid (more appropriate for tables than listbox)
-      dom.items.setAttribute("role", "grid");
-      dom.items.setAttribute("aria-colcount", String(config.columns.length));
+      // ARIA: promote root to grid so both the header and body rowgroups
+      // are contained within the required parent role.
+      dom.root.setAttribute("role", "grid");
+      dom.root.setAttribute("aria-colcount", String(config.columns.length));
+      // aria-rowcount includes the header row (+1); updated in render loop
+      // when item count changes. Initial value uses current total.
+      let lastAriaRowCount = -1;
+
+      // Move aria-label from items (where dom.ts sets it on listbox) to root
+      const ariaLabel = dom.items.getAttribute("aria-label");
+      if (ariaLabel) {
+        dom.root.setAttribute("aria-label", ariaLabel);
+        dom.items.removeAttribute("aria-label");
+      }
+
+      // Items container becomes the body rowgroup
+      dom.items.setAttribute("role", "rowgroup");
+
+      // Mark intermediate wrappers as presentational so the accessibility
+      // tree sees the body rowgroup as a direct child of the grid.
+      // Without this, Lighthouse flags viewport/content as invalid grid children.
+      dom.viewport.setAttribute("role", "none");
+      dom.content.setAttribute("role", "none");
+
+      // Remove tabindex from viewport — a focusable element (tabindex="-1")
+      // causes browsers to ignore role="none" per ARIA conflict resolution
+      // rules, which makes the viewport an invalid child of role="grid".
+      dom.viewport.removeAttribute("tabindex");
 
       // ── Resolve initial column widths ──
       const containerWidth = ctx.getContainerWidth();
@@ -338,6 +363,13 @@ export const withTable = <T extends VListItem = VListItem>(
 
         // Total items (tables are 1:1 rows to items, unlike grid)
         const totalItems = ctx.getVirtualTotal();
+
+        // Update aria-rowcount when item count changes (+1 for header row)
+        const ariaRowCount = totalItems + 1;
+        if (ariaRowCount !== lastAriaRowCount) {
+          lastAriaRowCount = ariaRowCount;
+          dom.root.setAttribute("aria-rowcount", String(ariaRowCount));
+        }
 
         // Calculate visible range from size cache (mutate in place)
         if (totalItems === 0 || containerHeight === 0) {
@@ -615,8 +647,20 @@ export const withTable = <T extends VListItem = VListItem>(
         dom.content.style.minWidth = "";
         dom.items.style.minWidth = "";
         dom.root.classList.remove(`${classPrefix}--table`);
-        dom.items.setAttribute("role", "listbox"); // Restore default role
-        dom.items.removeAttribute("aria-colcount");
+
+        // Restore ARIA roles to pre-table state
+        dom.root.removeAttribute("role");
+        dom.root.removeAttribute("aria-colcount");
+        dom.viewport.removeAttribute("role");
+        dom.viewport.setAttribute("tabindex", "-1");
+        dom.content.removeAttribute("role");
+        const ariaLabel = dom.root.getAttribute("aria-label");
+        if (ariaLabel) {
+          dom.items.setAttribute("aria-label", ariaLabel);
+          dom.root.removeAttribute("aria-label");
+        }
+        dom.root.removeAttribute("aria-rowcount");
+        dom.items.setAttribute("role", "listbox");
       });
     },
 
