@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "bun:test";
 import {
-  MAX_VIRTUAL_HEIGHT,
+  MAX_VIRTUAL_SIZE,
   getCompressionState,
   calculateCompressedVisibleRange,
   calculateCompressedRenderRange,
@@ -22,9 +22,9 @@ import { createSizeCache } from "../../src/rendering/sizes";
 // Constants Tests
 // =============================================================================
 
-describe("MAX_VIRTUAL_HEIGHT", () => {
+describe("MAX_VIRTUAL_SIZE", () => {
   it("should be 16 million pixels", () => {
-    expect(MAX_VIRTUAL_HEIGHT).toBe(16_000_000);
+    expect(MAX_VIRTUAL_SIZE).toBe(16_000_000);
   });
 });
 
@@ -43,20 +43,20 @@ describe("getCompressionState", () => {
     expect(state.ratio).toBe(1);
   });
 
-  it("should compress lists exceeding MAX_VIRTUAL_HEIGHT", () => {
+  it("should compress lists exceeding MAX_VIRTUAL_SIZE", () => {
     // 1M items × 40px = 40M pixels > 16M limit
     const cache = createSizeCache(40, 1_000_000);
     const state = getCompressionState(1_000_000, cache);
 
     expect(state.isCompressed).toBe(true);
     expect(state.actualSize).toBe(40_000_000);
-    expect(state.virtualSize).toBe(MAX_VIRTUAL_HEIGHT);
+    expect(state.virtualSize).toBe(MAX_VIRTUAL_SIZE);
     expect(state.ratio).toBe(16_000_000 / 40_000_000); // 0.4
   });
 
-  it("should handle edge case at exactly MAX_VIRTUAL_HEIGHT", () => {
+  it("should handle edge case at exactly MAX_VIRTUAL_SIZE", () => {
     const itemHeight = 40;
-    const exactItems = MAX_VIRTUAL_HEIGHT / itemHeight; // 400,000 items
+    const exactItems = MAX_VIRTUAL_SIZE / itemHeight; // 400,000 items
 
     const cache = createSizeCache(itemHeight, exactItems);
     const state = getCompressionState(exactItems, cache);
@@ -81,7 +81,7 @@ describe("getCompressionState", () => {
 
     expect(state.isCompressed).toBe(true);
     expect(state.actualSize).toBe(400_000_000);
-    expect(state.virtualSize).toBe(MAX_VIRTUAL_HEIGHT);
+    expect(state.virtualSize).toBe(MAX_VIRTUAL_SIZE);
     expect(state.ratio).toBe(16_000_000 / 400_000_000); // 0.04
   });
 });

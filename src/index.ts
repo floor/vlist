@@ -149,7 +149,6 @@ export {
   diffRanges,
   // Scale utilities (for handling 1M+ items)
   MAX_VIRTUAL_SIZE,
-  MAX_VIRTUAL_HEIGHT,
   getCompressionState as getScaleState,
   getCompression as getScale,
   needsCompression as needsScaling,
