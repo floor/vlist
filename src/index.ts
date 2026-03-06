@@ -200,3 +200,11 @@ export {
   type ScrollController,
   type Scrollbar,
 } from "./features/scrollbar";
+
+// Stats utility (scroll progress, visible item count, velocity tracking)
+export {
+  createStats,
+  type StatsConfig,
+  type StatsState,
+  type Stats,
+} from "./utils/stats";
