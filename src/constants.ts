@@ -8,51 +8,48 @@
 // =============================================================================
 
 /** Default number of extra items to render outside viewport */
-export const DEFAULT_OVERSCAN = 3;
+export const OVERSCAN = 3;
 
 /** Default CSS class prefix */
-export const DEFAULT_CLASS_PREFIX = "vlist";
+export const CLASS_PREFIX = "vlist";
 
 // =============================================================================
 // Data Loading
 // =============================================================================
 
 /** Distance from bottom (in pixels) to trigger infinite scroll */
-export const LOAD_MORE_THRESHOLD = 200;
+export const LOAD_THRESHOLD = 200;
 
 /** Default number of items to load per request */
 export const INITIAL_LOAD_SIZE = 50;
 
-/** Default page size for data manager */
-export const DEFAULT_PAGE_SIZE = 50;
+/** Default load size for data manager */
+export const LOAD_SIZE = 50;
 
 // =============================================================================
-// Velocity-Based Load Cancellation & Preloading
+// Velocity-Based Loading
 // =============================================================================
 
 /**
  * Velocity threshold above which data loading is cancelled (px/ms)
  * When scrolling faster than this, we skip loading data since the user
  * is likely scrolling quickly past content they don't want to see.
- * Default: 5 px/ms
  */
-export const CANCEL_LOAD_VELOCITY_THRESHOLD = 5;
+export const LOAD_VELOCITY_THRESHOLD = 5;
 
 /**
  * Velocity threshold for preloading (px/ms)
- * When scrolling faster than this but slower than CANCEL_LOAD_VELOCITY_THRESHOLD,
+ * When scrolling faster than this but slower than LOAD_VELOCITY_THRESHOLD,
  * we preload extra items in the scroll direction to reduce placeholder flashing.
- * Default: 2 px/ms (medium scroll speed)
  */
 export const PRELOAD_VELOCITY_THRESHOLD = 2;
 
 /**
  * Number of extra items to preload ahead of scroll direction
  * Only applies when velocity is between PRELOAD_VELOCITY_THRESHOLD and
- * CANCEL_LOAD_VELOCITY_THRESHOLD.
- * Default: 50 items
+ * LOAD_VELOCITY_THRESHOLD.
  */
-export const PRELOAD_ITEMS_AHEAD = 50;
+export const PRELOAD_AHEAD = 50;
 
 // =============================================================================
 // Compression (Large Lists)
@@ -64,31 +61,28 @@ export const PRELOAD_ITEMS_AHEAD = 50;
  */
 export const MAX_VIRTUAL_SIZE = 16_000_000;
 
-/** @deprecated Use MAX_VIRTUAL_SIZE instead */
-export const MAX_VIRTUAL_HEIGHT = MAX_VIRTUAL_SIZE;
-
 // =============================================================================
 // Scrollbar
 // =============================================================================
 
 /** Default auto-hide behavior */
-export const DEFAULT_SCROLLBAR_AUTO_HIDE = true;
+export const SCROLLBAR_AUTO_HIDE = true;
 
 /** Default auto-hide delay in milliseconds */
-export const DEFAULT_SCROLLBAR_AUTO_HIDE_DELAY = 1000;
+export const SCROLLBAR_AUTO_HIDE_DELAY = 1000;
 
 /** Default minimum thumb size in pixels */
-export const DEFAULT_SCROLLBAR_MIN_THUMB_SIZE = 30;
+export const SCROLLBAR_MIN_THUMB_SIZE = 30;
 
 // =============================================================================
 // Placeholder
 // =============================================================================
 
 /** Default character used for masking text in placeholders */
-export const DEFAULT_MASK_CHARACTER = "x";
+export const MASK_CHARACTER = "x";
 
 /** Maximum items to sample for placeholder structure analysis */
-export const DEFAULT_MAX_SAMPLE_SIZE = 20;
+export const MAX_SAMPLE_SIZE = 20;
 
 /** Internal flag to identify placeholder items */
 export const PLACEHOLDER_FLAG = "_isPlaceholder";
@@ -101,13 +95,13 @@ export const PLACEHOLDER_ID_PREFIX = "__placeholder_";
 // =============================================================================
 
 /** Default chunk size for sparse storage */
-export const DEFAULT_CHUNK_SIZE = 100;
+export const CHUNK_SIZE = 100;
 
 /** Default maximum cached items before eviction */
-export const DEFAULT_MAX_CACHED_ITEMS = 10_000;
+export const MAX_CACHED_ITEMS = 10_000;
 
 /** Buffer for eviction (keep extra items around visible range) */
-export const DEFAULT_EVICTION_BUFFER = 500;
+export const EVICTION_BUFFER = 500;
 
 // =============================================================================
 // Scroll
@@ -117,4 +111,4 @@ export const DEFAULT_EVICTION_BUFFER = 500;
 export const SCROLL_IDLE_TIMEOUT = 150;
 
 /** Default wheel sensitivity multiplier */
-export const DEFAULT_WHEEL_SENSITIVITY = 1;
+export const WHEEL_SENSITIVITY = 1;

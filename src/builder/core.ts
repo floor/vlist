@@ -60,8 +60,8 @@ import type { MRefs } from "./materialize";
 // Constants
 // =============================================================================
 
-const DEFAULT_OVERSCAN = 3;
-const DEFAULT_CLASS_PREFIX = "vlist";
+const OVERSCAN = 3;
+const CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 
 // =============================================================================
@@ -177,8 +177,8 @@ function materialize<T extends VListItem = VListItem>(
   const {
     item: itemConfig,
     items: initialItems,
-    overscan = DEFAULT_OVERSCAN,
-    classPrefix = DEFAULT_CLASS_PREFIX,
+    overscan = OVERSCAN,
+    classPrefix = CLASS_PREFIX,
     ariaLabel,
     reverse: reverseMode = false,
     scroll: scrollConfig,
