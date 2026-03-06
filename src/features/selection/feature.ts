@@ -233,7 +233,14 @@ export const withSelection = <T extends VListItem = VListItem>(
       liveRegion.className = `${classPrefix}-live-region`;
       liveRegion.style.cssText =
         "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
-      dom.root.appendChild(liveRegion);
+
+      // When inside a grid (withTable), the live region must sit outside the
+      // grid root — role="grid" only allows row/rowgroup children.
+      // Append to the user's container element instead.
+      const liveParent = dom.root.getAttribute("role") === "grid"
+        ? dom.root.parentElement ?? dom.root
+        : dom.root;
+      liveParent.appendChild(liveRegion);
 
       // Announce selection changes
       const liveRef = liveRegion;

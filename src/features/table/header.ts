@@ -81,6 +81,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   // DOM Setup
   // =========================================================================
 
+  // Rowgroup wrapper — ensures the header row sits inside a proper
+  // ARIA rowgroup within the grid (dom.root has role="grid").
+  const rowgroup = document.createElement("div");
+  rowgroup.setAttribute("role", "rowgroup");
+
   const element = document.createElement("div");
   element.className = `${classPrefix}-table-header`;
   element.setAttribute("role", "row");
@@ -93,10 +98,12 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   // with the viewport for horizontal scrolling.
   const scrollContainer = document.createElement("div");
   scrollContainer.className = `${classPrefix}-table-header-scroll`;
+  scrollContainer.setAttribute("role", "presentation");
   element.appendChild(scrollContainer);
 
-  // Insert header as first child of root (above viewport)
-  root.insertBefore(element, root.firstChild);
+  // Insert header rowgroup as first child of root (above viewport)
+  rowgroup.appendChild(element);
+  root.insertBefore(rowgroup, root.firstChild);
 
   // Offset the viewport so content starts below the header.
   // Use position: absolute with insets so sizing works even when the
@@ -471,7 +478,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     viewport.style.right = "";
     viewport.style.bottom = "";
 
-    element.remove();
+    rowgroup.remove();
 
     cells = [];
     resizeHandles = [];
