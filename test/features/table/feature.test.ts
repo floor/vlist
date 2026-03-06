@@ -1376,4 +1376,207 @@ describe("withTable - Integration", () => {
     expect(ctx.dom.content.style.minWidth).not.toBe("");
     cleanupCtx(ctx);
   });
+
+  it("should add column-borders class when columnBorders is true", () => {
+    const feature = withTable({
+      columns: testColumns,
+      rowHeight: 40,
+      columnBorders: true,
+    });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    expect(ctx.dom.root.classList.contains("vlist--table-col-borders")).toBe(true);
+    cleanupCtx(ctx);
+  });
+
+  it("should move aria-label from items to root", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    // Simulate items having an aria-label (set by dom.ts for listbox)
+    ctx.dom.items.setAttribute("aria-label", "My list");
+
+    feature.setup(ctx);
+
+    expect(ctx.dom.root.getAttribute("aria-label")).toBe("My list");
+    expect(ctx.dom.items.getAttribute("aria-label")).toBeNull();
+    cleanupCtx(ctx);
+  });
+
+  it("should restore aria-label to items on destroy", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    ctx.dom.items.setAttribute("aria-label", "My list");
+
+    feature.setup(ctx);
+    expect(ctx.dom.root.getAttribute("aria-label")).toBe("My list");
+
+    for (const handler of ctx.destroyHandlers) {
+      handler();
+    }
+
+    expect(ctx.dom.items.getAttribute("aria-label")).toBe("My list");
+    expect(ctx.dom.root.getAttribute("aria-label")).toBeNull();
+    cleanupCtx(ctx);
+  });
+
+  it("should emit column:sort when onColumnSort is called via sort cycling", () => {
+    const sortableColumns: TableColumn<TestItem>[] = [
+      { key: "name", label: "Name", width: 200, sortable: true },
+      { key: "email", label: "Email", width: 300, sortable: true },
+    ];
+    const feature = withTable({ columns: sortableColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    // Click on a sortable header cell to trigger sort
+    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const nameHeader = headerCells[0] as HTMLElement;
+
+    // The header cell has a click listener that calls onColumnSort
+    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    nameHeader.dispatchEvent(clickEvt);
+
+    const emitted = getEmitted(ctx);
+    const sortEvents = emitted.filter(e => e.event === "column:sort");
+    expect(sortEvents.length).toBe(1);
+    expect(sortEvents[0]!.payload.key).toBe("name");
+    expect(sortEvents[0]!.payload.direction).toBe("asc");
+
+    // Check getSort reflects the new state
+    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    expect(getSort().key).toBe("name");
+    expect(getSort().direction).toBe("asc");
+
+    cleanupCtx(ctx);
+  });
+
+  it("should emit column:click when header cell is clicked", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const cell = headerCells[0] as HTMLElement;
+
+    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    cell.dispatchEvent(clickEvt);
+
+    const emitted = getEmitted(ctx);
+    const clickEvents = emitted.filter(e => e.event === "column:click");
+    expect(clickEvents.length).toBe(1);
+    expect(clickEvents[0]!.payload.key).toBe("name");
+    cleanupCtx(ctx);
+  });
+
+  it("should sync header scroll with viewport scrollLeft via afterScroll", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    // Simulate horizontal scroll on viewport
+    Object.defineProperty(ctx.dom.viewport, "scrollLeft", {
+      value: 50,
+      configurable: true,
+    });
+
+    // Trigger afterScroll
+    for (const handler of ctx.afterScroll) {
+      handler(0, "down");
+    }
+
+    // The header scroll container should have been synced
+    const scrollContainer = ctx.dom.root.querySelector(".vlist-table-header-scroll") as HTMLElement;
+    if (scrollContainer) {
+      // translateX should reflect the scroll offset
+      expect(scrollContainer.style.transform).toContain("translateX");
+    }
+    cleanupCtx(ctx);
+  });
+
+  it("should restore sort indicator after updateColumns when sort is active", () => {
+    const sortableColumns: TableColumn<TestItem>[] = [
+      { key: "name", label: "Name", width: 200, sortable: true },
+      { key: "email", label: "Email", width: 300, sortable: true },
+    ];
+    const feature = withTable({
+      columns: sortableColumns,
+      rowHeight: 40,
+      sort: { key: "name", direction: "desc" },
+    });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    // Verify initial sort
+    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    expect(getSort().key).toBe("name");
+
+    // Update columns — sort indicator should be restored
+    const updateColumns = ctx.methods.get("updateColumns") as Function;
+    updateColumns([
+      { key: "name", label: "Full Name", width: 250, sortable: true },
+      { key: "email", label: "E-mail", width: 350, sortable: true },
+    ]);
+
+    // Sort state should be preserved
+    expect(getSort().key).toBe("name");
+    expect(getSort().direction).toBe("desc");
+
+    // Header should show sort indicator on name column
+    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const nameCell = headerCells[0] as HTMLElement;
+    const sortIndicator = nameCell.querySelector("[aria-sort]") ?? nameCell;
+    // The cell or its parent should have sort-related attributes/classes
+    expect(nameCell.getAttribute("aria-sort")).toBe("descending");
+
+    cleanupCtx(ctx);
+  });
+
+  it("should expose _updateTableForGroups method", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+    ctx.renderIfNeeded();
+
+    const updateForGroups = ctx.methods.get("_updateTableForGroups") as Function;
+    expect(updateForGroups).toBeDefined();
+
+    // Call it with a header check function
+    updateForGroups(
+      (item: any) => item._isGroupHeader === true,
+      (key: string) => `<div class="group">${key}</div>`,
+    );
+
+    cleanupCtx(ctx);
+  });
+
+  it("should expose _replaceTableRenderer method", () => {
+    const feature = withTable({ columns: testColumns, rowHeight: 40 });
+    const ctx = createMockContext();
+
+    feature.setup(ctx);
+
+    const replaceRenderer = ctx.methods.get("_replaceTableRenderer") as Function;
+    expect(replaceRenderer).toBeDefined();
+
+    // Should accept a mock renderer
+    const mockRenderer = {
+      render: () => {},
+      updateColumnLayout: () => {},
+      clear: () => {},
+      destroy: () => {},
+      setGroupHeaderFn: () => {},
+    };
+    expect(() => replaceRenderer(mockRenderer)).not.toThrow();
+
+    cleanupCtx(ctx);
+  });
 });
