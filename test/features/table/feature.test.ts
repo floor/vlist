@@ -1025,7 +1025,7 @@ describe("withTable - Resize Handler", () => {
 
 describe("withTable - Sort", () => {
   it("should initialize with sort state from config", () => {
-    const feature = withTable({
+    const feature = withTable<TestItem>({
       columns: [
         { key: "name", label: "Name", width: 200, sortable: true },
         { key: "email", label: "Email", width: 300, sortable: true },
