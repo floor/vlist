@@ -3,6 +3,18 @@ initial commit → latest
 330 commits · 30 days · Feb 2 – Mar 5, 2026
 
 
+2026-03-06
+
+  fix(table): resolve ARIA required-children violations (role=presentation on header scroll container)
+  fix(table): remove tabindex from viewport so role=none is not ignored by browsers
+  fix(table): add aria-rowcount on grid, updated dynamically in render loop
+  fix(selection): move live region outside role=grid (only row/rowgroup children allowed)
+  feat(table): add striped row style with dedicated --vlist-bg-striped variable
+  test(table): add 14 striped tests for table renderer, update ARIA tests
+
+  → v1.2.9
+
+
 2026-03-05
 
   feat(table): add withGroups compatibility for grouped data tables
