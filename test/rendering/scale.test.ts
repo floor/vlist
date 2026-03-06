@@ -365,6 +365,31 @@ describe("calculateCompressedItemPosition", () => {
       expect(position).toBeGreaterThanOrEqual(0);
       expect(position).toBeLessThan(containerHeight);
     });
+
+    it("should interpolate positions in the near-bottom zone (not at max scroll)", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+      const maxScroll = compression.virtualSize - containerHeight;
+
+      // Scroll to near-bottom but NOT at max (halfway through the interpolation zone)
+      // distanceFromBottom = maxScroll - scrollPosition
+      // Interpolation zone is when distanceFromBottom <= containerHeight
+      const scrollPosition = maxScroll - containerHeight / 2; // distanceFromBottom = 300
+
+      const position = calculateCompressedItemPosition(
+        999_990,
+        scrollPosition,
+        cache,
+        1_000_000,
+        containerHeight,
+        compression,
+      );
+
+      // Should return a number (interpolated position)
+      expect(typeof position).toBe("number");
+      expect(Number.isFinite(position)).toBe(true);
+    });
   });
 });
 
@@ -475,6 +500,61 @@ describe("calculateCompressedScrollToIndex", () => {
       );
 
       expect(position).toBe(0);
+    });
+
+    it("should scroll to max for last item with end alignment", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+
+      const position = calculateCompressedScrollToIndex(
+        999_999,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "end",
+      );
+
+      // Special case: last item + end alignment → max scroll
+      const maxScroll = compression.virtualSize - containerHeight;
+      expect(position).toBe(maxScroll);
+    });
+
+    it("should handle center alignment with compression", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+
+      const position = calculateCompressedScrollToIndex(
+        500_000,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "center",
+      );
+
+      // 500000/1000000 * 16M = 8M, then subtract (600-40)/2 = 280
+      expect(position).toBe(8_000_000 - 280);
+    });
+
+    it("should handle end alignment (non-last item) with compression", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+
+      const position = calculateCompressedScrollToIndex(
+        500_000,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "end",
+      );
+
+      // 500000/1000000 * 16M = 8M, then subtract (600-40) = 560
+      expect(position).toBe(8_000_000 - 560);
     });
   });
 

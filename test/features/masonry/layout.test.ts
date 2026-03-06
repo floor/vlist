@@ -659,3 +659,74 @@ describe("edge cases", () => {
     }
   });
 });
+
+// =============================================================================
+// getTotalSize — fallback path (externally-constructed placements)
+// =============================================================================
+
+describe("getTotalSize - fallback for external placements", () => {
+  it("should compute total from external placements when no cached total", () => {
+    // Create a fresh layout (no calculateLayout called → cachedTotalSize = 0)
+    const layout = createMasonryLayout({ columns: 2, containerSize: 400 });
+
+    // Construct placements externally (not from calculateLayout)
+    const placements: ItemPlacement[] = [
+      { index: 0, x: 0, y: 0, lane: 0, size: 200, crossSize: 200 },
+      { index: 1, x: 200, y: 0, lane: 1, size: 300, crossSize: 200 },
+      { index: 2, x: 0, y: 200, lane: 0, size: 150, crossSize: 200 },
+    ];
+
+    // cachedTotalSize is 0, so it falls through to the recomputation path
+    const total = layout.getTotalSize(placements);
+    // lane 0: max extent = 200 + 150 = 350
+    // lane 1: max extent = 0 + 300 = 300
+    expect(total).toBe(350);
+  });
+});
+
+// =============================================================================
+// getVisibleItems — linear fallback (external placements, no lanePlacements)
+// =============================================================================
+
+describe("getVisibleItems - linear fallback", () => {
+  it("should find visible items from external placements without lane data", () => {
+    // Create a fresh layout (no calculateLayout called → lanePlacements empty)
+    const layout = createMasonryLayout({ columns: 2, containerSize: 400 });
+
+    // Construct placements externally
+    const placements: ItemPlacement[] = [
+      { index: 0, x: 0, y: 0, lane: 0, size: 100, crossSize: 200 },
+      { index: 1, x: 200, y: 0, lane: 1, size: 100, crossSize: 200 },
+      { index: 2, x: 0, y: 100, lane: 0, size: 100, crossSize: 200 },
+      { index: 3, x: 200, y: 100, lane: 1, size: 100, crossSize: 200 },
+      { index: 4, x: 0, y: 200, lane: 0, size: 100, crossSize: 200 },
+    ];
+
+    // lanePlacements is empty → triggers linear fallback
+    const visible = layout.getVisibleItems(placements, 50, 150);
+    const indices = visible.map((p) => p.index);
+
+    // Items overlapping [50, 150]:
+    // item 0: y=0..100, 100 > 50 → yes
+    // item 1: y=0..100, 100 > 50 → yes
+    // item 2: y=100..200, 100 < 150 → yes
+    // item 3: y=100..200, 100 < 150 → yes
+    // item 4: y=200..300, 200 >= 150 → no
+    expect(indices).toContain(0);
+    expect(indices).toContain(1);
+    expect(indices).toContain(2);
+    expect(indices).toContain(3);
+    expect(indices).not.toContain(4);
+  });
+
+  it("should return empty for external placements with no overlap", () => {
+    const layout = createMasonryLayout({ columns: 1, containerSize: 400 });
+
+    const placements: ItemPlacement[] = [
+      { index: 0, x: 0, y: 0, lane: 0, size: 100, crossSize: 400 },
+    ];
+
+    const visible = layout.getVisibleItems(placements, 200, 300);
+    expect(visible).toHaveLength(0);
+  });
+});

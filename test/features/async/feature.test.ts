@@ -1382,3 +1382,241 @@ describe("withAsync - Destroyed State", () => {
     expect(ensureRangeSpy).not.toHaveBeenCalled();
   });
 });
+
+// =============================================================================
+// Reverse Mode — Load More
+// =============================================================================
+
+describe("withAsync - Reverse Mode Load More", () => {
+  it("should trigger loadMore near the TOP in reverse mode", async () => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ reverse: true, velocity: 0, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const loadMoreSpy = mock(() => Promise.resolve());
+    dataManager.loadMore = loadMoreSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => true;
+    dataManager.getCached = () => 100;
+
+    // Scroll near the top (below LOAD_MORE_THRESHOLD = 200)
+    const scrollHandler = ctx.afterScroll[0]!;
+    scrollHandler(50, "up");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(loadMoreSpy).toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Velocity Deceleration Phases
+// =============================================================================
+
+describe("withAsync - Deceleration Handling", () => {
+  it("should reset deceleration when velocity goes back above threshold", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    // Start with high velocity
+    let currentVelocity = 10;
+    const ctx = createMockContext({ velocity: 10, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+
+    // Frame 1: high velocity (above threshold 5)
+    currentVelocity = 10;
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(100, "down");
+
+    // Frame 2: drop below threshold (deceleration begins)
+    currentVelocity = 3;
+    ctx.state.viewportState.renderRange = { start: 5, end: 15 };
+    scrollHandler(200, "down");
+
+    // Frame 3: velocity goes back above threshold (re-acceleration)
+    currentVelocity = 8;
+    ctx.state.viewportState.renderRange = { start: 10, end: 20 };
+    scrollHandler(300, "down");
+
+    // The re-acceleration should have reset the deceleration state
+    // Now drop velocity to stable low again
+    currentVelocity = 1;
+    ctx.state.viewportState.renderRange = { start: 12, end: 22 };
+    scrollHandler(350, "down");
+
+    // Should load immediately (not in deceleration phase)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+  });
+
+  it("should defer loading during deceleration and use settle timer", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter, autoLoad: false, total: 100 });
+
+    let currentVelocity = 10;
+    const ctx = createMockContext({ velocity: 10, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => false;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+
+    // Move scroll position away from edges so atEdge doesn't short-circuit
+    (ctx.scrollController as any).setScrollTop(500);
+
+    // Frame 1: high velocity (above cancelLoadThreshold=5)
+    currentVelocity = 10;
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(500, "down");
+
+    // Frame 2: drop below threshold but still > 0.5 (deceleration)
+    currentVelocity = 3;
+    ctx.state.viewportState.renderRange = { start: 5, end: 15 };
+    scrollHandler(700, "down");
+
+    // ensureRange should NOT have been called yet (deferring during deceleration)
+    expect(ensureRangeSpy.mock.calls.length).toBe(0);
+
+    // Wait for deceleration settle timer (120ms)
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Deceleration timer should have fired and loaded the pending range
+    expect(ensureRangeSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("should clear deceleration timer when velocity drops to near-zero", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    let currentVelocity = 10;
+    const ctx = createMockContext({ velocity: 10, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+
+    // Frame 1: high velocity
+    currentVelocity = 10;
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(100, "down");
+
+    // Frame 2: drop below threshold (deceleration starts)
+    currentVelocity = 3;
+    ctx.state.viewportState.renderRange = { start: 5, end: 15 };
+    scrollHandler(200, "down");
+
+    // Frame 3: velocity drops to near-zero — exits deceleration
+    currentVelocity = 0.1;
+    ctx.state.viewportState.renderRange = { start: 7, end: 17 };
+    scrollHandler(250, "down");
+
+    // Should load for the current range (not the stale pending one)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Network Recovery — online event
+// =============================================================================
+
+describe("withAsync - Network Recovery", () => {
+  it("should reload visible placeholders on 'online' event", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    ctx.state.viewportState.renderRange = { start: 10, end: 20 };
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    // Simulate network recovery
+    const onlineEvent = new dom.window.Event("online");
+    window.dispatchEvent(onlineEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalledWith(10, 20);
+  });
+
+  it("should not reload on 'online' when destroyed", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    ctx.state.isDestroyed = true;
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const onlineEvent = new dom.window.Event("online");
+    window.dispatchEvent(onlineEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+  });
+
+  it("should clean up online listener on destroy", () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    plugin.setup(ctx);
+
+    // Run destroy handlers
+    for (const handler of ctx.destroyHandlers) {
+      handler();
+    }
+
+    // The listener should have been removed (no error on dispatching)
+    expect(() => {
+      window.dispatchEvent(new dom.window.Event("online"));
+    }).not.toThrow();
+  });
+});
+
+// =============================================================================
+// autoLoad: false with total
+// =============================================================================
+
+describe("withAsync - autoLoad: false with total", () => {
+  it("should set total without loading when autoLoad is false and total is provided", async () => {
+    const adapter = createMockAdapter(500);
+    const plugin = withAsync({ adapter, autoLoad: false, total: 500 });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+
+    // adapter.read should NOT have been called
+    expect(adapter.read).not.toHaveBeenCalled();
+
+    // But total should be set
+    expect(dataManager.getTotal()).toBe(500);
+  });
+});
