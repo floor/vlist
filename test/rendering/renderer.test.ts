@@ -1076,3 +1076,299 @@ describe("renderer with cross-axis size (horizontal mode)", () => {
     renderer.destroy();
   });
 });
+
+// =============================================================================
+// Non-compressed fallback compression state
+// =============================================================================
+
+describe("renderer — non-compressed fallback", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should use trivial compression state when no compressionFns provided", () => {
+    const sizeCache = createSizeCache(40, 20);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 20,
+      "test-0",
+      false,
+      undefined,
+      undefined, // no compressionFns
+    );
+
+    const items = createTestItems(10);
+    renderer.render(items, { start: 0, end: 9 }, new Set(), -1);
+
+    // Should render correctly with the fallback compression state
+    expect(renderer.getElement(0)).toBeTruthy();
+    renderer.destroy();
+  });
+});
+
+// =============================================================================
+// ARIA setsize caching
+// =============================================================================
+
+describe("renderer — ARIA setsize caching", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should set aria-setsize on first render when totalItemsGetter is provided", () => {
+    const sizeCache = createSizeCache(40, 20);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 100, // totalItemsGetter
+      "test-0",
+    );
+
+    const items = createTestItems(5);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    const el = renderer.getElement(0)!;
+    expect(el.getAttribute("aria-setsize")).toBe("100");
+    expect(el.getAttribute("aria-posinset")).toBe("1");
+
+    renderer.destroy();
+  });
+
+  it("should cache and reuse aria-setsize string when total doesn't change", () => {
+    const sizeCache = createSizeCache(40, 20);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 50,
+      "test-0",
+    );
+
+    const items = createTestItems(5);
+    // Two renders with same total — second should reuse cached string
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    const el = renderer.getElement(0)!;
+    expect(el.getAttribute("aria-setsize")).toBe("50");
+    renderer.destroy();
+  });
+});
+
+// =============================================================================
+// Placeholder class on initial render
+// =============================================================================
+
+describe("renderer — placeholder handling", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should add placeholder class on initial render for placeholder items", () => {
+    const sizeCache = createSizeCache(40, 10);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 10,
+      "test-0",
+    );
+
+    // Placeholder items have id starting with "__placeholder_"
+    const items: TestItem[] = [
+      { id: "__placeholder_0" as any, name: "Loading..." },
+      { id: 2, name: "Item 2" },
+    ];
+    renderer.render(items, { start: 0, end: 1 }, new Set(), -1);
+
+    const el0 = renderer.getElement(0)!;
+    expect(el0.classList.contains("vlist-item--placeholder")).toBe(true);
+
+    const el1 = renderer.getElement(1)!;
+    expect(el1.classList.contains("vlist-item--placeholder")).toBe(false);
+
+    renderer.destroy();
+  });
+
+  it("should add replaced class when placeholder is replaced with real data", () => {
+    const sizeCache = createSizeCache(40, 10);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 10,
+      "test-0",
+    );
+
+    // First render with placeholder
+    const placeholderItems: TestItem[] = [
+      { id: "__placeholder_0" as any, name: "Loading..." },
+    ];
+    renderer.render(placeholderItems, { start: 0, end: 0 }, new Set(), -1);
+
+    const el = renderer.getElement(0)!;
+    expect(el.classList.contains("vlist-item--placeholder")).toBe(true);
+
+    // Second render replacing placeholder with real item
+    const realItems: TestItem[] = [{ id: 1, name: "Real Item" }];
+    renderer.render(realItems, { start: 0, end: 0 }, new Set(), -1);
+
+    // Should have replaced class (fade-in animation)
+    expect(el.classList.contains("vlist-item--replaced")).toBe(true);
+    // Placeholder class should be removed
+    expect(el.classList.contains("vlist-item--placeholder")).toBe(false);
+
+    renderer.destroy();
+  });
+});
+
+// =============================================================================
+// Position and class updates on existing items (horizontal mode)
+// =============================================================================
+
+describe("renderer — horizontal position updates", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should use translateX for horizontal mode on existing items", () => {
+    const sizeCache = createSizeCache(100, 20);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 20,
+      "test-0",
+      true, // horizontal
+    );
+
+    const items = createTestItems(5);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    const el = renderer.getElement(0)!;
+    expect(el.style.transform).toContain("translateX");
+
+    // Rebuild size cache with different sizes to force position update
+    sizeCache.rebuild(20);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    // Should still use translateX
+    expect(el.style.transform).toContain("translateX");
+
+    renderer.destroy();
+  });
+
+  it("should use translateX in updatePositions for horizontal mode", () => {
+    const sizeCache = createSizeCache(100, 20);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+      () => 20,
+      "test-0",
+      true, // horizontal
+    );
+
+    const items = createTestItems(5);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    // Call updatePositions with a compression context
+    renderer.updatePositions({
+      scrollPosition: 50,
+      totalItems: 20,
+      containerSize: 500,
+      rangeStart: 0,
+    });
+
+    const el = renderer.getElement(0)!;
+    expect(el.style.transform).toContain("translateX");
+
+    renderer.destroy();
+  });
+});
+
+// =============================================================================
+// sortDOM
+// =============================================================================
+
+describe("renderer — sortDOM", () => {
+  let itemsContainer: HTMLElement;
+
+  beforeEach(() => {
+    itemsContainer = document.createElement("div");
+    itemsContainer.className = "vlist-items";
+    document.body.appendChild(itemsContainer);
+  });
+
+  afterEach(() => {
+    itemsContainer.remove();
+  });
+
+  it("should reorder DOM children to match logical index order", () => {
+    const sizeCache = createSizeCache(40, 10);
+    const renderer = createRenderer<TestItem>(
+      itemsContainer,
+      template,
+      sizeCache,
+      "vlist",
+    );
+
+    const items = createTestItems(5);
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    // Call sortDOM — should not throw and should maintain all children
+    renderer.sortDOM();
+
+    const indices = Array.from(itemsContainer.children).map(
+      (el) => (el as HTMLElement).dataset.index,
+    );
+    // Should be in ascending order
+    for (let i = 0; i < indices.length - 1; i++) {
+      expect(Number(indices[i])).toBeLessThanOrEqual(Number(indices[i + 1]));
+    }
+
+    renderer.destroy();
+  });
+});

@@ -1388,3 +1388,188 @@ describe("template receives correct state", () => {
     expect(capturedState!.selected).toBe(false);
   });
 });
+
+// =============================================================================
+// Existing Item Updates (re-render with changes)
+// =============================================================================
+
+describe("masonry renderer — existing item updates", () => {
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    container = createItemsContainer();
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  it("should re-render template when item data changes (different id)", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    const items1 = createTestItems(2, 1);
+    const placements = [createPlacement(0), createPlacement(1)];
+
+    // First render
+    renderer.render(toGetItem(items1), placements, new Set(), -1);
+
+    const el0 = renderer.getElement(0)!;
+    expect(el0.textContent).toBe("Item 1");
+
+    // Second render with different item at index 0 (different id)
+    const items2 = [{ id: 99, name: "Replaced" }, items1[1]!];
+    renderer.render(toGetItem(items2), placements, new Set(), -1);
+
+    expect(el0.textContent).toBe("Replaced");
+    expect(el0.dataset.id).toBe("99");
+  });
+
+  it("should update selection class when selected state changes", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    const items = createTestItems(2, 1);
+    const placements = [createPlacement(0), createPlacement(1)];
+
+    // First render — no selection
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+    const el0 = renderer.getElement(0)!;
+    expect(el0.classList.contains("vlist-item--selected")).toBe(false);
+
+    // Second render — select item 0 (id=1)
+    renderer.render(toGetItem(items), placements, new Set([1]), -1);
+    expect(el0.classList.contains("vlist-item--selected")).toBe(true);
+    expect(el0.ariaSelected).toBe("true");
+  });
+
+  it("should update focus class when focused index changes", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    const items = createTestItems(2, 1);
+    const placements = [createPlacement(0), createPlacement(1)];
+
+    // First render — no focus
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+    const el0 = renderer.getElement(0)!;
+    expect(el0.classList.contains("vlist-item--focused")).toBe(false);
+
+    // Second render — focus on index 0
+    renderer.render(toGetItem(items), placements, new Set(), 0);
+    expect(el0.classList.contains("vlist-item--focused")).toBe(true);
+  });
+
+  it("should update position when placement coordinates change", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    const items = createTestItems(2, 1);
+    const placements1 = [
+      createPlacement(0, { x: 0, y: 0 }),
+      createPlacement(1, { x: 0, y: 100 }),
+    ];
+
+    // First render
+    renderer.render(toGetItem(items), placements1, new Set(), -1);
+    const el0 = renderer.getElement(0)!;
+    expect(el0.style.transform).toContain("0px");
+
+    // Second render with changed position
+    const placements2 = [
+      createPlacement(0, { x: 50, y: 200 }),
+      createPlacement(1, { x: 0, y: 100 }),
+    ];
+    renderer.render(toGetItem(items), placements2, new Set(), -1);
+    expect(el0.style.transform).toContain("200px");
+  });
+
+  it("should update size when placement dimensions change", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    const items = createTestItems(1, 1);
+    const placements1 = [createPlacement(0, { size: 100, crossSize: 200 })];
+
+    // First render
+    renderer.render(toGetItem(items), placements1, new Set(), -1);
+    const el0 = renderer.getElement(0)!;
+    expect(el0.style.height).toBe("100px");
+    expect(el0.style.width).toBe("200px");
+
+    // Second render with changed dimensions
+    const placements2 = [createPlacement(0, { size: 150, crossSize: 250 })];
+    renderer.render(toGetItem(items), placements2, new Set(), -1);
+    expect(el0.style.height).toBe("150px");
+    expect(el0.style.width).toBe("250px");
+  });
+});
+
+// =============================================================================
+// sortDOM
+// =============================================================================
+
+describe("masonry renderer — sortDOM", () => {
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    container = createItemsContainer();
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  it("should reorder DOM children to match logical index order", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+    );
+
+    // Render items 2, 0, 1 (out of order placements)
+    const items = createTestItems(3, 1);
+    const placements = [
+      createPlacement(2, { y: 0 }),
+      createPlacement(0, { y: 100 }),
+      createPlacement(1, { y: 200 }),
+    ];
+
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+
+    // Before sort, DOM order matches insertion (render) order
+    const beforeSort = Array.from(container.children).map(
+      (el) => (el as HTMLElement).dataset.index,
+    );
+
+    // Call sortDOM
+    renderer.sortDOM();
+
+    // After sort, DOM order should be logical (0, 1, 2)
+    const afterSort = Array.from(container.children).map(
+      (el) => (el as HTMLElement).dataset.index,
+    );
+    expect(afterSort).toEqual(["0", "1", "2"]);
+  });
+});

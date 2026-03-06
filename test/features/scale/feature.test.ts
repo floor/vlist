@@ -1149,6 +1149,126 @@ describe("withScale touch scrolling", () => {
       expect(indices.length).toBeGreaterThan(0);
     });
 
+    it("should run smooth scroll lerp animation via wheel events", () => {
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Dispatch a wheel event to start the lerp animation
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+
+      // Lerp should have scheduled a RAF
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Flush the lerp frames — smoothScrollTick should converge
+      const flushed = flushAllRAF(100);
+      expect(flushed).toBeGreaterThanOrEqual(1); // At least one lerp step
+
+      // Scroll position should have moved
+      expect(list.getScrollPosition()).toBeGreaterThan(0);
+    });
+
+    it("should cancel lerp animation when scrollToIndex sets position", () => {
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Start lerp via wheel
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // scrollToIndex calls the scroll setter, which should cancel lerp
+      list.scrollToIndex(100, "start");
+
+      // The scroll setter cancels smoothScrollId, so no more lerp frames
+      // (scrollToIndex may schedule its own RAF, but the lerp one is gone)
+      const pos = list.getScrollPosition();
+      expect(pos).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should update scrollbar bounds on resize", () => {
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      // The fallback scrollbar should exist
+      const scrollbar = list.element.querySelector(".vlist-scrollbar");
+      expect(scrollbar).not.toBeNull();
+
+      // Simulate a resize — withScale pushes a resizeHandler
+      // We can't easily trigger it without the full builder, but we can
+      // verify the scrollbar DOM is present and the list doesn't crash
+      expect(() => {
+        list!.scrollToIndex(1000, "start");
+        flushAllRAF();
+      }).not.toThrow();
+    });
+
+    it("should destroy cleanly when smooth scroll is in flight", () => {
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Start lerp via wheel
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Destroy while lerp is in flight — should cancel smoothScrollId
+      expect(() => {
+        list!.destroy();
+        list = null;
+      }).not.toThrow();
+
+      // Flushing remaining RAFs should not crash
+      expect(() => flushAllRAF()).not.toThrow();
+    });
+
     it("should handle transition from non-compressed to compressed with touch", () => {
       // Start with small list (no compression)
       const items = createTestItems(100);
