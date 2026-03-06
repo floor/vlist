@@ -193,12 +193,14 @@ function materialize<T extends VListItem = VListItem>(
   const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
   const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
-  // Detect mobile devices once at creation time - preserve native touch scrolling
+  // Detect touch-primary devices once at creation time — preserve native touch
+  // scrolling with momentum/bounce. Uses capability detection (pointer: coarse)
+  // instead of UA sniffing: works on foldables, touch laptops, Chrome OS tablets,
+  // and doesn't break when browsers freeze/reduce the UA string.
   const isMobile =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    ) ||
-    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    typeof matchMedia === "function" &&
+    matchMedia("(pointer: coarse)").matches &&
+    !matchMedia("(pointer: fine)").matches;
   const crossAxisSize: number | undefined = isHorizontal
     ? typeof itemConfig.height === "number"
       ? itemConfig.height
