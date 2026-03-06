@@ -41,6 +41,9 @@ beforeAll(() => {
     global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
       setTimeout(() => cb(performance.now()), 0) as unknown as number;
   }
+  if (!global.cancelAnimationFrame) {
+    global.cancelAnimationFrame = (id: number) => clearTimeout(id);
+  }
 });
 
 afterAll(() => {
@@ -53,6 +56,15 @@ afterAll(() => {
 // =============================================================================
 // Test Helpers
 // =============================================================================
+
+/**
+ * Flush both microtasks (queueMicrotask) and macrotasks (requestAnimationFrame
+ * polyfilled as setTimeout(…, 0)). Two rounds of setTimeout ensures the rAF
+ * callback scheduled inside restoreScroll has executed regardless of event-loop
+ * timing differences between local and CI environments.
+ */
+const flushAsync = (): Promise<void> =>
+  new Promise((resolve) => setTimeout(() => setTimeout(resolve, 0), 0));
 
 interface TestItem extends VListItem {
   id: number;
@@ -750,7 +762,25 @@ describe("withSnapshots - sizeCache Rebuild", () => {
 // =============================================================================
 
 describe("withSnapshots - loadVisibleRange", () => {
-  it("should call loadVisibleRange instead of reload when available", async () => {
+  // requestAnimationFrame in the source code may resolve to the JSDOM window's
+  // rAF (pretendToBeVisual) rather than our global polyfill. To avoid fragile
+  // timing, we replace global.requestAnimationFrame with a synchronous version
+  // for these tests so the callback fires immediately.
+  let savedRAF: typeof globalThis.requestAnimationFrame;
+
+  beforeAll(() => {
+    savedRAF = global.requestAnimationFrame;
+    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 0;
+    }) as typeof requestAnimationFrame;
+  });
+
+  afterAll(() => {
+    global.requestAnimationFrame = savedRAF;
+  });
+
+  it("should call loadVisibleRange instead of reload when available", () => {
     const loadVisibleFn = mock(async () => {});
     const reloadFn = mock(async () => {});
 
@@ -764,14 +794,11 @@ describe("withSnapshots - loadVisibleRange", () => {
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
 
-    // loadVisibleRange is called via requestAnimationFrame — wait for it
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     expect(loadVisibleFn).toHaveBeenCalled();
     expect(reloadFn).not.toHaveBeenCalled();
   });
 
-  it("should fall back to reload when loadVisibleRange not available", async () => {
+  it("should fall back to reload when loadVisibleRange not available", () => {
     const reloadFn = mock(async () => {});
 
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
@@ -784,12 +811,10 @@ describe("withSnapshots - loadVisibleRange", () => {
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     expect(reloadFn).toHaveBeenCalled();
   });
 
-  it("should not call anything when neither method exists", async () => {
+  it("should not call anything when neither method exists", () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
     // No async methods registered at all
 
@@ -799,8 +824,6 @@ describe("withSnapshots - loadVisibleRange", () => {
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     // Should not throw
     restore({ index: 5, offsetInItem: 10 });
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Scroll should still happen
     const history = (ctx as any)._scrollToHistory;
@@ -813,6 +836,21 @@ describe("withSnapshots - loadVisibleRange", () => {
 // =============================================================================
 
 describe("withSnapshots - Auto-Restore", () => {
+  // Same synchronous rAF override as loadVisibleRange tests above.
+  let savedRAF: typeof globalThis.requestAnimationFrame;
+
+  beforeAll(() => {
+    savedRAF = global.requestAnimationFrame;
+    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 0;
+    }) as typeof requestAnimationFrame;
+  });
+
+  afterAll(() => {
+    global.requestAnimationFrame = savedRAF;
+  });
+
   it("should schedule restoreScroll via queueMicrotask when restore provided", async () => {
     const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
 
@@ -884,8 +922,8 @@ describe("withSnapshots - Auto-Restore", () => {
     const feature = withSnapshots<TestItem>({ restore: snapshot });
     feature.setup(ctx);
 
-    // Wait for queueMicrotask + requestAnimationFrame
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait for queueMicrotask (rAF is synchronous in this describe block)
+    await new Promise((resolve) => queueMicrotask(resolve));
 
     expect(loadVisibleFn).toHaveBeenCalled();
   });

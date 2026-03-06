@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.2.9** — [Changelog](./changelog.txt)
+**v1.3.0** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
@@ -97,7 +97,7 @@ const list = vlist({
 | `withSelection()` | +1.8 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +4.9 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +5.0 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
@@ -395,7 +395,7 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 | + Grid | 12.8 KB |
 | + Groups | 12.9 KB |
 | + Async | 12.7 KB |
-| + Table | 13.6 KB |
+| + Table | 13.7 KB |
 
 ### Memory Efficiency
 
@@ -446,7 +446,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (2493 tests) and `bun run build` before submitting
+2. Run `bun test` (2719 tests) and `bun run build` before submitting
 
 ## License
 
