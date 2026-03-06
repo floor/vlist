@@ -894,6 +894,7 @@ function materialize<T extends VListItem = VListItem>(
       for (let i = 0; i < idleHandlers.length; i++) {
         idleHandlers[i]!();
       }
+      emitter.emit("scroll:idle", { scrollPosition: $.ls });
     }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
@@ -999,6 +1000,7 @@ function materialize<T extends VListItem = VListItem>(
         for (let i = 0; i < idleHandlers.length; i++) {
           idleHandlers[i]!();
         }
+        emitter.emit("scroll:idle", { scrollPosition: $.ls });
       }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
     $.wh = wheelHandler;
@@ -1431,6 +1433,7 @@ function materialize<T extends VListItem = VListItem>(
     }
     rendered.clear();
     pool.clear();
+    emitter.emit("destroy", undefined);
     emitter.clear();
 
     dom.root.remove();
