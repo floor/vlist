@@ -28,6 +28,7 @@
  * - Cached empty Set for no-selection case (zero allocation per frame)
  * - Viewport state mutated in place (no object creation per frame)
  * - Cached getItem closure (no closure allocation per frame)
+ *
  * - Items passed to renderer via data manager reference (no sparse array)
  * - All data mutation methods intercepted for layout recalculation
  */
@@ -85,6 +86,19 @@ const EMPTY_ID_SET: Set<string | number> = new Set();
  * .build()
  * ```
  */
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/**
+ * Pixel multiplier for the overscan count.
+ * Masonry items have variable heights, so overscan is expressed in pixels
+ * rather than rows. Each overscan unit adds this many pixels of buffer
+ * above and below the viewport.
+ */
+const OVERSCAN = 100;
+
 export const withMasonry = <T extends VListItem = VListItem>(
   config: MasonryFeatureConfig,
 ): VListFeature<T> => {
@@ -224,7 +238,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       let forceNextRender = true; // first render must always run
 
       // ── Precomputed overscan value ──
-      const overscanPx = (resolvedConfig.overscan ?? 3) * 100;
+      const overscanPx = resolvedConfig.overscan * OVERSCAN;
 
       // ── Override render functions ──
       const masonryRenderIfNeeded = (): void => {
