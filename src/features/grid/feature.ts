@@ -364,7 +364,7 @@ export const withGrid = <T extends VListItem = VListItem>(
       let forceNextRender = true; // first render must always run
 
       // ── Precomputed overscan value ──
-      const overscan = resolvedConfig.overscan ?? 3;
+      const overscan = resolvedConfig.overscan;
 
       // ── Mutable range objects — reused across frames (no allocation) ──
       const visibleRange = { start: 0, end: 0 };
@@ -401,11 +401,13 @@ export const withGrid = <T extends VListItem = VListItem>(
             0,
             ctx.sizeCache.indexAtOffset(scrollTop),
           );
-          let visibleEnd = ctx.sizeCache.indexAtOffset(
-            scrollTop + containerHeight,
+          // containerHeight is exclusive: pixel at (scrollTop + containerHeight) is
+          // the first pixel NOT shown.  Using -1 converts to the last visible pixel
+          // so we don't include a row whose first pixel sits exactly on the boundary.
+          visibleRange.end = Math.min(
+            totalRows - 1,
+            Math.max(0, ctx.sizeCache.indexAtOffset(scrollTop + containerHeight - 1)),
           );
-          if (visibleEnd < totalRows - 1) visibleEnd++;
-          visibleRange.end = Math.min(totalRows - 1, Math.max(0, visibleEnd));
         }
 
         // Apply overscan (mutate in place)

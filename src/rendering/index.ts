@@ -66,7 +66,6 @@ export {
 // Scale (large dataset handling - used by withScale feature)
 export {
   MAX_VIRTUAL_SIZE,
-  MAX_VIRTUAL_HEIGHT,
   getCompressionState,
   getCompressionState as getCompression,
   needsCompression,

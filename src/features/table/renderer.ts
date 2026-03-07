@@ -138,13 +138,6 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
 };
 
 // =============================================================================
-// Constants
-// =============================================================================
-
-/** Grace period frames before a released element is returned to the pool */
-const RELEASE_GRACE = 2;
-
-// =============================================================================
 // Tracked Row
 // =============================================================================
 
@@ -176,9 +169,6 @@ interface TrackedRow {
 
   /** Last height in pixels (for change detection) */
   lastHeight: number;
-
-  /** Frame counter when last seen in render range */
-  lastSeenFrame: number;
 }
 
 // =============================================================================
@@ -212,7 +202,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const pool = createElementPool();
   const rendered = new Map<number, TrackedRow>();
 
-  let frameCounter = 0;
   let lastAriaSetSize = -1;
   let currentLayout = layout;
 
@@ -416,7 +405,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       lastFocused: false,
       lastOffset: offset,
       lastHeight: height,
-      lastSeenFrame: frameCounter,
     };
   };
 
@@ -493,7 +481,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       lastFocused: isFocused,
       lastOffset: offset,
       lastHeight: height,
-      lastSeenFrame: frameCounter,
     };
   };
 
@@ -518,14 +505,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     selectedIds: Set<string | number>,
     focusedIndex: number,
   ): void => {
-    frameCounter++;
-
-    // Release items outside the new range, with grace period to prevent
-    // boundary thrashing (hover blink, CSS transition replay).
+    // Release items outside the new range immediately.
+    // Tables don't need a grace period — row hover is a simple background
+    // change with no CSS transitions to preserve, and each graced row
+    // carries N cell elements so the DOM cost is high.
     for (const [index, tracked] of rendered) {
-      if (index >= range.start && index <= range.end) {
-        tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+      if (index < range.start || index > range.end) {
         pool.release(tracked.element);
         rendered.delete(index);
       }
@@ -608,7 +593,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.element.style.height = `${height}px`;
           }
 
-          existing.lastSeenFrame = frameCounter;
         } else {
           // ── Data row path (existing logic) ──
           const idChanged = existing.lastItemId !== item.id;
@@ -654,7 +638,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.element.setAttribute("aria-rowindex", String(i + 2));
           }
 
-          existing.lastSeenFrame = frameCounter;
         }
       } else {
         // New row — create and collect in fragment for batched insertion
@@ -790,7 +773,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       pool.release(tracked.element);
     }
     rendered.clear();
-    frameCounter = 0;
     lastAriaSetSize = -1;
   };
 
