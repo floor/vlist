@@ -153,7 +153,7 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
  * on small scroll deltas, preserving DOM element hover state and avoiding
  * CSS transition replays.
  */
-const RELEASE_GRACE = 2;
+const RELEASE_GRACE = 1;
 
 // =============================================================================
 // Tracked rendered item — change-tracking fields for skip-if-unchanged
@@ -583,6 +583,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     if (fragment) {
       itemsContainer.appendChild(fragment);
     }
+
   };
 
   /**
