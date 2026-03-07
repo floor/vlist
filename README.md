@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.0** — [Changelog](./changelog.txt)
+**v1.3.1** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
@@ -446,7 +446,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (2719 tests) and `bun run build` before submitting
+2. Run `bun test` (2763 tests) and `bun run build` before submitting
 
 ## License
 

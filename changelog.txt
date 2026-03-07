@@ -1,6 +1,20 @@
 vlist — full changelog
 initial commit → latest
-330 commits · 30 days · Feb 2 – Mar 6, 2026
+333 commits · 34 days · Feb 2 – Mar 7, 2026
+
+
+2026-03-07
+
+  fix(grid): remove visibleEnd++ phantom row, use exclusive viewport boundary
+  fix(grid): reduce RELEASE_GRACE from 2 to 1 to halve lingering DOM elements during scroll
+  fix(grid): import OVERSCAN/CLASS_PREFIX/SCROLL_IDLE_TIMEOUT from shared constants
+  fix(table): remove visibleEnd++ phantom row, use exclusive viewport boundary
+  fix(table): remove RELEASE_GRACE entirely — table rows carry N cells, no grace needed
+  fix(masonry): reduce RELEASE_GRACE from 2 to 1
+  fix(masonry): extract overscan pixel multiplier into OVERSCAN constant
+  refactor: remove redundant ?? 3 overscan fallbacks in grid, table, masonry features
+
+  → v1.3.1
 
 
 2026-03-06
