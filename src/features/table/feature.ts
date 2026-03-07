@@ -333,7 +333,7 @@ export const withTable = <T extends VListItem = VListItem>(
       let forceNextRender = true; // first render must always run
 
       // ── Precomputed overscan value ──
-      const overscan = resolvedConfig.overscan ?? 3;
+      const overscan = resolvedConfig.overscan;
 
       // ── Mutable range objects — reused across frames (no allocation) ──
       const visibleRange = { start: 0, end: 0 };
@@ -380,11 +380,13 @@ export const withTable = <T extends VListItem = VListItem>(
             0,
             ctx.sizeCache.indexAtOffset(scrollTop),
           );
-          let visibleEnd = ctx.sizeCache.indexAtOffset(
-            scrollTop + containerHeight,
+          // containerHeight is exclusive: pixel at (scrollTop + containerHeight) is
+          // the first pixel NOT shown.  Using -1 converts to the last visible pixel
+          // so we don't include a row whose first pixel sits exactly on the boundary.
+          visibleRange.end = Math.min(
+            totalItems - 1,
+            Math.max(0, ctx.sizeCache.indexAtOffset(scrollTop + containerHeight - 1)),
           );
-          if (visibleEnd < totalItems - 1) visibleEnd++;
-          visibleRange.end = Math.min(totalItems - 1, Math.max(0, visibleEnd));
         }
 
         // Apply overscan (mutate in place)
@@ -414,10 +416,9 @@ export const withTable = <T extends VListItem = VListItem>(
         const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : -1;
 
         // Render! The renderer's change tracking makes unchanged items a no-op
-        // (skips template, class, and position updates). The grace-period
-        // release loop inside render() advances the frame counter on every call,
-        // so items that left the range are eventually released even when the
-        // row-level range is unchanged.
+        // (skips template, class, and position updates). Items outside the range
+        // are released immediately (no grace period — table rows carry N cells
+        // each, so lingering rows are expensive).
         tableRenderer!.render(items, renderRange, selectedIds, focusedIndex);
 
         // Emit range:change only when range actually changed

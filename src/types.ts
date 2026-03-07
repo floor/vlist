@@ -473,6 +473,12 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Container resized */
   resize: { height: number; width: number };
+
+  /** Scroll idle — fired after scrolling stops and idle timeout elapses */
+  "scroll:idle": { scrollPosition: number };
+
+  /** Destroy — fired just before the instance is torn down */
+  destroy: undefined;
 }
 
 /** Event handler type */

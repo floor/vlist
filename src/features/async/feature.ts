@@ -23,10 +23,10 @@ import { createDataManager } from "./manager";
 
 import {
   INITIAL_LOAD_SIZE,
-  LOAD_MORE_THRESHOLD,
-  CANCEL_LOAD_VELOCITY_THRESHOLD,
+  LOAD_THRESHOLD,
+  LOAD_VELOCITY_THRESHOLD,
   PRELOAD_VELOCITY_THRESHOLD,
-  PRELOAD_ITEMS_AHEAD,
+  PRELOAD_AHEAD,
 } from "../../constants";
 
 // =============================================================================
@@ -100,10 +100,10 @@ export const withAsync = <T extends VListItem = VListItem>(
 ): VListFeature<T> => {
   const { adapter, loading, storage, total, autoLoad = true } = config;
   const cancelLoadThreshold =
-    loading?.cancelThreshold ?? CANCEL_LOAD_VELOCITY_THRESHOLD;
+    loading?.cancelThreshold ?? LOAD_VELOCITY_THRESHOLD;
   const preloadThreshold =
     loading?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
-  const preloadAhead = loading?.preloadAhead ?? PRELOAD_ITEMS_AHEAD;
+  const preloadAhead = loading?.preloadAhead ?? PRELOAD_AHEAD;
 
   return {
     name: "withAsync",
@@ -263,7 +263,7 @@ export const withAsync = <T extends VListItem = VListItem>(
           ) {
             if (isReverse) {
               // Reverse mode: trigger "load more" near the TOP
-              if (scrollPosition < LOAD_MORE_THRESHOLD) {
+              if (scrollPosition < LOAD_THRESHOLD) {
                 emitter.emit("load:start", {
                   offset: ctx.dataManager.getCached(),
                   limit: INITIAL_LOAD_SIZE,
@@ -280,7 +280,7 @@ export const withAsync = <T extends VListItem = VListItem>(
                 scrollPosition -
                 ctx.state.viewportState.containerSize;
 
-              if (distanceFromBottom < LOAD_MORE_THRESHOLD) {
+              if (distanceFromBottom < LOAD_THRESHOLD) {
                 emitter.emit("load:start", {
                   offset: ctx.dataManager.getCached(),
                   limit: INITIAL_LOAD_SIZE,

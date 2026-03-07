@@ -83,12 +83,12 @@ export type ScrollCallback = (position: number) => void;
 // Constants
 // =============================================================================
 
-const DEFAULT_AUTO_HIDE = true;
-const DEFAULT_AUTO_HIDE_DELAY = 1000;
-const DEFAULT_MIN_THUMB_SIZE = 30;
-const DEFAULT_SHOW_ON_HOVER = true;
-const DEFAULT_HOVER_ZONE_WIDTH = 16;
-const DEFAULT_SHOW_ON_VIEWPORT_ENTER = true;
+const AUTO_HIDE = true;
+const AUTO_HIDE_DELAY = 1000;
+const MIN_THUMB_SIZE = 30;
+const SHOW_ON_HOVER = true;
+const HOVER_ZONE_WIDTH = 16;
+const SHOW_ON_VIEWPORT_ENTER = true;
 
 // =============================================================================
 // Factory
@@ -111,12 +111,12 @@ export const createScrollbar = (
   horizontal = false,
 ): Scrollbar => {
   const {
-    autoHide = DEFAULT_AUTO_HIDE,
-    autoHideDelay = DEFAULT_AUTO_HIDE_DELAY,
-    minThumbSize = DEFAULT_MIN_THUMB_SIZE,
-    showOnHover = DEFAULT_SHOW_ON_HOVER,
-    hoverZoneWidth = DEFAULT_HOVER_ZONE_WIDTH,
-    showOnViewportEnter = DEFAULT_SHOW_ON_VIEWPORT_ENTER,
+    autoHide = AUTO_HIDE,
+    autoHideDelay = AUTO_HIDE_DELAY,
+    minThumbSize = MIN_THUMB_SIZE,
+    showOnHover = SHOW_ON_HOVER,
+    hoverZoneWidth = HOVER_ZONE_WIDTH,
+    showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
   } = config;
 
   // State
