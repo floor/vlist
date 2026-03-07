@@ -19,8 +19,8 @@ import type { TableColumn, ResolvedColumn, TableLayout } from "./types";
 // Defaults
 // =============================================================================
 
-const DEFAULT_MIN_COLUMN_WIDTH = 50;
-const DEFAULT_MAX_COLUMN_WIDTH = Infinity;
+const MIN_COLUMN_WIDTH = 50;
+const MAX_COLUMN_WIDTH = Infinity;
 
 // =============================================================================
 // Factory
@@ -37,8 +37,8 @@ const DEFAULT_MAX_COLUMN_WIDTH = Infinity;
  */
 export const createTableLayout = <T extends VListItem = VListItem>(
   columnDefs: TableColumn<T>[],
-  globalMinWidth: number = DEFAULT_MIN_COLUMN_WIDTH,
-  globalMaxWidth: number = DEFAULT_MAX_COLUMN_WIDTH,
+  globalMinWidth: number = MIN_COLUMN_WIDTH,
+  globalMaxWidth: number = MAX_COLUMN_WIDTH,
   globalResizable: boolean = true,
 ): TableLayout<T> => {
   let defs = columnDefs;

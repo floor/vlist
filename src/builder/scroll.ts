@@ -13,7 +13,7 @@ import type { ScrollToOptions } from "../types";
 // Constants
 // =============================================================================
 
-export const DEFAULT_SMOOTH_DURATION = 300;
+export const SMOOTH_DURATION = 300;
 
 // =============================================================================
 // Easing
@@ -41,18 +41,18 @@ export const resolveScrollArgs = (
     return {
       align: alignOrOptions,
       behavior: "auto",
-      duration: DEFAULT_SMOOTH_DURATION,
+      duration: SMOOTH_DURATION,
     };
   if (alignOrOptions && typeof alignOrOptions === "object")
     return {
       align: alignOrOptions.align ?? "start",
       behavior: alignOrOptions.behavior ?? "auto",
-      duration: alignOrOptions.duration ?? DEFAULT_SMOOTH_DURATION,
+      duration: alignOrOptions.duration ?? SMOOTH_DURATION,
     };
   return {
     align: "start",
     behavior: "auto",
-    duration: DEFAULT_SMOOTH_DURATION,
+    duration: SMOOTH_DURATION,
   };
 };
 

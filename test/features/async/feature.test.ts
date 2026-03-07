@@ -1402,7 +1402,7 @@ describe("withAsync - Reverse Mode Load More", () => {
     dataManager.getHasMore = () => true;
     dataManager.getCached = () => 100;
 
-    // Scroll near the top (below LOAD_MORE_THRESHOLD = 200)
+    // Scroll near the top (below LOAD_THRESHOLD = 200)
     const scrollHandler = ctx.afterScroll[0]!;
     scrollHandler(50, "up");
 

@@ -14,8 +14,8 @@ import type { VListItem } from "../../types";
 import {
   PLACEHOLDER_FLAG,
   PLACEHOLDER_ID_PREFIX,
-  DEFAULT_MASK_CHARACTER,
-  DEFAULT_MAX_SAMPLE_SIZE,
+  MASK_CHARACTER,
+  MAX_SAMPLE_SIZE,
 } from "../../constants";
 
 // =============================================================================
@@ -74,8 +74,8 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   config: PlaceholderConfig = {},
 ): PlaceholderManager<T> => {
   const {
-    maskCharacter = DEFAULT_MASK_CHARACTER,
-    maxSampleSize = DEFAULT_MAX_SAMPLE_SIZE,
+    maskCharacter = MASK_CHARACTER,
+    maxSampleSize = MAX_SAMPLE_SIZE,
   } = config;
 
   // State

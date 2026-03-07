@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -52,7 +52,7 @@
     "build": "bun run build.ts",
     "dev": "bun run build.ts --watch",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "size": "bun run scripts/measure-size.ts",
     "prepublishOnly": "bun run build --types"
   },

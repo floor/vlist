@@ -55,14 +55,11 @@ import {
   createDefaultScrollProxy,
 } from "./materialize";
 import type { MRefs } from "./materialize";
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const DEFAULT_OVERSCAN = 3;
-const DEFAULT_CLASS_PREFIX = "vlist";
-const SCROLL_IDLE_TIMEOUT = 150;
+import {
+  OVERSCAN,
+  CLASS_PREFIX,
+  SCROLL_IDLE_TIMEOUT,
+} from "../constants";
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
@@ -177,8 +174,8 @@ function materialize<T extends VListItem = VListItem>(
   const {
     item: itemConfig,
     items: initialItems,
-    overscan = DEFAULT_OVERSCAN,
-    classPrefix = DEFAULT_CLASS_PREFIX,
+    overscan = OVERSCAN,
+    classPrefix = CLASS_PREFIX,
     ariaLabel,
     reverse: reverseMode = false,
     scroll: scrollConfig,
@@ -894,6 +891,7 @@ function materialize<T extends VListItem = VListItem>(
       for (let i = 0; i < idleHandlers.length; i++) {
         idleHandlers[i]!();
       }
+      emitter.emit("scroll:idle", { scrollPosition: $.ls });
     }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
   };
 
@@ -999,6 +997,7 @@ function materialize<T extends VListItem = VListItem>(
         for (let i = 0; i < idleHandlers.length; i++) {
           idleHandlers[i]!();
         }
+        emitter.emit("scroll:idle", { scrollPosition: $.ls });
       }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
     };
     $.wh = wheelHandler;
@@ -1431,6 +1430,7 @@ function materialize<T extends VListItem = VListItem>(
     }
     rendered.clear();
     pool.clear();
+    emitter.emit("destroy", undefined);
     emitter.clear();
 
     dom.root.remove();

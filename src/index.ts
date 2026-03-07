@@ -149,7 +149,6 @@ export {
   diffRanges,
   // Scale utilities (for handling 1M+ items)
   MAX_VIRTUAL_SIZE,
-  MAX_VIRTUAL_HEIGHT,
   getCompressionState as getScaleState,
   getCompression as getScale,
   needsCompression as needsScaling,
@@ -201,3 +200,11 @@ export {
   type ScrollController,
   type Scrollbar,
 } from "./features/scrollbar";
+
+// Stats utility (scroll progress, visible item count, velocity tracking)
+export {
+  createStats,
+  type StatsConfig,
+  type StatsState,
+  type Stats,
+} from "./utils/stats";
