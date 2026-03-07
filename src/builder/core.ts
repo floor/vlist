@@ -55,14 +55,11 @@ import {
   createDefaultScrollProxy,
 } from "./materialize";
 import type { MRefs } from "./materialize";
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const OVERSCAN = 3;
-const CLASS_PREFIX = "vlist";
-const SCROLL_IDLE_TIMEOUT = 150;
+import {
+  OVERSCAN,
+  CLASS_PREFIX,
+  SCROLL_IDLE_TIMEOUT,
+} from "../constants";
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
