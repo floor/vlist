@@ -284,6 +284,7 @@ function createMockContext(
     setContainerDimensions: mock(() => {}),
     disableViewportResize: mock(() => {}),
     disableWheelHandler: mock(() => {}),
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   // Attach test helpers

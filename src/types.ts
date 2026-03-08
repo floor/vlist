@@ -194,6 +194,26 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    */
   striped?: boolean;
 
+  /**
+   * Gap between items in pixels along the main axis (default: 0).
+   *
+   * Adds consistent spacing between items without requiring CSS margin
+   * or padding hacks on `.vlist-item`. The gap is baked into the size
+   * cache (each slot = itemSize + gap) and subtracted from the DOM
+   * element height, so items are positioned with precise spacing.
+   *
+   * Works identically to the `gap` option in grid and masonry modes.
+   *
+   * ```ts
+   * item: {
+   *   height: 60,
+   *   gap: 10,        // 10px between each item
+   *   template: …,
+   * }
+   * ```
+   */
+  gap?: number;
+
   /** Template function to render each item */
   template: ItemTemplate<T>;
 }

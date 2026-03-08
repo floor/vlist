@@ -251,7 +251,11 @@ function createMockContext(
     rebuildSizeCache: () => {},
     setSizeConfig: () => {},
     updateContentSize: (size) => {
-      testDom.content.style.height = `${size}px`;
+      if (options?.horizontal) {
+        testDom.content.style.width = `${size}px`;
+      } else {
+        testDom.content.style.height = `${size}px`;
+      }
     },
     updateCompressionMode: () => {},
     setVisibleRangeFn: () => {},
@@ -263,6 +267,7 @@ function createMockContext(
     setContainerDimensions: () => {},
     disableViewportResize: () => {},
     disableWheelHandler: () => {},
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   return ctx;

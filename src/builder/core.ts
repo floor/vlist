@@ -45,6 +45,7 @@ import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
+import { resolvePadding, mainAxisPaddingFrom } from "../utils/padding";
 import { sortRenderedDOM } from "../rendering/sort";
 import {
   createMaterializeCtx,
@@ -176,6 +177,7 @@ function materialize<T extends VListItem = VListItem>(
     overscan = OVERSCAN,
     classPrefix = CLASS_PREFIX,
     ariaLabel,
+    padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
   } = config;
@@ -186,6 +188,10 @@ function materialize<T extends VListItem = VListItem>(
   const wrapEnabled = scrollCfg?.wrap ?? false;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
+  // Grid and masonry features manage their own gap — ignore item.gap when active
+  const gap = (features.has("withGrid") || features.has("withMasonry"))
+    ? 0
+    : (itemConfig.gap ?? 0);
   const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
   const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
@@ -271,6 +277,19 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.classList.add(`${classPrefix}-viewport--no-scrollbar`);
   }
 
+  // ── Apply padding to content element ────────────────────────────
+  // Works like CSS padding — adds inset space around items.
+  // Uses border-box so cross-axis padding (e.g. left/right in vertical
+  // mode) doesn't cause overflow on the 100%-wide content element.
+  // Main-axis padding is compensated by adding it to the explicit size.
+  const pad = resolvePadding(paddingConfig);
+  const mainAxisPadding = mainAxisPaddingFrom(pad, isHorizontal);
+  if (pad.top || pad.right || pad.bottom || pad.left) {
+    dom.content.style.boxSizing = "border-box";
+    dom.content.style.padding =
+      `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`;
+  }
+
   // ── Create core components ──────────────────────────────────────
   const emitter = createEmitter<VListEvents<T>>();
 
@@ -286,15 +305,37 @@ function materialize<T extends VListItem = VListItem>(
     typeof mainAxisSizeConfig === "function" &&
     (features.has("withGrid") || features.has("withMasonry"));
 
+  // ── Gap support ─────────────────────────────────────────────────
+  // When gap > 0, wrap the size config so each slot = itemSize + gap.
+  // The gap is subtracted from the DOM element height at render time,
+  // leaving consistent spacing between items (same pattern as grid/masonry).
+  const effectiveSizeConfig: number | ((index: number) => number) =
+    gap > 0
+      ? typeof mainAxisSizeConfig === "function"
+        ? (index: number) =>
+            (mainAxisSizeConfig as (index: number) => number)(index) + gap
+        : (mainAxisSizeConfig as number) + gap
+      : mainAxisSizeConfig;
+
   const initialSizeCache = measurementEnabled
     ? createMeasuredSizeCache(
-        estimatedSizeValue!,
+        estimatedSizeValue! + gap,
         initialItemsArray.length,
       )
     : createSizeCache(
-        mainAxisSizeConfig,
+        effectiveSizeConfig,
         featureReplacesSizeCache ? 0 : initialItemsArray.length,
       );
+
+  // Fix trailing gap: the last item's slot includes a gap that shouldn't
+  // add empty space at the bottom of the list.
+  if (gap > 0) {
+    const origGetTotalSize = initialSizeCache.getTotalSize;
+    initialSizeCache.getTotalSize = (): number => {
+      const total = origGetTotalSize();
+      return total > 0 ? total - gap : 0;
+    };
+  }
   const pool = createElementPool();
 
   // ── Shared mutable refs ($) ─────────────────────────────────────
@@ -336,7 +377,7 @@ function materialize<T extends VListItem = VListItem>(
       calcVisibleRange(scrollTop, cHeight, hc, total, out);
     },
     gsp: (index, hc, cHeight, total, align) => {
-      return calcScrollToPosition(index, hc, cHeight, total, align);
+      return calcScrollToPosition(index, hc, cHeight, total, align, $.mp);
     },
     pef: null as unknown as (element: HTMLElement, index: number) => void,
     at: itemConfig.template as ItemTemplate<T>,
@@ -345,6 +386,8 @@ function materialize<T extends VListItem = VListItem>(
     wh: null,
     gcw: () => $.cw,
     gch: () => $.ch,
+    gp: gap,
+    mp: mainAxisPadding,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -397,7 +440,7 @@ function materialize<T extends VListItem = VListItem>(
   // ── Content size helper (needed by measurement + render) ────────
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalSize()}px`;
+    const size = `${$.hc.getTotalSize() + mainAxisPadding}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -420,6 +463,7 @@ function materialize<T extends VListItem = VListItem>(
     updateContentSize,
     measuredCache,
     measurementEnabled,
+    gap,
   );
 
   const itemState: ItemState = { selected: false, focused: false };
@@ -492,7 +536,7 @@ function materialize<T extends VListItem = VListItem>(
 
     if (isHorizontal) {
       if (shouldConstrainSize) {
-        element.style.width = `${$.hc.getSize(index)}px`;
+        element.style.width = `${$.hc.getSize(index) - gap}px`;
       } else {
         element.style.width = "";
       }
@@ -501,7 +545,7 @@ function materialize<T extends VListItem = VListItem>(
       }
     } else {
       if (shouldConstrainSize) {
-        element.style.height = `${$.hc.getSize(index)}px`;
+        element.style.height = `${$.hc.getSize(index) - gap}px`;
       } else {
         element.style.height = "";
       }
@@ -602,11 +646,11 @@ function materialize<T extends VListItem = VListItem>(
             (measurement.mc && measurement.mc.isMeasured(i));
           if (isHorizontal) {
             existing.style.width = shouldConstrain
-              ? `${$.hc.getSize(i)}px`
+              ? `${$.hc.getSize(i) - gap}px`
               : "";
           } else {
             existing.style.height = shouldConstrain
-              ? `${$.hc.getSize(i)}px`
+              ? `${$.hc.getSize(i) - gap}px`
               : "";
           }
 

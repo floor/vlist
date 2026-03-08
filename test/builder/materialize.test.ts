@@ -104,6 +104,8 @@ function createTestRefs(): MRefs<TestItem> {
     id: false,
     la: "",
     wh: null,
+    gp: 0,
+    mp: 0,
   };
 }
 

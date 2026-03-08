@@ -231,6 +231,7 @@ function createMockContext(config?: {
     setContainerDimensions: mock(() => {}),
     disableViewportResize: mock(() => {}),
     disableWheelHandler: mock(() => {}),
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   // Mock setAttribute/removeAttribute for ARIA testing
