@@ -166,6 +166,407 @@ describe("builder/core.ts (see index.test.ts for full coverage)", () => {
 });
 
 // =============================================================================
+// Item Gap Support
+// =============================================================================
+
+describe("item gap", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Read the content element's height style — reflects getTotalSize() */
+  const getContentHeight = (container: HTMLElement): number => {
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    return content ? parseInt(content.style.height, 10) : 0;
+  };
+
+  it("should add gap between items with fixed height", () => {
+    const container = createContainer();
+    const items = createTestItems(5);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    // Total size = 5 * (40 + 10) - 10 trailing gap = 240
+    expect(getContentHeight(container)).toBe(240);
+
+    // DOM elements should be 40px tall (gap not included in element)
+    const el = container.querySelector(".vlist-item") as HTMLElement;
+    expect(el.style.height).toBe("40px");
+
+    list.destroy();
+  });
+
+  it("should add gap between items with variable height", () => {
+    const container = createContainer();
+    const heights = [30, 50, 40, 60, 20];
+    const items = createTestItems(5);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: (i) => heights[i] ?? 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    // Total = (30+50+40+60+20) + 5*10 - 10 = 200 + 40 = 240
+    expect(getContentHeight(container)).toBe(240);
+
+    list.destroy();
+  });
+
+  it("should position items with gap spacing", () => {
+    const container = createContainer();
+    const items = createTestItems(10);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    // Items should be positioned at 0, 50, 100, 150, ...
+    const els = container.querySelectorAll(".vlist-item");
+    const offsets = Array.from(els).map((el) => {
+      const match = (el as HTMLElement).style.transform.match(/translateY\((\d+)px\)/);
+      return match ? Number(match[1]) : -1;
+    });
+
+    // First item at 0, second at 50 (40 height + 10 gap)
+    expect(offsets).toContain(0);
+    expect(offsets).toContain(50);
+    expect(offsets).toContain(100);
+
+    list.destroy();
+  });
+
+  it("should have no effect when gap is 0 (default)", () => {
+    const container = createContainer();
+    const items = createTestItems(5);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    // Total size = 5 * 40 = 200 (no gap)
+    expect(getContentHeight(container)).toBe(200);
+
+    list.destroy();
+  });
+
+  it("should handle single item without trailing gap", () => {
+    const container = createContainer();
+    const items = createTestItems(1);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    // Single item: 40 + 10 - 10 trailing = 40 (no gap visible)
+    expect(getContentHeight(container)).toBe(40);
+
+    list.destroy();
+  });
+
+  it("should handle empty list with gap", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: [],
+    }).build();
+
+    expect(getContentHeight(container)).toBe(0);
+
+    list.destroy();
+  });
+
+  it("should preserve gap after setItems", () => {
+    const container = createContainer();
+    const items = createTestItems(5);
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items,
+    }).build();
+
+    expect(getContentHeight(container)).toBe(240);
+
+    // Replace items
+    const newItems = createTestItems(3);
+    list.setItems(newItems);
+
+    // Total = 3 * (40 + 10) - 10 = 140
+    expect(getContentHeight(container)).toBe(140);
+
+    list.destroy();
+  });
+});
+
+// =============================================================================
+// Padding Support
+// =============================================================================
+
+describe("padding", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Read the content element's height style — reflects getTotalSize() + padding */
+  const getContentHeight = (container: HTMLElement): number => {
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    return content ? parseInt(content.style.height, 10) : 0;
+  };
+
+  /** Read the content element's computed padding style */
+  const getContentPadding = (container: HTMLElement): string => {
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    return content ? content.style.padding : "";
+  };
+
+  /** Read the content element's box-sizing */
+  const getContentBoxSizing = (container: HTMLElement): string => {
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    return content ? content.style.boxSizing : "";
+  };
+
+  it("should apply equal padding on all sides with number shorthand", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 16,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    expect(getContentPadding(container)).toBe("16px");
+    expect(getContentBoxSizing(container)).toBe("border-box");
+
+    list.destroy();
+  });
+
+  it("should apply vertical/horizontal padding with [v, h] tuple", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: [16, 12],
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    expect(getContentPadding(container)).toBe("16px 12px");
+    expect(getContentBoxSizing(container)).toBe("border-box");
+
+    list.destroy();
+  });
+
+  it("should apply per-side padding with [t, r, b, l] tuple", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: [16, 12, 20, 8],
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    expect(getContentPadding(container)).toBe("16px 12px 20px 8px");
+    expect(getContentBoxSizing(container)).toBe("border-box");
+
+    list.destroy();
+  });
+
+  it("should add main-axis padding to content height", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 16,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    // Total = 5 * 40 (items) + 16 + 16 (top + bottom padding) = 232
+    expect(getContentHeight(container)).toBe(232);
+
+    list.destroy();
+  });
+
+  it("should add asymmetric main-axis padding to content height", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: [20, 12],
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    // Total = 5 * 40 (items) + 20 + 20 (top + bottom) = 240
+    // (horizontal padding 12 doesn't affect height)
+    expect(getContentHeight(container)).toBe(240);
+
+    list.destroy();
+  });
+
+  it("should add per-side main-axis padding to content height", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: [20, 12, 10, 8],
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    // Total = 5 * 40 (items) + 20 (top) + 10 (bottom) = 230
+    expect(getContentHeight(container)).toBe(230);
+
+    list.destroy();
+  });
+
+  it("should have no effect when padding is 0 (default)", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    // No padding applied
+    expect(getContentPadding(container)).toBe("");
+    expect(getContentHeight(container)).toBe(200);
+
+    list.destroy();
+  });
+
+  it("should work with gap and padding combined", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 16,
+      item: {
+        height: 40,
+        gap: 10,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    // Items: 5 * (40 + 10) - 10 (trailing gap) = 240
+    // Padding: 16 + 16 = 32
+    // Total = 240 + 32 = 272
+    expect(getContentHeight(container)).toBe(272);
+
+    list.destroy();
+  });
+
+  it("should preserve padding after setItems", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 16,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    expect(getContentHeight(container)).toBe(232);
+
+    list.setItems(createTestItems(3));
+
+    // Total = 3 * 40 + 16 + 16 = 152
+    expect(getContentHeight(container)).toBe(152);
+
+    list.destroy();
+  });
+
+  it("should handle empty list with padding", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 16,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: [],
+    }).build();
+
+    // Empty list: getTotalSize() = 0, but padding still adds 32
+    // (border-box means height includes padding)
+    expect(getContentHeight(container)).toBe(32);
+
+    list.destroy();
+  });
+
+  it("should not set box-sizing when padding is 0", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      padding: 0,
+      item: {
+        height: 40,
+        template: (item) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(5),
+    }).build();
+
+    expect(getContentBoxSizing(container)).toBe("");
+    expect(getContentHeight(container)).toBe(200);
+
+    list.destroy();
+  });
+});
+
+// =============================================================================
 // Wheel Handler — Horizontal Scroll Support
 // =============================================================================
 // The wheel handler in vertical mode intercepts wheel events and calls

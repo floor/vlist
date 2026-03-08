@@ -256,6 +256,7 @@ function createMockContext(
     setContainerDimensions: setContainerDimensions as any,
     disableViewportResize: disableViewportResize as any,
     disableWheelHandler: disableWheelHandler as any,
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   return ctx;

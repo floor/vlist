@@ -20,6 +20,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding, crossAxisPaddingFrom } from "../../utils/padding";
 import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 import { calculateScrollToIndex } from "../../rendering";
 
@@ -99,11 +100,16 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       const isHorizontal = resolvedConfig.horizontal;
 
-      // Helper: get cross-axis container dimension.
+      // ── Resolve cross-axis padding from config ──
+      const crossAxisPadding = crossAxisPaddingFrom(resolvePadding(rawConfig.padding), isHorizontal);
+
+      // Helper: get cross-axis container dimension minus padding.
       // In vertical mode the cross-axis is horizontal (viewport width).
       // In horizontal mode the cross-axis is vertical (viewport height).
-      const getCrossAxisSize = (): number =>
-        isHorizontal ? dom.viewport.clientHeight : ctx.getContainerWidth();
+      const getCrossAxisSize = (): number => {
+        const raw = isHorizontal ? dom.viewport.clientHeight : ctx.getContainerWidth();
+        return raw - crossAxisPadding;
+      };
 
       // ── Create grid layout ──
       // Check if groups feature will be active (items contain group headers)
@@ -271,12 +277,8 @@ export const withGrid = <T extends VListItem = VListItem>(
           // This ensures everything (DOM, scrollbar, calculations) uses the correct height
           ctx.sizeCache.getTotalSize = () => correctTotalHeight;
 
-          // Manually update DOM content size (height for vertical, width for horizontal)
-          if (resolvedConfig.horizontal) {
-            ctx.dom.content.style.width = `${correctTotalHeight}px`;
-          } else {
-            ctx.dom.content.style.height = `${correctTotalHeight}px`;
-          }
+          // Update DOM content size (padding compensation handled by updateContentSize)
+          ctx.updateContentSize(correctTotalHeight);
 
           // Recreate renderer with updated layout
           createAndSetGridRenderer();
@@ -488,7 +490,7 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       ctx.resizeHandlers.push((width: number, height: number): void => {
         // Use the cross-axis dimension: width for vertical, height for horizontal
-        const crossAxisSize = isHorizontal ? height : width;
+        const crossAxisSize = (isHorizontal ? height : width) - crossAxisPadding;
 
         // Always update grid state (used by dynamic height functions)
         gridState.containerWidth = crossAxisSize;
@@ -551,13 +553,15 @@ export const withGrid = <T extends VListItem = VListItem>(
 
           const safeRow = Math.max(0, Math.min(rowIndex, totalRows - 1));
 
-          const position = calculateScrollToIndex(
-            safeRow,
-            ctx.sizeCache,
-            ctx.state.viewportState.containerSize,
-            totalRows,
-            align,
-            ctx.getCachedCompression(),
+          const position = ctx.adjustScrollPosition(
+            calculateScrollToIndex(
+              safeRow,
+              ctx.sizeCache,
+              ctx.state.viewportState.containerSize,
+              totalRows,
+              align,
+              ctx.getCachedCompression(),
+            ),
           );
 
           if (behavior === "smooth") {
