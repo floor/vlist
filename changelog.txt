@@ -1,9 +1,16 @@
 vlist — full changelog
 initial commit → latest
-334 commits · 35 days · Feb 2 – Mar 8, 2026
+338 commits · 35 days · Feb 2 – Mar 8, 2026
 
 
 2026-03-08
+
+  feat(item): add gap property for consistent spacing between items
+  feat(config): add padding property for content inset around list boundaries
+  refactor(range): move padding-aware scroll logic into calcScrollToPosition
+  perf(builder): base bundle 24.7 KB minified (9.3 KB gzipped)
+
+  → v1.3.3
 
   refactor(builder): extract measurement and api modules from core.ts
   refactor(builder): deduplicate idle handler, click/dblclick, stayAtEnd

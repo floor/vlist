@@ -390,6 +390,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     disableWheelHandler: () => {
       // Stub - not used in simplified context
     },
+    adjustScrollPosition: (pos: number) => pos,
     invalidateRendered: () => {
       // Stub - not used in simplified context
     },

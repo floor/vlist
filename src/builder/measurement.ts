@@ -64,6 +64,7 @@ export const createMeasurement = <T extends VListItem>(
   updateContentSize: () => void,
   measuredCache: MeasuredSizeCache | null,
   measurementEnabled: boolean,
+  gap: number = 0,
 ): MeasurementState => {
 
   // ── stayAtEnd — reusable by both measurement and other content-size changes ──
@@ -133,19 +134,21 @@ export const createMeasurement = <T extends VListItem>(
         : entry.borderBoxSize[0]!.blockSize;
 
       if (!measuredCache.isMeasured(index)) {
+        // Store measured size + gap so prefix sums include spacing
+        const sizeWithGap = newSize + gap;
         const oldSize = measuredCache.getSize(index);
-        measuredCache.setMeasuredSize(index, newSize);
+        measuredCache.setMeasuredSize(index, sizeWithGap);
         hasNewMeasurements = true;
 
         // Track scroll correction for above-viewport items
-        if (index < firstVisible && newSize !== oldSize) {
-          pendingScrollDelta += newSize - oldSize;
+        if (index < firstVisible && sizeWithGap !== oldSize) {
+          pendingScrollDelta += sizeWithGap - oldSize;
         }
 
         // Stop observing — size is now known
         observer!.unobserve(entry.target as Element);
 
-        // Set explicit size on the element now that it's measured
+        // Set explicit size on the element (content size only, without gap)
         const el = entry.target as HTMLElement;
         if (isHorizontal) {
           el.style.width = `${newSize}px`;

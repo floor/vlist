@@ -279,13 +279,15 @@ export const withSelection = <T extends VListItem = VListItem>(
         );
 
         ctx.scrollController.scrollTo(
-          calculateScrollToIndex(
-            idx,
-            ctx.sizeCache,
-            ctx.state.viewportState.containerSize,
-            ctx.dataManager.getState().total,
-            "center",
-            ctx.getCachedCompression(),
+          ctx.adjustScrollPosition(
+            calculateScrollToIndex(
+              idx,
+              ctx.sizeCache,
+              ctx.state.viewportState.containerSize,
+              ctx.dataManager.getState().total,
+              "center",
+              ctx.getCachedCompression(),
+            ),
           ),
         );
 
@@ -434,15 +436,18 @@ export const withSelection = <T extends VListItem = VListItem>(
           // Scroll focused item into view + ARIA
           if (newFocusIndex >= 0) {
             const dataState = ctx.dataManager.getState();
-            const position = calculateScrollToIndex(
-              newFocusIndex,
-              ctx.sizeCache,
-              ctx.state.viewportState.containerSize,
-              dataState.total,
-              "center",
-              ctx.getCachedCompression(),
+            ctx.scrollController.scrollTo(
+              ctx.adjustScrollPosition(
+                calculateScrollToIndex(
+                  newFocusIndex,
+                  ctx.sizeCache,
+                  ctx.state.viewportState.containerSize,
+                  dataState.total,
+                  "center",
+                  ctx.getCachedCompression(),
+                ),
+              ),
             );
-            ctx.scrollController.scrollTo(position);
 
             dom.root.setAttribute(
               "aria-activedescendant",
