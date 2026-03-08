@@ -186,6 +186,10 @@ function materialize<T extends VListItem = VListItem>(
   const wrapEnabled = scrollCfg?.wrap ?? false;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
+  // Grid and masonry features manage their own gap — ignore item.gap when active
+  const gap = (features.has("withGrid") || features.has("withMasonry"))
+    ? 0
+    : (itemConfig.gap ?? 0);
   const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
   const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
@@ -286,15 +290,37 @@ function materialize<T extends VListItem = VListItem>(
     typeof mainAxisSizeConfig === "function" &&
     (features.has("withGrid") || features.has("withMasonry"));
 
+  // ── Gap support ─────────────────────────────────────────────────
+  // When gap > 0, wrap the size config so each slot = itemSize + gap.
+  // The gap is subtracted from the DOM element height at render time,
+  // leaving consistent spacing between items (same pattern as grid/masonry).
+  const effectiveSizeConfig: number | ((index: number) => number) =
+    gap > 0
+      ? typeof mainAxisSizeConfig === "function"
+        ? (index: number) =>
+            (mainAxisSizeConfig as (index: number) => number)(index) + gap
+        : (mainAxisSizeConfig as number) + gap
+      : mainAxisSizeConfig;
+
   const initialSizeCache = measurementEnabled
     ? createMeasuredSizeCache(
-        estimatedSizeValue!,
+        estimatedSizeValue! + gap,
         initialItemsArray.length,
       )
     : createSizeCache(
-        mainAxisSizeConfig,
+        effectiveSizeConfig,
         featureReplacesSizeCache ? 0 : initialItemsArray.length,
       );
+
+  // Fix trailing gap: the last item's slot includes a gap that shouldn't
+  // add empty space at the bottom of the list.
+  if (gap > 0) {
+    const origGetTotalSize = initialSizeCache.getTotalSize;
+    initialSizeCache.getTotalSize = (): number => {
+      const total = origGetTotalSize();
+      return total > 0 ? total - gap : 0;
+    };
+  }
   const pool = createElementPool();
 
   // ── Shared mutable refs ($) ─────────────────────────────────────
@@ -345,6 +371,7 @@ function materialize<T extends VListItem = VListItem>(
     wh: null,
     gcw: () => $.cw,
     gch: () => $.ch,
+    gp: gap,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -420,6 +447,7 @@ function materialize<T extends VListItem = VListItem>(
     updateContentSize,
     measuredCache,
     measurementEnabled,
+    gap,
   );
 
   const itemState: ItemState = { selected: false, focused: false };
@@ -492,7 +520,7 @@ function materialize<T extends VListItem = VListItem>(
 
     if (isHorizontal) {
       if (shouldConstrainSize) {
-        element.style.width = `${$.hc.getSize(index)}px`;
+        element.style.width = `${$.hc.getSize(index) - gap}px`;
       } else {
         element.style.width = "";
       }
@@ -501,7 +529,7 @@ function materialize<T extends VListItem = VListItem>(
       }
     } else {
       if (shouldConstrainSize) {
-        element.style.height = `${$.hc.getSize(index)}px`;
+        element.style.height = `${$.hc.getSize(index) - gap}px`;
       } else {
         element.style.height = "";
       }
@@ -602,11 +630,11 @@ function materialize<T extends VListItem = VListItem>(
             (measurement.mc && measurement.mc.isMeasured(i));
           if (isHorizontal) {
             existing.style.width = shouldConstrain
-              ? `${$.hc.getSize(i)}px`
+              ? `${$.hc.getSize(i) - gap}px`
               : "";
           } else {
             existing.style.height = shouldConstrain
-              ? `${$.hc.getSize(i)}px`
+              ? `${$.hc.getSize(i) - gap}px`
               : "";
           }
 
