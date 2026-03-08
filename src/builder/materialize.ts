@@ -147,6 +147,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   gcw: () => number;
   /** getContainerHeight */
   gch: () => number;
+  /** gap — item spacing along main axis (0 = none) */
+  gp: number;
 }
 
 // =============================================================================
@@ -391,6 +393,15 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
     setSizeConfig(newConfig: number | ((index: number) => number)): void {
       $.hc = createSizeCache(newConfig, $.vtf());
+      // Re-apply trailing gap fix when gap > 0 (cache was replaced)
+      if ($.gp > 0) {
+        const origGetTotalSize = $.hc.getTotalSize;
+        const gap = $.gp;
+        $.hc.getTotalSize = (): number => {
+          const total = origGetTotalSize();
+          return total > 0 ? total - gap : 0;
+        };
+      }
     },
     updateContentSize(totalSize: number): void {
       const size = `${totalSize}px`;
