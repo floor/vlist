@@ -377,32 +377,7 @@ function materialize<T extends VListItem = VListItem>(
       calcVisibleRange(scrollTop, cHeight, hc, total, out);
     },
     gsp: (index, hc, cHeight, total, align) => {
-      if ($.mp === 0) {
-        return calcScrollToPosition(index, hc, cHeight, total, align);
-      }
-      // With padding, the scrollable area is getTotalSize() + padding.
-      // calcScrollToPosition clamps to getTotalSize() - cHeight which
-      // is too tight — compute directly with a padding-aware max.
-      if (total === 0) return 0;
-      const clamped = Math.max(0, Math.min(index, total - 1));
-      const offset = hc.getOffset(clamped);
-      const itemH = hc.getSize(clamped);
-      const maxScroll = Math.max(0, hc.getTotalSize() + $.mp - cHeight);
-      let pos: number;
-      switch (align) {
-        case "center":
-          pos = offset - (cHeight - itemH) / 2;
-          break;
-        case "end":
-          // For the last item, scroll to the true bottom (show end padding)
-          pos = offset + itemH >= hc.getTotalSize()
-            ? maxScroll
-            : offset - cHeight + itemH;
-          break;
-        default:
-          pos = offset;
-      }
-      return Math.max(0, Math.min(pos, maxScroll));
+      return calcScrollToPosition(index, hc, cHeight, total, align, $.mp);
     },
     pef: null as unknown as (element: HTMLElement, index: number) => void,
     at: itemConfig.template as ItemTemplate<T>,
