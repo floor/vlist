@@ -45,6 +45,7 @@ import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
+import { resolvePadding, mainAxisPaddingFrom } from "../utils/padding";
 import { sortRenderedDOM } from "../rendering/sort";
 import {
   createMaterializeCtx,
@@ -176,6 +177,7 @@ function materialize<T extends VListItem = VListItem>(
     overscan = OVERSCAN,
     classPrefix = CLASS_PREFIX,
     ariaLabel,
+    padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
   } = config;
@@ -190,14 +192,6 @@ function materialize<T extends VListItem = VListItem>(
   const gap = (features.has("withGrid") || features.has("withMasonry"))
     ? 0
     : (itemConfig.gap ?? 0);
-  // Padding: space before the first item and after the last item
-  const paddingCfg = itemConfig.padding;
-  const paddingStart = typeof paddingCfg === "number"
-    ? paddingCfg
-    : (paddingCfg?.start ?? 0);
-  const paddingEnd = typeof paddingCfg === "number"
-    ? paddingCfg
-    : (paddingCfg?.end ?? 0);
   const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
   const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
@@ -283,6 +277,19 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.classList.add(`${classPrefix}-viewport--no-scrollbar`);
   }
 
+  // ── Apply padding to content element ────────────────────────────
+  // Works like CSS padding — adds inset space around items.
+  // Uses border-box so cross-axis padding (e.g. left/right in vertical
+  // mode) doesn't cause overflow on the 100%-wide content element.
+  // Main-axis padding is compensated by adding it to the explicit size.
+  const pad = resolvePadding(paddingConfig);
+  const mainAxisPadding = mainAxisPaddingFrom(pad, isHorizontal);
+  if (pad.top || pad.right || pad.bottom || pad.left) {
+    dom.content.style.boxSizing = "border-box";
+    dom.content.style.padding =
+      `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`;
+  }
+
   // ── Create core components ──────────────────────────────────────
   const emitter = createEmitter<VListEvents<T>>();
 
@@ -320,15 +327,13 @@ function materialize<T extends VListItem = VListItem>(
         featureReplacesSizeCache ? 0 : initialItemsArray.length,
       );
 
-  // Fix trailing gap and add padding to total size.
-  // Trailing gap: the last item's slot includes a gap that shouldn't
-  // add empty space at the bottom. Padding: adds space before/after items.
-  if (gap > 0 || paddingStart > 0 || paddingEnd > 0) {
+  // Fix trailing gap: the last item's slot includes a gap that shouldn't
+  // add empty space at the bottom of the list.
+  if (gap > 0) {
     const origGetTotalSize = initialSizeCache.getTotalSize;
     initialSizeCache.getTotalSize = (): number => {
       const total = origGetTotalSize();
-      if (total === 0) return 0;
-      return total - gap + paddingStart + paddingEnd;
+      return total > 0 ? total - gap : 0;
     };
   }
   const pool = createElementPool();
@@ -369,10 +374,35 @@ function materialize<T extends VListItem = VListItem>(
     rfn: null as unknown as () => void,
     ffn: null as unknown as () => void,
     gvr: (scrollTop, cHeight, hc, total, out) => {
-      calcVisibleRange(scrollTop - paddingStart, cHeight, hc, total, out);
+      calcVisibleRange(scrollTop, cHeight, hc, total, out);
     },
     gsp: (index, hc, cHeight, total, align) => {
-      return calcScrollToPosition(index, hc, cHeight, total, align, paddingEnd);
+      if ($.mp === 0) {
+        return calcScrollToPosition(index, hc, cHeight, total, align);
+      }
+      // With padding, the scrollable area is getTotalSize() + padding.
+      // calcScrollToPosition clamps to getTotalSize() - cHeight which
+      // is too tight — compute directly with a padding-aware max.
+      if (total === 0) return 0;
+      const clamped = Math.max(0, Math.min(index, total - 1));
+      const offset = hc.getOffset(clamped);
+      const itemH = hc.getSize(clamped);
+      const maxScroll = Math.max(0, hc.getTotalSize() + $.mp - cHeight);
+      let pos: number;
+      switch (align) {
+        case "center":
+          pos = offset - (cHeight - itemH) / 2;
+          break;
+        case "end":
+          // For the last item, scroll to the true bottom (show end padding)
+          pos = offset + itemH >= hc.getTotalSize()
+            ? maxScroll
+            : offset - cHeight + itemH;
+          break;
+        default:
+          pos = offset;
+      }
+      return Math.max(0, Math.min(pos, maxScroll));
     },
     pef: null as unknown as (element: HTMLElement, index: number) => void,
     at: itemConfig.template as ItemTemplate<T>,
@@ -382,8 +412,7 @@ function materialize<T extends VListItem = VListItem>(
     gcw: () => $.cw,
     gch: () => $.ch,
     gp: gap,
-    ps: paddingStart,
-    pe: paddingEnd,
+    mp: mainAxisPadding,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -436,7 +465,7 @@ function materialize<T extends VListItem = VListItem>(
   // ── Content size helper (needed by measurement + render) ────────
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalSize()}px`;
+    const size = `${$.hc.getTotalSize() + mainAxisPadding}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -509,7 +538,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const positionElement = (element: HTMLElement, index: number): void => {
-    const offset = Math.round($.hc.getOffset(index) + $.ps);
+    const offset = Math.round($.hc.getOffset(index));
     if (isHorizontal) {
       element.style.transform = `translateX(${offset}px)`;
     } else {

@@ -233,6 +233,7 @@ function createMockContext(): BuilderContext<TestItem> {
     setContainerDimensions: () => {},
     disableViewportResize: () => {},
     disableWheelHandler: () => {},
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   return ctx;

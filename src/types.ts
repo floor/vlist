@@ -214,38 +214,6 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    */
   gap?: number;
 
-  /**
-   * Padding around the list content along the main axis (default: 0).
-   *
-   * Adds empty space before the first item and after the last item,
-   * analogous to CSS `padding` on a flex/grid container. Since items
-   * are absolutely positioned via `translateY`, CSS padding on the
-   * content element would not work — this option offsets all item
-   * positions and adjusts the total content size instead.
-   *
-   * - `number` — Equal padding at start and end
-   * - `{ start, end }` — Different padding at each edge
-   *
-   * "Start" means the top in vertical mode, the left in horizontal mode.
-   * "End" means the bottom in vertical mode, the right in horizontal mode.
-   *
-   * ```ts
-   * item: {
-   *   height: 60,
-   *   gap: 10,
-   *   padding: 16,              // 16px top and bottom
-   *   template: …,
-   * }
-   * // or
-   * item: {
-   *   height: 60,
-   *   padding: { start: 20, end: 12 },
-   *   template: …,
-   * }
-   * ```
-   */
-  padding?: number | { start?: number; end?: number };
-
   /** Template function to render each item */
   template: ItemTemplate<T>;
 }

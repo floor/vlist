@@ -35,6 +35,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding, crossAxisPaddingFrom, mainAxisPaddingFrom } from "../../utils/padding";
 import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 
 import { createMasonryLayout } from "./layout";
@@ -132,9 +133,15 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // ── Add masonry CSS class ──
       dom.root.classList.add(`${classPrefix}--masonry`);
 
-      // ── Get container size (cross-axis dimension) ──
+      // ── Resolve padding from config ──
+      const resolvedPad = resolvePadding(rawConfig.padding);
+      const crossAxisPadding = crossAxisPaddingFrom(resolvedPad, isHorizontal);
+      const mainAxisPadding = mainAxisPaddingFrom(resolvedPad, isHorizontal);
+
+      // ── Get container size (cross-axis dimension minus padding) ──
       const getCrossAxisSize = (): number => {
-        return isHorizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+        const raw = isHorizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+        return raw - crossAxisPadding;
       };
 
       // ── Create masonry layout ──
@@ -193,12 +200,8 @@ export const withMasonry = <T extends VListItem = VListItem>(
         const totalSize = masonryLayout!.getTotalSize(cachedPlacements);
         ctx.sizeCache.getTotalSize = () => totalSize;
 
-        // Update DOM content size
-        if (isHorizontal) {
-          dom.content.style.width = `${totalSize}px`;
-        } else {
-          dom.content.style.height = `${totalSize}px`;
-        }
+        // Update DOM content size (padding compensation handled by updateContentSize)
+        ctx.updateContentSize(totalSize);
       };
 
       // ── Create masonry renderer ──
@@ -323,7 +326,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
 
       // ── Handle resize ──
       const handleResize = (width: number, height: number): void => {
-        const newContainerSize = isHorizontal ? height : width;
+        const newContainerSize = (isHorizontal ? height : width) - crossAxisPadding;
 
         if (masonryLayout && masonryLayout.containerSize !== newContainerSize) {
           masonryLayout.update({ containerSize: newContainerSize });
@@ -390,9 +393,18 @@ export const withMasonry = <T extends VListItem = VListItem>(
             scrollTarget = mainAxisPosition - containerSize / 2 + placement.size / 2;
           } else if (align === "end") {
             scrollTarget = mainAxisPosition - containerSize + placement.size;
+            // For the last item, scroll to the true bottom (show end padding).
+            // In masonry the last item by index may not be in the tallest lane,
+            // but "end" on the final item should reach the absolute bottom.
+            const totalSize = masonryLayout!.getTotalSize(cachedPlacements);
+            if (index === cachedPlacements.length - 1) {
+              const paddedMax = Math.max(0, totalSize + mainAxisPadding - containerSize);
+              scrollTarget = paddedMax;
+            }
           }
 
           scrollTarget = Math.max(0, scrollTarget);
+          scrollTarget = ctx.adjustScrollPosition(scrollTarget);
 
           if (behavior === "smooth") {
             animateScroll(ctx.scrollController.getScrollTop(), scrollTarget, duration);

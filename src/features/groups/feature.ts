@@ -342,13 +342,15 @@ export const withGroups = <T extends VListItem = VListItem>(
             resolveScrollArgs(alignOrOptions);
           const total = ctx.dataManager.getTotal();
 
-          const position = calculateScrollToIndex(
-            layoutIndex,
-            ctx.sizeCache,
-            ctx.state.viewportState.containerSize,
-            total,
-            align,
-            ctx.getCachedCompression(),
+          const position = ctx.adjustScrollPosition(
+            calculateScrollToIndex(
+              layoutIndex,
+              ctx.sizeCache,
+              ctx.state.viewportState.containerSize,
+              total,
+              align,
+              ctx.getCachedCompression(),
+            ),
           );
 
           if (behavior === "smooth") {

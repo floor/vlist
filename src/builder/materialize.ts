@@ -149,10 +149,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   gch: () => number;
   /** gap — item spacing along main axis (0 = none) */
   gp: number;
-  /** paddingStart — space before the first item along main axis (0 = none) */
-  ps: number;
-  /** paddingEnd — space after the last item along main axis (0 = none) */
-  pe: number;
+  /** mainAxisPadding — sum of CSS padding along scroll axis (0 = none) */
+  mp: number;
 }
 
 // =============================================================================
@@ -237,6 +235,19 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
     get rawConfig() {
       return rawConfig;
+    },
+    adjustScrollPosition(position: number): number {
+      if ($.mp === 0) return position;
+      // calculateScrollToIndex clamps to getTotalSize() - containerSize.
+      // With padding the scrollable area is getTotalSize() + padding.
+      // If the position hit the old ceiling, extend to the padded max
+      // so scrollToIndex can reach the very bottom (including padding).
+      const containerSize = isHorizontal ? $.cw : $.ch;
+      const totalSize = $.hc.getTotalSize();
+      const unpaddedMax = Math.max(0, totalSize - containerSize);
+      const paddedMax = Math.max(0, totalSize + $.mp - containerSize);
+      if (position >= unpaddedMax) return paddedMax;
+      return Math.min(position, paddedMax);
     },
 
     // Mutable component slots (features can replace)
@@ -397,21 +408,18 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
     setSizeConfig(newConfig: number | ((index: number) => number)): void {
       $.hc = createSizeCache(newConfig, $.vtf());
-      // Re-apply trailing gap and padding fixes when cache is replaced
-      if ($.gp > 0 || $.ps > 0 || $.pe > 0) {
+      // Re-apply trailing gap fix when gap > 0 (cache was replaced)
+      if ($.gp > 0) {
         const origGetTotalSize = $.hc.getTotalSize;
         const gap = $.gp;
-        const ps = $.ps;
-        const pe = $.pe;
         $.hc.getTotalSize = (): number => {
           const total = origGetTotalSize();
-          if (total === 0) return 0;
-          return total - gap + ps + pe;
+          return total > 0 ? total - gap : 0;
         };
       }
     },
     updateContentSize(totalSize: number): void {
-      const size = `${totalSize}px`;
+      const size = `${totalSize + $.mp}px`;
       if (isHorizontal) {
         dom.content.style.width = size;
       } else {
