@@ -2,19 +2,19 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.2** — [Changelog](./changelog.txt)
+**v1.3.3** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/@floor/vlist)](https://bundlephobia.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~8.7 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~9.3 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
+- **Gap & padding** — built-in item spacing and content inset (CSS shorthand convention)
 - **Reverse, page-scroll, wrap** — every layout mode
 - **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader DOM ordering
 - **React, Vue, Svelte** — framework adapters available
@@ -89,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 8.7 KB | Core virtualization |
+| **Base** | 9.3 KB | Core virtualization, gap & padding |
 | `withGrid()` | +4.0 KB | 2D grid layout with context injection |
-| `withMasonry()` | +2.6 KB | Pinterest-style masonry layout |
+| `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
 | `withGroups()` | +4.2 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.0 KB | Lazy loading with adapters |
-| `withSelection()` | +1.8 KB | Single/multiple selection + keyboard nav |
+| `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +5.0 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +4.9 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
@@ -216,6 +216,8 @@ const list = vlist({
 | **Horizontal grid** | `orientation: 'horizontal'` + `withGrid()` |
 | **Data table** | `withTable({ columns, rowHeight, resizable })` |
 | **Grouped table** | `withTable({ columns, rowHeight })` + `withGroups({ ... })` |
+| **Item gap** | `item: { height: 48, gap: 8 }` |
+| **Content padding** | `padding: 16` or `padding: [16, 12]` or `padding: [16, 12, 20, 8]` |
 | **Masonry** | `withMasonry({ columns: 4, gap: 16 })` |
 | **Page-level scroll** | `withPage()` |
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
@@ -391,11 +393,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 8.7 KB |
-| + Grid | 12.8 KB |
-| + Groups | 12.9 KB |
-| + Async | 12.7 KB |
-| + Table | 13.7 KB |
+| Base only | 9.3 KB |
+| + Grid | 13.3 KB |
+| + Groups | 13.4 KB |
+| + Async | 13.3 KB |
+| + Table | 14.2 KB |
 
 ### Memory Efficiency
 
@@ -446,7 +448,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (2763 tests) and `bun run build` before submitting
+2. Run `bun test` (2781 tests) and `bun run build` before submitting
 
 ## License
 
