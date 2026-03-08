@@ -244,6 +244,7 @@ function createMockContext(overrides?: {
     setContainerDimensions: () => {},
     disableViewportResize: () => {},
     disableWheelHandler: () => {},
+    adjustScrollPosition: (pos: number) => pos,
   };
 
   // Attach emitted array for test assertions

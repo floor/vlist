@@ -70,7 +70,6 @@ export const calcScrollToPosition = (
   containerHeight: number,
   totalItems: number,
   align: "start" | "center" | "end",
-  paddingEnd: number = 0,
 ): number => {
   if (totalItems === 0) return 0;
   const clamped = Math.max(0, Math.min(index, totalItems - 1));
@@ -83,7 +82,7 @@ export const calcScrollToPosition = (
       pos = offset - (containerHeight - itemH) / 2;
       break;
     case "end":
-      pos = offset - containerHeight + itemH + paddingEnd;
+      pos = offset - containerHeight + itemH;
       break;
     default:
       pos = offset;

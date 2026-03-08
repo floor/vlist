@@ -65,6 +65,27 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
    */
   orientation?: "vertical" | "horizontal";
 
+  /**
+   * Padding around the list content (default: 0).
+   *
+   * Works exactly like CSS `padding` — adds inset space between the
+   * viewport edge and the items. Applied as CSS padding on the content
+   * element, so it works identically for list, grid, and masonry
+   * layouts with zero positioning overhead.
+   *
+   * Follows CSS shorthand convention:
+   * - `number` — Equal padding on all four sides
+   * - `[vertical, horizontal]` — Top/bottom and left/right
+   * - `[top, right, bottom, left]` — Per-side (CSS order)
+   *
+   * ```ts
+   * padding: 16           // 16px all sides
+   * padding: [16, 12]     // 16px top/bottom, 12px left/right
+   * padding: [16, 12, 20, 8]  // top, right, bottom, left
+   * ```
+   */
+  padding?: number | [number, number] | [number, number, number, number];
+
   /** Reverse mode for chat UIs */
   reverse?: boolean;
 
@@ -184,6 +205,18 @@ export interface BuilderContext<T extends VListItem = VListItem> {
 
   /** The raw user-provided builder config (for features that need original values) */
   readonly rawConfig: BuilderConfig<T>;
+
+  /**
+   * Adjust a raw scroll position (from calculateScrollToIndex or similar)
+   * to account for CSS padding on the content element.
+   *
+   * CSS padding expands the scrollable area beyond `getTotalSize()`, so
+   * the max-scroll clamp must include the padding. The position itself
+   * is unchanged — CSS padding already offsets items visually.
+   *
+   * No-op when padding is 0 — returns the input unchanged.
+   */
+  adjustScrollPosition(position: number): number;
 
   // ── Mutable components (replaceable by features) ───────────────
   renderer: Renderer<T>;
