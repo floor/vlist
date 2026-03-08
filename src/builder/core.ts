@@ -190,6 +190,14 @@ function materialize<T extends VListItem = VListItem>(
   const gap = (features.has("withGrid") || features.has("withMasonry"))
     ? 0
     : (itemConfig.gap ?? 0);
+  // Padding: space before the first item and after the last item
+  const paddingCfg = itemConfig.padding;
+  const paddingStart = typeof paddingCfg === "number"
+    ? paddingCfg
+    : (paddingCfg?.start ?? 0);
+  const paddingEnd = typeof paddingCfg === "number"
+    ? paddingCfg
+    : (paddingCfg?.end ?? 0);
   const mainAxisSizeConfig = mainAxisValue ?? estimatedSizeValue!;
   const measurementEnabled = mainAxisValue == null && estimatedSizeValue != null;
 
@@ -312,13 +320,15 @@ function materialize<T extends VListItem = VListItem>(
         featureReplacesSizeCache ? 0 : initialItemsArray.length,
       );
 
-  // Fix trailing gap: the last item's slot includes a gap that shouldn't
-  // add empty space at the bottom of the list.
-  if (gap > 0) {
+  // Fix trailing gap and add padding to total size.
+  // Trailing gap: the last item's slot includes a gap that shouldn't
+  // add empty space at the bottom. Padding: adds space before/after items.
+  if (gap > 0 || paddingStart > 0 || paddingEnd > 0) {
     const origGetTotalSize = initialSizeCache.getTotalSize;
     initialSizeCache.getTotalSize = (): number => {
       const total = origGetTotalSize();
-      return total > 0 ? total - gap : 0;
+      if (total === 0) return 0;
+      return total - gap + paddingStart + paddingEnd;
     };
   }
   const pool = createElementPool();
@@ -359,10 +369,10 @@ function materialize<T extends VListItem = VListItem>(
     rfn: null as unknown as () => void,
     ffn: null as unknown as () => void,
     gvr: (scrollTop, cHeight, hc, total, out) => {
-      calcVisibleRange(scrollTop, cHeight, hc, total, out);
+      calcVisibleRange(scrollTop - paddingStart, cHeight, hc, total, out);
     },
     gsp: (index, hc, cHeight, total, align) => {
-      return calcScrollToPosition(index, hc, cHeight, total, align);
+      return calcScrollToPosition(index, hc, cHeight, total, align, paddingEnd);
     },
     pef: null as unknown as (element: HTMLElement, index: number) => void,
     at: itemConfig.template as ItemTemplate<T>,
@@ -372,6 +382,8 @@ function materialize<T extends VListItem = VListItem>(
     gcw: () => $.cw,
     gch: () => $.ch,
     gp: gap,
+    ps: paddingStart,
+    pe: paddingEnd,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -497,7 +509,7 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const positionElement = (element: HTMLElement, index: number): void => {
-    const offset = Math.round($.hc.getOffset(index));
+    const offset = Math.round($.hc.getOffset(index) + $.ps);
     if (isHorizontal) {
       element.style.transform = `translateX(${offset}px)`;
     } else {
