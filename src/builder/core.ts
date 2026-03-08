@@ -15,8 +15,6 @@ import type {
   VListEvents,
   ItemTemplate,
   ItemState,
-  EventHandler,
-  Unsubscribe,
   Range,
 } from "../types";
 
@@ -47,7 +45,6 @@ import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
-import { easeInOutQuad, resolveScrollArgs } from "./scroll";
 import { sortRenderedDOM } from "../rendering/sort";
 import {
   createMaterializeCtx,
@@ -55,6 +52,8 @@ import {
   createDefaultScrollProxy,
 } from "./materialize";
 import type { MRefs } from "./materialize";
+import { createMeasurement } from "./measurement";
+import { createApi } from "./api";
 import {
   OVERSCAN,
   CLASS_PREFIX,
@@ -352,7 +351,6 @@ function materialize<T extends VListItem = VListItem>(
   $.vtf = () => ($.dm ? $.dm.getTotal() : $.it.length);
 
   // Local-only mutable state (not needed by extracted factories)
-  let animationFrameId: number | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let isScrolling = false;
 
@@ -396,149 +394,34 @@ function materialize<T extends VListItem = VListItem>(
     );
   };
 
+  // ── Content size helper (needed by measurement + render) ────────
+
+  const updateContentSize = (): void => {
+    const size = `${$.hc.getTotalSize()}px`;
+    if (isHorizontal) {
+      dom.content.style.width = size;
+    } else {
+      dom.content.style.height = size;
+    }
+  };
+
   // ── Mode B: Measurement tracking ───────────────────────────────
-  // Maps observed elements back to their item index for ResizeObserver callback
-  const measuredElementToIndex = measurementEnabled
-    ? new WeakMap<Element, number>()
-    : null;
   const measuredCache = measurementEnabled
     ? (initialSizeCache as MeasuredSizeCache)
     : null;
 
-  // Item measurement ResizeObserver (Mode B only)
-  let itemResizeObserver: ResizeObserver | null = null;
+  const measurement = createMeasurement(
+    $,
+    dom,
+    isHorizontal,
+    visibleRange,
+    lastRenderRange,
+    () => isScrolling,
+    updateContentSize,
+    measuredCache,
+    measurementEnabled,
+  );
 
-  // Scroll correction accumulated within a single ResizeObserver batch,
-  // then applied immediately at the end of that batch (Direction C).
-  // Works for both vertical (scrollTop) and horizontal (scrollLeft).
-  let pendingScrollDelta = 0;
-  let pendingContentSizeUpdate = false;
-
-  /**
-   * Mode B: flush deferred content size update on scroll idle.
-   * Scroll correction is applied immediately in the ResizeObserver callback
-   * (Direction C) so only content size needs flushing here — this keeps the
-   * scrollbar stable during active scrolling while avoiding the glitch caused
-   * by large accumulated corrections on idle.
-   *
-   * Axis-neutral: works for both vertical and horizontal orientations.
-   */
-  const flushMeasurements = (): void => {
-    if (!measurementEnabled) return;
-
-    if (pendingContentSizeUpdate) {
-      // Check if user is at the scroll end before content size changes
-      // (bottom for vertical, right edge for horizontal)
-      const scroll = $.sgt();
-      const maxScroll = isHorizontal
-        ? dom.viewport.scrollWidth - dom.viewport.clientWidth
-        : dom.viewport.scrollHeight - dom.viewport.clientHeight;
-      const wasAtEnd = maxScroll > 0 && scroll >= maxScroll - 2;
-
-      updateContentSize();
-      pendingContentSizeUpdate = false;
-
-      // Stay at end: content grew but scroll position was clamped to old max
-      if (wasAtEnd) {
-        const newMax = Math.max(0, $.hc.getTotalSize() - (isHorizontal ? $.cw : $.ch));
-        if (newMax > scroll) {
-          $.sst(newMax);
-          $.ls = newMax;
-          $.rfn();
-        }
-      }
-    }
-  };
-
-  if (measurementEnabled && measuredCache && measuredElementToIndex) {
-    itemResizeObserver = new ResizeObserver((entries) => {
-      if ($.id) return;
-
-      let hasNewMeasurements = false;
-      const firstVisible = visibleRange.start;
-
-      for (const entry of entries) {
-        const index = measuredElementToIndex.get(entry.target);
-        if (index === undefined) continue;
-
-        const newSize = isHorizontal
-          ? entry.borderBoxSize[0]!.inlineSize
-          : entry.borderBoxSize[0]!.blockSize;
-
-        if (!measuredCache.isMeasured(index)) {
-          const oldSize = measuredCache.getSize(index);
-          measuredCache.setMeasuredSize(index, newSize);
-          hasNewMeasurements = true;
-
-          // Track scroll correction for above-viewport items
-          if (index < firstVisible && newSize !== oldSize) {
-            pendingScrollDelta += newSize - oldSize;
-          }
-
-          // Stop observing — size is now known
-          itemResizeObserver!.unobserve(entry.target as Element);
-
-          // Set explicit size on the element now that it's measured
-          const el = entry.target as HTMLElement;
-          if (isHorizontal) {
-            el.style.width = `${newSize}px`;
-          } else {
-            el.style.height = `${newSize}px`;
-          }
-        }
-      }
-
-      if (!hasNewMeasurements) return;
-
-      // Rebuild prefix sums so item positions are correct
-      measuredCache.rebuild($.vtf());
-      $.hc = measuredCache;
-
-      // Direction C: always apply scroll correction immediately.
-      // Per-batch corrections are small (one batch of items) and masked by
-      // the user's own scroll motion during active scrolling.  This avoids
-      // the glitch caused by accumulating a large delta and applying it all
-      // at once on scroll idle.
-      if (pendingScrollDelta !== 0) {
-        const currentScroll = $.sgt();
-        $.sst(currentScroll + pendingScrollDelta);
-        $.ls = currentScroll + pendingScrollDelta;
-        pendingScrollDelta = 0;
-      }
-
-      // Content size: defer during scrolling for scrollbar stability
-      // (changing content height while the user drags the scrollbar thumb
-      // causes the thumb proportions to shift under their finger).
-      if (isScrolling) {
-        pendingContentSizeUpdate = true;
-      } else {
-        // Check if user is at the scroll end before content size changes
-        // (bottom for vertical, right edge for horizontal)
-        const scrollBeforeResize = $.sgt();
-        const maxScrollBeforeResize = isHorizontal
-          ? dom.viewport.scrollWidth - dom.viewport.clientWidth
-          : dom.viewport.scrollHeight - dom.viewport.clientHeight;
-        const wasAtEnd = maxScrollBeforeResize > 0 && scrollBeforeResize >= maxScrollBeforeResize - 2;
-
-        updateContentSize();
-        pendingContentSizeUpdate = false;
-
-        // Stay at end: content grew but scroll position was clamped to old max
-        if (wasAtEnd) {
-          const newMax = Math.max(0, $.hc.getTotalSize() - (isHorizontal ? $.cw : $.ch));
-          if (newMax > scrollBeforeResize) {
-            $.sst(newMax);
-            $.ls = newMax;
-          }
-        }
-      }
-
-      // Reposition items with corrected prefix sums
-      lastRenderRange.start = -1;
-      lastRenderRange.end = -1;
-      $.rfn();
-    });
-  }
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
   const striped = itemConfig.striped === true;
@@ -605,7 +488,7 @@ function materialize<T extends VListItem = VListItem>(
     // measure the real content height. Measured items use their known size.
     const shouldConstrainSize =
       !measurementEnabled ||
-      (measuredCache && measuredCache.isMeasured(index));
+      (measurement.mc && measurement.mc.isMeasured(index));
 
     if (isHorizontal) {
       if (shouldConstrainSize) {
@@ -644,15 +527,6 @@ function materialize<T extends VListItem = VListItem>(
     applyTemplate(element, $.at(item, index, itemState));
     $.pef(element, index);
     return element;
-  };
-
-  const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalSize()}px`;
-    if (isHorizontal) {
-      dom.content.style.width = size;
-    } else {
-      dom.content.style.height = size;
-    }
   };
 
   // ── Main render function ────────────────────────────────────────
@@ -725,7 +599,7 @@ function materialize<T extends VListItem = VListItem>(
           // Mode B: unconstrain unmeasured items for ResizeObserver measurement
           const shouldConstrain =
             !measurementEnabled ||
-            (measuredCache && measuredCache.isMeasured(i));
+            (measurement.mc && measurement.mc.isMeasured(i));
           if (isHorizontal) {
             existing.style.width = shouldConstrain
               ? `${$.hc.getSize(i)}px`
@@ -795,14 +669,14 @@ function materialize<T extends VListItem = VListItem>(
     // updates and scroll correction until scroll idle for scrollbar stability.
     if (
       measurementEnabled &&
-      itemResizeObserver &&
-      measuredCache &&
-      measuredElementToIndex
+      measurement.ob &&
+      measurement.mc &&
+      measurement.ei
     ) {
       for (const { index, element } of newlyRenderedForMeasurement) {
-        if (!measuredCache.isMeasured(index)) {
-          measuredElementToIndex.set(element, index);
-          itemResizeObserver.observe(element);
+        if (!measurement.mc.isMeasured(index)) {
+          measurement.ei.set(element, index);
+          measurement.ob.observe(element);
         }
       }
     }
@@ -840,10 +714,35 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Scroll handling ─────────────────────────────────────────────
 
+  /** Shared scroll-idle callback — resets state, flushes measurements, notifies features. */
+  const onScrollIdle = (): void => {
+    dom.root.classList.remove(`${classPrefix}--scrolling`);
+    isScrolling = false;
+    $.vt.velocity = 0;
+    $.vt.sampleCount = 0;
+    emitter.emit("velocity:change", { velocity: 0, reliable: false });
+    measurement.fl();
+    sortDOMChildren();
+    for (let i = 0; i < idleHandlers.length; i++) idleHandlers[i]!();
+    emitter.emit("scroll:idle", { scrollPosition: $.ls });
+  };
+
+  const scheduleIdle = (): void => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(onScrollIdle, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+  };
+
   const onScrollFrame = (): void => {
     if ($.id) return;
 
     const scrollTop = $.sgt();
+
+    // Guard: skip when position hasn't changed. This prevents the native
+    // `scroll` event (fired after the wheel handler programmatically sets
+    // scrollTop) from doing redundant work — the wheel handler already
+    // called onScrollFrame directly with the new position.
+    if (scrollTop === $.ls && isScrolling) return;
+
     const direction: "up" | "down" = scrollTop >= $.ls ? "down" : "up";
 
     // Update velocity tracker
@@ -870,29 +769,7 @@ function materialize<T extends VListItem = VListItem>(
       afterScroll[i]!(scrollTop, direction);
     }
 
-    // Idle detection
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      dom.root.classList.remove(`${classPrefix}--scrolling`);
-      isScrolling = false;
-      // Reset velocity to 0 when idle
-      $.vt.velocity = 0;
-      $.vt.sampleCount = 0;
-      emitter.emit("velocity:change", {
-        velocity: 0,
-        reliable: false,
-      });
-      // Mode B: flush deferred content size + scroll correction
-      flushMeasurements();
-      // Accessibility: reorder DOM children to match logical order
-      // so screen readers encounter items in the correct sequence
-      sortDOMChildren();
-      // Feature idle handlers (e.g. grid/masonry DOM reorder)
-      for (let i = 0; i < idleHandlers.length; i++) {
-        idleHandlers[i]!();
-      }
-      emitter.emit("scroll:idle", { scrollPosition: $.ls });
-    }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+    scheduleIdle();
   };
 
   // Wheel handler (can be disabled via config)
@@ -906,7 +783,13 @@ function materialize<T extends VListItem = VListItem>(
   // This prevents blank areas during fast scrolling on desktop browsers
   // Skip on mobile to preserve native touch scrolling with momentum/bounce
   if (wheelEnabled && !isHorizontal && !isMobile) {
-    // Intercept wheel events and handle scroll manually
+    // Intercept wheel events for synchronous rendering — prevents blank
+    // areas during fast desktop scrolling. We preventDefault, compute the
+    // clamped position, set scrollTop, then call onScrollFrame directly so
+    // velocity tracking, event emission, afterScroll hooks, and idle
+    // scheduling all go through one code path. The guard in onScrollFrame
+    // skips the redundant native `scroll` event that fires after we set
+    // scrollTop programmatically.
     wheelHandler = (event: WheelEvent): void => {
       // When compression is active (withScale), the scale feature has its
       // own wheel handler that manages virtual scroll position with smooth
@@ -921,7 +804,6 @@ function materialize<T extends VListItem = VListItem>(
       // scrolling works. Only intercept predominantly-vertical gestures.
       const hasHorizontalOverflow = dom.viewport.scrollWidth > dom.viewport.clientWidth;
       if (hasHorizontalOverflow && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        // Pure horizontal gesture — let the browser scroll natively
         return;
       }
 
@@ -933,72 +815,19 @@ function materialize<T extends VListItem = VListItem>(
         dom.viewport.scrollLeft += event.deltaX;
       }
 
-      // Get current scroll position
       const currentScroll = $.sgt();
-      const delta = event.deltaY;
-
-      // Use the actual DOM scroll limit — this matches what the browser
-      // enforces for scrollTop, avoiding sub-pixel mismatches with
-      // $.hc.getTotalSize() when content size updates are pending.
       const maxScroll = dom.viewport.scrollHeight - dom.viewport.clientHeight;
+      const newScroll = Math.max(0, Math.min(currentScroll + event.deltaY, maxScroll));
 
-      // Calculate new scroll position
-      const newScroll = Math.max(
-        0,
-        Math.min(currentScroll + delta, maxScroll),
-      );
+      // Clamped at boundary — nothing moved, skip.
+      if (Math.abs(newScroll - currentScroll) < 1) return;
 
-      // When clamped at a boundary (top or bottom), the scroll position
-      // didn't actually change. Reset velocity immediately — the list
-      // isn't moving — and skip the full scroll cycle. Use 1px tolerance
-      // to handle sub-pixel rounding between our calculation and the
-      // browser's actual scroll limit.
-      if (Math.abs(newScroll - currentScroll) < 1) {
-        if ($.vt.velocity !== 0) {
-          $.vt.velocity = 0;
-          $.vt.sampleCount = 0;
-          emitter.emit("velocity:change", { velocity: 0, reliable: false });
-        }
-        return;
-      }
-
-      // Update scroll position
+      // Set scroll position then run onScrollFrame synchronously.
+      // onScrollFrame reads $.sgt() which returns the new scrollTop,
+      // computes direction from the delta vs $.ls, and handles everything:
+      // velocity, render, events, afterScroll, idle scheduling.
       $.sst(newScroll);
-
-      // Trigger scroll frame handler immediately (synchronous rendering)
-      $.ls = newScroll;
-      $.vt = updateVelocityTracker($.vt as any, newScroll);
-      $.rfn();
-
-      // Emit scroll event
-      const direction: "up" | "down" =
-        newScroll >= currentScroll ? "down" : "up";
-      emitter.emit("scroll", { scrollPosition: newScroll, direction });
-
-      // Update scrolling class
-      if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
-        dom.root.classList.add(`${classPrefix}--scrolling`);
-      }
-      isScrolling = true;
-
-      // Idle detection
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        dom.root.classList.remove(`${classPrefix}--scrolling`);
-        isScrolling = false;
-        $.vt.velocity = 0;
-        $.vt.sampleCount = 0;
-        emitter.emit("velocity:change", { velocity: 0, reliable: false });
-        // Mode B: flush deferred content size + scroll correction
-        flushMeasurements();
-        // Accessibility: reorder DOM children to match logical order
-        sortDOMChildren();
-        // Feature idle handlers (e.g. grid/masonry DOM reorder)
-        for (let i = 0; i < idleHandlers.length; i++) {
-          idleHandlers[i]!();
-        }
-        emitter.emit("scroll:idle", { scrollPosition: $.ls });
-      }, scrollCfg?.idleTimeout ?? SCROLL_IDLE_TIMEOUT);
+      onScrollFrame();
     };
     $.wh = wheelHandler;
     dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
@@ -1018,23 +847,20 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── Click & keydown handlers (delegate to features) ──────────────
 
+  /** Resolve the item under a mouse event, skipping group headers. */
+  const findClickTarget = (event: MouseEvent): { item: T; index: number } | null => {
+    const itemEl = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
+    if (!itemEl) return null;
+    const index = parseInt(itemEl.dataset.index ?? "-1", 10);
+    if (index < 0) return null;
+    const item = ($.dm?.getItem(index) ?? $.it[index]) as T | undefined;
+    if (!item || (item as any).__groupHeader) return null;
+    return { item, index };
+  };
+
   const handleClick = (event: MouseEvent): void => {
-    // Core: emit item:click
-    const target = event.target as HTMLElement;
-    const itemEl = target.closest("[data-index]") as HTMLElement | null;
-    if (itemEl) {
-      const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
-      if (layoutIndex >= 0) {
-        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
-        if (item) {
-          // Skip group headers
-          if ((item as any).__groupHeader) {
-            return;
-          }
-          emitter.emit("item:click", { item, index: layoutIndex, event });
-        }
-      }
-    }
+    const hit = findClickTarget(event);
+    if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event });
 
     for (let i = 0; i < clickHandlers.length; i++) {
       clickHandlers[i]!(event);
@@ -1042,22 +868,8 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const handleDblClick = (event: MouseEvent): void => {
-    // Core: emit item:dblclick
-    const target = event.target as HTMLElement;
-    const itemEl = target.closest("[data-index]") as HTMLElement | null;
-    if (itemEl) {
-      const layoutIndex = parseInt(itemEl.dataset.index ?? "-1", 10);
-      if (layoutIndex >= 0) {
-        const item = $.dm?.getItem(layoutIndex) ?? $.it[layoutIndex];
-        if (item) {
-          // Skip group headers
-          if ((item as any).__groupHeader) {
-            return;
-          }
-          emitter.emit("item:dblclick", { item, index: layoutIndex, event });
-        }
-      }
-    }
+    const hit = findClickTarget(event);
+    if (hit) emitter.emit("item:dblclick", { item: hit.item, index: hit.index, event });
   };
 
   const handleKeydown = (event: KeyboardEvent): void => {
@@ -1112,7 +924,7 @@ function materialize<T extends VListItem = VListItem>(
 
   // ── BuilderContext + proxies (extracted to materialize.ts) ───
 
-  const deps = {
+  const deps: import("./materialize").MDeps<T> = {
     dom,
     emitter,
     resolvedConfig,
@@ -1254,260 +1066,32 @@ function materialize<T extends VListItem = VListItem>(
     $.rfn();
   }
 
-  // ── Base data methods ───────────────────────────────────────────
+  // ── Assemble public API (extracted to api.ts) ───────────────────
 
-  const setItems = (newItems: T[]): void => {
-    ctx.dataManager.setItems(newItems, 0, newItems.length);
-  };
-
-  const appendItems = isReverse
-    ? (newItems: T[]): void => {
-        const wasAtBottom = $.sab(2);
-        const currentTotal = $.it.length;
-        ctx.dataManager.setItems(newItems, currentTotal);
-        if (wasAtBottom && $.it.length > 0) {
-          const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
-          $.sst(pos);
-          $.ls = pos;
-          $.rfn();
-        }
+  return createApi(
+    $,
+    dom,
+    emitter,
+    rendered,
+    pool,
+    methods,
+    sortedFeatures,
+    destroyHandlers,
+    ctx,
+    isReverse,
+    wrapEnabled,
+    handleClick,
+    handleDblClick,
+    handleKeydown,
+    onScrollFrame,
+    resizeObserver,
+    () => {
+      if (measurement.ob) {
+        measurement.ob.disconnect();
       }
-    : (newItems: T[]): void => {
-        const currentTotal = $.it.length;
-        ctx.dataManager.setItems(newItems, currentTotal);
-      };
-
-  const prependItems = isReverse
-    ? (newItems: T[]): void => {
-        const scrollTop = $.sgt();
-        const heightBefore = $.hc.getTotalSize();
-        const existingItems = [...$.it];
-        ctx.dataManager.clear();
-        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = $.hc.getTotalSize();
-        const delta = heightAfter - heightBefore;
-        if (delta > 0) {
-          $.sst(scrollTop + delta);
-          $.ls = scrollTop + delta;
-        }
-      }
-    : (newItems: T[]): void => {
-        const existingItems = [...$.it];
-        ctx.dataManager.clear();
-        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-      };
-
-  const updateItem = (index: number, updates: Partial<T>): void => {
-    ctx.dataManager.updateItem(index, updates);
-  };
-
-  const removeItem = (index: number): void => {
-    ctx.dataManager.removeItem(index);
-  };
-
-  const reload = async (): Promise<void> => {
-    if ((ctx.dataManager as any).reload) {
-      await (ctx.dataManager as any).reload();
-    }
-  };
-
-  // ── Base scroll methods ─────────────────────────────────────────
-
-  const cancelScroll = (): void => {
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-  };
-
-  const animateScroll = (from: number, to: number, duration: number): void => {
-    cancelScroll();
-    if (Math.abs(to - from) < 1) {
-      $.sst(to);
-      $.ls = to;
-      $.rfn();
-      return;
-    }
-    const start = performance.now();
-    const tick = (now: number): void => {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      const newPos = from + (to - from) * easeInOutQuad(t);
-      $.sst(newPos);
-      // Update lastScrollTop BEFORE rendering so range calculation uses correct value
-      $.ls = newPos;
-      // Ensure rendering happens on each frame during smooth scroll
-      $.rfn();
-      if (t < 1) animationFrameId = requestAnimationFrame(tick);
-      else animationFrameId = null;
-    };
-    animationFrameId = requestAnimationFrame(tick);
-  };
-
-  const scrollToIndex = (
-    index: number,
-    alignOrOptions?:
-      | "start"
-      | "center"
-      | "end"
-      | import("../types").ScrollToOptions,
-  ): void => {
-    const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
-    const total = $.vtf();
-
-    let idx = index;
-    if (wrapEnabled && total > 0) {
-      idx = ((idx % total) + total) % total;
-    }
-
-    const position = $.gsp(idx, $.hc, $.ch, total, align);
-
-    if (behavior === "smooth") {
-      animateScroll($.sgt(), position, duration);
-    } else {
-      cancelScroll();
-      $.sst(position);
-    }
-  };
-
-  // scrollToItem removed - use scrollToIndex instead
-  // Users can maintain their own id→index map if needed
-
-  const getScrollPosition = (): number => $.sgt();
-
-  // ── Event subscription ──────────────────────────────────────────
-
-  const on = <K extends keyof VListEvents<T>>(
-    event: K,
-    handler: EventHandler<VListEvents<T>[K]>,
-  ): Unsubscribe => {
-    return emitter.on(
-      event,
-      handler as EventHandler<VListEvents<T>[typeof event]>,
-    );
-  };
-
-  const off = <K extends keyof VListEvents<T>>(
-    event: K,
-    handler: EventHandler<VListEvents<T>[K]>,
-  ): void => {
-    emitter.off(event, handler as EventHandler<VListEvents<T>[typeof event]>);
-  };
-
-  // ── Destroy ─────────────────────────────────────────────────────
-
-  const destroy = (): void => {
-    if ($.id) return;
-    $.id = true;
-    ctx.state.isDestroyed = true;
-
-    dom.items.removeEventListener("click", handleClick);
-    dom.root.removeEventListener("keydown", handleKeydown);
-    $.st.removeEventListener("scroll", onScrollFrame);
-    resizeObserver.disconnect();
-    if (itemResizeObserver) {
-      itemResizeObserver.disconnect();
-      itemResizeObserver = null;
-    }
-
-    if ($.wh) {
-      dom.viewport.removeEventListener("wheel", $.wh);
-    }
-    if (idleTimer) clearTimeout(idleTimer);
-
-    for (let i = 0; i < destroyHandlers.length; i++) {
-      destroyHandlers[i]!();
-    }
-    for (const feature of sortedFeatures) {
-      if (feature.destroy) feature.destroy();
-    }
-
-    cancelScroll();
-
-    for (const [, element] of rendered) {
-      element.remove();
-      pool.release(element);
-    }
-    rendered.clear();
-    pool.clear();
-    emitter.emit("destroy", undefined);
-    emitter.clear();
-
-    dom.root.remove();
-  };
-
-  // ── Assemble public API ─────────────────────────────────────────
-
-  const api: VList<T> = {
-    get element() {
-      return dom.root;
     },
-    get items() {
-      // Check if a feature (e.g., groups) provides a custom items getter
-      if (methods.has("_getItems")) {
-        return (methods.get("_getItems") as any)();
-      }
-      return $.it as readonly T[];
+    () => {
+      if (idleTimer) clearTimeout(idleTimer);
     },
-    get total() {
-      // Check if a feature (e.g., groups) provides a custom total getter
-      if (methods.has("_getTotal")) {
-        return (methods.get("_getTotal") as any)();
-      }
-      return $.vtf();
-    },
-
-    setItems: methods.has("setItems")
-      ? (methods.get("setItems") as any)
-      : setItems,
-    appendItems: methods.has("appendItems")
-      ? (methods.get("appendItems") as any)
-      : appendItems,
-    prependItems: methods.has("prependItems")
-      ? (methods.get("prependItems") as any)
-      : prependItems,
-    updateItem: methods.has("updateItem")
-      ? (methods.get("updateItem") as any)
-      : updateItem,
-    removeItem: methods.has("removeItem")
-      ? (methods.get("removeItem") as any)
-      : removeItem,
-    reload: methods.has("reload") ? (methods.get("reload") as any) : reload,
-
-    scrollToIndex: methods.has("scrollToIndex")
-      ? (methods.get("scrollToIndex") as any)
-      : scrollToIndex,
-    cancelScroll: methods.has("cancelScroll")
-      ? (methods.get("cancelScroll") as any)
-      : cancelScroll,
-    getScrollPosition: methods.has("getScrollPosition")
-      ? (methods.get("getScrollPosition") as any)
-      : getScrollPosition,
-
-    on,
-    off,
-    destroy,
-  };
-
-  // Merge feature methods
-  for (const [name, fn] of methods) {
-    if (
-      name.charCodeAt(0) === 95 || // '_' — internal methods (e.g. _getSelectedIds)
-      name === "setItems" ||
-      name === "appendItems" ||
-      name === "prependItems" ||
-      name === "updateItem" ||
-      name === "removeItem" ||
-      name === "reload" ||
-      name === "scrollToIndex" ||
-      name === "scrollToItem" ||
-      name === "cancelScroll" ||
-      name === "getScrollPosition"
-    ) {
-      continue;
-    }
-    (api as any)[name] = fn;
-  }
-
-  return api;
+  );
 }
