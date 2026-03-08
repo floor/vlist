@@ -1,6 +1,17 @@
 vlist — full changelog
 initial commit → latest
-333 commits · 34 days · Feb 2 – Mar 7, 2026
+334 commits · 35 days · Feb 2 – Mar 8, 2026
+
+
+2026-03-08
+
+  refactor(builder): extract measurement and api modules from core.ts
+  refactor(builder): deduplicate idle handler, click/dblclick, stayAtEnd
+  fix(scroll): wheel handler now fires afterScroll hooks and velocity:change events
+  fix(scroll): prevent double-firing of scroll events during wheel scrolling
+  perf(builder): base bundle −0.5 KB minified (23.6 KB, 8.8 KB gzipped)
+
+  → v1.3.2
 
 
 2026-03-07
