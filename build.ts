@@ -46,6 +46,34 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
+  // Build internals bundle (low-level exports for advanced users)
+  const internalsStart = performance.now();
+
+  const internalsResult = await Bun.build({
+    entrypoints: ["./src/internals.ts"],
+    outdir: "./dist",
+    format: "esm",
+    target: "browser",
+    minify: !isDev,
+    sourcemap: isDev ? "inline" : "none",
+    naming: "internals.js",
+  });
+
+  if (!internalsResult.success) {
+    console.error("\nInternals build failed:\n");
+    for (const log of internalsResult.logs) {
+      console.error(log);
+    }
+    process.exit(1);
+  }
+
+  const internalsFile = Bun.file("./dist/internals.js");
+  const internalsSize = (internalsFile.size / 1024).toFixed(1);
+  const internalsTime = performance.now() - internalsStart;
+  console.log(
+    `  Internals   ${internalsTime.toFixed(0).padStart(6)}ms  dist/internals.js (${internalsSize} KB)`,
+  );
+
   // Generate type declarations (optional)
   if (withTypes) {
     const dtsStart = performance.now();
