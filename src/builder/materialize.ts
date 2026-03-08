@@ -149,6 +149,10 @@ export interface MRefs<T extends VListItem = VListItem> {
   gch: () => number;
   /** gap — item spacing along main axis (0 = none) */
   gp: number;
+  /** paddingStart — space before the first item along main axis (0 = none) */
+  ps: number;
+  /** paddingEnd — space after the last item along main axis (0 = none) */
+  pe: number;
 }
 
 // =============================================================================
@@ -393,13 +397,16 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     },
     setSizeConfig(newConfig: number | ((index: number) => number)): void {
       $.hc = createSizeCache(newConfig, $.vtf());
-      // Re-apply trailing gap fix when gap > 0 (cache was replaced)
-      if ($.gp > 0) {
+      // Re-apply trailing gap and padding fixes when cache is replaced
+      if ($.gp > 0 || $.ps > 0 || $.pe > 0) {
         const origGetTotalSize = $.hc.getTotalSize;
         const gap = $.gp;
+        const ps = $.ps;
+        const pe = $.pe;
         $.hc.getTotalSize = (): number => {
           const total = origGetTotalSize();
-          return total > 0 ? total - gap : 0;
+          if (total === 0) return 0;
+          return total - gap + ps + pe;
         };
       }
     },
