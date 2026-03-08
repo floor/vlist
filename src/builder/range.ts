@@ -70,19 +70,25 @@ export const calcScrollToPosition = (
   containerHeight: number,
   totalItems: number,
   align: "start" | "center" | "end",
+  mainAxisPadding: number = 0,
 ): number => {
   if (totalItems === 0) return 0;
   const clamped = Math.max(0, Math.min(index, totalItems - 1));
   const offset = hc.getOffset(clamped);
   const itemH = hc.getSize(clamped);
-  const maxScroll = Math.max(0, hc.getTotalSize() - containerHeight);
+  const totalSize = hc.getTotalSize();
+  const maxScroll = Math.max(0, totalSize + mainAxisPadding - containerHeight);
   let pos: number;
   switch (align) {
     case "center":
       pos = offset - (containerHeight - itemH) / 2;
       break;
     case "end":
-      pos = offset - containerHeight + itemH;
+      // When padding is active and this is the last item, snap to maxScroll
+      // so the end padding is fully visible.
+      pos = (mainAxisPadding > 0 && offset + itemH >= totalSize)
+        ? maxScroll
+        : offset - containerHeight + itemH;
       break;
     default:
       pos = offset;
