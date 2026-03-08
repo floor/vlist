@@ -34,6 +34,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./internals": {
+      "types": "./dist/internals.d.ts",
+      "import": "./dist/internals.js",
+      "default": "./dist/internals.js"
+    },
     "./styles": "./dist/vlist.css",
     "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
@@ -41,6 +46,7 @@
   },
   "files": [
     "dist/index.js",
+    "dist/internals.js",
     "dist/**/*.d.ts",
     "dist/**/*.css",
     "!dist/**/*.d.ts.map"
