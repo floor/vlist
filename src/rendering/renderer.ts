@@ -231,7 +231,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
     getState: CompressionStateFn;
     getPosition: CompressedPositionFn;
   },
-  striped?: boolean,
+  striped?: boolean | "data" | "even" | "odd",
+  stripeIndexFn?: () => (index: number) => number,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, TrackedItem>();
@@ -242,6 +243,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   // Frame counter for release grace period
   let frameCounter = 0;
+
+  // Cached stripe index function — resolved once per render frame, not per item
+  let cachedStripeFn: ((index: number) => number) | null = null;
 
   // Track aria-setsize to avoid redundant updates on existing items
   let lastAriaSetSize = "";
@@ -427,7 +431,16 @@ export const createRenderer = <T extends VListItem = VListItem>(
     }
 
     // Striped: toggle odd class based on logical index (not DOM order)
-    if (striped) element.classList.toggle(oddClass, (index & 1) === 1);
+    // String modes ("data"/"even"/"odd"): use cachedStripeFn to map layout index → stripe index
+    if (striped) {
+      if (cachedStripeFn) {
+        const si = cachedStripeFn(index);
+        if (si < 0) element.classList.remove(oddClass);
+        else element.classList.toggle(oddClass, (si & 1) === 1);
+      } else {
+        element.classList.toggle(oddClass, (index & 1) === 1);
+      }
+    }
 
     const offset = calculateOffset(index, compressionCtx);
     element.style.transform = horizontal
@@ -490,6 +503,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
         setSizeChanged = true;
       }
     }
+
+    // Resolve stripe function once per frame (not per item)
+    cachedStripeFn = (typeof striped === "string" && stripeIndexFn) ? stripeIndexFn() : null;
 
     // DocumentFragment for batched DOM insertion — only allocated when needed
     let fragment: DocumentFragment | null = null;
