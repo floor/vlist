@@ -865,6 +865,133 @@ describe("createDataManager", () => {
 
       expect(manager.getCached()).toBe(2);
     });
+
+    it("should eagerly analyze placeholder structure with adapter even before placeholders are requested", () => {
+      // Regression: when an adapter is present, setItems must analyze
+      // placeholder structure on the very first batch — BEFORE any
+      // placeholder has been generated. Previously the lazy-init guard
+      // (`placeholders` is null) caused the first batch to be skipped,
+      // so placeholders fell back to a generic single-field skeleton
+      // until a later setItems finally triggered analysis.
+      const adapter: VListAdapter = {
+        read: async () => ({ items: [], total: 0, hasMore: false }),
+      };
+      const manager = createDataManager({
+        adapter,
+        initialTotal: 100,
+      });
+
+      // Do NOT call getPlaceholders() — simulates the real scenario where
+      // the user hasn't scrolled into unloaded territory yet.
+      expect(manager.getPlaceholders().hasAnalyzedStructure()).toBe(false);
+
+      // First batch arrives (e.g. from loadInitial)
+      const items: VListItem[] = [
+        { id: 1, name: "Alice", type: "artist", country: "FRA" },
+        { id: 2, name: "Bob", type: "track", country: "USA" },
+      ];
+      manager.setItems(items, 0, 100);
+
+      // Structure must be analyzed now
+      expect(manager.getPlaceholders().hasAnalyzedStructure()).toBe(true);
+
+      // Placeholders generated AFTER setItems must use real field profiles
+      const placeholder = manager.getItem(50) as any;
+      expect(placeholder._isPlaceholder).toBe(true);
+      // Must have the same fields as real items (not the generic fallback)
+      expect(placeholder.name).toBeDefined();
+      expect(placeholder.type).toBeDefined();
+      expect(placeholder.country).toBeDefined();
+      // Must NOT have the fallback-only "label" field
+      expect(placeholder.label).toBeUndefined();
+    });
+
+    it("should not eagerly create placeholders without adapter (static lists)", () => {
+      // Static lists (no adapter) never need placeholders, so setItems
+      // should NOT eagerly create the placeholder manager.
+      const manager = createDataManager({
+        initialTotal: 100,
+      });
+
+      const items: VListItem[] = [
+        { id: 1, name: "Item 1" },
+        { id: 2, name: "Item 2" },
+      ];
+      manager.setItems(items, 0, 100);
+
+      // Placeholder manager should not have been analyzed (lazy path)
+      // We can't check if it was created without accessing it, but we
+      // can verify that accessing it now shows it was NOT analyzed
+      // (no adapter → the eager path in setItems is skipped).
+      // Note: getPlaceholders() force-creates it, but hasAnalyzedStructure
+      // should be false since setItems skipped analysis for non-adapter case.
+      expect(manager.getPlaceholders().hasAnalyzedStructure()).toBe(false);
+    });
+
+    it("should produce correct placeholders on first fast scroll with adapter", async () => {
+      // End-to-end regression: simulates the exact user scenario.
+      // 1. loadInitial loads items 0-24
+      // 2. User scrolls fast to index 500 (no data there yet)
+      // 3. getItem(500) must return a placeholder with real field structure
+      const allItems = Array.from({ length: 1000 }, (_, i) => ({
+        id: i,
+        name: `Track ${i}`,
+        artist: `Artist ${i}`,
+        duration: String(180 + i),
+      }));
+
+      const adapter = createMockAdapter(allItems);
+      const manager = createDataManager({
+        adapter,
+        initialTotal: 1000,
+        pageSize: 25,
+      });
+
+      // Step 1: load first page (simulates loadInitial)
+      // Note: loadInitial requests pageSize (25) but calculateMissingRanges
+      // aligns to chunk boundaries (default 100), so a full chunk is loaded.
+      await manager.loadInitial();
+      expect(manager.getCached()).toBe(100);
+
+      // Step 2: request item far from loaded range (simulates fast scroll)
+      const placeholder = manager.getItem(500) as any;
+      expect(placeholder._isPlaceholder).toBe(true);
+
+      // Step 3: placeholder must have real field structure, not fallback
+      expect(placeholder.name).toBeDefined();
+      expect(placeholder.artist).toBeDefined();
+      expect(placeholder.duration).toBeDefined();
+      expect(placeholder.label).toBeUndefined();
+    });
+
+    it("should produce correct placeholders in getItemsInRange after first load with adapter", async () => {
+      const allItems = Array.from({ length: 200 }, (_, i) => ({
+        id: i,
+        title: `Song ${i}`,
+        genre: "rock",
+      }));
+
+      const adapter = createMockAdapter(allItems);
+      const manager = createDataManager({
+        adapter,
+        initialTotal: 200,
+        pageSize: 25,
+      });
+
+      await manager.loadInitial();
+
+      // Request a range entirely outside loaded data
+      const items = manager.getItemsInRange(100, 110);
+
+      // All should be placeholders with correct structure
+      for (const item of items) {
+        const p = item as any;
+        expect(p._isPlaceholder).toBe(true);
+        expect(p.title).toBeDefined();
+        expect(p.genre).toBeDefined();
+        expect(p.label).toBeUndefined();
+      }
+    });
   });
 
   // ===========================================================================
