@@ -85,6 +85,51 @@
 }
 
 /* =============================================================================
+   Dark Mode — OS-level preference fallback
+   ============================================================================= */
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme-mode="light"]) {
+        --vlist-bg: #111827;
+        --vlist-bg-hover: #1f2937;
+        --vlist-bg-selected: rgba(59, 130, 246, 0.3);
+        --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
+        --vlist-border: #374151;
+        --vlist-border-selected: #3b82f6;
+        --vlist-text: #f9fafb;
+        --vlist-text-muted: #9ca3af;
+        --vlist-scrollbar-width: 8px;
+        --vlist-scrollbar-thumb: #4b5563;
+        --vlist-scrollbar-thumb-hover: #6b7280;
+        --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
+        --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+        --vlist-scrollbar-custom-thumb-radius: 4px;
+        --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+        --vlist-group-header-bg: #1e2433;
+    }
+}
+
+/* Dark Mode — .dark class override (Tailwind convention) */
+.dark {
+    --vlist-bg: #111827;
+    --vlist-bg-hover: #1f2937;
+    --vlist-bg-selected: rgba(59, 130, 246, 0.3);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
+    --vlist-border: #374151;
+    --vlist-border-selected: #3b82f6;
+    --vlist-text: #f9fafb;
+    --vlist-text-muted: #9ca3af;
+    --vlist-scrollbar-width: 8px;
+    --vlist-scrollbar-thumb: #4b5563;
+    --vlist-scrollbar-thumb-hover: #6b7280;
+    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-custom-thumb-radius: 4px;
+    --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+    --vlist-group-header-bg: #1e2433;
+}
+
+/* =============================================================================
    Base Component Styles
    ============================================================================= */
 
@@ -96,9 +141,22 @@
     overflow: hidden;
     background-color: var(--vlist-bg);
     color: var(--vlist-text);
+    color-scheme: light;
     border: 1px solid var(--vlist-border);
     border-radius: var(--vlist-border-radius);
     outline: none;
+}
+
+/* Inform the browser of dark color-scheme for native UI (scrollbars, etc.) */
+[data-theme-mode="dark"] .vlist,
+.dark .vlist {
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme-mode="light"]) .vlist {
+        color-scheme: dark;
+    }
 }
 
 /* Focus state - only show for keyboard navigation */
@@ -324,16 +382,7 @@
     contain: content;
 }
 
-/* Dark mode group header colors */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --vlist-group-header-bg: #1e2433;
-    }
-}
-
-.dark {
-    --vlist-group-header-bg: #1e2433;
-}
+/* Dark mode group header colors — handled in the consolidated dark mode blocks above */
 
 /* Suppress transitions on sticky header during scroll */
 .vlist--scrolling .vlist-sticky-header {
