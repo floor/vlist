@@ -1,6 +1,16 @@
 vlist — full changelog
 initial commit → latest
-338 commits · 35 days · Feb 2 – Mar 8, 2026
+376 commits · 36 days · Feb 2 – Mar 9, 2026
+
+
+2026-03-09
+
+  feat(styles): add consolidated dark mode support with prefers-color-scheme, .dark class, and color-scheme
+  feat(striped): add "data", "even", "odd" modes for group-aware striping
+  feat(export): clean up
+  perf(builder): base bundle 96.6 KB minified (31.8 KB gzipped)
+
+  → v1.3.4
 
 
 2026-03-08
