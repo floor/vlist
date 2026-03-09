@@ -380,13 +380,19 @@ export const createDataManager = <T extends VListItem = VListItem>(
   };
 
   const setItems = (items: T[], offset: number = 0, total?: number): void => {
-    // Analyze structure for placeholders from first batch (only if placeholders already created)
-    if (
-      placeholders &&
-      !placeholders.hasAnalyzedStructure() &&
-      items.length > 0
-    ) {
-      placeholders.analyzeStructure(items);
+    // Analyze structure for placeholders from first batch.
+    // Use getOrCreatePlaceholders() so the profile is captured eagerly —
+    // before the user scrolls fast into unloaded territory. Without this,
+    // the lazy-init guard (`placeholders` is null) causes the first batch
+    // to be missed, and placeholders fall back to a generic single-field
+    // skeleton until a later setItems finally triggers analysis.
+    // Only do this when an adapter exists (async loading); static lists
+    // never generate placeholders so we keep the lazy path for them.
+    if (adapter && items.length > 0) {
+      const pm = getOrCreatePlaceholders();
+      if (!pm.hasAnalyzedStructure()) {
+        pm.analyzeStructure(items);
+      }
     }
 
     // Store items
@@ -418,9 +424,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
       hasMore = false;
     }
 
-    // Notify
-    onItemsLoaded?.(items, offset, storage.getTotal());
+    // Notify — state change MUST fire before onItemsLoaded so that
+    // the size cache is rebuilt (via onStateChange → sizeCache.rebuild)
+    // before onItemsLoaded triggers a forced render. Without this order
+    // the render sees sizeCache.totalSize=0 and only shows a few rows.
     notifyStateChange();
+    onItemsLoaded?.(items, offset, storage.getTotal());
   };
 
   const updateItem = (id: string | number, updates: Partial<T>): boolean => {
