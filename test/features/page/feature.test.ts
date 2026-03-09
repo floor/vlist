@@ -257,6 +257,8 @@ function createMockContext(
     disableViewportResize: disableViewportResize as any,
     disableWheelHandler: disableWheelHandler as any,
     adjustScrollPosition: (pos: number) => pos,
+    getStripeIndexFn: () => (index: number) => index,
+    setStripeIndexFn: () => {},
   };
 
   return ctx;
