@@ -285,6 +285,8 @@ function createMockContext(
     disableViewportResize: mock(() => {}),
     disableWheelHandler: mock(() => {}),
     adjustScrollPosition: (pos: number) => pos,
+    getStripeIndexFn: () => (index: number) => index,
+    setStripeIndexFn: () => {},
   };
 
   // Attach test helpers

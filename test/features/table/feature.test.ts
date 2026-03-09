@@ -245,6 +245,8 @@ function createMockContext(overrides?: {
     disableViewportResize: () => {},
     disableWheelHandler: () => {},
     adjustScrollPosition: (pos: number) => pos,
+    getStripeIndexFn: () => (index: number) => index,
+    setStripeIndexFn: () => {},
   };
 
   // Attach emitted array for test assertions

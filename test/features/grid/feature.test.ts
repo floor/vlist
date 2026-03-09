@@ -221,6 +221,8 @@ function createMockContext(): BuilderContext<TestItem> {
     disableViewportResize: () => {},
     disableWheelHandler: () => {},
     adjustScrollPosition: (pos: number) => pos,
+    getStripeIndexFn: () => (index: number) => index,
+    setStripeIndexFn: () => {},
   };
 
   return ctx;

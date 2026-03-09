@@ -106,6 +106,7 @@ function createTestRefs(): MRefs<TestItem> {
     wh: null,
     gp: 0,
     mp: 0,
+    sif: (index: number) => index,
   };
 }
 
