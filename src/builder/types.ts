@@ -404,6 +404,22 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * window scrolling instead of manual scroll position updates.
    */
   disableWheelHandler(): void;
+
+  /**
+   * Get the current stripe-index function.
+   * Maps a layout index to the index used for even/odd striping.
+   * Default: identity (returns the index as-is).
+   * When groups override this, group headers return -1 (skip striping)
+   * and data items return a contiguous data-only index.
+   */
+  getStripeIndexFn(): (index: number) => number;
+
+  /**
+   * Replace the stripe-index function.
+   * Used by the groups feature when `striped: "data"` to exclude
+   * group headers from the even/odd alternation.
+   */
+  setStripeIndexFn(fn: (index: number) => number): void;
 }
 
 // =============================================================================
