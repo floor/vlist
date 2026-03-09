@@ -1,9 +1,15 @@
 vlist — full changelog
 initial commit → latest
-376 commits · 36 days · Feb 2 – Mar 9, 2026
+378 commits · 36 days · Feb 2 – Mar 9, 2026
 
 
 2026-03-09
+
+  fix(table): account for cross-axis padding in column width resolution
+  fix(async): eagerly analyze placeholder structure on first setItems with adapter
+  perf(builder): base bundle 96.7 KB minified (31.9 KB gzipped)
+
+  → v1.3.5
 
   feat(styles): add consolidated dark mode support with prefers-color-scheme, .dark class, and color-scheme
   feat(striped): add "data", "even", "odd" modes for group-aware striping
