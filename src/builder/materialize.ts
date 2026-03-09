@@ -151,6 +151,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   gp: number;
   /** mainAxisPadding — sum of CSS padding along scroll axis (0 = none) */
   mp: number;
+  /** stripeIndexFn — maps layout index to stripe index (-1 = skip) */
+  sif: (index: number) => number;
 }
 
 // =============================================================================
@@ -508,6 +510,14 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
         dom.viewport.removeEventListener("wheel", $.wh);
         $.wh = null;
       }
+    },
+
+    getStripeIndexFn(): (index: number) => number {
+      return $.sif;
+    },
+
+    setStripeIndexFn(fn: (index: number) => number): void {
+      $.sif = fn;
     },
   };
 };

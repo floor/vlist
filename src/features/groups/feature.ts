@@ -274,6 +274,33 @@ export const withGroups = <T extends VListItem = VListItem>(
         stickyHeader.update(ctx.scrollController.getScrollTop());
       }
 
+      // ── Helper: rebuild stripe index map ──
+      const stripedMode = rawConfig.item?.striped;
+      const rebuildStripeMap = (): void => {
+        if (stripedMode !== "data" && stripedMode !== "even" && stripedMode !== "odd") return;
+        const stripeMap = new Int32Array(layoutItems.length);
+        const offset = stripedMode === "odd" ? 1 : 0;
+        let dataIndex = 0;
+        for (let i = 0; i < layoutItems.length; i++) {
+          if (isGroupHeader(layoutItems[i])) {
+            stripeMap[i] = -1;
+            // "even" and "odd" reset the counter after each header
+            if (stripedMode === "even" || stripedMode === "odd") {
+              dataIndex = 0;
+            }
+          } else {
+            stripeMap[i] = dataIndex++ + offset;
+          }
+        }
+        ctx.setStripeIndexFn((index: number): number => {
+          if (index < 0 || index >= stripeMap.length) return index;
+          return stripeMap[index] as number;
+        });
+      };
+
+      // Initial stripe map build
+      rebuildStripeMap();
+
       // ── Helper: rebuild groups after data changes ──
       const rebuildGroups = (): void => {
         if (!groupLayout) return;
@@ -287,6 +314,9 @@ export const withGroups = <T extends VListItem = VListItem>(
 
         // Update data manager with new layout items
         ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
+
+        // Rebuild stripe map after layout changes
+        rebuildStripeMap();
 
         // Refresh sticky header content
         if (stickyHeader) {
