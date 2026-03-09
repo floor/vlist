@@ -36,6 +36,7 @@ import { withScale } from "../../src/features/scale/feature";
 import { withSnapshots } from "../../src/features/snapshots/feature";
 import { withGrid } from "../../src/features/grid/feature";
 import { withGroups } from "../../src/features/groups/feature";
+import { withTable } from "../../src/features/table/feature";
 import { isGroupHeader } from "../../src/features/groups";
 
 // =============================================================================
@@ -2451,5 +2452,138 @@ describe("integration — concurrent operations", () => {
 
     const selected = (list as any).getSelected();
     expect(selected.length).toBe(3);
+  });
+});
+
+// =============================================================================
+// Async + Table Combined
+// =============================================================================
+
+describe("integration — async + table", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem>;
+
+  const tableColumns = [
+    { key: "name", label: "Name", width: 150 },
+    { key: "value", label: "Value", width: 100, align: "right" as const },
+  ];
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) list.destroy();
+    container.remove();
+  });
+
+  it("should render all visible rows after async data loads", async () => {
+    // This is the exact bug that was fixed: withAsync + withTable initially
+    // showed only ~4 rows because onItemsLoaded triggered forceRender before
+    // onStateChange rebuilt the size cache — so sizeCache.totalSize was 0
+    // and the visible range calculation produced [0..0] + overscan = [0..3].
+    const adapter = createMockAdapter(500);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 40, headerHeight: 40 }))
+      .build();
+
+    await flush();
+
+    // Container is 500px, header is 40px, so viewport is 460px.
+    // At 40px per row, we expect ~12 visible rows + overscan (3) = ~15.
+    // With the bug, only 4 rows were rendered.
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(8);
+  });
+
+  it("should set content height to match total items after load", async () => {
+    const adapter = createMockAdapter(1000);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 50, headerHeight: 40 }))
+      .build();
+
+    await flush();
+
+    // Content height should be total * rowHeight = 1000 * 50 = 50000
+    const content = list.element.querySelector(".vlist-content") as HTMLElement;
+    expect(content).not.toBeNull();
+    const height = parseInt(content.style.height, 10);
+    expect(height).toBe(50000);
+  });
+
+  it("should render correct range after reload", async () => {
+    const adapter = createMockAdapter(200);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 40, headerHeight: 40 }))
+      .build();
+
+    await flush();
+
+    const indicesBefore = getRenderedIndices(list);
+    expect(indicesBefore.length).toBeGreaterThan(8);
+
+    await list.reload();
+    await flush();
+
+    const indicesAfter = getRenderedIndices(list);
+    expect(indicesAfter.length).toBeGreaterThan(8);
+  });
+
+  it("should emit range:change with correct count after async load", async () => {
+    const adapter = createMockAdapter(500);
+    let lastRange: { start: number; end: number } | null = null;
+
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 40, headerHeight: 40 }))
+      .build();
+
+    list.on("range:change", ({ range }: any) => {
+      lastRange = range;
+    });
+
+    await flush();
+
+    expect(lastRange).not.toBeNull();
+    // The range should cover significantly more than 4 rows
+    const count = lastRange!.end - lastRange!.start + 1;
+    expect(count).toBeGreaterThan(8);
+  });
+
+  it("should work with async + table + selection combined", async () => {
+    const adapter = createMockAdapter(200);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 40, headerHeight: 40 }))
+      .use(withSelection({ mode: "single" }))
+      .build();
+
+    await flush();
+
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(8);
+
+    // Selection should work on loaded items
+    (list as any).select(1);
+    const selected = (list as any).getSelected();
+    expect(selected.length).toBe(1);
   });
 });
