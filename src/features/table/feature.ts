@@ -33,6 +33,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding, crossAxisPaddingFrom } from "../../utils/padding";
 
 import { createTableLayout } from "./layout";
 import { createTableHeader } from "./header";
@@ -145,6 +146,9 @@ export const withTable = <T extends VListItem = VListItem>(
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 
+      // ── Resolve cross-axis padding from config ──
+      const crossAxisPadding = crossAxisPaddingFrom(resolvePadding(ctx.rawConfig.padding), false);
+
       // Header height: explicit, or fixed rowHeight, or default 40
       const headerHeight = config.headerHeight ??
         (typeof rowHeight === "number" ? rowHeight : 40);
@@ -212,7 +216,7 @@ export const withTable = <T extends VListItem = VListItem>(
       dom.viewport.removeAttribute("tabindex");
 
       // ── Resolve initial column widths ──
-      const containerWidth = ctx.getContainerWidth();
+      const containerWidth = ctx.getContainerWidth() - crossAxisPadding;
       tableLayout.resolve(containerWidth);
 
       // ── Create table header ──
@@ -331,6 +335,7 @@ export const withTable = <T extends VListItem = VListItem>(
       // all downstream work (range calc, renderer diffing) is skipped.
       let lastScrollPosition = -1;
       let lastContainerSize = -1;
+      let lastTotalItems = -1;
       let forceNextRender = true; // first render must always run
 
       // ── Precomputed overscan value ──
@@ -350,20 +355,24 @@ export const withTable = <T extends VListItem = VListItem>(
         const scrollTop = ctx.scrollController.getScrollTop();
         const containerHeight = ctx.state.viewportState.containerSize;
 
+        // Total items (tables are 1:1 rows to items, unlike grid)
+        const totalItems = ctx.getVirtualTotal();
+
         // ── Early exit: skip all work when nothing changed ──
+        // Must check totalItems too — when async data arrives the total
+        // jumps from 0 → N while scroll and container stay the same.
         if (
           !forceNextRender &&
           scrollTop === lastScrollPosition &&
-          containerHeight === lastContainerSize
+          containerHeight === lastContainerSize &&
+          totalItems === lastTotalItems
         ) {
           return;
         }
         lastScrollPosition = scrollTop;
         lastContainerSize = containerHeight;
+        lastTotalItems = totalItems;
         forceNextRender = false;
-
-        // Total items (tables are 1:1 rows to items, unlike grid)
-        const totalItems = ctx.getVirtualTotal();
 
         // Update aria-rowcount when item count changes (+1 for header row)
         const ariaRowCount = totalItems + 1;
@@ -487,7 +496,7 @@ export const withTable = <T extends VListItem = VListItem>(
       ctx.resizeHandlers.push((width: number, _height: number): void => {
         if (!tableLayout) return;
 
-        tableLayout.resolve(width);
+        tableLayout.resolve(width - crossAxisPadding);
 
         // Update header
         if (tableHeader) {
@@ -513,7 +522,7 @@ export const withTable = <T extends VListItem = VListItem>(
 
         // Update layout
         tableLayout.updateColumns(columns);
-        tableLayout.resolve(ctx.getContainerWidth());
+        tableLayout.resolve(ctx.getContainerWidth() - crossAxisPadding);
 
         // Rebuild header
         tableHeader.rebuild(tableLayout);
