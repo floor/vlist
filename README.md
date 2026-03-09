@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.3** — [Changelog](./changelog.txt)
+**v1.3.4** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~9.3 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~9.4 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -89,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 9.3 KB | Core virtualization, gap & padding |
+| **Base** | 9.4 KB | Core virtualization, gap & padding |
 | `withGrid()` | +4.0 KB | 2D grid layout with context injection |
 | `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
-| `withGroups()` | +4.2 KB | Grouped lists with sticky/inline headers |
+| `withGroups()` | +4.3 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.0 KB | Lazy loading with adapters |
 | `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +4.9 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +5.0 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
@@ -223,7 +223,7 @@ const list = vlist({
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
 | **Variable heights** | `item: { height: (index) => heights[index] }` |
-| **Zebra striping** | `item: { striped: true }` + `.vlist-item--odd { background: #fafafb }` |
+| **Zebra striping** | `item: { striped: true }` or `striped: 'even'` / `'odd'` / `'data'` (group-aware) |
 
 See **[vlist.dev](https://vlist.dev)** for live demos of each.
 
@@ -366,6 +366,18 @@ import '@floor/vlist/styles/extras'    // optional enhancements
 
 Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--selected`, `.vlist-scrollbar` selectors. See [vlist.dev](https://vlist.dev) for theming examples.
 
+### Dark Mode
+
+Dark mode is supported out of the box via three mechanisms (no extra imports needed):
+
+| Method | How it works |
+|--------|-------------|
+| **OS preference** | `prefers-color-scheme: dark` — automatic |
+| **Tailwind `.dark` class** | Add `.dark` to any ancestor element |
+| **`data-theme-mode`** | Set `data-theme-mode="dark"` on `<html>` for explicit control |
+
+To force light mode when `prefers-color-scheme` would otherwise activate dark, set `data-theme-mode="light"` on the root element. All dark mode CSS variables and `color-scheme` declarations are handled automatically.
+
 ## Architecture
 
 ### Dimension-Agnostic Design (v0.9.0)
@@ -393,11 +405,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 9.3 KB |
+| Base only | 9.4 KB |
 | + Grid | 13.3 KB |
-| + Groups | 13.4 KB |
-| + Async | 13.3 KB |
-| + Table | 14.2 KB |
+| + Groups | 13.7 KB |
+| + Async | 13.4 KB |
+| + Table | 14.3 KB |
 
 ### Memory Efficiency
 
@@ -448,7 +460,7 @@ const list: VList<Photo> = vlist<Photo>({
 ## Contributing
 
 1. Fork → branch → make changes → add tests → pull request
-2. Run `bun test` (2781 tests) and `bun run build` before submitting
+2. Run `bun test` and `bun run build` before submitting
 
 ## License
 

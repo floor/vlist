@@ -197,13 +197,17 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   classPrefix: string,
   ariaIdPrefix: string,
   getTotalItems: () => number,
-  striped?: boolean,
+  striped?: boolean | "data" | "even" | "odd",
+  stripeIndexFn?: () => (index: number) => number,
 ): TableRendererInstance<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedRow>();
 
   let lastAriaSetSize = -1;
   let currentLayout = layout;
+
+  // Cached stripe index function — resolved once per render frame, not per row
+  let cachedStripeFn: ((index: number) => number) | null = null;
 
   // ── Group header support ──
   // When groups are active, the renderer needs to handle group header
@@ -280,7 +284,14 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     let className = rowClass;
-    if (striped && (index & 1) === 1) className += ` ${oddClass}`;
+    if (striped) {
+      if (cachedStripeFn) {
+        const si = cachedStripeFn(index);
+        if (si >= 0 && (si & 1) === 1) className += ` ${oddClass}`;
+      } else if ((index & 1) === 1) {
+        className += ` ${oddClass}`;
+      }
+    }
     if (isSelected) className += ` ${selectedClass}`;
     if (isFocused) className += ` ${focusedClass}`;
     element.className = className;
@@ -527,8 +538,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     // DocumentFragment for batched DOM insertion of new elements
     let fragment: DocumentFragment | null = null;
 
-    // Resolve size cache once per frame (not per item)
+    // Resolve size cache and stripe function once per frame (not per item)
     const sc = getSizeCache();
+    cachedStripeFn = (typeof striped === "string" && stripeIndexFn) ? stripeIndexFn() : null;
 
     // Render each item in range
     for (let i = range.start; i <= range.end; i++) {
