@@ -190,9 +190,17 @@ export interface ItemConfig<T extends VListItem = VListItem> {
    * .vlist-item--odd { background: #fafafb; }
    * ```
    *
+   * - `true` — all items (including group headers) count for even/odd.
+   * - `"data"` — only data items count; group headers are excluded from
+   *   the stripe index so they don't shift the alternating pattern.
+   * - `"even"` — counter resets after each group header; first data row
+   *   in every group is even (non-striped). macOS Finder behavior.
+   * - `"odd"` — counter resets after each group header; first data row
+   *   in every group is odd (striped).
+   *
    * Default: `false` (no extra work on the render hot path).
    */
-  striped?: boolean;
+  striped?: boolean | "data" | "even" | "odd";
 
   /**
    * Gap between items in pixels along the main axis (default: 0).

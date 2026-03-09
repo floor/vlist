@@ -388,6 +388,7 @@ function materialize<T extends VListItem = VListItem>(
     gch: () => $.ch,
     gp: gap,
     mp: mainAxisPadding,
+    sif: (index: number) => index,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -468,7 +469,9 @@ function materialize<T extends VListItem = VListItem>(
 
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
-  const striped = itemConfig.striped === true;
+  const stripedMode = itemConfig.striped;
+  const striped = !!stripedMode;
+  const stripedFn = stripedMode === "data" || stripedMode === "even" || stripedMode === "odd";
   const oddClass = `${classPrefix}-item--odd`;
 
   // No ID → index map (removed for memory efficiency)
@@ -566,7 +569,16 @@ function materialize<T extends VListItem = VListItem>(
     }
 
     // Striped: toggle odd class based on logical index (not DOM order)
-    if (striped) element.classList.toggle(oddClass, (index & 1) === 1);
+    // String modes ("data"/"even"/"odd"): use $.sif to map layout index → stripe index
+    if (striped) {
+      if (stripedFn) {
+        const si = $.sif(index);
+        if (si < 0) element.classList.remove(oddClass);
+        else element.classList.toggle(oddClass, (si & 1) === 1);
+      } else {
+        element.classList.toggle(oddClass, (index & 1) === 1);
+      }
+    }
 
     applyTemplate(element, $.at(item, index, itemState));
     $.pef(element, index);

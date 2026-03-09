@@ -95,6 +95,11 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   // ── Public method registration ────────────────────────────────
   const methods: Map<string, Function> = new Map();
 
+  // ── Stripe index function (for data-only striping) ────────────
+  // Default: identity (index as-is). Groups feature overrides this
+  // when striped: "data" to skip group headers from even/odd count.
+  let stripeIndexFn: (index: number) => number = (index) => index;
+
   // ── Helpers ───────────────────────────────────────────────────
 
   const getVirtualTotal = (): number => virtualTotalFn();
@@ -248,6 +253,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       undefined,
       undefined,
       rawConfig.item?.striped,
+      () => stripeIndexFn,
     );
     renderer = newRenderer;
   };
@@ -393,6 +399,10 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     adjustScrollPosition: (pos: number) => pos,
     invalidateRendered: () => {
       // Stub - not used in simplified context
+    },
+    getStripeIndexFn: () => stripeIndexFn,
+    setStripeIndexFn: (fn: (index: number) => number) => {
+      stripeIndexFn = fn;
     },
   };
 
