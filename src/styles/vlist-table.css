@@ -327,6 +327,36 @@
     background-color: var(--vlist-bg, #111827);
 }
 
+/* =============================================================================
+   Placeholder Rows
+   ============================================================================= */
+
+/* Hide text — all placeholder cells have child elements (renderer wraps bare text) */
+.vlist-table-row.vlist-item--placeholder .vlist-table-cell {
+    color: transparent;
+}
+
+/* Direct children become skeleton bars sized to their natural content width */
+.vlist-table-row.vlist-item--placeholder .vlist-table-cell > * {
+    color: transparent;
+    background-color: var(--vlist-border, #e5e7eb);
+    border-radius: 4px;
+    animation: vlist-placeholder-pulse 2s ease-in-out infinite;
+    line-height: 1;
+    min-width: 1em;
+}
+
+/* Nested children (e.g. spans inside a wrapper div) — invisible so only parent bar shows */
+.vlist-table-row.vlist-item--placeholder .vlist-table-cell > * > * {
+    visibility: hidden;
+}
+
+/* Override inline styles on badges/pills so skeleton color wins */
+.vlist-table-row.vlist-item--placeholder .vlist-table-cell > *[style] {
+    background: var(--vlist-border, #e5e7eb) !important;
+    color: transparent !important;
+}
+
 [data-theme-mode="dark"] .vlist--table-row-borders .vlist-table-group-header {
     border-top-color: var(--vlist-border, #374151);
 }
