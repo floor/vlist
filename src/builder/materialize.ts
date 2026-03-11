@@ -625,7 +625,8 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       }
       return true;
     },
-    removeItem: (index: number) => {
+    removeItem: (id: string | number) => {
+      const index = typeof id === "number" ? id : $.it.findIndex((item: any) => item.id === id);
       if (index < 0 || index >= $.it.length) return false;
       $.it.splice(index, 1);
       if ($.ii) syncAfterChange();

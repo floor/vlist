@@ -244,6 +244,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const cellCenterClass = `${classPrefix}-table-cell--center`;
   const cellRightClass = `${classPrefix}-table-cell--right`;
   const oddClass = `${classPrefix}-item--odd`;
+  const placeholderClass = `${classPrefix}-item--placeholder`;
+  const replacedClass = `${classPrefix}-item--replaced`;
   const groupHeaderRowClass = `${classPrefix}-item ${classPrefix}-table-row ${classPrefix}-table-group-header`;
   const groupHeaderContentClass = `${classPrefix}-table-group-header-content`;
 
@@ -259,6 +261,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     item: T,
     col: ResolvedColumn<T>,
     rowIndex: number,
+    isPlaceholder: boolean = false,
   ): void => {
     if (col.def.cell) {
       const result = col.def.cell(item, col.def, rowIndex);
@@ -270,7 +273,14 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     } else {
       // Default: show item[column.key] as text
       const value = (item as Record<string, unknown>)[col.def.key];
-      cell.textContent = value != null ? String(value) : "";
+      const text = value != null ? String(value) : "";
+      if (isPlaceholder && text) {
+        // Wrap in <span> so CSS skeleton styling can target the element
+        // (bare text nodes can't be styled with background/border-radius)
+        cell.innerHTML = `<span>${text}</span>`;
+      } else {
+        cell.textContent = text;
+      }
     }
   };
 
@@ -282,6 +292,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     index: number,
     isSelected: boolean,
     isFocused: boolean,
+    isPlaceholder: boolean = false,
   ): void => {
     let className = rowClass;
     if (striped) {
@@ -292,6 +303,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
         className += ` ${oddClass}`;
       }
     }
+    if (isPlaceholder) className += ` ${placeholderClass}`;
     if (isSelected) className += ` ${selectedClass}`;
     if (isFocused) className += ` ${focusedClass}`;
     element.className = className;
@@ -441,7 +453,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     element.style.height = `${height}px`;
 
     // Apply classes
-    applyRowClasses(element, index, isSelected, isFocused);
+    const isPlaceholder = String(item.id).startsWith("__placeholder_");
+    applyRowClasses(element, index, isSelected, isFocused, isPlaceholder);
 
     // ARIA attributes
     element.setAttribute("role", "row");
@@ -475,7 +488,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       applyCellAlign(cell, col);
 
       // Content
-      applyCellTemplate(cell, item, col, index);
+      applyCellTemplate(cell, item, col, index, isPlaceholder);
     }
 
     // Position row via translateY from size cache
@@ -613,19 +626,32 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
           if (idChanged) {
             // Different item at this index — full re-render of cells
+            const wasPlaceholder = existing.lastItemId != null && String(existing.lastItemId).startsWith("__placeholder_");
+            const isPlaceholder = String(item.id).startsWith("__placeholder_");
+
             const cols = currentLayout.columns;
             for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
-              applyCellTemplate(existing.cells[c]!, item, cols[c]!, i);
+              applyCellTemplate(existing.cells[c]!, item, cols[c]!, i, isPlaceholder);
             }
-            applyRowClasses(existing.element, i, isSelected, isFocused);
+            applyRowClasses(existing.element, i, isSelected, isFocused, isPlaceholder);
             existing.element.setAttribute("data-id", String(item.id));
             setAriaSelected(existing.element, isSelected);
+
+            // Fade-in animation when placeholder is replaced with real data
+            if (wasPlaceholder && !isPlaceholder) {
+              existing.element.classList.add(replacedClass);
+              setTimeout(() => {
+                existing.element.classList.remove(replacedClass);
+              }, 300);
+            }
+
             existing.lastItemId = item.id;
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
           } else if (selectedChanged || focusedChanged) {
             // Same item — only update classes/aria if state changed
-            applyRowClasses(existing.element, i, isSelected, isFocused);
+            const isPlaceholder = String(item.id).startsWith("__placeholder_");
+            applyRowClasses(existing.element, i, isSelected, isFocused, isPlaceholder);
             setAriaSelected(existing.element, isSelected);
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
