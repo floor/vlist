@@ -1902,7 +1902,9 @@ describe("data/manager — updateItem when storage entry is missing (L414)", () 
     expect(typeof result).toBe("boolean");
   });
 
-  it("should return false when storage entry is directly deleted but idToIndex is stale (L414)", async () => {
+  it("should return false when storage entry is evicted but idToIndex is stale (L414)", async () => {
+    // Clear storage directly to create the inconsistency:
+    // idToIndex still has "b" → 1, but storage has no data.
     const initialItems = [
       { id: "a", name: "Alpha" },
       { id: "b", name: "Beta" },
@@ -1917,14 +1919,12 @@ describe("data/manager — updateItem when storage entry is missing (L414)", () 
     expect(manager.getItem(0)).toEqual({ id: "a", name: "Alpha" });
     expect(manager.getIndexById("b")).toBe(1);
 
-    // Directly delete index 1 from storage, bypassing removeItem
-    // (which would also clean idToIndex). This creates the exact
-    // inconsistency: idToIndex has "b" → 1, but storage.get(1) is undefined.
+    // Clear storage directly — this wipes all chunks but the
+    // manager's idToIndex still has "b" → 1 (stale).
     const storage = manager.getStorage();
-    storage.delete(1);
+    storage.clear();
 
-    // Now updateItem("b", ...) should find index=1 in idToIndex
-    // but storage.get(1) returns undefined → hits L414 branch
+    // Now idToIndex has "b" → 1, but storage.get(1) is undefined
     const result = manager.updateItem("b", { name: "Updated" });
     expect(result).toBe(false);
   });
