@@ -448,8 +448,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll callback
     const scrollHandler = ctx.afterScroll[0];
@@ -474,8 +475,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll with high velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -501,8 +503,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -547,8 +550,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -586,8 +590,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -620,8 +625,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -649,7 +655,7 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Trigger scroll
@@ -685,8 +691,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll down with medium velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -716,8 +723,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll up
     const scrollHandler = ctx.afterScroll[0];
@@ -745,8 +753,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll with slow velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -774,8 +783,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll near end
     const scrollHandler = ctx.afterScroll[0];
@@ -804,8 +814,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll up near start
     const scrollHandler = ctx.afterScroll[0];
@@ -1009,7 +1020,7 @@ describe("withAsync - Idle Timer", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll handler queues the range (velocity too high)
@@ -1039,7 +1050,7 @@ describe("withAsync - Idle Timer", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Queue a range
@@ -1095,7 +1106,7 @@ describe("withAsync - Range Change Detection", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll with range 0-10
@@ -1123,7 +1134,7 @@ describe("withAsync - Range Change Detection", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll
@@ -1246,7 +1257,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const reloadFn = ctx.methods.get("reload")!;
@@ -1326,7 +1337,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
@@ -1346,7 +1357,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
@@ -1372,7 +1383,7 @@ describe("withAsync - Destroyed State", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Trigger scroll
@@ -1431,7 +1442,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1472,7 +1483,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.getIsLoading = () => false;
     dataManager.getHasMore = () => false;
@@ -1513,7 +1524,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1552,7 +1563,7 @@ describe("withAsync - Network Recovery", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Simulate network recovery
@@ -1573,7 +1584,7 @@ describe("withAsync - Network Recovery", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const onlineEvent = new dom.window.Event("online");
@@ -1622,7 +1633,7 @@ describe("withAsync - Pending Range Uses Live Render Range", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1669,7 +1680,7 @@ describe("withAsync - Pending Range Uses Live Render Range", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.getIsLoading = () => false;
     dataManager.getHasMore = () => false;
@@ -1722,7 +1733,7 @@ describe("withAsync - Pending Range Uses Live Render Range", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.getIsLoading = () => false;
     dataManager.getHasMore = () => false;
@@ -1776,7 +1787,7 @@ describe("withAsync - Pending Range Uses Live Render Range", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1880,7 +1891,7 @@ describe("withAsync - Grid Range Conversion", () => {
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
     dataManager.getTotal = () => 200;
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Trigger scroll
@@ -1912,7 +1923,7 @@ describe("withAsync - Grid Range Conversion", () => {
 
     const dataManager = ctx.capturedDataManager();
     dataManager.getTotal = () => 200;
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0];
@@ -1942,7 +1953,7 @@ describe("withAsync - Grid Range Conversion", () => {
 
     const dataManager = ctx.capturedDataManager();
     dataManager.getTotal = () => 50;
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0];
@@ -1968,7 +1979,7 @@ describe("withAsync - Grid Range Conversion", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0];
@@ -2002,7 +2013,7 @@ describe("withAsync - Grid Range Conversion", () => {
 
     const dataManager = ctx.capturedDataManager();
     dataManager.getTotal = () => 200;
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // High velocity — range gets queued
@@ -2049,7 +2060,7 @@ describe("withAsync - Grid Range Conversion", () => {
 
     const dataManager = ctx.capturedDataManager();
     dataManager.getTotal = () => 100;
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0];
