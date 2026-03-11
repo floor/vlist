@@ -126,12 +126,10 @@ export const withSelection = <T extends VListItem = VListItem>(
       // placeholders when using sparse/async data.
       const idToIndexMap = new Map<string | number, number>();
 
-      const rebuildIdIndex = (reason?: string): void => {
+      const rebuildIdIndex = (): void => {
         idToIndexMap.clear();
         const total = ctx.dataManager.getTotal();
         const cached = ctx.dataManager.getCached();
-
-        console.log(`[selection.rebuildIdIndex] reason=${reason ?? 'init'}, total=${total}, cached=${cached}`);
 
         // Nothing cached — skip entirely (common for async data at setup)
         if (cached === 0) return;
@@ -143,7 +141,6 @@ export const withSelection = <T extends VListItem = VListItem>(
             const item = ctx.dataManager.getItem(i);
             if (item) idToIndexMap.set(item.id, i);
           }
-          console.log(`[selection.rebuildIdIndex] fast path — indexed ${idToIndexMap.size} items, first 10:`, [...idToIndexMap.entries()].slice(0, 10));
           return;
         }
 
@@ -153,21 +150,14 @@ export const withSelection = <T extends VListItem = VListItem>(
         const storage = ctx.dataManager.getStorage();
         if (storage && typeof (storage as any).getLoadedRanges === "function") {
           const ranges = (storage as any).getLoadedRanges() as Array<{ start: number; end: number }>;
-          console.log(`[selection.rebuildIdIndex] sparse path — loadedRanges:`, JSON.stringify(ranges));
           for (const range of ranges) {
             for (let i = range.start; i <= range.end; i++) {
               const item = ctx.dataManager.getItem(i);
-              if (item) {
-                const isPlaceholder = (item as any)._isPlaceholder;
-                if (isPlaceholder) {
-                  console.log(`[selection.rebuildIdIndex] WARNING: placeholder at index ${i}, id=${item.id}`);
-                } else {
-                  idToIndexMap.set(item.id, i);
-                }
+              if (item && !(item as any)._isPlaceholder) {
+                idToIndexMap.set(item.id, i);
               }
             }
           }
-          console.log(`[selection.rebuildIdIndex] sparse path — indexed ${idToIndexMap.size} items, sample around deleted area:`, [...idToIndexMap.entries()].filter(([, idx]) => idx >= 290 && idx <= 310));
         }
       };
 
@@ -175,14 +165,12 @@ export const withSelection = <T extends VListItem = VListItem>(
       // Without this, idToIndexMap holds stale indices after items shift,
       // causing getSelectedItems() to return wrong items.
       emitter.on("data:change", ({ type, id }) => {
-        console.log(`[selection] data:change event — type=${type}, id=${id}`);
         if (type === "remove") {
           // Remove the deleted id from selection state
           selectionState.selected.delete(id);
-          console.log(`[selection] removed id=${id} from selected, remaining:`, [...selectionState.selected]);
 
           // Rebuild index — all indices after the removed item shifted
-          rebuildIdIndex('data:change/remove');
+          rebuildIdIndex();
         }
       });
 
@@ -554,14 +542,9 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       ctx.methods.set("getSelectedItems", (): T[] => {
         // O(1) lookup using ID → index map
-        console.log(`[selection.getSelectedItems] selected IDs:`, [...selectionState.selected]);
-        console.log(`[selection.getSelectedItems] idToIndexMap sample:`, [...idToIndexMap.entries()].filter(([id]) => selectionState.selected.has(id)));
-
         const getItemByIdFn = (id: string | number): T | undefined => {
           const index = idToIndexMap.get(id);
-          const item = index === undefined ? undefined : ctx.dataManager.getItem(index);
-          console.log(`[selection.getSelectedItems] resolving id=${id} → index=${index} → item.id=${item ? (item as any).id : 'undefined'}`);
-          return item;
+          return index === undefined ? undefined : ctx.dataManager.getItem(index);
         };
         return getSelectedItems(selectionState, getItemByIdFn);
       });

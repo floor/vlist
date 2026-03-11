@@ -281,12 +281,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
   };
 
   const deleteItem = (index: number): boolean => {
-    console.log(`[sparse.delete] index=${index}, totalItems=${totalItems}, cachedItemCount=${cachedItemCount}`);
-
-    if (index < 0 || index >= totalItems) {
-      console.log(`[sparse.delete] BAIL — out of bounds (index=${index}, total=${totalItems})`);
-      return false;
-    }
+    if (index < 0 || index >= totalItems) return false;
 
     // Check if the item at this index is loaded
     const chunkIdx = getChunkIndex(index);
@@ -296,83 +291,63 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
       chunk !== undefined &&
       chunk.items[slotInChunk] !== undefined;
 
-    if (!wasLoaded) {
-      console.log(`[sparse.delete] BAIL — slot not loaded (index=${index}, chunkIdx=${chunkIdx}, slotInChunk=${slotInChunk})`);
-      return false;
+    if (!wasLoaded) return false;
+
+    // Collect all loaded items at indices > deleted index, in order.
+    // This is O(cachedItems) instead of O(totalItems) — critical for
+    // lists with 300K+ items where only ~50 are in memory.
+    const deletedChunkIdx = chunkIdx;
+    const sortedChunkKeys = Array.from(chunks.keys())
+      .filter(k => k >= deletedChunkIdx)
+      .sort((a, b) => a - b);
+
+    const shifted: Array<{ oldIndex: number; item: T }> = [];
+
+    for (const ci of sortedChunkKeys) {
+      const c = chunks.get(ci)!;
+      const base = ci * chunkSize;
+      for (let s = 0; s < chunkSize; s++) {
+        if (c.items[s] === undefined) continue;
+        const itemIndex = base + s;
+        if (itemIndex <= index) continue; // before or at deleted — skip
+        shifted.push({ oldIndex: itemIndex, item: c.items[s]! });
+      }
     }
 
-    const deletedItem = chunk.items[slotInChunk];
-    console.log(`[sparse.delete] deleting item at index=${index}: id=${(deletedItem as any)?.id}`);
-
-    // 1. Remove the item at `index`
+    // 1. Remove the deleted item and all items that will shift
+    //    Clear the deleted item
     chunk.items[slotInChunk] = undefined;
     chunk.count--;
     cachedItemCount--;
-    if (chunk.count === 0) {
-      chunks.delete(chunkIdx);
+    if (chunk.count === 0) chunks.delete(chunkIdx);
+
+    //    Clear each item that will be re-inserted at a lower index
+    for (const { oldIndex } of shifted) {
+      const ci = getChunkIndex(oldIndex);
+      const c = chunks.get(ci);
+      if (!c) continue;
+      const slot = getIndexInChunk(oldIndex);
+      if (c.items[slot] !== undefined) {
+        c.items[slot] = undefined;
+        c.count--;
+        cachedItemCount--;
+        if (c.count === 0) chunks.delete(ci);
+      }
     }
 
-    // 2. Shift all items after `index` down by 1.
-    //    For each position i from index to totalItems-2, move i+1 → i.
-    //    Unloaded slots (holes / evicted chunks) stay undefined.
-    const lastIndex = totalItems - 1;
-    let shiftedCount = 0;
-
-    for (let i = index; i < lastIndex; i++) {
-      const srcChunkIdx = getChunkIndex(i + 1);
-      const srcChunk = chunks.get(srcChunkIdx);
-      const srcSlot = getIndexInChunk(i + 1);
-      const nextItem =
-        srcChunk !== undefined ? srcChunk.items[srcSlot] : undefined;
-
-      const dstChunkIdx = getChunkIndex(i);
-      const dstSlot = getIndexInChunk(i);
-      const dstChunk = chunks.get(dstChunkIdx);
-      const dstHasItem = dstChunk !== undefined &&
-        dstChunk.items[dstSlot] !== undefined;
-
-      if (nextItem !== undefined) {
-        // Move item from i+1 into i
-        const dst = getOrCreateChunk(dstChunkIdx);
-        if (!dstHasItem) {
-          cachedItemCount++;
-          dst.count++;
-        }
-        dst.items[dstSlot] = nextItem;
-
-        // Clear source
-        srcChunk!.items[srcSlot] = undefined;
-        srcChunk!.count--;
-        cachedItemCount--;
-        if (srcChunk!.count === 0) {
-          chunks.delete(srcChunkIdx);
-        }
-        shiftedCount++;
-      } else if (dstHasItem) {
-        // Source is empty, but destination has an item — clear it
-        // (the hole shifts down into this position)
-        dstChunk!.items[dstSlot] = undefined;
-        dstChunk!.count--;
-        cachedItemCount--;
-        if (dstChunk!.count === 0) {
-          chunks.delete(dstChunkIdx);
-        }
-      }
-      // Both empty — nothing to do
+    // 2. Re-insert each shifted item at (oldIndex - 1)
+    for (const { oldIndex, item } of shifted) {
+      const newIndex = oldIndex - 1;
+      const ci = getChunkIndex(newIndex);
+      const dst = getOrCreateChunk(ci);
+      const slot = getIndexInChunk(newIndex);
+      dst.items[slot] = item;
+      dst.count++;
+      cachedItemCount++;
     }
 
     // 3. Decrease total
     totalItems--;
-
-    console.log(`[sparse.delete] done — shifted=${shiftedCount}, newTotal=${totalItems}, newCached=${cachedItemCount}`);
-
-    // DEBUG — dump first 10 items after shift
-    const snapshot: string[] = [];
-    for (let i = 0; i < Math.min(10, totalItems); i++) {
-      const item = get(i);
-      snapshot.push(item ? `${i}:id=${(item as any).id}` : `${i}:empty`);
-    }
-    console.log(`[sparse.delete] snapshot: [${snapshot.join(', ')}]`);
 
     return true;
   };
