@@ -115,6 +115,31 @@ export const withAsync = <T extends VListItem = VListItem>(
       const { emitter } = ctx;
       const isReverse = ctx.config.reverse;
 
+      // ── Grid-aware range conversion ──
+      // When withGrid is active, viewportState.renderRange contains ROW indices
+      // (e.g. rows 0-5), but ensureRange needs flat ITEM indices (e.g. 0-23
+      // with 4 columns). The grid feature (priority 10) registers its layout
+      // before us (priority 20), so we can resolve it once at setup time.
+      type GridLayoutLike = {
+        getItemRange: (rowStart: number, rowEnd: number, totalItems: number) => { start: number; end: number };
+      };
+      const getGridLayout = ctx.methods.get("_getGridLayout") as (() => GridLayoutLike | null) | undefined;
+
+      /**
+       * Convert the current viewportState.renderRange to flat item indices.
+       * No-op when grid is not active — returns the range as-is.
+       */
+      const getItemRangeFromRenderRange = (renderRange: Range): Range => {
+        if (getGridLayout) {
+          const layout = getGridLayout();
+          if (layout) {
+            const total = ctx.dataManager.getTotal();
+            return layout.getItemRange(renderRange.start, renderRange.end, total);
+          }
+        }
+        return renderRange;
+      };
+
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
         adapter,
@@ -191,17 +216,32 @@ export const withAsync = <T extends VListItem = VListItem>(
       };
 
       /**
-       * Load the pending range if any (called on idle)
+       * Load data for the current visible range (called on idle / deceleration settle).
+       *
+       * The saved `pendingRange` acts as a boolean guard — we only fire when
+       * loading was actually deferred during a fast scroll. But instead of
+       * consuming the stale saved coordinates, we read the *live* renderRange
+       * from viewportState. By the time the idle/deceleration timer fires the
+       * smooth-scroll animation may have moved the viewport well past the
+       * position where `pendingRange` was captured, so the saved range can
+       * point at chunks the user has already scrolled past.
        */
       const loadPendingRange = (): void => {
-        if (pendingRange) {
-          const range = pendingRange;
-          pendingRange = null;
+        if (!pendingRange) return;
+        pendingRange = null;
 
-          ctx.dataManager.ensureRange(range.start, range.end).catch((error) => {
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end < renderRange.start) return;
+
+        // Reset so the afterScroll rangeChanged check re-evaluates
+        lastEnsuredRange = null;
+
+        const itemRange = getItemRangeFromRenderRange(renderRange);
+        ctx.dataManager
+          .ensureRange(itemRange.start, itemRange.end)
+          .catch((error) => {
             emitter.emit("error", { error, context: "ensureRange" });
           });
-        }
       };
 
       // ── Post-scroll: velocity-aware loading + load-more ──
@@ -314,16 +354,23 @@ export const withAsync = <T extends VListItem = VListItem>(
                 decelerationTimer = null;
               }
 
+              // Convert row-space renderRange to item-space for ensureRange
+              const itemRange = getItemRangeFromRenderRange(renderRange);
+
               // Calculate preload range based on scroll direction and velocity
-              let loadStart = renderRange.start;
-              let loadEnd = renderRange.end;
-              const total = ctx.getVirtualTotal();
+              let loadStart = itemRange.start;
+              let loadEnd = itemRange.end;
+              // In grid mode, virtualTotal is row count — use real item total for clamping.
+              // In non-grid mode, virtualTotal equals item total.
+              const total = getGridLayout
+                ? ctx.dataManager.getTotal()
+                : ctx.getVirtualTotal();
 
               if (currentVelocity > preloadThreshold) {
                 if (direction === "down") {
-                  loadEnd = Math.min(renderRange.end + preloadAhead, total - 1);
+                  loadEnd = Math.min(itemRange.end + preloadAhead, total - 1);
                 } else {
-                  loadStart = Math.max(renderRange.start - preloadAhead, 0);
+                  loadStart = Math.max(itemRange.start - preloadAhead, 0);
                 }
               }
 
@@ -406,8 +453,9 @@ export const withAsync = <T extends VListItem = VListItem>(
 
         const { renderRange } = ctx.state.viewportState;
         if (renderRange.end > 0) {
+          const itemRange = getItemRangeFromRenderRange(renderRange);
           ctx.dataManager
-            .ensureRange(renderRange.start, renderRange.end)
+            .ensureRange(itemRange.start, itemRange.end)
             .catch((error) => {
               emitter.emit("error", { error, context: "ensureRange" });
             });
@@ -445,11 +493,12 @@ export const withAsync = <T extends VListItem = VListItem>(
 
         const { renderRange } = ctx.state.viewportState;
         if (renderRange.end > 0) {
+          const itemRange = getItemRangeFromRenderRange(renderRange);
           emitter.emit("load:start", {
-            offset: renderRange.start,
-            limit: renderRange.end - renderRange.start + 1,
+            offset: itemRange.start,
+            limit: itemRange.end - itemRange.start + 1,
           });
-          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+          await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
         }
       });
 
@@ -482,7 +531,8 @@ export const withAsync = <T extends VListItem = VListItem>(
         // placeholders are never replaced because no scroll event fires.
         const { renderRange } = ctx.state.viewportState;
         if (renderRange.end > 0) {
-          await ctx.dataManager.ensureRange(renderRange.start, renderRange.end);
+          const itemRange = getItemRangeFromRenderRange(renderRange);
+          await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
         }
       });
 

@@ -48,7 +48,7 @@ export interface SimpleDataManager<T extends VListItem = VListItem> {
   setTotal: (total: number) => void;
   setItems: (items: T[], offset?: number, total?: number) => void;
   updateItem: (index: number, updates: Partial<T>) => boolean;
-  removeItem: (index: number) => boolean;
+  removeItem: (id: string | number) => boolean;
   loadRange: (start: number, end: number) => Promise<void>;
   ensureRange: (start: number, end: number) => Promise<void>;
   loadInitial: () => Promise<void>;
@@ -177,7 +177,8 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
     return true;
   };
 
-  const removeItem = (index: number): boolean => {
+  const removeItem = (id: string | number): boolean => {
+    const index = typeof id === "number" ? id : items.findIndex((item: any) => item.id === id);
     if (index < 0 || index >= items.length) return false;
 
     items.splice(index, 1);

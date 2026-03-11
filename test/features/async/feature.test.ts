@@ -448,8 +448,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll callback
     const scrollHandler = ctx.afterScroll[0];
@@ -474,8 +475,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll with high velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -501,8 +503,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -547,8 +550,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -586,8 +590,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -620,8 +625,9 @@ describe("withAsync - Velocity-Aware Loading", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     const scrollHandler = ctx.afterScroll[0];
 
@@ -649,7 +655,7 @@ describe("withAsync - Velocity-Aware Loading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Trigger scroll
@@ -685,8 +691,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll down with medium velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -716,8 +723,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll up
     const scrollHandler = ctx.afterScroll[0];
@@ -745,8 +753,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll with slow velocity
     const scrollHandler = ctx.afterScroll[0];
@@ -774,8 +783,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll near end
     const scrollHandler = ctx.afterScroll[0];
@@ -804,8 +814,9 @@ describe("withAsync - Preloading", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
+
 
     // Trigger scroll up near start
     const scrollHandler = ctx.afterScroll[0];
@@ -1009,7 +1020,7 @@ describe("withAsync - Idle Timer", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll handler queues the range (velocity too high)
@@ -1039,7 +1050,7 @@ describe("withAsync - Idle Timer", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Queue a range
@@ -1095,7 +1106,7 @@ describe("withAsync - Range Change Detection", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll with range 0-10
@@ -1123,7 +1134,7 @@ describe("withAsync - Range Change Detection", () => {
 
     // Get the captured data manager and spy on ensureRange
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // First scroll
@@ -1246,7 +1257,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const reloadFn = ctx.methods.get("reload")!;
@@ -1326,7 +1337,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
@@ -1346,7 +1357,7 @@ describe("withAsync - Reload Method", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.reload = mock(() => Promise.resolve());
 
@@ -1372,7 +1383,7 @@ describe("withAsync - Destroyed State", () => {
 
     // Get the captured data manager
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Trigger scroll
@@ -1431,7 +1442,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1472,7 +1483,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
     dataManager.getIsLoading = () => false;
     dataManager.getHasMore = () => false;
@@ -1513,7 +1524,7 @@ describe("withAsync - Deceleration Handling", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const scrollHandler = ctx.afterScroll[0]!;
@@ -1552,7 +1563,7 @@ describe("withAsync - Network Recovery", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     // Simulate network recovery
@@ -1573,7 +1584,7 @@ describe("withAsync - Network Recovery", () => {
     plugin.setup(ctx);
 
     const dataManager = ctx.capturedDataManager();
-    const ensureRangeSpy = mock(() => Promise.resolve());
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
     dataManager.ensureRange = ensureRangeSpy;
 
     const onlineEvent = new dom.window.Event("online");
@@ -1603,6 +1614,202 @@ describe("withAsync - Network Recovery", () => {
 });
 
 // =============================================================================
+// Pending Range — Live Range Fix
+// =============================================================================
+
+describe("withAsync - Pending Range Uses Live Render Range", () => {
+  it("should use live renderRange when idle timer fires, not stale pendingRange", (done) => {
+    // Scenario: smooth scroll defers loading, but by the time the idle timer
+    // fires the viewport has moved far past the saved pendingRange.
+    // loadPendingRange must read viewportState.renderRange (the live position)
+    // instead of consuming the stale saved coordinates.
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 5 },
+    });
+
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Frame 1: fast scroll at range 100..120 — deferred (velocity too high)
+    ctx.state.viewportState.renderRange = { start: 100, end: 120 };
+    (ctx.scrollController as any).setScrollTop(3600);
+    scrollHandler(3600, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Simulate viewport moving to a completely different position
+    // (smooth scroll animation continued and landed elsewhere)
+    ctx.state.viewportState.renderRange = { start: 500, end: 520 };
+
+    // Fire idle timer — should use live range {500..520}, not stale {100..120}
+    idleHandler(18000, "down");
+
+    setTimeout(() => {
+      expect(ensureRangeSpy).toHaveBeenCalled();
+      const lastCall = ensureRangeSpy.mock.calls[ensureRangeSpy.mock.calls.length - 1];
+      // Must match the LIVE renderRange, not the stale one
+      expect(lastCall[0]).toBe(500);
+      expect(lastCall[1]).toBe(520);
+      done();
+    }, 250);
+  });
+
+  it("should use live renderRange when deceleration timer fires", async () => {
+    // Same bug, triggered via the deceleration settle timer (120ms) rather
+    // than the idle timer (200ms).
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      autoLoad: false,
+      total: 10000,
+      loading: { cancelThreshold: 5 },
+    });
+
+    let currentVelocity = 30;
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => false;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+
+    // Frame 1: high velocity, renderRange = 200..220
+    currentVelocity = 30;
+    ctx.state.viewportState.renderRange = { start: 200, end: 220 };
+    (ctx.scrollController as any).setScrollTop(7200);
+    scrollHandler(7200, "down");
+
+    // Frame 2: velocity drops below threshold (deceleration starts)
+    // renderRange moves to 300..320
+    currentVelocity = 3;
+    ctx.state.viewportState.renderRange = { start: 300, end: 320 };
+    (ctx.scrollController as any).setScrollTop(10800);
+    scrollHandler(10800, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Before deceleration timer fires, viewport settles at 800..820
+    ctx.state.viewportState.renderRange = { start: 800, end: 820 };
+
+    // Wait for deceleration settle timer (120ms)
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const lastCall = ensureRangeSpy.mock.calls[ensureRangeSpy.mock.calls.length - 1];
+    // Must be the live range {800..820}, not the stale {300..320}
+    expect(lastCall[0]).toBe(800);
+    expect(lastCall[1]).toBe(820);
+  });
+
+  it("should reset lastEnsuredRange so afterScroll re-evaluates after pending load", (done) => {
+    // After loadPendingRange fires via idle, a subsequent afterScroll frame
+    // at the SAME renderRange should still call ensureRange — proving that
+    // lastEnsuredRange was cleared by loadPendingRange.
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      autoLoad: false,
+      total: 10000,
+      loading: { cancelThreshold: 5 },
+    });
+
+    let currentVelocity = 30;
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => false;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Frame 1: fast scroll at range 50..70 — deferred (velocity too high)
+    ctx.state.viewportState.renderRange = { start: 50, end: 70 };
+    (ctx.scrollController as any).setScrollTop(1800);
+    scrollHandler(1800, "down");
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Idle fires — loads the live range and resets lastEnsuredRange
+    idleHandler(1800, "down");
+
+    setTimeout(() => {
+      const callCountAfterIdle = ensureRangeSpy.mock.calls.length;
+      expect(callCountAfterIdle).toBeGreaterThan(0);
+
+      // Now scroll slowly at the SAME range {50..70}.
+      // First drop velocity to 0 so we fully exit deceleration
+      // (previousVelocity goes through the 30→0 transition cleanly).
+      currentVelocity = 0;
+      (ctx.scrollController as any).setScrollTop(1800);
+      scrollHandler(1800, "down");
+
+      // Then a normal slow scroll — same range, low velocity.
+      // If lastEnsuredRange wasn't nulled, rangeChanged would be false
+      // and ensureRange would be skipped.
+      currentVelocity = 1;
+      ctx.state.viewportState.renderRange = { start: 50, end: 70 };
+      (ctx.scrollController as any).setScrollTop(1801);
+      scrollHandler(1801, "down");
+
+      expect(ensureRangeSpy.mock.calls.length).toBeGreaterThan(callCountAfterIdle);
+      done();
+    }, 250);
+  });
+
+  it("should not fire ensureRange when no range was deferred", (done) => {
+    // loadPendingRange should be a no-op when pendingRange is null
+    // (e.g. low-velocity scroll that loaded inline)
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 50 }, // high threshold = everything loads inline
+    });
+
+    const ctx = createMockContext({ velocity: 1, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Low-velocity scroll — loads inline via afterScroll (no pending)
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(0, "down");
+
+    const callCountAfterScroll = ensureRangeSpy.mock.calls.length;
+
+    // Fire idle timer — should NOT trigger an extra ensureRange
+    idleHandler(0, "down");
+
+    setTimeout(() => {
+      expect(ensureRangeSpy.mock.calls.length).toBe(callCountAfterScroll);
+      done();
+    }, 250);
+  });
+});
+
+// =============================================================================
 // autoLoad: false with total
 // =============================================================================
 
@@ -1621,5 +1828,250 @@ describe("withAsync - autoLoad: false with total", () => {
 
     // But total should be set
     expect(dataManager.getTotal()).toBe(500);
+  });
+});
+
+// =============================================================================
+// Grid + Async Integration (row-to-item range conversion)
+// =============================================================================
+
+describe("withAsync - Grid Range Conversion", () => {
+  /**
+   * When withGrid is active, viewportState.renderRange contains ROW indices.
+   * The async feature must convert these to flat ITEM indices before calling
+   * ensureRange. Without this conversion, ensureRange receives row indices
+   * (e.g. 0-5) instead of item indices (e.g. 0-23 with 4 columns), causing
+   * most items to remain as placeholders.
+   */
+
+  function createMockGridLayout(columns: number) {
+    return {
+      columns,
+      gap: 8,
+      update: () => {},
+      getTotalRows: (totalItems: number) => Math.ceil(totalItems / columns),
+      getPosition: (itemIndex: number) => ({
+        row: Math.floor(itemIndex / columns),
+        col: itemIndex % columns,
+      }),
+      getRow: (itemIndex: number) => Math.floor(itemIndex / columns),
+      getCol: (itemIndex: number) => itemIndex % columns,
+      getItemRange: (rowStart: number, rowEnd: number, totalItems: number) => ({
+        start: Math.max(0, rowStart * columns),
+        end: Math.min(totalItems - 1, (rowEnd + 1) * columns - 1),
+      }),
+      getItemIndex: (row: number, col: number, totalItems: number) => {
+        const index = row * columns + col;
+        return index < totalItems ? index : -1;
+      },
+      getColumnWidth: (containerWidth: number) =>
+        (containerWidth - (columns - 1) * 8) / columns,
+      getColumnOffset: (col: number, containerWidth: number) => {
+        const colWidth = (containerWidth - (columns - 1) * 8) / columns;
+        return col * (colWidth + 8);
+      },
+    };
+  }
+
+  it("should convert row range to item range for ensureRange when grid is active", async () => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    // Register grid layout BEFORE plugin setup (grid has priority 10, async has 20)
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Set renderRange in ROW space (rows 0-5 with 4 columns = items 0-23)
+    ctx.state.viewportState.renderRange = { start: 0, end: 5 };
+
+    plugin.setup(ctx);
+
+    // Get the captured data manager and spy on ensureRange
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    // Trigger scroll
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Should call ensureRange with ITEM indices (0-23), not row indices (0-5)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(0);   // start item = row 0 * 4 columns = 0
+    expect(call[1]).toBe(23);  // end item = (5+1) * 4 - 1 = 23
+  });
+
+  it("should convert row range to item range when scrolled further down", async () => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 10-15 with 4 columns = items 40-63
+    ctx.state.viewportState.renderRange = { start: 10, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(500, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(40);  // row 10 * 4 = 40
+    expect(call[1]).toBe(63);  // (15+1) * 4 - 1 = 63
+  });
+
+  it("should clamp item range to total items in grid mode", async () => {
+    const adapter = createMockAdapter(50);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 10-15 would be items 40-63, but total is only 50
+    ctx.state.viewportState.renderRange = { start: 10, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 50;
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(500, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(40);  // row 10 * 4 = 40
+    expect(call[1]).toBe(49);  // clamped to totalItems - 1 = 49
+  });
+
+  it("should NOT convert range when grid is not active", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    // No grid layout registered — plain list mode
+
+    ctx.state.viewportState.renderRange = { start: 5, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Should pass range as-is (no conversion)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(5);
+    expect(call[1]).toBe(15);
+  });
+
+  it("should convert range in loadPendingRange (idle handler) with grid", (done) => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 25 },
+    });
+
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 5-10 = items 20-43
+    ctx.state.viewportState.renderRange = { start: 5, end: 10 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    // High velocity — range gets queued
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(300, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Trigger idle timer
+    const idleHandler = ctx.afterScroll[1];
+    idleHandler(300, "down");
+
+    // Wait for idle timeout (200ms)
+    setTimeout(() => {
+      expect(ensureRangeSpy).toHaveBeenCalled();
+      const call = ensureRangeSpy.mock.calls[0];
+      expect(call[0]).toBe(20);  // row 5 * 4 = 20
+      expect(call[1]).toBe(43);  // (10+1) * 4 - 1 = 43
+      done();
+    }, 250);
+  });
+
+  it("should use item total (not row total) for preload clamping in grid mode", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = withAsync({
+      adapter,
+      loading: {
+        preloadThreshold: 2,
+        preloadAhead: 500, // Very large to force clamping
+        cancelThreshold: 25,
+      },
+    });
+
+    const ctx = createMockContext({ velocity: 5, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 0-3 = items 0-15; getVirtualTotal returns row count (25 rows)
+    // but item total is 100
+    ctx.state.viewportState.renderRange = { start: 0, end: 3 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 100;
+    const ensureRangeSpy = mock((_s: number, _e: number) => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(0);
+    // Should clamp to item total - 1 (99), not row total - 1 (24)
+    expect(call[1]).toBe(99);
   });
 });

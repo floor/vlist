@@ -1,6 +1,18 @@
 vlist — full changelog
 initial commit → latest
-378 commits · 36 days · Feb 2 – Mar 9, 2026
+384 commits · 38 days · Feb 2 – Mar 11, 2026
+
+
+2026-03-11
+
+  fix(async): removeItem — shift sparse storage, force render, debounced gap refill
+  fix(async): convert row-space renderRange to item indices when grid is active
+  fix(async): use live render range in loadPendingRange instead of stale saved coordinates
+  fix(types): widen removeItem signature to string | number across all data managers
+  feat(table): add placeholder skeleton styling for table rows
+  perf(builder): base bundle 98.3 KB minified (32.5 KB gzipped)
+
+  → v1.3.6
 
 
 2026-03-09

@@ -458,21 +458,20 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const removeItem = (id: string | number): boolean => {
     const index = idToIndex.get(id);
-    if (index === undefined) {
-      return false;
-    }
+    if (index === undefined) return false;
 
-    storage.delete(index);
-    removeFromIdIndex(id);
+    // storage.delete now shifts all items after `index` down by 1
+    // and decrements totalItems — no manual setTotal needed.
+    const deleted = storage.delete(index);
+    if (!deleted) return false;
 
-    // Decrease total
-    const currentTotal = storage.getTotal();
-    if (currentTotal > 0) {
-      storage.setTotal(currentTotal - 1);
-    }
+    // Indices changed for every item after the deleted one —
+    // rebuild the full id→index map from storage.
+    rebuildIdIndex();
 
-    // Rebuild index since indices shifted conceptually
-    // Note: In a true sparse array, items don't shift, but the total decreases
+    // Stale range keys in activeLoads may now refer to wrong offsets.
+    activeLoads.clear();
+
     notifyStateChange();
     return true;
   };

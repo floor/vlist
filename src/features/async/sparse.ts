@@ -281,31 +281,73 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
   };
 
   const deleteItem = (index: number): boolean => {
-    if (index < 0 || index >= totalItems) {
-      return false;
+    if (index < 0 || index >= totalItems) return false;
+
+    // Check if the item at this index is loaded
+    const chunkIdx = getChunkIndex(index);
+    const chunk = chunks.get(chunkIdx);
+    const slotInChunk = getIndexInChunk(index);
+    const wasLoaded =
+      chunk !== undefined &&
+      chunk.items[slotInChunk] !== undefined;
+
+    if (!wasLoaded) return false;
+
+    // Collect all loaded items at indices > deleted index, in order.
+    // This is O(cachedItems) instead of O(totalItems) — critical for
+    // lists with 300K+ items where only ~50 are in memory.
+    const deletedChunkIdx = chunkIdx;
+    const sortedChunkKeys = Array.from(chunks.keys())
+      .filter(k => k >= deletedChunkIdx)
+      .sort((a, b) => a - b);
+
+    const shifted: Array<{ oldIndex: number; item: T }> = [];
+
+    for (const ci of sortedChunkKeys) {
+      const c = chunks.get(ci)!;
+      const base = ci * chunkSize;
+      for (let s = 0; s < chunkSize; s++) {
+        if (c.items[s] === undefined) continue;
+        const itemIndex = base + s;
+        if (itemIndex <= index) continue; // before or at deleted — skip
+        shifted.push({ oldIndex: itemIndex, item: c.items[s]! });
+      }
     }
 
-    const chunkIndex = getChunkIndex(index);
-    const chunk = chunks.get(chunkIndex);
-
-    if (!chunk) {
-      return false;
-    }
-
-    const indexInChunk = getIndexInChunk(index);
-
-    if (chunk.items[indexInChunk] === undefined) {
-      return false;
-    }
-
-    chunk.items[indexInChunk] = undefined;
+    // 1. Remove the deleted item and all items that will shift
+    //    Clear the deleted item
+    chunk.items[slotInChunk] = undefined;
     chunk.count--;
     cachedItemCount--;
+    if (chunk.count === 0) chunks.delete(chunkIdx);
 
-    // Remove chunk if empty
-    if (chunk.count === 0) {
-      chunks.delete(chunkIndex);
+    //    Clear each item that will be re-inserted at a lower index
+    for (const { oldIndex } of shifted) {
+      const ci = getChunkIndex(oldIndex);
+      const c = chunks.get(ci);
+      if (!c) continue;
+      const slot = getIndexInChunk(oldIndex);
+      if (c.items[slot] !== undefined) {
+        c.items[slot] = undefined;
+        c.count--;
+        cachedItemCount--;
+        if (c.count === 0) chunks.delete(ci);
+      }
     }
+
+    // 2. Re-insert each shifted item at (oldIndex - 1)
+    for (const { oldIndex, item } of shifted) {
+      const newIndex = oldIndex - 1;
+      const ci = getChunkIndex(newIndex);
+      const dst = getOrCreateChunk(ci);
+      const slot = getIndexInChunk(newIndex);
+      dst.items[slot] = item;
+      dst.count++;
+      cachedItemCount++;
+    }
+
+    // 3. Decrease total
+    totalItems--;
 
     return true;
   };

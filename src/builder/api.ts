@@ -104,8 +104,42 @@ export const createApi = <T extends VListItem = VListItem>(
     ctx.dataManager.updateItem(index, updates);
   };
 
-  const removeItem = (index: number): void => {
-    ctx.dataManager.removeItem(index);
+  // Debounced ensureRange — coalesces multiple synchronous removeItem calls
+  // into a single async fetch. Without this, deleting 5 items in a loop
+  // fires 5 overlapping ensureRange requests (each clearing the previous
+  // via activeLoads.clear). The microtask fires once after the synchronous
+  // deletion loop completes.
+  let ensureRangePending = false;
+
+  const removeItem = (id: string | number): boolean => {
+    const result = ctx.dataManager.removeItem(id);
+    if (result) {
+      emitter.emit("data:change", { type: "remove", id });
+      // Force re-render: removeItem shifts all items after the deleted index
+      // down by 1, so the same render range now contains different items.
+      // renderIfNeeded (called via onStateChange) bails when the range
+      // start/end haven't changed, leaving stale data in the DOM.
+      ctx.forceRender();
+
+      // Refill gaps: when a deletion shifts items across chunk boundaries,
+      // the last slot(s) of the loaded range become empty (the item that
+      // should fill them lives in an unloaded chunk). Debounce via microtask
+      // so consecutive synchronous deletes produce a single fetch.
+      if (!ensureRangePending) {
+        const dm = ctx.dataManager as any;
+        if (typeof dm.ensureRange === "function") {
+          ensureRangePending = true;
+          queueMicrotask(() => {
+            ensureRangePending = false;
+            const { start, end } = ctx.state.viewportState.renderRange;
+            if (end >= start) {
+              dm.ensureRange(start, end).catch(() => {});
+            }
+          });
+        }
+      }
+    }
+    return result;
   };
 
   const reload = async (): Promise<void> => {

@@ -153,11 +153,26 @@ export const withSelection = <T extends VListItem = VListItem>(
           for (const range of ranges) {
             for (let i = range.start; i <= range.end; i++) {
               const item = ctx.dataManager.getItem(i);
-              if (item) idToIndexMap.set(item.id, i);
+              if (item && !(item as any)._isPlaceholder) {
+                idToIndexMap.set(item.id, i);
+              }
             }
           }
         }
       };
+
+      // Rebuild index and clean selection after data mutations (removeItem).
+      // Without this, idToIndexMap holds stale indices after items shift,
+      // causing getSelectedItems() to return wrong items.
+      emitter.on("data:change", ({ type, id }) => {
+        if (type === "remove") {
+          // Remove the deleted id from selection state
+          selectionState.selected.delete(id);
+
+          // Rebuild index — all indices after the removed item shifted
+          rebuildIdIndex();
+        }
+      });
 
       // Incrementally index newly loaded items via load:end event.
       // Items arrive in small batches (25-50) with a known offset, so
@@ -529,8 +544,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         // O(1) lookup using ID → index map
         const getItemByIdFn = (id: string | number): T | undefined => {
           const index = idToIndexMap.get(id);
-          if (index === undefined) return undefined;
-          return ctx.dataManager.getItem(index);
+          return index === undefined ? undefined : ctx.dataManager.getItem(index);
         };
         return getSelectedItems(selectionState, getItemByIdFn);
       });

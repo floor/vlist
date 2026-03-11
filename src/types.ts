@@ -505,6 +505,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Scroll idle — fired after scrolling stops and idle timeout elapses */
   "scroll:idle": { scrollPosition: number };
 
+  /** Data changed — fired after item removal or other data mutations */
+  "data:change": { type: "remove"; id: string | number } | { type: "update"; id: string | number };
+
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;
 }
