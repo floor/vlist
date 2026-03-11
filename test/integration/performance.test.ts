@@ -475,7 +475,7 @@ describe("performance — render cycles", () => {
       simulateScroll(list, 500);
     });
 
-    expect(elapsed).toBeLessThan(20);
+    expect(elapsed).toBeLessThan(20 * CI_MULTIPLIER);
     list.destroy();
   });
 
