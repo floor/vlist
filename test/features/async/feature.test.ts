@@ -1819,3 +1819,248 @@ describe("withAsync - autoLoad: false with total", () => {
     expect(dataManager.getTotal()).toBe(500);
   });
 });
+
+// =============================================================================
+// Grid + Async Integration (row-to-item range conversion)
+// =============================================================================
+
+describe("withAsync - Grid Range Conversion", () => {
+  /**
+   * When withGrid is active, viewportState.renderRange contains ROW indices.
+   * The async feature must convert these to flat ITEM indices before calling
+   * ensureRange. Without this conversion, ensureRange receives row indices
+   * (e.g. 0-5) instead of item indices (e.g. 0-23 with 4 columns), causing
+   * most items to remain as placeholders.
+   */
+
+  function createMockGridLayout(columns: number) {
+    return {
+      columns,
+      gap: 8,
+      update: () => {},
+      getTotalRows: (totalItems: number) => Math.ceil(totalItems / columns),
+      getPosition: (itemIndex: number) => ({
+        row: Math.floor(itemIndex / columns),
+        col: itemIndex % columns,
+      }),
+      getRow: (itemIndex: number) => Math.floor(itemIndex / columns),
+      getCol: (itemIndex: number) => itemIndex % columns,
+      getItemRange: (rowStart: number, rowEnd: number, totalItems: number) => ({
+        start: Math.max(0, rowStart * columns),
+        end: Math.min(totalItems - 1, (rowEnd + 1) * columns - 1),
+      }),
+      getItemIndex: (row: number, col: number, totalItems: number) => {
+        const index = row * columns + col;
+        return index < totalItems ? index : -1;
+      },
+      getColumnWidth: (containerWidth: number) =>
+        (containerWidth - (columns - 1) * 8) / columns,
+      getColumnOffset: (col: number, containerWidth: number) => {
+        const colWidth = (containerWidth - (columns - 1) * 8) / columns;
+        return col * (colWidth + 8);
+      },
+    };
+  }
+
+  it("should convert row range to item range for ensureRange when grid is active", async () => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    // Register grid layout BEFORE plugin setup (grid has priority 10, async has 20)
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Set renderRange in ROW space (rows 0-5 with 4 columns = items 0-23)
+    ctx.state.viewportState.renderRange = { start: 0, end: 5 };
+
+    plugin.setup(ctx);
+
+    // Get the captured data manager and spy on ensureRange
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    // Trigger scroll
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Should call ensureRange with ITEM indices (0-23), not row indices (0-5)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(0);   // start item = row 0 * 4 columns = 0
+    expect(call[1]).toBe(23);  // end item = (5+1) * 4 - 1 = 23
+  });
+
+  it("should convert row range to item range when scrolled further down", async () => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 10-15 with 4 columns = items 40-63
+    ctx.state.viewportState.renderRange = { start: 10, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(500, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(40);  // row 10 * 4 = 40
+    expect(call[1]).toBe(63);  // (15+1) * 4 - 1 = 63
+  });
+
+  it("should clamp item range to total items in grid mode", async () => {
+    const adapter = createMockAdapter(50);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 10-15 would be items 40-63, but total is only 50
+    ctx.state.viewportState.renderRange = { start: 10, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 50;
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(500, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(40);  // row 10 * 4 = 40
+    expect(call[1]).toBe(49);  // clamped to totalItems - 1 = 49
+  });
+
+  it("should NOT convert range when grid is not active", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext({ velocity: 0, isTracking: true });
+    // No grid layout registered — plain list mode
+
+    ctx.state.viewportState.renderRange = { start: 5, end: 15 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Should pass range as-is (no conversion)
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(5);
+    expect(call[1]).toBe(15);
+  });
+
+  it("should convert range in loadPendingRange (idle handler) with grid", (done) => {
+    const adapter = createMockAdapter(200);
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 25 },
+    });
+
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 5-10 = items 20-43
+    ctx.state.viewportState.renderRange = { start: 5, end: 10 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 200;
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    // High velocity — range gets queued
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(300, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Trigger idle timer
+    const idleHandler = ctx.afterScroll[1];
+    idleHandler(300, "down");
+
+    // Wait for idle timeout (200ms)
+    setTimeout(() => {
+      expect(ensureRangeSpy).toHaveBeenCalled();
+      const call = ensureRangeSpy.mock.calls[0];
+      expect(call[0]).toBe(20);  // row 5 * 4 = 20
+      expect(call[1]).toBe(43);  // (10+1) * 4 - 1 = 43
+      done();
+    }, 250);
+  });
+
+  it("should use item total (not row total) for preload clamping in grid mode", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = withAsync({
+      adapter,
+      loading: {
+        preloadThreshold: 2,
+        preloadAhead: 500, // Very large to force clamping
+        cancelThreshold: 25,
+      },
+    });
+
+    const ctx = createMockContext({ velocity: 5, isTracking: true });
+
+    const gridLayout = createMockGridLayout(4);
+    ctx.methods.set("_getGridLayout", () => gridLayout);
+
+    // Rows 0-3 = items 0-15; getVirtualTotal returns row count (25 rows)
+    // but item total is 100
+    ctx.state.viewportState.renderRange = { start: 0, end: 3 };
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.getTotal = () => 100;
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0];
+    scrollHandler(100, "down");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const call = ensureRangeSpy.mock.calls[0];
+    expect(call[0]).toBe(0);
+    // Should clamp to item total - 1 (99), not row total - 1 (24)
+    expect(call[1]).toBe(99);
+  });
+});
