@@ -191,17 +191,31 @@ export const withAsync = <T extends VListItem = VListItem>(
       };
 
       /**
-       * Load the pending range if any (called on idle)
+       * Load data for the current visible range (called on idle / deceleration settle).
+       *
+       * The saved `pendingRange` acts as a boolean guard — we only fire when
+       * loading was actually deferred during a fast scroll. But instead of
+       * consuming the stale saved coordinates, we read the *live* renderRange
+       * from viewportState. By the time the idle/deceleration timer fires the
+       * smooth-scroll animation may have moved the viewport well past the
+       * position where `pendingRange` was captured, so the saved range can
+       * point at chunks the user has already scrolled past.
        */
       const loadPendingRange = (): void => {
-        if (pendingRange) {
-          const range = pendingRange;
-          pendingRange = null;
+        if (!pendingRange) return;
+        pendingRange = null;
 
-          ctx.dataManager.ensureRange(range.start, range.end).catch((error) => {
+        const { renderRange } = ctx.state.viewportState;
+        if (renderRange.end < renderRange.start) return;
+
+        // Reset so the afterScroll rangeChanged check re-evaluates
+        lastEnsuredRange = null;
+
+        ctx.dataManager
+          .ensureRange(renderRange.start, renderRange.end)
+          .catch((error) => {
             emitter.emit("error", { error, context: "ensureRange" });
           });
-        }
       };
 
       // ── Post-scroll: velocity-aware loading + load-more ──

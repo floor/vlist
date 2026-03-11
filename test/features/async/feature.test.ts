@@ -1603,6 +1603,202 @@ describe("withAsync - Network Recovery", () => {
 });
 
 // =============================================================================
+// Pending Range — Live Range Fix
+// =============================================================================
+
+describe("withAsync - Pending Range Uses Live Render Range", () => {
+  it("should use live renderRange when idle timer fires, not stale pendingRange", (done) => {
+    // Scenario: smooth scroll defers loading, but by the time the idle timer
+    // fires the viewport has moved far past the saved pendingRange.
+    // loadPendingRange must read viewportState.renderRange (the live position)
+    // instead of consuming the stale saved coordinates.
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 5 },
+    });
+
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Frame 1: fast scroll at range 100..120 — deferred (velocity too high)
+    ctx.state.viewportState.renderRange = { start: 100, end: 120 };
+    (ctx.scrollController as any).setScrollTop(3600);
+    scrollHandler(3600, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Simulate viewport moving to a completely different position
+    // (smooth scroll animation continued and landed elsewhere)
+    ctx.state.viewportState.renderRange = { start: 500, end: 520 };
+
+    // Fire idle timer — should use live range {500..520}, not stale {100..120}
+    idleHandler(18000, "down");
+
+    setTimeout(() => {
+      expect(ensureRangeSpy).toHaveBeenCalled();
+      const lastCall = ensureRangeSpy.mock.calls[ensureRangeSpy.mock.calls.length - 1];
+      // Must match the LIVE renderRange, not the stale one
+      expect(lastCall[0]).toBe(500);
+      expect(lastCall[1]).toBe(520);
+      done();
+    }, 250);
+  });
+
+  it("should use live renderRange when deceleration timer fires", async () => {
+    // Same bug, triggered via the deceleration settle timer (120ms) rather
+    // than the idle timer (200ms).
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      autoLoad: false,
+      total: 10000,
+      loading: { cancelThreshold: 5 },
+    });
+
+    let currentVelocity = 30;
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => false;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+
+    // Frame 1: high velocity, renderRange = 200..220
+    currentVelocity = 30;
+    ctx.state.viewportState.renderRange = { start: 200, end: 220 };
+    (ctx.scrollController as any).setScrollTop(7200);
+    scrollHandler(7200, "down");
+
+    // Frame 2: velocity drops below threshold (deceleration starts)
+    // renderRange moves to 300..320
+    currentVelocity = 3;
+    ctx.state.viewportState.renderRange = { start: 300, end: 320 };
+    (ctx.scrollController as any).setScrollTop(10800);
+    scrollHandler(10800, "down");
+
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Before deceleration timer fires, viewport settles at 800..820
+    ctx.state.viewportState.renderRange = { start: 800, end: 820 };
+
+    // Wait for deceleration settle timer (120ms)
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(ensureRangeSpy).toHaveBeenCalled();
+    const lastCall = ensureRangeSpy.mock.calls[ensureRangeSpy.mock.calls.length - 1];
+    // Must be the live range {800..820}, not the stale {300..320}
+    expect(lastCall[0]).toBe(800);
+    expect(lastCall[1]).toBe(820);
+  });
+
+  it("should reset lastEnsuredRange so afterScroll re-evaluates after pending load", (done) => {
+    // After loadPendingRange fires via idle, a subsequent afterScroll frame
+    // at the SAME renderRange should still call ensureRange — proving that
+    // lastEnsuredRange was cleared by loadPendingRange.
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      autoLoad: false,
+      total: 10000,
+      loading: { cancelThreshold: 5 },
+    });
+
+    let currentVelocity = 30;
+    const ctx = createMockContext({ velocity: 30, isTracking: true });
+    ctx.scrollController.getVelocity = () => currentVelocity;
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+    dataManager.getIsLoading = () => false;
+    dataManager.getHasMore = () => false;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Frame 1: fast scroll at range 50..70 — deferred (velocity too high)
+    ctx.state.viewportState.renderRange = { start: 50, end: 70 };
+    (ctx.scrollController as any).setScrollTop(1800);
+    scrollHandler(1800, "down");
+    expect(ensureRangeSpy).not.toHaveBeenCalled();
+
+    // Idle fires — loads the live range and resets lastEnsuredRange
+    idleHandler(1800, "down");
+
+    setTimeout(() => {
+      const callCountAfterIdle = ensureRangeSpy.mock.calls.length;
+      expect(callCountAfterIdle).toBeGreaterThan(0);
+
+      // Now scroll slowly at the SAME range {50..70}.
+      // First drop velocity to 0 so we fully exit deceleration
+      // (previousVelocity goes through the 30→0 transition cleanly).
+      currentVelocity = 0;
+      (ctx.scrollController as any).setScrollTop(1800);
+      scrollHandler(1800, "down");
+
+      // Then a normal slow scroll — same range, low velocity.
+      // If lastEnsuredRange wasn't nulled, rangeChanged would be false
+      // and ensureRange would be skipped.
+      currentVelocity = 1;
+      ctx.state.viewportState.renderRange = { start: 50, end: 70 };
+      (ctx.scrollController as any).setScrollTop(1801);
+      scrollHandler(1801, "down");
+
+      expect(ensureRangeSpy.mock.calls.length).toBeGreaterThan(callCountAfterIdle);
+      done();
+    }, 250);
+  });
+
+  it("should not fire ensureRange when no range was deferred", (done) => {
+    // loadPendingRange should be a no-op when pendingRange is null
+    // (e.g. low-velocity scroll that loaded inline)
+    const adapter = createMockAdapter();
+    const plugin = withAsync({
+      adapter,
+      loading: { cancelThreshold: 50 }, // high threshold = everything loads inline
+    });
+
+    const ctx = createMockContext({ velocity: 1, isTracking: true });
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const ensureRangeSpy = mock(() => Promise.resolve());
+    dataManager.ensureRange = ensureRangeSpy;
+
+    const scrollHandler = ctx.afterScroll[0]!;
+    const idleHandler = ctx.afterScroll[1]!;
+
+    // Low-velocity scroll — loads inline via afterScroll (no pending)
+    ctx.state.viewportState.renderRange = { start: 0, end: 10 };
+    scrollHandler(0, "down");
+
+    const callCountAfterScroll = ensureRangeSpy.mock.calls.length;
+
+    // Fire idle timer — should NOT trigger an extra ensureRange
+    idleHandler(0, "down");
+
+    setTimeout(() => {
+      expect(ensureRangeSpy.mock.calls.length).toBe(callCountAfterScroll);
+      done();
+    }, 250);
+  });
+});
+
+// =============================================================================
 // autoLoad: false with total
 // =============================================================================
 
