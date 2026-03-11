@@ -104,8 +104,12 @@ export const createApi = <T extends VListItem = VListItem>(
     ctx.dataManager.updateItem(index, updates);
   };
 
-  const removeItem = (index: number): void => {
-    ctx.dataManager.removeItem(index);
+  const removeItem = (id: string | number): boolean => {
+    const result = ctx.dataManager.removeItem(id);
+    if (result) {
+      emitter.emit("data:change", { type: "remove", id });
+    }
+    return result;
   };
 
   const reload = async (): Promise<void> => {
