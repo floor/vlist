@@ -357,6 +357,7 @@ describe("createSparseStorage", () => {
       expect(result).toBe(true);
       expect(storage.has(0)).toBe(false);
       expect(storage.getCachedCount()).toBe(0);
+      expect(storage.getTotal()).toBe(0);
     });
 
     it("should return false for negative index", () => {
@@ -408,10 +409,114 @@ describe("createSparseStorage", () => {
       expect(storage.isChunkLoaded(0)).toBe(true);
 
       storage.delete(0);
+      // Item was the only loaded one in the chunk, but totalItems
+      // decreased so the chunk may or may not exist depending on
+      // whether shifting brought anything in. With only 1 loaded
+      // item at index 0 and nothing at index 1, the chunk is empty.
       expect(storage.isChunkLoaded(0)).toBe(false);
     });
 
-    it("should keep chunk if other items remain", () => {
+    it("should shift items after deleted index down by 1", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(2, createItem(3));
+
+      storage.delete(0);
+
+      // Items shifted: [2, 3] now at indices [0, 1]
+      expect(storage.getTotal()).toBe(2);
+      expect(storage.get(0)).toEqual(createItem(2));
+      expect(storage.get(1)).toEqual(createItem(3));
+      expect(storage.get(2)).toBeUndefined();
+      expect(storage.getCachedCount()).toBe(2);
+    });
+
+    it("should shift items when deleting from the middle", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(2, createItem(3));
+      storage.set(3, createItem(4));
+      storage.set(4, createItem(5));
+
+      storage.delete(2);
+
+      // [1, 2, 4, 5] at indices [0, 1, 2, 3]
+      expect(storage.getTotal()).toBe(4);
+      expect(storage.get(0)).toEqual(createItem(1));
+      expect(storage.get(1)).toEqual(createItem(2));
+      expect(storage.get(2)).toEqual(createItem(4));
+      expect(storage.get(3)).toEqual(createItem(5));
+      expect(storage.getCachedCount()).toBe(4);
+    });
+
+    it("should not shift when deleting the last item", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(2, createItem(3));
+
+      storage.delete(2);
+
+      // [1, 2] at indices [0, 1], total decremented
+      expect(storage.getTotal()).toBe(2);
+      expect(storage.get(0)).toEqual(createItem(1));
+      expect(storage.get(1)).toEqual(createItem(2));
+      expect(storage.getCachedCount()).toBe(2);
+    });
+
+    it("should shift across chunk boundaries", () => {
+      const storage = createSparseStorage({ chunkSize: 3 });
+
+      // Chunk 0: [A, B, C], Chunk 1: [D, E, F]
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(2, createItem(3));
+      storage.set(3, createItem(4));
+      storage.set(4, createItem(5));
+      storage.set(5, createItem(6));
+
+      // Delete B (index 1) — items shift across chunk boundary
+      storage.delete(1);
+
+      // [A, C, D, E, F] at indices [0, 1, 2, 3, 4]
+      expect(storage.getTotal()).toBe(5);
+      expect(storage.get(0)).toEqual(createItem(1));
+      expect(storage.get(1)).toEqual(createItem(3));
+      expect(storage.get(2)).toEqual(createItem(4));
+      expect(storage.get(3)).toEqual(createItem(5));
+      expect(storage.get(4)).toEqual(createItem(6));
+      expect(storage.getCachedCount()).toBe(5);
+    });
+
+    it("should handle holes during shift", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+      storage.setTotal(10);
+
+      // Load items at 0, 1, 5, 6 — gap at 2, 3, 4
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(5, createItem(6));
+      storage.set(6, createItem(7));
+
+      storage.delete(0);
+
+      // Item at 1 shifts to 0, gap at 1-3, item at 5→4, item at 6→5
+      expect(storage.getTotal()).toBe(9);
+      expect(storage.get(0)).toEqual(createItem(2));
+      expect(storage.get(1)).toBeUndefined();
+      expect(storage.get(2)).toBeUndefined();
+      expect(storage.get(3)).toBeUndefined();
+      expect(storage.get(4)).toEqual(createItem(6));
+      expect(storage.get(5)).toEqual(createItem(7));
+      expect(storage.getCachedCount()).toBe(3);
+    });
+
+    it("should keep chunk if other items remain after shift", () => {
       const storage = createSparseStorage({ chunkSize: 10 });
 
       storage.set(0, createItem(1));
@@ -419,8 +524,43 @@ describe("createSparseStorage", () => {
 
       storage.delete(0);
 
+      // Item 6 shifted from index 5 to index 4
+      expect(storage.getTotal()).toBe(5);
       expect(storage.isChunkLoaded(0)).toBe(true);
-      expect(storage.get(5)).toEqual(createItem(6));
+      expect(storage.get(4)).toEqual(createItem(6));
+    });
+
+    it("should handle multiple sequential deletions", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+
+      storage.set(0, createItem(1));
+      storage.set(1, createItem(2));
+      storage.set(2, createItem(3));
+      storage.set(3, createItem(4));
+      storage.set(4, createItem(5));
+
+      // Delete first item repeatedly
+      storage.delete(0); // [2,3,4,5]
+      storage.delete(0); // [3,4,5]
+      storage.delete(0); // [4,5]
+
+      expect(storage.getTotal()).toBe(2);
+      expect(storage.get(0)).toEqual(createItem(4));
+      expect(storage.get(1)).toEqual(createItem(5));
+      expect(storage.getCachedCount()).toBe(2);
+    });
+
+    it("should decrement total even with unloaded items after deleted index", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+      storage.setTotal(100);
+
+      // Only index 0 is loaded; indices 1-99 are unloaded
+      storage.set(0, createItem(1));
+
+      storage.delete(0);
+
+      expect(storage.getTotal()).toBe(99);
+      expect(storage.getCachedCount()).toBe(0);
     });
   });
 

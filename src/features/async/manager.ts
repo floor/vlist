@@ -458,21 +458,38 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const removeItem = (id: string | number): boolean => {
     const index = idToIndex.get(id);
+
+    // DEBUG
+    console.log(`[removeItem] id=${id}, resolvedIndex=${index}, total=${storage.getTotal()}, cached=${storage.getCachedCount()}`);
+    console.log(`[removeItem] idToIndex entries:`, [...idToIndex.entries()].slice(0, 20));
+
     if (index === undefined) {
+      console.log(`[removeItem] BAIL — id=${id} not found in idToIndex`);
       return false;
     }
 
-    storage.delete(index);
-    removeFromIdIndex(id);
+    // DEBUG — what's at this index before delete?
+    const itemAtIndex = storage.get(index);
+    console.log(`[removeItem] item at index ${index}:`, itemAtIndex ? `id=${itemAtIndex.id}` : 'undefined');
 
-    // Decrease total
-    const currentTotal = storage.getTotal();
-    if (currentTotal > 0) {
-      storage.setTotal(currentTotal - 1);
+    // storage.delete now shifts all items after `index` down by 1
+    // and decrements totalItems — no manual setTotal needed.
+    const deleted = storage.delete(index);
+    console.log(`[removeItem] storage.delete(${index}) returned ${deleted}, newTotal=${storage.getTotal()}, newCached=${storage.getCachedCount()}`);
+
+    if (!deleted) {
+      console.log(`[removeItem] BAIL — storage.delete returned false for index=${index}`);
+      return false;
     }
 
-    // Rebuild index since indices shifted conceptually
-    // Note: In a true sparse array, items don't shift, but the total decreases
+    // Indices changed for every item after the deleted one —
+    // rebuild the full id→index map from storage.
+    rebuildIdIndex();
+    console.log(`[removeItem] after rebuildIdIndex:`, [...idToIndex.entries()].slice(0, 20));
+
+    // Stale range keys in activeLoads may now refer to wrong offsets.
+    activeLoads.clear();
+
     notifyStateChange();
     return true;
   };
