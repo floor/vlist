@@ -10,43 +10,24 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, mock } from "bun:test";
-import { JSDOM } from "jsdom";
 import { vlist } from "../../src/builder/core";
 import { withAsync } from "../../src/features/async/feature";
 import type { VListItem, VListAdapter } from "../../src/types";
+import { setupDOM, teardownDOM } from "../helpers/dom";
 
 // =============================================================================
-// JSDOM Setup
+// JSDOM Setup (shared helpers — fires ResizeObserver with real dimensions)
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
 let originalConsoleError: any;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
+  setupDOM({ width: 300, height: 400 });
   originalConsoleError = console.error;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
+  teardownDOM();
   console.error = originalConsoleError;
 });
 
@@ -61,6 +42,8 @@ interface TestItem extends VListItem {
 
 function createContainer(height: number = 400): HTMLElement {
   const container = document.createElement("div");
+  Object.defineProperty(container, "clientHeight", { value: height, configurable: true });
+  Object.defineProperty(container, "clientWidth", { value: 300, configurable: true });
   container.style.height = `${height}px`;
   container.style.overflow = "auto";
   document.body.appendChild(container);

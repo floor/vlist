@@ -32,6 +32,7 @@ import type {
 import type { MRefs } from "./materialize";
 import { easeInOutQuad, resolveScrollArgs } from "./scroll";
 
+
 // =============================================================================
 // Factory
 // =============================================================================
@@ -60,6 +61,28 @@ export const createApi = <T extends VListItem = VListItem>(
   // ── Base data methods ─────────────────────────────────────────────
 
   const setItems = (newItems: T[]): void => {
+    if (process.env.NODE_ENV !== "production") {
+      if (!Array.isArray(newItems)) {
+        console.warn('[vlist] setItems() expects an array, got:', typeof newItems);
+        return;
+      }
+      if (newItems.length > 0 && newItems[0] && !('id' in newItems[0])) {
+        console.warn('[vlist] Items must have an "id" property. First item:', newItems[0]);
+      }
+      // Check for duplicate IDs (#10d)
+      const seen = new Set<string | number>();
+      for (let i = 0; i < newItems.length; i++) {
+        const item = newItems[i];
+        if (item && 'id' in item) {
+          if (seen.has(item.id as string | number)) {
+            console.warn(`[vlist] Duplicate item ID "${item.id}" at index ${i}. updateItem() and removeItem() will only match the first occurrence.`);
+            break; // warn once
+          }
+          seen.add(item.id as string | number);
+        }
+      }
+    }
+    cancelScroll(); // #10a: cancel in-progress smooth scroll before updating data
     ctx.dataManager.setItems(newItems, 0, newItems.length);
   };
 
@@ -101,6 +124,12 @@ export const createApi = <T extends VListItem = VListItem>(
       };
 
   const updateItem = (index: number, updates: Partial<T>): void => {
+    if (process.env.NODE_ENV !== "production") {
+      const total = $.vtf();
+      if (index < 0 || index >= total) {
+        console.warn(`[vlist] updateItem() index ${index} is out of range (0–${total - 1}).`);
+      }
+    }
     ctx.dataManager.updateItem(index, updates);
   };
 
@@ -112,6 +141,16 @@ export const createApi = <T extends VListItem = VListItem>(
   let ensureRangePending = false;
 
   const removeItem = (id: string | number): boolean => {
+    // Capture the focused element's item index before removal for focus recovery (#13d)
+    let focusedItemIndex = -1;
+    if (typeof document !== "undefined") {
+      const active = document.activeElement;
+      if (active && dom.items.contains(active)) {
+        const idx = (active as HTMLElement).dataset?.index;
+        if (idx !== undefined) focusedItemIndex = parseInt(idx, 10);
+      }
+    }
+
     const result = ctx.dataManager.removeItem(id);
     if (result) {
       emitter.emit("data:change", { type: "remove", id });
@@ -139,6 +178,23 @@ export const createApi = <T extends VListItem = VListItem>(
         }
       }
     }
+    if (!result && process.env.NODE_ENV !== "production") {
+      console.warn(`[vlist] removeItem() could not find item with id "${id}".`);
+    }
+
+    // Focus recovery (#13d): when the focused item was removed, move focus
+    // to the nearest remaining item.
+    if (result && focusedItemIndex >= 0) {
+      const total = $.vtf();
+      if (total > 0) {
+        const nextIndex = Math.min(focusedItemIndex, total - 1);
+        const nextEl = rendered.get(nextIndex);
+        if (nextEl && typeof nextEl.focus === "function") {
+          nextEl.focus();
+        }
+      }
+    }
+
     return result;
   };
 
@@ -187,6 +243,12 @@ export const createApi = <T extends VListItem = VListItem>(
     index: number,
     alignOrOptions?: "start" | "center" | "end" | ScrollToOptions,
   ): void => {
+    if (process.env.NODE_ENV !== "production") {
+      const total = $.vtf();
+      if (total > 0 && (index < 0 || index >= total)) {
+        console.warn(`[vlist] scrollToIndex(${index}) is out of range (0–${total - 1}).`);
+      }
+    }
     const { align, behavior, duration } = resolveScrollArgs(alignOrOptions);
     const total = $.vtf();
 

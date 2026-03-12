@@ -13,6 +13,8 @@ export interface DOMStructure {
   viewport: HTMLElement;
   content: HTMLElement;
   items: HTMLElement;
+  /** Visually-hidden live region for screen reader range announcements */
+  liveRegion: HTMLElement;
 }
 
 // =============================================================================
@@ -78,10 +80,27 @@ export const createDOMStructure = (
     items.style.width = "100%";
   }
 
+  // Visually-hidden ARIA live region for announcing visible range changes (#13b)
+  const liveRegion = document.createElement("div");
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.setAttribute("role", "status");
+  liveRegion.className = `${classPrefix}-live`;
+  liveRegion.style.position = "absolute";
+  liveRegion.style.width = "1px";
+  liveRegion.style.height = "1px";
+  liveRegion.style.padding = "0";
+  liveRegion.style.margin = "-1px";
+  liveRegion.style.overflow = "hidden";
+  liveRegion.style.clip = "rect(0,0,0,0)";
+  liveRegion.style.whiteSpace = "nowrap";
+  liveRegion.style.border = "0";
+
   content.appendChild(items);
   viewport.appendChild(content);
+  root.appendChild(liveRegion);
   root.appendChild(viewport);
   container.appendChild(root);
 
-  return { root, viewport, content, items };
+  return { root, viewport, content, items, liveRegion };
 };

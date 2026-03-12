@@ -500,16 +500,18 @@ describe("builder core", () => {
     expect(first.getAttribute("aria-posinset")).toBeTruthy();
   });
 
-  it("should not include live region without selection plugin", () => {
+  it("should include ARIA live region for range announcements", () => {
     list = vlist<TestItem>({
       container,
       item: { height: 40, template },
       items: createTestItems(10),
     }).build();
 
-    // Live region is only created by selection plugin, not by core
+    // Live region is always created by core for screen reader range announcements (#13b)
     const liveRegion = list.element.querySelector("[aria-live]");
-    expect(liveRegion).toBeNull();
+    expect(liveRegion).not.toBeNull();
+    expect(liveRegion!.getAttribute("aria-live")).toBe("polite");
+    expect(liveRegion!.getAttribute("role")).toBe("status");
   });
 
   it("should re-render when scrolling through the list", () => {
