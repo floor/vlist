@@ -27,85 +27,21 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { JSDOM } from "jsdom";
 import { vlist } from "../../src/builder/core";
+import { setupDOM, teardownDOM } from "../helpers/dom";
+import { createTestItems, createContainer } from "../helpers/factory";
+import type { TestItem } from "../helpers/factory";
 
 // =============================================================================
-// JSDOM Setup
+// JSDOM Setup (shared helpers)
 // =============================================================================
 
 let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-
-  global.ResizeObserver = class MockResizeObserver {
-    callback: ResizeObserverCallback;
-    constructor(callback: ResizeObserverCallback) {
-      this.callback = callback;
-    }
-    observe(target: Element) {
-      this.callback(
-        [
-          {
-            target,
-            contentRect: { width: 400, height: 600 } as DOMRectReadOnly,
-            borderBoxSize: [],
-            contentBoxSize: [],
-            devicePixelContentBoxSize: [],
-          },
-        ] as any,
-        this as any,
-      );
-    }
-    unobserve() {}
-    disconnect() {}
-  } as any;
-
-  if (!global.requestAnimationFrame) {
-    global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
-      setTimeout(() => cb(performance.now()), 0) as unknown as number;
-  }
-  if (!global.cancelAnimationFrame) {
-    global.cancelAnimationFrame = (id: number) => clearTimeout(id);
-  }
+  dom = setupDOM({ width: 400, height: 600 });
 });
 
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
-interface TestItem {
-  id: number;
-  name: string;
-  [key: string]: unknown;
-}
-
-const createTestItems = (count: number): TestItem[] =>
-  Array.from({ length: count }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }));
-
-const createContainer = (): HTMLElement => {
-  const el = document.createElement("div");
-  Object.defineProperty(el, "clientHeight", { value: 500, configurable: true });
-  Object.defineProperty(el, "clientWidth", { value: 400, configurable: true });
-  document.body.appendChild(el);
-  return el;
-};
+afterAll(() => teardownDOM());
 
 /**
  * Create a WheelEvent with the given deltas.
