@@ -32,8 +32,11 @@ jobs:
       - name: Test
         run: bun test
 
+      - name: Coverage threshold
+        run: bun run scripts/check-coverage.ts --threshold 85
+
       - name: Build
         run: bun run build
 
-      - name: Bundle size
+      - name: Bundle size + tree-shaking
         run: bun run size

@@ -11,40 +11,20 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
-import { JSDOM } from "jsdom";
 import { vlist } from "../../src/builder/core";
 import type { VListItem } from "../../src/types";
+import { setupDOM, teardownDOM, createMockResizeObserver } from "../helpers/dom";
 
 // =============================================================================
-// JSDOM Setup
+// JSDOM Setup (shared helpers — fires ResizeObserver with real dimensions)
 // =============================================================================
-
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
+  setupDOM({ width: 300, height: 400 });
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
+  teardownDOM();
 });
 
 // =============================================================================
@@ -58,6 +38,8 @@ interface TestItem extends VListItem {
 
 function createContainer(height: number = 400): HTMLElement {
   const container = document.createElement("div");
+  Object.defineProperty(container, "clientHeight", { value: height, configurable: true });
+  Object.defineProperty(container, "clientWidth", { value: 300, configurable: true });
   container.style.height = `${height}px`;
   container.style.overflow = "auto";
   document.body.appendChild(container);
@@ -365,9 +347,9 @@ describe("Edge Cases: Extreme Item Dimensions", () => {
       items: createItemArray(100),
     }).build();
 
-    // With huge items, should only render 1-2 visible
+    // With huge items, should only render a few (visible + overscan)
     const items = instance.element.querySelectorAll("[data-index]");
-    expect(items.length).toBeLessThan(5);
+    expect(items.length).toBeLessThanOrEqual(5);
     expect(items.length).toBeGreaterThan(0);
 
     instance.destroy();

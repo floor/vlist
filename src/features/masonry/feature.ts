@@ -118,6 +118,9 @@ export const withMasonry = <T extends VListItem = VListItem>(
     name: "withMasonry",
     priority: 10,
 
+    // Conflict with other layout features
+    conflicts: ["withGrid", "withTable"],
+
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
       const classPrefix = resolvedConfig.classPrefix;

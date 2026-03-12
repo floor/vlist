@@ -510,7 +510,15 @@ function materialize<T extends VListItem = VListItem>(
   const applyTemplate = (
     element: HTMLElement,
     result: string | HTMLElement,
+    index?: number,
   ): void => {
+    if (process.env.NODE_ENV !== "production") {
+      if (!result) {
+        console.warn(`[vlist] Template returned falsy value${index !== undefined ? ` for item at index ${index}` : ''}. The element will render as blank.`);
+      } else if (typeof result === "string" && result === "") {
+        console.warn(`[vlist] Template returned empty string${index !== undefined ? ` for item at index ${index}` : ''}. The element will render as blank.`);
+      }
+    }
     if (typeof result === "string") element.innerHTML = result;
     else element.replaceChildren(result);
   };
@@ -580,7 +588,7 @@ function materialize<T extends VListItem = VListItem>(
       }
     }
 
-    applyTemplate(element, $.at(item, index, itemState));
+    applyTemplate(element, $.at(item, index, itemState), index);
     $.pef(element, index);
     return element;
   };
@@ -591,13 +599,20 @@ function materialize<T extends VListItem = VListItem>(
   const coreRenderIfNeeded = (): void => {
     if ($.id) return;
 
+    // #10b: Skip render when container has zero main-axis size (e.g. collapsed
+    // accordion, display:none parent). calcVisibleRange would produce a
+    // degenerate range and items would be positioned at offset 0, causing a
+    // visual flash when the container expands. The ResizeObserver callback
+    // will call $.rfn() once the container gets a real size.
+    const containerSize = isHorizontal ? $.cw : $.ch;
+    if (containerSize <= 0) return;
+
     // Resolve selection getters lazily (selection feature registers them at setup)
     resolveSelectionGetters();
     const selectedIds = selectionIdsGetter ? selectionIdsGetter() : $.ss;
     const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : $.fi;
 
     const total = $.vtf();
-    const containerSize = isHorizontal ? $.cw : $.ch;
     $.gvr($.ls, containerSize, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
 
@@ -650,7 +665,7 @@ function materialize<T extends VListItem = VListItem>(
           const wasPlaceholder = existingId?.startsWith("__placeholder_");
           const isPlaceholder = newId.startsWith("__placeholder_");
 
-          applyTemplate(existing, $.at(item, i, itemState));
+          applyTemplate(existing, $.at(item, i, itemState), i);
           existing.dataset.id = newId;
           // Mode B: unconstrain unmeasured items for ResizeObserver measurement
           const shouldConstrain =
@@ -937,6 +952,25 @@ function materialize<T extends VListItem = VListItem>(
   dom.items.addEventListener("click", handleClick);
   dom.items.addEventListener("dblclick", handleDblClick);
   dom.root.addEventListener("keydown", handleKeydown);
+
+  // ── ARIA live region: announce visible range changes (#13b) ─────
+  // Debounced to ~300ms so fast scrolling doesn't spam screen readers.
+  let liveRegionTimer: ReturnType<typeof setTimeout> | null = null;
+  const updateLiveRegion = (data: { range: { start: number; end: number } }): void => {
+    if (liveRegionTimer) clearTimeout(liveRegionTimer);
+    liveRegionTimer = setTimeout(() => {
+      liveRegionTimer = null;
+      if ($.id) return;
+      const total = $.vtf();
+      const { start, end } = data.range;
+      dom.liveRegion.textContent = `Showing items ${start + 1} to ${Math.min(end + 1, total)} of ${total}`;
+    }, 300);
+  };
+  emitter.on("range:change", updateLiveRegion);
+  destroyHandlers.push(() => {
+    if (liveRegionTimer) clearTimeout(liveRegionTimer);
+    emitter.off("range:change", updateLiveRegion);
+  });
 
   // ── ResizeObserver ──────────────────────────────────────────────
 

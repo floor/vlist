@@ -87,6 +87,8 @@ export const withGrid = <T extends VListItem = VListItem>(
     name: "withGrid",
     priority: 10,
 
+    conflicts: ["withTable", "withMasonry"],
+
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;

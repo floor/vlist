@@ -16,35 +16,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { JSDOM } from "jsdom";
+import { setupDOM, teardownDOM } from "../helpers/dom";
 import { resolveContainer, createDOMStructure } from "../../src/builder/dom";
 
 // =============================================================================
 // JSDOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+beforeAll(() => setupDOM());
+afterAll(() => teardownDOM());
 
 // =============================================================================
 // resolveContainer
@@ -78,9 +58,9 @@ describe("resolveContainer", () => {
 // =============================================================================
 
 describe("createDOMStructure", () => {
-  it("should create root, viewport, content, and items elements", () => {
+  it("should create root, viewport, content, items, and liveRegion elements", () => {
     const container = document.createElement("div");
-    const { root, viewport, content, items } = createDOMStructure(
+    const { root, viewport, content, items, liveRegion } = createDOMStructure(
       container,
       "vlist",
     );
@@ -89,6 +69,7 @@ describe("createDOMStructure", () => {
     expect(viewport).toBeInstanceOf(HTMLElement);
     expect(content).toBeInstanceOf(HTMLElement);
     expect(items).toBeInstanceOf(HTMLElement);
+    expect(liveRegion).toBeInstanceOf(HTMLElement);
   });
 
   it("should nest elements correctly: container > root > viewport > content > items", () => {
@@ -166,5 +147,44 @@ describe("createDOMStructure", () => {
     expect(items.getAttribute("aria-orientation")).toBe("horizontal");
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
+  });
+
+  // ── ARIA live region (#13b) ─────────────────────────────────────
+
+  it("should create a visually-hidden ARIA live region", () => {
+    const container = document.createElement("div");
+    const { liveRegion } = createDOMStructure(container, "vlist");
+
+    expect(liveRegion).toBeInstanceOf(HTMLElement);
+    expect(liveRegion.getAttribute("aria-live")).toBe("polite");
+    expect(liveRegion.getAttribute("aria-atomic")).toBe("true");
+    expect(liveRegion.getAttribute("role")).toBe("status");
+    expect(liveRegion.className).toBe("vlist-live");
+  });
+
+  it("should visually hide the live region with clip-rect technique", () => {
+    const container = document.createElement("div");
+    const { liveRegion } = createDOMStructure(container, "vlist");
+
+    expect(liveRegion.style.position).toBe("absolute");
+    expect(liveRegion.style.width).toBe("1px");
+    expect(liveRegion.style.height).toBe("1px");
+    expect(liveRegion.style.overflow).toBe("hidden");
+    // JSDOM normalizes clip rect values with units
+    expect(liveRegion.style.clip).toMatch(/rect\(0(px)?,\s*0(px)?,\s*0(px)?,\s*0(px)?\)/);
+  });
+
+  it("should place live region as a direct child of root", () => {
+    const container = document.createElement("div");
+    const { root, liveRegion } = createDOMStructure(container, "vlist");
+
+    expect(liveRegion.parentElement).toBe(root);
+  });
+
+  it("should use class prefix for live region class name", () => {
+    const container = document.createElement("div");
+    const { liveRegion } = createDOMStructure(container, "my-list");
+
+    expect(liveRegion.className).toBe("my-list-live");
   });
 });

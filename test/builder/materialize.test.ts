@@ -57,18 +57,21 @@ function createTestDOM() {
   const viewport = document.createElement("div");
   const content = document.createElement("div");
   const items = document.createElement("div");
+  const liveRegion = document.createElement("div");
 
   root.className = "vlist";
   viewport.className = "vlist__viewport";
   content.className = "vlist__content";
   items.className = "vlist__items";
+  liveRegion.className = "vlist-live";
 
   content.appendChild(items);
   viewport.appendChild(content);
+  root.appendChild(liveRegion);
   root.appendChild(viewport);
   document.body.appendChild(root);
 
-  return { root, viewport, content, items };
+  return { root, viewport, content, items, liveRegion };
 }
 
 function createTestRefs(): MRefs<TestItem> {

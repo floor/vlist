@@ -31,7 +31,8 @@
    CSS Custom Properties (Design Tokens)
    ============================================================================= */
 
-[data-theme-mode="light"] {
+/* Default tokens — work without any data-theme-mode attribute */
+:root {
     /* Colors - Light Mode */
     --vlist-bg: #ffffff;
     --vlist-bg-hover: #f9fafb;
