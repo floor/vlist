@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.6** — [Changelog](./changelog.txt)
+**v1.3.7** — [Changelog](./changelog.txt) — V1 code review complete ✅
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,13 +10,13 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~9.4 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~10.3 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
 - **Gap & padding** — built-in item spacing and content inset (CSS shorthand convention)
 - **Reverse, page-scroll, wrap** — every layout mode
-- **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader DOM ordering
+- **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader DOM ordering, ARIA live region
 - **React, Vue, Svelte** — framework adapters available
 
 **14+ interactive examples → [vlist.dev](https://vlist.dev)**
@@ -89,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 9.4 KB | Core virtualization, gap & padding |
+| **Base** | 10.3 KB | Core virtualization, gap, padding, ARIA live region |
 | `withGrid()` | +4.0 KB | 2D grid layout with context injection |
 | `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
 | `withGroups()` | +4.3 KB | Grouped lists with sticky/inline headers |
-| `withAsync()` | +4.0 KB | Lazy loading with adapters |
+| `withAsync()` | +4.3 KB | Lazy loading with adapters |
 | `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +2.6 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +5.0 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +5.1 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.5 KB | Scroll save/restore |
 
@@ -405,11 +405,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 9.4 KB |
-| + Grid | 13.3 KB |
-| + Groups | 13.7 KB |
-| + Async | 13.4 KB |
-| + Table | 14.3 KB |
+| Base only | 10.3 KB |
+| + Grid | 14.3 KB |
+| + Groups | 14.6 KB |
+| + Async | 14.6 KB |
+| + Table | 15.4 KB |
 
 ### Memory Efficiency
 
