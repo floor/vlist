@@ -1,6 +1,28 @@
 vlist — full changelog
 initial commit → latest
-384 commits · 38 days · Feb 2 – Mar 11, 2026
+385 commits · 39 days · Feb 2 – Mar 12, 2026
+
+
+2026-03-12
+
+  feat(builder): dev-mode diagnostics — warn on non-array setItems, missing/duplicate IDs, out-of-range scrollToIndex, missing updateItem/removeItem targets, empty template return (DCE-verified, 0 KB prod overhead)
+  fix(rendering): setItems() calls cancelScroll() before updating data
+  fix(rendering): skip render when containerSize <= 0 (zero-height guard)
+  feat(a11y): ARIA live region (aria-live=polite) for visible range announcements
+  feat(a11y): focus recovery on removeItem() — nearest remaining item receives focus
+  feat(grid): add conflicts declaration (masonry, table)
+  feat(masonry): add conflicts declaration (grid, table)
+  feat(styles): CSS :root defaults replace [data-theme-mode] selector
+  feat(ci): tree-shaking verification (11 scenarios) integrated into measure-size.ts
+  feat(ci): coverage threshold enforcement script (85% minimum)
+  test: shared test helpers in test/helpers/ (dom, factory, timers)
+  test: DOM snapshot tests — 11 tests across 6 configurations (base, grid, groups, masonry, table)
+  test: 2,822 tests / 37,978 assertions, all passing
+  perf(builder): base bundle 26.2 KB minified (9.8 KB gzipped)
+
+  V1 code review — all 14 items complete ✅
+
+  → v1.3.7
 
 
 2026-03-11
