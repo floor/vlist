@@ -170,7 +170,12 @@ export const createApi = <T extends VListItem = VListItem>(
           ensureRangePending = true;
           queueMicrotask(() => {
             ensureRangePending = false;
+            const totalNow = ctx.dataManager.getTotal();
             const { start, end } = ctx.state.viewportState.renderRange;
+            // Skip refill if list is now empty — no slots to fill,
+            // and a fetch here would re-populate the just-removed item
+            // if the adapter returns a stale response.
+            if (totalNow === 0) return;
             if (end >= start) {
               dm.ensureRange(start, end).catch(() => {});
             }
