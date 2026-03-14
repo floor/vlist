@@ -500,6 +500,8 @@ export interface VList<T extends VListItem = VListItem> {
   prependItems: (items: T[]) => void;
   updateItem: (id: string | number, updates: Partial<T>) => void;
   removeItem: (id: string | number) => void;
+  getItemAt: (index: number) => T | undefined;
+  getIndexById: (id: string | number) => number;
   reload: () => Promise<void>;
 
   // ── Scroll methods (always available) ─────────────────────────
