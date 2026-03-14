@@ -24,6 +24,10 @@ export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
 export { withTable } from "./features/table";
 
+// Utils
+export { createStats } from "./utils/stats";
+export type { Stats, StatsConfig, StatsState } from "./utils/stats";
+
 // Core Types
 export type {
   // Core types
