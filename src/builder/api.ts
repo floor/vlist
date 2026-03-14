@@ -198,6 +198,14 @@ export const createApi = <T extends VListItem = VListItem>(
     return result;
   };
 
+  const getItemAt = (index: number): T | undefined => {
+    return ctx.dataManager.getItem(index);
+  };
+
+  const getIndexById = (id: string | number): number => {
+    return (ctx.dataManager as any).getIndexById?.(id) ?? -1;
+  };
+
   const reload = async (): Promise<void> => {
     if ((ctx.dataManager as any).reload) {
       await (ctx.dataManager as any).reload();
@@ -365,6 +373,8 @@ export const createApi = <T extends VListItem = VListItem>(
       ? (methods.get("removeItem") as any)
       : removeItem,
     reload: methods.has("reload") ? (methods.get("reload") as any) : reload,
+    getItemAt,
+    getIndexById,
 
     scrollToIndex: methods.has("scrollToIndex")
       ? (methods.get("scrollToIndex") as any)
