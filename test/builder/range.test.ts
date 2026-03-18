@@ -44,7 +44,7 @@ describe("calcVisibleRange", () => {
     calcVisibleRange(0, 500, hc, 0, out);
 
     expect(out.start).toBe(0);
-    expect(out.end).toBe(0);
+    expect(out.end).toBe(-1);
   });
 
   it("should handle zero container height", () => {
@@ -54,7 +54,7 @@ describe("calcVisibleRange", () => {
     calcVisibleRange(0, 0, hc, 100, out);
 
     expect(out.start).toBe(0);
-    expect(out.end).toBe(0);
+    expect(out.end).toBe(-1);
   });
 
   it("should clamp start to 0", () => {
@@ -173,13 +173,13 @@ describe("applyOverscan", () => {
   });
 
   it("should handle empty list", () => {
-    const visible: Range = { start: 0, end: 0 };
+    const visible: Range = { start: 0, end: -1 };
     const out: Range = { start: 0, end: 0 };
 
     applyOverscan(visible, 3, 0, out);
 
     expect(out.start).toBe(0);
-    expect(out.end).toBe(0);
+    expect(out.end).toBe(-1);
   });
 
   it("should handle visible range at start", () => {
