@@ -50,14 +50,21 @@ export interface CompressionState {
 /**
  * Calculate compression state for a list
  * Pure function - no side effects
+ *
+ * @param _totalItems - Total number of items
+ * @param sizeCache - Size cache for item sizes/offsets
+ * @param force - When true, enables compressed mode even if total size is under the limit.
+ *   Useful for testing, consistent UX, or preemptively enabling compression
+ *   before the list grows past the browser limit.
  */
 export const getCompressionState = (
   _totalItems: number,
   sizeCache: SizeCache,
+  force?: boolean,
 ): CompressionState => {
   const actualSize = sizeCache.getTotalSize();
-  const isCompressed = actualSize > MAX_VIRTUAL_SIZE;
-  const virtualSize = isCompressed ? MAX_VIRTUAL_SIZE : actualSize;
+  const isCompressed = force === true || actualSize > MAX_VIRTUAL_SIZE;
+  const virtualSize = actualSize > MAX_VIRTUAL_SIZE ? MAX_VIRTUAL_SIZE : actualSize;
   const ratio = actualSize > 0 ? virtualSize / actualSize : 1;
 
   return {
@@ -391,8 +398,9 @@ export const getMaxItemsWithoutCompression = (itemSize: number): number => {
 export const getCompressionInfo = (
   totalItems: number,
   sizeCache: SizeCache,
+  force?: boolean,
 ): string => {
-  const compression = getCompressionState(totalItems, sizeCache);
+  const compression = getCompressionState(totalItems, sizeCache, force);
 
   if (!compression.isCompressed) {
     return `No compression needed (${totalItems} items, ${(compression.actualSize / 1_000_000).toFixed(2)}M px)`;

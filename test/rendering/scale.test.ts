@@ -84,6 +84,47 @@ describe("getCompressionState", () => {
     expect(state.virtualSize).toBe(MAX_VIRTUAL_SIZE);
     expect(state.ratio).toBe(16_000_000 / 400_000_000); // 0.04
   });
+
+  it("should force compressed mode on a small list when force is true", () => {
+    const cache = createSizeCache(40, 100);
+    const state = getCompressionState(100, cache, true);
+
+    expect(state.isCompressed).toBe(true);
+    // virtualSize equals actualSize since total is under the limit
+    expect(state.actualSize).toBe(4_000);
+    expect(state.virtualSize).toBe(4_000);
+    expect(state.ratio).toBe(1);
+  });
+
+  it("should keep ratio 1 when forced on a list under the limit", () => {
+    // 10K items × 40px = 400K pixels — well under 16M
+    const cache = createSizeCache(40, 10_000);
+    const state = getCompressionState(10_000, cache, true);
+
+    expect(state.isCompressed).toBe(true);
+    expect(state.virtualSize).toBe(400_000);
+    expect(state.ratio).toBe(1);
+  });
+
+  it("should still cap virtualSize at MAX_VIRTUAL_SIZE when forced on a large list", () => {
+    // 1M items × 40px = 40M — exceeds limit regardless of force
+    const cache = createSizeCache(40, 1_000_000);
+    const state = getCompressionState(1_000_000, cache, true);
+
+    expect(state.isCompressed).toBe(true);
+    expect(state.virtualSize).toBe(MAX_VIRTUAL_SIZE);
+    expect(state.ratio).toBe(16_000_000 / 40_000_000);
+  });
+
+  it("should not force when force is false or undefined", () => {
+    const cache = createSizeCache(40, 100);
+
+    const stateDefault = getCompressionState(100, cache);
+    expect(stateDefault.isCompressed).toBe(false);
+
+    const stateExplicit = getCompressionState(100, cache, false);
+    expect(stateExplicit.isCompressed).toBe(false);
+  });
 });
 
 // =============================================================================
