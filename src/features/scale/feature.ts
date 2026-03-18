@@ -32,6 +32,29 @@ import type { Range } from "../../types";
 import { createScrollbar, type Scrollbar } from "../scrollbar";
 
 // =============================================================================
+// Configuration
+// =============================================================================
+
+/** Configuration options for the scale feature */
+export interface ScaleConfig {
+  /**
+   * Force compressed scroll mode even when the total size is below the
+   * browser's ~16.7M pixel limit.
+   *
+   * When `true`, the feature always activates compressed scrolling
+   * (custom wheel/touch handling, lerp-based smooth scroll, custom
+   * scrollbar fallback) regardless of the list size. This is useful for:
+   *
+   * - **Testing** — verify compression behaviour with a small item set
+   * - **Consistent UX** — prefer the smooth scroll physics for all lists
+   * - **Pre-emptive** — avoid the mode switch when items are added at runtime
+   *
+   * @default false
+   */
+  force?: boolean;
+}
+
+// =============================================================================
 // Smooth Scroll Constants
 // =============================================================================
 
@@ -121,7 +144,9 @@ const TOUCH_VELOCITY_WINDOW = 100;
  */
 export const withScale = <
   T extends VListItem = VListItem,
->(): VListFeature<T> => {
+>(config?: ScaleConfig): VListFeature<T> => {
+  const force = config?.force ?? false;
+
   let scrollbar: Scrollbar | null = null;
   let virtualScrollPosition = 0;
   let compressedModeActive = false;
@@ -163,7 +188,7 @@ export const withScale = <
        */
       const enhancedUpdateCompressionMode = (): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.sizeCache);
+        const compression = getCompressionState(total, ctx.sizeCache, force);
 
         if (compression.isCompressed && !compressedModeActive) {
           // Entering compressed mode
@@ -517,7 +542,7 @@ export const withScale = <
           firstItemPosition = null;
           firstItemIndex = null;
 
-          const compression = getCompressionState(totalItems, hc);
+          const compression = getCompressionState(totalItems, hc, force);
           calculateCompressedVisibleRange(
             scrollTop,
             containerHeight,
@@ -537,7 +562,7 @@ export const withScale = <
           totalItems: number,
           align: "start" | "center" | "end",
         ): number => {
-          const compression = getCompressionState(totalItems, hc);
+          const compression = getCompressionState(totalItems, hc, force);
           return calculateCompressedScrollToIndex(
             index,
             hc,
@@ -562,7 +587,7 @@ export const withScale = <
 
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
         const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.sizeCache);
+        const compression = getCompressionState(total, ctx.sizeCache, force);
 
         if (compression.isCompressed) {
           const scrollTop = ctx.scrollController.getScrollTop();

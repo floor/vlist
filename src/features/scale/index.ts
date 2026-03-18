@@ -20,4 +20,4 @@ export {
   type CompressionState,
 } from "../../rendering/scale";
 
-export { withScale } from "./feature";
+export { withScale, type ScaleConfig } from "./feature";
