@@ -14,6 +14,7 @@ export { vlist } from "./builder";
 
 // Features - tree-shakeable
 export { withScale } from "./features/scale";
+export type { ScaleConfig } from "./features/scale";
 export { withAsync } from "./features/async";
 export { withScrollbar } from "./features/scrollbar";
 export { withPage } from "./features/page";
