@@ -79,4 +79,5 @@ export type {
   VListConfig,
   VListFeature,
   BuilderContext,
+  ReloadOptions,
 } from "./builder";
