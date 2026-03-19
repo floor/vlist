@@ -195,6 +195,36 @@ export const withScale = <
           compressedModeActive = true;
           ctx.scrollController.enableCompression(compression);
 
+          // Capture the current native scroll position before we reset it.
+          // This becomes the initial virtualScrollPosition so the user
+          // doesn't see a visual jump when switching to compressed mode.
+          const nativePos = horizontal
+            ? dom.viewport.scrollLeft
+            : dom.viewport.scrollTop;
+
+          // Hide native scroll — the proxy's enableCompression only sets a
+          // flag; it does NOT change overflow like the real scroll controller.
+          // We must set overflow: hidden ourselves so native scrollTop can't
+          // drift and desync from virtualScrollPosition.
+          if (horizontal) {
+            dom.viewport.style.overflowX = "hidden";
+          } else {
+            dom.viewport.style.overflow = "hidden";
+          }
+          // Reset native scroll position to 0 — all scrolling is now
+          // virtual, so native offset must be zero to avoid double-offset.
+          if (horizontal) {
+            dom.viewport.scrollLeft = 0;
+          } else {
+            dom.viewport.scrollTop = 0;
+          }
+
+          // Transfer the captured native position to virtual scroll state
+          if (nativePos > 0) {
+            virtualScrollPosition = nativePos;
+            targetScrollPosition = nativePos;
+          }
+
           // Set content size to virtual height (not actual height)
           // This is critical - the content div must match the virtual height
           // for scrolling and positioning to work correctly
@@ -435,6 +465,40 @@ export const withScale = <
             `.${classPrefix}-scrollbar`,
           );
 
+          // ── Native scroll drift guard ───────────────────────────────
+          // In compressed mode the viewport has overflow:hidden and
+          // native scrollTop should stay at 0. But browser focus
+          // management (scrollIntoView, keyboard Tab, selection focus)
+          // can still nudge it. Any non-zero native offset desync's
+          // virtual positioning because items use transforms relative
+          // to scrollTop=0.  We listen for the native scroll event and
+          // immediately reset it.
+          const resetNativeScroll = (): void => {
+            const nativeST = horizontal
+              ? dom.viewport.scrollLeft
+              : dom.viewport.scrollTop;
+            if (nativeST !== 0) {
+              console.warn(
+                `[vlist/scale] native scroll drift detected: ${nativeST}px — resetting to 0`,
+              );
+              if (horizontal) {
+                dom.viewport.scrollLeft = 0;
+              } else {
+                dom.viewport.scrollTop = 0;
+              }
+            }
+          };
+          viewport.addEventListener("scroll", resetNativeScroll, {
+            passive: true,
+          });
+          ctx.destroyHandlers.push(() => {
+            viewport.removeEventListener("scroll", resetNativeScroll);
+          });
+
+          // Force custom scrollbar if not already present
+          // (native scrollbar can't represent compressed space)
+          // Check if withScrollbar feature already created one by looking for
+          // the scrollbar track element
           if (!hasScrollbarTrack) {
             // Create a fallback scrollbar for compressed mode
             scrollbar = createScrollbar(
@@ -489,6 +553,14 @@ export const withScale = <
           compressedModeActive = false;
           ctx.scrollController.disableCompression();
 
+          // Restore native scroll — re-enable overflow so the native
+          // scrollbar / scroll behaviour works again.
+          if (horizontal) {
+            dom.viewport.style.overflowX = "auto";
+          } else {
+            dom.viewport.style.overflow = "auto";
+          }
+
           // Restore content size to actual height
           ctx.updateContentSize(compression.actualSize);
         } else if (compression.isCompressed) {
@@ -507,11 +579,41 @@ export const withScale = <
           );
         }
 
+        // Sync viewport state so other features (grid, async, etc.) see
+        // the correct compression flag — especially important when force
+        // is true and the natural compression check would return false.
+        const vs = ctx.state.viewportState;
+        vs.isCompressed = compression.isCompressed;
+        vs.compressionRatio = compression.ratio;
+        vs.totalSize = compression.virtualSize;
+        vs.actualSize = compression.actualSize;
+
         // Update cached compression
         ctx.state.cachedCompression = {
           state: compression,
           totalItems: total,
         };
+
+        // ── Clamp virtualScrollPosition to new maxScroll ──────────────
+        // After a resize or data change the total content size may shrink
+        // (e.g. grid cross-axis width changed → row heights rounded
+        // differently → virtualSize decreased by a few pixels).  If the
+        // current virtualScrollPosition exceeds the new maxScroll, items
+        // are positioned past the viewport, causing a visible glitch.
+        // Clamping here keeps the scroll position in-bounds immediately.
+        if (compressedModeActive) {
+          const maxScroll = Math.max(
+            0,
+            compression.virtualSize - ctx.state.viewportState.containerSize,
+          );
+          if (virtualScrollPosition > maxScroll) {
+            virtualScrollPosition = maxScroll;
+            targetScrollPosition = maxScroll;
+          } else if (virtualScrollPosition < 0) {
+            virtualScrollPosition = 0;
+            targetScrollPosition = 0;
+          }
+        }
       };
 
       // Replace the context's updateCompressionMode with our enhanced version
