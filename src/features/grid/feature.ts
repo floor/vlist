@@ -494,7 +494,19 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Use the cross-axis dimension: width for vertical, height for horizontal
         const crossAxisSize = (isHorizontal ? height : width) - crossAxisPadding;
 
-        // Always update grid state (used by dynamic height functions)
+        // Skip if cross-axis size hasn't meaningfully changed (< 1px).
+        // ResizeObserver can fire with sub-pixel jitter that would cause
+        // a full grid rebuild: clear all rendered items, rebuild size
+        // cache (possibly with a different Math.round result for row
+        // height), update compression bounds, and force-render.  At
+        // scroll boundaries this manifests as a visible glitch because
+        // the total content size changes by a pixel or two, shifting
+        // maxScroll and item positions for one frame.
+        if (Math.abs(crossAxisSize - gridState.containerWidth) < 1) {
+          return;
+        }
+
+        // Update grid state (used by dynamic height functions)
         gridState.containerWidth = crossAxisSize;
 
         if (gridRenderer) {
