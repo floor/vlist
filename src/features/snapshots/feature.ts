@@ -136,10 +136,18 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         const { index, offsetInItem, selectedIds } = snapshot;
         const totalItems = ctx.getVirtualTotal();
 
-        // If total is 0, we cannot restore scroll position yet.
-        // The caller should provide initialTotal when creating the list
-        // (or include total in the snapshot via withAsync({ total: snapshot?.total })).
-        if (totalItems === 0) {
+        // If total is 0 but the snapshot carries a total, bootstrap the
+        // data manager so sizeCache/compression/content-height are correct
+        // before we set the scroll position. This happens when reload()
+        // was called with skipInitialLoad (no data fetched yet).
+        if (totalItems === 0 && snapshot.total && snapshot.total > 0) {
+          ctx.dataManager.setTotal(snapshot.total);
+          // Rebuild sizeCache and compression with the new total
+          ctx.sizeCache.rebuild(snapshot.total);
+          ctx.updateCompressionMode();
+          const freshCompression = ctx.getCachedCompression();
+          ctx.updateContentSize(freshCompression.virtualSize);
+        } else if (totalItems === 0) {
           return;
         }
 
@@ -154,16 +162,18 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // callback (which rebuilds sizeCache) is gated by isInitialized, so
         // sizeCache may still have total=0. Rebuild it now so compression
         // and virtualSize calculations use the correct total.
+        // Re-read virtual total (may have been updated by bootstrap above)
+        const effectiveTotal = ctx.getVirtualTotal();
         const sizeCacheTotal = ctx.sizeCache.getTotal();
-        if (sizeCacheTotal !== totalItems) {
-          ctx.sizeCache.rebuild(totalItems);
+        if (sizeCacheTotal !== effectiveTotal) {
+          ctx.sizeCache.rebuild(effectiveTotal);
           ctx.updateCompressionMode();
           const freshCompression = ctx.getCachedCompression();
           ctx.updateContentSize(freshCompression.virtualSize);
         }
 
         const compression = ctx.getCachedCompression();
-        const safeIndex = Math.max(0, Math.min(index, totalItems - 1));
+        const safeIndex = Math.max(0, Math.min(index, effectiveTotal - 1));
 
         let scrollPosition: number;
 
@@ -172,7 +182,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           const itemSize = ctx.sizeCache.getSize(safeIndex);
           const fraction = itemSize > 0 ? offsetInItem / itemSize : 0;
           scrollPosition =
-            ((safeIndex + fraction) / totalItems) * compression.virtualSize;
+            ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
         } else {
           // Normal: direct offset
           const offset = ctx.sizeCache.getOffset(safeIndex);
@@ -209,11 +219,29 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           | undefined;
 
         if (loadVisibleFn) {
-          // Wait a frame for the scroll position to settle and the viewport
-          // state to update, then load visible data.
-          requestAnimationFrame(() => {
-            loadVisibleFn();
-          });
+          // Wait for the viewport container to have a real size before loading.
+          // On page reload, the ResizeObserver hasn't fired yet when restoreScroll
+          // runs, so containerSize is 0 and forceRender produces renderRange {0,0}.
+          // Poll with rAF until containerSize > 0 (typically 1-2 frames).
+          const MAX_POLLS = 10;
+          let polls = 0;
+          const savedScrollPosition = scrollPosition;
+          const pollUntilReady = (): void => {
+            polls++;
+            const cs = ctx.state.viewportState.containerSize;
+            const currentScrollTop = ctx.scrollController.getScrollTop();
+            if (cs > 0) {
+              // Re-apply scroll position if it was lost (e.g. ResizeObserver
+              // reset scrollTop when content size changed from 0 to real size)
+              if (Math.abs(currentScrollTop - savedScrollPosition) > 1) {
+                ctx.scrollController.scrollTo(savedScrollPosition);
+              }
+              loadVisibleFn();
+            } else if (polls < MAX_POLLS) {
+              requestAnimationFrame(pollUntilReady);
+            }
+          };
+          requestAnimationFrame(pollUntilReady);
         } else {
           // Fallback: if there's a reload method but no loadVisibleRange
           // (shouldn't happen with current withAsync, but defensive).

@@ -211,7 +211,7 @@ export const createApi = <T extends VListItem = VListItem>(
     return (ctx.dataManager as any).getIndexById?.(id) ?? -1;
   };
 
-  const reload = async (): Promise<void> => {
+  const reload = async (_options?: { skipInitialLoad?: boolean }): Promise<void> => {
     if ((ctx.dataManager as any).reload) {
       await (ctx.dataManager as any).reload();
     }
