@@ -11,13 +11,14 @@
  * - Placeholder generation — creates skeleton items for unloaded ranges
  * - Request deduplication — prevents duplicate fetches for the same range
  * - Idle handler — loads any pending ranges when scrolling stops
+ * - Snapshot-aware reload — reload({ snapshot }) skips page-1 and auto-restores position
  *
- * Added methods: reload
+ * Added methods: reload, loadVisibleRange
  * Added events: load:start, load:end, error
  */
 
-import type { VListItem, VListAdapter, Range } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListItem, VListAdapter, Range, ScrollSnapshot } from "../../types";
+import type { VListFeature, BuilderContext, ReloadOptions } from "../../builder/types";
 
 import { createDataManager } from "./manager";
 
@@ -503,9 +504,18 @@ export const withAsync = <T extends VListItem = VListItem>(
       });
 
       // ── Register reload method ──
-      ctx.methods.set("reload", async (options?: { skipInitialLoad?: boolean }): Promise<void> => {
+      ctx.methods.set("reload", async (options?: ReloadOptions): Promise<void> => {
         lastEnsuredRange = null;
         pendingRange = null;
+
+        // Determine if we should skip the initial page-1 load.
+        // A snapshot with meaningful data (total > 0 AND index > 0) means
+        // we'll restore to a non-zero position — loading page 1 is wasted.
+        const snapshot = options?.snapshot;
+        const hasRestorable = snapshot != null
+          && (snapshot.total ?? 0) > 0
+          && snapshot.index > 0;
+        const shouldSkipInitial = hasRestorable || (options?.skipInitialLoad === true);
 
         // Clear all rendered DOM elements so the renderer recreates them
         // from scratch. Without this, items whose ID didn't change
@@ -516,7 +526,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         // Clear old data and reset total to 0
         await ctx.dataManager.reload();
 
-        if (!options?.skipInitialLoad) {
+        if (!shouldSkipInitial) {
           // Load initial data first (this will update total and trigger onStateChange)
           // The onStateChange callback will call forceRender automatically when data arrives
           emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
@@ -534,6 +544,21 @@ export const withAsync = <T extends VListItem = VListItem>(
           if (renderRange.end > 0) {
             const itemRange = getItemRangeFromRenderRange(renderRange);
             await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
+          }
+        }
+
+        // ── Auto-restore snapshot ──
+        // When a snapshot was provided and has meaningful data, call
+        // restoreScroll (from withSnapshots) which bootstraps the total,
+        // sets scroll position, and loads the visible range at that position.
+        // This eliminates the need for the consumer to manually coordinate
+        // skipInitialLoad + restoreScroll after reload().
+        if (hasRestorable) {
+          const restoreScroll = ctx.methods.get("restoreScroll") as
+            | ((s: ScrollSnapshot) => void)
+            | undefined;
+          if (restoreScroll) {
+            restoreScroll(snapshot);
           }
         }
       });

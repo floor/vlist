@@ -28,6 +28,7 @@ import type {
   BuilderContext,
   VListFeature,
   VList,
+  ReloadOptions,
 } from "./types";
 import type { MRefs } from "./materialize";
 import { easeInOutQuad, resolveScrollArgs } from "./scroll";
@@ -211,7 +212,7 @@ export const createApi = <T extends VListItem = VListItem>(
     return (ctx.dataManager as any).getIndexById?.(id) ?? -1;
   };
 
-  const reload = async (_options?: { skipInitialLoad?: boolean }): Promise<void> => {
+  const reload = async (_options?: ReloadOptions): Promise<void> => {
     if ((ctx.dataManager as any).reload) {
       await (ctx.dataManager as any).reload();
     }
