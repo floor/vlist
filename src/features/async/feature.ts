@@ -503,7 +503,7 @@ export const withAsync = <T extends VListItem = VListItem>(
       });
 
       // ── Register reload method ──
-      ctx.methods.set("reload", async (): Promise<void> => {
+      ctx.methods.set("reload", async (options?: { skipInitialLoad?: boolean }): Promise<void> => {
         lastEnsuredRange = null;
         pendingRange = null;
 
@@ -516,23 +516,25 @@ export const withAsync = <T extends VListItem = VListItem>(
         // Clear old data and reset total to 0
         await ctx.dataManager.reload();
 
-        // Load initial data first (this will update total and trigger onStateChange)
-        // The onStateChange callback will call forceRender automatically when data arrives
-        emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
-        await ctx.dataManager.loadInitial();
+        if (!options?.skipInitialLoad) {
+          // Load initial data first (this will update total and trigger onStateChange)
+          // The onStateChange callback will call forceRender automatically when data arrives
+          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+          await ctx.dataManager.loadInitial();
 
-        // Force a render to immediately show placeholders (good UX while
-        // the API responds) and to guarantee viewportState.renderRange
-        // reflects the correct visible range — including compressed mode.
-        ctx.forceRender();
+          // Force a render to immediately show placeholders (good UX while
+          // the API responds) and to guarantee viewportState.renderRange
+          // reflects the correct visible range — including compressed mode.
+          ctx.forceRender();
 
-        // After reload, ensure the currently visible range is loaded.
-        // Without this, if the user is scrolled past the initial page,
-        // placeholders are never replaced because no scroll event fires.
-        const { renderRange } = ctx.state.viewportState;
-        if (renderRange.end > 0) {
-          const itemRange = getItemRangeFromRenderRange(renderRange);
-          await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
+          // After reload, ensure the currently visible range is loaded.
+          // Without this, if the user is scrolled past the initial page,
+          // placeholders are never replaced because no scroll event fires.
+          const { renderRange } = ctx.state.viewportState;
+          if (renderRange.end > 0) {
+            const itemRange = getItemRangeFromRenderRange(renderRange);
+            await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
+          }
         }
       });
 
