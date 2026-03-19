@@ -31,9 +31,7 @@ import type {
 } from "../../types";
 
 import {
-  getCompressionState,
   calculateCompressedItemPosition,
-  type CompressionState,
 } from "../../rendering/scale";
 import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
@@ -212,25 +210,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   // Track if groups are active (affects size cache indexing)
   let groupsActive = false;
 
-  // Cache compression state
-  let cachedCompression: CompressionState | null = null;
-  let cachedTotalRows = 0;
-
   // ── Frame counter for release grace period ──
   let frameCounter = 0;
 
   // Track aria-setsize to avoid redundant updates on existing items
   let lastAriaSetSize = "";
   let lastAriaTotal = -1;
-
-  const getCompression = (totalRows: number): CompressionState => {
-    if (cachedCompression && cachedTotalRows === totalRows) {
-      return cachedCompression;
-    }
-    cachedCompression = getCompressionState(totalRows, sizeCache);
-    cachedTotalRows = totalRows;
-    return cachedCompression;
-  };
 
   // Reusable item state to avoid allocation per render
   const reusableItemState: ItemState = { selected: false, focused: false };
@@ -282,21 +267,16 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   ): number => {
     const row = gridLayout.getRow(itemIndex);
 
-    if (compressionCtx) {
-      const totalRows = compressionCtx.totalItems; // In grid mode, totalItems = totalRows
-      const compression = getCompression(totalRows);
-
-      if (compression.isCompressed) {
-        return calculateCompressedItemPosition(
-          row,
-          compressionCtx.scrollPosition,
-          sizeCache,
-          totalRows,
-          compressionCtx.containerSize,
-          compression,
-          compressionCtx.rangeStart,
-        );
-      }
+    if (compressionCtx?.compression?.isCompressed) {
+      return calculateCompressedItemPosition(
+        row,
+        compressionCtx.scrollPosition,
+        sizeCache,
+        compressionCtx.totalItems,
+        compressionCtx.containerSize,
+        compressionCtx.compression,
+        compressionCtx.rangeStart,
+      );
     }
 
     // Normal positioning: row offset from size cache

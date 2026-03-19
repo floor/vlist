@@ -132,6 +132,9 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     reusableCompressionCtx.totalItems = getVirtualTotal();
     reusableCompressionCtx.containerSize = state.viewportState.containerSize;
     reusableCompressionCtx.rangeStart = state.viewportState.renderRange.start;
+    if (state.cachedCompression) {
+      reusableCompressionCtx.compression = state.cachedCompression.state;
+    }
     return reusableCompressionCtx;
   };
 
