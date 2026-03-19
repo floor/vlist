@@ -502,7 +502,7 @@ export interface VList<T extends VListItem = VListItem> {
   removeItem: (id: string | number) => void;
   getItemAt: (index: number) => T | undefined;
   getIndexById: (id: string | number) => number;
-  reload: () => Promise<void>;
+  reload: (options?: { skipInitialLoad?: boolean }) => Promise<void>;
 
   // ── Scroll methods (always available) ─────────────────────────
   scrollToIndex: (

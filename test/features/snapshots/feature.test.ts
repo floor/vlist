@@ -199,7 +199,10 @@ function createMockContext(
       clear: mock(() => {}),
       destroy: mock(() => {}),
     } as any,
-    dataManager: {} as any,
+    dataManager: {
+      setTotal: mock((_total: number) => {}),
+      getTotal: mock(() => totalItems),
+    } as any,
     scrollController: {
       getScrollTop: mock(() => scrollTop),
       scrollTo: mock((pos: number) => {
@@ -517,16 +520,59 @@ describe("withSnapshots - getScrollSnapshot", () => {
 // =============================================================================
 
 describe("withSnapshots - restoreScroll", () => {
-  it("should do nothing when totalItems is 0", () => {
+  it("should do nothing when totalItems is 0 and snapshot has no total", () => {
     const ctx = createMockContext({ totalItems: 0 });
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 50, offsetInItem: 10 });
+
+    const history = (ctx as any)._scrollToHistory;
+    expect(history.length).toBe(0);
+  });
+
+  it("should do nothing when totalItems is 0 and snapshot.total is 0", () => {
+    const ctx = createMockContext({ totalItems: 0 });
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 50, offsetInItem: 10, total: 0 });
+
+    const history = (ctx as any)._scrollToHistory;
+    expect(history.length).toBe(0);
+  });
+
+  it("should bootstrap total from snapshot when totalItems is 0 but snapshot has total", () => {
+    const itemHeight = 48;
+    const containerSize = 500;
+    const ctx = createMockContext({ totalItems: 0, itemHeight, containerSize });
+    // After setTotal bootstraps, getVirtualTotal should return the new total.
+    // Also make compression mock dynamic so virtualSize updates after rebuild.
+    let currentTotal = 0;
+    (ctx.getVirtualTotal as any).mockImplementation(() => currentTotal);
+    (ctx.dataManager.setTotal as any).mockImplementation((t: number) => { currentTotal = t; });
+    (ctx.getCachedCompression as any).mockImplementation(() => ({
+      isCompressed: false,
+      actualSize: currentTotal * itemHeight,
+      virtualSize: currentTotal * itemHeight,
+      ratio: 1,
+    }));
+
     const feature = withSnapshots<TestItem>();
     feature.setup(ctx);
 
     const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 50, offsetInItem: 10, total: 1000 });
 
+    // Should have called setTotal with snapshot's total
+    expect(ctx.dataManager.setTotal).toHaveBeenCalledWith(1000);
+    // Should have scrolled (not bailed)
     const history = (ctx as any)._scrollToHistory;
-    expect(history.length).toBe(0);
+    expect(history.length).toBe(1);
+    // index=50, offset=50*48+10=2410
+    expect(history[0]).toBe(2410);
   });
 
   it("should scroll to correct position in normal mode", () => {
@@ -945,8 +991,33 @@ describe("withSnapshots - Auto-Restore", () => {
     expect(history.length).toBe(0);
   });
 
-  it("should handle auto-restore with totalItems=0 gracefully", async () => {
+  it("should handle auto-restore with totalItems=0 and no snapshot total gracefully", async () => {
     const ctx = createMockContext({ totalItems: 0 });
+
+    const snapshot: ScrollSnapshot = { index: 50, offsetInItem: 10 };
+    const feature = withSnapshots<TestItem>({ restore: snapshot });
+    feature.setup(ctx);
+
+    await new Promise((resolve) => queueMicrotask(resolve));
+
+    // Should not have scrolled (total is 0 and snapshot has no total)
+    const history = (ctx as any)._scrollToHistory;
+    expect(history.length).toBe(0);
+  });
+
+  it("should auto-restore by bootstrapping total from snapshot when totalItems=0", async () => {
+    const itemHeight = 48;
+    const containerSize = 500;
+    const ctx = createMockContext({ totalItems: 0, itemHeight, containerSize });
+    let currentTotal = 0;
+    (ctx.getVirtualTotal as any).mockImplementation(() => currentTotal);
+    (ctx.dataManager.setTotal as any).mockImplementation((t: number) => { currentTotal = t; });
+    (ctx.getCachedCompression as any).mockImplementation(() => ({
+      isCompressed: false,
+      actualSize: currentTotal * itemHeight,
+      virtualSize: currentTotal * itemHeight,
+      ratio: 1,
+    }));
 
     const snapshot: ScrollSnapshot = { index: 50, offsetInItem: 10, total: 1000 };
     const feature = withSnapshots<TestItem>({ restore: snapshot });
@@ -954,9 +1025,10 @@ describe("withSnapshots - Auto-Restore", () => {
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
-    // Should not have scrolled (total is 0)
+    // Should have bootstrapped and scrolled
+    expect(ctx.dataManager.setTotal).toHaveBeenCalledWith(1000);
     const history = (ctx as any)._scrollToHistory;
-    expect(history.length).toBe(0);
+    expect(history.length).toBe(1);
   });
 });
 
