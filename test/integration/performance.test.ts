@@ -41,6 +41,10 @@ import { withGroups } from "../../src/features/groups/feature";
 // Apply a multiplier to all timing thresholds to avoid flaky failures.
 const CI_MULTIPLIER = process.env.CI ? 3 : 1;
 
+/** Timing assertion that auto-applies CI_MULTIPLIER to the threshold */
+const expectFasterThan = (elapsed: number, ms: number) =>
+  expect(elapsed).toBeLessThan(ms * CI_MULTIPLIER);
+
 // =============================================================================
 // JSDOM Setup
 // =============================================================================
@@ -264,7 +268,7 @@ describe("performance — initialization", () => {
       }).build();
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list!.destroy();
   });
 
@@ -280,7 +284,7 @@ describe("performance — initialization", () => {
       }).build();
     });
 
-    expect(elapsed).toBeLessThan(500);
+    expectFasterThan(elapsed, 500);
     list!.destroy();
   });
 
@@ -298,7 +302,7 @@ describe("performance — initialization", () => {
         .build();
     });
 
-    expect(elapsed).toBeLessThan(2000);
+    expectFasterThan(elapsed, 2000);
     list!.destroy();
   });
 
@@ -317,7 +321,7 @@ describe("performance — initialization", () => {
         .build();
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list!.destroy();
   });
 
@@ -335,7 +339,7 @@ describe("performance — initialization", () => {
         .build();
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list!.destroy();
   });
 
@@ -359,7 +363,7 @@ describe("performance — initialization", () => {
         .build();
     });
 
-    expect(elapsed).toBeLessThan(200);
+    expectFasterThan(elapsed, 200);
     list!.destroy();
   });
 
@@ -379,7 +383,7 @@ describe("performance — initialization", () => {
         .build();
     });
 
-    expect(elapsed).toBeLessThan(200);
+    expectFasterThan(elapsed, 200);
     list!.destroy();
   });
 });
@@ -414,7 +418,7 @@ describe("performance — render cycles", () => {
       simulateScroll(list, 500);
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -433,7 +437,7 @@ describe("performance — render cycles", () => {
       simulateScroll(list, 5000);
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -454,7 +458,7 @@ describe("performance — render cycles", () => {
       simulateScroll(list, 50000);
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
     list.destroy();
   });
 
@@ -475,7 +479,7 @@ describe("performance — render cycles", () => {
       simulateScroll(list, 500);
     });
 
-    expect(elapsed).toBeLessThan(20 * CI_MULTIPLIER);
+    expectFasterThan(elapsed, 20);
     list.destroy();
   });
 
@@ -493,7 +497,7 @@ describe("performance — render cycles", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(50 * CI_MULTIPLIER);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 
@@ -518,7 +522,7 @@ describe("performance — render cycles", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(50 * CI_MULTIPLIER);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 
@@ -539,7 +543,7 @@ describe("performance — render cycles", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list.destroy();
   });
 });
@@ -572,7 +576,7 @@ describe("performance — data operations", () => {
       list.setItems(newItems);
     });
 
-    expect(elapsed).toBeLessThan(50);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 
@@ -589,7 +593,7 @@ describe("performance — data operations", () => {
       list.setItems(newItems);
     });
 
-    expect(elapsed).toBeLessThan(500);
+    expectFasterThan(elapsed, 500);
     list.destroy();
   });
 
@@ -609,7 +613,7 @@ describe("performance — data operations", () => {
       list.appendItems(newItems);
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
     list.destroy();
   });
 
@@ -629,7 +633,7 @@ describe("performance — data operations", () => {
       list.prependItems(newItems);
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
     list.destroy();
   });
 
@@ -644,7 +648,7 @@ describe("performance — data operations", () => {
       list.updateItem(500, { name: "Updated Item 501" });
     });
 
-    expect(elapsed).toBeLessThan(1);
+    expectFasterThan(elapsed, 1);
     list.destroy();
   });
 
@@ -659,7 +663,7 @@ describe("performance — data operations", () => {
       list.removeItem(500);
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -676,7 +680,7 @@ describe("performance — data operations", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(20);
+    expectFasterThan(elapsed, 20);
     list.destroy();
   });
 
@@ -693,7 +697,7 @@ describe("performance — data operations", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list.destroy();
   });
 });
@@ -724,7 +728,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 
   it("should destroy 100K item list in under 10ms", () => {
@@ -738,7 +742,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 
   it("should destroy 1M compressed item list in under 10ms", () => {
@@ -754,7 +758,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 
   it("should destroy list with all features in under 10ms", () => {
@@ -778,7 +782,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 
   it("should destroy grid list in under 10ms", () => {
@@ -796,7 +800,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 
   it("should destroy grouped list in under 10ms", () => {
@@ -822,7 +826,7 @@ describe("performance — destroy", () => {
       list.destroy();
     });
 
-    expect(elapsed).toBeLessThan(10);
+    expectFasterThan(elapsed, 10);
   });
 });
 
@@ -852,7 +856,7 @@ describe("performance — scrollToIndex", () => {
       list.scrollToIndex(5000);
     });
 
-    expect(elapsed).toBeLessThan(2);
+    expectFasterThan(elapsed, 2);
     list.destroy();
   });
 
@@ -867,7 +871,7 @@ describe("performance — scrollToIndex", () => {
       list.scrollToIndex(50000);
     });
 
-    expect(elapsed).toBeLessThan(2);
+    expectFasterThan(elapsed, 2);
     list.destroy();
   });
 
@@ -884,7 +888,7 @@ describe("performance — scrollToIndex", () => {
       list.scrollToIndex(500000);
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -901,7 +905,7 @@ describe("performance — scrollToIndex", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(100);
+    expectFasterThan(elapsed, 100);
     list.destroy();
   });
 
@@ -918,7 +922,7 @@ describe("performance — scrollToIndex", () => {
       list.scrollToIndex(5000);
     });
 
-    expect(elapsed).toBeLessThan(20);
+    expectFasterThan(elapsed, 20);
     list.destroy();
   });
 });
@@ -953,7 +957,7 @@ describe("performance — selection operations", () => {
       }
     });
 
-    expect(elapsed).toBeLessThan(200 * CI_MULTIPLIER);
+    expectFasterThan(elapsed, 200);
     list.destroy();
   });
 
@@ -970,7 +974,7 @@ describe("performance — selection operations", () => {
       (list as any).selectAll();
     });
 
-    expect(elapsed).toBeLessThan(50);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 
@@ -989,7 +993,7 @@ describe("performance — selection operations", () => {
       (list as any).clearSelection();
     });
 
-    expect(elapsed).toBeLessThan(20);
+    expectFasterThan(elapsed, 20);
     list.destroy();
   });
 
@@ -1010,7 +1014,7 @@ describe("performance — selection operations", () => {
       (list as any).getSelected();
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -1031,7 +1035,7 @@ describe("performance — selection operations", () => {
       (list as any).getSelectedItems();
     });
 
-    expect(elapsed).toBeLessThan(20);
+    expectFasterThan(elapsed, 20);
     list.destroy();
   });
 });
@@ -1066,7 +1070,7 @@ describe("performance — snapshot operations", () => {
       (list as any).getScrollSnapshot();
     });
 
-    expect(elapsed).toBeLessThan(1);
+    expectFasterThan(elapsed, 1);
     list.destroy();
   });
 
@@ -1088,7 +1092,7 @@ describe("performance — snapshot operations", () => {
       (list as any).restoreScroll(snapshot);
     });
 
-    expect(elapsed).toBeLessThan(5);
+    expectFasterThan(elapsed, 5);
     list.destroy();
   });
 
@@ -1108,7 +1112,7 @@ describe("performance — snapshot operations", () => {
       (list as any).getScrollSnapshot();
     });
 
-    expect(elapsed).toBeLessThan(1);
+    expectFasterThan(elapsed, 1);
     list.destroy();
   });
 });
@@ -1143,7 +1147,7 @@ describe("performance — compression transitions", () => {
       list.setItems(largeItems);
     });
 
-    expect(elapsed).toBeLessThan(500);
+    expectFasterThan(elapsed, 500);
     list.destroy();
   });
 
@@ -1162,7 +1166,7 @@ describe("performance — compression transitions", () => {
       list.setItems(smallItems);
     });
 
-    expect(elapsed).toBeLessThan(50);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 });
@@ -1211,7 +1215,7 @@ describe("performance — feature overhead", () => {
     // Feature overhead should be reasonable
     // Use Math.max(bareTime, 1) to avoid division by zero for very fast runs
     const overhead = featureTime / Math.max(bareTime, 1);
-    expect(overhead).toBeLessThan(5);
+    expectFasterThan(overhead, 5);
   });
 
   it("should have less than 5x overhead for grid scroll vs standard scroll", () => {
@@ -1248,7 +1252,7 @@ describe("performance — feature overhead", () => {
     gridList.destroy();
 
     const overhead = gridTime / Math.max(stdTime, 1);
-    expect(overhead).toBeLessThan(10);
+    expectFasterThan(overhead, 10);
   });
 });
 
