@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.7** — [Changelog](./changelog.txt) — V1 code review complete ✅
+**v1.3.8** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~10.3 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~9.9 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -89,17 +89,17 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 10.3 KB | Core virtualization, gap, padding, ARIA live region |
-| `withGrid()` | +4.0 KB | 2D grid layout with context injection |
+| **Base** | 9.9 KB | Core virtualization, gap, padding, ARIA live region |
+| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
 | `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
-| `withGroups()` | +4.3 KB | Grouped lists with sticky/inline headers |
-| `withAsync()` | +4.3 KB | Lazy loading with adapters |
+| `withGroups()` | +4.2 KB | Grouped lists with sticky/inline headers |
+| `withAsync()` | +4.4 KB | Lazy loading with adapters |
 | `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
-| `withScale()` | +2.6 KB | 1M+ items via scroll compression |
-| `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
+| `withScale()` | +3.0 KB | 1M+ items via scroll compression |
+| `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
 | `withTable()` | +5.1 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
-| `withSnapshots()` | +0.5 KB | Scroll save/restore |
+| `withSnapshots()` | +0.6 KB | Scroll save/restore |
 
 ## Examples
 
@@ -242,7 +242,10 @@ const list = vlist(config).use(...features).build()
 | `list.prependItems(items)` | Add to start (preserves scroll position) |
 | `list.updateItem(index, partial)` | Update a single item by index |
 | `list.removeItem(index)` | Remove by index |
+| `list.getItemAt(index)` | Get item at index |
+| `list.getIndexById(id)` | Get index by item ID |
 | `list.reload()` | Re-fetch from adapter (async) |
+| `list.reload({ snapshot })` | Re-fetch and restore scroll position from snapshot |
 
 ### Navigation
 
@@ -309,6 +312,12 @@ list.on('load:error', ({ error, offset, limit }) => {})
 list.on('velocity:change', ({ velocity, reliable }) => {})
 ```
 
+### Statistics (with `createStats()`)
+
+| Method | Description |
+|--------|-------------|
+| `createStats(list)` | Create a stats tracker for scroll performance metrics |
+
 ### Properties
 
 | Property | Description |
@@ -334,7 +343,8 @@ withGroups({ getGroupForIndex, headerHeight, headerTemplate, sticky?: true })
 withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
 withTable({ columns, rowHeight, headerHeight?, resizable?, columnBorders?, rowBorders? })
-withScale()                           // no config — auto-activates at 16.7M px
+withScale()                           // auto-activates at 16.7M px
+withScale({ force: true })            // force compression on any list size
 withScrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 withPage()                            // no config — uses document scroll
 withSnapshots()                       // included by default
@@ -405,11 +415,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 10.3 KB |
-| + Grid | 14.3 KB |
-| + Groups | 14.6 KB |
-| + Async | 14.6 KB |
-| + Table | 15.4 KB |
+| Base only | 9.9 KB |
+| + Grid | 13.8 KB |
+| + Groups | 14.1 KB |
+| + Async | 14.3 KB |
+| + Table | 15.0 KB |
 
 ### Memory Efficiency
 

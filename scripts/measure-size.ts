@@ -42,6 +42,8 @@ type FeatureName = (typeof ALL_FEATURES)[number];
 const KNOWN_DEPS: Partial<Record<FeatureName, readonly FeatureName[]>> = {
   // withGroups pulls in grid/renderer via require() for grouped grid layouts
   withGroups: ["withGrid"],
+  // withAsync references "restoreScroll" method name string from withSnapshots
+  withAsync: ["withSnapshots"],
   // withScale imports createScrollbar for compressed-mode auto-scrollbar
   withScale: ["withScrollbar"],
   // withSnapshots references "loadVisibleRange" method name string from withAsync
