@@ -2075,3 +2075,229 @@ describe("withAsync - Grid Range Conversion", () => {
     expect(call[1]).toBe(99);
   });
 });
+
+// =============================================================================
+// Reload with Snapshot (auto-restore)
+// =============================================================================
+
+describe("withAsync - Reload with Snapshot", () => {
+  it("should skip loadInitial when snapshot has meaningful data", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const loadInitialSpy = mock(() => Promise.resolve());
+    dataManager.loadInitial = loadInitialSpy;
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    await reloadFn({ snapshot: { index: 50, offsetInItem: 10, total: 500 } });
+
+    // loadInitial should NOT have been called — snapshot has index > 0 and total > 0
+    expect(loadInitialSpy).not.toHaveBeenCalled();
+  });
+
+  it("should NOT skip loadInitial when snapshot has index 0", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+
+    // Reset forceRender mock to track calls from reload only
+    (ctx.forceRender as any).mockClear();
+
+    await reloadFn({ snapshot: { index: 0, offsetInItem: 0, total: 500 } });
+
+    // index=0 means "load from the top" — normal reload path, forceRender should be called
+    expect(ctx.forceRender).toHaveBeenCalled();
+  });
+
+  it("should NOT skip loadInitial when snapshot has total 0", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    (ctx.forceRender as any).mockClear();
+
+    await reloadFn({ snapshot: { index: 5, offsetInItem: 0, total: 0 } });
+
+    // total=0 means empty list — normal reload path
+    expect(ctx.forceRender).toHaveBeenCalled();
+  });
+
+  it("should NOT skip loadInitial when snapshot is undefined", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    (ctx.forceRender as any).mockClear();
+
+    await reloadFn({ snapshot: undefined });
+
+    // No snapshot — normal reload path
+    expect(ctx.forceRender).toHaveBeenCalled();
+  });
+
+  it("should call restoreScroll when snapshot has meaningful data", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    const restoreScrollMock = mock(() => {});
+    ctx.methods.set("restoreScroll", restoreScrollMock);
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    const snapshot = { index: 50, offsetInItem: 10, total: 500 };
+    await reloadFn({ snapshot });
+
+    expect(restoreScrollMock).toHaveBeenCalledWith(snapshot);
+  });
+
+  it("should NOT call restoreScroll when snapshot has index 0", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    const restoreScrollMock = mock(() => {});
+    ctx.methods.set("restoreScroll", restoreScrollMock);
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    await reloadFn({ snapshot: { index: 0, offsetInItem: 0, total: 500 } });
+
+    expect(restoreScrollMock).not.toHaveBeenCalled();
+  });
+
+  it("should NOT call restoreScroll when no restoreScroll method registered", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    // No restoreScroll registered (withSnapshots not installed)
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+
+    // Should not throw even without withSnapshots
+    await reloadFn({ snapshot: { index: 50, offsetInItem: 10, total: 500 } });
+  });
+
+  it("should still invalidateRendered and call dataManager.reload when snapshot provided", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    ctx.methods.set("restoreScroll", mock(() => {}));
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const dmReloadSpy = mock(() => Promise.resolve());
+    dataManager.reload = dmReloadSpy;
+
+    const reloadFn = ctx.methods.get("reload")!;
+    await reloadFn({ snapshot: { index: 50, offsetInItem: 10, total: 500 } });
+
+    // State reset should always happen
+    expect(ctx.invalidateRendered).toHaveBeenCalled();
+    expect(dmReloadSpy).toHaveBeenCalled();
+  });
+
+  it("should honor explicit skipInitialLoad even without snapshot", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    const loadInitialSpy = mock(() => Promise.resolve());
+    dataManager.loadInitial = loadInitialSpy;
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    await reloadFn({ skipInitialLoad: true });
+
+    // Explicit skipInitialLoad still works without snapshot
+    expect(loadInitialSpy).not.toHaveBeenCalled();
+  });
+
+  it("should pass snapshot with selectedIds to restoreScroll", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    const restoreScrollMock = mock(() => {});
+    ctx.methods.set("restoreScroll", restoreScrollMock);
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    const snapshot = { index: 50, offsetInItem: 10, total: 500, selectedIds: ["a", "b"] };
+    await reloadFn({ snapshot });
+
+    // The full snapshot (including selectedIds) should be passed through
+    expect(restoreScrollMock).toHaveBeenCalledWith(snapshot);
+    const passedSnapshot = restoreScrollMock.mock.calls[0][0];
+    expect(passedSnapshot.selectedIds).toEqual(["a", "b"]);
+  });
+
+  it("should treat snapshot without total property as non-restorable", async () => {
+    const adapter = createMockAdapter();
+    const plugin = withAsync({ adapter });
+
+    const ctx = createMockContext();
+    const restoreScrollMock = mock(() => {});
+    ctx.methods.set("restoreScroll", restoreScrollMock);
+
+    plugin.setup(ctx);
+
+    const dataManager = ctx.capturedDataManager();
+    dataManager.reload = mock(() => Promise.resolve());
+
+    const reloadFn = ctx.methods.get("reload")!;
+    (ctx.forceRender as any).mockClear();
+
+    // Snapshot with no total property — total defaults to undefined
+    await reloadFn({ snapshot: { index: 5, offsetInItem: 10 } });
+
+    // Should go through normal reload path (forceRender called, restoreScroll NOT called)
+    expect(ctx.forceRender).toHaveBeenCalled();
+    expect(restoreScrollMock).not.toHaveBeenCalled();
+  });
+});

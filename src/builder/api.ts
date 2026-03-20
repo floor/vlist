@@ -28,6 +28,7 @@ import type {
   BuilderContext,
   VListFeature,
   VList,
+  ReloadOptions,
 } from "./types";
 import type { MRefs } from "./materialize";
 import { easeInOutQuad, resolveScrollArgs } from "./scroll";
@@ -170,7 +171,12 @@ export const createApi = <T extends VListItem = VListItem>(
           ensureRangePending = true;
           queueMicrotask(() => {
             ensureRangePending = false;
+            const totalNow = ctx.dataManager.getTotal();
             const { start, end } = ctx.state.viewportState.renderRange;
+            // Skip refill if list is now empty — no slots to fill,
+            // and a fetch here would re-populate the just-removed item
+            // if the adapter returns a stale response.
+            if (totalNow === 0) return;
             if (end >= start) {
               dm.ensureRange(start, end).catch(() => {});
             }
@@ -198,7 +204,15 @@ export const createApi = <T extends VListItem = VListItem>(
     return result;
   };
 
-  const reload = async (): Promise<void> => {
+  const getItemAt = (index: number): T | undefined => {
+    return ctx.dataManager.getItem(index);
+  };
+
+  const getIndexById = (id: string | number): number => {
+    return (ctx.dataManager as any).getIndexById?.(id) ?? -1;
+  };
+
+  const reload = async (_options?: ReloadOptions): Promise<void> => {
     if ((ctx.dataManager as any).reload) {
       await (ctx.dataManager as any).reload();
     }
@@ -365,6 +379,8 @@ export const createApi = <T extends VListItem = VListItem>(
       ? (methods.get("removeItem") as any)
       : removeItem,
     reload: methods.has("reload") ? (methods.get("reload") as any) : reload,
+    getItemAt,
+    getIndexById,
 
     scrollToIndex: methods.has("scrollToIndex")
       ? (methods.get("scrollToIndex") as any)

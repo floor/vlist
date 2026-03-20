@@ -376,6 +376,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
         totalItems: $.vtf(),
         containerSize: $.ch,
         rangeStart: renderRange.start,
+        compression: sharedState.cachedCompression?.state,
       } as any;
     },
     renderIfNeeded(): void {

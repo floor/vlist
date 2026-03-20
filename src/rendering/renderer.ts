@@ -67,6 +67,8 @@ export interface CompressionContext {
   totalItems: number;
   containerSize: number;
   rangeStart: number;
+  /** Pre-computed compression state (includes force flag) */
+  compression?: CompressionState;
 }
 
 /** DOM structure created by createDOMStructure */
