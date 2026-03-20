@@ -1256,6 +1256,98 @@ describe("withScale plugin", () => {
     expect(indices.length).toBeGreaterThan(0);
     expect(indices).toContain(499_999);
   });
+
+  // ── force: true ───────────────────────────────────────────────────────
+
+  it("should activate compressed mode on a small list when force is true", () => {
+    // 100 items × 40px = 4000px — well under 16M, but force enables compression
+    const items = createTestItems(100);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withScale({ force: true }))
+      .build();
+
+    expect(list.total).toBe(100);
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(0);
+  });
+
+  it("should create custom scrollbar fallback when force is true", () => {
+    const items = createTestItems(100);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withScale({ force: true }))
+      .build();
+
+    // Compressed mode creates a fallback scrollbar even for small lists
+    const scrollbar = list.element.querySelector(".vlist-scrollbar");
+    expect(scrollbar).not.toBeNull();
+  });
+
+  it("should support scrollToIndex when force is true on a small list", () => {
+    const items = createTestItems(200);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withScale({ force: true }))
+      .build();
+
+    list.scrollToIndex(150, "start");
+    flushGraceViaScroll(list, list.getScrollPosition());
+
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    // Should have items near the target
+    const hasNearTarget = indices.some((idx) => Math.abs(idx - 150) < 20);
+    expect(hasNearTarget).toBe(true);
+  });
+
+  it("should handle setItems while force is true", () => {
+    const items = createTestItems(50);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withScale({ force: true }))
+      .build();
+
+    expect(list.total).toBe(50);
+
+    // Grow the list — compression should stay active
+    const moreItems = createTestItems(300);
+    list.setItems(moreItems);
+    expect(list.total).toBe(300);
+
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(indices).toContain(0);
+  });
+
+  it("should not activate compressed mode without force on a small list", () => {
+    // Sanity check: withScale() without force on a small list stays uncompressed
+    const items = createTestItems(100);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items,
+    })
+      .use(withScale())
+      .build();
+
+    // No fallback scrollbar = uncompressed mode
+    const scrollbar = list.element.querySelector(".vlist-scrollbar");
+    expect(scrollbar).toBeNull();
+  });
 });
 
 // =============================================================================

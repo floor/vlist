@@ -35,6 +35,45 @@ import type { ScrollController } from "../features/scrollbar/controller";
 import type { Emitter } from "../events";
 
 // =============================================================================
+// Reload Options
+// =============================================================================
+
+/** Options for the reload() method. */
+export interface ReloadOptions {
+  /**
+   * Skip the initial page-1 load after resetting state.
+   * When true, reload() clears data and DOM but does NOT call loadInitial().
+   * The caller is responsible for loading data (e.g. via restoreScroll).
+   *
+   * Automatically set to true when `snapshot` is provided with meaningful data.
+   */
+  skipInitialLoad?: boolean;
+
+  /**
+   * Snapshot to restore after resetting state.
+   *
+   * When provided with meaningful data (total > 0 and index > 0),
+   * reload() automatically:
+   * 1. Skips loadInitial() (no wasted page-1 request)
+   * 2. Calls restoreScroll(snapshot) to load data at the target position
+   *
+   * This eliminates the need for the consumer to manually coordinate
+   * skipInitialLoad and restoreScroll after reload.
+   *
+   * ```ts
+   * // Before: manual coordination
+   * const hasRestorable = snapshot && snapshot.total > 0 && snapshot.index > 0;
+   * await list.reload(hasRestorable ? { skipInitialLoad: true } : undefined);
+   * if (hasRestorable) list.restoreScroll(snapshot);
+   *
+   * // After: vlist handles it
+   * await list.reload({ snapshot });
+   * ```
+   */
+  snapshot?: ScrollSnapshot;
+}
+
+// =============================================================================
 // Builder Configuration
 // =============================================================================
 
@@ -500,7 +539,9 @@ export interface VList<T extends VListItem = VListItem> {
   prependItems: (items: T[]) => void;
   updateItem: (id: string | number, updates: Partial<T>) => void;
   removeItem: (id: string | number) => void;
-  reload: () => Promise<void>;
+  getItemAt: (index: number) => T | undefined;
+  getIndexById: (id: string | number) => number;
+  reload: (options?: ReloadOptions) => Promise<void>;
 
   // ── Scroll methods (always available) ─────────────────────────
   scrollToIndex: (

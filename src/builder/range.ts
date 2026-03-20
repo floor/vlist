@@ -21,7 +21,7 @@ export const calcVisibleRange = (
 ): void => {
   if (totalItems === 0 || containerHeight === 0) {
     out.start = 0;
-    out.end = 0;
+    out.end = -1;
     return;
   }
 
@@ -51,11 +51,10 @@ export const applyOverscan = (
   totalItems: number,
   out: Range,
 ): void => {
-  if (totalItems === 0) {
-    out.start = 0;
-    out.end = 0;
-    return;
-  }
+  // No special case needed for totalItems===0: calcVisibleRange already
+  // sets visible.end=-1, so Math.min(-1, -1+overscan) = -1 and
+  // Math.max(0, 0-overscan) = 0 — the empty sentinel {start:0,end:-1}
+  // propagates correctly through the cleanup loop in coreRenderIfNeeded.
   out.start = Math.max(0, visible.start - overscan);
   out.end = Math.min(totalItems - 1, visible.end + overscan);
 };

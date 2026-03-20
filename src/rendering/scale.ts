@@ -50,14 +50,21 @@ export interface CompressionState {
 /**
  * Calculate compression state for a list
  * Pure function - no side effects
+ *
+ * @param _totalItems - Total number of items
+ * @param sizeCache - Size cache for item sizes/offsets
+ * @param force - When true, enables compressed mode even if total size is under the limit.
+ *   Useful for testing, consistent UX, or preemptively enabling compression
+ *   before the list grows past the browser limit.
  */
 export const getCompressionState = (
   _totalItems: number,
   sizeCache: SizeCache,
+  force?: boolean,
 ): CompressionState => {
   const actualSize = sizeCache.getTotalSize();
-  const isCompressed = actualSize > MAX_VIRTUAL_SIZE;
-  const virtualSize = isCompressed ? MAX_VIRTUAL_SIZE : actualSize;
+  const isCompressed = force === true || actualSize > MAX_VIRTUAL_SIZE;
+  const virtualSize = actualSize > MAX_VIRTUAL_SIZE ? MAX_VIRTUAL_SIZE : actualSize;
   const ratio = actualSize > 0 ? virtualSize / actualSize : 1;
 
   return {
@@ -97,8 +104,11 @@ export const calculateCompressedVisibleRange = (
     return out;
   }
 
-  if (!compression.isCompressed) {
-    // Normal calculation using size cache
+  if (!compression.isCompressed || compression.ratio === 1) {
+    // Normal calculation using size cache.
+    // Also used when ratio === 1 (force mode, no actual compression) —
+    // the scroll infrastructure is active but positions map 1:1,
+    // so offset-based math is exact and avoids interpolation drift.
     const start = sizeCache.indexAtOffset(scrollPosition);
     // Find the last item that is at least partially visible
     // Add 1 to match the fixed-height ceil() behavior (safe overshoot)
@@ -220,6 +230,13 @@ export const calculateCompressedItemPosition = (
     return sizeCache.getOffset(index);
   }
 
+  // When ratio === 1 (force mode, no actual compression), virtualSize === actualSize
+  // so scroll position maps 1:1 to pixel offset. Use simple subtraction to avoid
+  // near-bottom interpolation drift that causes a gap at the bottom.
+  if (compression.ratio === 1) {
+    return sizeCache.getOffset(index) - scrollPosition;
+  }
+
   const { virtualSize } = compression;
   const maxScroll = virtualSize - containerHeight;
   const distanceFromBottom = maxScroll - scrollPosition;
@@ -300,7 +317,7 @@ export const calculateCompressedScrollToIndex = (
 
   let targetPosition: number;
 
-  if (compression.isCompressed) {
+  if (compression.isCompressed && compression.ratio !== 1) {
     // Special case: last item with "end" alignment should go to max scroll
     // to avoid gap at bottom due to compression ratio precision
     if (align === "end" && index === totalItems - 1) {
@@ -311,7 +328,8 @@ export const calculateCompressedScrollToIndex = (
     const ratio = index / totalItems;
     targetPosition = ratio * compression.virtualSize;
   } else {
-    // Direct calculation using actual offset
+    // Direct calculation using actual offset.
+    // Also used when ratio === 1 (force mode) — positions map 1:1.
     targetPosition = sizeCache.getOffset(index);
   }
 
@@ -345,11 +363,12 @@ export const calculateIndexFromScrollPosition = (
 ): number => {
   if (totalItems === 0) return 0;
 
-  if (compression.isCompressed) {
+  if (compression.isCompressed && compression.ratio !== 1) {
     const scrollRatio = scrollPosition / compression.virtualSize;
     return Math.floor(scrollRatio * totalItems);
   }
 
+  // Direct lookup — also used when ratio === 1 (force mode, no actual compression)
   return sizeCache.indexAtOffset(scrollPosition);
 };
 
@@ -391,8 +410,9 @@ export const getMaxItemsWithoutCompression = (itemSize: number): number => {
 export const getCompressionInfo = (
   totalItems: number,
   sizeCache: SizeCache,
+  force?: boolean,
 ): string => {
-  const compression = getCompressionState(totalItems, sizeCache);
+  const compression = getCompressionState(totalItems, sizeCache, force);
 
   if (!compression.isCompressed) {
     return `No compression needed (${totalItems} items, ${(compression.actualSize / 1_000_000).toFixed(2)}M px)`;

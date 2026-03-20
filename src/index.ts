@@ -14,6 +14,7 @@ export { vlist } from "./builder";
 
 // Features - tree-shakeable
 export { withScale } from "./features/scale";
+export type { ScaleConfig } from "./features/scale";
 export { withAsync } from "./features/async";
 export { withScrollbar } from "./features/scrollbar";
 export { withPage } from "./features/page";
@@ -23,6 +24,10 @@ export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
 export { withTable } from "./features/table";
+
+// Utils
+export { createStats } from "./utils/stats";
+export type { Stats, StatsConfig, StatsState } from "./utils/stats";
 
 // Core Types
 export type {
@@ -74,4 +79,5 @@ export type {
   VListConfig,
   VListFeature,
   BuilderContext,
+  ReloadOptions,
 } from "./builder";

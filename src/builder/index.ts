@@ -36,6 +36,7 @@ export type {
   VListFeature,
   FeatureFactory,
   BuilderContext,
+  ReloadOptions,
 
   // Internal (for feature authors)
   BuilderState,
