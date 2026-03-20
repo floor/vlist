@@ -257,6 +257,18 @@ export const withScale = <
           const smoothScrollTick = (): void => {
             const diff = targetScrollPosition - virtualScrollPosition;
 
+            // Safety: if data was cleared (total=0) while an animation
+            // was in flight, snap to 0 and stop.  The clamp in
+            // updateCompressionMode already resets via scrollTo(), but
+            // a rAF callback queued before the clamp could still fire.
+            if (ctx.getVirtualTotal() === 0) {
+              virtualScrollPosition = 0;
+              targetScrollPosition = 0;
+              smoothScrollId = null;
+              ctx.scrollController.scrollTo(0);
+              return;
+            }
+
             if (Math.abs(diff) < SNAP_THRESHOLD) {
               // Close enough — snap to target and stop animating
               virtualScrollPosition = targetScrollPosition;
@@ -551,6 +563,49 @@ export const withScale = <
         } else if (!compression.isCompressed && compressedModeActive) {
           // Leaving compressed mode
           compressedModeActive = false;
+
+          // ── Cancel in-flight animations ─────────────────────────────
+          if (smoothScrollId !== null) {
+            cancelAnimationFrame(smoothScrollId);
+            smoothScrollId = null;
+          }
+          if (momentumId !== null) {
+            cancelAnimationFrame(momentumId);
+            momentumId = null;
+          }
+
+          // ── Reset virtual scroll state ──────────────────────────────
+          // These must be zeroed BEFORE restoring native scroll functions,
+          // otherwise the stale virtualScrollPosition leaks into the
+          // scroll pipeline on the next frame.
+          virtualScrollPosition = 0;
+          targetScrollPosition = 0;
+          touchSamples = [];
+
+          // ── Restore native scroll functions ─────────────────────────
+          // When entering compressed mode we replaced $.sgt / $.sst with
+          // closures over virtualScrollPosition.  We must restore the
+          // original native-DOM readers so that the rendering pipeline
+          // reads from viewport.scrollTop again.
+          ctx.setScrollFns(
+            horizontal
+              ? () => dom.viewport.scrollLeft
+              : () => dom.viewport.scrollTop,
+            horizontal
+              ? (pos: number) => { dom.viewport.scrollLeft = pos; }
+              : (pos: number) => { dom.viewport.scrollTop = pos; },
+          );
+
+          // ── Reset native scroll position ────────────────────────────
+          // In compressed mode scrollTop was pinned to 0 (overflow:hidden).
+          // Ensure it stays at 0 when we re-enable native scroll so the
+          // renderer and the DOM agree on the starting position.
+          if (horizontal) {
+            dom.viewport.scrollLeft = 0;
+          } else {
+            dom.viewport.scrollTop = 0;
+          }
+
           ctx.scrollController.disableCompression();
 
           // Restore native scroll — re-enable overflow so the native
@@ -559,6 +614,14 @@ export const withScale = <
             dom.viewport.style.overflowX = "auto";
           } else {
             dom.viewport.style.overflow = "auto";
+          }
+
+          // ── Clean up custom scrollbar ───────────────────────────────
+          // If we created a fallback scrollbar when entering compressed
+          // mode, destroy it now — native scrollbar takes over.
+          if (scrollbar) {
+            scrollbar.destroy();
+            scrollbar = null;
           }
 
           // Restore content size to actual height
@@ -601,17 +664,46 @@ export const withScale = <
         // current virtualScrollPosition exceeds the new maxScroll, items
         // are positioned past the viewport, causing a visible glitch.
         // Clamping here keeps the scroll position in-bounds immediately.
+        //
+        // CRITICAL: We must propagate the clamped position through
+        // scrollController.scrollTo() — not just update the closure
+        // variables — because scrollTo() also updates $.ls (the last
+        // scroll position used by the render pipeline). Without this,
+        // the next forceRender/renderIfNeeded reads a stale $.ls and
+        // calculates a wrong visible range, causing an empty list after
+        // category switches.
         if (compressedModeActive) {
           const maxScroll = Math.max(
             0,
             compression.virtualSize - ctx.state.viewportState.containerSize,
           );
-          if (virtualScrollPosition > maxScroll) {
-            virtualScrollPosition = maxScroll;
-            targetScrollPosition = maxScroll;
-          } else if (virtualScrollPosition < 0) {
-            virtualScrollPosition = 0;
-            targetScrollPosition = 0;
+          let clamped = virtualScrollPosition;
+          if (clamped > maxScroll) {
+            clamped = maxScroll;
+          } else if (clamped < 0) {
+            clamped = 0;
+          }
+
+          if (clamped !== virtualScrollPosition) {
+            // Cancel any in-flight smooth scroll / touch momentum
+            // animation — it would override the clamped position on
+            // the next frame.
+            if (smoothScrollId !== null) {
+              cancelAnimationFrame(smoothScrollId);
+              smoothScrollId = null;
+            }
+            if (momentumId !== null) {
+              cancelAnimationFrame(momentumId);
+              momentumId = null;
+            }
+
+            // Propagate through the scroll controller so $.ls is
+            // updated and the render pipeline sees the correct
+            // position.  scrollTo() internally calls the setter
+            // installed by setScrollFns which writes
+            // virtualScrollPosition and targetScrollPosition, so no
+            // explicit assignment is needed here.
+            ctx.scrollController.scrollTo(clamped);
           }
         }
       };
