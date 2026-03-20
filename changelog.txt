@@ -1,9 +1,38 @@
 vlist — full changelog
 initial commit → latest
-385 commits · 39 days · Feb 2 – Mar 12, 2026
+407 commits · 46 days · Feb 2 – Mar 20, 2026
+
+
+2026-03-20
+
+  fix(scale): propagate clamped scroll position through scrollTo pipeline
+
+
+2026-03-19
+
+  feat(async): add reload({ snapshot }) for automatic scroll restore
+  feat(async): add skipInitialLoad option to reload for snapshot restore optimization
+  fix(scale): complete force compression lifecycle — native scroll sync, grid state, drift guard
+
+
+2026-03-18
+
+  fix(scale): use exact offset math when ratio=1 to eliminate bottom gap
+  feat(scale): add force option to enable compressed mode on any list size
+
+
+2026-03-14
+
+  fix(render): clear stale DOM nodes when last item removed — empty range returns end:-1
+  feat(utils): export createStats and types from public API
+  feat(api): expose getItemAt and getIndexById on public VList API
 
 
 2026-03-12
+
+  fix(test): apply CI_MULTIPLIER to all timing thresholds in performance tests
+  fix(ci): pin setup-bun to v2.1.3 to avoid transient 401 errors
+
 
   feat(builder): dev-mode diagnostics — warn on non-array setItems, missing/duplicate IDs, out-of-range scrollToIndex, missing updateItem/removeItem targets, empty template return (DCE-verified, 0 KB prod overhead)
   fix(rendering): setItems() calls cancelScroll() before updating data
