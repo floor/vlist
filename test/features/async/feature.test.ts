@@ -2259,7 +2259,7 @@ describe("withAsync - Reload with Snapshot", () => {
     const plugin = withAsync({ adapter });
 
     const ctx = createMockContext();
-    const restoreScrollMock = mock(() => {});
+    const restoreScrollMock = mock((_snapshot: Record<string, unknown>) => {});
     ctx.methods.set("restoreScroll", restoreScrollMock);
 
     plugin.setup(ctx);
@@ -2273,8 +2273,8 @@ describe("withAsync - Reload with Snapshot", () => {
 
     // The full snapshot (including selectedIds) should be passed through
     expect(restoreScrollMock).toHaveBeenCalledWith(snapshot);
-    const passedSnapshot = restoreScrollMock.mock.calls[0][0];
-    expect(passedSnapshot.selectedIds).toEqual(["a", "b"]);
+    const passedSnapshot = restoreScrollMock.mock.calls[0]![0];
+    expect(passedSnapshot!.selectedIds).toEqual(["a", "b"]);
   });
 
   it("should treat snapshot without total property as non-restorable", async () => {
