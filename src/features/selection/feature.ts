@@ -14,7 +14,7 @@
  *   eliminating the previous querySelectorAll-based DOM bypass.
  *
  * Added methods: select, deselect, toggleSelect, selectAll, clearSelection,
- *                getSelected, getSelectedItems
+ *                getSelected, getSelectedItems, selectNext, selectPrevious
  *
  * Internal methods (for renderer integration, not public API):
  *   _getSelectedIds  — returns the live Set<string|number> of selected IDs
@@ -98,6 +98,8 @@ export const withSelection = <T extends VListItem = VListItem>(
       "clearSelection",
       "getSelected",
       "getSelectedItems",
+      "selectNext",
+      "selectPrevious",
     ] as const,
 
     setup(ctx: BuilderContext<T>): void {
@@ -114,6 +116,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         ctx.methods.set("getSelected", () => []);
         ctx.methods.set("getSelectedItems", () => []);
         ctx.methods.set("setSelectionMode", () => {});
+        ctx.methods.set("selectNext", () => {});
+        ctx.methods.set("selectPrevious", () => {});
         return;
       }
 
@@ -547,6 +551,60 @@ export const withSelection = <T extends VListItem = VListItem>(
           return index === undefined ? undefined : ctx.dataManager.getItem(index);
         };
         return getSelectedItems(selectionState, getItemByIdFn);
+      });
+
+      // ── Shared helper: move focus + select + scroll-if-needed + emit ──
+      const moveFocusAndSelect = (direction: "next" | "previous"): void => {
+        const totalItems = ctx.dataManager.getTotal();
+        if (totalItems === 0) return;
+
+        selectionState = direction === "next"
+          ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap)
+          : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
+
+        const idx = selectionState.focusedIndex;
+        const item = ctx.dataManager.getItem(idx);
+        if (!item) return;
+
+        selectionState = selectItems(selectionState, [item.id], mode);
+
+        // Only scroll when the target item is outside the viewport.
+        // When scrolling is needed, align to the edge the item is
+        // approaching: "end" for next (bottom), "start" for previous (top).
+        const itemOffset = ctx.sizeCache.getOffset(idx);
+        const itemSize = ctx.sizeCache.getSize(idx);
+        const scrollPos = ctx.state.viewportState.scrollPosition;
+        const viewportSize = ctx.state.viewportState.containerSize;
+
+        const isAboveViewport = itemOffset < scrollPos;
+        const isBelowViewport = itemOffset + itemSize > scrollPos + viewportSize;
+
+        if (isAboveViewport || isBelowViewport) {
+          const align = direction === "next" ? "end" : "start";
+          const dataState = ctx.dataManager.getState();
+          ctx.scrollController.scrollTo(
+            ctx.adjustScrollPosition(
+              calculateScrollToIndex(
+                idx,
+                ctx.sizeCache,
+                ctx.state.viewportState.containerSize,
+                dataState.total,
+                align,
+                ctx.getCachedCompression(),
+              ),
+            ),
+          );
+        }
+
+        forceRenderAndEmit();
+      };
+
+      ctx.methods.set("selectNext", (): void => {
+        moveFocusAndSelect("next");
+      });
+
+      ctx.methods.set("selectPrevious", (): void => {
+        moveFocusAndSelect("previous");
       });
 
       // ── Cleanup handler ──
