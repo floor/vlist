@@ -180,6 +180,7 @@ function materialize<T extends VListItem = VListItem>(
     padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
+    accessible: accessibleMode = true,
   } = config;
 
   const scrollCfg: ScrollConfig | undefined = scrollConfig;
@@ -218,6 +219,7 @@ function materialize<T extends VListItem = VListItem>(
     wrap: wrapEnabled,
     horizontal: isHorizontal,
     ariaIdPrefix,
+    accessible: accessibleMode,
   };
 
   // ── Sort and validate features ───────────────────────────────────
@@ -260,6 +262,7 @@ function materialize<T extends VListItem = VListItem>(
     classPrefix,
     ariaLabel,
     isHorizontal,
+    accessibleMode,
   );
 
   // ── Apply scroll config to viewport ─────────────────────────────
@@ -1072,7 +1075,7 @@ function materialize<T extends VListItem = VListItem>(
   // as required by the WAI-ARIA listbox pattern. When withSelection is
   // present it registers _getFocusedIndex and owns all focus behaviour.
 
-  if (!methods.has("_getFocusedIndex")) {
+  if (accessibleMode && !methods.has("_getFocusedIndex")) {
     let coreFocus = -1;
     const focusedClass = `${classPrefix}-item--focused`;
 
