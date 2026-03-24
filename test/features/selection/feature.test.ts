@@ -143,6 +143,8 @@ function createMockContext(): BuilderContext<TestItem> {
       getItemsInRange: (start: number, end: number) =>
         testItems.slice(start, end + 1),
       isItemLoaded: () => true,
+      getState: () => ({ total: testItems.length }),
+      getStorage: () => null,
     } as any,
     scrollController: {
       getScrollTop: () => 0,
@@ -415,10 +417,147 @@ describe("withSelection — Methods", () => {
 
     feature.setup!(ctx);
 
-    // 7 public methods + 2 internal getters (_getSelectedIds, _getFocusedIndex)
-    expect(ctx.methods.size).toBe(9);
+    // 9 public methods + 2 internal getters (_getSelectedIds, _getFocusedIndex)
+    expect(ctx.methods.size).toBe(11);
     expect(ctx.methods.has("_getSelectedIds")).toBe(true);
     expect(ctx.methods.has("_getFocusedIndex")).toBe(true);
+    expect(ctx.methods.has("selectNext")).toBe(true);
+    expect(ctx.methods.has("selectPrevious")).toBe(true);
+  });
+
+  it("selectNext should move focus and select next item", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+
+    // First call: focus starts at -1, moveFocusDown goes to 0
+    selectNext();
+    expect(getSelected()).toEqual([0]);
+
+    // Second call: moves to index 1
+    selectNext();
+    expect(getSelected()).toEqual([1]);
+
+    // Third call: moves to index 2
+    selectNext();
+    expect(getSelected()).toEqual([2]);
+  });
+
+  it("selectPrevious should move focus and select previous item", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const selectPrevious = ctx.methods.get("selectPrevious") as () => void;
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+
+    // Move to index 2
+    selectNext();
+    selectNext();
+    selectNext();
+    expect(getSelected()).toEqual([2]);
+
+    // Move back to index 1
+    selectPrevious();
+    expect(getSelected()).toEqual([1]);
+  });
+
+  it("selectNext should not wrap past last item by default", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+
+    // 100 test items — move to last
+    for (let i = 0; i < 100; i++) selectNext();
+    expect(getSelected()).toEqual([99]);
+
+    // Try to go past last — should stay on last
+    selectNext();
+    expect(getSelected()).toEqual([99]);
+  });
+
+  it("selectNext should not scroll when next item is within viewport", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    const scrollToMock = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToMock;
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+
+    // Items are 50px, viewport is 600px, scrollPosition is 0.
+    // Items 0–11 are visible. Moving from -1 → 0 → 1 stays in viewport.
+    selectNext(); // index 0
+    selectNext(); // index 1
+    selectNext(); // index 2
+
+    expect(scrollToMock).not.toHaveBeenCalled();
+  });
+
+  it("selectNext should scroll with 'end' alignment when item goes below viewport", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    const scrollToMock = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToMock;
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+
+    // Items are 50px, viewport is 600px (12 items visible: 0–11).
+    // Navigate to index 11 (last visible), then to 12 (off-viewport).
+    for (let i = 0; i < 12; i++) selectNext(); // index 0..11, all visible
+    expect(scrollToMock).not.toHaveBeenCalled();
+
+    selectNext(); // index 12 — offset 600, bottom edge 650 > scrollPos(0) + viewport(600)
+    expect(scrollToMock).toHaveBeenCalled();
+  });
+
+  it("selectPrevious should scroll with 'start' alignment when item goes above viewport", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    const scrollToMock = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToMock;
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const selectPrevious = ctx.methods.get("selectPrevious") as () => void;
+
+    // Navigate to index 5 (middle of viewport)
+    for (let i = 0; i < 6; i++) selectNext();
+    expect(scrollToMock).not.toHaveBeenCalled();
+
+    // Simulate that viewport has scrolled so index 5 is at the top edge.
+    // scrollPosition = 250 means items 5–16 are visible.
+    ctx.state.viewportState.scrollPosition = 250;
+
+    // selectPrevious → index 4, offset 200 < scrollPos 250 → should scroll
+    selectPrevious();
+    expect(scrollToMock).toHaveBeenCalled();
+  });
+
+  it("selectPrevious should not scroll when previous item is within viewport", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContext();
+    const scrollToMock = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToMock;
+    feature.setup!(ctx);
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const selectPrevious = ctx.methods.get("selectPrevious") as () => void;
+
+    // Navigate to index 5 (middle of viewport, scrollPosition is 0)
+    for (let i = 0; i < 6; i++) selectNext();
+
+    // selectPrevious → index 4, offset 200, still in viewport (0–600)
+    selectPrevious();
+    expect(scrollToMock).not.toHaveBeenCalled();
   });
 
   it("getSelected should return empty array initially", () => {
