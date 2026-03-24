@@ -586,6 +586,8 @@ export interface VList<T extends VListItem = VListItem> {
   clearSelection?: () => void;
   getSelected?: () => Array<string | number>;
   getSelectedItems?: () => T[];
+  selectNext?: () => void;
+  selectPrevious?: () => void;
 
   // Snapshots (added by withSnapshots)
   getScrollSnapshot?: () => ScrollSnapshot;
