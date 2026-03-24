@@ -729,11 +729,12 @@ export const createDOMStructure = (
   classPrefix: string,
   ariaLabel?: string,
   horizontal?: boolean,
+  accessible?: boolean,
 ): DOMStructure => {
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
-  root.setAttribute("tabindex", "0");
+  if (accessible !== false) root.setAttribute("tabindex", "0");
 
   if (horizontal) {
     root.classList.add(`${classPrefix}--horizontal`);

@@ -270,7 +270,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
       });
 
-      // ── Focus handler — activate first/last-focused item on keyboard Tab ──
+      // ── Focus & keyboard handlers (skipped when accessible: false) ──
       // Uses :focus-visible to detect keyboard focus — no extra listeners needed.
       const onFocusIn = (): void => {
         if (ctx.state.isDestroyed) return;
@@ -316,7 +316,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
       };
 
-      dom.root.addEventListener("focusin", onFocusIn);
+      if (resolvedConfig.accessible) dom.root.addEventListener("focusin", onFocusIn);
 
       // ── Blur handler — clear focus ring when focus leaves the list ──
       const onFocusOut = (e: FocusEvent): void => {
@@ -345,7 +345,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
       };
 
-      dom.root.addEventListener("focusout", onFocusOut);
+      if (resolvedConfig.accessible) dom.root.addEventListener("focusout", onFocusOut);
 
       // ── Click handler ──
       ctx.clickHandlers.push((event: MouseEvent): void => {
@@ -383,8 +383,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         forceRenderAndEmit();
       });
 
-      // ── Keyboard handler ──
-      ctx.keydownHandlers.push((event: KeyboardEvent): void => {
+      // ── Keyboard handler (skipped when accessible: false) ──
+      if (resolvedConfig.accessible) ctx.keydownHandlers.push((event: KeyboardEvent): void => {
         if (ctx.state.isDestroyed) return;
 
         const totalItems = ctx.dataManager.getTotal();

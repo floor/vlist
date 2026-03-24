@@ -40,11 +40,12 @@ export const createDOMStructure = (
   classPrefix: string,
   ariaLabel?: string,
   horizontal?: boolean,
+  accessible?: boolean,
 ): DOMStructure => {
   const root = document.createElement("div");
   root.className = classPrefix;
   if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
-  root.setAttribute("tabindex", "0");
+  if (accessible !== false) root.setAttribute("tabindex", "0");
 
   const viewport = document.createElement("div");
   viewport.className = `${classPrefix}-viewport`;
