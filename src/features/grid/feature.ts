@@ -250,6 +250,19 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       createAndSetGridRenderer();
 
+      // ── Expose updateItem for the builder API ──
+      // The builder API's updateItem() needs to re-apply the template
+      // after data changes (e.g. cover upload). In grid mode the core
+      // rendered Map is empty — all DOM lives in the grid renderer.
+      // This method delegates to the grid renderer's updateItem which
+      // always re-applies the template.
+      ctx.methods.set(
+        "_updateRenderedItem",
+        (index: number, item: T, isSelected: boolean, isFocused: boolean) => {
+          gridRenderer?.updateItem(index, item, isSelected, isFocused);
+        },
+      );
+
       // ── Expose grid layout for other features (e.g., groups) ──
       ctx.methods.set("_getGridLayout", () => gridLayout);
       ctx.methods.set("_getGridConfig", () => gridConfig);

@@ -127,6 +127,7 @@ function createMockContext(config?: {
       wrap: false,
       horizontal: false,
       ariaIdPrefix: "vlist",
+      accessible: true,
     },
     rawConfig: {} as any,
     renderer: {

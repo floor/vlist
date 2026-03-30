@@ -133,6 +133,7 @@ function createTestDeps(): MDeps<TestItem> {
       wrap: false,
       horizontal: false,
       ariaIdPrefix: "vlist",
+      accessible: true,
     },
     rawConfig: {
       container: testDom.root,

@@ -180,6 +180,7 @@ function materialize<T extends VListItem = VListItem>(
     padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
+    accessible: accessibleMode = true,
   } = config;
 
   const scrollCfg: ScrollConfig | undefined = scrollConfig;
@@ -218,6 +219,7 @@ function materialize<T extends VListItem = VListItem>(
     wrap: wrapEnabled,
     horizontal: isHorizontal,
     ariaIdPrefix,
+    accessible: accessibleMode,
   };
 
   // ── Sort and validate features ───────────────────────────────────
@@ -260,6 +262,7 @@ function materialize<T extends VListItem = VListItem>(
     classPrefix,
     ariaLabel,
     isHorizontal,
+    accessibleMode,
   );
 
   // ── Apply scroll config to viewport ─────────────────────────────
@@ -1045,6 +1048,26 @@ function materialize<T extends VListItem = VListItem>(
   $.dm = createDefaultDataProxy($, deps, ctx);
   $.sc = createDefaultScrollProxy($, deps);
 
+  // ── Default _updateRenderedItem for list mode ────────────────────
+  // Re-applies the template for a single item after data changes.
+  // Grid and table features override this with their own renderer's
+  // updateItem (which owns the rendered Map in those modes).
+  methods.set(
+    "_updateRenderedItem",
+    (index: number, item: T, isSelected: boolean, isFocused: boolean): void => {
+      const element = rendered.get(index);
+      if (!element) return;
+
+      const state: import("../types").ItemState = { selected: isSelected, focused: isFocused };
+      const result = $.at(item, index, state);
+      applyTemplate(element, result, index);
+      element.dataset.id = String(item.id);
+      element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+      element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    },
+  );
+
   // ── Run feature setup ────────────────────────────────────────────
 
   // Check for method collisions
@@ -1072,7 +1095,7 @@ function materialize<T extends VListItem = VListItem>(
   // as required by the WAI-ARIA listbox pattern. When withSelection is
   // present it registers _getFocusedIndex and owns all focus behaviour.
 
-  if (!methods.has("_getFocusedIndex")) {
+  if (accessibleMode && !methods.has("_getFocusedIndex")) {
     let coreFocus = -1;
     const focusedClass = `${classPrefix}-item--focused`;
 
