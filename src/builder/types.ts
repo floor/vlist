@@ -125,6 +125,18 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
    */
   padding?: number | [number, number] | [number, number, number, number];
 
+  /**
+   * Enable built-in keyboard navigation (default: true).
+   *
+   * When `true`, the list handles Arrow Up/Down, Home/End key presses
+   * to move focus between items (WAI-ARIA listbox pattern).
+   *
+   * Set to `false` to disable all built-in keyboard handling, useful
+   * when the host application provides its own keyboard navigation or
+   * when the list is non-interactive.
+   */
+  accessible?: boolean;
+
   /** Reverse mode for chat UIs */
   reverse?: boolean;
 
@@ -208,6 +220,7 @@ export interface ResolvedBuilderConfig {
   readonly wrap: boolean;
   readonly horizontal: boolean;
   readonly ariaIdPrefix: string;
+  readonly accessible: boolean;
 }
 
 // =============================================================================
@@ -573,6 +586,8 @@ export interface VList<T extends VListItem = VListItem> {
   clearSelection?: () => void;
   getSelected?: () => Array<string | number>;
   getSelectedItems?: () => T[];
+  selectNext?: () => void;
+  selectPrevious?: () => void;
 
   // Snapshots (added by withSnapshots)
   getScrollSnapshot?: () => ScrollSnapshot;

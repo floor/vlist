@@ -112,6 +112,7 @@ function createMockContext(): BuilderContext<TestItem> {
       wrap: false,
       horizontal: false,
       ariaIdPrefix: "vlist",
+      accessible: true,
     },
     rawConfig: {
       container: document.createElement("div"),

@@ -124,6 +124,22 @@ export const createApi = <T extends VListItem = VListItem>(
         ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
       };
 
+  // ── Cached method getters for updateItem ──
+  // Resolved lazily on first call (features register these during setup).
+  // Caching avoids three Map.get() lookups on every updateItem call.
+  let updateRenderedFn: ((idx: number, it: T, sel: boolean, foc: boolean) => void) | null = null;
+  let selectionIdsFn: (() => Set<string | number>) | null = null;
+  let focusedIndexFn: (() => number) | null = null;
+  let updateItemGettersResolved = false;
+
+  const resolveUpdateItemGetters = (): void => {
+    if (updateItemGettersResolved) return;
+    updateItemGettersResolved = true;
+    updateRenderedFn = (methods.get("_updateRenderedItem") as typeof updateRenderedFn) ?? null;
+    selectionIdsFn = (methods.get("_getSelectedIds") as typeof selectionIdsFn) ?? null;
+    focusedIndexFn = (methods.get("_getFocusedIndex") as typeof focusedIndexFn) ?? null;
+  };
+
   const updateItem = (index: number, updates: Partial<T>): void => {
     if (process.env.NODE_ENV !== "production") {
       const total = $.vtf();
@@ -131,7 +147,29 @@ export const createApi = <T extends VListItem = VListItem>(
         console.warn(`[vlist] updateItem() index ${index} is out of range (0–${total - 1}).`);
       }
     }
+
     ctx.dataManager.updateItem(index, updates);
+
+    // Re-apply the template for the updated element.
+    // The scroll-driven render loops (core, grid, table) skip re-templating
+    // when the item id hasn't changed. But updateItem() is an explicit API
+    // call signalling that data changed (e.g. new cover image), so we must
+    // force the template to re-apply.
+    //
+    // Core registers a default "_updateRenderedItem" that uses the inline
+    // rendered Map. Grid and table features override it with their own
+    // renderer's updateItem (which owns the rendered Map in those modes).
+    resolveUpdateItemGetters();
+
+    if (!updateRenderedFn) return;
+
+    const item = ctx.dataManager.getItem(index);
+    if (item) {
+      const selectedIds = selectionIdsFn ? selectionIdsFn() : $.ss;
+      const isSelected = selectedIds.has(item.id);
+      const isFocused = (focusedIndexFn ? focusedIndexFn() : $.fi) === index;
+      updateRenderedFn(index, item, isSelected, isFocused);
+    }
   };
 
   // Debounced ensureRange — coalesces multiple synchronous removeItem calls

@@ -30,6 +30,7 @@ import type {
   Range,
 } from "../../types";
 
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 import {
   calculateCompressedItemPosition,
 } from "../../rendering/scale";
@@ -230,6 +231,8 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   const baseClass = `${classPrefix}-item ${classPrefix}-grid-item`;
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
+  const placeholderClass = `${classPrefix}-item--placeholder`;
+  const replacedClass = `${classPrefix}-item--replaced`;
 
   /**
    * Apply template result to element
@@ -418,6 +421,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     const result = template(item, itemIndex, state);
     applyTemplate(element, result);
 
+    // Placeholder class — detected via ID prefix
+    const isPlaceholder = String(item.id).startsWith(PLACEHOLDER_ID_PREFIX);
+    if (isPlaceholder) {
+      element.classList.add(placeholderClass);
+    }
+
     // Apply state classes and position
     applyClasses(element, isSelected, isFocused);
     positionElement(element, transform);
@@ -512,22 +521,37 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
 
-        // Template re-evaluation only when item data or selection/focus changed
-        if (idChanged || selectedChanged || focusedChanged) {
-          if (idChanged) {
-            const state = getItemState(isSelected, isFocused);
-            const result = template(item, i, state);
-            applyTemplate(existing.element, result);
-            existing.element.dataset.id = String(item.id);
-            existing.element.dataset.row = String(gridLayout.getRow(i));
-            existing.element.dataset.col = String(gridLayout.getCol(i));
-            applySizeStyles(existing.element, i);
+        // Template re-evaluation when item data changes
+        if (idChanged) {
+          const existingId = String(existing.lastItemId);
+          const newId = String(item.id);
+          const wasPlaceholder = existingId.startsWith(PLACEHOLDER_ID_PREFIX);
+          const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+
+          const state = getItemState(isSelected, isFocused);
+          const result = template(item, i, state);
+          applyTemplate(existing.element, result);
+          existing.element.dataset.id = newId;
+          existing.element.dataset.row = String(gridLayout.getRow(i));
+          existing.element.dataset.col = String(gridLayout.getCol(i));
+          applySizeStyles(existing.element, i);
+
+          // Toggle placeholder class
+          existing.element.classList.toggle(placeholderClass, isPlaceholder);
+
+          // Fade-in animation when placeholder is replaced with real data
+          if (wasPlaceholder && !isPlaceholder) {
+            existing.element.classList.add(replacedClass);
+            setTimeout(() => existing.element.classList.remove(replacedClass), 300);
           }
 
+          existing.lastItemId = item.id;
+        }
+
+        // Class + aria updates only when selection/focus changed
+        if (idChanged || selectedChanged || focusedChanged) {
           applyClasses(existing.element, isSelected, isFocused);
           existing.element.ariaSelected = String(isSelected);
-
-          existing.lastItemId = item.id;
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
         }
@@ -580,8 +604,10 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Update a single item (used by selection feature for focused item changes).
-   * Leverages change tracking — skips work when state is already current.
+   * Update a single item (explicit API call).
+   * Always re-applies the template because the caller signals that the item
+   * data has changed — even when the id stays the same (e.g. cover update).
+   * Updates TrackedItem fields so subsequent scroll frames skip redundant work.
    */
   const updateItem = (
     index: number,
@@ -592,23 +618,17 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     const existing = rendered.get(index);
     if (!existing) return;
 
-    const idChanged = existing.lastItemId !== item.id;
-    const selectedChanged = existing.lastSelected !== isSelected;
-    const focusedChanged = existing.lastFocused !== isFocused;
+    const state = getItemState(isSelected, isFocused);
+    const result = template(item, index, state);
+    applyTemplate(existing.element, result);
+    applyClasses(existing.element, isSelected, isFocused);
+    existing.element.dataset.id = String(item.id);
+    existing.element.ariaSelected = String(isSelected);
+    applySizeStyles(existing.element, index);
 
-    if (idChanged || selectedChanged || focusedChanged) {
-      const state = getItemState(isSelected, isFocused);
-      const result = template(item, index, state);
-      applyTemplate(existing.element, result);
-      applyClasses(existing.element, isSelected, isFocused);
-      existing.element.dataset.id = String(item.id);
-      existing.element.ariaSelected = String(isSelected);
-      applySizeStyles(existing.element, index);
-
-      existing.lastItemId = item.id;
-      existing.lastSelected = isSelected;
-      existing.lastFocused = isFocused;
-    }
+    existing.lastItemId = item.id;
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
   };
 
   /**
