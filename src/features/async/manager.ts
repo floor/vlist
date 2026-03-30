@@ -130,8 +130,8 @@ export interface DataManager<T extends VListItem = VListItem> {
   /** Set items at offset */
   setItems: (items: T[], offset?: number, total?: number) => void;
 
-  /** Update item by ID */
-  updateItem: (id: string | number, updates: Partial<T>) => boolean;
+  /** Update item at index */
+  updateItem: (index: number, updates: Partial<T>) => boolean;
 
   /** Remove item by ID */
   removeItem: (id: string | number) => boolean;
@@ -432,25 +432,21 @@ export const createDataManager = <T extends VListItem = VListItem>(
     onItemsLoaded?.(items, offset, storage.getTotal());
   };
 
-  const updateItem = (id: string | number, updates: Partial<T>): boolean => {
-    const index = idToIndex.get(id);
-    if (index === undefined) {
-      return false;
-    }
-
+  const updateItem = (index: number, updates: Partial<T>): boolean => {
     const existing = storage.get(index);
     if (!existing) {
       return false;
     }
 
+    const oldId = existing.id;
     const updated = { ...existing, ...updates } as T;
     storage.set(index, updated);
 
     // Update ID index if ID changed
-    if (updates.id !== undefined && updates.id !== id) {
-      removeFromIdIndex(id);
-      updateIdIndex(index, updated);
+    if (updates.id !== undefined && updates.id !== oldId) {
+      removeFromIdIndex(oldId);
     }
+    updateIdIndex(index, updated);
 
     notifyStateChange();
     return true;

@@ -606,6 +606,19 @@ export const withTable = <T extends VListItem = VListItem>(
       ctx.methods.set("_getTableLayout", () => tableLayout);
 
       /**
+       * Expose updateItem for the builder API.
+       * In table mode the core rendered Map is empty — all DOM lives in
+       * the table renderer. This delegates to its updateItem which always
+       * re-applies cell templates.
+       */
+      ctx.methods.set(
+        "_updateRenderedItem",
+        (index: number, item: T, isSelected: boolean, isFocused: boolean) => {
+          tableRenderer?.updateItem(index, item, isSelected, isFocused);
+        },
+      );
+
+      /**
        * Replace the table renderer instance (for groups feature integration).
        * The groups feature calls this to swap in a groups-aware renderer.
        */
