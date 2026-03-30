@@ -1927,7 +1927,7 @@ describe("data/manager — updateItem when storage entry is missing (L414)", () 
     storage.clear();
 
     // Now idToIndex has "b" → 1, but storage.get(1) is undefined
-    const result = manager.updateItem("b", { name: "Updated" });
+    const result = manager.updateItem(1, { name: "Updated" });
     expect(result).toBe(false);
   });
 });
