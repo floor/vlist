@@ -1048,6 +1048,26 @@ function materialize<T extends VListItem = VListItem>(
   $.dm = createDefaultDataProxy($, deps, ctx);
   $.sc = createDefaultScrollProxy($, deps);
 
+  // ── Default _updateRenderedItem for list mode ────────────────────
+  // Re-applies the template for a single item after data changes.
+  // Grid and table features override this with their own renderer's
+  // updateItem (which owns the rendered Map in those modes).
+  methods.set(
+    "_updateRenderedItem",
+    (index: number, item: T, isSelected: boolean, isFocused: boolean): void => {
+      const element = rendered.get(index);
+      if (!element) return;
+
+      const state: import("../types").ItemState = { selected: isSelected, focused: isFocused };
+      const result = $.at(item, index, state);
+      applyTemplate(element, result, index);
+      element.dataset.id = String(item.id);
+      element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+      element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    },
+  );
+
   // ── Run feature setup ────────────────────────────────────────────
 
   // Check for method collisions

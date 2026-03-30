@@ -604,8 +604,10 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   };
 
   /**
-   * Update a single item (used by selection feature for focused item changes).
-   * Leverages change tracking — skips work when state is already current.
+   * Update a single item (explicit API call).
+   * Always re-applies the template because the caller signals that the item
+   * data has changed — even when the id stays the same (e.g. cover update).
+   * Updates TrackedItem fields so subsequent scroll frames skip redundant work.
    */
   const updateItem = (
     index: number,
@@ -616,23 +618,17 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     const existing = rendered.get(index);
     if (!existing) return;
 
-    const idChanged = existing.lastItemId !== item.id;
-    const selectedChanged = existing.lastSelected !== isSelected;
-    const focusedChanged = existing.lastFocused !== isFocused;
+    const state = getItemState(isSelected, isFocused);
+    const result = template(item, index, state);
+    applyTemplate(existing.element, result);
+    applyClasses(existing.element, isSelected, isFocused);
+    existing.element.dataset.id = String(item.id);
+    existing.element.ariaSelected = String(isSelected);
+    applySizeStyles(existing.element, index);
 
-    if (idChanged || selectedChanged || focusedChanged) {
-      const state = getItemState(isSelected, isFocused);
-      const result = template(item, index, state);
-      applyTemplate(existing.element, result);
-      applyClasses(existing.element, isSelected, isFocused);
-      existing.element.dataset.id = String(item.id);
-      existing.element.ariaSelected = String(isSelected);
-      applySizeStyles(existing.element, index);
-
-      existing.lastItemId = item.id;
-      existing.lastSelected = isSelected;
-      existing.lastFocused = isFocused;
-    }
+    existing.lastItemId = item.id;
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
   };
 
   /**
