@@ -700,7 +700,10 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   // =========================================================================
 
   /**
-   * Update a single row (e.g., after data change).
+   * Update a single row (explicit API call).
+   * Always re-applies cell templates because the caller signals that the item
+   * data has changed — even when the id stays the same (e.g. cover update).
+   * Updates TrackedItem fields so subsequent scroll frames skip redundant work.
    */
   const updateItem = (
     index: number,
@@ -714,25 +717,17 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     // Group headers are not selectable — skip state updates
     if (existing.isGroupHeader) return;
 
-    const idChanged = existing.lastItemId !== item.id;
-    const selectedChanged = existing.lastSelected !== isSelected;
-    const focusedChanged = existing.lastFocused !== isFocused;
-
-    if (idChanged || selectedChanged || focusedChanged) {
-      if (idChanged) {
-        const cols = currentLayout.columns;
-        for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
-          applyCellTemplate(existing.cells[c]!, item, cols[c]!, index);
-        }
-        existing.element.setAttribute("data-id", String(item.id));
-        existing.lastItemId = item.id;
-      }
-
-      applyRowClasses(existing.element, index, isSelected, isFocused);
-      setAriaSelected(existing.element, isSelected);
-      existing.lastSelected = isSelected;
-      existing.lastFocused = isFocused;
+    const cols = currentLayout.columns;
+    for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
+      applyCellTemplate(existing.cells[c]!, item, cols[c]!, index);
     }
+    existing.element.setAttribute("data-id", String(item.id));
+    existing.lastItemId = item.id;
+
+    applyRowClasses(existing.element, index, isSelected, isFocused);
+    setAriaSelected(existing.element, isSelected);
+    existing.lastSelected = isSelected;
+    existing.lastFocused = isFocused;
   };
 
   /**

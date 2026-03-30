@@ -158,17 +158,18 @@ describe("createDataManager", () => {
   });
 
   describe("updateItem", () => {
-    it("should update item by id", () => {
+    it("should update item at index", () => {
       const items = createTestItems(5);
       const manager = createDataManager({ initialItems: items });
 
-      const result = manager.updateItem(3, { name: "Updated Item 3" });
+      // Item at index 2 has id=3
+      const result = manager.updateItem(2, { name: "Updated Item 3" });
 
       expect(result).toBe(true);
       expect(manager.getItemById(3)?.name).toBe("Updated Item 3");
     });
 
-    it("should return false for non-existent id", () => {
+    it("should return false for out-of-bounds index", () => {
       const manager = createDataManager({
         initialItems: createTestItems(5),
       });
@@ -182,7 +183,8 @@ describe("createDataManager", () => {
       const items = [{ id: 1, name: "Item 1", extra: "data" }];
       const manager = createDataManager({ initialItems: items });
 
-      manager.updateItem(1, { name: "Updated" });
+      // Index 0 has id=1
+      manager.updateItem(0, { name: "Updated" });
 
       const item = manager.getItemById(1) as {
         id: number;
@@ -752,8 +754,8 @@ describe("createDataManager", () => {
       ];
       const manager = createDataManager({ initialItems: items });
 
-      // Change item 2's ID to 99
-      const result = manager.updateItem(2, {
+      // Change item at index 1 (id=2) to have id=99
+      const result = manager.updateItem(1, {
         id: 99,
         name: "Bob Renamed",
       } as any);
