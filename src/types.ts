@@ -470,6 +470,16 @@ export interface ViewportState {
 // Events
 // =============================================================================
 
+/** Viewport state snapshot attached to error events for debugging */
+export interface ErrorViewportSnapshot {
+  scrollPosition: number;
+  containerSize: number;
+  visibleRange: { start: number; end: number };
+  renderRange: { start: number; end: number };
+  totalItems: number;
+  isCompressed: boolean;
+}
+
 /** Event types and their payloads */
 export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Item clicked */
@@ -496,8 +506,8 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Data loading completed */
   "load:end": { items: T[]; total?: number; offset?: number };
 
-  /** Error occurred */
-  error: { error: Error; context: string };
+  /** Error occurred (includes viewport state when available) */
+  error: { error: Error; context: string; viewport?: ErrorViewportSnapshot };
 
   /** Container resized */
   resize: { height: number; width: number };
