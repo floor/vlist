@@ -16,6 +16,7 @@ import type {
   ItemTemplate,
   ItemState,
   Range,
+  ErrorViewportSnapshot,
 } from "../types";
 
 import type { ScrollConfig } from "../types";
@@ -424,6 +425,16 @@ function materialize<T extends VListItem = VListItem>(
     cachedCompression: null,
   };
 
+  // ── Error reporting helper ──────────────────────────────────────
+  const snapshotViewport = (): ErrorViewportSnapshot => ({
+    scrollPosition: sharedState.viewportState.scrollPosition,
+    containerSize: sharedState.viewportState.containerSize,
+    visibleRange: { ...sharedState.viewportState.visibleRange },
+    renderRange: { ...sharedState.viewportState.renderRange },
+    totalItems: $.vtf(),
+    isCompressed: sharedState.viewportState.isCompressed,
+  });
+
   // Rendered item tracking
   const rendered = new Map<number, HTMLElement>();
 
@@ -591,7 +602,17 @@ function materialize<T extends VListItem = VListItem>(
       }
     }
 
-    applyTemplate(element, $.at(item, index, itemState), index);
+    try {
+      applyTemplate(element, $.at(item, index, itemState), index);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      emitter.emit("error", {
+        error,
+        context: `template(index=${index}, id=${item.id})`,
+        viewport: snapshotViewport(),
+      });
+      element.textContent = "";
+    }
     $.pef(element, index);
     return element;
   };
@@ -668,7 +689,17 @@ function materialize<T extends VListItem = VListItem>(
           const wasPlaceholder = existingId?.startsWith("__placeholder_");
           const isPlaceholder = newId.startsWith("__placeholder_");
 
-          applyTemplate(existing, $.at(item, i, itemState), i);
+          try {
+            applyTemplate(existing, $.at(item, i, itemState), i);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            emitter.emit("error", {
+              error,
+              context: `template(index=${i}, id=${item.id})`,
+              viewport: snapshotViewport(),
+            });
+            existing.textContent = "";
+          }
           existing.dataset.id = newId;
           // Mode B: unconstrain unmeasured items for ResizeObserver measurement
           const shouldConstrain =
@@ -1059,8 +1090,17 @@ function materialize<T extends VListItem = VListItem>(
       if (!element) return;
 
       const state: import("../types").ItemState = { selected: isSelected, focused: isFocused };
-      const result = $.at(item, index, state);
-      applyTemplate(element, result, index);
+      try {
+        const result = $.at(item, index, state);
+        applyTemplate(element, result, index);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        emitter.emit("error", {
+          error,
+          context: `template(index=${index}, id=${item.id})`,
+          viewport: snapshotViewport(),
+        });
+      }
       element.dataset.id = String(item.id);
       element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
       element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
@@ -1087,7 +1127,19 @@ function materialize<T extends VListItem = VListItem>(
   }
 
   for (const feature of sortedFeatures) {
-    feature.setup(ctx);
+    try {
+      feature.setup(ctx);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (process.env.NODE_ENV !== "production") {
+        console.error(`[vlist] Feature "${feature.name}" setup failed:`, error);
+      }
+      emitter.emit("error", {
+        error,
+        context: `feature.setup(${feature.name})`,
+        viewport: snapshotViewport(),
+      });
+    }
   }
 
   // ── Baseline keyboard navigation (when no selection feature) ────
