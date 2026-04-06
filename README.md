@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.3.9** — [Changelog](./changelog.txt)
+**v1.4.0** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -19,7 +19,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader DOM ordering, ARIA live region
 - **React, Vue, Svelte** — framework adapters available
 
-**14+ interactive examples → [vlist.dev](https://vlist.dev)**
+**14+ interactive examples → [vlist.io](https://vlist.io)**
 
 ## Highlights
 
@@ -103,7 +103,7 @@ const list = vlist({
 
 ## Examples
 
-More examples at **[vlist.dev](https://vlist.dev)**.
+More examples at **[vlist.io](https://vlist.io)**.
 
 ### Data Table
 
@@ -225,7 +225,7 @@ const list = vlist({
 | **Variable heights** | `item: { height: (index) => heights[index] }` |
 | **Zebra striping** | `item: { striped: true }` or `striped: 'even'` / `'odd'` / `'data'` (group-aware) |
 
-See **[vlist.dev](https://vlist.dev)** for live demos of each.
+See **[vlist.io](https://vlist.io)** for live demos of each.
 
 ## API
 
@@ -350,7 +350,7 @@ withPage()                            // no config — uses document scroll
 withSnapshots()                       // included by default
 ```
 
-Full configuration reference → **[vlist.dev](https://vlist.dev)**
+Full configuration reference → **[vlist.io](https://vlist.io)**
 
 ## Framework Adapters
 
@@ -374,7 +374,7 @@ import '@floor/vlist/styles'           // base styles (required)
 import '@floor/vlist/styles/extras'    // optional enhancements
 ```
 
-Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--selected`, `.vlist-scrollbar` selectors. See [vlist.dev](https://vlist.dev) for theming examples.
+Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--selected`, `.vlist-scrollbar` selectors. See [vlist.io](https://vlist.io) for theming examples.
 
 ### Dark Mode
 
@@ -407,7 +407,7 @@ state.scrollTop                // ❌ Stored scrollLEFT!
 
 This makes the codebase clearer and eliminates semantic confusion when working with horizontal lists.
 
-**Migration from v0.8.2:** See [v0.9.0 Migration Guide](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
+**Migration from v0.8.2:** See [v0.9.0 Migration Guide](https://vlist.io/docs/refactoring/v0.9.0-migration-guide.md)
 
 ## Performance
 
@@ -478,12 +478,12 @@ const list: VList<Photo> = vlist<Photo>({
 
 ## Changelog
 
-See [CHANGELOG.md](https://vlist.dev/docs/CHANGELOG.md) for the full release history. A simplified [changelog.txt](./changelog.txt) is also available.
+See [CHANGELOG.md](https://vlist.io/docs/CHANGELOG.md) for the full release history. A simplified [changelog.txt](./changelog.txt) is also available.
 
 ## Links
 
-- **Docs & Examples:** [vlist.dev](https://vlist.dev)
-- **Migration Guide:** [v0.9.0 Migration](https://vlist.dev/docs/refactoring/v0.9.0-migration-guide.md)
+- **Docs & Examples:** [vlist.io](https://vlist.io)
+- **Migration Guide:** [v0.9.0 Migration](https://vlist.io/docs/refactoring/v0.9.0-migration-guide.md)
 - **GitHub:** [github.com/floor/vlist](https://github.com/floor/vlist)
 - **NPM:** [@floor/vlist](https://www.npmjs.com/package/@floor/vlist)
 - **Issues:** [GitHub Issues](https://github.com/floor/vlist/issues)
