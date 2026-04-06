@@ -8,6 +8,7 @@ import { JSDOM } from "jsdom";
 import { withAsync } from "../../../src/features/async/feature";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import type { BuilderContext } from "../../../src/builder/types";
+import { LOAD_VELOCITY_THRESHOLD } from "../../../src/constants";
 
 // =============================================================================
 // JSDOM Setup
@@ -1477,8 +1478,8 @@ describe("withAsync - Deceleration Handling", () => {
     const adapter = createMockAdapter();
     const plugin = withAsync({ adapter, autoLoad: false, total: 100 });
 
-    let currentVelocity = 10;
-    const ctx = createMockContext({ velocity: 10, isTracking: true });
+    let currentVelocity = LOAD_VELOCITY_THRESHOLD + 3;
+    const ctx = createMockContext({ velocity: LOAD_VELOCITY_THRESHOLD + 3, isTracking: true });
     ctx.scrollController.getVelocity = () => currentVelocity;
 
     plugin.setup(ctx);
@@ -1494,13 +1495,13 @@ describe("withAsync - Deceleration Handling", () => {
     // Move scroll position away from edges so atEdge doesn't short-circuit
     (ctx.scrollController as any).setScrollTop(500);
 
-    // Frame 1: high velocity (above cancelLoadThreshold=5)
-    currentVelocity = 10;
+    // Frame 1: high velocity (above LOAD_VELOCITY_THRESHOLD)
+    currentVelocity = LOAD_VELOCITY_THRESHOLD + 3;
     ctx.state.viewportState.renderRange = { start: 0, end: 10 };
     scrollHandler(500, "down");
 
     // Frame 2: drop below threshold but still > 0.5 (deceleration)
-    currentVelocity = 3;
+    currentVelocity = LOAD_VELOCITY_THRESHOLD - 7;
     ctx.state.viewportState.renderRange = { start: 5, end: 15 };
     scrollHandler(700, "down");
 
