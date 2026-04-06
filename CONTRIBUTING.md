@@ -29,7 +29,7 @@ bun run typecheck
 bun run build
 ```
 
-Interactive examples and documentation are available at **[vlist.dev](https://vlist.dev)** (source: [github.com/floor/vlist.dev](https://github.com/floor/vlist.dev)).
+Interactive examples and documentation are available at **[vlist.io](https://vlist.io)** (source: [github.com/floor/vlist.io](https://github.com/floor/vlist.io)).
 
 ## Project Structure
 
@@ -99,7 +99,7 @@ vlist/
 └── tsconfig.json
 ```
 
-> **Note:** Sandbox examples and documentation live in the [vlist.dev](https://github.com/floor/vlist.dev) repository.
+> **Note:** Sandbox examples and documentation live in the [vlist.io](https://github.com/floor/vlist.io) repository.
 
 ### Architecture
 
@@ -132,7 +132,7 @@ vlist({ config })          → VListBuilder    (configure)
 3. **Run tests** — `bun test` (runs all), `bun test test/features/grid/` (runs one folder)
 4. **Type check** — `bun run typecheck`
 5. **Build** — `bun run build`
-6. **Test visually** — check relevant examples at [vlist.dev](https://vlist.dev/sandbox/)
+6. **Test visually** — check relevant examples at [vlist.io](https://vlist.io/sandbox/)
 
 ### Running Tests
 
@@ -315,7 +315,7 @@ In `package.json` exports map — only if the feature needs a standalone import 
 
 ### 6. Create a sandbox example
 
-Add an interactive example in the [vlist.dev](https://github.com/floor/vlist.dev) repository.
+Add an interactive example in the [vlist.io](https://github.com/floor/vlist.io) repository.
 
 **Reference implementations:**
 - `src/features/page/` — simple feature (single file, ~180 lines)
@@ -364,7 +364,7 @@ chore(deps): update dev dependencies
 - [ ] All tests pass (`bun test`)
 - [ ] Type check passes (`bun run typecheck`)
 - [ ] Build succeeds (`bun run build`)
-- [ ] Sandbox example updated or added at [vlist.dev](https://github.com/floor/vlist.dev) (if user-facing)
+- [ ] Sandbox example updated or added at [vlist.io](https://github.com/floor/vlist.io) (if user-facing)
 - [ ] No new runtime dependencies added
 - [ ] Commit messages follow conventional commits
 

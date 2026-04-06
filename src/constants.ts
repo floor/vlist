@@ -34,7 +34,7 @@ export const PRELOAD_AHEAD = 50;
  * When scrolling faster than this, we skip loading data since the user
  * is likely scrolling quickly past content they don't want to see.
  */
-export const LOAD_VELOCITY_THRESHOLD = 5;
+export const LOAD_VELOCITY_THRESHOLD = 12;
 
 /**
  * Velocity threshold for preloading (px/ms)
