@@ -1,6 +1,21 @@
 vlist — full changelog
 initial commit → latest
-413 commits · 57 days · Feb 2 – Mar 30, 2026
+417 commits · 63 days · Feb 2 – Apr 6, 2026
+
+
+2026-04-06
+
+  fix(table): add compressed positioning support for withScale compatibility
+  fix(table): add updatePositions() for efficient scroll-only position updates in compressed mode
+  fix(scale): normalize scroll sensitivity for compressed lists
+  test(table): add 5 compressed positioning tests (large dataset, force mode, updatePositions)
+
+  → v1.4.0
+
+
+2026-04-03
+
+  feat(core): contextual error reporting — error event fires for template failures, feature setup errors, and destroy handler errors with ErrorViewportSnapshot
 
 
 2026-03-30
@@ -459,7 +474,7 @@ initial commit → latest
   feat(scroll): add horizontal scrolling support
   feat(a11y): aria-setsize, aria-posinset, aria-activedescendant, aria-busy, live region
   test: improve coverage to 94.78% funcs / 95.86% lines (+262 tests)
-  refactor: move sandbox and docs to vlist.dev
+  refactor: move sandbox and docs to vlist.io
 
 
 2026-02-09
