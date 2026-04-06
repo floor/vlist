@@ -84,6 +84,16 @@ const LERP_FACTOR = 0.65;
 /** Snap to target when remaining distance is below this threshold (px). */
 const SNAP_THRESHOLD = 0.5;
 
+/**
+ * Scroll speed multiplier to match native scroll feel.
+ *
+ * After applying the compression ratio, the effective scroll distance
+ * is physically correct but feels sluggish compared to native scrolling
+ * because the browser's own acceleration/momentum is bypassed.
+ * This factor compensates for that lost amplification.
+ */
+const SCROLL_SPEED_MULTIPLIER = 1.7;
+
 // =============================================================================
 // Touch Scroll Constants
 // =============================================================================
@@ -276,14 +286,14 @@ export const withScale = <
             } else {
               // Move a fraction of the remaining distance
               virtualScrollPosition += diff * LERP_FACTOR;
-              
+
               // Clamp virtualScrollPosition to valid range to prevent scrolling beyond maxScroll
               // This is critical when user keeps scrolling at the bottom - targetScrollPosition
               // gets clamped to maxScroll, but virtualScrollPosition can drift beyond it during lerp
               const comp = ctx.getCachedCompression();
               const maxScroll = comp.virtualSize - ctx.state.viewportState.containerSize;
               virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
-              
+
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
             }
 
@@ -308,7 +318,7 @@ export const withScale = <
 
             targetScrollPosition = Math.max(
               0,
-              Math.min(targetScrollPosition + e.deltaY, maxScroll),
+              Math.min(targetScrollPosition + e.deltaY * comp.ratio * SCROLL_SPEED_MULTIPLIER, maxScroll),
             );
 
             // Start animation loop if not already running
@@ -371,7 +381,7 @@ export const withScale = <
 
             const newPos = Math.max(
               0,
-              Math.min(touchScrollStart + delta, maxScroll),
+              Math.min(touchScrollStart + delta * comp.ratio * SCROLL_SPEED_MULTIPLIER, maxScroll),
             );
 
             virtualScrollPosition = newPos;
