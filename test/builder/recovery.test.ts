@@ -148,23 +148,38 @@ describe("Error Handling: Invalid Configuration", () => {
     }).toThrow(); // Template is required
   });
 
-  it("should throw when template throws error during render", () => {
+  it("should emit error event when template throws during render", () => {
     suppressConsoleError();
-    
-    // Template errors during initial render cause build to fail
-    expect(() => {
-      const instance = vlist<TestItem>({
-        container,
-        item: { 
-          height: 50, 
-          template: () => {
-            throw new Error("Template error");
-          }
-        },
-        items: createItemArray(10),
-      }).build();
-    }).toThrow();
-    
+
+    // Template errors during render are caught and emitted as error events
+    // instead of crashing the entire list
+    const errors: Array<{ error: Error; context: string }> = [];
+    const instance = vlist<TestItem>({
+      container,
+      item: { 
+        height: 50, 
+        template: () => {
+          throw new Error("Template error");
+        }
+      },
+      items: createItemArray(10),
+    }).build();
+
+    instance.on("error", (payload) => {
+      errors.push(payload);
+    });
+
+    // Initial render already happened during build(), but error events
+    // were emitted before we subscribed. Trigger a re-render with
+    // different IDs so the template is re-applied for existing indices.
+    errors.length = 0;
+    instance.setItems(createItemArray(5).map((item, i) => ({ ...item, id: i + 100 })));
+
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]!.error.message).toBe("Template error");
+    expect(errors[0]!.context).toMatch(/^template\(/);
+
+    instance.destroy();
     restoreConsoleError();
   });
 
@@ -179,6 +194,260 @@ describe("Error Handling: Invalid Configuration", () => {
     }).build();
 
     expect(instance).toBeDefined();
+
+    instance.destroy();
+  });
+});
+
+// =============================================================================
+// Tests: Contextual Error Reporting
+// =============================================================================
+
+describe("Error Handling: Contextual Error Reporting", () => {
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    container = createContainer();
+    suppressConsoleError();
+  });
+
+  afterEach(() => {
+    container.remove();
+    restoreConsoleError();
+  });
+
+  it("should include viewport snapshot in template error events", () => {
+    let callCount = 0;
+    const instance = vlist<TestItem>({
+      container,
+      item: {
+        height: 50,
+        template: (item) => {
+          callCount++;
+          // Throw only on the second wave (after we subscribe)
+          if (callCount > 10) throw new Error("Viewport snapshot test");
+          return `<div>${item.name}</div>`;
+        },
+      },
+      items: createItemArray(10),
+    }).build();
+
+    const errors: Array<{ error: Error; context: string; viewport?: any }> = [];
+    instance.on("error", (payload) => {
+      errors.push(payload);
+    });
+
+    // Trigger re-render with different IDs to force template re-application
+    instance.setItems(createItemArray(5, 500));
+
+    expect(errors.length).toBeGreaterThan(0);
+
+    const first = errors[0]!;
+    expect(first.viewport).toBeDefined();
+    expect(typeof first.viewport.scrollPosition).toBe("number");
+    expect(typeof first.viewport.containerSize).toBe("number");
+    expect(first.viewport.visibleRange).toBeDefined();
+    expect(typeof first.viewport.visibleRange.start).toBe("number");
+    expect(typeof first.viewport.visibleRange.end).toBe("number");
+    expect(first.viewport.renderRange).toBeDefined();
+    expect(typeof first.viewport.renderRange.start).toBe("number");
+    expect(typeof first.viewport.renderRange.end).toBe("number");
+    expect(typeof first.viewport.totalItems).toBe("number");
+    expect(typeof first.viewport.isCompressed).toBe("boolean");
+
+    instance.destroy();
+  });
+
+  it("should catch feature setup errors and continue with remaining features", () => {
+    const setupOrder: string[] = [];
+
+    const brokenFeature = {
+      name: "brokenFeature",
+      priority: 40,
+      setup() {
+        setupOrder.push("broken");
+        throw new Error("Feature setup exploded");
+      },
+    };
+
+    const healthyFeature = {
+      name: "healthyFeature",
+      priority: 45,
+      methods: ["healthyMethod"] as const,
+      setup(ctx: any) {
+        setupOrder.push("healthy");
+        ctx.methods.set("healthyMethod", () => "works");
+      },
+    };
+
+    const instance = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createItemArray(10),
+    })
+      .use(brokenFeature)
+      .use(healthyFeature)
+      .build();
+
+    // Both features ran setup (broken first due to lower priority)
+    expect(setupOrder).toEqual(["broken", "healthy"]);
+
+    // The healthy feature's method is available despite the broken one
+    expect(typeof (instance as any).healthyMethod).toBe("function");
+    expect((instance as any).healthyMethod()).toBe("works");
+
+    // The list is still functional
+    expect(instance.total).toBe(10);
+    instance.setItems(createItemArray(5));
+    expect(instance.total).toBe(5);
+
+    instance.destroy();
+  });
+
+  it("should emit error event when feature setup fails", () => {
+    const errors: Array<{ error: Error; context: string }> = [];
+
+    const brokenFeature = {
+      name: "kaboom",
+      setup() {
+        throw new Error("Setup failed");
+      },
+    };
+
+    const errorCapture = {
+      name: "errorCapture",
+      priority: 10, // Run before the broken feature (default 50)
+      setup(ctx: any) {
+        ctx.emitter.on("error", (payload: any) => {
+          errors.push(payload);
+        });
+      },
+    };
+
+    const instance = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createItemArray(10),
+    })
+      .use(errorCapture)
+      .use(brokenFeature)
+      .build();
+
+    expect(errors.length).toBe(1);
+    expect(errors[0]!.error.message).toBe("Setup failed");
+    expect(errors[0]!.context).toBe("feature.setup(kaboom)");
+
+    instance.destroy();
+  });
+
+  it("should continue destroy cleanup when a handler throws", () => {
+    let secondHandlerRan = false;
+    let featureDestroyRan = false;
+
+    const crashOnDestroy = {
+      name: "crashOnDestroy",
+      setup(ctx: any) {
+        ctx.destroyHandlers.push(() => {
+          throw new Error("Destroy handler exploded");
+        });
+        ctx.destroyHandlers.push(() => {
+          secondHandlerRan = true;
+        });
+      },
+      destroy() {
+        featureDestroyRan = true;
+      },
+    };
+
+    const instance = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createItemArray(10),
+    })
+      .use(crashOnDestroy)
+      .build();
+
+    // Should not throw
+    instance.destroy();
+
+    // Subsequent handlers and feature.destroy() still ran
+    expect(secondHandlerRan).toBe(true);
+    expect(featureDestroyRan).toBe(true);
+  });
+
+  it("should emit collected destroy errors before clearing emitter", () => {
+    const errors: Array<{ error: Error; context: string }> = [];
+
+    const crashOnDestroy = {
+      name: "crashOnDestroy",
+      setup(ctx: any) {
+        ctx.destroyHandlers.push(() => {
+          throw new Error("Handler 1 failed");
+        });
+        ctx.destroyHandlers.push(() => {
+          throw new Error("Handler 2 failed");
+        });
+      },
+    };
+
+    const instance = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createItemArray(10),
+    })
+      .use(crashOnDestroy)
+      .build();
+
+    instance.on("error", (payload) => {
+      errors.push(payload);
+    });
+
+    instance.destroy();
+
+    expect(errors.length).toBe(2);
+    expect(errors[0]!.context).toBe("destroy");
+    expect(errors[0]!.error.message).toBe("Handler 1 failed");
+    expect(errors[1]!.context).toBe("destroy");
+    expect(errors[1]!.error.message).toBe("Handler 2 failed");
+  });
+
+  it("should not crash render loop when multiple items throw", () => {
+    let callCount = 0;
+
+    const instance = vlist<TestItem>({
+      container,
+      item: {
+        height: 50,
+        template: (item) => {
+          callCount++;
+          // First wave succeeds (initial render)
+          if (callCount > 10) {
+            // Second wave: even-indexed items throw
+            if (item.id % 2 === 0) throw new Error(`Item ${item.id} failed`);
+          }
+          return `<div>${item.name}</div>`;
+        },
+      },
+      items: createItemArray(10),
+    }).build();
+
+    const errors: Array<{ error: Error; context: string }> = [];
+    instance.on("error", (payload) => {
+      errors.push(payload);
+    });
+
+    // Trigger re-render with new IDs
+    instance.setItems(
+      Array.from({ length: 8 }, (_, i) => ({ id: i + 200, name: `New ${i}` })),
+    );
+
+    // Some items errored, some rendered fine — list is still alive
+    expect(errors.length).toBeGreaterThan(0);
+    expect(instance.total).toBe(8);
+
+    // Can still perform data operations
+    instance.setItems(createItemArray(3, 900));
+    expect(instance.total).toBe(3);
 
     instance.destroy();
   });

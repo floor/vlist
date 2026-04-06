@@ -359,11 +359,22 @@ export const createApi = <T extends VListItem = VListItem>(
     }
     clearIdleTimer();
 
+    const destroyErrors: Error[] = [];
     for (let i = 0; i < destroyHandlers.length; i++) {
-      destroyHandlers[i]!();
+      try {
+        destroyHandlers[i]!();
+      } catch (err) {
+        destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
+      }
     }
     for (const feature of sortedFeatures) {
-      if (feature.destroy) feature.destroy();
+      if (feature.destroy) {
+        try {
+          feature.destroy();
+        } catch (err) {
+          destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
     }
 
     cancelScroll();
@@ -375,6 +386,10 @@ export const createApi = <T extends VListItem = VListItem>(
     rendered.clear();
     pool.clear();
     emitter.emit("destroy", undefined);
+    // Emit any errors collected during destroy (before clearing the emitter)
+    for (const error of destroyErrors) {
+      emitter.emit("error", { error, context: "destroy" });
+    }
     emitter.clear();
 
     dom.root.remove();
