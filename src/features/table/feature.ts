@@ -358,9 +358,14 @@ export const withTable = <T extends VListItem = VListItem>(
         // Total items (tables are 1:1 rows to items, unlike grid)
         const totalItems = ctx.getVirtualTotal();
 
+        const isCompressed = ctx.state.viewportState.isCompressed;
+
         // ── Early exit: skip all work when nothing changed ──
         // Must check totalItems too — when async data arrives the total
         // jumps from 0 → N while scroll and container stay the same.
+        // In compressed mode, items are positioned relative to the viewport,
+        // so we must update positions on every scroll change even when the
+        // range is unchanged.
         if (
           !forceNextRender &&
           scrollTop === lastScrollPosition &&
@@ -413,6 +418,10 @@ export const withTable = <T extends VListItem = VListItem>(
 
         const lastRange = ctx.state.lastRenderRange;
 
+        const compressionCtx = isCompressed
+          ? ctx.getCompressionContext()
+          : undefined;
+
         // Get items from the data manager for the render range
         const items = ctx.dataManager.getItemsInRange(
           renderRange.start,
@@ -429,7 +438,7 @@ export const withTable = <T extends VListItem = VListItem>(
         // (skips template, class, and position updates). Items outside the range
         // are released immediately (no grace period — table rows carry N cells
         // each, so lingering rows are expensive).
-        tableRenderer!.render(items, renderRange, selectedIds, focusedIndex);
+        tableRenderer!.render(items, renderRange, selectedIds, focusedIndex, compressionCtx);
 
         // Emit range:change only when range actually changed
         if (lastRange.start !== renderRange.start || lastRange.end !== renderRange.end) {
