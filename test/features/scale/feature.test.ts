@@ -1422,63 +1422,58 @@ describe("withScale touch scrolling", () => {
       flushAllRAF();
     });
 
-    it("should clamp virtualScrollPosition when totalSize shrinks", () => {
-      // Covers lines 692-708: clamping virtual position + cancelling animations.
-      // Use force:true with a smaller set to make the test faster while still
-      // exercising the compressed-mode clamping path.
-      const items = createTestItems(500_000);
+    it("should clamp virtualScrollPosition when totalSize shrinks while still compressed", () => {
+      // Covers lines 685-717: clamping path requires compressedModeActive
+      // to remain true after shrink. Using force:true so compression stays
+      // active regardless of actual size — this lets us use a smaller list
+      // where shrinking clearly reduces maxScroll.
+      //
+      // 10k items × 40px = 400k. Scroll to end → pos ≈ 399,500.
+      // Shrink to 5k × 40px = 200k. New max ≈ 199,500 < 399,500 → clamp.
+      const items = createTestItems(10_000);
       list = vlist<TestItem>({
         container,
         item: { height: 40, template },
         items,
       })
-        .use(withScale())
+        .use(withScale({ force: true }))
         .build();
 
-      // Scroll to near the end via touch drag so virtualScrollPosition
-      // is very high
-      const viewport = getViewport(list);
-      for (let i = 0; i < 20; i++) {
-        simulateTouchDrag(viewport, 500, 50, 3);
-        flushAllRAF();
-      }
+      // Scroll to near the end
+      list.scrollToIndex(9_999, "end");
+      flushAllRAF();
       const posAfterScroll = list.getScrollPosition();
-      expect(posAfterScroll).toBeGreaterThan(0);
+      expect(posAfterScroll).toBeGreaterThan(100_000);
 
-      // Now drastically reduce items. This reduces totalSize, so the
-      // old virtualScrollPosition exceeds the new maxScroll.
-      // updateCompressionMode's clamping code (lines 691-717) fires.
-      // 1000 items × 40px = 40000px (still compressed with force, or
-      // not compressed at all — either way the total size shrinks).
-      list.setItems(createTestItems(1000));
+      // Shrink to 5k — still compressed (force:true), maxScroll halved.
+      list.setItems(createTestItems(5_000));
       flushAllRAF();
 
-      // Scroll position should have been clamped
       const posAfterShrink = list.getScrollPosition();
-      // Should be within the new valid range
+      // Should have been clamped to the new maxScroll
+      expect(posAfterShrink).toBeLessThan(posAfterScroll);
       expect(posAfterShrink).toBeGreaterThanOrEqual(0);
 
-      // List should still render items correctly
       const indices = getRenderedIndices(list);
       expect(indices.length).toBeGreaterThan(0);
     });
 
-    it("should cancel lerp when clamping is triggered by shrinking items", () => {
+    it("should cancel lerp when clamping is triggered while still compressed", () => {
       // Targets lines 701-703: cancelling smoothScrollId when
-      // clamped !== virtualScrollPosition.
-      const items = createTestItems(500_000);
+      // clamped !== virtualScrollPosition. Uses force:true to stay compressed.
+      const items = createTestItems(10_000);
       list = vlist<TestItem>({
         container,
         item: { height: 40, template },
         items,
       })
-        .use(withScale())
+        .use(withScale({ force: true }))
         .build();
 
       const viewport = getViewport(list);
 
       // Scroll to near the end
-      list.scrollToIndex(499_000, "start");
+      list.scrollToIndex(9_999, "end");
       flushAllRAF();
 
       // Start a lerp animation via wheel (sets smoothScrollId)
@@ -1491,32 +1486,31 @@ describe("withScale touch scrolling", () => {
       viewport.dispatchEvent(wheelEvent);
       expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
 
-      // DON'T touch (would cancel smoothScrollId)
-      // Shrink drastically — virtualScrollPosition > new maxScroll → clamp
-      // → cancel in-flight smoothScrollId (lines 701-703)
-      list.setItems(createTestItems(10_000));
+      // Shrink to 5k (still compressed) — virtualScrollPosition > new
+      // maxScroll → clamp → cancel in-flight smoothScrollId
+      list.setItems(createTestItems(5_000));
       flushAllRAF();
 
       const pos = list.getScrollPosition();
       expect(pos).toBeGreaterThanOrEqual(0);
     });
 
-    it("should cancel momentum when clamping is triggered by shrinking items", () => {
+    it("should cancel momentum when clamping is triggered while still compressed", () => {
       // Targets lines 705-707: cancelling momentumId when
-      // clamped !== virtualScrollPosition.
-      const items = createTestItems(500_000);
+      // clamped !== virtualScrollPosition while still compressed.
+      const items = createTestItems(10_000);
       list = vlist<TestItem>({
         container,
         item: { height: 40, template },
         items,
       })
-        .use(withScale())
+        .use(withScale({ force: true }))
         .build();
 
       const viewport = getViewport(list);
 
       // Scroll to near the end
-      list.scrollToIndex(499_000, "start");
+      list.scrollToIndex(9_999, "end");
       flushAllRAF();
 
       // Start momentum via touch flick
@@ -1531,9 +1525,8 @@ describe("withScale touch scrolling", () => {
       viewport.dispatchEvent(createTouchEvent("touchend", { touches: [] }));
       expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
 
-      // Shrink — virtualScrollPosition > new maxScroll → clamp
-      // → cancel in-flight momentumId (lines 705-707)
-      list.setItems(createTestItems(10_000));
+      // Shrink to 5k (still compressed) — clamp → cancel momentumId
+      list.setItems(createTestItems(5_000));
       flushAllRAF();
 
       const pos = list.getScrollPosition();
@@ -1541,8 +1534,7 @@ describe("withScale touch scrolling", () => {
     });
 
     it("should clean up scrollbar and lerp animation on destroy", () => {
-      // Covers destroy cleanup when smoothScrollId is non-null.
-      // Tests destroyHandler (lines 837-845) and feature's destroy() (lines 849-861).
+      // Covers destroyHandler cleanup when smoothScrollId is non-null.
       // We use ONLY wheel (no touch) to keep smoothScrollId non-null.
       const items = createTestItems(500_000);
       list = vlist<TestItem>({
@@ -1578,7 +1570,7 @@ describe("withScale touch scrolling", () => {
     });
 
     it("should clean up momentum animation on destroy", () => {
-      // Covers destroy cleanup when momentumId is non-null.
+      // Covers destroyHandler cleanup when momentumId is non-null.
       const items = createTestItems(500_000);
       list = vlist<TestItem>({
         container,
