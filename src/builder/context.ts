@@ -382,6 +382,9 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setPositionElementFn: () => {
       // Stub - not used in simplified context
     },
+    setUpdateItemClassesFn: () => {
+      // Stub - not used in simplified context
+    },
     setScrollFns: () => {
       // Stub - not used in simplified context
     },

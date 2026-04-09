@@ -471,6 +471,13 @@ export const withTable = <T extends VListItem = VListItem>(
       // =====================================================================
       ctx.setRenderFns(tableRenderIfNeeded, tableForceRender);
 
+      // Replace the item-class updater so that withSelection's keyboard
+      // navigation applies focus/selection classes via the table renderer
+      // (the core rendered Map is empty in table mode).
+      ctx.setUpdateItemClassesFn((index: number, isSelected: boolean, isFocused: boolean): void => {
+        tableRenderer?.updateItemClasses(index, isSelected, isFocused);
+      });
+
       // ── Horizontal scroll sync ──
       // Keep the header scrolled in sync with the viewport.
       const headerWithSync = tableHeader as ReturnType<typeof createTableHeader<T>> &

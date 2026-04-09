@@ -419,6 +419,15 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   setPositionElementFn(fn: (element: HTMLElement, index: number) => void): void;
 
   /**
+   * Replace the item-class updater used by the renderer proxy.
+   * Used by withTable to inject its own class-update logic (the core
+   * rendered Map is empty in table mode — the table renderer owns the DOM).
+   */
+  setUpdateItemClassesFn(
+    fn: (index: number, isSelected: boolean, isFocused: boolean) => void,
+  ): void;
+
+  /**
    * Replace the render functions.
    * Used by grid/groups features that need to completely replace the render logic
    * (e.g., to convert row ranges to item ranges for grid rendering).

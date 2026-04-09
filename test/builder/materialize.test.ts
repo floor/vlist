@@ -110,6 +110,7 @@ function createTestRefs(): MRefs<TestItem> {
     gp: 0,
     mp: 0,
     sif: (index: number) => index,
+    uic: () => {},
   };
 }
 
@@ -311,6 +312,13 @@ describe("createMaterializeCtx - Renderer", () => {
   it("should update element classes when item is rendered", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
+    refs.uic = (index: number, isSelected: boolean, isFocused: boolean) => {
+      const element = deps.rendered.get(index);
+      if (!element) return;
+      element.classList.toggle("vlist-item--selected", isSelected);
+      element.classList.toggle("vlist-item--focused", isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    };
     const ctx = createMaterializeCtx(refs, deps);
 
     const el = document.createElement("div");
@@ -326,6 +334,13 @@ describe("createMaterializeCtx - Renderer", () => {
   it("should toggle focused class correctly", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
+    refs.uic = (index: number, isSelected: boolean, isFocused: boolean) => {
+      const element = deps.rendered.get(index);
+      if (!element) return;
+      element.classList.toggle("vlist-item--selected", isSelected);
+      element.classList.toggle("vlist-item--focused", isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    };
     const ctx = createMaterializeCtx(refs, deps);
 
     const el = document.createElement("div");
@@ -341,6 +356,13 @@ describe("createMaterializeCtx - Renderer", () => {
   it("should handle missing element gracefully", () => {
     const refs = createTestRefs();
     const deps = createTestDeps();
+    refs.uic = (index: number, isSelected: boolean, isFocused: boolean) => {
+      const element = deps.rendered.get(index);
+      if (!element) return;
+      element.classList.toggle("vlist-item--selected", isSelected);
+      element.classList.toggle("vlist-item--focused", isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    };
     const ctx = createMaterializeCtx(refs, deps);
 
     // Should not throw
