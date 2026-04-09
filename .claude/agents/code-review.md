@@ -3,6 +3,8 @@ name: code-review
 description: Review code against vlist project rules and conventions. Use proactively after writing or editing code to catch violations before committing.
 tools: Read, Glob, Grep, Bash, Agent(perf-audit)
 model: opus
+effort: high
+memory: project
 color: yellow
 ---
 

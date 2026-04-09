@@ -3,6 +3,8 @@ name: perf-audit
 description: Audit vlist source code for hot-path performance violations. Use when changes touch scroll handling, rendering, range calculations, or any code that runs per-frame.
 tools: Read, Glob, Grep
 model: opus
+effort: high
+memory: project
 color: red
 ---
 

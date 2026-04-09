@@ -2,6 +2,8 @@
 
 High-performance virtual scrolling library. Zero dependencies, plugin architecture, TypeScript strict mode.
 
+**Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
+
 - **Package:** `@floor/vlist` on npm
 - **Repo:** `github.com/floor/vlist` (core) + separate repos for `vlist-react`, `vlist-vue`, `vlist-svelte`, `vlist-solidjs`
 - **Docs:** [vlist.io](https://vlist.io)
