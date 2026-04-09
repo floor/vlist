@@ -8,7 +8,7 @@ dist/
 .idea/
 .vscode/
 .zed/
-.claude/
+.claude/settings.local.json
 *.swp
 *.swo
 *~
