@@ -8,10 +8,15 @@ dist/
 .idea/
 .vscode/
 .zed/
-.claude/settings.local.json
+
 *.swp
 *.swo
 *~
+
+#AI
+.cursor/
+.claude/settings.local.json
+scratchpad
 
 # OS
 .DS_Store

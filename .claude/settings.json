@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -o pipefail && cd $CLAUDE_PROJECT_DIR && bun run typecheck 2>&1 | tail -5",
+            "timeout": 30000
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -o pipefail && cd $CLAUDE_PROJECT_DIR && bun run typecheck 2>&1 | tail -5",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -o pipefail && cd $CLAUDE_PROJECT_DIR && bun run typecheck 2>&1 | tail -10 && echo 'Typecheck passed' || (echo 'BLOCKED: typecheck failed — fix type errors before committing' >&2; exit 2)",
+            "timeout": 30000
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set -o pipefail && cd $CLAUDE_PROJECT_DIR && (bun run typecheck 2>&1 | tail -5) && (bun test 2>&1 | tail -10) && echo 'All checks passed' || (echo 'BLOCKED: tests or typecheck failed — fix before pushing' >&2; exit 2)",
+            "timeout": 120000
+          }
+        ]
+      }
+    ]
+  }
+}
