@@ -170,8 +170,11 @@
     outline-offset: -2px;
 }
 
-/* Hide container outline when an item is focused — the item ring is enough */
-.vlist:has(.vlist-item--focused):focus-visible {
+/* Hide container outline when an item is focused or selected —
+   the item ring / highlight is enough. Selected covers the click case
+   where focusVisible is false so --focused isn't applied. */
+.vlist:has(.vlist-item--focused):focus-visible,
+.vlist:has(.vlist-item--selected):focus-visible {
     outline: none;
 }
 
