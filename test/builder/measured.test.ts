@@ -47,6 +47,41 @@ let defaultMockItemSize = 80;
 /** Track unobserve calls for assertions */
 let unobservedElements: Element[] = [];
 
+/**
+ * Items whose measurement should be deferred (not fired synchronously).
+ * When an item's index is in this set, the mock ResizeObserver's observe()
+ * stores the (target, callback) pair but does NOT fire the callback.
+ * Call `flushDeferredMeasurements()` to fire them later.
+ */
+let deferredItemIndices: Set<number> = new Set();
+interface DeferredEntry { target: Element; callback: ResizeObserverCallback; observer: unknown; }
+let deferredMeasurements: DeferredEntry[] = [];
+
+const flushDeferredMeasurements = (): void => {
+  const entries = deferredMeasurements.splice(0);
+  for (const { target, callback, observer } of entries) {
+    const el = target as HTMLElement;
+    const itemIndex = parseInt(el.dataset.index!, 10);
+    const size = mockItemSizes.get(itemIndex) ?? defaultMockItemSize;
+    callback(
+      [
+        {
+          target,
+          contentRect: {
+            width: size, height: size,
+            top: 0, left: 0, bottom: size, right: size,
+            x: 0, y: 0, toJSON: () => ({}),
+          },
+          borderBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
+          contentBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
+          devicePixelContentBoxSize: [],
+        } as ResizeObserverEntry,
+      ],
+      observer as ResizeObserver,
+    );
+  }
+};
+
 beforeAll(() => {
   dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
     url: "http://localhost/",
@@ -82,6 +117,13 @@ beforeAll(() => {
       if (indexAttr !== undefined) {
         // Item observation — use configured sizes
         const itemIndex = parseInt(indexAttr, 10);
+
+        // Deferred items: store for later flush
+        if (deferredItemIndices.has(itemIndex)) {
+          deferredMeasurements.push({ target, callback: this.callback, observer: this });
+          return;
+        }
+
         const size = mockItemSizes.get(itemIndex) ?? defaultMockItemSize;
         this.callback(
           [
@@ -1157,5 +1199,215 @@ describe("Mode B: interaction with scroll events", () => {
 
     const pos = list.getScrollPosition();
     expect(typeof pos).toBe("number");
+  });
+});
+
+// =============================================================================
+// Mode B: stayAtEnd — snap scroll to bottom when content grows
+// =============================================================================
+
+describe("Mode B: stayAtEnd", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+    mockItemSizes = new Map();
+    unobservedElements = [];
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    container.remove();
+  });
+
+  it("should snap to the new end when user was at the bottom and content grows", async () => {
+    // stayAtEnd checks viewport.scrollHeight - viewport.clientHeight.
+    // JSDOM doesn't compute layout, so we mock scrollHeight.
+    //
+    // Strategy: items 0-19 measure at 100px (same as estimated).
+    // Items 20-29 are deferred — they won't be measured until we
+    // explicitly flush. We scroll to the bottom which renders items
+    // 20-29, causing their observe() to be called but deferred.
+    // Then we flush, items measure at 300px (vs 100px estimated),
+    // content grows, and stayAtEnd fires.
+    defaultMockItemSize = 100;
+    deferredItemIndices = new Set();
+    deferredMeasurements = [];
+    for (let i = 20; i < 30; i++) {
+      deferredItemIndices.add(i);
+      mockItemSizes.set(i, 300);
+    }
+
+    list = vlist<TestItem>({
+      container,
+      item: { estimatedHeight: 100, template },
+      items: createTestItems(30),
+    }).build();
+
+    const viewport = getViewportElement(list);
+    const content = getContentElement(list);
+
+    // Mock scrollHeight to simulate real browser behavior: scrollHeight
+    // reflects the CURRENT content height at the time of read.
+    // In a real browser, scrollHeight is computed from actual layout and
+    // lags behind style changes. We simulate this by caching the value
+    // before content grows, then updating it lazily.
+    //
+    // For stayAtEnd to reach lines 78-84:
+    //   maxBefore = scrollHeight - clientHeight → must use OLD height
+    //   scrollBefore >= maxBefore - 2 → user at bottom
+    //   newMax = getTotalSize() - containerSize → uses NEW (grown) total
+    //   newMax > scrollBefore → true
+    //
+    // This requires scrollHeight to lag behind getTotalSize(). We achieve
+    // this by pinning scrollHeight to the pre-measurement value.
+    let pinnedScrollHeight = 0;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => pinnedScrollHeight,
+      configurable: true,
+    });
+
+    // After build: 30 items × 100px = 3000px.
+    const heightAfterBuild = parseInt(content.style.height, 10);
+    expect(heightAfterBuild).toBe(3000);
+    pinnedScrollHeight = heightAfterBuild; // pin to 3000
+
+    // Scroll to the bottom — this renders items 20-29 and their
+    // observe() calls are deferred (stored in deferredMeasurements).
+    const maxScrollBefore = heightAfterBuild - 500; // 2500
+    simulateScroll(list, maxScrollBefore);
+    const scrollPosAtBottom = viewport.scrollTop;
+    expect(scrollPosAtBottom).toBe(2500);
+
+    // Verify we have deferred measurements pending
+    expect(deferredMeasurements.length).toBeGreaterThan(0);
+
+    // Wait for scroll idle so isScrolling becomes false
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+
+    // Keep scrollHeight pinned at 3000 (pre-measurement value).
+    // When stayAtEnd runs:
+    //   maxBefore = 3000 - 500 = 2500
+    //   scrollBefore = 2500 >= 2500 - 2 = 2498 → true (at bottom)
+    //   newMax = getTotalSize() - 500 = 5000 - 500 = 4500
+    //   4500 > 2500 → true → SNAP to 4500 (lines 78-84 covered!)
+    flushDeferredMeasurements();
+
+    const heightAfterMeasure = parseInt(content.style.height, 10);
+
+    // Content should have grown (deferred items measured larger)
+    expect(heightAfterMeasure).toBeGreaterThan(heightAfterBuild);
+
+    // Scroll position should have snapped forward to the new bottom
+    expect(viewport.scrollTop).toBeGreaterThan(scrollPosAtBottom);
+  });
+
+  it("should not snap when user is not at the bottom", () => {
+    // Same deferred-measurement approach, but scroll to middle instead
+    // of bottom. stayAtEnd should NOT fire (user not at bottom).
+    defaultMockItemSize = 100;
+    deferredItemIndices = new Set();
+    deferredMeasurements = [];
+    for (let i = 20; i < 50; i++) {
+      deferredItemIndices.add(i);
+      mockItemSizes.set(i, 200);
+    }
+
+    list = vlist<TestItem>({
+      container,
+      item: { estimatedHeight: 100, template },
+      items: createTestItems(50),
+    }).build();
+
+    const viewport = getViewportElement(list);
+    const content = getContentElement(list);
+
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => parseInt(content.style.height, 10) || 0,
+      configurable: true,
+    });
+
+    // Scroll to middle (not at bottom)
+    simulateScroll(list, 200);
+    const posBefore = viewport.scrollTop;
+
+    // Flush deferred measurements — content grows, but user is NOT at bottom
+    flushDeferredMeasurements();
+
+    const newContentHeight = parseInt(content.style.height, 10);
+    const maxScroll = newContentHeight - 500;
+
+    // Scroll position should NOT have snapped to the end
+    expect(viewport.scrollTop).toBeLessThan(maxScroll - 100);
+  });
+});
+
+// =============================================================================
+// Mode B: flush — deferred content size update on scroll idle
+// =============================================================================
+
+describe("Mode B: flush (deferred content size update)", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+    mockItemSizes = new Map();
+    unobservedElements = [];
+  });
+
+  afterEach(() => {
+    if (list) {
+      list.destroy();
+      list = null;
+    }
+    container.remove();
+  });
+
+  it("should defer content size update during scroll and apply on idle", async () => {
+    // When measurements happen during active scrolling (isScrolling=true),
+    // the content size update is deferred (pendingContentSizeUpdate = true).
+    // On scroll idle (after SCROLL_IDLE_TIMEOUT = 150ms), flush() runs.
+    //
+    // Strategy: defer measurements for later items. Build, scroll (sets
+    // isScrolling = true), then flush deferred measurements while
+    // isScrolling is true. Content size should be deferred until idle.
+    defaultMockItemSize = 100;
+    deferredItemIndices = new Set();
+    deferredMeasurements = [];
+    for (let i = 10; i < 30; i++) {
+      deferredItemIndices.add(i);
+      mockItemSizes.set(i, 200);
+    }
+
+    list = vlist<TestItem>({
+      container,
+      item: { estimatedHeight: 100, template },
+      items: createTestItems(30),
+    }).build();
+
+    const content = getContentElement(list);
+    const heightAfterBuild = parseInt(content.style.height, 10);
+    expect(heightAfterBuild).toBeGreaterThan(0);
+
+    // Scroll — this sets isScrolling = true inside the builder
+    simulateScroll(list, 500);
+
+    // Now flush deferred measurements WHILE scrolling is active.
+    // The ResizeObserver callback sees isScrollingFn() = true →
+    // pendingContentSizeUpdate = true (content size deferred).
+    flushDeferredMeasurements();
+
+    // Wait for idle timeout (150ms) + margin so flush() is called
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+
+    // After idle, flush() should have applied the deferred content size.
+    const heightAfterIdle = parseInt(content.style.height, 10);
+    // Content should reflect the larger measured items
+    expect(heightAfterIdle).toBeGreaterThanOrEqual(heightAfterBuild);
   });
 });

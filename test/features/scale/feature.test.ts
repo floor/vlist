@@ -1300,5 +1300,315 @@ describe("withScale touch scrolling", () => {
       const indices = getRenderedIndices(list);
       expect(indices.length).toBeGreaterThan(0);
     });
+
+    it("should snap smoothScrollTick to 0 when data is cleared during animation", () => {
+      // Covers lines 274-279: smoothScrollTick safety check when total=0
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Scroll down first so we have a non-zero position
+      simulateTouchDrag(viewport, 500, 100, 5);
+      flushAllRAF();
+      expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+      // Start a wheel scroll to trigger the lerp animation (smoothScrollTick)
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+
+      // Lerp animation is now in flight (smoothScrollId is set)
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Flush ONE frame so smoothScrollTick actually runs
+      flushOneRAF();
+
+      // Clear all data — total becomes 0
+      list.setItems([]);
+
+      // Flush remaining RAF — smoothScrollTick should detect total=0 and snap to 0
+      flushAllRAF();
+
+      // Scroll position should be 0 since data was cleared
+      expect(list.getScrollPosition()).toBe(0);
+    });
+
+    it("should leave compressed mode and cancel lerp when items shrink below threshold", () => {
+      // Covers lines 573-584: leaving compressed mode cancels smoothScrollId
+      // and momentumId, restores native scroll, destroys scrollbar.
+      //
+      // Key: we must ensure smoothScrollId is non-null when the transition
+      // happens. The touchstart handler cancels smoothScrollId, so we
+      // only use wheel (not touch) to set up the in-flight animation.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Verify we're in compressed mode
+      expect(list.element.querySelector(".vlist-scrollbar")).not.toBeNull();
+      expect(viewport.style.overflow).toBe("hidden");
+
+      // Start a lerp animation via wheel (sets smoothScrollId)
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // DON'T touch drag (touchstart would cancel smoothScrollId).
+      // smoothScrollId is non-null. momentumId is null.
+
+      // Shrink to leave compressed mode — should cancel smoothScrollId.
+      list.setItems(createTestItems(100));
+
+      // Compressed mode deactivated
+      expect(viewport.style.overflow).toBe("auto");
+      flushAllRAF();
+    });
+
+    it("should leave compressed mode and cancel momentum when items shrink", () => {
+      // Specifically covers momentumId cancellation (lines 582-584)
+      // when leaving compressed mode.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Start momentum via touch flick (sets momentumId)
+      const touch0 = new MockTouch({ clientY: 500, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchstart", { touches: [touch0] }),
+      );
+      const touchFast = new MockTouch({ clientY: 100, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchmove", { touches: [touchFast] }),
+      );
+      viewport.dispatchEvent(createTouchEvent("touchend", { touches: [] }));
+
+      // momentumId is non-null (momentum in flight)
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Shrink to leave compressed mode — should cancel momentumId
+      list.setItems(createTestItems(100));
+
+      expect(viewport.style.overflow).toBe("auto");
+      flushAllRAF();
+    });
+
+    it("should clamp virtualScrollPosition when totalSize shrinks", () => {
+      // Covers lines 692-708: clamping virtual position + cancelling animations.
+      // Use force:true with a smaller set to make the test faster while still
+      // exercising the compressed-mode clamping path.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      // Scroll to near the end via touch drag so virtualScrollPosition
+      // is very high
+      const viewport = getViewport(list);
+      for (let i = 0; i < 20; i++) {
+        simulateTouchDrag(viewport, 500, 50, 3);
+        flushAllRAF();
+      }
+      const posAfterScroll = list.getScrollPosition();
+      expect(posAfterScroll).toBeGreaterThan(0);
+
+      // Now drastically reduce items. This reduces totalSize, so the
+      // old virtualScrollPosition exceeds the new maxScroll.
+      // updateCompressionMode's clamping code (lines 691-717) fires.
+      // 1000 items × 40px = 40000px (still compressed with force, or
+      // not compressed at all — either way the total size shrinks).
+      list.setItems(createTestItems(1000));
+      flushAllRAF();
+
+      // Scroll position should have been clamped
+      const posAfterShrink = list.getScrollPosition();
+      // Should be within the new valid range
+      expect(posAfterShrink).toBeGreaterThanOrEqual(0);
+
+      // List should still render items correctly
+      const indices = getRenderedIndices(list);
+      expect(indices.length).toBeGreaterThan(0);
+    });
+
+    it("should cancel lerp when clamping is triggered by shrinking items", () => {
+      // Targets lines 701-703: cancelling smoothScrollId when
+      // clamped !== virtualScrollPosition.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Scroll to near the end
+      list.scrollToIndex(499_000, "start");
+      flushAllRAF();
+
+      // Start a lerp animation via wheel (sets smoothScrollId)
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // DON'T touch (would cancel smoothScrollId)
+      // Shrink drastically — virtualScrollPosition > new maxScroll → clamp
+      // → cancel in-flight smoothScrollId (lines 701-703)
+      list.setItems(createTestItems(10_000));
+      flushAllRAF();
+
+      const pos = list.getScrollPosition();
+      expect(pos).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should cancel momentum when clamping is triggered by shrinking items", () => {
+      // Targets lines 705-707: cancelling momentumId when
+      // clamped !== virtualScrollPosition.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Scroll to near the end
+      list.scrollToIndex(499_000, "start");
+      flushAllRAF();
+
+      // Start momentum via touch flick
+      const touch0 = new MockTouch({ clientY: 500, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchstart", { touches: [touch0] }),
+      );
+      const touchFast = new MockTouch({ clientY: 100, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchmove", { touches: [touchFast] }),
+      );
+      viewport.dispatchEvent(createTouchEvent("touchend", { touches: [] }));
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Shrink — virtualScrollPosition > new maxScroll → clamp
+      // → cancel in-flight momentumId (lines 705-707)
+      list.setItems(createTestItems(10_000));
+      flushAllRAF();
+
+      const pos = list.getScrollPosition();
+      expect(pos).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should clean up scrollbar and lerp animation on destroy", () => {
+      // Covers destroy cleanup when smoothScrollId is non-null.
+      // Tests destroyHandler (lines 837-845) and feature's destroy() (lines 849-861).
+      // We use ONLY wheel (no touch) to keep smoothScrollId non-null.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Start lerp animation via wheel (sets smoothScrollId)
+      const wheelEvent = new dom.window.Event("wheel", {
+        bubbles: true,
+        cancelable: true,
+      });
+      (wheelEvent as any).deltaY = 200;
+      (wheelEvent as any).deltaX = 0;
+      viewport.dispatchEvent(wheelEvent);
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Verify scrollbar exists
+      expect(list.element.querySelector(".vlist-scrollbar")).not.toBeNull();
+
+      // Destroy while lerp is in flight
+      expect(() => {
+        list!.destroy();
+        list = null;
+      }).not.toThrow();
+
+      expect(() => flushAllRAF()).not.toThrow();
+    });
+
+    it("should clean up momentum animation on destroy", () => {
+      // Covers destroy cleanup when momentumId is non-null.
+      const items = createTestItems(500_000);
+      list = vlist<TestItem>({
+        container,
+        item: { height: 40, template },
+        items,
+      })
+        .use(withScale())
+        .build();
+
+      const viewport = getViewport(list);
+
+      // Start momentum via touch flick (sets momentumId)
+      const touch0 = new MockTouch({ clientY: 500, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchstart", { touches: [touch0] }),
+      );
+      const touchFast = new MockTouch({ clientY: 100, target: viewport });
+      viewport.dispatchEvent(
+        createTouchEvent("touchmove", { touches: [touchFast] }),
+      );
+      viewport.dispatchEvent(createTouchEvent("touchend", { touches: [] }));
+      expect(pendingRAFCount()).toBeGreaterThanOrEqual(1);
+
+      // Destroy while momentum is in flight
+      expect(() => {
+        list!.destroy();
+        list = null;
+      }).not.toThrow();
+
+      expect(() => flushAllRAF()).not.toThrow();
+    });
   });
 });
