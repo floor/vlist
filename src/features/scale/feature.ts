@@ -472,11 +472,6 @@ export const withScale = <
             viewport.removeEventListener("touchmove", touchMoveHandler);
             viewport.removeEventListener("touchend", touchEndHandler);
             viewport.removeEventListener("touchcancel", touchEndHandler);
-            cancelMomentum();
-            if (smoothScrollId !== null) {
-              cancelAnimationFrame(smoothScrollId);
-              smoothScrollId = null;
-            }
           });
 
           // Force custom scrollbar if not already present
@@ -834,6 +829,9 @@ export const withScale = <
       enhancedUpdateCompressionMode();
 
       // ── Cleanup ──
+      // Single handler covers both compressed and non-compressed paths.
+      // Event listener removal is handled by a separate destroyHandler
+      // pushed when entering compressed mode (see above).
       ctx.destroyHandlers.push(() => {
         if (scrollbar) {
           scrollbar.destroy();
@@ -843,22 +841,11 @@ export const withScale = <
           cancelAnimationFrame(smoothScrollId);
           smoothScrollId = null;
         }
+        if (momentumId !== null) {
+          cancelAnimationFrame(momentumId);
+          momentumId = null;
+        }
       });
-    },
-
-    destroy(): void {
-      if (scrollbar) {
-        scrollbar.destroy();
-        scrollbar = null;
-      }
-      if (smoothScrollId !== null) {
-        cancelAnimationFrame(smoothScrollId);
-        smoothScrollId = null;
-      }
-      if (momentumId !== null) {
-        cancelAnimationFrame(momentumId);
-        momentumId = null;
-      }
     },
   };
 };
