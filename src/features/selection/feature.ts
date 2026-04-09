@@ -273,6 +273,10 @@ export const withSelection = <T extends VListItem = VListItem>(
           // is in virtual/compressed space — can't compare directly.
           // Use visible range for the hit-test, then compute the scroll
           // target via the compression mapping with fractional precision.
+          //
+          // NOTE: assumes roughly uniform item sizes — compressedItemSize
+          // is virtualSize / totalItems. This is acceptable because
+          // withScale is designed for massive lists with fixed row height.
           const { visibleRange } = ctx.state.viewportState;
           const itemSize = ctx.sizeCache.getSize(Math.max(0, idx));
           const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
@@ -287,11 +291,11 @@ export const withSelection = <T extends VListItem = VListItem>(
             // with idx as the last fully visible one.
             const exactTopIndex = idx + 1 - containerSize / itemSize;
             const target = Math.max(0, exactTopIndex * compressedItemSize);
-            ctx.scrollController.scrollTo(target);
+            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(target));
           } else if (idx < visibleRange.end - fullyVisible) {
             // Item is above the fully-visible area — place it at the top.
             const target = Math.max(0, idx * compressedItemSize);
-            ctx.scrollController.scrollTo(target);
+            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(target));
           }
         }
       };
@@ -301,7 +305,6 @@ export const withSelection = <T extends VListItem = VListItem>(
         const h = ctx.sizeCache.getSize(Math.max(0, selectionState.focusedIndex));
         return Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
       };
-
 
 
       // ── ARIA live region ──
