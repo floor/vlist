@@ -457,6 +457,15 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       $.gsp = fn;
     },
 
+    getScrollToPos(
+      index: number,
+      containerHeight: number,
+      totalItems: number,
+      align: "start" | "center" | "end",
+    ): number {
+      return $.gsp(index, $.hc, containerHeight, totalItems, align);
+    },
+
     setPositionElementFn(
       fn: (element: HTMLElement, index: number) => void,
     ): void {

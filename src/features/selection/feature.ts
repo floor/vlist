@@ -250,15 +250,49 @@ export const withSelection = <T extends VListItem = VListItem>(
       const scrollToIndexIfNeeded = (idx: number): void => {
         if (idx < 0) return;
 
-        const itemOffset = ctx.sizeCache.getOffset(idx);
-        const itemBottom = itemOffset + ctx.sizeCache.getSize(idx);
-        const scrollPos = ctx.state.viewportState.scrollPosition;
-        const viewportBottom = scrollPos + ctx.state.viewportState.containerSize;
+        const compression = ctx.getCachedCompression();
+        const isCompressed = compression?.isCompressed && compression.ratio !== 1;
+        const containerSize = ctx.state.viewportState.containerSize;
+        const totalItems = ctx.dataManager.getTotal();
 
-        if (itemOffset < scrollPos) {
-          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemOffset));
-        } else if (itemBottom > viewportBottom) {
-          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - ctx.state.viewportState.containerSize));
+        if (!isCompressed) {
+          // ── Non-compressed: pixel-perfect positioning (original logic) ──
+          const itemOffset = ctx.sizeCache.getOffset(idx);
+          const itemBottom = itemOffset + ctx.sizeCache.getSize(idx);
+          const scrollPos = ctx.state.viewportState.scrollPosition;
+          const viewportBottom = scrollPos + containerSize;
+
+          if (itemOffset < scrollPos) {
+            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemOffset));
+          } else if (itemBottom > viewportBottom) {
+            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
+          }
+        } else {
+          // ── Compressed: fractional index math ──
+          // sizeCache offsets are in actual-pixel space but scrollPosition
+          // is in virtual/compressed space — can't compare directly.
+          // Use visible range for the hit-test, then compute the scroll
+          // target via the compression mapping with fractional precision.
+          const { visibleRange } = ctx.state.viewportState;
+          const itemSize = ctx.sizeCache.getSize(Math.max(0, idx));
+          const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
+          const { virtualSize } = compression!;
+          const compressedItemSize = virtualSize / totalItems;
+
+          if (idx > visibleRange.start + fullyVisible - 1) {
+            // Item is below the fully-visible area.
+            // Place item idx at the bottom edge using fractional top index:
+            //   exactTop = idx + 1 - (containerSize / itemSize)
+            // so that exactly containerSize/itemSize items fill the viewport
+            // with idx as the last fully visible one.
+            const exactTopIndex = idx + 1 - containerSize / itemSize;
+            const target = Math.max(0, exactTopIndex * compressedItemSize);
+            ctx.scrollController.scrollTo(target);
+          } else if (idx < visibleRange.end - fullyVisible) {
+            // Item is above the fully-visible area — place it at the top.
+            const target = Math.max(0, idx * compressedItemSize);
+            ctx.scrollController.scrollTo(target);
+          }
         }
       };
 

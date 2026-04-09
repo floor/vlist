@@ -402,6 +402,17 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   ): void;
 
   /**
+   * Get the current scroll-to-index position calculator.
+   * Returns the compression-aware version if withScale has replaced it.
+   */
+  getScrollToPos(
+    index: number,
+    containerHeight: number,
+    totalItems: number,
+    align: "start" | "center" | "end",
+  ): number;
+
+  /**
    * Replace the item positioning function.
    * Used by withCompression to inject compressed item positioning.
    */

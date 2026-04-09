@@ -378,6 +378,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setScrollToPosFn: () => {
       // Stub - not used in simplified context
     },
+    getScrollToPos: (_index: number, _containerHeight: number, _totalItems: number, _align: "start" | "center" | "end") => 0,
     setPositionElementFn: () => {
       // Stub - not used in simplified context
     },
