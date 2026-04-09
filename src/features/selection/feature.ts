@@ -6,7 +6,7 @@
  *
  * What it wires:
  * - Click handler on items container — toggles selection on item click
- * - Keyboard handler on root — ArrowUp/Down for focus, Space/Enter for toggle
+ * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
  * - Render integration — registers internal getters (_getSelectedIds,
@@ -38,6 +38,7 @@ import {
   moveFocusDown,
   moveFocusToFirst,
   moveFocusToLast,
+  moveFocusByPage,
   getSelectedIds,
   getSelectedItems,
 } from "./state";
@@ -245,6 +246,30 @@ export const withSelection = <T extends VListItem = VListItem>(
         });
       };
 
+      // ── Helper: scroll just enough to reveal the item ──
+      const scrollToIndexIfNeeded = (idx: number): void => {
+        if (idx < 0) return;
+
+        const itemOffset = ctx.sizeCache.getOffset(idx);
+        const itemBottom = itemOffset + ctx.sizeCache.getSize(idx);
+        const scrollPos = ctx.state.viewportState.scrollPosition;
+        const viewportBottom = scrollPos + ctx.state.viewportState.containerSize;
+
+        if (itemOffset < scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemOffset));
+        } else if (itemBottom > viewportBottom) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - ctx.state.viewportState.containerSize));
+        }
+      };
+
+      // ── Helper: page size in items for PageUp/Down ──
+      const getPageSize = (): number => {
+        const h = ctx.sizeCache.getSize(Math.max(0, selectionState.focusedIndex));
+        return Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
+      };
+
+
+
       // ── ARIA live region ──
       liveRegion = document.createElement("div");
       liveRegion.setAttribute("aria-live", "polite");
@@ -413,6 +438,20 @@ export const withSelection = <T extends VListItem = VListItem>(
             focusOnly = true;
             break;
 
+          case "PageUp":
+            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "up");
+            newState.focusVisible = true;
+            handled = true;
+            focusOnly = true;
+            break;
+
+          case "PageDown":
+            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "down");
+            newState.focusVisible = true;
+            handled = true;
+            focusOnly = true;
+            break;
+
           case "Home":
             newState = moveFocusToFirst(selectionState, totalItems);
             newState.focusVisible = true;
@@ -452,21 +491,9 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           const newFocusIndex = selectionState.focusedIndex;
 
-          // Scroll focused item into view + ARIA
+          // Scroll focused item into view (smart scroll) + ARIA
           if (newFocusIndex >= 0) {
-            const dataState = ctx.dataManager.getState();
-            ctx.scrollController.scrollTo(
-              ctx.adjustScrollPosition(
-                calculateScrollToIndex(
-                  newFocusIndex,
-                  ctx.sizeCache,
-                  ctx.state.viewportState.containerSize,
-                  dataState.total,
-                  "center",
-                  ctx.getCachedCompression(),
-                ),
-              ),
-            );
+            scrollToIndexIfNeeded(newFocusIndex);
 
             dom.root.setAttribute(
               "aria-activedescendant",
@@ -568,33 +595,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         selectionState = selectItems(selectionState, [item.id], mode);
 
-        // Only scroll when the target item is outside the viewport.
-        // When scrolling is needed, align to the edge the item is
-        // approaching: "end" for next (bottom), "start" for previous (top).
-        const itemOffset = ctx.sizeCache.getOffset(idx);
-        const itemSize = ctx.sizeCache.getSize(idx);
-        const scrollPos = ctx.state.viewportState.scrollPosition;
-        const viewportSize = ctx.state.viewportState.containerSize;
-
-        const isAboveViewport = itemOffset < scrollPos;
-        const isBelowViewport = itemOffset + itemSize > scrollPos + viewportSize;
-
-        if (isAboveViewport || isBelowViewport) {
-          const align = direction === "next" ? "end" : "start";
-          const dataState = ctx.dataManager.getState();
-          ctx.scrollController.scrollTo(
-            ctx.adjustScrollPosition(
-              calculateScrollToIndex(
-                idx,
-                ctx.sizeCache,
-                ctx.state.viewportState.containerSize,
-                dataState.total,
-                align,
-                ctx.getCachedCompression(),
-              ),
-            ),
-          );
-        }
+        scrollToIndexIfNeeded(idx);
 
         forceRenderAndEmit();
       };
