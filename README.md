@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.4.0** — [Changelog](./changelog.txt)
+**v1.4.1** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~9.9 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~10.4 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -30,7 +30,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Horizontal groups** — sticky headers work in horizontal carousels
 - **Horizontal grid layouts** — 2D grids work in both orientations
 - **Masonry** — shortest-lane placement via `withMasonry()`
-- **Keyboard accessible** — focus-visible outlines, arrow/Home/End navigation, Tab support
+- **Keyboard accessible** — focus-visible outlines, arrow/Home/End/PageUp/PageDown navigation, smart edge-scroll, Tab support
 - **Responsive grid & masonry** — context-injected `columnWidth` auto-recalculates on resize
 
 ## Installation
@@ -89,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 9.9 KB | Core virtualization, gap, padding, ARIA live region |
-| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
+| **Base** | 10.4 KB | Core virtualization, gap, padding, ARIA live region |
+| `withGrid()` | +4.0 KB | 2D grid layout with context injection |
 | `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
-| `withGroups()` | +4.2 KB | Grouped lists with sticky/inline headers |
+| `withGroups()` | +4.3 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.4 KB | Lazy loading with adapters |
-| `withSelection()` | +1.7 KB | Single/multiple selection + keyboard nav |
+| `withSelection()` | +2.1 KB | Single/multiple selection + keyboard nav |
 | `withScale()` | +3.0 KB | 1M+ items via scroll compression |
-| `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
-| `withTable()` | +5.1 KB | Data table with columns, resize, sort, groups |
+| `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
+| `withTable()` | +5.6 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.6 KB | Scroll save/restore |
 
@@ -415,11 +415,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 9.9 KB |
-| + Grid | 13.8 KB |
-| + Groups | 14.1 KB |
-| + Async | 14.3 KB |
-| + Table | 15.0 KB |
+| Base only | 10.4 KB |
+| + Grid | 14.4 KB |
+| + Groups | 14.7 KB |
+| + Async | 14.8 KB |
+| + Table | 16.0 KB |
 
 ### Memory Efficiency
 

@@ -238,6 +238,7 @@ function createMockContext(overrides?: {
     updateCompressionMode: () => {},
     setVisibleRangeFn: () => {},
     setScrollToPosFn: () => {},
+    getScrollToPos: () => 0,
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: () => {},

@@ -1,6 +1,17 @@
 vlist — full changelog
 initial commit → latest
-417 commits · 63 days · Feb 2 – Apr 6, 2026
+425 commits · 66 days · Feb 2 – Apr 9, 2026
+
+
+2026-04-09
+
+  test(core): close coverage gaps in measurement, api, and scale
+  refactor(scale): remove redundant destroy cleanup, add clamping tests
+  fix(selection): smart keyboard scroll + PageUp/PageDown support (#3)
+  fix(selection): keyboard scroll in compressed mode (scale)
+  fix(table): keyboard focus/selection classes not applied in table mode
+  fix(css): hide container focus outline when a row is selected
+  test(selection): add keyboard scroll, PageUp/PageDown, and table delegation tests
 
 
 2026-04-06

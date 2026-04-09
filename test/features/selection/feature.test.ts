@@ -1084,17 +1084,16 @@ describe("withSelection — focusout handler", () => {
 // =============================================================================
 
 describe("withSelection — keyboard edge cases", () => {
-  it("should remove aria-activedescendant when focusedIndex goes negative", () => {
+  it("should keep aria-activedescendant when ArrowUp at index 0 with wrap=false", () => {
     const feature = withSelection<TestItem>({ mode: "single" });
     const ctx = createMockContextWithEmitter();
-    const scrollToSpy = mock(() => {});
-    (ctx.scrollController as any).scrollTo = scrollToSpy;
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.scrollController as any).getScrollTop = () => 0;
     (ctx.renderer as any).updateItemClasses = mock(() => {});
-    (ctx.dataManager as any).getState = () => ({ total: 100 });
 
     feature.setup!(ctx);
 
-    // First set focus at index 0 via ArrowDown
+    // Focus item 0 via ArrowDown
     const arrowDown = new (dom.window as any).KeyboardEvent("keydown", {
       key: "ArrowDown",
       bubbles: true,
@@ -1104,12 +1103,7 @@ describe("withSelection — keyboard edge cases", () => {
 
     expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
 
-    // Now ArrowUp at index 0 with wrap=false should stay at 0 (not go negative)
-    // To test the negative index path, we need to manipulate focus to -1
-    // The actual code doesn't let focusedIndex go below 0 with moveFocusUp
-    // unless totalItems is 0. Test with 0 items:
-    (ctx.dataManager as any).getTotal = () => 0;
-
+    // ArrowUp at index 0 with wrap=false — focus stays at 0
     const arrowUp = new (dom.window as any).KeyboardEvent("keydown", {
       key: "ArrowUp",
       bubbles: true,
@@ -1117,11 +1111,31 @@ describe("withSelection — keyboard edge cases", () => {
     arrowUp.preventDefault = mock(() => {});
     ctx.keydownHandlers[0]!(arrowUp);
 
-    // With 0 items, focusedIndex stays at 0 (moveFocusUp clamps)
-    // The removeAttribute path is for when newFocusIndex < 0
-    // This happens via moveFocusUp with 0 total items returning -1
-    // Let's check what actually happens
-    expect(scrollToSpy).toHaveBeenCalled();
+    // Focus clamped at 0, aria-activedescendant unchanged
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+  });
+
+  it("should not scroll when totalItems is 0", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+    const scrollToSpy = mock(() => {});
+    (ctx.scrollController as any).scrollTo = scrollToSpy;
+    (ctx.scrollController as any).getScrollTop = () => 0;
+    (ctx.renderer as any).updateItemClasses = mock(() => {});
+    (ctx.dataManager as any).getTotal = () => 0;
+    (ctx.dataManager as any).getItem = () => undefined;
+
+    feature.setup!(ctx);
+
+    const arrowDown = new (dom.window as any).KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+    });
+    arrowDown.preventDefault = mock(() => {});
+    ctx.keydownHandlers[0]!(arrowDown);
+
+    // With 0 items the handler returns early — no scroll
+    expect(scrollToSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -1187,5 +1201,385 @@ describe("withSelection — ARIA in grid context", () => {
 
     // Cleanup
     feature.destroy!();
+  });
+});
+
+// =============================================================================
+// withSelection — Keyboard scroll behavior (scrollToIndexIfNeeded)
+// =============================================================================
+
+describe("withSelection — keyboard scroll", () => {
+  /** Helper: set up a selection feature with spied scrollTo */
+  function setupKeyboardTest(opts?: {
+    containerSize?: number;
+    itemHeight?: number;
+    itemCount?: number;
+    scrollPosition?: number;
+  }) {
+    const containerSize = opts?.containerSize ?? 600;
+    const itemHeight = opts?.itemHeight ?? 50;
+    const itemCount = opts?.itemCount ?? 100;
+    const scrollPosition = opts?.scrollPosition ?? 0;
+
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+
+    const scrollToSpy = mock(() => {});
+    (ctx.scrollController as any).scrollTo = scrollToSpy;
+    (ctx.scrollController as any).getScrollTop = () => scrollPosition;
+
+    const updateClassesSpy = mock(() => {});
+    (ctx.renderer as any).updateItemClasses = updateClassesSpy;
+
+    // Configure size cache and viewport
+    const sizeCache = createSizeCache(itemHeight, itemCount);
+    (ctx as any).sizeCache = sizeCache;
+    ctx.state.viewportState.containerSize = containerSize;
+    ctx.state.viewportState.scrollPosition = scrollPosition;
+
+    // visibleRange: items that fit in viewport from current scroll
+    const firstVisible = Math.floor(scrollPosition / itemHeight);
+    const lastVisible = Math.min(
+      itemCount - 1,
+      firstVisible + Math.ceil(containerSize / itemHeight),
+    );
+    ctx.state.viewportState.visibleRange = { start: firstVisible, end: lastVisible };
+
+    (ctx.dataManager as any).getTotal = () => itemCount;
+    (ctx.dataManager as any).getItem = (index: number) =>
+      index >= 0 && index < itemCount ? { id: index, name: `Item ${index}` } : undefined;
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+      return event;
+    };
+
+    return { ctx, feature, scrollToSpy, updateClassesSpy, fireKey, itemHeight, containerSize };
+  }
+
+  it("should not scroll when focused item is fully visible", () => {
+    const { fireKey, scrollToSpy } = setupKeyboardTest();
+
+    // Focus item 0 via ArrowDown (from -1 → 0)
+    fireKey("ArrowDown");
+    scrollToSpy.mockClear();
+
+    // ArrowDown to item 1 — still well within viewport
+    fireKey("ArrowDown");
+
+    // Item 1 at offset 50-100 is fully visible in 600px viewport at scroll 0
+    expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it("should scroll down when focused item is below viewport", () => {
+    const { fireKey, scrollToSpy } = setupKeyboardTest({
+      itemHeight: 50,
+      containerSize: 600,
+    });
+
+    // Focus item 0
+    fireKey("ArrowDown");
+    scrollToSpy.mockClear();
+
+    // Jump to End (item 99) — definitely below viewport
+    fireKey("End");
+
+    // Should scroll to reveal item 99
+    expect(scrollToSpy).toHaveBeenCalled();
+    const scrollTarget = (scrollToSpy.mock.calls as any[][])[0]![0] as number;
+    // Item 99 bottom = 100*50 = 5000, minus containerSize 600 = 4400
+    expect(scrollTarget).toBe(99 * 50 + 50 - 600);
+  });
+
+  it("should scroll up when focused item is above viewport", () => {
+    // Start scrolled down to item 50
+    const { fireKey, scrollToSpy } = setupKeyboardTest({
+      scrollPosition: 2500, // item 50 at top
+      itemHeight: 50,
+      containerSize: 600,
+    });
+
+    // Focus item via ArrowDown (starts at -1 → 0, but item 0 is above viewport)
+    fireKey("ArrowDown");
+
+    // focusedIndex starts at -1, ArrowDown → 0. Item 0 is at offset 0,
+    // well above scrollPosition 2500. Should scroll up to item 0.
+    expect(scrollToSpy).toHaveBeenCalled();
+    const scrollTarget = (scrollToSpy.mock.calls as any[][])[0]![0] as number;
+    expect(scrollTarget).toBe(0);
+  });
+
+  it("should align item to bottom edge when scrolling down", () => {
+    const { fireKey, scrollToSpy } = setupKeyboardTest({
+      itemHeight: 50,
+      containerSize: 600,
+      itemCount: 100,
+    });
+
+    // Focus item 0, then End to jump to item 99
+    fireKey("ArrowDown");
+    scrollToSpy.mockClear();
+    fireKey("End");
+
+    const scrollTarget = (scrollToSpy.mock.calls as any[][])[0]![0] as number;
+    // itemBottom - containerSize = (99*50 + 50) - 600 = 4400
+    expect(scrollTarget).toBe(4400);
+  });
+
+  it("should align item to top edge when scrolling up", () => {
+    const { fireKey, scrollToSpy } = setupKeyboardTest({
+      scrollPosition: 2500,
+      itemHeight: 50,
+      containerSize: 600,
+    });
+
+    // Focus item 0 (above viewport)
+    fireKey("ArrowDown");
+
+    const scrollTarget = (scrollToSpy.mock.calls as any[][])[0]![0] as number;
+    // Item 0 offset = 0 → scroll to top of item
+    expect(scrollTarget).toBe(0);
+  });
+});
+
+// =============================================================================
+// withSelection — PageUp / PageDown
+// =============================================================================
+
+describe("withSelection — PageUp/PageDown", () => {
+  function setupPageTest(opts?: { itemCount?: number }) {
+    const itemHeight = 50;
+    const containerSize = 600;
+    const itemCount = opts?.itemCount ?? 100;
+
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+
+    const scrollToSpy = mock(() => {});
+    (ctx.scrollController as any).scrollTo = scrollToSpy;
+    (ctx.scrollController as any).getScrollTop = () => 0;
+
+    const updateClassesSpy = mock(() => {});
+    (ctx.renderer as any).updateItemClasses = updateClassesSpy;
+
+    const sizeCache = createSizeCache(itemHeight, itemCount);
+    (ctx as any).sizeCache = sizeCache;
+    ctx.state.viewportState.containerSize = containerSize;
+    ctx.state.viewportState.scrollPosition = 0;
+    ctx.state.viewportState.visibleRange = { start: 0, end: 13 };
+
+    (ctx.dataManager as any).getTotal = () => itemCount;
+    (ctx.dataManager as any).getItem = (index: number) =>
+      index >= 0 && index < itemCount ? { id: index, name: `Item ${index}` } : undefined;
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+      return event;
+    };
+
+    return { ctx, feature, scrollToSpy, updateClassesSpy, fireKey, itemHeight, containerSize };
+  }
+
+  it("should move focus by page size on PageDown", () => {
+    const { fireKey, updateClassesSpy, containerSize, itemHeight } = setupPageTest();
+    const pageSize = Math.floor(containerSize / itemHeight); // 12
+
+    // Focus item 0
+    fireKey("ArrowDown");
+    updateClassesSpy.mockClear();
+
+    // PageDown: 0 + 12 = 12
+    fireKey("PageDown");
+
+    // The new focused item should be index 12
+    // updateItemClasses is called for the old item (unfocused) and new item (focused)
+    const focusedCalls = (updateClassesSpy.mock.calls as any[][]).filter(
+      (call) => call[2] === true,
+    );
+    expect(focusedCalls.length).toBeGreaterThan(0);
+    // The focused call should be for index 12
+    expect(focusedCalls[focusedCalls.length - 1]![0]).toBe(pageSize);
+  });
+
+  it("should move focus by page size on PageUp", () => {
+    const { fireKey, updateClassesSpy, containerSize, itemHeight } = setupPageTest();
+    const pageSize = Math.floor(containerSize / itemHeight); // 12
+
+    // Focus item 0, then End to go to 99
+    fireKey("ArrowDown");
+    fireKey("End");
+    updateClassesSpy.mockClear();
+
+    // PageUp from 99: 99 - 12 = 87
+    fireKey("PageUp");
+
+    const focusedCalls = (updateClassesSpy.mock.calls as any[][]).filter(
+      (call) => call[2] === true,
+    );
+    expect(focusedCalls.length).toBeGreaterThan(0);
+    expect(focusedCalls[focusedCalls.length - 1]![0]).toBe(99 - pageSize);
+  });
+
+  it("should preventDefault on PageDown", () => {
+    const { fireKey } = setupPageTest();
+
+    fireKey("ArrowDown"); // focus first
+    const event = fireKey("PageDown");
+
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it("should preventDefault on PageUp", () => {
+    const { fireKey } = setupPageTest();
+
+    fireKey("ArrowDown"); // focus first
+    const event = fireKey("PageUp");
+
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it("should clamp PageDown at last item", () => {
+    const { fireKey, updateClassesSpy } = setupPageTest({ itemCount: 5 });
+
+    fireKey("ArrowDown"); // focus 0
+    updateClassesSpy.mockClear();
+
+    // PageDown with pageSize 12 but only 5 items → clamp to 4
+    fireKey("PageDown");
+
+    const focusedCalls = (updateClassesSpy.mock.calls as any[][]).filter(
+      (call) => call[2] === true,
+    );
+    expect(focusedCalls.length).toBeGreaterThan(0);
+    expect(focusedCalls[focusedCalls.length - 1]![0]).toBe(4);
+  });
+
+  it("should clamp PageUp at first item", () => {
+    const { fireKey, updateClassesSpy } = setupPageTest();
+
+    // Focus item 3 (ArrowDown 4 times from -1)
+    fireKey("ArrowDown"); // 0
+    fireKey("ArrowDown"); // 1
+    fireKey("ArrowDown"); // 2
+    fireKey("ArrowDown"); // 3
+    updateClassesSpy.mockClear();
+
+    // PageUp from 3 with pageSize 12 → clamp to 0
+    fireKey("PageUp");
+
+    const focusedCalls = (updateClassesSpy.mock.calls as any[][]).filter(
+      (call) => call[2] === true,
+    );
+    expect(focusedCalls.length).toBeGreaterThan(0);
+    expect(focusedCalls[focusedCalls.length - 1]![0]).toBe(0);
+  });
+});
+
+// =============================================================================
+// withSelection + withTable — updateItemClasses delegation
+// =============================================================================
+
+describe("withSelection — table updateItemClasses delegation", () => {
+  it("should call the replaced updateItemClassesFn on keyboard navigation", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+
+    // Simulate what withTable does: replace the updateItemClassesFn
+    const tableUpdateSpy = mock((_index: number, _isSelected: boolean, _isFocused: boolean) => {});
+    let replacedFn: ((index: number, isSelected: boolean, isFocused: boolean) => void) | null = null;
+    (ctx as any).setUpdateItemClassesFn = (fn: any) => {
+      replacedFn = fn;
+    };
+
+    // Install a renderer that delegates to the replaced fn (simulating materialize)
+    (ctx.renderer as any).updateItemClasses = (
+      index: number,
+      isSelected: boolean,
+      isFocused: boolean,
+    ) => {
+      tableUpdateSpy(index, isSelected, isFocused);
+    };
+
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.scrollController as any).getScrollTop = () => 0;
+    (ctx.dataManager as any).getTotal = () => 100;
+    (ctx.dataManager as any).getItem = (index: number) =>
+      index >= 0 && index < 100 ? { id: index, name: `Item ${index}` } : undefined;
+
+    feature.setup!(ctx);
+
+    // Fire ArrowDown to focus item 0
+    const event = new (dom.window as any).KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+    });
+    event.preventDefault = mock(() => {});
+    ctx.keydownHandlers[0]!(event);
+
+    // The renderer's updateItemClasses should have been called with focus on item 0
+    const focusedCalls = (tableUpdateSpy.mock.calls as any[][]).filter(
+      (call) => call[2] === true,
+    );
+    expect(focusedCalls.length).toBe(1);
+    expect(focusedCalls[0]![0]).toBe(0); // index 0
+    expect(focusedCalls[0]![1]).toBe(false); // not selected
+    expect(focusedCalls[0]![2]).toBe(true); // focused
+  });
+
+  it("should unfocus previous item and focus new item on ArrowDown", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+
+    const updateSpy = mock((_index: number, _isSelected: boolean, _isFocused: boolean) => {});
+    (ctx.renderer as any).updateItemClasses = updateSpy;
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.scrollController as any).getScrollTop = () => 0;
+    (ctx.dataManager as any).getTotal = () => 100;
+    (ctx.dataManager as any).getItem = (index: number) =>
+      index >= 0 && index < 100 ? { id: index, name: `Item ${index}` } : undefined;
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+    };
+
+    // ArrowDown → focus item 0
+    fireKey("ArrowDown");
+    updateSpy.mockClear();
+
+    // ArrowDown → focus item 1 (unfocus item 0)
+    fireKey("ArrowDown");
+
+    // Should have 2 calls: unfocus item 0, focus item 1
+    expect(updateSpy.mock.calls.length).toBe(2);
+
+    // First call: unfocus item 0
+    const calls = updateSpy.mock.calls as any[][];
+    expect(calls[0]![0]).toBe(0); // index
+    expect(calls[0]![2]).toBe(false); // not focused
+
+    // Second call: focus item 1
+    expect(calls[1]![0]).toBe(1); // index
+    expect(calls[1]![2]).toBe(true); // focused
   });
 });
