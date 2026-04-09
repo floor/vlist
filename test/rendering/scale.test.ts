@@ -576,8 +576,8 @@ describe("calculateCompressedScrollToIndex", () => {
         "center",
       );
 
-      // 500000/1000000 * 16M = 8M, then subtract (600-40)/2 = 280
-      expect(position).toBe(8_000_000 - 280);
+      // 500000/1000000 * 16M = 8M, offset scaled by ratio: (600-40)/2 * 0.4 = 112
+      expect(position).toBe(8_000_000 - 112);
     });
 
     it("should handle end alignment (non-last item) with compression", () => {
@@ -594,8 +594,146 @@ describe("calculateCompressedScrollToIndex", () => {
         "end",
       );
 
-      // 500000/1000000 * 16M = 8M, then subtract (600-40) = 560
-      expect(position).toBe(8_000_000 - 560);
+      // 500000/1000000 * 16M = 8M, offset scaled by ratio: (600-40) * 0.4 = 224
+      expect(position).toBe(8_000_000 - 224);
+    });
+
+    it("center alignment should place target item in the middle of the visible range", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+      const targetIndex = 500_000;
+
+      const scrollPos = calculateCompressedScrollToIndex(
+        targetIndex,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "center",
+      );
+
+      // Round-trip: the scroll position should produce a visible range
+      // that contains the target index near its center
+      const range = { start: 0, end: 0 };
+      calculateCompressedVisibleRange(
+        scrollPos,
+        containerHeight,
+        cache,
+        1_000_000,
+        compression,
+        range,
+      );
+
+      const visibleCount = range.end - range.start + 1;
+      const positionInRange = targetIndex - range.start;
+
+      // Target should be within the visible range
+      expect(targetIndex).toBeGreaterThanOrEqual(range.start);
+      expect(targetIndex).toBeLessThanOrEqual(range.end);
+
+      // Target should be near the center (within 2 items of midpoint)
+      const midpoint = visibleCount / 2;
+      expect(Math.abs(positionInRange - midpoint)).toBeLessThan(2);
+    });
+
+    it("end alignment should place target item at the bottom of the visible range", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+      const targetIndex = 500_000;
+
+      const scrollPos = calculateCompressedScrollToIndex(
+        targetIndex,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "end",
+      );
+
+      const range = { start: 0, end: 0 };
+      calculateCompressedVisibleRange(
+        scrollPos,
+        containerHeight,
+        cache,
+        1_000_000,
+        compression,
+        range,
+      );
+
+      // Target should be within the visible range
+      expect(targetIndex).toBeGreaterThanOrEqual(range.start);
+      expect(targetIndex).toBeLessThanOrEqual(range.end);
+
+      // Target should be near the end (within 2 items of the last visible)
+      expect(range.end - targetIndex).toBeLessThan(2);
+    });
+
+    it("start alignment should place target item at the top of the visible range", () => {
+      const cache = createSizeCache(40, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 600;
+      const targetIndex = 500_000;
+
+      const scrollPos = calculateCompressedScrollToIndex(
+        targetIndex,
+        cache,
+        containerHeight,
+        1_000_000,
+        compression,
+        "start",
+      );
+
+      const range = { start: 0, end: 0 };
+      calculateCompressedVisibleRange(
+        scrollPos,
+        containerHeight,
+        cache,
+        1_000_000,
+        compression,
+        range,
+      );
+
+      // Target should be at or very near the start
+      expect(targetIndex).toBeGreaterThanOrEqual(range.start);
+      expect(targetIndex - range.start).toBeLessThan(2);
+    });
+
+    it("round-trip should work at various indices", () => {
+      const cache = createSizeCache(68, 1_000_000);
+      const compression = getCompressionState(1_000_000, cache);
+      const containerHeight = 700;
+      const range = { start: 0, end: 0 };
+
+      for (const targetIndex of [1_000, 250_000, 500_000, 750_000, 999_000]) {
+        const scrollPos = calculateCompressedScrollToIndex(
+          targetIndex,
+          cache,
+          containerHeight,
+          1_000_000,
+          compression,
+          "center",
+        );
+
+        calculateCompressedVisibleRange(
+          scrollPos,
+          containerHeight,
+          cache,
+          1_000_000,
+          compression,
+          range,
+        );
+
+        // Target must be visible
+        expect(targetIndex).toBeGreaterThanOrEqual(range.start);
+        expect(targetIndex).toBeLessThanOrEqual(range.end);
+
+        // And roughly centered
+        const visibleCount = range.end - range.start + 1;
+        const positionInRange = targetIndex - range.start;
+        expect(Math.abs(positionInRange - visibleCount / 2)).toBeLessThan(2);
+      }
     });
   });
 

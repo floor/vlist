@@ -325,13 +325,30 @@ export const calculateCompressedScrollToIndex = (
     }
 
     // Map index to compressed scroll position
-    const ratio = index / totalItems;
-    targetPosition = ratio * compression.virtualSize;
-  } else {
-    // Direct calculation using actual offset.
-    // Also used when ratio === 1 (force mode) — positions map 1:1.
-    targetPosition = sizeCache.getOffset(index);
+    const indexRatio = index / totalItems;
+    targetPosition = indexRatio * compression.virtualSize;
+
+    // Alignment adjustment must be scaled by the compression ratio.
+    // The viewport shows containerHeight/itemSize items regardless of
+    // compression, but each scroll-pixel maps to 1/ratio actual pixels.
+    // Without scaling, the pixel offset overshoots by 1/ratio items.
+    const itemSize = sizeCache.getSize(index);
+    switch (align) {
+      case "center":
+        targetPosition -= (containerHeight - itemSize) / 2 * compression.ratio;
+        break;
+      case "end":
+        targetPosition -= (containerHeight - itemSize) * compression.ratio;
+        break;
+    }
+
+    const maxScroll = compression.virtualSize - containerHeight;
+    return Math.max(0, Math.min(targetPosition, maxScroll));
   }
+
+  // Direct calculation using actual offset.
+  // Also used when ratio === 1 (force mode) — positions map 1:1.
+  targetPosition = sizeCache.getOffset(index);
 
   // Adjust for alignment using the specific item's size
   const itemSize = sizeCache.getSize(index);
