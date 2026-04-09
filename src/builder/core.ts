@@ -393,6 +393,13 @@ function materialize<T extends VListItem = VListItem>(
     gp: gap,
     mp: mainAxisPadding,
     sif: (index: number) => index,
+    uic: (index: number, isSelected: boolean, isFocused: boolean): void => {
+      const element = rendered.get(index);
+      if (!element) return;
+      element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
+      element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
+      element.ariaSelected = isSelected ? "true" : "false";
+    },
   };
 
   // virtualTotalFn must reference $ after creation

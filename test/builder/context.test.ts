@@ -719,7 +719,9 @@ describe("createBuilderContext", () => {
       expect(() => ctx.setRenderFns(() => {}, () => {})).not.toThrow();
       expect(() => ctx.setVisibleRangeFn(() => ({ start: 0, end: 10 }))).not.toThrow();
       expect(() => ctx.setScrollToPosFn(() => 0)).not.toThrow();
+      expect(() => ctx.getScrollToPos(0, 500, 100, "start")).not.toThrow();
       expect(() => ctx.setPositionElementFn(() => {})).not.toThrow();
+      expect(() => ctx.setUpdateItemClassesFn(() => {})).not.toThrow();
       expect(() => ctx.setScrollFns(() => 0, () => {})).not.toThrow();
       expect(() => ctx.setScrollTarget(document.createElement("div"))).not.toThrow();
       expect(() => ctx.setContainerDimensions({ width: () => 300, height: () => 500 })).not.toThrow();

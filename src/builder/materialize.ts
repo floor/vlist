@@ -153,6 +153,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   mp: number;
   /** stripeIndexFn — maps layout index to stripe index (-1 = skip) */
   sif: (index: number) => number;
+  /** updateItemClassesFn */
+  uic: (index: number, isSelected: boolean, isFocused: boolean) => void;
 }
 
 // =============================================================================
@@ -208,7 +210,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     pool,
     sharedState,
     isHorizontal,
-    classPrefix,
+    classPrefix: _classPrefix,
     contentSizeHandlers,
     idleHandlers,
     afterScroll,
@@ -275,11 +277,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
           isSelected: boolean,
           isFocused: boolean,
         ): void => {
-          const element = rendered.get(index);
-          if (!element) return;
-          element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-          element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-          element.ariaSelected = isSelected ? "true" : "false";
+          $.uic(index, isSelected, isFocused);
         },
         updatePositions: () => {},
         updateItem: () => {},
@@ -528,6 +526,12 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
 
     setStripeIndexFn(fn: (index: number) => number): void {
       $.sif = fn;
+    },
+
+    setUpdateItemClassesFn(
+      fn: (index: number, isSelected: boolean, isFocused: boolean) => void,
+    ): void {
+      $.uic = fn;
     },
   };
 };
