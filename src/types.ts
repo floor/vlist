@@ -25,6 +25,21 @@ export interface VListItem {
 // =============================================================================
 
 /** Groups configuration for createVList */
+export interface GroupHeaderConfig {
+  /** 
+   * Size of group header elements in pixels along the main axis.
+   * - `number` — Fixed size for all headers
+   * - `(group: string, groupIndex: number) => number` — Variable size per group
+   */
+  height: number | ((group: string, groupIndex: number) => number);
+
+  /**
+   * Template function to render a group header.
+   * Receives the group key and the group's sequential index (0-based).
+   */
+  template: (group: string, groupIndex: number) => string | HTMLElement;
+}
+
 export interface GroupsConfig {
   /**
    * Determine which group an item belongs to.
@@ -37,17 +52,9 @@ export interface GroupsConfig {
   getGroupForIndex: (index: number) => string;
 
   /**
-   * Height of group header elements in pixels.
-   * - `number` — Fixed height for all headers
-   * - `(group: string, groupIndex: number) => number` — Variable height per group
+   * Group header configuration — mirrors the `item` config shape.
    */
-  headerHeight: number | ((group: string, groupIndex: number) => number);
-
-  /**
-   * Template function to render a group header.
-   * Receives the group key and the group's sequential index (0-based).
-   */
-  headerTemplate: (group: string, groupIndex: number) => string | HTMLElement;
+  header: GroupHeaderConfig;
 
   /**
    * Enable sticky headers (default: true).

@@ -302,8 +302,7 @@ describe("DOM Snapshots", () => {
       .use(
         withGroups({
           getGroupForIndex: (index) => (index < 4 ? "A" : index < 8 ? "B" : "C"),
-          headerHeight: 30,
-          headerTemplate: (group) => `<strong>${group}</strong>`,
+          header: { height: 30, template: (group) => `<strong>${group}</strong>` },
         }),
       )
       .build();
