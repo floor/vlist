@@ -28,6 +28,7 @@
 
 import type { VListItem, SelectionMode } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding } from "../../utils/padding";
 
 import {
   createSelectionState,
@@ -252,6 +253,11 @@ export const withSelection = <T extends VListItem = VListItem>(
       };
 
       // ── Helper: scroll just enough to reveal the focused item ──
+      // Resolve padding once (start/end along main axis)
+      const resolvedPad = resolvePadding(ctx.rawConfig.padding);
+      const startPadding = resolvedConfig.horizontal ? resolvedPad.left : resolvedPad.top;
+      const endPadding = resolvedConfig.horizontal ? resolvedPad.right : resolvedPad.bottom;
+
       const scrollToFocus = (idx: number): void => {
         if (idx < 0) return;
 
@@ -266,6 +272,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           ctx.sizeCache,
           scrollPos,
           containerSize,
+          startPadding,
+          endPadding,
           compression,
           totalItems,
           visibleRange,

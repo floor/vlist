@@ -7,6 +7,10 @@
  * - Normal: pixel-perfect offset comparison against scroll position
  * - Compressed: fractional index math because sizeCache offsets are in
  *   actual-pixel space but scrollPosition is in virtual/compressed space
+ *
+ * Padding-aware: CSS padding on the content element shifts items in scroll
+ * space by `startPadding` (paddingTop for vertical, paddingLeft for horizontal).
+ * The function accounts for this offset in both visibility checks and alignment.
  */
 
 import type { SizeCache } from "./sizes";
@@ -21,6 +25,10 @@ import type { Range } from "../types";
  * @param sizeCache - Size cache for offset/size lookups
  * @param scrollPosition - Current scroll position
  * @param containerSize - Viewport container size (height or width)
+ * @param startPadding - Main-axis start padding (paddingTop / paddingLeft) that
+ *   shifts items in scroll space. Pass 0 when there is no padding.
+ * @param endPadding - Main-axis end padding (paddingBottom / paddingRight).
+ *   Kept visible below the item when aligning to the bottom edge.
  * @param compression - Optional compression state from withScale
  * @param totalItems - Total item count (required when compressed)
  * @param visibleRange - Current visible range (required when compressed for hit-testing)
@@ -31,6 +39,8 @@ export const scrollToFocus = (
   sizeCache: SizeCache,
   scrollPosition: number,
   containerSize: number,
+  startPadding: number = 0,
+  endPadding: number = 0,
   compression?: CompressionState | null,
   totalItems?: number,
   visibleRange?: Range | null,
@@ -42,19 +52,23 @@ export const scrollToFocus = (
 
   if (!isCompressed) {
     // ── Normal: pixel-perfect positioning ──
+    // Items are offset by startPadding in scroll space due to CSS padding
+    // on the content element. An item at sizeCache offset O appears at
+    // O + startPadding in the scrollable area.
     const itemOffset = sizeCache.getOffset(index);
     const itemSize = sizeCache.getSize(index);
-    const itemBottom = itemOffset + itemSize;
+    const adjustedTop = itemOffset + startPadding;
+    const adjustedBottom = adjustedTop + itemSize;
     const viewportBottom = scrollPosition + containerSize;
 
-    // Item is above the viewport — align to top edge
-    if (itemOffset < scrollPosition) {
-      return itemOffset;
+    // Item is above the viewport — align to top edge (with padding visible)
+    if (adjustedTop < scrollPosition) {
+      return Math.max(0, itemOffset);
     }
 
-    // Item is below the viewport — align to bottom edge
-    if (itemBottom > viewportBottom) {
-      return itemBottom - containerSize;
+    // Item is below the viewport — align to bottom edge (keep endPadding visible)
+    if (adjustedBottom > viewportBottom) {
+      return adjustedBottom + endPadding - containerSize;
     }
 
     // Item is fully visible — no scroll needed
@@ -73,17 +87,19 @@ export const scrollToFocus = (
   const total = totalItems!;
   const { virtualSize } = compression!;
   const itemSize = sizeCache.getSize(Math.max(0, index));
-  const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
+  // Effective container size excludes padding — only the usable area for items
+  const effectiveSize = containerSize - startPadding - endPadding;
+  const fullyVisible = Math.max(1, Math.floor(effectiveSize / itemSize));
   const compressedItemSize = virtualSize / total;
 
   if (visibleRange) {
     if (index > visibleRange.start + fullyVisible - 1) {
       // Item is below the fully-visible area.
       // Place item at the bottom edge using fractional top index:
-      //   exactTop = index + 1 - (containerSize / itemSize)
-      // so that exactly containerSize/itemSize items fill the viewport
+      //   exactTop = index + 1 - (effectiveSize / itemSize)
+      // so that exactly effectiveSize/itemSize items fill the viewport
       // with index as the last fully visible one.
-      const exactTopIndex = index + 1 - containerSize / itemSize;
+      const exactTopIndex = index + 1 - effectiveSize / itemSize;
       return Math.max(0, exactTopIndex * compressedItemSize);
     }
 
@@ -98,7 +114,7 @@ export const scrollToFocus = (
     const currentEnd = currentIndex + fullyVisible;
 
     if (index > currentEnd - 1) {
-      const exactTopIndex = index + 1 - containerSize / itemSize;
+      const exactTopIndex = index + 1 - effectiveSize / itemSize;
       return Math.max(0, exactTopIndex * compressedItemSize);
     }
 
