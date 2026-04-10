@@ -327,7 +327,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         // string vs HTMLElement, headerTemplate, or any template details.
         const ht = config.header.template;
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
-          const group = groupLayout.groups[groupIndex];
+          const group = groupLayout!.groups[groupIndex];
           if (!group) return;
           const result = ht(group.key, group.groupIndex);
           if (typeof result === "string") slot.innerHTML = result;
