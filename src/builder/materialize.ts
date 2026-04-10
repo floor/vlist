@@ -428,7 +428,13 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       }
     },
     updateCompressionMode(): void {
-      // No-op by default — withCompression feature replaces this
+      // No-op by default — withScale feature replaces this.
+      // Fire contentSizeHandlers so features (e.g. withScrollbar) pick up
+      // any content-size change.  When withScale is active its enhanced
+      // version fires these itself; this default path covers the plain case.
+      for (let i = 0; i < contentSizeHandlers.length; i++) {
+        contentSizeHandlers[i]!();
+      }
     },
 
     setVisibleRangeFn(
@@ -564,10 +570,10 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
   const syncAfterChange = (): void => {
     $.hc.rebuild($.vtf());
     updateContentSize();
+    // updateCompressionMode fires contentSizeHandlers internally
+    // (both the default implementation and withScale's enhanced version),
+    // so we don't duplicate the loop here.
     ctx.updateCompressionMode();
-    for (let i = 0; i < contentSizeHandlers.length; i++) {
-      contentSizeHandlers[i]!();
-    }
     $.ffn();
   };
 

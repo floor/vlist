@@ -77,3 +77,8 @@ export {
   calculateCompressedScrollToIndex,
   calculateIndexFromScrollPosition,
 } from "./scale";
+
+// Smart Edge Scroll (shared by core baseline and selection feature)
+export {
+  scrollToFocus,
+} from "./scroll";

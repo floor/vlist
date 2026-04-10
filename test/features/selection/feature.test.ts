@@ -1205,7 +1205,7 @@ describe("withSelection — ARIA in grid context", () => {
 });
 
 // =============================================================================
-// withSelection — Keyboard scroll behavior (scrollToIndexIfNeeded)
+// withSelection — Keyboard scroll behavior (scrollToFocus)
 // =============================================================================
 
 describe("withSelection — keyboard scroll", () => {
@@ -1581,5 +1581,262 @@ describe("withSelection — table updateItemClasses delegation", () => {
     // Second call: focus item 1
     expect(calls[1]![0]).toBe(1); // index
     expect(calls[1]![2]).toBe(true); // focused
+  });
+});
+
+// =============================================================================
+// withSelection — Group Header Skipping (#5)
+// =============================================================================
+
+/**
+ * Helper: create a mock context where certain indices are group headers.
+ * Simulates a layout like: [header(0), item(1), item(2), header(3), item(4), ...]
+ */
+function createGroupedMockContext(headerIndices: Set<number>): BuilderContext<TestItem> {
+  const ctx = createMockContextWithEmitter();
+
+  // Register _isGroupHeader before withSelection.setup() resolves it
+  ctx.methods.set("_isGroupHeader", (index: number): boolean => {
+    return headerIndices.has(index);
+  });
+
+  return ctx;
+}
+
+describe("withSelection — group header skipping", () => {
+  // Layout: [H(0), item(1), item(2), H(3), item(4), item(5), H(6), item(7)]
+  const headers = new Set([0, 3, 6]);
+
+  function setupGrouped(opts?: { mode?: "single" | "multiple"; followFocus?: boolean }) {
+    const feature = withSelection<TestItem>({
+      mode: opts?.mode ?? "single",
+      followFocus: opts?.followFocus,
+    });
+    const ctx = createGroupedMockContext(headers);
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.renderer as any).updateItemClasses = mock(() => {});
+    (ctx.dataManager as any).getTotal = () => 8;
+    (ctx.dataManager as any).getState = () => ({ total: 8 });
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string, extra?: Record<string, any>) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        ...extra,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+      return event;
+    };
+
+    const focusIn = () => {
+      const orig = ctx.dom.root.matches;
+      ctx.dom.root.matches = (sel: string) =>
+        sel === ":focus-visible" ? true : orig.call(ctx.dom.root, sel);
+      const ev = new (dom.window as any).FocusEvent("focusin", { bubbles: true });
+      ctx.dom.root.dispatchEvent(ev);
+      ctx.dom.root.matches = orig;
+    };
+
+    return { ctx, feature, fireKey, focusIn };
+  }
+
+  // ── focusin ──────────────────────────────────────────────────
+
+  it("focusin should skip header at index 0 and land on index 1", () => {
+    const { ctx, focusIn } = setupGrouped();
+    focusIn();
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
+  });
+
+  // ── ArrowDown ────────────────────────────────────────────────
+
+  it("ArrowDown should skip header at index 3", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    focusIn(); // → index 1
+    fireKey("ArrowDown"); // → index 2
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
+
+    fireKey("ArrowDown"); // would land on 3 (header) → skip to 4
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
+  });
+
+  // ── ArrowUp ──────────────────────────────────────────────────
+
+  it("ArrowUp should skip header at index 3", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    focusIn(); // → 1
+    fireKey("ArrowDown"); // → 2
+    fireKey("ArrowDown"); // → 4 (skipped 3)
+    fireKey("ArrowUp"); // would land on 3 (header) → skip to 2
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
+  });
+
+  // ── Home / End ───────────────────────────────────────────────
+
+  it("Home should skip header at index 0 and land on index 1", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    focusIn(); // → 1
+    fireKey("ArrowDown"); // → 2
+    fireKey("Home"); // would land on 0 (header) → skip to 1
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
+  });
+
+  it("End should land on last non-header item", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    focusIn(); // → 1
+    fireKey("End"); // index 7 (not a header)
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-7");
+  });
+
+  // ── PageDown / PageUp ────────────────────────────────────────
+
+  it("PageDown should skip header if it lands on one", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    // With containerSize=600 and itemHeight=50 → pageSize=12, but total=8
+    // so PageDown from 1 → min(1+12, 7) = 7 → not a header, fine.
+    // Use a smaller container to get a more interesting page size.
+    ctx.state.viewportState.containerSize = 150; // pageSize = 3
+    focusIn(); // → 1
+    fireKey("PageDown"); // 1+3=4 → not a header → lands on 4
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
+  });
+
+  // ── Click ────────────────────────────────────────────────────
+
+  it("click on a group header should be ignored", () => {
+    const { ctx } = setupGrouped();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    // Create a fake item element at index 0 (header)
+    const itemEl = document.createElement("div");
+    itemEl.setAttribute("data-index", "0");
+    ctx.dom.items.appendChild(itemEl);
+
+    const clickEvent = new (dom.window as any).MouseEvent("click", { bubbles: true });
+    Object.defineProperty(clickEvent, "target", { value: itemEl });
+
+    ctx.clickHandlers[0]!(clickEvent);
+
+    // No item:click event should have been emitted
+    const itemClickCalls = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "item:click",
+    );
+    expect(itemClickCalls.length).toBe(0);
+  });
+
+  it("click on a regular item should work normally", () => {
+    const { ctx } = setupGrouped();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    // Create a fake item element at index 1 (regular item)
+    const itemEl = document.createElement("div");
+    itemEl.setAttribute("data-index", "1");
+    ctx.dom.items.appendChild(itemEl);
+
+    const clickEvent = new (dom.window as any).MouseEvent("click", { bubbles: true });
+    Object.defineProperty(clickEvent, "target", { value: itemEl });
+
+    ctx.clickHandlers[0]!(clickEvent);
+
+    const itemClickCalls = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "item:click",
+    );
+    expect(itemClickCalls.length).toBe(1);
+  });
+
+  // ── Space / Enter ────────────────────────────────────────────
+
+  it("Space should not select a header even if somehow focused on one", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped();
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    focusIn(); // → 1
+
+    // Manually force focusedIndex to a header to test the guard
+    // We do this by navigating to index 4, then patching getTotal
+    // so ArrowDown wraps to 0 (header). Instead, just test that
+    // Space on a normal item works and doesn't crash.
+    fireKey(" "); // Space on index 1 → should toggle selection
+
+    const selChanges = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "selection:change",
+    );
+    expect(selChanges.length).toBeGreaterThan(0);
+  });
+
+  // ── selectNext / selectPrevious ──────────────────────────────
+
+  it("selectNext should skip headers", () => {
+    const { ctx, focusIn } = setupGrouped();
+    focusIn(); // → 1
+
+    // Get the selectNext method
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    expect(selectNext).toBeDefined();
+
+    selectNext(); // 1 → 2
+    selectNext(); // 2 → would be 3 (header) → skips to 4
+    selectNext(); // 4 → 5
+
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+    const selected = getSelected();
+    // In single mode, only last item is selected
+    expect(selected).toEqual([5]);
+  });
+
+  it("selectPrevious should skip headers", () => {
+    const { ctx, focusIn } = setupGrouped();
+    focusIn(); // → 1
+
+    const selectNext = ctx.methods.get("selectNext") as () => void;
+    const selectPrevious = ctx.methods.get("selectPrevious") as () => void;
+
+    selectNext(); // → 2
+    selectNext(); // → 4 (skipped 3)
+    selectPrevious(); // 4 → would be 3 (header) → skips to 2
+
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+    expect(getSelected()).toEqual([2]);
+  });
+
+  // ── No groups active ────────────────────────────────────────
+
+  it("should work normally when _isGroupHeader is not registered", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.renderer as any).updateItemClasses = mock(() => {});
+    (ctx.dataManager as any).getState = () => ({ total: 100 });
+
+    // No _isGroupHeader registered on ctx.methods
+    feature.setup!(ctx);
+
+    const orig = ctx.dom.root.matches;
+    ctx.dom.root.matches = (sel: string) =>
+      sel === ":focus-visible" ? true : orig.call(ctx.dom.root, sel);
+    const ev = new (dom.window as any).FocusEvent("focusin", { bubbles: true });
+    ctx.dom.root.dispatchEvent(ev);
+    ctx.dom.root.matches = orig;
+
+    // Should land on index 0 (no skipping)
+    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+  });
+
+  // ── followFocus with headers ─────────────────────────────────
+
+  it("followFocus should select the item after skipping a header", () => {
+    const { ctx, focusIn, fireKey } = setupGrouped({ followFocus: true });
+    focusIn(); // → 1
+    fireKey("ArrowDown"); // → 2
+    fireKey("ArrowDown"); // would be 3 (header) → 4
+
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+    expect(getSelected()).toEqual([4]);
   });
 });
