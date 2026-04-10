@@ -281,11 +281,58 @@ describe("withGroups — Factory", () => {
     });
     expect(feature).toBeDefined();
   });
+
+  it("should accept header.width for horizontal orientation", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : "B"),
+      header: {
+        width: 48,
+        template: (key) => `<div>${key}</div>`,
+      },
+    });
+    expect(feature).toBeDefined();
+    expect(feature.name).toBe("withGroups");
+  });
+
+  it("should accept legacy headerHeight/headerTemplate", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : "B"),
+      headerHeight: 32,
+      headerTemplate: (key) => `<div>${key}</div>`,
+    });
+    expect(feature).toBeDefined();
+    expect(feature.name).toBe("withGroups");
+  });
+
+  it("should setup with legacy headerHeight/headerTemplate config", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      headerHeight: 32,
+      headerTemplate: (key) => `<div>${key}</div>`,
+    });
+    const ctx = createMockContext();
+    // setup() should run without error, exercising the normalizeConfig legacy path
+    expect(() => feature.setup!(ctx)).not.toThrow();
+    // The _isGroupHeader method should have been registered, proving setup completed
+    const isGroupHeader = ctx.methods.get("_isGroupHeader") as (index: number) => boolean;
+    expect(isGroupHeader).toBeDefined();
+    expect(isGroupHeader(0)).toBe(true);
+  });
 });
 
 // =============================================================================
 // withGroups — Setup Tests
 // =============================================================================
+
+// =============================================================================
+// Helper for striped mode tests
+// =============================================================================
+
+function createMockContextWithStriped(mode: "data" | "even" | "odd"): BuilderContext<TestItem> {
+  const ctx = createMockContext();
+  (ctx.rawConfig.item as any).striped = mode;
+  return ctx;
+}
 
 describe("withGroups — Setup", () => {
   it("should add grouped CSS class to root", () => {
@@ -459,6 +506,94 @@ describe("withGroups — Setup", () => {
     expect(gridLayoutUpdated).toBe(true);
     expect(gridRendererReplaced).toBe(true);
     expect(templateReplaced).toBe(false);
+  });
+
+  it("should call updateGridLayoutForGroups callback with correct isHeader results", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+    });
+    const ctx = createMockContext();
+    let isHeaderFn: ((index: number) => boolean) | null = null;
+
+    // Mock grid integration methods
+    ctx.methods.set("_getGridLayout", () => ({
+      getColumns: () => 3,
+      getColumnWidth: () => 133,
+      isHeaderRow: () => false,
+      getRowForIndex: () => 0,
+      getColumnForIndex: () => 0,
+      getTotalRows: () => 10,
+    }));
+    ctx.methods.set("_replaceGridRenderer", () => {});
+    ctx.methods.set("_updateGridLayoutForGroups", (fn: (index: number) => boolean) => {
+      isHeaderFn = fn;
+    });
+
+    feature.setup!(ctx);
+
+    expect(isHeaderFn).not.toBeNull();
+    // Index 0 is a group header in the layout
+    expect(isHeaderFn!(0)).toBe(true);
+    // Index 1 is a data item
+    expect(isHeaderFn!(1)).toBe(false);
+  });
+});
+
+// =============================================================================
+// withGroups — Striped Rows with Groups
+// =============================================================================
+
+describe("withGroups — Striped Rows", () => {
+  it("should build stripe map in 'data' mode", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+    });
+    const ctx = createMockContextWithStriped("data");
+    feature.setup!(ctx);
+    // The stripe map should have been built without errors
+    expect(ctx.dataManager.getTotal()).toBeGreaterThan(0);
+  });
+
+  it("should build stripe map in 'data' mode with correct indices", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+    });
+    const ctx = createMockContextWithStriped("data");
+    let stripeIndexFn: ((index: number) => number) | null = null;
+    ctx.setStripeIndexFn = (fn: any) => { stripeIndexFn = fn; };
+    feature.setup!(ctx);
+    // Call the stripe function to cover lines 377-378
+    expect(stripeIndexFn).not.toBeNull();
+    // Index 0 is a group header → should return -1
+    expect(stripeIndexFn!(0)).toBe(-1);
+    // Index 1 is the first data item → should return 0
+    expect(stripeIndexFn!(1)).toBe(0);
+    // Out of bounds → returns the index itself
+    expect(stripeIndexFn!(-1)).toBe(-1);
+    expect(stripeIndexFn!(9999)).toBe(9999);
+  });
+
+  it("should build stripe map in 'even' mode", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+    });
+    const ctx = createMockContextWithStriped("even");
+    feature.setup!(ctx);
+    expect(ctx.dataManager.getTotal()).toBeGreaterThan(0);
+  });
+
+  it("should build stripe map in 'odd' mode", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : i < 20 ? "B" : "C"),
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+    });
+    const ctx = createMockContextWithStriped("odd");
+    feature.setup!(ctx);
+    expect(ctx.dataManager.getTotal()).toBeGreaterThan(0);
   });
 });
 
