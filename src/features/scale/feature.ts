@@ -281,7 +281,13 @@ export const withScale = <
 
             if (Math.abs(diff) < SNAP_THRESHOLD) {
               // Close enough — snap to target and stop animating
-              virtualScrollPosition = targetScrollPosition;
+              // Clamp targetScrollPosition to valid range before snapping —
+              // targetScrollPosition may have been set from a stale maxScroll
+              // (e.g. wheel handler fired before compression updated bounds).
+              const comp = ctx.getCachedCompression();
+              const maxScroll = Math.max(0, comp.virtualSize - ctx.state.viewportState.containerSize);
+              virtualScrollPosition = Math.max(0, Math.min(targetScrollPosition, maxScroll));
+              targetScrollPosition = virtualScrollPosition;
               smoothScrollId = null;
             } else {
               // Move a fraction of the remaining distance
@@ -495,9 +501,6 @@ export const withScale = <
               ? dom.viewport.scrollLeft
               : dom.viewport.scrollTop;
             if (nativeST !== 0) {
-              console.warn(
-                `[vlist/scale] native scroll drift detected: ${nativeST}px — resetting to 0`,
-              );
               if (horizontal) {
                 dom.viewport.scrollLeft = 0;
               } else {

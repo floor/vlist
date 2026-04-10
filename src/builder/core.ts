@@ -463,7 +463,8 @@ function materialize<T extends VListItem = VListItem>(
   // ── Content size helper (needed by measurement + render) ────────
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalSize() + mainAxisPadding}px`;
+    const totalSize = $.hc.getTotalSize();
+    const size = `${totalSize + mainAxisPadding}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -1034,7 +1035,24 @@ function materialize<T extends VListItem = VListItem>(
 
         // Only render if already initialized (features have run)
         if ($.ii) {
-          updateContentSize();
+          // When compression is active, content size must use the virtual
+          // size — not the sizeCache total (which is the actual/uncompressed
+          // size).  The no-arg updateContentSize() reads from sizeCache and
+          // would set content height to e.g. 72 000 000 px instead of the
+          // compressed 16 000 000 px, causing the browser to adjust
+          // scrollTop into uncompressed space and corrupt the virtual
+          // scroll position.
+          const cc = sharedState.cachedCompression;
+          if (cc && cc.state.isCompressed) {
+            const sz = `${cc.state.virtualSize + mainAxisPadding}px`;
+            if (isHorizontal) {
+              dom.content.style.width = sz;
+            } else {
+              dom.content.style.height = sz;
+            }
+          } else {
+            updateContentSize();
+          }
           $.rfn();
           emitter.emit("resize", { height: newHeight, width: newWidth });
         }
