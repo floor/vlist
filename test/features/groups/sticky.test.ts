@@ -99,14 +99,11 @@ function createMockLayout(headerIndices: number[] = [0, 10]): GroupLayout {
   } as unknown as GroupLayout;
 }
 
-function createMockConfig() {
-  return {
-    groupBy: (_item: any) => "A",
-    headerHeight: 40,
-    headerTemplate: (el: HTMLElement, _group: string | number) => {
-      el.textContent = "Header";
-    },
-    stickyHeaders: true,
+function createMockRenderInto(layout: GroupLayout) {
+  return (slot: HTMLElement, groupIndex: number): void => {
+    const group = layout.groups[groupIndex];
+    if (!group) return;
+    slot.innerHTML = `Header: ${group.key}`;
   };
 }
 
@@ -119,13 +116,13 @@ describe("createStickyHeader", () => {
     const root = createTestRoot();
     const sizeCache = createSizeCache(50, 100);
     const layout = createMockLayout();
-    const config = createMockConfig();
+    const renderInto = createMockRenderInto(layout);
 
     const sticky = createStickyHeader(
       root,
       layout,
       sizeCache,
-      config as any,
+      renderInto,
       "vlist",
       false,
     );
@@ -142,7 +139,7 @@ describe("createStickyHeader", () => {
     const root = createTestRoot();
     const sizeCache = createSizeCache(50, 100);
     const layout = createMockLayout();
-    const config = createMockConfig();
+    const renderInto = createMockRenderInto(layout);
 
     const childCountBefore = root.children.length;
 
@@ -150,7 +147,7 @@ describe("createStickyHeader", () => {
       root,
       layout,
       sizeCache,
-      config as any,
+      renderInto,
       "vlist",
       false,
     );
@@ -165,13 +162,13 @@ describe("createStickyHeader", () => {
     const root = createTestRoot();
     const sizeCache = createSizeCache(50, 100);
     const layout = createMockLayout();
-    const config = createMockConfig();
+    const renderInto = createMockRenderInto(layout);
 
     const sticky = createStickyHeader(
       root,
       layout,
       sizeCache,
-      config as any,
+      renderInto,
       "vlist",
       false,
     );
@@ -192,13 +189,13 @@ describe("createStickyHeader", () => {
     const root = createTestRoot();
     const sizeCache = createSizeCache(50, 100);
     const layout = createMockLayout();
-    const config = createMockConfig();
+    const renderInto = createMockRenderInto(layout);
 
     const sticky = createStickyHeader(
       root,
       layout,
       sizeCache,
-      config as any,
+      renderInto,
       "vlist",
       false,
     );
@@ -215,13 +212,13 @@ describe("createStickyHeader", () => {
     const root = createTestRoot();
     const sizeCache = createSizeCache(50, 0);
     const layout = createMockLayout([]);
-    const config = createMockConfig();
+    const renderInto = createMockRenderInto(layout);
 
     const sticky = createStickyHeader(
       root,
       layout,
       sizeCache,
-      config as any,
+      renderInto,
       "vlist",
       false,
     );
@@ -292,13 +289,13 @@ describe("createStickyHeader — update", () => {
   it("should show sticky header when scrolled past first header", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // Scroll past the first header (offset 0)
     sticky.update(100);
@@ -315,13 +312,13 @@ describe("createStickyHeader — update", () => {
   it("should hide when scrollPosition is before first header", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // First show it
     sticky.update(100);
@@ -359,13 +356,13 @@ describe("createStickyHeader — update", () => {
       getHeaderHeight: () => 40,
     } as unknown as GroupLayout;
 
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // First show it by scrolling past the header
     sticky.update(150);
@@ -383,13 +380,13 @@ describe("createStickyHeader — update", () => {
   it("should apply push-out transform when next header approaches", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // Next header at index 12, offset = 12 * 50 = 600
     // Push starts when inline header reaches viewport top (distance = 0),
@@ -410,13 +407,13 @@ describe("createStickyHeader — update", () => {
   it("should clear transform when no push-out needed", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // First trigger push-out (scrollPos = 620 → distance = -20)
     sticky.update(620);
@@ -435,13 +432,13 @@ describe("createStickyHeader — update", () => {
   it("should render group with out-of-bounds index", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // Show and then check content for a valid group first
     sticky.update(100);
@@ -455,13 +452,13 @@ describe("createStickyHeader — update", () => {
   it("should use translateX in horizontal mode", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", true);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", true);
 
     // Trigger push-out in horizontal mode (scrollPos = 620 → distance = -20)
     sticky.update(620);
@@ -477,17 +474,15 @@ describe("createStickyHeader — update", () => {
   it("should handle headerTemplate returning a DOM element", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => {
-        const el = document.createElement("span");
-        el.textContent = `Group: ${key}`;
-        return el;
-      },
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      const el = document.createElement("span");
+      el.textContent = `Group: ${group.key}`;
+      slot.replaceChildren(el);
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     sticky.update(100);
 
@@ -507,13 +502,13 @@ describe("createStickyHeader — visibility and refresh", () => {
   it("should hide when calling hide()", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     // Show it first
     sticky.update(100);
@@ -530,13 +525,13 @@ describe("createStickyHeader — visibility and refresh", () => {
   it("should refresh content for same group", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
 
     sticky.update(100);
     sticky.refresh();
@@ -551,13 +546,13 @@ describe("createStickyHeader — visibility and refresh", () => {
   it("should handle stickyOffset in vertical mode", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false, 48);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false, 48);
 
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
     expect(stickyEl.style.top).toBe("48px");
@@ -569,13 +564,13 @@ describe("createStickyHeader — visibility and refresh", () => {
   it("should handle stickyOffset in horizontal mode", () => {
     const root = createTestRoot();
     const { layout, sizeCache } = createLayoutWithHeaders();
-    const config = {
-      headerHeight: 40,
-      headerTemplate: (key: string | number) => `Header: ${key}`,
-      stickyHeaders: true,
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = layout.groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
     };
 
-    const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", true, 48);
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", true, 48);
 
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
     expect(stickyEl.style.left).toBe("48px");

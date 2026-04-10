@@ -4,8 +4,10 @@
  * Manages a floating header that sticks to the viewport edge and transitions
  * smoothly when the next group's header approaches (push-out effect).
  *
- * Two permanent slot elements are recycled — their content is swapped via
- * replaceChildren() on group change, avoiding DOM churn during fast scrolling.
+ * Two permanent slot elements are recycled — content is swapped via a
+ * caller-provided `renderInto` callback, keeping the sticky header
+ * template-agnostic (same pattern as item rendering).
+ *
  * Header offsets and sizes are pre-cached into flat arrays on rebuild,
  * keeping the per-tick scroll handler free of function calls.
  *
@@ -14,14 +16,14 @@
  *   └── .sticky-group  (standby slot — translated during push)
  */
 
-import type { GroupLayout, GroupsConfig, StickyHeader } from "./types";
+import type { GroupLayout, StickyHeader } from "./types";
 import type { SizeCache } from "../../rendering/sizes";
 
 export const createStickyHeader = (
   root: HTMLElement,
   layout: GroupLayout,
   sizeCache: SizeCache,
-  config: GroupsConfig,
+  renderInto: (slot: HTMLElement, groupIndex: number) => void,
   classPrefix: string,
   horizontal: boolean = false,
   stickyOffset: number = 0,
@@ -66,8 +68,8 @@ export const createStickyHeader = (
 
   // Pre-cached arrays — rebuilt in cacheGroups(), read on every scroll tick
   let groups = layout.groups;
-  let offsets: number[] = [];   // offsets[i] = sizeCache.getOffset(groups[i].headerLayoutIndex)
-  let sizes: number[] = [];     // sizes[i]   = layout.getHeaderHeight(i)
+  let offsets: number[] = [];
+  let sizes: number[] = [];
   let groupCount = 0;
 
   const cacheGroups = (): void => {
@@ -90,12 +92,9 @@ export const createStickyHeader = (
   let lastOffset = 0;
   let transitioning = false;
 
-  // Slot content
+  // Slot content — delegate to caller-provided renderInto
   const fill = (slot: HTMLElement, gi: number): number => {
-    const g = groups[gi]!;
-    const result = config.headerTemplate(g.key, g.groupIndex);
-    if (typeof result === "string") slot.innerHTML = result;
-    else slot.replaceChildren(result);
+    renderInto(slot, gi);
     const sz = sizes[gi]!;
     setMain(slot, sz);
     return sz;
@@ -191,7 +190,6 @@ export const createStickyHeader = (
     if (nxt < groupCount) {
       const dist = offsets[nxt]! - scroll;
       if (dist <= 0 && dist > -curSize) {
-        // Transition in progress
         if (nxtGroup !== nxt || !transitioning) {
           nxtGroup = nxt;
           fill(standby, nxt);
