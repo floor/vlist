@@ -21,8 +21,6 @@ import { MAX_VIRTUAL_SIZE } from "../constants";
 import type { SizeCache } from "./sizes";
 import {
   countVisibleItems,
-  countItemsFittingFromBottom,
-  getOffsetForVirtualIndex,
 } from "./sizes";
 
 // Re-export for convenience
@@ -135,35 +133,6 @@ export const calculateCompressedVisibleRange = (
   );
   let end = Math.ceil(exactIndex) + visibleCount;
 
-  // Near-bottom interpolation
-  // This ensures we can reach the actual last items
-  const maxScroll = virtualSize - containerHeight;
-  const distanceFromBottom = maxScroll - scrollPosition;
-
-  if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
-    const itemsAtBottom = countItemsFittingFromBottom(
-      sizeCache,
-      containerHeight,
-      totalItems,
-    );
-    const firstVisibleAtBottom = Math.max(0, totalItems - itemsAtBottom);
-
-    // Interpolation factor: 0 at threshold, 1 at bottom
-    const interpolation = Math.max(
-      0,
-      Math.min(1, 1 - distanceFromBottom / containerHeight),
-    );
-
-    // Blend between normal compressed position and actual bottom position
-    start = Math.floor(start + (firstVisibleAtBottom - start) * interpolation);
-
-    // At the very bottom, ensure we show the last item
-    end =
-      distanceFromBottom <= 1
-        ? totalItems - 1
-        : Math.min(totalItems - 1, start + visibleCount);
-  }
-
   out.start = Math.max(0, start);
   out.end = Math.min(totalItems - 1, Math.max(0, end));
   return out;
@@ -238,51 +207,13 @@ export const calculateCompressedItemPosition = (
   }
 
   const { virtualSize } = compression;
-  const maxScroll = virtualSize - containerHeight;
-  const distanceFromBottom = maxScroll - scrollPosition;
-
-  // Near-bottom interpolation: ensures we can smoothly reach the last items
-  if (distanceFromBottom <= containerHeight && distanceFromBottom >= -1) {
-    // Special case: at exact max scroll, position items from bottom up
-    if (scrollPosition >= maxScroll - 1) {
-      // Calculate position from the bottom of the viewport
-      const totalHeightFromBottom =
-        sizeCache.getTotalSize() - sizeCache.getOffset(index);
-      return containerHeight - totalHeightFromBottom;
-    }
-
-    const itemsAtBottom = countItemsFittingFromBottom(
-      sizeCache,
-      containerHeight,
-      totalItems,
-    );
-    const firstVisibleAtBottom = Math.max(0, totalItems - itemsAtBottom);
-    const scrollRatio = scrollPosition / virtualSize;
-    const exactScrollIndex = scrollRatio * totalItems;
-
-    // Interpolation factor: 0 at threshold, 1 at bottom
-    const interpolation = Math.max(
-      0,
-      Math.min(1, 1 - distanceFromBottom / containerHeight),
-    );
-
-    // Bottom position: offset relative to first visible item at bottom
-    const bottomPosition =
-      sizeCache.getOffset(index) - sizeCache.getOffset(firstVisibleAtBottom);
-
-    // Normal compressed position: offset relative to virtual scroll index
-    const normalPosition =
-      sizeCache.getOffset(index) -
-      getOffsetForVirtualIndex(sizeCache, exactScrollIndex, totalItems);
-
-    // Blend between compressed position and actual bottom position
-    return normalPosition + (bottomPosition - normalPosition) * interpolation;
-  }
 
   // Normal compressed positioning
   //
   // Map scrollTop to an actual-space offset via the compression ratio,
   // then position the item relative to that offset.
+  // With compression slack on the content div the linear formula is valid
+  // for ALL scroll positions — no near-bottom interpolation needed.
   const scrollRatio = scrollPosition / virtualSize;
   const actualSize = sizeCache.getTotalSize();
   const virtualScrollOffset = scrollRatio * actualSize;
@@ -318,13 +249,9 @@ export const calculateCompressedScrollToIndex = (
   let targetPosition: number;
 
   if (compression.isCompressed && compression.ratio !== 1) {
-    // Special case: last item with "end" alignment should go to max scroll
-    // to avoid gap at bottom due to compression ratio precision
-    if (align === "end" && index === totalItems - 1) {
-      return Math.max(0, compression.virtualSize - containerHeight);
-    }
-
-    // Map index to compressed scroll position
+    // Map index to compressed scroll position using linear formula.
+    // With compression slack on the content div the linear mapping is valid
+    // for ALL indices — no special-case needed for the last item.
     const indexRatio = index / totalItems;
     targetPosition = indexRatio * compression.virtualSize;
 
@@ -342,8 +269,10 @@ export const calculateCompressedScrollToIndex = (
         break;
     }
 
-    const maxScroll = compression.virtualSize - containerHeight;
-    return Math.max(0, Math.min(targetPosition, maxScroll));
+    // NOTE: no maxScroll clamp here — the caller (withScale) manages
+    // maxScroll with compression slack included.  Clamping to
+    // virtualSize − containerHeight would prevent reaching the last items.
+    return Math.max(0, targetPosition);
   }
 
   // Direct calculation using actual offset.
