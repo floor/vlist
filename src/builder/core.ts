@@ -1173,8 +1173,12 @@ function materialize<T extends VListItem = VListItem>(
     const commitFocus = (index: number, total: number): void => {
       dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
       const containerSize = isHorizontal ? $.cw : $.ch;
+      const startPadding = isHorizontal ? pad.left : pad.top;
+      const endPadding = isHorizontal ? pad.right : pad.bottom;
       const newScroll = scrollToFocus(
         index, $.hc, $.ls, containerSize,
+        startPadding,
+        endPadding,
         sharedState.cachedCompression?.state,
         total,
         sharedState.viewportState.visibleRange,
