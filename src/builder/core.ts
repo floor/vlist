@@ -1208,6 +1208,8 @@ function materialize<T extends VListItem = VListItem>(
       switch (event.key) {
         case "ArrowUp":   n = p <= 0 ? total - 1 : p - 1; break;
         case "ArrowDown": n = p >= total - 1 ? 0 : p + 1; break;
+        case "PageUp":    n = Math.max(0, p - Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
+        case "PageDown":  n = Math.min(total - 1, p + Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
         case "Home":      n = 0; break;
         case "End":       n = total - 1; break;
         default: return;
