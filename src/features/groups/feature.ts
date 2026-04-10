@@ -148,7 +148,8 @@ export const withGroups = <T extends VListItem = VListItem>(
       layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
       // ── Create grouped size function ──
-      const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
+      const stickyEnabled = config.sticky !== false;
+      const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
 
       // ── Update size config and rebuild size cache ──
       ctx.setSizeConfig(groupedSizeFn);
@@ -331,7 +332,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         groupLayout.rebuild(originalItems.length);
         layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
 
-        const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize);
+        const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
         ctx.setSizeConfig(newGroupedSizeFn);
         ctx.rebuildSizeCache(layoutItems.length);
 
