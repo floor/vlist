@@ -75,6 +75,14 @@ export const createStickyHeader = (
   // Slider — holds current (and optionally next) header, translated for push effect
   const slider = document.createElement("div");
   slider.style.willChange = "transform";
+  const initialSize = layout.groups.length > 0 ? layout.getHeaderHeight(0) : 0;
+  if (horizontal) {
+    slider.style.height = "100%";
+    slider.style.width = `${initialSize}px`;
+  } else {
+    slider.style.width = "100%";
+    slider.style.height = `${initialSize}px`;
+  }
   container.appendChild(slider);
 
   // Direct references to the rendered header elements inside the slider.
@@ -147,12 +155,14 @@ export const createStickyHeader = (
     const groups = layout.groups;
     if (groupIndex < 0 || groupIndex >= groups.length) return;
 
-    // Set container size to match header height
+    // Set container and slider size to match header height
     const headerSize = layout.getHeaderHeight(groupIndex);
     if (horizontal) {
       container.style.width = `${headerSize}px`;
+      slider.style.width = `${headerSize}px`;
     } else {
       container.style.height = `${headerSize}px`;
+      slider.style.height = `${headerSize}px`;
     }
 
     currentEl = renderHeader(groupIndex);

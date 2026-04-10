@@ -187,6 +187,7 @@ export const buildLayoutItems = <T extends VListItem>(
 export const createGroupedSizeFn = (
   layout: GroupLayout,
   itemSize: number | ((index: number) => number),
+  sticky: boolean = false,
 ): ((layoutIndex: number) => number) => {
   const getItemSize =
     typeof itemSize === "number"
@@ -197,6 +198,10 @@ export const createGroupedSizeFn = (
     const entry = layout.getEntry(layoutIndex);
 
     if (entry.type === "header") {
+      // When sticky headers are active the first group's inline header
+      // is redundant (the sticky header already shows it).  Collapse it
+      // to 0 so it occupies no space in the layout.
+      if (sticky && entry.group.groupIndex === 0) return 0;
       return layout.getHeaderHeight(entry.group.groupIndex);
     }
 

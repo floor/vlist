@@ -364,6 +364,7 @@
     background-color: var(--vlist-group-header-bg, #f3f4f6);
     border-bottom: 1px solid var(--vlist-border);
     z-index: 1;
+    overflow: hidden;
 }
 
 .vlist--grouped .vlist-item[data-id^="__group_header_"]:hover {
