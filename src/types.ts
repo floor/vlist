@@ -54,7 +54,17 @@ export interface GroupsConfig {
   /**
    * Group header configuration — mirrors the `item` config shape.
    */
-  header: GroupHeaderConfig;
+  header?: GroupHeaderConfig;
+
+  /**
+   * @deprecated Use `header.height` instead.
+   */
+  headerHeight?: number | ((group: string, groupIndex: number) => number);
+
+  /**
+   * @deprecated Use `header.template` instead.
+   */
+  headerTemplate?: (group: string, groupIndex: number) => string | HTMLElement;
 
   /**
    * Enable sticky headers (default: true).
