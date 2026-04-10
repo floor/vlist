@@ -228,11 +228,15 @@ export const withAsync = <T extends VListItem = VListItem>(
        * point at chunks the user has already scrolled past.
        */
       const loadPendingRange = (): void => {
-        if (!pendingRange) return;
+        if (!pendingRange) {
+          return;
+        }
         pendingRange = null;
 
         const { renderRange } = ctx.state.viewportState;
-        if (renderRange.end < renderRange.start) return;
+        if (renderRange.end < renderRange.start) {
+          return;
+        }
 
         // Reset so the afterScroll rangeChanged check re-evaluates
         lastEnsuredRange = null;

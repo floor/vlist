@@ -48,7 +48,6 @@ import {
   getSelectedItems,
 } from "./state";
 
-import { calculateScrollToIndex } from "../../rendering";
 import { scrollToFocus as sharedScrollToFocus } from "../../rendering/scroll";
 
 // =============================================================================
@@ -388,13 +387,11 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         ctx.scrollController.scrollTo(
           ctx.adjustScrollPosition(
-            calculateScrollToIndex(
+            ctx.getScrollToPos(
               idx,
-              ctx.sizeCache,
               ctx.state.viewportState.containerSize,
               ctx.dataManager.getState().total,
               "center",
-              ctx.getCachedCompression(),
             ),
           ),
         );
