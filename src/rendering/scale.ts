@@ -212,7 +212,7 @@ export const calculateCompressedItemPosition = (
   //
   // Map scrollTop to an actual-space offset via the compression ratio,
   // then position the item relative to that offset.
-  // With bottom-padding on the content div the linear formula is valid
+  // With compression slack on the content div the linear formula is valid
   // for ALL scroll positions — no near-bottom interpolation needed.
   const scrollRatio = scrollPosition / virtualSize;
   const actualSize = sizeCache.getTotalSize();
@@ -250,7 +250,7 @@ export const calculateCompressedScrollToIndex = (
 
   if (compression.isCompressed && compression.ratio !== 1) {
     // Map index to compressed scroll position using linear formula.
-    // With bottom-padding on the content div the linear mapping is valid
+    // With compression slack on the content div the linear mapping is valid
     // for ALL indices — no special-case needed for the last item.
     const indexRatio = index / totalItems;
     targetPosition = indexRatio * compression.virtualSize;
@@ -270,7 +270,7 @@ export const calculateCompressedScrollToIndex = (
     }
 
     // NOTE: no maxScroll clamp here — the caller (withScale) manages
-    // maxScroll with bottom-padding included.  Clamping to
+    // maxScroll with compression slack included.  Clamping to
     // virtualSize − containerHeight would prevent reaching the last items.
     return Math.max(0, targetPosition);
   }

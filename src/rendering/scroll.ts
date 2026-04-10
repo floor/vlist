@@ -57,7 +57,7 @@ export const scrollToFocus = (
   }
 
   // ── Compressed: linear index math ──
-  // With bottom-padding on the content div, the linear formula
+  // With compression slack on the content div, the linear formula
   // index * compressedItemSize is valid for ALL indices (no near-bottom
   // interpolation hack needed).
   const total = totalItems!;
