@@ -229,8 +229,8 @@ export const createGroupLayout = (
   let groups: GroupBoundary[] = buildGroups(itemCount, config.getGroupForIndex);
   let totalEntries = itemCount + groups.length;
 
-  // Pre-compute header heights if using fixed height
-  const headerHeightConfig = config.header?.height ?? config.headerHeight!;
+  // Pre-compute header sizes — resolve from height, width, or legacy headerHeight
+  const headerHeightConfig = config.header?.height ?? config.header?.width ?? config.headerHeight!;
   const getHeaderHeight =
     typeof headerHeightConfig === "number"
       ? (_groupIndex: number): number => headerHeightConfig
