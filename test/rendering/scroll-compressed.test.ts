@@ -1,7 +1,7 @@
 /**
  * vlist — Compressed-mode scrollToFocus tests
  *
- * Covers the bottom-padding approach that replaced the near-bottom
+ * Covers the compression-slack approach that replaced the near-bottom
  * interpolation hack, and validates the scrollToFocus boundary logic
  * in compressed mode.
  */
@@ -21,17 +21,17 @@ import type { Range } from "../../src/types";
 // Helpers
 // =============================================================================
 
-/** Compute the bottom padding that the scale feature adds to the content div. */
-const bottomPadding = (containerSize: number, ratio: number): number =>
+/** Compute the compression slack that the scale feature adds to the content div. */
+const compressionSlack = (containerSize: number, ratio: number): number =>
   Math.max(0, containerSize * (1 - ratio));
 
-/** Effective maxScroll with bottom padding. */
+/** Effective maxScroll with compression slack. */
 const paddedMaxScroll = (
   virtualSize: number,
   containerSize: number,
   ratio: number,
 ): number =>
-  virtualSize + bottomPadding(containerSize, ratio) - containerSize;
+  virtualSize + compressionSlack(containerSize, ratio) - containerSize;
 
 /** Compute visible range at a given scroll position. */
 const visibleRangeAt = (
@@ -68,12 +68,12 @@ const maxScroll = paddedMaxScroll(comp.virtualSize, CONTAINER, comp.ratio);
 const fullyVisible = Math.floor(CONTAINER / ITEM_HEIGHT); // 8
 
 // =============================================================================
-// Bottom padding
+// Compression slack
 // =============================================================================
 
-describe("compressedBottomPadding", () => {
+describe("compressionSlack", () => {
   it("should be containerSize * (1 - ratio)", () => {
-    const pad = bottomPadding(CONTAINER, comp.ratio);
+    const pad = compressionSlack(CONTAINER, comp.ratio);
     expect(pad).toBeCloseTo(CONTAINER * (1 - comp.ratio), 2);
     expect(pad).toBeGreaterThan(0);
     expect(pad).toBeLessThan(CONTAINER);

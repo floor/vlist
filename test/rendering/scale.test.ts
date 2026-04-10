@@ -195,17 +195,17 @@ describe("calculateCompressedVisibleRange", () => {
       expect(range.start).toBeLessThan(600_000);
     });
 
-    it("should reach last item with bottom-padded maxScroll", () => {
+    it("should reach last item with slack-adjusted maxScroll", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const out = { start: 0, end: 0 };
 
-      // With bottom padding the effective maxScroll is higher than
+      // With compression slack the effective maxScroll is higher than
       // virtualSize - containerHeight, allowing the linear formula
       // to reach the last items.
-      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
-      const maxScroll = compression.virtualSize + bottomPad - containerHeight;
+      const slack = Math.max(0, containerHeight * (1 - compression.ratio));
+      const maxScroll = compression.virtualSize + slack - containerHeight;
       const range = calculateCompressedVisibleRange(
         maxScroll,
         containerHeight,
@@ -393,9 +393,9 @@ describe("calculateCompressedItemPosition", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
-      // With bottom padding the effective maxScroll is higher
-      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
-      const maxScroll = compression.virtualSize + bottomPad - containerHeight;
+      // With compression slack the effective maxScroll is higher
+      const slack = Math.max(0, containerHeight * (1 - compression.ratio));
+      const maxScroll = compression.virtualSize + slack - containerHeight;
 
       // Last item should be positioned within the viewport at padded max scroll
       const position = calculateCompressedItemPosition(
@@ -528,7 +528,7 @@ describe("calculateCompressedScrollToIndex", () => {
         "start",
       );
 
-      // With bottom padding the linear formula can exceed the old
+      // With compression slack the linear formula can exceed the old
       // virtualSize - containerHeight limit, but must stay non-negative
       expect(position).toBeGreaterThanOrEqual(0);
     });
@@ -564,10 +564,10 @@ describe("calculateCompressedScrollToIndex", () => {
 
       // With the linear formula (no special case), the last item with
       // "end" alignment should produce a position that, when rendered
-      // with bottom padding, places the last item at the viewport bottom.
+      // with compression slack, places the last item at the viewport bottom.
       // The position should be positive and within the padded scroll range.
-      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
-      const paddedMaxScroll = compression.virtualSize + bottomPad - containerHeight;
+      const slack = Math.max(0, containerHeight * (1 - compression.ratio));
+      const paddedMaxScroll = compression.virtualSize + slack - containerHeight;
       expect(position).toBeGreaterThan(0);
       expect(position).toBeLessThanOrEqual(paddedMaxScroll);
     });
@@ -976,9 +976,9 @@ describe("Compression Integration", () => {
     const cache = createSizeCache(itemHeight, totalItems);
     const compression = getCompressionState(totalItems, cache);
 
-    // With bottom padding the effective maxScroll reaches the last items
-    const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
-    const maxScroll = compression.virtualSize + bottomPad - containerHeight;
+    // With compression slack the effective maxScroll reaches the last items
+    const slack = Math.max(0, containerHeight * (1 - compression.ratio));
+    const maxScroll = compression.virtualSize + slack - containerHeight;
     const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
       maxScroll,

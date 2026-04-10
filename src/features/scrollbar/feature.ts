@@ -106,7 +106,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       }
 
       // Set initial bounds — use viewportState.totalSize which includes
-      // bottom padding from withScale (so scrollbar reaches the last item)
+      // compression slack from withScale (so scrollbar reaches the last item)
       scrollbar.updateBounds(
         ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
         ctx.state.viewportState.containerSize,
