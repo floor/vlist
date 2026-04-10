@@ -292,7 +292,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       };
 
       // ── Helper: scroll just enough to reveal the focused item ──
-      // Resolve padding once (start/end along main axis)
+      // Resolve padding once (start/end along main axis).
       const resolvedPad = resolvePadding(ctx.rawConfig.padding);
       const startPadding = resolvedConfig.horizontal ? resolvedPad.left : resolvedPad.top;
       const endPadding = resolvedConfig.horizontal ? resolvedPad.right : resolvedPad.bottom;

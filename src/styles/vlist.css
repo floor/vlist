@@ -370,8 +370,11 @@
     background-color: var(--vlist-group-header-bg, #f3f4f6);
 }
 
-/* Sticky header overlay */
+/* Sticky header overlay — left/right set here (not inline) so the
+   scrollbar overlap rule below can reduce `right` when needed. */
 .vlist-sticky-header {
+    left: 0;
+    right: 0;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
     border-bottom: 1px solid var(--vlist-border);
     contain: content;

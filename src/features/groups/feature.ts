@@ -250,6 +250,29 @@ export const withGroups = <T extends VListItem = VListItem>(
       // ── Add grouped CSS class ──
       dom.root.classList.add(`${classPrefix}--grouped`);
 
+      // ── Expose sticky header height so scrollToFocus can offset ──
+      // When sticky headers are active, items scrolled to the top edge
+      // are obscured by the header. Selection and core baseline add this
+      // value to startPadding so the scroll target lands below the header.
+      if (config.sticky !== false) {
+        ctx.methods.set(
+          "_getStickyHeaderHeight",
+          (): number => config.headerHeight,
+        );
+
+        // Push the viewport below the sticky header so that:
+        //  1. The scrollbar sits below the header (no overlap)
+        //  2. Items at the top of the viewport are naturally below the header
+        // The sticky header stays position:absolute over the reserved space.
+        if (!resolvedConfig.horizontal) {
+          dom.viewport.style.marginTop = `${config.headerHeight}px`;
+          dom.viewport.style.height = `calc(100% - ${config.headerHeight}px)`;
+        } else {
+          dom.viewport.style.marginLeft = `${config.headerHeight}px`;
+          dom.viewport.style.width = `calc(100% - ${config.headerHeight}px)`;
+        }
+      }
+
       // ── Create sticky header (when sticky is enabled) ──
       if (config.sticky !== false) {
         stickyHeader = createStickyHeader(
