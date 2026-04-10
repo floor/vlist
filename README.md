@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.4.2** — [Changelog](./changelog.txt)
+**v1.4.3** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -78,8 +78,7 @@ const list = vlist({
   .use(withGrid({ columns: 4, gap: 16 }))
   .use(withGroups({
     getGroupForIndex: (i) => photos[i].category,
-    headerHeight: 40,
-    headerTemplate: (cat) => `<h2>${cat}</h2>`,
+    header: { height: 40, template: (cat) => `<h2>${cat}</h2>` },
   }))
   .use(withSelection({ mode: 'multiple' }))
   .build()
@@ -171,8 +170,10 @@ const contacts = vlist({
 })
   .use(withGroups({
     getGroupForIndex: (i) => sortedContacts[i].lastName[0].toUpperCase(),
-    headerHeight: 36,
-    headerTemplate: (letter) => `<div class="header">${letter}</div>`,
+    header: {
+      height: 36,
+      template: (letter) => `<div class="header">${letter}</div>`,
+    },
     sticky: true,
   }))
   .build()
@@ -339,7 +340,7 @@ Each feature's config is fully typed — hover in your IDE for details.
 ```typescript
 withGrid({ columns: 4, gap: 16 })
 withMasonry({ columns: 4, gap: 16 })
-withGroups({ getGroupForIndex, headerHeight, headerTemplate, sticky?: true })
+withGroups({ getGroupForIndex, header: { height, template }, sticky?: true })
 withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
 withTable({ columns, rowHeight, headerHeight?, resizable?, columnBorders?, rowBorders? })
