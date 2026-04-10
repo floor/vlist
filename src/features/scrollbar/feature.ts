@@ -105,10 +105,10 @@ export const withScrollbar = <T extends VListItem = VListItem>(
         dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
       }
 
-      // Set initial bounds
-      const compression = ctx.getCachedCompression();
+      // Set initial bounds — use viewportState.totalSize which includes
+      // bottom padding from withScale (so scrollbar reaches the last item)
       scrollbar.updateBounds(
-        compression.virtualSize,
+        ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
         ctx.state.viewportState.containerSize,
       );
 
@@ -124,9 +124,8 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       // ── Resize: update thumb size ──
       ctx.resizeHandlers.push((_width: number, _height: number): void => {
         if (scrollbarRef) {
-          const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
-            comp.virtualSize,
+            ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
             ctx.state.viewportState.containerSize,
           );
         }
@@ -135,9 +134,8 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       // ── Content size change: update scrollbar bounds when items change ──
       ctx.contentSizeHandlers.push((): void => {
         if (scrollbarRef) {
-          const comp = ctx.getCachedCompression();
           scrollbarRef.updateBounds(
-            comp.virtualSize,
+            ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
             ctx.state.viewportState.containerSize,
           );
         }

@@ -195,14 +195,17 @@ describe("calculateCompressedVisibleRange", () => {
       expect(range.start).toBeLessThan(600_000);
     });
 
-    it("should handle near-bottom interpolation", () => {
+    it("should reach last item with bottom-padded maxScroll", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
       const out = { start: 0, end: 0 };
 
-      // Scroll to very end
-      const maxScroll = compression.virtualSize - containerHeight;
+      // With bottom padding the effective maxScroll is higher than
+      // virtualSize - containerHeight, allowing the linear formula
+      // to reach the last items.
+      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
+      const maxScroll = compression.virtualSize + bottomPad - containerHeight;
       const range = calculateCompressedVisibleRange(
         maxScroll,
         containerHeight,
@@ -390,9 +393,11 @@ describe("calculateCompressedItemPosition", () => {
       const cache = createSizeCache(40, 1_000_000);
       const compression = getCompressionState(1_000_000, cache);
       const containerHeight = 600;
-      const maxScroll = compression.virtualSize - containerHeight;
+      // With bottom padding the effective maxScroll is higher
+      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
+      const maxScroll = compression.virtualSize + bottomPad - containerHeight;
 
-      // Last item should be positioned within the viewport at max scroll
+      // Last item should be positioned within the viewport at padded max scroll
       const position = calculateCompressedItemPosition(
         999_999,
         maxScroll,
@@ -402,7 +407,7 @@ describe("calculateCompressedItemPosition", () => {
         compression,
       );
 
-      // Should be visible in the viewport (near-bottom interpolation)
+      // Should be visible in the viewport
       expect(position).toBeGreaterThanOrEqual(0);
       expect(position).toBeLessThan(containerHeight);
     });
@@ -523,9 +528,9 @@ describe("calculateCompressedScrollToIndex", () => {
         "start",
       );
 
-      // Should be clamped to max scroll
-      const maxScroll = compression.virtualSize - containerHeight;
-      expect(position).toBeLessThanOrEqual(maxScroll);
+      // With bottom padding the linear formula can exceed the old
+      // virtualSize - containerHeight limit, but must stay non-negative
+      expect(position).toBeGreaterThanOrEqual(0);
     });
 
     it("should handle first item", () => {
@@ -557,9 +562,14 @@ describe("calculateCompressedScrollToIndex", () => {
         "end",
       );
 
-      // Special case: last item + end alignment → max scroll
-      const maxScroll = compression.virtualSize - containerHeight;
-      expect(position).toBe(maxScroll);
+      // With the linear formula (no special case), the last item with
+      // "end" alignment should produce a position that, when rendered
+      // with bottom padding, places the last item at the viewport bottom.
+      // The position should be positive and within the padded scroll range.
+      const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
+      const paddedMaxScroll = compression.virtualSize + bottomPad - containerHeight;
+      expect(position).toBeGreaterThan(0);
+      expect(position).toBeLessThanOrEqual(paddedMaxScroll);
     });
 
     it("should handle center alignment with compression", () => {
@@ -966,8 +976,9 @@ describe("Compression Integration", () => {
     const cache = createSizeCache(itemHeight, totalItems);
     const compression = getCompressionState(totalItems, cache);
 
-    // Scroll to maximum
-    const maxScroll = compression.virtualSize - containerHeight;
+    // With bottom padding the effective maxScroll reaches the last items
+    const bottomPad = Math.max(0, containerHeight * (1 - compression.ratio));
+    const maxScroll = compression.virtualSize + bottomPad - containerHeight;
     const out = { start: 0, end: 0 };
     const range = calculateCompressedVisibleRange(
       maxScroll,

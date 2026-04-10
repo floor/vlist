@@ -692,7 +692,7 @@ export const withScale = <
         const vs = ctx.state.viewportState;
         vs.isCompressed = compression.isCompressed;
         vs.compressionRatio = compression.ratio;
-        vs.totalSize = compression.virtualSize;
+        vs.totalSize = compression.virtualSize + bottomPad;
         vs.actualSize = compression.actualSize;
 
         // Update cached compression
@@ -749,6 +749,17 @@ export const withScale = <
             // explicit assignment is needed here.
             ctx.scrollController.scrollTo(clamped);
           }
+        }
+
+        // ── Notify content-size listeners ─────────────────────────────
+        // Features like withScrollbar cache totalSize from updateBounds.
+        // When compression changes the effective content size (virtualSize
+        // + bottomPad), those features must re-read viewportState.totalSize.
+        // withAsync calls updateCompressionMode but does NOT fire
+        // contentSizeHandlers itself, so we do it here — the one place
+        // where the compressed content size actually changes.
+        for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
+          ctx.contentSizeHandlers[i]!();
         }
       };
 

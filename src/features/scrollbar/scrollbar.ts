@@ -336,7 +336,6 @@ export const createScrollbar = (
       0,
       Math.min(dragStartScrollPosition + deltaScroll, maxScroll),
     );
-
     // Update thumb immediately for responsive feel
     const thumbRatio = newPosition / maxScroll;
     const thumbPosition = thumbRatio * maxThumbTravel;
