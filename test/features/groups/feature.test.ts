@@ -305,6 +305,27 @@ describe("withGroups — Setup", () => {
     expect(ctx.dom.root.classList.contains("vlist--grouped")).toBe(true);
   });
 
+  it("should register _isGroupHeader method", () => {
+    const feature = withGroups<TestItem>({
+      getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+      headerHeight: 40,
+      headerTemplate: () => "Header",
+    });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    const isGroupHeader = ctx.methods.get("_isGroupHeader") as (index: number) => boolean;
+    expect(isGroupHeader).toBeDefined();
+    expect(typeof isGroupHeader).toBe("function");
+
+    // Index 0 is the first group header (group "A")
+    expect(isGroupHeader(0)).toBe(true);
+
+    // Index 1 is a regular data item
+    expect(isGroupHeader(1)).toBe(false);
+  });
+
   it("should register a destroy handler", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
