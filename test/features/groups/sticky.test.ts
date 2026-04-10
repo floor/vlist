@@ -396,9 +396,11 @@ describe("createStickyHeader — update", () => {
     // distance = 600 - scrollPosition < 40 → scrollPosition > 560
     sticky.update(580);
 
+    // Transform is on the inner slider, not the container
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
+    const slider = stickyEl.firstElementChild as HTMLElement;
     // distance = 600 - 580 = 20, translateOffset = 20 - 40 = -20
-    expect(stickyEl.style.transform).toBe("translateY(-20px)");
+    expect(slider.style.transform).toBe("translateY(-20px)");
 
     sticky.destroy();
     root.remove();
@@ -418,11 +420,12 @@ describe("createStickyHeader — update", () => {
     // First trigger push-out
     sticky.update(580);
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
-    expect(stickyEl.style.transform).toBe("translateY(-20px)");
+    const slider = stickyEl.firstElementChild as HTMLElement;
+    expect(slider.style.transform).toBe("translateY(-20px)");
 
     // Now scroll back — no push-out
     sticky.update(200);
-    expect(stickyEl.style.transform).toBe("");
+    expect(slider.style.transform).toBe("");
 
     sticky.destroy();
     root.remove();
@@ -463,7 +466,8 @@ describe("createStickyHeader — update", () => {
     sticky.update(580);
 
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
-    expect(stickyEl.style.transform).toBe("translateX(-20px)");
+    const slider = stickyEl.firstElementChild as HTMLElement;
+    expect(slider.style.transform).toBe("translateX(-20px)");
 
     sticky.destroy();
     root.remove();

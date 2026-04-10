@@ -370,21 +370,15 @@
     background-color: var(--vlist-group-header-bg, #f3f4f6);
 }
 
-/* Sticky header overlay — left/right set here (not inline) so the
-   scrollbar overlap rule below can reduce `right` when needed. */
+/* Sticky header — sits above the viewport (not overlaying it).
+   The viewport's margin-top + height are adjusted by the groups feature
+   so the scrollbar and items naturally start below the header.
+   The inner slider holds current + next header for push transitions. */
 .vlist-sticky-header {
     left: 0;
     right: 0;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
     border-bottom: 1px solid var(--vlist-border);
-    contain: content;
-}
-
-/* Dark mode group header colors — handled in the consolidated dark mode blocks above */
-
-/* Suppress transitions on sticky header during scroll */
-.vlist--scrolling .vlist-sticky-header {
-    transition: none;
 }
 
 /* =============================================================================
