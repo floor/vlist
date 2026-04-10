@@ -70,8 +70,11 @@ export const scrollToFocus = (
   if (visibleRange) {
     // Use >= / <= (inclusive) so items at the boundary get scrolled into view
     if (index >= visibleRange.start + fullyVisible) {
-      // Item is below the fully-visible area — align to bottom edge
-      const wantStart = index + 1 - fullyVisible;
+      // Item is below the fully-visible area — align to bottom edge.
+      // Use fractional effectiveSize/itemSize (not integer fullyVisible)
+      // so the focused item's bottom aligns with the viewport's bottom.
+      const exactVisible = effectiveSize / itemSize;
+      const wantStart = index + 1 - exactVisible;
       return Math.max(0, wantStart * compressedItemSize);
     }
 
@@ -88,7 +91,8 @@ export const scrollToFocus = (
   const currentEnd = currentIndex + fullyVisible;
 
   if (index >= currentEnd) {
-    const wantStart = index + 1 - fullyVisible;
+    const exactVisible = effectiveSize / itemSize;
+    const wantStart = index + 1 - exactVisible;
     return Math.max(0, wantStart * compressedItemSize);
   }
 
