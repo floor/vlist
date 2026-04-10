@@ -1,6 +1,25 @@
 vlist — full changelog
 initial commit → latest
-435 commits · 67 days · Feb 2 – Apr 10, 2026
+448 commits · 67 days · Feb 2 – Apr 10, 2026
+
+
+2026-04-10
+
+  feat(groups): collapse first inline header when sticky is active (#8)
+  feat(groups): sticky header architecture rewrite — recycled slots, pre-cached arrays (#8)
+  feat(groups): template-driven sticky header via renderInto callback (#8)
+  feat(groups): new header: { height, template } config shape (backwards compatible)
+  feat(groups): orientation-aware header config (height/width)
+  fix(sticky): variable-height header support in binary search (#8)
+  fix(sticky): container size update in complete() for variable heights
+  fix(sticky): slider sizing derived from actual header size, not hardcoded
+  fix(css): remove redundant .vlist-sticky-group rule
+  perf(sticky): pre-cache offsets/sizes in flat arrays — zero function calls per tick
+  perf(sticky): module reduced from 413 to 230 lines (44% smaller)
+  test(sticky): 100% coverage on sticky.ts
+  test(groups): feature.ts coverage improved to 99.61%
+
+  → v1.4.3
 
 
 2026-04-10
