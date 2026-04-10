@@ -918,171 +918,412 @@ describe("builder/core — wheel handler scroll cycle", () => {
 });
 
 // =============================================================================
-// Core focus management (no withSelection)
+// Core baseline single-select (no withSelection)
 // =============================================================================
 
-describe("builder/core — core focus management", () => {
+describe("builder/core — core baseline single-select", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("should handle keyboard navigation without withSelection", () => {
+  // ── Helpers ──────────────────────────────────────────────────────
+
+  /** Build a list and return root + helpers for focus-visible stubbing and event dispatch. */
+  const setup = (count = 20) => {
     const container = createContainer();
     const list = vlist<TestItem>({
       container,
       item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(20),
+      items: createTestItems(count),
     }).build();
 
     const root = list.element;
+    const items = () => root.querySelector("[role='listbox']")!;
 
-    // Simulate focusin — JSDOM doesn't support :focus-visible so moveFocus may not trigger,
-    // but the handler should not throw
-    const focusInEvt = new dom.window.FocusEvent("focusin", { bubbles: true });
-    expect(() => root.dispatchEvent(focusInEvt)).not.toThrow();
+    // Controllable :focus-visible stub (JSDOM doesn't support it)
+    let focusVisibleOverride = true;
+    const origMatches = root.matches.bind(root);
+    root.matches = (selector: string) => {
+      if (selector === ":focus-visible") return focusVisibleOverride;
+      return origMatches(selector);
+    };
 
-    // ArrowDown should not throw
-    const arrowDown = new dom.window.KeyboardEvent("keydown", {
-      key: "ArrowDown",
-      bubbles: true,
-    });
-    expect(() => root.dispatchEvent(arrowDown)).not.toThrow();
+    const setFocusVisible = (v: boolean) => { focusVisibleOverride = v; };
 
-    // ArrowUp
-    const arrowUp = new dom.window.KeyboardEvent("keydown", {
-      key: "ArrowUp",
-      bubbles: true,
-    });
-    expect(() => root.dispatchEvent(arrowUp)).not.toThrow();
+    const focusIn = () =>
+      root.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true }));
 
-    // Home
-    const home = new dom.window.KeyboardEvent("keydown", {
-      key: "Home",
-      bubbles: true,
-    });
-    expect(() => root.dispatchEvent(home)).not.toThrow();
+    const focusOut = (relatedTarget: Node | null = null) =>
+      root.dispatchEvent(
+        new dom.window.FocusEvent("focusout", { bubbles: true, relatedTarget }),
+      );
 
-    // End
-    const end = new dom.window.KeyboardEvent("keydown", {
-      key: "End",
-      bubbles: true,
-    });
-    expect(() => root.dispatchEvent(end)).not.toThrow();
+    const fireKey = (key: string) =>
+      root.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", { key, bubbles: true }),
+      );
 
-    // Focusout should not throw
-    const focusOutEvt = new dom.window.FocusEvent("focusout", {
-      bubbles: true,
-      relatedTarget: null,
-    });
-    expect(() => root.dispatchEvent(focusOutEvt)).not.toThrow();
+    const clickItem = (index: number) => {
+      const el = items().querySelector(`[data-index="${index}"]`) as HTMLElement | null;
+      if (!el) throw new Error(`No rendered item at index ${index}`);
+      const evt = new dom.window.MouseEvent("click", { bubbles: true });
+      Object.defineProperty(evt, "target", { value: el, configurable: true });
+      items().dispatchEvent(evt);
+    };
+
+    const itemEl = (index: number) =>
+      items().querySelector(`[data-index="${index}"]`) as HTMLElement | null;
+
+    const hasClass = (index: number, cls: string) =>
+      itemEl(index)?.classList.contains(cls) ?? false;
+
+    const ariaSelected = (index: number) =>
+      itemEl(index)?.getAttribute("aria-selected");
+
+    return { list, root, focusIn, focusOut, fireKey, clickItem, itemEl, hasClass, ariaSelected, setFocusVisible };
+  };
+
+  // ── Smoke / no-throw ─────────────────────────────────────────────
+
+  it("should handle keyboard navigation without withSelection", () => {
+    const { list, root, focusIn, focusOut, fireKey } = setup();
+
+    expect(() => focusIn()).not.toThrow();
+    expect(() => fireKey("ArrowDown")).not.toThrow();
+    expect(() => fireKey("ArrowUp")).not.toThrow();
+    expect(() => fireKey("Home")).not.toThrow();
+    expect(() => fireKey("End")).not.toThrow();
+    expect(() => fireKey(" ")).not.toThrow();
+    expect(() => fireKey("Enter")).not.toThrow();
+    expect(() => focusOut()).not.toThrow();
 
     list.destroy();
   });
 
+  // ── ARIA activedescendant ────────────────────────────────────────
+
   it("should set aria-activedescendant on focusin with focus-visible", () => {
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(20),
-    }).build();
+    const { list, root, focusIn } = setup();
 
-    const root = list.element;
-
-    // Stub :focus-visible to return true
-    const origMatches = root.matches.bind(root);
-    root.matches = (selector: string) => {
-      if (selector === ":focus-visible") return true;
-      return origMatches(selector);
-    };
-
-    const focusInEvt = new dom.window.FocusEvent("focusin", { bubbles: true });
-    root.dispatchEvent(focusInEvt);
-
-    // Should have set aria-activedescendant (prefix includes a counter, e.g. vlist-14-item-0)
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-\d+$/);
+    focusIn();
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     list.destroy();
   });
 
   it("should clear aria-activedescendant on focusout to external target", () => {
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(20),
-    }).build();
+    const { list, root, focusIn, focusOut } = setup();
 
-    const root = list.element;
-
-    // First focus in (stub :focus-visible)
-    const origMatches = root.matches.bind(root);
-    root.matches = (selector: string) => {
-      if (selector === ":focus-visible") return true;
-      return origMatches(selector);
-    };
-
-    root.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true }));
+    focusIn();
     expect(root.getAttribute("aria-activedescendant")).toBeTruthy();
 
-    // Focus out to external element (not inside root)
     const external = document.createElement("button");
     document.body.appendChild(external);
-    const focusOutEvt = new dom.window.FocusEvent("focusout", {
-      bubbles: true,
-      relatedTarget: external,
-    });
-    root.dispatchEvent(focusOutEvt);
+    focusOut(external);
 
     expect(root.getAttribute("aria-activedescendant")).toBeNull();
 
     list.destroy();
   });
 
-  it("should navigate with ArrowDown/ArrowUp after focus", () => {
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(20),
-    }).build();
+  // ── Arrow keys move focus only (no selection) ────────────────────
 
-    const root = list.element;
+  it("should navigate with ArrowDown/ArrowUp/Home/End after focus", () => {
+    const { list, root, focusIn, fireKey } = setup();
 
-    // Stub :focus-visible
-    const origMatches = root.matches.bind(root);
-    root.matches = (selector: string) => {
-      if (selector === ":focus-visible") return true;
-      return origMatches(selector);
-    };
-
-    // Focus in to activate item 0
-    root.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true }));
+    focusIn();
     expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
-    // ArrowDown → item 1
-    root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
-    );
+    fireKey("ArrowDown");
     expect(root.getAttribute("aria-activedescendant")).toMatch(/item-1$/);
 
-    // ArrowUp → item 0
-    root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
-    );
+    fireKey("ArrowUp");
     expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
-    // Home → item 0 (already there)
-    root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }),
-    );
+    fireKey("Home");
     expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
-    // End → last item
-    root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", { key: "End", bubbles: true }),
-    );
+    fireKey("End");
     expect(root.getAttribute("aria-activedescendant")).toMatch(/item-19$/);
+
+    list.destroy();
+  });
+
+  it("should NOT select when arrow keys move focus", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn(); // focus item 0
+    fireKey("ArrowDown"); // focus item 1
+
+    // Item 1 has focus ring but NOT selection
+    expect(hasClass(1, "vlist-item--focused")).toBe(true);
+    expect(hasClass(1, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(1)).toBe("false");
+
+    // Item 0 has neither
+    expect(hasClass(0, "vlist-item--focused")).toBe(false);
+    expect(hasClass(0, "vlist-item--selected")).toBe(false);
+
+    list.destroy();
+  });
+
+  // ── No wrapping ──────────────────────────────────────────────────
+
+  it("should not wrap ArrowUp past first item", () => {
+    const { list, root, focusIn, fireKey } = setup();
+
+    focusIn(); // focus item 0
+    fireKey("ArrowUp"); // should stay at 0
+
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+
+    list.destroy();
+  });
+
+  it("should not wrap ArrowDown past last item", () => {
+    const { list, root, focusIn, fireKey } = setup(5);
+
+    focusIn();
+    fireKey("End"); // focus item 4
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-4$/);
+
+    fireKey("ArrowDown"); // should stay at 4
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-4$/);
+
+    list.destroy();
+  });
+
+  // ── Space / Enter toggles selection ──────────────────────────────
+
+  it("should select focused item on Space", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn(); // focus item 0
+    fireKey("ArrowDown"); // focus item 1
+
+    // Not selected yet
+    expect(hasClass(1, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(1)).toBe("false");
+
+    // Space → select
+    fireKey(" ");
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(1)).toBe("true");
+
+    list.destroy();
+  });
+
+  it("should select focused item on Enter", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn();
+    fireKey("ArrowDown"); // focus item 1
+    fireKey("Enter"); // select
+
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(1)).toBe("true");
+
+    list.destroy();
+  });
+
+  it("should deselect on second Space (toggle)", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn();
+    fireKey(" "); // select item 0
+    expect(hasClass(0, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(0)).toBe("true");
+
+    fireKey(" "); // deselect item 0
+    expect(hasClass(0, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(0)).toBe("false");
+
+    list.destroy();
+  });
+
+  it("should keep focus ring visible after Space/Enter (keyboard)", () => {
+    const { list, focusIn, fireKey, hasClass } = setup();
+
+    focusIn();
+    fireKey("ArrowDown"); // focus item 1
+    fireKey(" "); // select item 1
+
+    // Both focus ring and selection should be visible
+    expect(hasClass(1, "vlist-item--focused")).toBe(true);
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+
+    list.destroy();
+  });
+
+  it("should move focus away from selected item without deselecting", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn();
+    fireKey(" "); // select item 0
+    expect(hasClass(0, "vlist-item--selected")).toBe(true);
+
+    fireKey("ArrowDown"); // focus item 1
+
+    // Item 0: still selected, no focus ring
+    expect(hasClass(0, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(0)).toBe("true");
+    expect(hasClass(0, "vlist-item--focused")).toBe(false);
+
+    // Item 1: focus ring, not selected
+    expect(hasClass(1, "vlist-item--focused")).toBe(true);
+    expect(hasClass(1, "vlist-item--selected")).toBe(false);
+
+    list.destroy();
+  });
+
+  it("should replace selection when selecting a different item", () => {
+    const { list, focusIn, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn();
+    fireKey(" "); // select item 0
+    expect(hasClass(0, "vlist-item--selected")).toBe(true);
+
+    fireKey("ArrowDown"); // focus item 1
+    fireKey(" "); // select item 1
+
+    // Item 1 now selected
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(1)).toBe("true");
+
+    // Item 0 deselected (single-select: only one at a time)
+    expect(hasClass(0, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(0)).toBe("false");
+
+    list.destroy();
+  });
+
+  // ── Click ────────────────────────────────────────────────────────
+
+  it("should select and focus item on click", () => {
+    const { list, clickItem, hasClass, ariaSelected } = setup();
+
+    clickItem(3);
+
+    expect(hasClass(3, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(3)).toBe("true");
+
+    list.destroy();
+  });
+
+  it("should NOT show focus ring on click (mouse)", () => {
+    const { list, clickItem, hasClass, setFocusVisible } = setup();
+
+    // Mouse click: :focus-visible is false in real browsers
+    setFocusVisible(false);
+    clickItem(2);
+
+    // Selected but no focus ring
+    expect(hasClass(2, "vlist-item--selected")).toBe(true);
+    expect(hasClass(2, "vlist-item--focused")).toBe(false);
+
+    list.destroy();
+  });
+
+  it("should restore focus ring on keyboard after mouse click", () => {
+    const { list, clickItem, fireKey, hasClass, setFocusVisible } = setup();
+
+    // Mouse click — :focus-visible false
+    setFocusVisible(false);
+    clickItem(2);
+    expect(hasClass(2, "vlist-item--focused")).toBe(false);
+
+    // Keyboard navigation — :focus-visible true
+    setFocusVisible(true);
+    fireKey("ArrowDown"); // focus ring on item 3
+    expect(hasClass(3, "vlist-item--focused")).toBe(true);
+
+    list.destroy();
+  });
+
+  it("should deselect on click of already-selected item (toggle)", () => {
+    const { list, clickItem, hasClass, ariaSelected } = setup();
+
+    clickItem(3);
+    expect(hasClass(3, "vlist-item--selected")).toBe(true);
+
+    clickItem(3); // toggle off
+    expect(hasClass(3, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(3)).toBe("false");
+
+    list.destroy();
+  });
+
+  it("should replace selection when clicking a different item", () => {
+    const { list, clickItem, hasClass, ariaSelected } = setup();
+
+    clickItem(1);
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+
+    clickItem(4);
+    expect(hasClass(4, "vlist-item--selected")).toBe(true);
+    expect(hasClass(1, "vlist-item--selected")).toBe(false);
+    expect(ariaSelected(1)).toBe("false");
+
+    list.destroy();
+  });
+
+  // ── PageUp / PageDown ────────────────────────────────────────────
+
+  it("should move focus by page on PageDown/PageUp", () => {
+    const { list, root, focusIn, fireKey } = setup(100);
+
+    focusIn(); // focus item 0
+
+    // Container 600px / item 40px = 15 items per page
+    fireKey("PageDown");
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-15$/);
+
+    fireKey("PageUp");
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+
+    list.destroy();
+  });
+
+  // ── Focusout preserves state for re-focus ────────────────────────
+
+  it("should restore focus position on re-focus after blur", () => {
+    const { list, root, focusIn, focusOut, fireKey } = setup();
+
+    focusIn();
+    fireKey("ArrowDown");
+    fireKey("ArrowDown"); // focus item 2
+
+    const external = document.createElement("button");
+    document.body.appendChild(external);
+    focusOut(external);
+    expect(root.getAttribute("aria-activedescendant")).toBeNull();
+
+    // Re-focus — should resume at item 2
+    focusIn();
+    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-2$/);
+
+    list.destroy();
+  });
+
+  it("should preserve selection across blur and re-focus", () => {
+    const { list, focusIn, focusOut, fireKey, hasClass, ariaSelected } = setup();
+
+    focusIn();
+    fireKey("ArrowDown"); // focus item 1
+    fireKey(" "); // select item 1
+
+    const external = document.createElement("button");
+    document.body.appendChild(external);
+    focusOut(external);
+
+    // Selection persists even when blurred
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+    expect(ariaSelected(1)).toBe("true");
+
+    // Re-focus
+    focusIn();
+    expect(hasClass(1, "vlist-item--selected")).toBe(true);
+    expect(hasClass(1, "vlist-item--focused")).toBe(true);
 
     list.destroy();
   });
