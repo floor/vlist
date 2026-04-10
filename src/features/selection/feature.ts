@@ -246,8 +246,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         });
       };
 
-      // ── Helper: scroll just enough to reveal the item ──
-      const scrollToIndexIfNeeded = (idx: number): void => {
+      // ── Helper: scroll just enough to reveal the focused item ──
+      const scrollToFocus = (idx: number): void => {
         if (idx < 0) return;
 
         const compression = ctx.getCachedCompression();
@@ -530,7 +530,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           // Scroll focused item into view (smart scroll) + ARIA
           if (newFocusIndex >= 0) {
-            scrollToIndexIfNeeded(newFocusIndex);
+            scrollToFocus(newFocusIndex);
 
             dom.root.setAttribute(
               "aria-activedescendant",
@@ -632,7 +632,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         selectionState = selectItems(selectionState, [item.id], mode);
 
-        scrollToIndexIfNeeded(idx);
+        scrollToFocus(idx);
 
         forceRenderAndEmit();
       };

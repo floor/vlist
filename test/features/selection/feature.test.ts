@@ -1205,7 +1205,7 @@ describe("withSelection — ARIA in grid context", () => {
 });
 
 // =============================================================================
-// withSelection — Keyboard scroll behavior (scrollToIndexIfNeeded)
+// withSelection — Keyboard scroll behavior (scrollToFocus)
 // =============================================================================
 
 describe("withSelection — keyboard scroll", () => {
