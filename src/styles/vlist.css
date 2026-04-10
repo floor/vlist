@@ -382,6 +382,9 @@
     border-bottom: 1px solid var(--vlist-border);
 }
 
+.vlist-sticky-group {
+    width: 100%;
+
 /* =============================================================================
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
