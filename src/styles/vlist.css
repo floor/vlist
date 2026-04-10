@@ -160,21 +160,12 @@
     }
 }
 
-/* Focus state - only show for keyboard navigation */
-.vlist:focus {
-    outline: none;
-}
-
+/* Focus state — per WAI-ARIA Listbox pattern the visual focus indicator
+   belongs on the active descendant (the item's --focused ring), not the
+   container.  The onFocusIn handler ensures an item is always focused
+   when the user tabs in, so the container outline is never needed. */
+.vlist:focus,
 .vlist:focus-visible {
-    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
-    outline-offset: -2px;
-}
-
-/* Hide container outline when an item is focused or selected —
-   the item ring / highlight is enough. Selected covers the click case
-   where focusVisible is false so --focused isn't applied. */
-.vlist:has(.vlist-item--focused):focus-visible,
-.vlist:has(.vlist-item--selected):focus-visible {
     outline: none;
 }
 
