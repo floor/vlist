@@ -400,6 +400,10 @@ export const withGroups = <T extends VListItem = VListItem>(
       // We register special methods that the builder core will check
       ctx.methods.set("_getItems", () => originalItems as readonly T[]);
       ctx.methods.set("_getTotal", () => originalItems.length);
+      ctx.methods.set("_isGroupHeader", (index: number): boolean => {
+        const item = layoutItems[index];
+        return !!(item && isGroupHeader(item));
+      });
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {

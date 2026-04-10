@@ -6,7 +6,10 @@
  *
  * What it wires:
  * - Click handler on items container — toggles selection on item click
+ *   - Shift+click in multiple mode selects a range from the last-focused item
  * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
+ *   - In single mode with followFocus: true, selection follows focus on arrow keys
+ *   - In multiple mode, arrow keys move focus only; Space/Enter toggles selection
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
  * - Render integration — registers internal getters (_getSelectedIds,
@@ -25,6 +28,7 @@
 
 import type { VListItem, SelectionMode } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding } from "../../utils/padding";
 
 import {
   createSelectionState,
@@ -33,6 +37,7 @@ import {
   toggleSelection,
   selectAll,
   clearSelection,
+  selectRange,
   setFocusedIndex,
   moveFocusUp,
   moveFocusDown,
@@ -43,7 +48,7 @@ import {
   getSelectedItems,
 } from "./state";
 
-import { calculateScrollToIndex } from "../../rendering";
+import { scrollToFocus as sharedScrollToFocus } from "../../rendering/scroll";
 
 // =============================================================================
 // Feature Config
@@ -56,6 +61,13 @@ export interface SelectionFeatureConfig {
 
   /** Initially selected item IDs */
   initial?: Array<string | number>;
+
+  /**
+   * When true, arrow keys select the focused item in single mode
+   * (WAI-ARIA "selection follows focus" pattern). Default: false.
+   * Ignored in multiple mode (focus and selection are always independent).
+   */
+  followFocus?: boolean;
 }
 
 // =============================================================================
@@ -81,6 +93,7 @@ export const withSelection = <T extends VListItem = VListItem>(
   config?: SelectionFeatureConfig,
 ): VListFeature<T> => {
   const mode: SelectionMode = config?.mode ?? "single";
+  const followFocus = config?.followFocus ?? false;
   const initial = config?.initial;
 
   // Selection state — lives for the lifetime of the list
@@ -124,6 +137,38 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Add selectable CSS class ──
       dom.root.classList.add(`${classPrefix}--selectable`);
+
+      // ── Group header awareness ──
+      // When withGroups is active (priority 10, runs before us at 50),
+      // it registers _isGroupHeader. Resolve once at setup time.
+      const isGroupHeaderFn = ctx.methods.get("_isGroupHeader") as
+        | ((index: number) => boolean)
+        | undefined;
+
+      /** Check whether a layout index is a group header */
+      const isHeader = (index: number): boolean =>
+        isGroupHeaderFn ? isGroupHeaderFn(index) : false;
+
+      /**
+       * Starting from `from`, scan in `dir` (+1 or -1) to find the first
+       * non-header index. Returns `from` unchanged when groups aren't active.
+       * Falls back to the opposite direction if all items in `dir` are headers.
+       */
+      const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
+        if (!isGroupHeaderFn) return from;
+        let i = from;
+        while (i >= 0 && i < total) {
+          if (!isHeader(i)) return i;
+          i += dir;
+        }
+        // Went out of bounds — try opposite direction
+        i = from - dir;
+        while (i >= 0 && i < total) {
+          if (!isHeader(i)) return i;
+          i -= dir;
+        }
+        return from; // all headers (shouldn't happen)
+      };
 
       // ── ID → index map for O(1) lookups (selection feature only) ──
       // Incrementally indexed: items are added as they load via the load:end
@@ -246,53 +291,35 @@ export const withSelection = <T extends VListItem = VListItem>(
         });
       };
 
-      // ── Helper: scroll just enough to reveal the item ──
-      const scrollToIndexIfNeeded = (idx: number): void => {
+      // ── Helper: scroll just enough to reveal the focused item ──
+      // Resolve padding once (start/end along main axis)
+      const resolvedPad = resolvePadding(ctx.rawConfig.padding);
+      const startPadding = resolvedConfig.horizontal ? resolvedPad.left : resolvedPad.top;
+      const endPadding = resolvedConfig.horizontal ? resolvedPad.right : resolvedPad.bottom;
+
+      const scrollToFocus = (idx: number): void => {
         if (idx < 0) return;
 
-        const compression = ctx.getCachedCompression();
-        const isCompressed = compression?.isCompressed && compression.ratio !== 1;
         const containerSize = ctx.state.viewportState.containerSize;
+        const scrollPos = ctx.state.viewportState.scrollPosition;
         const totalItems = ctx.dataManager.getTotal();
+        const compression = ctx.getCachedCompression();
+        const { visibleRange } = ctx.state.viewportState;
 
-        if (!isCompressed) {
-          // ── Non-compressed: pixel-perfect positioning (original logic) ──
-          const itemOffset = ctx.sizeCache.getOffset(idx);
-          const itemBottom = itemOffset + ctx.sizeCache.getSize(idx);
-          const scrollPos = ctx.state.viewportState.scrollPosition;
-          const viewportBottom = scrollPos + containerSize;
+        const newScroll = sharedScrollToFocus(
+          idx,
+          ctx.sizeCache,
+          scrollPos,
+          containerSize,
+          startPadding,
+          endPadding,
+          compression,
+          totalItems,
+          visibleRange,
+        );
 
-          if (itemOffset < scrollPos) {
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemOffset));
-          } else if (itemBottom > viewportBottom) {
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
-          }
-        } else {
-          // ── Compressed: fractional index math ──
-          // sizeCache offsets are in actual-pixel space but scrollPosition
-          // is in virtual/compressed space — can't compare directly.
-          // Use visible range for the hit-test, then compute the scroll
-          // target via the compression mapping with fractional precision.
-          const { visibleRange } = ctx.state.viewportState;
-          const itemSize = ctx.sizeCache.getSize(Math.max(0, idx));
-          const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
-          const { virtualSize } = compression!;
-          const compressedItemSize = virtualSize / totalItems;
-
-          if (idx > visibleRange.start + fullyVisible - 1) {
-            // Item is below the fully-visible area.
-            // Place item idx at the bottom edge using fractional top index:
-            //   exactTop = idx + 1 - (containerSize / itemSize)
-            // so that exactly containerSize/itemSize items fill the viewport
-            // with idx as the last fully visible one.
-            const exactTopIndex = idx + 1 - containerSize / itemSize;
-            const target = Math.max(0, exactTopIndex * compressedItemSize);
-            ctx.scrollController.scrollTo(target);
-          } else if (idx < visibleRange.end - fullyVisible) {
-            // Item is above the fully-visible area — place it at the top.
-            const target = Math.max(0, idx * compressedItemSize);
-            ctx.scrollController.scrollTo(target);
-          }
+        if (newScroll !== scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
         }
       };
 
@@ -301,7 +328,6 @@ export const withSelection = <T extends VListItem = VListItem>(
         const h = ctx.sizeCache.getSize(Math.max(0, selectionState.focusedIndex));
         return Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
       };
-
 
 
       // ── ARIA live region ──
@@ -343,10 +369,13 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (totalItems === 0) return;
 
         // Restore previous focus position, or start at 0
-        const idx =
+        let idx =
           selectionState.focusedIndex >= 0
             ? Math.min(selectionState.focusedIndex, totalItems - 1)
             : 0;
+
+        // Skip group headers
+        idx = skipHeaders(idx, 1, totalItems);
 
         selectionState = setFocusedIndex(selectionState, idx);
         selectionState.focusVisible = true;
@@ -358,13 +387,11 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         ctx.scrollController.scrollTo(
           ctx.adjustScrollPosition(
-            calculateScrollToIndex(
+            ctx.getScrollToPos(
               idx,
-              ctx.sizeCache,
               ctx.state.viewportState.containerSize,
               ctx.dataManager.getState().total,
               "center",
-              ctx.getCachedCompression(),
             ),
           ),
         );
@@ -426,8 +453,25 @@ export const withSelection = <T extends VListItem = VListItem>(
         const item = ctx.dataManager.getItem(index);
         if (!item) return;
 
+        // Ignore clicks on group headers
+        if (isHeader(index)) return;
+
         // Emit click event
         emitter.emit("item:click", { item, index, event });
+
+        // Shift+click range selection (multiple mode only)
+        if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
+          const items = ctx.getAllLoadedItems();
+          selectionState = selectRange(selectionState, items, selectionState.focusedIndex, index, mode);
+          selectionState = setFocusedIndex(selectionState, index);
+          selectionState.focusVisible = false;
+          dom.root.setAttribute(
+            "aria-activedescendant",
+            `${ariaIdPrefix}-item-${index}`,
+          );
+          forceRenderAndEmit();
+          return;
+        }
 
         // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
@@ -502,7 +546,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case " ":
           case "Enter":
-            if (selectionState.focusedIndex >= 0) {
+            if (selectionState.focusedIndex >= 0 && !isHeader(selectionState.focusedIndex)) {
               const focusedItem = ctx.dataManager.getItem(
                 selectionState.focusedIndex,
               );
@@ -519,6 +563,21 @@ export const withSelection = <T extends VListItem = VListItem>(
             break;
         }
 
+        // Skip group headers after directional movement
+        if (focusOnly && isGroupHeaderFn) {
+          const dir: 1 | -1 = newState.focusedIndex > previousFocusIndex ? 1 : -1;
+          newState.focusedIndex = skipHeaders(newState.focusedIndex, dir, totalItems);
+        }
+
+        // Optional: selection follows focus on arrow/page/home/end keys
+        if (followFocus && mode === "single" && focusOnly && newState.focusedIndex >= 0) {
+          const focusedItem = ctx.dataManager.getItem(newState.focusedIndex);
+          if (focusedItem) {
+            newState = selectItems(newState, [focusedItem.id], mode);
+          }
+          focusOnly = false; // trigger full re-render with selection change event
+        }
+
         if (handled) {
           event.preventDefault();
           selectionState = newState;
@@ -527,7 +586,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           // Scroll focused item into view (smart scroll) + ARIA
           if (newFocusIndex >= 0) {
-            scrollToIndexIfNeeded(newFocusIndex);
+            scrollToFocus(newFocusIndex);
 
             dom.root.setAttribute(
               "aria-activedescendant",
@@ -623,13 +682,17 @@ export const withSelection = <T extends VListItem = VListItem>(
           ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap)
           : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
 
+        // Skip group headers
+        const dir: 1 | -1 = direction === "next" ? 1 : -1;
+        selectionState.focusedIndex = skipHeaders(selectionState.focusedIndex, dir, totalItems);
+
         const idx = selectionState.focusedIndex;
         const item = ctx.dataManager.getItem(idx);
         if (!item) return;
 
         selectionState = selectItems(selectionState, [item.id], mode);
 
-        scrollToIndexIfNeeded(idx);
+        scrollToFocus(idx);
 
         forceRenderAndEmit();
       };

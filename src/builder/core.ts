@@ -48,6 +48,7 @@ import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
 import { resolvePadding, mainAxisPaddingFrom } from "../utils/padding";
 import { sortRenderedDOM } from "../rendering/sort";
+import { scrollToFocus } from "../rendering/scroll";
 import {
   createMaterializeCtx,
   createDefaultDataProxy,
@@ -462,7 +463,8 @@ function materialize<T extends VListItem = VListItem>(
   // ── Content size helper (needed by measurement + render) ────────
 
   const updateContentSize = (): void => {
-    const size = `${$.hc.getTotalSize() + mainAxisPadding}px`;
+    const totalSize = $.hc.getTotalSize();
+    const size = `${totalSize + mainAxisPadding}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -659,6 +661,19 @@ function materialize<T extends VListItem = VListItem>(
           $.pef(element, index);
         }
       }
+
+      // Always keep viewportState in sync — even when the render range is
+      // unchanged.  Features (e.g. withSelection's scrollToFocus) read
+      // viewportState.scrollPosition and visibleRange on the next keydown.
+      // Without this update the values go stale whenever the scroll moves
+      // within the existing overscan buffer, causing cumulative drift in
+      // compressed-mode keyboard navigation (End → repeated PageUp).
+      sharedState.viewportState.scrollPosition = $.ls;
+      sharedState.viewportState.containerSize = containerSize;
+      sharedState.viewportState.visibleRange.start = visibleRange.start;
+      sharedState.viewportState.visibleRange.end = visibleRange.end;
+      sharedState.viewportState.renderRange.start = renderRange.start;
+      sharedState.viewportState.renderRange.end = renderRange.end;
       return;
     }
 
@@ -1033,7 +1048,24 @@ function materialize<T extends VListItem = VListItem>(
 
         // Only render if already initialized (features have run)
         if ($.ii) {
-          updateContentSize();
+          // When compression is active, content size must use the virtual
+          // size — not the sizeCache total (which is the actual/uncompressed
+          // size).  The no-arg updateContentSize() reads from sizeCache and
+          // would set content height to e.g. 72 000 000 px instead of the
+          // compressed 16 000 000 px, causing the browser to adjust
+          // scrollTop into uncompressed space and corrupt the virtual
+          // scroll position.
+          const cc = sharedState.cachedCompression;
+          if (cc && cc.state.isCompressed) {
+            const sz = `${cc.state.virtualSize + mainAxisPadding}px`;
+            if (isHorizontal) {
+              dom.content.style.width = sz;
+            } else {
+              dom.content.style.height = sz;
+            }
+          } else {
+            updateContentSize();
+          }
           $.rfn();
           emitter.emit("resize", { height: newHeight, width: newWidth });
         }
@@ -1149,71 +1181,158 @@ function materialize<T extends VListItem = VListItem>(
     }
   }
 
-  // ── Baseline keyboard navigation (when no selection feature) ────
-  // Provides Tab-to-focus-first-item and Arrow/Home/End focus movement
-  // as required by the WAI-ARIA listbox pattern. When withSelection is
-  // present it registers _getFocusedIndex and owns all focus behaviour.
+  // ── Baseline single-select (when no selection feature) ──────────
+  // Per WAI-ARIA listbox pattern:
+  //   Arrow keys     → move focus only (focus ring + aria-activedescendant)
+  //   Space / Enter  → select the focused item (aria-selected + --selected class)
+  //   Click          → select + focus the clicked item
+  // Wrapping configurable via scroll.wrap (default: false). Smart edge-scroll (only scrolls when focused item is
+  // outside viewport, aligns to nearest edge).
+  // Lightweight: $.fi tracks focus, $.ss (Set with 0-1 entries) tracks selection.
 
   if (accessibleMode && !methods.has("_getFocusedIndex")) {
-    let coreFocus = -1;
     const focusedClass = `${classPrefix}-item--focused`;
+    const startPad = isHorizontal ? pad.left : pad.top;
+    const endPad = isHorizontal ? pad.right : pad.bottom;
+    let coreFocusVisible = false;
 
-    const moveFocus = (prev: number, next: number): void => {
-      const total = $.vtf();
-      if (next < 0 || next >= total) return;
-      coreFocus = next;
+    // Register internal getter so the render loop respects focusVisible.
+    // When false (mouse click), the render sees -1 → no --focused class.
+    methods.set("_getFocusedIndex", (): number => {
+      return coreFocusVisible ? $.fi : -1;
+    });
 
-      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${next}`);
-
-      // Scroll into view + re-render
-      const size = isHorizontal ? $.cw : $.ch;
-      $.sst($.gsp(next, $.hc, size, total, "center"));
-      $.ls = $.sgt();
-      $.rfn();
-
-      // Swap focused class via rendered map (no DOM query)
-      if (prev >= 0 && prev !== next) rendered.get(prev)?.classList.remove(focusedClass);
-      rendered.get(next)?.classList.add(focusedClass);
+    /** Scroll-if-needed + ARIA activedescendant + force render */
+    const commitFocus = (index: number, total: number): void => {
+      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+      const containerSize = isHorizontal ? $.cw : $.ch;
+      const newScroll = scrollToFocus(
+        index, $.hc, $.ls, containerSize,
+        startPad,
+        endPad,
+        sharedState.cachedCompression?.state,
+        total,
+        sharedState.viewportState.visibleRange,
+      );
+      if (newScroll !== $.ls) {
+        $.sst(newScroll);
+        $.ls = $.sgt();
+      }
+      $.ffn();
     };
 
-    // Tab into list → activate first (or last-focused) item
+    /** Move focus ring only — does NOT change selection */
+    const moveFocus = (next: number, total: number): void => {
+      $.fi = next;
+      coreFocusVisible = true;
+      commitFocus(next, total);
+    };
+
+    /** Toggle selection on an item by index (updates aria-selected + --selected class) */
+    const coreSelect = (index: number, total: number, keyboard: boolean): void => {
+      $.fi = index;
+      if (keyboard) coreFocusVisible = true;
+
+      // Toggle: if already selected, deselect; otherwise select
+      const item = ($.dm ? $.dm.getItem(index) : $.it[index]) as T | undefined;
+      if (item && $.ss.has(item.id)) {
+        $.ss.clear();
+      } else {
+        $.ss.clear();
+        if (item) $.ss.add(item.id);
+      }
+
+      commitFocus(index, total);
+    };
+
+    // Tab into list → focus first (or last-focused) item (keyboard only)
+    /** Skip group headers: scan from `from` in `dir`, fall back to opposite direction. */
+    const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
+      let i = from;
+      while (i >= 0 && i < total) {
+        const item = $.dm ? $.dm.getItem(i) : $.it[i];
+        if (!item || !(item as any).__groupHeader) return i;
+        i += dir;
+      }
+      // Out of bounds — try opposite direction
+      i = from - dir;
+      while (i >= 0 && i < total) {
+        const item = $.dm ? $.dm.getItem(i) : $.it[i];
+        if (!item || !(item as any).__groupHeader) return i;
+        i -= dir;
+      }
+      return from;
+    };
+
     const onFocusIn = (): void => {
       if ($.id) return;
       if (!dom.root.matches(":focus-visible")) return;
       const total = $.vtf();
       if (total === 0) return;
-      moveFocus(-1, coreFocus >= 0 ? Math.min(coreFocus, total - 1) : 0);
+      let target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
+      target = skipHeaders(target, 1, total);
+      moveFocus(target, total);
     };
     dom.root.addEventListener("focusin", onFocusIn);
 
-    // Blur — clear focus ring when focus leaves the list
+    // Blur — clear focus ring (but preserve $.fi and $.ss for re-focus)
     const onFocusOut = (e: FocusEvent): void => {
       if ($.id) return;
       const related = e.relatedTarget as Node | null;
       if (related && dom.root.contains(related)) return;
 
-      if (coreFocus >= 0) {
-        rendered.get(coreFocus)?.classList.remove(focusedClass);
+      coreFocusVisible = false;
+      if ($.fi >= 0) {
+        rendered.get($.fi)?.classList.remove(focusedClass);
       }
       dom.root.removeAttribute("aria-activedescendant");
     };
     dom.root.addEventListener("focusout", onFocusOut);
 
+    // Keyboard handler — arrows move focus (wrap if scroll.wrap), Space/Enter selects
     keydownHandlers.push((event: KeyboardEvent): void => {
       if ($.id) return;
       const total = $.vtf();
       if (total === 0) return;
-      const p = coreFocus;
+      const p = $.fi;
       let n = p;
       switch (event.key) {
-        case "ArrowUp":   n = p <= 0 ? total - 1 : p - 1; break;
-        case "ArrowDown": n = p >= total - 1 ? 0 : p + 1; break;
+        case "ArrowUp":   n = p <= 0 ? (wrapEnabled ? total - 1 : 0) : p - 1; break;
+        case "ArrowDown": n = p >= total - 1 ? (wrapEnabled ? 0 : total - 1) : p + 1; break;
+        case "PageUp":    n = Math.max(0, p - Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
+        case "PageDown":  n = Math.min(total - 1, p + Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
         case "Home":      n = 0; break;
         case "End":       n = total - 1; break;
+        case " ":
+        case "Enter":
+          if (p >= 0) {
+            const focusedItem = ($.dm ? $.dm.getItem(p) : $.it[p]) as T | undefined;
+            if (focusedItem && !(focusedItem as any).__groupHeader) {
+              coreSelect(p, total, true);
+            }
+          }
+          event.preventDefault();
+          return;
         default: return;
       }
       event.preventDefault();
-      moveFocus(p, n);
+      // Skip group headers
+      n = skipHeaders(n, n >= p ? 1 : -1, total);
+      if (n !== p) moveFocus(n, total);
+    });
+
+    // Click → select + focus
+    clickHandlers.push((event: MouseEvent): void => {
+      if ($.id) return;
+      const itemEl = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
+      if (!itemEl) return;
+      const index = parseInt(itemEl.dataset.index ?? "-1", 10);
+      if (index < 0) return;
+      const item = ($.dm?.getItem(index) ?? $.it[index]) as T | undefined;
+      if (!item || (item as any).__groupHeader) return;
+      coreFocusVisible = false;
+      dom.root.focus();
+      coreSelect(index, $.vtf(), false);
     });
 
     destroyHandlers.push(() => {
