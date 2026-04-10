@@ -160,17 +160,18 @@ const TOUCH_VELOCITY_WINDOW = 100;
  * an index ~37 items from the end (for typical 72 px rows), leaving the
  * tail unreachable.  The padding is always < containerSize and safe to
  * add on top of MAX_VIRTUAL_SIZE.
+ *
+ * The exact value is  containerSize × (1 − ratio)  which ensures that at
+ * maxScroll the last item's bottom edge aligns precisely with the
+ * viewport's bottom edge (no gap, no overshoot).
  */
 const compressedBottomPadding = (
   virtualSize: number,
   containerSize: number,
-  totalItems: number,
-  itemSize: number,
+  ratio: number,
 ): number => {
-  if (totalItems === 0 || !itemSize) return 0;
-  const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
-  const compressedItemSize = virtualSize / totalItems;
-  return Math.max(0, containerSize - fullyVisible * compressedItemSize);
+  if (virtualSize <= 0) return 0;
+  return Math.max(0, containerSize * (1 - ratio));
 };
 
 export const withScale = <
@@ -258,12 +259,10 @@ export const withScale = <
           }
 
           // Compute bottom padding so linear formula reaches every item
-          const itemSize = ctx.sizeCache.getSize(0);
           bottomPad = compressedBottomPadding(
             compression.virtualSize,
             ctx.state.viewportState.containerSize,
-            total,
-            itemSize,
+            compression.ratio,
           );
 
           // Set content size to virtual height + bottom padding
@@ -669,12 +668,10 @@ export const withScale = <
           ctx.scrollController.updateConfig({ compression });
 
           // Recompute bottom padding for new compression state
-          const itemSize = ctx.sizeCache.getSize(0);
           bottomPad = compressedBottomPadding(
             compression.virtualSize,
             ctx.state.viewportState.containerSize,
-            total,
-            itemSize,
+            compression.ratio,
           );
 
           // Update content size to new virtual height + bottom padding
