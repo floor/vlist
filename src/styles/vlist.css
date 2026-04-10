@@ -256,18 +256,18 @@
 }
 
 /* Item selected state */
-.vlist-item--selected {
+.vlist-item.vlist-item--selected {
     background-color: var(--vlist-bg-selected);
     /* border-left: 4px solid var(--vlist-border-selected); */
     /* padding-left: calc(var(--vlist-item-padding-x) - 4px); */
 }
 
-.vlist--selectable .vlist-item--selected:hover {
+.vlist-item.vlist-item--selected:hover {
     background-color: var(--vlist-bg-selected-hover);
 }
 
 /* Item focused state (keyboard navigation) */
-.vlist-item--focused {
+.vlist-item.vlist-item--focused {
     outline: 2px solid var(--vlist-focus-ring, #3b82f6);
     outline-offset: -2px;
     z-index: 1;
@@ -287,7 +287,7 @@
 /* Placeholder content styling - examples should define their own placeholder appearance */
 
 /* Combined selected + focused */
-.vlist-item--selected.vlist-item--focused {
+.vlist-item.vlist-item--selected.vlist-item--focused {
     outline-color: var(--vlist-border-selected);
 }
 

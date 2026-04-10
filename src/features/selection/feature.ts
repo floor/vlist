@@ -6,7 +6,10 @@
  *
  * What it wires:
  * - Click handler on items container — toggles selection on item click
+ *   - Shift+click in multiple mode selects a range from the last-focused item
  * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
+ *   - In single mode, selection follows focus on arrow/page/home/end keys
+ *   - In multiple mode, arrow keys move focus only; Space/Enter toggles selection
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
  * - Render integration — registers internal getters (_getSelectedIds,
@@ -33,6 +36,7 @@ import {
   toggleSelection,
   selectAll,
   clearSelection,
+  selectRange,
   setFocusedIndex,
   moveFocusUp,
   moveFocusDown,
@@ -44,6 +48,7 @@ import {
 } from "./state";
 
 import { calculateScrollToIndex } from "../../rendering";
+import { scrollToFocus as sharedScrollToFocus } from "../../rendering/scroll";
 
 // =============================================================================
 // Feature Config
@@ -250,53 +255,24 @@ export const withSelection = <T extends VListItem = VListItem>(
       const scrollToFocus = (idx: number): void => {
         if (idx < 0) return;
 
-        const compression = ctx.getCachedCompression();
-        const isCompressed = compression?.isCompressed && compression.ratio !== 1;
         const containerSize = ctx.state.viewportState.containerSize;
+        const scrollPos = ctx.state.viewportState.scrollPosition;
         const totalItems = ctx.dataManager.getTotal();
+        const compression = ctx.getCachedCompression();
+        const { visibleRange } = ctx.state.viewportState;
 
-        if (!isCompressed) {
-          // ── Non-compressed: pixel-perfect positioning (original logic) ──
-          const itemOffset = ctx.sizeCache.getOffset(idx);
-          const itemBottom = itemOffset + ctx.sizeCache.getSize(idx);
-          const scrollPos = ctx.state.viewportState.scrollPosition;
-          const viewportBottom = scrollPos + containerSize;
+        const newScroll = sharedScrollToFocus(
+          idx,
+          ctx.sizeCache,
+          scrollPos,
+          containerSize,
+          compression,
+          totalItems,
+          visibleRange,
+        );
 
-          if (itemOffset < scrollPos) {
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemOffset));
-          } else if (itemBottom > viewportBottom) {
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
-          }
-        } else {
-          // ── Compressed: fractional index math ──
-          // sizeCache offsets are in actual-pixel space but scrollPosition
-          // is in virtual/compressed space — can't compare directly.
-          // Use visible range for the hit-test, then compute the scroll
-          // target via the compression mapping with fractional precision.
-          //
-          // NOTE: assumes roughly uniform item sizes — compressedItemSize
-          // is virtualSize / totalItems. This is acceptable because
-          // withScale is designed for massive lists with fixed row height.
-          const { visibleRange } = ctx.state.viewportState;
-          const itemSize = ctx.sizeCache.getSize(Math.max(0, idx));
-          const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
-          const { virtualSize } = compression!;
-          const compressedItemSize = virtualSize / totalItems;
-
-          if (idx > visibleRange.start + fullyVisible - 1) {
-            // Item is below the fully-visible area.
-            // Place item idx at the bottom edge using fractional top index:
-            //   exactTop = idx + 1 - (containerSize / itemSize)
-            // so that exactly containerSize/itemSize items fill the viewport
-            // with idx as the last fully visible one.
-            const exactTopIndex = idx + 1 - containerSize / itemSize;
-            const target = Math.max(0, exactTopIndex * compressedItemSize);
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(target));
-          } else if (idx < visibleRange.end - fullyVisible) {
-            // Item is above the fully-visible area — place it at the top.
-            const target = Math.max(0, idx * compressedItemSize);
-            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(target));
-          }
+        if (newScroll !== scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
         }
       };
 
@@ -432,6 +408,20 @@ export const withSelection = <T extends VListItem = VListItem>(
         // Emit click event
         emitter.emit("item:click", { item, index, event });
 
+        // Shift+click range selection (multiple mode only)
+        if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
+          const items = ctx.getAllLoadedItems();
+          selectionState = selectRange(selectionState, items, selectionState.focusedIndex, index, mode);
+          selectionState = setFocusedIndex(selectionState, index);
+          selectionState.focusVisible = false;
+          dom.root.setAttribute(
+            "aria-activedescendant",
+            `${ariaIdPrefix}-item-${index}`,
+          );
+          forceRenderAndEmit();
+          return;
+        }
+
         // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
         selectionState.focusVisible = false;
@@ -520,6 +510,15 @@ export const withSelection = <T extends VListItem = VListItem>(
               handled = true;
             }
             break;
+        }
+
+        // Single mode: selection follows focus on arrow/page/home/end keys
+        if (mode === "single" && focusOnly && newState.focusedIndex >= 0) {
+          const focusedItem = ctx.dataManager.getItem(newState.focusedIndex);
+          if (focusedItem) {
+            newState = selectItems(newState, [focusedItem.id], mode);
+          }
+          focusOnly = false; // trigger full re-render with selection change event
         }
 
         if (handled) {
