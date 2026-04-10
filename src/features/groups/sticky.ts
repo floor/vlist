@@ -77,13 +77,11 @@ export const createStickyHeader = (
   slider.style.willChange = "transform";
   container.appendChild(slider);
 
-  // Current header slot
-  const currentSlot = document.createElement("div");
-  slider.appendChild(currentSlot);
-
-  // Next header slot (used during push transition)
-  const nextSlot = document.createElement("div");
-  // Not appended yet — added only during transition
+  // Direct references to the rendered header elements inside the slider.
+  // No wrapper divs — the template output is appended directly with
+  // height set on the element itself.
+  let currentEl: HTMLElement | null = null;
+  let nextEl: HTMLElement | null = null;
 
   // Insert container as first child of root
   root.insertBefore(container, root.firstChild);
@@ -100,23 +98,37 @@ export const createStickyHeader = (
   // =========================================================================
 
   /**
-   * Render a header template into a target element.
+   * Render a header template and return the element with height set.
    */
-  const renderInto = (target: HTMLElement, groupIndex: number): void => {
+  const renderHeader = (groupIndex: number): HTMLElement | null => {
     const groups = layout.groups;
-    if (groupIndex < 0 || groupIndex >= groups.length) {
-      target.textContent = "";
-      return;
-    }
+    if (groupIndex < 0 || groupIndex >= groups.length) return null;
 
     const group = groups[groupIndex]!;
     const result = config.headerTemplate(group.key, group.groupIndex);
+    const headerSize = layout.getHeaderHeight(groupIndex);
 
+    let el: HTMLElement;
     if (typeof result === "string") {
-      target.innerHTML = result;
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = result;
+      el = (wrapper.firstElementChild as HTMLElement) ?? wrapper;
+      // If innerHTML produced a text node or multiple nodes, use the wrapper
+      if (el === wrapper && wrapper.childNodes.length > 0) {
+        el.style.cssText = "";
+      }
     } else {
-      target.replaceChildren(result);
+      el = result;
     }
+
+    // Set size directly on the rendered element — no wrapper div
+    if (horizontal) {
+      el.style.width = `${headerSize}px`;
+    } else {
+      el.style.height = `${headerSize}px`;
+    }
+
+    return el;
   };
 
   /**
@@ -126,46 +138,47 @@ export const createStickyHeader = (
     if (groupIndex === currentGroupIndex) return;
     currentGroupIndex = groupIndex;
 
-    const groups = layout.groups;
-    if (groupIndex < 0 || groupIndex >= groups.length) {
-      currentSlot.textContent = "";
-      return;
+    // Remove old current element
+    if (currentEl && currentEl.parentNode === slider) {
+      slider.removeChild(currentEl);
     }
+    currentEl = null;
+
+    const groups = layout.groups;
+    if (groupIndex < 0 || groupIndex >= groups.length) return;
 
     // Set container size to match header height
     const headerSize = layout.getHeaderHeight(groupIndex);
     if (horizontal) {
       container.style.width = `${headerSize}px`;
-      currentSlot.style.width = `${headerSize}px`;
     } else {
       container.style.height = `${headerSize}px`;
-      currentSlot.style.height = `${headerSize}px`;
     }
 
-    renderInto(currentSlot, groupIndex);
+    currentEl = renderHeader(groupIndex);
+    if (currentEl) {
+      // Insert at the beginning of slider (before any next element)
+      slider.insertBefore(currentEl, slider.firstChild);
+    }
   };
 
   /**
-   * Prepare the next header slot for the push transition.
+   * Prepare the next header for the push transition.
    */
   const prepareNextGroup = (groupIndex: number): void => {
     if (groupIndex === nextGroupIndex && isTransitioning) return;
     nextGroupIndex = groupIndex;
 
-    const headerSize = layout.getHeaderHeight(groupIndex);
-    if (horizontal) {
-      nextSlot.style.width = `${headerSize}px`;
-    } else {
-      nextSlot.style.height = `${headerSize}px`;
+    // Remove old next element if present
+    if (nextEl && nextEl.parentNode === slider) {
+      slider.removeChild(nextEl);
     }
 
-    renderInto(nextSlot, groupIndex);
-
-    // Append next slot if not already in the slider
-    if (!isTransitioning) {
-      slider.appendChild(nextSlot);
-      isTransitioning = true;
+    nextEl = renderHeader(groupIndex);
+    if (nextEl) {
+      slider.appendChild(nextEl);
     }
+    isTransitioning = true;
   };
 
   /**
@@ -174,16 +187,15 @@ export const createStickyHeader = (
   const completeTransition = (): void => {
     if (!isTransitioning) return;
 
-    // Copy next content into current slot
-    const nextGroupIdx = nextGroupIndex;
-    currentGroupIndex = -1; // Force re-render
-    setCurrentGroup(nextGroupIdx);
-
-    // Remove next slot from DOM and reset slider
-    if (nextSlot.parentNode === slider) {
-      slider.removeChild(nextSlot);
+    // Remove old current
+    if (currentEl && currentEl.parentNode === slider) {
+      slider.removeChild(currentEl);
     }
-    nextSlot.textContent = "";
+
+    // Next becomes current
+    currentEl = nextEl;
+    currentGroupIndex = nextGroupIndex;
+    nextEl = null;
     nextGroupIndex = -1;
     isTransitioning = false;
 
@@ -198,10 +210,10 @@ export const createStickyHeader = (
   const cancelTransition = (): void => {
     if (!isTransitioning) return;
 
-    if (nextSlot.parentNode === slider) {
-      slider.removeChild(nextSlot);
+    if (nextEl && nextEl.parentNode === slider) {
+      slider.removeChild(nextEl);
     }
-    nextSlot.textContent = "";
+    nextEl = null;
     nextGroupIndex = -1;
     isTransitioning = false;
 
@@ -238,13 +250,17 @@ export const createStickyHeader = (
       return;
     }
 
-    // Binary search: find the last group whose header offset <= scrollPosition.
+    // Binary search: find the last group whose header has fully scrolled
+    // past the viewport top.  The sticky header sits ABOVE the viewport,
+    // so we offset by headerHeight — the group doesn't become "active"
+    // until its inline header is completely above the viewport.
+    const hh = config.headerHeight;
     let lo = 0;
     let hi = groups.length - 1;
 
     while (lo < hi) {
       const mid = (lo + hi + 1) >>> 1;
-      if (sizeCache.getOffset(groups[mid]!.headerLayoutIndex) <= scrollPosition) {
+      if (sizeCache.getOffset(groups[mid]!.headerLayoutIndex) + hh <= scrollPosition) {
         lo = mid;
       } else {
         hi = mid - 1;
@@ -259,7 +275,8 @@ export const createStickyHeader = (
     }
     setCurrentGroup(activeGroupIdx);
 
-    // Check if the next group's inline header is approaching
+    // Check if the next group's inline header is approaching the
+    // viewport top (= bottom of the sticky header area).
     const activeHeaderSize = layout.getHeaderHeight(activeGroupIdx);
     const nextGroupIdx = activeGroupIdx + 1;
 
@@ -267,15 +284,19 @@ export const createStickyHeader = (
       const nextHeaderOffset = sizeCache.getOffset(
         groups[nextGroupIdx]!.headerLayoutIndex,
       );
+      // distance = pixels from viewport top to the inline header.
+      // Positive: header is below viewport top.
+      // Zero: header is at viewport top (= bottom of sticky area).
+      // Negative: header has scrolled past viewport top.
       const distance = nextHeaderOffset - scrollPosition;
 
-      if (distance < activeHeaderSize) {
-        // Next header is pushing — prepare the transition
+      if (distance <= 0 && distance > -activeHeaderSize) {
+        // Inline header is at or past viewport top — push transition.
+        // translateOffset goes from 0 (just arrived) to -activeHeaderSize
+        // (fully pushed out).
         prepareNextGroup(nextGroupIdx);
 
-        // Calculate translation: 0 when distance = activeHeaderSize,
-        // -activeHeaderSize when distance = 0
-        const translateOffset = distance - activeHeaderSize;
+        const translateOffset = distance;
 
         if (translateOffset !== lastTranslateValue) {
           lastTranslateValue = translateOffset;
@@ -284,8 +305,15 @@ export const createStickyHeader = (
             ? `translateX(${transformValue}px)`
             : `translateY(${transformValue}px)`;
         }
+      } else if (distance <= -activeHeaderSize) {
+        // Transition complete — next group is fully past.
+        // The binary search already switched the active group,
+        // so just clean up.
+        if (isTransitioning) {
+          completeTransition();
+        }
       } else {
-        // Next header is far away — cancel any in-progress transition
+        // Next header is still below viewport top — no transition
         if (isTransitioning) {
           cancelTransition();
         }
@@ -295,15 +323,6 @@ export const createStickyHeader = (
       if (isTransitioning) {
         cancelTransition();
       }
-    }
-
-    // If the active group changed and we were transitioning to it,
-    // complete the transition
-    if (
-      isTransitioning &&
-      activeGroupIdx === nextGroupIndex
-    ) {
-      completeTransition();
     }
   };
 
@@ -321,17 +340,22 @@ export const createStickyHeader = (
     if (!isVisible) return;
     isVisible = false;
     container.style.display = "none";
+    // Clean up elements
+    if (currentEl && currentEl.parentNode === slider) {
+      slider.removeChild(currentEl);
+    }
+    currentEl = null;
     currentGroupIndex = -1;
-    nextGroupIndex = -1;
-    lastTranslateValue = 0;
-    slider.style.transform = "";
     if (isTransitioning) {
-      if (nextSlot.parentNode === slider) {
-        slider.removeChild(nextSlot);
+      if (nextEl && nextEl.parentNode === slider) {
+        slider.removeChild(nextEl);
       }
-      nextSlot.textContent = "";
+      nextEl = null;
+      nextGroupIndex = -1;
       isTransitioning = false;
     }
+    lastTranslateValue = 0;
+    slider.style.transform = "";
   };
 
   // =========================================================================
@@ -356,6 +380,8 @@ export const createStickyHeader = (
 
   const destroy = (): void => {
     container.remove();
+    currentEl = null;
+    nextEl = null;
     currentGroupIndex = -1;
     nextGroupIndex = -1;
     isVisible = false;
