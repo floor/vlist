@@ -22,16 +22,23 @@ import type { Range } from "../../src/types";
 // =============================================================================
 
 /** Compute the compression slack that the scale feature adds to the content div. */
-const compressionSlack = (containerSize: number, ratio: number): number =>
-  Math.max(0, containerSize * (1 - ratio));
+const compressionSlack = (
+  containerSize: number,
+  ratio: number,
+  mainAxisPadding: number = 0,
+): number => {
+  const effectiveSize = containerSize - mainAxisPadding;
+  return Math.max(0, effectiveSize * (1 - ratio) + mainAxisPadding);
+};
 
 /** Effective maxScroll with compression slack. */
 const paddedMaxScroll = (
   virtualSize: number,
   containerSize: number,
   ratio: number,
+  mainAxisPadding: number = 0,
 ): number =>
-  virtualSize + compressionSlack(containerSize, ratio) - containerSize;
+  virtualSize + compressionSlack(containerSize, ratio, mainAxisPadding) - containerSize;
 
 /** Compute visible range at a given scroll position. */
 const visibleRangeAt = (
@@ -72,11 +79,12 @@ const fullyVisible = Math.floor(CONTAINER / ITEM_HEIGHT); // 8
 // =============================================================================
 
 describe("compressionSlack", () => {
-  it("should be containerSize * (1 - ratio)", () => {
-    const pad = compressionSlack(CONTAINER, comp.ratio);
-    expect(pad).toBeCloseTo(CONTAINER * (1 - comp.ratio), 2);
-    expect(pad).toBeGreaterThan(0);
-    expect(pad).toBeLessThan(CONTAINER);
+  it("should be effectiveSize * (1 - ratio) + mainAxisPadding when no CSS padding", () => {
+    const slack = compressionSlack(CONTAINER, comp.ratio);
+    // With 0 padding: effectiveSize = containerSize, so slack = containerSize * (1 - ratio)
+    expect(slack).toBeCloseTo(CONTAINER * (1 - comp.ratio), 2);
+    expect(slack).toBeGreaterThan(0);
+    expect(slack).toBeLessThan(CONTAINER);
   });
 
   it("should make last item reachable at maxScroll", () => {
@@ -98,6 +106,72 @@ describe("compressionSlack", () => {
     // Its bottom edge should be at or near containerSize
     const bottom = pos + ITEM_HEIGHT;
     expect(bottom).toBeCloseTo(CONTAINER, 1);
+  });
+
+  describe("with CSS padding", () => {
+    const PAD_TOP = 16;
+    const PAD_BOTTOM = 16;
+    const MAIN_AXIS_PAD = PAD_TOP + PAD_BOTTOM;
+
+    it("should be larger than without padding", () => {
+      const withoutPad = compressionSlack(CONTAINER, comp.ratio);
+      const withPad = compressionSlack(CONTAINER, comp.ratio, MAIN_AXIS_PAD);
+      expect(withPad).toBeGreaterThan(withoutPad);
+    });
+
+    it("should include the full main-axis padding in the slack", () => {
+      const withoutPad = compressionSlack(CONTAINER, comp.ratio);
+      const withPad = compressionSlack(CONTAINER, comp.ratio, MAIN_AXIS_PAD);
+      // The difference should account for the padding that was removed from
+      // effectiveSize and then added back: padding * ratio
+      const expectedDiff = MAIN_AXIS_PAD * comp.ratio;
+      expect(withPad - withoutPad).toBeCloseTo(expectedDiff, 2);
+    });
+
+    it("should produce a larger maxScroll than without padding", () => {
+      const msNoPad = paddedMaxScroll(comp.virtualSize, CONTAINER, comp.ratio);
+      const msWithPad = paddedMaxScroll(comp.virtualSize, CONTAINER, comp.ratio, MAIN_AXIS_PAD);
+      expect(msWithPad).toBeGreaterThan(msNoPad);
+    });
+
+    it("should make last item reachable at padded maxScroll", () => {
+      const ms = paddedMaxScroll(comp.virtualSize, CONTAINER, comp.ratio, MAIN_AXIS_PAD);
+      const startIndex = Math.floor((ms / comp.virtualSize) * TOTAL);
+      const effectiveVisible = Math.floor((CONTAINER - MAIN_AXIS_PAD) / ITEM_HEIGHT);
+      expect(startIndex).toBeGreaterThanOrEqual(TOTAL - effectiveVisible - 1);
+    });
+
+    it("should place last item within reduced effective viewport at maxScroll", () => {
+      // calculateCompressedItemPosition returns a transform value that
+      // does NOT include CSS padding — CSS padding shifts items visually
+      // via the content element.  The raw position should place the last
+      // item's bottom at effectiveSize (containerSize - mainAxisPadding).
+      const ms = paddedMaxScroll(comp.virtualSize, CONTAINER, comp.ratio, MAIN_AXIS_PAD);
+      const pos = calculateCompressedItemPosition(
+        TOTAL - 1,
+        ms,
+        cache,
+        TOTAL,
+        CONTAINER,
+        comp,
+      );
+      const bottom = pos + ITEM_HEIGHT;
+      const effectiveSize = CONTAINER - MAIN_AXIS_PAD;
+      expect(bottom).toBeCloseTo(effectiveSize, 1);
+    });
+
+    it("should return mainAxisPadding when ratio is 1 (no compression)", () => {
+      // ratio=1 → effectiveSize * 0 + padding = padding
+      // In practice ratio=1 means no compression so this won't be called,
+      // but the formula is still mathematically consistent.
+      expect(compressionSlack(CONTAINER, 1, MAIN_AXIS_PAD)).toBe(MAIN_AXIS_PAD);
+    });
+
+    it("should increase proportionally with padding size", () => {
+      const small = compressionSlack(CONTAINER, comp.ratio, 16);
+      const large = compressionSlack(CONTAINER, comp.ratio, 64);
+      expect(large).toBeGreaterThan(small);
+    });
   });
 });
 
