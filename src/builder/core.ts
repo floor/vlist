@@ -1161,10 +1161,17 @@ function materialize<T extends VListItem = VListItem>(
 
   if (accessibleMode && !methods.has("_getFocusedIndex")) {
     const focusedClass = `${classPrefix}-item--focused`;
+    let coreFocusVisible = false;
 
-    /** Scroll the viewport just enough to reveal the target index */
-    const scrollIntoView = (index: number): void => {
-      const total = $.vtf();
+    // Register internal getter so the render loop respects focusVisible.
+    // When false (mouse click), the render sees -1 → no --focused class.
+    methods.set("_getFocusedIndex", (): number => {
+      return coreFocusVisible ? $.fi : -1;
+    });
+
+    /** Scroll-if-needed + ARIA activedescendant + force render */
+    const commitFocus = (index: number, total: number): void => {
+      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
       const containerSize = isHorizontal ? $.cw : $.ch;
       const newScroll = scrollToFocus(
         index, $.hc, $.ls, containerSize,
@@ -1176,32 +1183,22 @@ function materialize<T extends VListItem = VListItem>(
         $.sst(newScroll);
         $.ls = $.sgt();
       }
-    };
-
-    /** Move focus ring only — does NOT change selection */
-    const moveFocus = (prev: number, next: number): void => {
-      const total = $.vtf();
-      if (next < 0 || next >= total) return;
-
-      $.fi = next;
-
-      // ARIA activedescendant
-      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${next}`);
-
-      // Smart edge-scroll + render
-      scrollIntoView(next);
       $.ffn();
     };
 
+    /** Move focus ring only — does NOT change selection */
+    const moveFocus = (next: number, total: number): void => {
+      $.fi = next;
+      coreFocusVisible = true;
+      commitFocus(next, total);
+    };
+
     /** Toggle selection on an item by index (updates aria-selected + --selected class) */
-    const coreSelect = (index: number): void => {
-      const total = $.vtf();
-      if (index < 0 || index >= total) return;
-
-      // Move focus to the selected item
+    const coreSelect = (index: number, total: number, keyboard: boolean): void => {
       $.fi = index;
+      if (keyboard) coreFocusVisible = true;
 
-      // Toggle selection: if already selected, deselect; otherwise select
+      // Toggle: if already selected, deselect; otherwise select
       const item = ($.dm ? $.dm.getItem(index) : $.it[index]) as T | undefined;
       if (item && $.ss.has(item.id)) {
         $.ss.clear();
@@ -1210,22 +1207,17 @@ function materialize<T extends VListItem = VListItem>(
         if (item) $.ss.add(item.id);
       }
 
-      // ARIA activedescendant
-      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
-
-      // Smart edge-scroll + render
-      scrollIntoView(index);
-      $.ffn();
+      commitFocus(index, total);
     };
 
-    // Tab into list → focus first (or last-focused) item (no selection)
+    // Tab into list → focus first (or last-focused) item (keyboard only)
     const onFocusIn = (): void => {
       if ($.id) return;
       if (!dom.root.matches(":focus-visible")) return;
       const total = $.vtf();
       if (total === 0) return;
       const target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
-      moveFocus(-1, target);
+      moveFocus(target, total);
     };
     dom.root.addEventListener("focusin", onFocusIn);
 
@@ -1235,6 +1227,7 @@ function materialize<T extends VListItem = VListItem>(
       const related = e.relatedTarget as Node | null;
       if (related && dom.root.contains(related)) return;
 
+      coreFocusVisible = false;
       if ($.fi >= 0) {
         rendered.get($.fi)?.classList.remove(focusedClass);
       }
@@ -1258,14 +1251,13 @@ function materialize<T extends VListItem = VListItem>(
         case "End":       n = total - 1; break;
         case " ":
         case "Enter":
-          // Select the currently focused item
-          if (p >= 0) coreSelect(p);
+          if (p >= 0) coreSelect(p, total, true);
           event.preventDefault();
           return;
         default: return;
       }
       event.preventDefault();
-      if (n !== p) moveFocus(p, n);
+      if (n !== p) moveFocus(n, total);
     });
 
     // Click → select + focus
@@ -1277,9 +1269,9 @@ function materialize<T extends VListItem = VListItem>(
       if (index < 0) return;
       const item = ($.dm?.getItem(index) ?? $.it[index]) as T | undefined;
       if (!item || (item as any).__groupHeader) return;
-      // Ensure root has focus so subsequent keyboard events are captured
+      coreFocusVisible = false;
       dom.root.focus();
-      coreSelect(index);
+      coreSelect(index, $.vtf(), false);
     });
 
     destroyHandlers.push(() => {
