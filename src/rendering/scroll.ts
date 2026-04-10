@@ -78,8 +78,8 @@ export const scrollToFocus = (
       return Math.max(0, wantStart * compressedItemSize);
     }
 
-    if (index <= visibleRange.end - fullyVisible) {
-      // Item is above the fully-visible area — align to top edge
+    if (index <= visibleRange.start) {
+      // Item is at or above the first (potentially clipped) visible item — align to top edge
       return Math.max(0, index * compressedItemSize);
     }
 
@@ -96,7 +96,7 @@ export const scrollToFocus = (
     return Math.max(0, wantStart * compressedItemSize);
   }
 
-  if (index <= currentIndex) {
+  if (index < currentIndex) {
     return Math.max(0, index * compressedItemSize);
   }
 
