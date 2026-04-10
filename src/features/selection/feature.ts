@@ -8,7 +8,7 @@
  * - Click handler on items container — toggles selection on item click
  *   - Shift+click in multiple mode selects a range from the last-focused item
  * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
- *   - In single mode, selection follows focus on arrow/page/home/end keys
+ *   - In single mode with followFocus: true, selection follows focus on arrow keys
  *   - In multiple mode, arrow keys move focus only; Space/Enter toggles selection
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
@@ -62,6 +62,13 @@ export interface SelectionFeatureConfig {
 
   /** Initially selected item IDs */
   initial?: Array<string | number>;
+
+  /**
+   * When true, arrow keys select the focused item in single mode
+   * (WAI-ARIA "selection follows focus" pattern). Default: false.
+   * Ignored in multiple mode (focus and selection are always independent).
+   */
+  followFocus?: boolean;
 }
 
 // =============================================================================
@@ -87,6 +94,7 @@ export const withSelection = <T extends VListItem = VListItem>(
   config?: SelectionFeatureConfig,
 ): VListFeature<T> => {
   const mode: SelectionMode = config?.mode ?? "single";
+  const followFocus = config?.followFocus ?? false;
   const initial = config?.initial;
 
   // Selection state — lives for the lifetime of the list
@@ -520,8 +528,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             break;
         }
 
-        // Single mode: selection follows focus on arrow/page/home/end keys
-        if (mode === "single" && focusOnly && newState.focusedIndex >= 0) {
+        // Optional: selection follows focus on arrow/page/home/end keys
+        if (followFocus && mode === "single" && focusOnly && newState.focusedIndex >= 0) {
           const focusedItem = ctx.dataManager.getItem(newState.focusedIndex);
           if (focusedItem) {
             newState = selectItems(newState, [focusedItem.id], mode);
