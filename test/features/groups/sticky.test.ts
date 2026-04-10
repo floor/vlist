@@ -392,14 +392,15 @@ describe("createStickyHeader — update", () => {
     const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
 
     // Next header at index 12, offset = 12 * 50 = 600
-    // headerHeight = 40, so push starts when distance < 40
-    // distance = 600 - scrollPosition < 40 → scrollPosition > 560
-    sticky.update(580);
+    // Push starts when inline header reaches viewport top (distance = 0),
+    // i.e. scrollPosition = 600.  Active group switches at offset + hh,
+    // so at scrollPosition = 620 the push is 20px into the transition.
+    sticky.update(620);
 
     // Transform is on the inner slider, not the container
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
     const slider = stickyEl.firstElementChild as HTMLElement;
-    // distance = 600 - 580 = 20, translateOffset = 20 - 40 = -20
+    // distance = 600 - 620 = -20, translateOffset = -20
     expect(slider.style.transform).toBe("translateY(-20px)");
 
     sticky.destroy();
@@ -417,13 +418,13 @@ describe("createStickyHeader — update", () => {
 
     const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", false);
 
-    // First trigger push-out
-    sticky.update(580);
+    // First trigger push-out (scrollPos = 620 → distance = -20)
+    sticky.update(620);
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
     const slider = stickyEl.firstElementChild as HTMLElement;
     expect(slider.style.transform).toBe("translateY(-20px)");
 
-    // Now scroll back — no push-out
+    // Now scroll back — inline header below viewport top, no push-out
     sticky.update(200);
     expect(slider.style.transform).toBe("");
 
@@ -462,8 +463,8 @@ describe("createStickyHeader — update", () => {
 
     const sticky = createStickyHeader(root, layout, sizeCache, config as any, "vlist", true);
 
-    // Trigger push-out in horizontal mode
-    sticky.update(580);
+    // Trigger push-out in horizontal mode (scrollPos = 620 → distance = -20)
+    sticky.update(620);
 
     const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
     const slider = stickyEl.firstElementChild as HTMLElement;
