@@ -284,8 +284,7 @@ describe("memory — DOM cleanup after destroy", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -420,8 +419,7 @@ describe("memory — create/destroy cycles", () => {
         .use(
           withGroups({
             getGroupForIndex: (i: number) => items[i]?.group ?? "",
-            headerHeight: 30,
-            headerTemplate,
+            header: { height: 30, template: headerTemplate },
             sticky: true,
           }),
         )
@@ -1073,8 +1071,7 @@ describe("memory — double destroy safety", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
           sticky: true,
         }),
       )

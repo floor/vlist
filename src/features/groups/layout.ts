@@ -230,7 +230,7 @@ export const createGroupLayout = (
   let totalEntries = itemCount + groups.length;
 
   // Pre-compute header heights if using fixed height
-  const headerHeightConfig = config.headerHeight;
+  const headerHeightConfig = config.header.height;
   const getHeaderHeight =
     typeof headerHeightConfig === "number"
       ? (_groupIndex: number): number => headerHeightConfig

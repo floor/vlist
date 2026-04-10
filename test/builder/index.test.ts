@@ -2639,8 +2639,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2660,8 +2659,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2682,8 +2680,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2707,8 +2704,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: true, // explicit
         }),
       )
@@ -2730,8 +2726,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: false,
         }),
       )
@@ -2752,8 +2747,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2780,8 +2774,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "Z",
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2810,8 +2803,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => currentItems[i]?.group ?? "A",
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2838,8 +2830,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2860,8 +2851,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2882,8 +2872,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2911,8 +2900,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -2934,8 +2922,7 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: undefined as any,
-            headerHeight: 32,
-            headerTemplate,
+            header: { height: 32, template: headerTemplate },
           }),
         )
         .build();
@@ -2954,12 +2941,11 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 0,
-            headerTemplate,
+            header: { height: 0, template: headerTemplate },
           }),
         )
         .build();
-    }).toThrow(/headerHeight must be a positive number/);
+    }).toThrow(/header\.height must be a positive number/);
 
     expect(() => {
       vlist<GroupedTestItem>({
@@ -2970,12 +2956,11 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: -10,
-            headerTemplate,
+            header: { height: -10, template: headerTemplate },
           }),
         )
         .build();
-    }).toThrow(/headerHeight must be a positive number/);
+    }).toThrow(/header\.height must be a positive number/);
   });
 
   it("should throw when headerTemplate is missing", () => {
@@ -2990,12 +2975,11 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 32,
-            headerTemplate: undefined as any,
+            header: { height: 32, template: undefined as any },
           }),
         )
         .build();
-    }).toThrow(/headerTemplate is required/);
+    }).toThrow(/header\.template is required/);
   });
   it("should work with horizontal orientation", () => {
     const items = createGroupedItems(6);
@@ -3011,8 +2995,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3035,8 +3018,7 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 32,
-            headerTemplate,
+            header: { height: 32, template: headerTemplate },
           }),
         )
         .build();
@@ -3054,8 +3036,7 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 32,
-            headerTemplate,
+            header: { height: 32, template: headerTemplate },
             sticky: true,
           }),
         )
@@ -3078,8 +3059,7 @@ describe("withGroups plugin", () => {
         .use(
           withGroups({
             getGroupForIndex: (i) => items[i]!.group,
-            headerHeight: 32,
-            headerTemplate,
+            header: { height: 32, template: headerTemplate },
             sticky: false,
           }),
         )
@@ -3099,8 +3079,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3125,8 +3104,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -3152,8 +3130,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (_i) => "A",
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3173,8 +3150,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: () => "A",
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3202,8 +3178,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3227,8 +3202,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate: (key) => `<div class="string-header">${key}</div>`,
+          header: { height: 32, template: (key) => `<div class="string-header">${key}</div>` },
         }),
       )
       .build();
@@ -3251,8 +3225,7 @@ describe("withGroups plugin", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3294,8 +3267,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withSelection({ mode: "multiple" }))
@@ -3321,8 +3293,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withScrollbar())
@@ -3345,8 +3316,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withSnapshots())
@@ -3375,8 +3345,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withSelection({ mode: "multiple" }))
@@ -3404,8 +3373,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withGrid({ columns: 3 }))
@@ -3429,8 +3397,7 @@ describe("withGroups plugin combinations", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .use(withSelection({ mode: "multiple" }))
@@ -3488,8 +3455,7 @@ describe("withGroups layout logic", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -3514,8 +3480,7 @@ describe("withGroups layout logic", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -3545,8 +3510,7 @@ describe("withGroups layout logic", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -3577,8 +3541,7 @@ describe("withGroups layout logic", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -3624,8 +3587,7 @@ describe("withGroups sticky header behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3649,8 +3611,7 @@ describe("withGroups sticky header behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3673,8 +3634,7 @@ describe("withGroups sticky header behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight,
-          headerTemplate,
+          header: { height: headerHeight, template: headerTemplate },
         }),
       )
       .build();
@@ -3709,8 +3669,7 @@ describe("withGroups sticky header behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3732,8 +3691,7 @@ describe("withGroups sticky header behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3779,8 +3737,7 @@ describe("withGroups template rendering", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3804,8 +3761,7 @@ describe("withGroups template rendering", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3829,8 +3785,7 @@ describe("withGroups template rendering", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3860,8 +3815,7 @@ describe("withGroups template rendering", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate: (key, groupIndex) => {
+          header: { height: 32, template: (key, groupIndex) => {
             if (capturedKey === null) {
               capturedKey = key;
               capturedIndex = groupIndex;
@@ -3870,7 +3824,7 @@ describe("withGroups template rendering", () => {
             el.className = "group-header";
             el.textContent = `${key}-${groupIndex}`;
             return el;
-          },
+          } },
         }),
       )
       .build();
@@ -3912,8 +3866,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3932,8 +3885,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3952,8 +3904,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3972,8 +3923,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -3994,8 +3944,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -4016,8 +3965,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
         }),
       )
       .build();
@@ -4042,8 +3990,7 @@ describe("withGroups scroll behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -4093,8 +4040,7 @@ describe("withGroups destroy behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -4124,8 +4070,7 @@ describe("withGroups destroy behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -4148,8 +4093,7 @@ describe("withGroups destroy behavior", () => {
       .use(
         withGroups({
           getGroupForIndex: (i) => items[i]!.group,
-          headerHeight: 32,
-          headerTemplate,
+          header: { height: 32, template: headerTemplate },
           sticky: false,
         }),
       )

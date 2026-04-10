@@ -49,8 +49,10 @@ const getGroup = (index: number): string => CONTACTS[index]!.lastName[0]!;
 
 const makeConfig = (overrides: Partial<GroupsConfig> = {}): GroupsConfig => ({
   getGroupForIndex: getGroup,
-  headerHeight: 32,
-  headerTemplate: (group) => `<div>${group}</div>`,
+  header: {
+    height: 32,
+    template: (group) => `<div>${group}</div>`,
+  },
   sticky: true,
   ...overrides,
 });
@@ -351,7 +353,7 @@ describe("createGroupLayout", () => {
       const layout = createGroupLayout(
         CONTACTS.length,
         makeConfig({
-          headerHeight: 40,
+          header: { height: 40, template: (group) => `<div>${group}</div>` },
         }),
       );
 
@@ -364,7 +366,7 @@ describe("createGroupLayout", () => {
       const layout = createGroupLayout(
         CONTACTS.length,
         makeConfig({
-          headerHeight: (_group, groupIndex) => 30 + groupIndex * 10,
+          header: { height: (_group: string, groupIndex: number) => 30 + groupIndex * 10, template: (group) => `<div>${group}</div>` },
         }),
       );
 
@@ -629,7 +631,7 @@ describe("createGroupedSizeFn", () => {
     const layout = createGroupLayout(
       CONTACTS.length,
       makeConfig({
-        headerHeight: 32,
+        header: { height: 32, template: (group) => `<div>${group}</div>` },
       }),
     );
     const heightFn = createGroupedSizeFn(layout, 48);
@@ -644,7 +646,7 @@ describe("createGroupedSizeFn", () => {
     const layout = createGroupLayout(
       CONTACTS.length,
       makeConfig({
-        headerHeight: 32,
+        header: { height: 32, template: (group) => `<div>${group}</div>` },
       }),
     );
     const heightFn = createGroupedSizeFn(layout, 48);
@@ -662,7 +664,7 @@ describe("createGroupedSizeFn", () => {
     const layout = createGroupLayout(
       CONTACTS.length,
       makeConfig({
-        headerHeight: 32,
+        header: { height: 32, template: (group) => `<div>${group}</div>` },
       }),
     );
     // Variable height: each item has height 40 + dataIndex * 5
@@ -686,7 +688,7 @@ describe("createGroupedSizeFn", () => {
     const layout = createGroupLayout(
       CONTACTS.length,
       makeConfig({
-        headerHeight: (_group, groupIndex) => 20 + groupIndex * 10,
+        header: { height: (_group: string, groupIndex: number) => 20 + groupIndex * 10, template: (group) => `<div>${group}</div>` },
       }),
     );
     const heightFn = createGroupedSizeFn(layout, 48);

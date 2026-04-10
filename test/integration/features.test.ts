@@ -702,8 +702,7 @@ describe("integration — group header click skip", () => {
       .use(
         withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -746,8 +745,7 @@ describe("integration — group header click skip", () => {
       .use(
         withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -783,8 +781,7 @@ describe("integration — group header click skip", () => {
       .use(
         withGroups({
           getGroupForIndex: (index: number) => items[index]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .build();
@@ -1080,8 +1077,7 @@ describe("integration — cross-feature destroy ordering", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .use(withScrollbar())
@@ -1705,8 +1701,7 @@ describe("integration — groups + grid combined", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .use(withGrid({ columns: 3 }))
@@ -1727,8 +1722,7 @@ describe("integration — groups + grid combined", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .use(withGrid({ columns: 4 }))
@@ -1749,8 +1743,7 @@ describe("integration — groups + grid combined", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .use(withGrid({ columns: 3 }))
@@ -1773,8 +1766,7 @@ describe("integration — groups + grid combined", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
         }),
       )
       .use(withGrid({ columns: 3 }))
@@ -1813,8 +1805,7 @@ describe("integration — groups sticky header scroll", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
           sticky: true,
         }),
       )
@@ -1843,8 +1834,7 @@ describe("integration — groups sticky header scroll", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
           sticky: true,
         }),
       )

@@ -51,11 +51,13 @@ export interface GroupsFeatureConfig {
   /** Returns group key for item at index (required) */
   getGroupForIndex: (index: number) => string;
 
-  /** Height of group headers in pixels (required) */
-  headerHeight: number;
-
-  /** Render function for headers (required) */
-  headerTemplate: (key: string, groupIndex: number) => HTMLElement | string;
+  /** Group header configuration (required) */
+  header: {
+    /** Height of group headers in pixels (required) */
+    height: number;
+    /** Render function for headers (required) */
+    template: (key: string, groupIndex: number) => HTMLElement | string;
+  };
 
   /** Enable sticky headers — iOS Contacts style (default: true) */
   sticky?: boolean;
@@ -80,12 +82,14 @@ export interface GroupsFeatureConfig {
  * })
  * .use(withGroups({
  *   getGroupForIndex: (i) => sortedContacts[i].lastName[0],
- *   headerHeight: 32,
- *   headerTemplate: (letter) => {
- *     const el = document.createElement('div')
- *     el.className = 'letter-header'
- *     el.textContent = letter
- *     return el
+ *   header: {
+ *     height: 32,
+ *     template: (letter) => {
+ *       const el = document.createElement('div')
+ *       el.className = 'letter-header'
+ *       el.textContent = letter
+ *       return el
+ *     },
  *   },
  * }))
  * .build()
@@ -98,13 +102,13 @@ export const withGroups = <T extends VListItem = VListItem>(
   if (!config.getGroupForIndex) {
     throw new Error("[vlist/builder] withGroups: getGroupForIndex is required");
   }
-  if (config.headerHeight == null || config.headerHeight <= 0) {
+  if (config.header?.height == null || config.header.height <= 0) {
     throw new Error(
-      "[vlist/builder] withGroups: headerHeight must be a positive number",
+      "[vlist/builder] withGroups: header.height must be a positive number",
     );
   }
-  if (!config.headerTemplate) {
-    throw new Error("[vlist/builder] withGroups: headerTemplate is required");
+  if (!config.header?.template) {
+    throw new Error("[vlist/builder] withGroups: header.template is required");
   }
 
   let groupLayout: GroupLayout | null = null;
@@ -137,8 +141,10 @@ export const withGroups = <T extends VListItem = VListItem>(
       // ── Create group layout ──
       const groupsConfig = {
         getGroupForIndex: config.getGroupForIndex,
-        headerHeight: config.headerHeight,
-        headerTemplate: config.headerTemplate,
+        header: {
+          height: config.header.height,
+          template: config.header.template,
+        },
         sticky: config.sticky ?? false,
       };
 
@@ -161,7 +167,7 @@ export const withGroups = <T extends VListItem = VListItem>(
 
       // ── Create unified template ──
       const userTemplate = rawConfig.item.template;
-      const { headerTemplate } = config;
+      const { template: headerTemplate } = config.header;
 
       // Create unified template that handles both headers and items
       const unifiedTemplate = ((
@@ -237,7 +243,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         // and the header template. No need to replace the renderer.
         updateTableForGroups(
           (item: any) => isGroupHeader(item),
-          config.headerTemplate,
+          config.header.template,
         );
       } else {
         // Replace the template with the unified version
@@ -258,7 +264,7 @@ export const withGroups = <T extends VListItem = VListItem>(
       if (config.sticky !== false) {
         ctx.methods.set(
           "_getStickyHeaderHeight",
-          (): number => config.headerHeight,
+          (): number => config.header.height,
         );
 
         // Push the viewport below the sticky header so that:
@@ -266,11 +272,11 @@ export const withGroups = <T extends VListItem = VListItem>(
         //  2. Items at the top of the viewport are naturally below the header
         // The sticky header stays position:absolute over the reserved space.
         if (!resolvedConfig.horizontal) {
-          dom.viewport.style.marginTop = `${config.headerHeight}px`;
-          dom.viewport.style.height = `calc(100% - ${config.headerHeight}px)`;
+          dom.viewport.style.marginTop = `${config.header.height}px`;
+          dom.viewport.style.height = `calc(100% - ${config.header.height}px)`;
         } else {
-          dom.viewport.style.marginLeft = `${config.headerHeight}px`;
-          dom.viewport.style.width = `calc(100% - ${config.headerHeight}px)`;
+          dom.viewport.style.marginLeft = `${config.header.height}px`;
+          dom.viewport.style.width = `calc(100% - ${config.header.height}px)`;
         }
       }
 
@@ -279,7 +285,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         // Template-driven: the sticky header receives a renderInto callback
         // that works exactly like item rendering — it doesn't know about
         // string vs HTMLElement, headerTemplate, or any template details.
-        const { headerTemplate: ht } = config;
+        const ht = config.header.template;
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = groupLayout.groups[groupIndex];
           if (!group) return;

@@ -248,8 +248,7 @@ describe("withGroups — Factory", () => {
   it("should create a feature with correct name and priority", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: (key) => `<div>${key}</div>`,
+      header: { height: 40, template: (key) => `<div>${key}</div>` },
     });
 
     expect(feature.name).toBe("withGroups");
@@ -260,8 +259,7 @@ describe("withGroups — Factory", () => {
   it("should require getGroupForIndex function", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     expect(feature).toBeDefined();
   });
@@ -269,8 +267,7 @@ describe("withGroups — Factory", () => {
   it("should accept sticky option", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
       sticky: true,
     });
     expect(feature).toBeDefined();
@@ -279,8 +276,7 @@ describe("withGroups — Factory", () => {
   it("should accept sticky disabled", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
       sticky: false,
     });
     expect(feature).toBeDefined();
@@ -295,8 +291,7 @@ describe("withGroups — Setup", () => {
   it("should add grouped CSS class to root", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
 
@@ -308,8 +303,7 @@ describe("withGroups — Setup", () => {
   it("should register _isGroupHeader method", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
 
@@ -329,8 +323,7 @@ describe("withGroups — Setup", () => {
   it("should register a destroy handler", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
 
@@ -344,8 +337,7 @@ describe("withGroups — Setup", () => {
   it("should register an afterScroll handler for sticky headers", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
       sticky: true,
     });
     const ctx = createMockContext();
@@ -361,8 +353,7 @@ describe("withGroups — Setup", () => {
     let templateReplaced = false;
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
     ctx.replaceTemplate = () => {
@@ -378,8 +369,7 @@ describe("withGroups — Setup", () => {
     let sizeConfigReplaced = false;
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
     ctx.setSizeConfig = () => {
@@ -394,8 +384,7 @@ describe("withGroups — Setup", () => {
   it("should run destroy handler without error", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
     const ctx = createMockContext();
 
@@ -413,8 +402,7 @@ describe("withGroups — Setup", () => {
 
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: (key) => `<div>${key}</div>`,
+      header: { height: 40, template: (key) => `<div>${key}</div>` },
     });
     const ctx = createMockContext();
 
@@ -442,8 +430,7 @@ describe("withGroups — Setup", () => {
 
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: (key) => `<div>${key}</div>`,
+      header: { height: 40, template: (key) => `<div>${key}</div>` },
     });
     const ctx = createMockContext();
 
@@ -483,8 +470,7 @@ describe("withGroups — Feature Destroy", () => {
   it("should clean up sticky header via feature.destroy()", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
       sticky: true,
     });
     const ctx = createMockContext();
@@ -498,8 +484,7 @@ describe("withGroups — Feature Destroy", () => {
   it("should be safe to call feature.destroy() without setup", () => {
     const feature = withGroups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
-      headerHeight: 40,
-      headerTemplate: () => "Header",
+      header: { height: 40, template: () => "Header" },
     });
 
     expect(() => feature.destroy!()).not.toThrow();

@@ -356,8 +356,7 @@ describe("performance — initialization", () => {
         .use(
           withGroups({
             getGroupForIndex: (i: number) => items[i]?.group ?? "",
-            headerHeight: 30,
-            headerTemplate,
+            header: { height: 30, template: headerTemplate },
           }),
         )
         .build();
@@ -813,8 +812,7 @@ describe("performance — destroy", () => {
       .use(
         withGroups({
           getGroupForIndex: (i: number) => items[i]?.group ?? "",
-          headerHeight: 30,
-          headerTemplate,
+          header: { height: 30, template: headerTemplate },
           sticky: true,
         }),
       )
