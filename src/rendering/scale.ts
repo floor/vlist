@@ -190,7 +190,7 @@ export const calculateCompressedItemPosition = (
   scrollPosition: number,
   sizeCache: SizeCache,
   totalItems: number,
-  containerHeight: number,
+  _containerHeight: number,
   compression: CompressionState,
   _rangeStart?: number,
 ): number => {
