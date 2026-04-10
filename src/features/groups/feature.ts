@@ -51,17 +51,35 @@ export interface GroupsFeatureConfig {
   /** Returns group key for item at index (required) */
   getGroupForIndex: (index: number) => string;
 
-  /** Group header configuration (required) */
-  header: {
+  /** Group header configuration — mirrors the `item` config shape */
+  header?: {
     /** Height of group headers in pixels (required) */
     height: number;
     /** Render function for headers (required) */
     template: (key: string, groupIndex: number) => HTMLElement | string;
   };
 
+  /** @deprecated Use `header.height` instead. */
+  headerHeight?: number;
+  /** @deprecated Use `header.template` instead. */
+  headerTemplate?: (key: string, groupIndex: number) => HTMLElement | string;
+
   /** Enable sticky headers — iOS Contacts style (default: true) */
   sticky?: boolean;
 }
+
+/**
+ * Normalize legacy flat config into the nested `header` shape.
+ * Supports both `{ header: { height, template } }` (new)
+ * and `{ headerHeight, headerTemplate }` (legacy).
+ */
+const normalizeConfig = (raw: GroupsFeatureConfig): GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } } => {
+  if (raw.header) return raw as any;
+  if (raw.headerHeight != null && raw.headerTemplate) {
+    return { ...raw, header: { height: raw.headerHeight, template: raw.headerTemplate } };
+  }
+  return raw as any; // let validation catch missing fields
+};
 
 // =============================================================================
 // Feature Factory
@@ -96,8 +114,11 @@ export interface GroupsFeatureConfig {
  * ```
  */
 export const withGroups = <T extends VListItem = VListItem>(
-  config: GroupsFeatureConfig,
+  rawConfig: GroupsFeatureConfig,
 ): VListFeature<T> => {
+  // Compat: normalize legacy flat fields into nested header object
+  const config = normalizeConfig(rawConfig);
+
   // Validate
   if (!config.getGroupForIndex) {
     throw new Error("[vlist/builder] withGroups: getGroupForIndex is required");
