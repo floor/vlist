@@ -343,6 +343,47 @@ describe("scrollToFocus — compressed mode", () => {
       expect(result).toBeCloseTo(targetIndex * cis, 4);
     });
   });
+
+  describe("no visibleRange fallback", () => {
+    it("should scroll down when item is below current viewport (no visibleRange)", () => {
+      const scrollPos = 0;
+      const result = scrollToFocus(
+        20, cache, scrollPos, CONTAINER, 0, 0, comp, TOTAL, null,
+      );
+      // Item 20 is beyond the viewport — should scroll to show it at bottom
+      expect(result).toBeGreaterThan(0);
+    });
+
+    it("should scroll up when item is above current viewport (no visibleRange)", () => {
+      const scrollPos = 500 * cis;
+      const result = scrollToFocus(
+        100, cache, scrollPos, CONTAINER, 0, 0, comp, TOTAL, null,
+      );
+      // Item 100 is above the current scroll position — should scroll up
+      expect(result).toBeLessThan(scrollPos);
+      expect(result).toBeCloseTo(100 * cis, 4);
+    });
+
+    it("should not scroll when item is within current viewport (no visibleRange)", () => {
+      const scrollPos = 100 * cis;
+      const result = scrollToFocus(
+        103, cache, scrollPos, CONTAINER, 0, 0, comp, TOTAL, null,
+      );
+      // Item 103 is within the viewport — no scroll
+      expect(result).toBe(scrollPos);
+    });
+
+    it("should use fractional alignment for below-viewport case (no visibleRange)", () => {
+      const scrollPos = 0;
+      const targetIndex = 20;
+      const result = scrollToFocus(
+        targetIndex, cache, scrollPos, CONTAINER, 0, 0, comp, TOTAL, null,
+      );
+      const exactVisible = CONTAINER / ITEM_HEIGHT;
+      const wantStart = targetIndex + 1 - exactVisible;
+      expect(result).toBeCloseTo(wantStart * cis, 4);
+    });
+  });
 });
 
 // =============================================================================
