@@ -276,11 +276,23 @@ export const withGroups = <T extends VListItem = VListItem>(
 
       // ── Create sticky header (when sticky is enabled) ──
       if (config.sticky !== false) {
+        // Template-driven: the sticky header receives a renderInto callback
+        // that works exactly like item rendering — it doesn't know about
+        // string vs HTMLElement, headerTemplate, or any template details.
+        const { headerTemplate: ht } = config;
+        const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+          const group = groupLayout.groups[groupIndex];
+          if (!group) return;
+          const result = ht(group.key, group.groupIndex);
+          if (typeof result === "string") slot.innerHTML = result;
+          else slot.replaceChildren(result);
+        };
+
         stickyHeader = createStickyHeader(
           dom.root,
           groupLayout,
           ctx.sizeCache,
-          { ...groupsConfig, sticky: groupsConfig.sticky ?? false },
+          renderInto,
           classPrefix,
           resolvedConfig.horizontal,
           tableHeaderHeight,
