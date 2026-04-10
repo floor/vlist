@@ -1155,12 +1155,14 @@ function materialize<T extends VListItem = VListItem>(
   //   Arrow keys     → move focus only (focus ring + aria-activedescendant)
   //   Space / Enter  → select the focused item (aria-selected + --selected class)
   //   Click          → select + focus the clicked item
-  // No wrapping. Smart edge-scroll (only scrolls when focused item is
+  // Wrapping configurable via scroll.wrap (default: false). Smart edge-scroll (only scrolls when focused item is
   // outside viewport, aligns to nearest edge).
   // Lightweight: $.fi tracks focus, $.ss (Set with 0-1 entries) tracks selection.
 
   if (accessibleMode && !methods.has("_getFocusedIndex")) {
     const focusedClass = `${classPrefix}-item--focused`;
+    const startPad = isHorizontal ? pad.left : pad.top;
+    const endPad = isHorizontal ? pad.right : pad.bottom;
     let coreFocusVisible = false;
 
     // Register internal getter so the render loop respects focusVisible.
@@ -1173,12 +1175,10 @@ function materialize<T extends VListItem = VListItem>(
     const commitFocus = (index: number, total: number): void => {
       dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
       const containerSize = isHorizontal ? $.cw : $.ch;
-      const startPadding = isHorizontal ? pad.left : pad.top;
-      const endPadding = isHorizontal ? pad.right : pad.bottom;
       const newScroll = scrollToFocus(
         index, $.hc, $.ls, containerSize,
-        startPadding,
-        endPadding,
+        startPad,
+        endPad,
         sharedState.cachedCompression?.state,
         total,
         sharedState.viewportState.visibleRange,
@@ -1239,7 +1239,7 @@ function materialize<T extends VListItem = VListItem>(
     };
     dom.root.addEventListener("focusout", onFocusOut);
 
-    // Keyboard handler — arrows move focus, Space/Enter selects
+    // Keyboard handler — arrows move focus (wrap if scroll.wrap), Space/Enter selects
     keydownHandlers.push((event: KeyboardEvent): void => {
       if ($.id) return;
       const total = $.vtf();
@@ -1247,8 +1247,8 @@ function materialize<T extends VListItem = VListItem>(
       const p = $.fi;
       let n = p;
       switch (event.key) {
-        case "ArrowUp":   n = Math.max(0, p - 1); break;
-        case "ArrowDown": n = Math.min(total - 1, p + 1); break;
+        case "ArrowUp":   n = p <= 0 ? (wrapEnabled ? total - 1 : 0) : p - 1; break;
+        case "ArrowDown": n = p >= total - 1 ? (wrapEnabled ? 0 : total - 1) : p + 1; break;
         case "PageUp":    n = Math.max(0, p - Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
         case "PageDown":  n = Math.min(total - 1, p + Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
         case "Home":      n = 0; break;
