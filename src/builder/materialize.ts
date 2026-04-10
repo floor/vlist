@@ -561,7 +561,6 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
   const {
     rendered,
     itemState,
-    contentSizeHandlers,
     applyTemplate,
     updateContentSize,
   } = deps;
