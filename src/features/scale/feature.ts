@@ -10,7 +10,7 @@
  * - Scroll position mapping — maps compressed scroll positions to item indices
  * - Item positioning — positions items relative to viewport in compressed mode
  * - Custom scrollbar fallback — forces custom scrollbar in compressed mode
- * - Near-bottom interpolation — smooth blending near the end of the list
+ * - Compression slack — extends scroll range so the linear index formula reaches every item
  * - Cached compression state — recalculates only when total item count changes
  * - Smooth scroll interpolation — lerp-based wheel handling for cross-browser consistency
  * - Touch scroll support — finger tracking + momentum for iOS Safari / mobile browsers
@@ -21,6 +21,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { resolvePadding } from "../../utils/padding";
 
 import {
   getCompressionState,
@@ -152,6 +153,37 @@ const TOUCH_VELOCITY_WINDOW = 100;
  * .build()
  * ```
  */
+/**
+ * Compute the compression slack needed so that the linear compressed-index
+ * formula can address every item — including the very last one.
+ *
+ * Without this slack, maxScroll = virtualSize − containerSize maps to
+ * an index ~37 items from the end (for typical 72 px rows), leaving the
+ * tail unreachable.  The slack is always < containerSize and safe to
+ * add on top of MAX_VIRTUAL_SIZE.
+ *
+ * The exact value is  effectiveSize × (1 − ratio)  where effectiveSize
+ * is the viewport area available for items (containerSize minus any CSS
+ * padding along the main axis).  This ensures that at maxScroll the last
+ * item's bottom edge aligns precisely with the viewport's bottom edge
+ * (no gap, no overshoot).
+ *
+ * @param mainAxisPadding - Sum of CSS padding along the scroll axis
+ *   (paddingTop + paddingBottom for vertical, paddingLeft + paddingRight
+ *   for horizontal).  Pass 0 when there is no padding.
+ */
+const compressionSlack = (
+  virtualSize: number,
+  containerSize: number,
+  ratio: number,
+  mainAxisPadding: number = 0,
+): number => {
+  if (virtualSize <= 0) return 0;
+  // effectiveSize = viewport area available for items (excludes CSS padding)
+  const effectiveSize = containerSize - mainAxisPadding;
+  return Math.max(0, effectiveSize * (1 - ratio) + mainAxisPadding);
+};
+
 export const withScale = <
   T extends VListItem = VListItem,
 >(config?: ScaleConfig): VListFeature<T> => {
@@ -160,6 +192,7 @@ export const withScale = <
   let scrollbar: Scrollbar | null = null;
   let virtualScrollPosition = 0;
   let compressedModeActive = false;
+  let slack = 0; // recomputed whenever compression state changes
 
   // Smooth scroll state — shared across the feature closure so that
   // external scroll position changes (scrollbar drag, scrollToIndex)
@@ -181,6 +214,13 @@ export const withScale = <
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;
       const { classPrefix, horizontal } = resolvedConfig;
+
+      // Resolve CSS padding along the main scroll axis so that
+      // compression slack and maxScroll calculations account for it.
+      const resolvedPad = resolvePadding(ctx.rawConfig.padding);
+      const mainAxisPad = horizontal
+        ? resolvedPad.left + resolvedPad.right
+        : resolvedPad.top + resolvedPad.bottom;
 
       /**
        * Enhanced compression mode updater.
@@ -235,10 +275,16 @@ export const withScale = <
             targetScrollPosition = nativePos;
           }
 
-          // Set content size to virtual height (not actual height)
-          // This is critical - the content div must match the virtual height
-          // for scrolling and positioning to work correctly
-          ctx.updateContentSize(compression.virtualSize);
+          // Compute compression slack so linear formula reaches every item
+          slack = compressionSlack(
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
+            compression.ratio,
+            mainAxisPad,
+          );
+
+          // Set content size to virtual height + compression slack
+          ctx.updateContentSize(compression.virtualSize + slack);
 
           // Replace scroll functions with virtual scroll position.
           // In compressed mode the total height exceeds the browser's DOM
@@ -285,7 +331,7 @@ export const withScale = <
               // targetScrollPosition may have been set from a stale maxScroll
               // (e.g. wheel handler fired before compression updated bounds).
               const comp = ctx.getCachedCompression();
-              const maxScroll = Math.max(0, comp.virtualSize - ctx.state.viewportState.containerSize);
+              const maxScroll = Math.max(0, comp.virtualSize + slack - ctx.state.viewportState.containerSize);
               virtualScrollPosition = Math.max(0, Math.min(targetScrollPosition, maxScroll));
               targetScrollPosition = virtualScrollPosition;
               smoothScrollId = null;
@@ -297,7 +343,7 @@ export const withScale = <
               // This is critical when user keeps scrolling at the bottom - targetScrollPosition
               // gets clamped to maxScroll, but virtualScrollPosition can drift beyond it during lerp
               const comp = ctx.getCachedCompression();
-              const maxScroll = comp.virtualSize - ctx.state.viewportState.containerSize;
+              const maxScroll = comp.virtualSize + slack - ctx.state.viewportState.containerSize;
               virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
 
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
@@ -320,7 +366,7 @@ export const withScale = <
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize - ctx.state.viewportState.containerSize;
+              comp.virtualSize + slack - ctx.state.viewportState.containerSize;
 
             targetScrollPosition = Math.max(
               0,
@@ -383,7 +429,7 @@ export const withScale = <
             const delta = touchStartPos - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize - ctx.state.viewportState.containerSize;
+              comp.virtualSize + slack - ctx.state.viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -432,7 +478,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualSize - ctx.state.viewportState.containerSize;
+                comp.virtualSize + slack - ctx.state.viewportState.containerSize;
 
               let newPos = virtualScrollPosition + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -633,19 +679,28 @@ export const withScale = <
           }
 
           // Restore content size to actual height
+          slack = 0;
           ctx.updateContentSize(compression.actualSize);
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
           ctx.scrollController.updateConfig({ compression });
 
-          // Update content size to new virtual height
-          ctx.updateContentSize(compression.virtualSize);
+          // Recompute compression slack for new compression state
+          slack = compressionSlack(
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
+            compression.ratio,
+            mainAxisPad,
+          );
+
+          // Update content size to new virtual height + compression slack
+          ctx.updateContentSize(compression.virtualSize + slack);
         }
 
         // Update scrollbar bounds if we have a fallback scrollbar
         if (scrollbar) {
           scrollbar.updateBounds(
-            compression.virtualSize,
+            compression.virtualSize + slack,
             ctx.state.viewportState.containerSize,
           );
         }
@@ -656,7 +711,7 @@ export const withScale = <
         const vs = ctx.state.viewportState;
         vs.isCompressed = compression.isCompressed;
         vs.compressionRatio = compression.ratio;
-        vs.totalSize = compression.virtualSize;
+        vs.totalSize = compression.virtualSize + slack;
         vs.actualSize = compression.actualSize;
 
         // Update cached compression
@@ -683,7 +738,7 @@ export const withScale = <
         if (compressedModeActive) {
           const maxScroll = Math.max(
             0,
-            compression.virtualSize - ctx.state.viewportState.containerSize,
+            compression.virtualSize + slack - ctx.state.viewportState.containerSize,
           );
           let clamped = virtualScrollPosition;
           if (clamped > maxScroll) {
@@ -713,6 +768,17 @@ export const withScale = <
             // explicit assignment is needed here.
             ctx.scrollController.scrollTo(clamped);
           }
+        }
+
+        // ── Notify content-size listeners ─────────────────────────────
+        // Features like withScrollbar cache totalSize from updateBounds.
+        // When compression changes the effective content size (virtualSize
+        // + slack), those features must re-read viewportState.totalSize.
+        // withAsync calls updateCompressionMode but does NOT fire
+        // contentSizeHandlers itself, so we do it here — the one place
+        // where the compressed content size actually changes.
+        for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
+          ctx.contentSizeHandlers[i]!();
         }
       };
 
