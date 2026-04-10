@@ -556,6 +556,9 @@ describe("createStickyHeader — update", () => {
     expect(stickyEl.innerHTML).toContain("Group C");
     expect((stickyEl.children[0] as HTMLElement).style.transform).toBe("");
     expect((stickyEl.children[1] as HTMLElement).style.transform).toBe("");
+    // Container size should update to Group C's header height (40px),
+    // not stay at Group B's (10px).
+    expect(stickyEl.style.height).toBe("40px");
 
     sticky.destroy();
     root.remove();

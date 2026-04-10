@@ -138,6 +138,7 @@ export const createStickyHeader = (
     standby = prev;
     curGroup = nxtGroup;
     curSize = curGroup >= 0 ? sizes[curGroup]! : 0;
+    setMain(container, curSize);
     clear(standby);
     nxtGroup = -1;
     transitioning = false;
