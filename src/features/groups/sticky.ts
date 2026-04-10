@@ -70,9 +70,10 @@ export const createStickyHeader = (
     // Vertical mode: stick to top edge
     // When used with a table, stickyOffset = table header height,
     // so the sticky group header sits below the column header row.
+    // left/right are set via CSS (.vlist-sticky-header) so the
+    // scrollbar overlap rule can reduce `right` when a custom
+    // scrollbar is present.
     element.style.top = stickyOffset ? `${stickyOffset}px` : "0";
-    element.style.left = "0";
-    element.style.right = "0";
   }
 
   // Insert as first child of root so it renders above the viewport
