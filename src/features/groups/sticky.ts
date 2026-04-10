@@ -4,11 +4,10 @@
  * and transitions smoothly when the next group's header approaches.
  *
  * The sticky header sits above the viewport (not overlaying it). Inside the
- * fixed-height container, a "slider" div holds two header slots: the current
+ * fixed-size container, a "slider" div holds two header slots: the current
  * header and (during transitions) the next header. The push-out effect is
- * achieved by translating the slider upward so the current header exits the
- * top while the next header enters from the bottom — all clipped by the
- * container's overflow: hidden.
+ * achieved by translating the slider so the current header exits while the
+ * next header enters — all clipped by the container's overflow: hidden.
  *
  * Layout:
  *   .vlist (root, position: relative)
@@ -16,7 +15,7 @@
  *   │   └── .sticky-slider (translated during push transition)
  *   │       ├── [current header content]
  *   │       └── [next header content]  (only during transition)
- *   └── .vlist-viewport (margin-top: headerHeight, height: calc(100% - headerHeight))
+ *   └── .vlist-viewport (margin-top: headerSize, height: calc(100% - headerSize))
  *       └── .vlist-content
  *           └── .vlist-items
  */
@@ -37,7 +36,7 @@ import type { SizeCache } from "../../rendering/sizes";
  * @param config - Groups configuration (headerTemplate, headerHeight)
  * @param classPrefix - CSS class prefix (default: 'vlist')
  * @param horizontal - Whether using horizontal scrolling mode
- * @param stickyOffset - Extra offset (e.g. table header height)
+ * @param stickyOffset - Extra offset (e.g. table header size)
  * @returns StickyHeader instance
  */
 export const createStickyHeader = (
@@ -49,6 +48,28 @@ export const createStickyHeader = (
   horizontal: boolean = false,
   stickyOffset: number = 0,
 ): StickyHeader => {
+  // =========================================================================
+  // Helpers
+  // =========================================================================
+
+  /** Orientation-aware style setters. */
+  const setMainSize = horizontal
+    ? (el: HTMLElement, px: number): void => { el.style.width = `${px}px`; }
+    : (el: HTMLElement, px: number): void => { el.style.height = `${px}px`; };
+
+  const setCrossSize = horizontal
+    ? (el: HTMLElement, v: string): void => { el.style.height = v; }
+    : (el: HTMLElement, v: string): void => { el.style.width = v; };
+
+  const translateFn = horizontal
+    ? (px: number): string => `translateX(${px}px)`
+    : (px: number): string => `translateY(${px}px)`;
+
+  /** Detach an element from the slider if it's currently attached. */
+  const detach = (el: HTMLElement | null): void => {
+    if (el && el.parentNode === slider) slider.removeChild(el);
+  };
+
   // =========================================================================
   // DOM Setup
   // =========================================================================
@@ -72,30 +93,34 @@ export const createStickyHeader = (
     container.style.top = stickyOffset ? `${stickyOffset}px` : "0";
   }
 
-  // Slider — holds current (and optionally next) header, translated for push effect
+  // Slider — holds current (and optionally next) header, translated for push
   const slider = document.createElement("div");
   slider.style.willChange = "transform";
   const initialSize = layout.groups.length > 0 ? layout.getHeaderHeight(0) : 0;
-  if (horizontal) {
-    slider.style.height = "100%";
-    slider.style.width = `${initialSize}px`;
-  } else {
-    slider.style.width = "100%";
-    slider.style.height = `${initialSize}px`;
-  }
+  setCrossSize(slider, "100%");
+  setMainSize(slider, initialSize);
   container.appendChild(slider);
 
   // Direct references to the rendered header elements inside the slider.
   // No wrapper divs — the template output is appended directly with
-  // height set on the element itself.
+  // size set on the element itself.
   let currentEl: HTMLElement | null = null;
   let nextEl: HTMLElement | null = null;
 
   // Insert container as first child of root
   root.insertBefore(container, root.firstChild);
 
+  // =========================================================================
+  // Cached state
+  // =========================================================================
+
+  // Snapshot of layout.groups — refreshed only in refresh() / rebuild paths.
+  // Avoids a property access + readonly-array dereference on every scroll tick.
+  let groups = layout.groups;
+
   // Track current state to avoid redundant DOM updates
   let currentGroupIndex = -1;
+  let currentHeaderSize = 0; // cached size of the active group's header
   let nextGroupIndex = -1;
   let isVisible = false;
   let lastTranslateValue = 0;
@@ -106,10 +131,9 @@ export const createStickyHeader = (
   // =========================================================================
 
   /**
-   * Render a header template and return the element with height set.
+   * Render a header template and return the element with size set.
    */
   const renderHeader = (groupIndex: number): HTMLElement | null => {
-    const groups = layout.groups;
     if (groupIndex < 0 || groupIndex >= groups.length) return null;
 
     const group = groups[groupIndex]!;
@@ -130,11 +154,7 @@ export const createStickyHeader = (
     }
 
     // Set size directly on the rendered element — no wrapper div
-    if (horizontal) {
-      el.style.width = `${headerSize}px`;
-    } else {
-      el.style.height = `${headerSize}px`;
-    }
+    setMainSize(el, headerSize);
 
     return el;
   };
@@ -147,23 +167,17 @@ export const createStickyHeader = (
     currentGroupIndex = groupIndex;
 
     // Remove old current element
-    if (currentEl && currentEl.parentNode === slider) {
-      slider.removeChild(currentEl);
-    }
+    detach(currentEl);
     currentEl = null;
+    currentHeaderSize = 0;
 
-    const groups = layout.groups;
     if (groupIndex < 0 || groupIndex >= groups.length) return;
 
-    // Set container and slider size to match header height
+    // Set container and slider size to match header size
     const headerSize = layout.getHeaderHeight(groupIndex);
-    if (horizontal) {
-      container.style.width = `${headerSize}px`;
-      slider.style.width = `${headerSize}px`;
-    } else {
-      container.style.height = `${headerSize}px`;
-      slider.style.height = `${headerSize}px`;
-    }
+    currentHeaderSize = headerSize;
+    setMainSize(container, headerSize);
+    setMainSize(slider, headerSize);
 
     currentEl = renderHeader(groupIndex);
     if (currentEl) {
@@ -180,9 +194,7 @@ export const createStickyHeader = (
     nextGroupIndex = groupIndex;
 
     // Remove old next element if present
-    if (nextEl && nextEl.parentNode === slider) {
-      slider.removeChild(nextEl);
-    }
+    detach(nextEl);
 
     nextEl = renderHeader(groupIndex);
     if (nextEl) {
@@ -191,27 +203,35 @@ export const createStickyHeader = (
     isTransitioning = true;
   };
 
+  // =========================================================================
+  // Transition management
+  // =========================================================================
+
+  /** Reset slider transform to identity. */
+  const resetSlider = (): void => {
+    lastTranslateValue = 0;
+    slider.style.transform = "";
+  };
+
   /**
    * Complete the transition: next becomes current.
    */
   const completeTransition = (): void => {
     if (!isTransitioning) return;
 
-    // Remove old current
-    if (currentEl && currentEl.parentNode === slider) {
-      slider.removeChild(currentEl);
-    }
+    detach(currentEl);
 
     // Next becomes current
     currentEl = nextEl;
     currentGroupIndex = nextGroupIndex;
+    currentHeaderSize = currentGroupIndex >= 0
+      ? layout.getHeaderHeight(currentGroupIndex)
+      : 0;
     nextEl = null;
     nextGroupIndex = -1;
     isTransitioning = false;
 
-    // Reset slider position
-    lastTranslateValue = 0;
-    slider.style.transform = "";
+    resetSlider();
   };
 
   /**
@@ -220,15 +240,12 @@ export const createStickyHeader = (
   const cancelTransition = (): void => {
     if (!isTransitioning) return;
 
-    if (nextEl && nextEl.parentNode === slider) {
-      slider.removeChild(nextEl);
-    }
+    detach(nextEl);
     nextEl = null;
     nextGroupIndex = -1;
     isTransitioning = false;
 
-    lastTranslateValue = 0;
-    slider.style.transform = "";
+    resetSlider();
   };
 
   // =========================================================================
@@ -246,8 +263,6 @@ export const createStickyHeader = (
    *    to create the push-out effect.
    */
   const update = (scrollPosition: number): void => {
-    const groups = layout.groups;
-
     if (groups.length === 0) {
       hide();
       return;
@@ -261,16 +276,17 @@ export const createStickyHeader = (
     }
 
     // Binary search: find the last group whose header has fully scrolled
-    // past the viewport top.  The sticky header sits ABOVE the viewport,
-    // so we offset by headerHeight — the group doesn't become "active"
-    // until its inline header is completely above the viewport.
-    const hh = config.headerHeight;
+    // past the viewport edge.  The sticky header sits ABOVE the viewport,
+    // so we offset by each group's header size — the group doesn't become
+    // "active" until its inline header is completely above the viewport.
     let lo = 0;
     let hi = groups.length - 1;
 
     while (lo < hi) {
       const mid = (lo + hi + 1) >>> 1;
-      if (sizeCache.getOffset(groups[mid]!.headerLayoutIndex) + hh <= scrollPosition) {
+      const midOffset = sizeCache.getOffset(groups[mid]!.headerLayoutIndex);
+      const midSize = layout.getHeaderHeight(mid);
+      if (midOffset + midSize <= scrollPosition) {
         lo = mid;
       } else {
         hi = mid - 1;
@@ -280,59 +296,45 @@ export const createStickyHeader = (
     const activeGroupIdx = lo;
 
     // Show and set the current group
-    if (!isVisible) {
-      show();
-    }
+    if (!isVisible) show();
     setCurrentGroup(activeGroupIdx);
 
     // Check if the next group's inline header is approaching the
-    // viewport top (= bottom of the sticky header area).
-    const activeHeaderSize = layout.getHeaderHeight(activeGroupIdx);
+    // viewport edge (= trailing edge of the sticky header area).
     const nextGroupIdx = activeGroupIdx + 1;
 
     if (nextGroupIdx < groups.length) {
       const nextHeaderOffset = sizeCache.getOffset(
         groups[nextGroupIdx]!.headerLayoutIndex,
       );
-      // distance = pixels from viewport top to the inline header.
-      // Positive: header is below viewport top.
-      // Zero: header is at viewport top (= bottom of sticky area).
-      // Negative: header has scrolled past viewport top.
+      // distance = pixels from viewport edge to the inline header.
+      // Positive: header is below viewport edge.
+      // Zero: header is at viewport edge (= trailing edge of sticky area).
+      // Negative: header has scrolled past viewport edge.
       const distance = nextHeaderOffset - scrollPosition;
 
-      if (distance <= 0 && distance > -activeHeaderSize) {
-        // Inline header is at or past viewport top — push transition.
-        // translateOffset goes from 0 (just arrived) to -activeHeaderSize
+      if (distance <= 0 && distance > -currentHeaderSize) {
+        // Inline header is at or past viewport edge — push transition.
+        // translateOffset goes from 0 (just arrived) to -currentHeaderSize
         // (fully pushed out).
         prepareNextGroup(nextGroupIdx);
 
-        const translateOffset = distance;
-
-        if (translateOffset !== lastTranslateValue) {
-          lastTranslateValue = translateOffset;
-          const transformValue = Math.round(translateOffset);
-          slider.style.transform = horizontal
-            ? `translateX(${transformValue}px)`
-            : `translateY(${transformValue}px)`;
+        if (distance !== lastTranslateValue) {
+          lastTranslateValue = distance;
+          slider.style.transform = translateFn(Math.round(distance));
         }
-      } else if (distance <= -activeHeaderSize) {
+      } else if (distance <= -currentHeaderSize) {
         // Transition complete — next group is fully past.
         // The binary search already switched the active group,
         // so just clean up.
-        if (isTransitioning) {
-          completeTransition();
-        }
+        if (isTransitioning) completeTransition();
       } else {
-        // Next header is still below viewport top — no transition
-        if (isTransitioning) {
-          cancelTransition();
-        }
+        // Next header is still below viewport edge — no transition
+        if (isTransitioning) cancelTransition();
       }
     } else {
       // No next group — cancel transition if active
-      if (isTransitioning) {
-        cancelTransition();
-      }
+      if (isTransitioning) cancelTransition();
     }
   };
 
@@ -350,22 +352,15 @@ export const createStickyHeader = (
     if (!isVisible) return;
     isVisible = false;
     container.style.display = "none";
-    // Clean up elements
-    if (currentEl && currentEl.parentNode === slider) {
-      slider.removeChild(currentEl);
-    }
+
+    // Tear down current header
+    detach(currentEl);
     currentEl = null;
     currentGroupIndex = -1;
-    if (isTransitioning) {
-      if (nextEl && nextEl.parentNode === slider) {
-        slider.removeChild(nextEl);
-      }
-      nextEl = null;
-      nextGroupIndex = -1;
-      isTransitioning = false;
-    }
-    lastTranslateValue = 0;
-    slider.style.transform = "";
+    currentHeaderSize = 0;
+
+    // Tear down any in-flight transition
+    cancelTransition();
   };
 
   // =========================================================================
@@ -377,8 +372,12 @@ export const createStickyHeader = (
    * Useful after items change and groups are recomputed.
    */
   const refresh = (): void => {
+    // Re-snapshot groups in case layout was rebuilt
+    groups = layout.groups;
+
     const prevGroup = currentGroupIndex;
     currentGroupIndex = -1; // Force re-render
+    currentHeaderSize = 0;
     if (prevGroup >= 0) {
       setCurrentGroup(prevGroup);
     }
@@ -393,6 +392,7 @@ export const createStickyHeader = (
     currentEl = null;
     nextEl = null;
     currentGroupIndex = -1;
+    currentHeaderSize = 0;
     nextGroupIndex = -1;
     isVisible = false;
     isTransitioning = false;
