@@ -492,6 +492,74 @@ describe("createStickyHeader — update", () => {
     sticky.destroy();
     root.remove();
   });
+  it("should complete transition when scrolled fully past next header", () => {
+    // To trigger complete(), the binary search must still return group 1
+    // as active while the push transition for group 2's header has fully
+    // completed.  This requires sizes[1] < sizes[2] so there's a scroll
+    // window where dist <= -curSize (small) but offsets[2]+sizes[2] > scroll
+    // (binary search hasn't advanced).
+    //
+    // Layout (itemSize=50, 34 items):
+    //   Group A: header@0  (offset 0,    headerHeight 40), 11 items
+    //   Group B: header@12 (offset 600,  headerHeight 10), 11 items
+    //   Group C: header@24 (offset 1200, headerHeight 40), 9 items
+    //
+    // Window for complete(): scroll in [1210, 1240)
+    //   dist = 1200 - scroll <= -10 (= -curSize)  → complete fires
+    //   offsets[2]+sizes[2] = 1240 > scroll        → binary search stays on group 1
+    const sizeCache = createSizeCache(50, 34);
+    const groups = [
+      { key: "Group A", groupIndex: 0, startIndex: 0,  endIndex: 10, itemCount: 11, headerLayoutIndex: 0 },
+      { key: "Group B", groupIndex: 1, startIndex: 11, endIndex: 21, itemCount: 11, headerLayoutIndex: 12 },
+      { key: "Group C", groupIndex: 2, startIndex: 22, endIndex: 30, itemCount: 9,  headerLayoutIndex: 24 },
+    ];
+    const headerHeights = [40, 10, 40];
+    const layout: GroupLayout = {
+      groups,
+      getGroupForIndex: () => 0,
+      getHeaderIndex: (gi: number) => groups[gi]?.headerLayoutIndex ?? 0,
+      getHeaderIndices: () => [0, 12, 24],
+      getHeaderHeight: (gi: number) => headerHeights[gi] ?? 40,
+      getGroupCount: () => 3,
+      getTotalWithHeaders: () => 34,
+      isHeader: (i: number) => i === 0 || i === 12 || i === 24,
+      dataIndexToLayoutIndex: (i: number) => i,
+      layoutIndexToDataIndex: (i: number) => i,
+      rebuild: () => {},
+    } as unknown as GroupLayout;
+
+    const root = createTestRoot();
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = groups[groupIndex];
+      if (!group) return;
+      slot.innerHTML = `Header: ${group.key}`;
+    };
+
+    const sticky = createStickyHeader(root, layout, sizeCache, renderInto, "vlist", false);
+    const stickyEl = root.querySelector(".vlist-sticky-header") as HTMLElement;
+
+    // Binary search: offsets[1]+sizes[1] = 600+10 = 610 <= 660 → group 1.
+    // nxt=2, offset[2]=1200, dist=540 > 0 → no transition.
+    sticky.update(660);
+    expect(stickyEl.innerHTML).toContain("Group B");
+
+    // Start push transition: dist = 1200 - 1205 = -5, curSize=10.
+    // -5 > -10 → push in progress, not yet complete.
+    sticky.update(1205);
+    expect(stickyEl.innerHTML).toContain("Group B");
+    expect(stickyEl.innerHTML).toContain("Group C");
+
+    // Complete transition: dist = 1200 - 1215 = -15, <= -10 → complete().
+    // Binary search: offsets[2]+sizes[2] = 1240 > 1215 → still group 1.
+    // complete() swaps slots, resets transforms, Group C becomes active.
+    sticky.update(1215);
+    expect(stickyEl.innerHTML).toContain("Group C");
+    expect((stickyEl.children[0] as HTMLElement).style.transform).toBe("");
+    expect((stickyEl.children[1] as HTMLElement).style.transform).toBe("");
+
+    sticky.destroy();
+    root.remove();
+  });
 });
 
 // =============================================================================
