@@ -661,6 +661,19 @@ function materialize<T extends VListItem = VListItem>(
           $.pef(element, index);
         }
       }
+
+      // Always keep viewportState in sync — even when the render range is
+      // unchanged.  Features (e.g. withSelection's scrollToFocus) read
+      // viewportState.scrollPosition and visibleRange on the next keydown.
+      // Without this update the values go stale whenever the scroll moves
+      // within the existing overscan buffer, causing cumulative drift in
+      // compressed-mode keyboard navigation (End → repeated PageUp).
+      sharedState.viewportState.scrollPosition = $.ls;
+      sharedState.viewportState.containerSize = containerSize;
+      sharedState.viewportState.visibleRange.start = visibleRange.start;
+      sharedState.viewportState.visibleRange.end = visibleRange.end;
+      sharedState.viewportState.renderRange.start = renderRange.start;
+      sharedState.viewportState.renderRange.end = renderRange.end;
       return;
     }
 

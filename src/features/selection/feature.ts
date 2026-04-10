@@ -306,6 +306,23 @@ export const withSelection = <T extends VListItem = VListItem>(
         const compression = ctx.getCachedCompression();
         const { visibleRange } = ctx.state.viewportState;
 
+        console.log(
+          `[selection/scrollToFocus] idx=${idx}, scrollPos=${scrollPos.toFixed(2)}, ` +
+          `containerSize=${containerSize}, totalItems=${totalItems}, ` +
+          `startPad=${startPadding}, endPad=${endPadding}`
+        );
+        if (compression) {
+          console.log(
+            `[selection/scrollToFocus]   compression: isCompressed=${compression.isCompressed}, ` +
+            `ratio=${compression.ratio?.toFixed(6)}, virtualSize=${compression.virtualSize?.toFixed(2)}`
+          );
+        }
+        if (visibleRange) {
+          console.log(
+            `[selection/scrollToFocus]   visibleRange=[${visibleRange.start}, ${visibleRange.end}]`
+          );
+        }
+
         const newScroll = sharedScrollToFocus(
           idx,
           ctx.sizeCache,
@@ -318,15 +335,36 @@ export const withSelection = <T extends VListItem = VListItem>(
           visibleRange,
         );
 
+        console.log(
+          `[selection/scrollToFocus]   sharedScrollToFocus returned=${newScroll.toFixed(2)}, ` +
+          `same as scrollPos=${newScroll === scrollPos}`
+        );
+
         if (newScroll !== scrollPos) {
-          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
+          const adjusted = ctx.adjustScrollPosition(newScroll);
+          console.log(
+            `[selection/scrollToFocus]   adjustScrollPosition: ${newScroll.toFixed(2)} → ${adjusted.toFixed(2)}`
+          );
+          ctx.scrollController.scrollTo(adjusted);
+          // Log what scrollPos actually becomes after scrollTo
+          const afterScrollPos = ctx.state.viewportState.scrollPosition;
+          console.log(
+            `[selection/scrollToFocus]   afterScrollTo: viewportState.scrollPosition=${afterScrollPos.toFixed(2)}, ` +
+            `delta from requested=${(afterScrollPos - adjusted).toFixed(2)}`
+          );
         }
       };
 
       // ── Helper: page size in items for PageUp/Down ──
       const getPageSize = (): number => {
         const h = ctx.sizeCache.getSize(Math.max(0, selectionState.focusedIndex));
-        return Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
+        const pageSize = Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
+        console.log(
+          `[selection/getPageSize] focusedIndex=${selectionState.focusedIndex}, ` +
+          `itemHeight=${h}, containerSize=${ctx.state.viewportState.containerSize}, ` +
+          `pageSize=${pageSize}`
+        );
+        return pageSize;
       };
 
 
@@ -516,19 +554,37 @@ export const withSelection = <T extends VListItem = VListItem>(
             focusOnly = true;
             break;
 
-          case "PageUp":
-            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "up");
+          case "PageUp": {
+            const pageSz = getPageSize();
+            console.log(
+              `[selection/KeyDown] PageUp: focusBefore=${selectionState.focusedIndex}, ` +
+              `pageSize=${pageSz}, totalItems=${totalItems}`
+            );
+            newState = moveFocusByPage(selectionState, totalItems, pageSz, "up");
+            console.log(
+              `[selection/KeyDown] PageUp: focusAfter=${newState.focusedIndex}`
+            );
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
+          }
 
-          case "PageDown":
-            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "down");
+          case "PageDown": {
+            const pageSz = getPageSize();
+            console.log(
+              `[selection/KeyDown] PageDown: focusBefore=${selectionState.focusedIndex}, ` +
+              `pageSize=${pageSz}, totalItems=${totalItems}`
+            );
+            newState = moveFocusByPage(selectionState, totalItems, pageSz, "down");
+            console.log(
+              `[selection/KeyDown] PageDown: focusAfter=${newState.focusedIndex}`
+            );
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
+          }
 
           case "Home":
             newState = moveFocusToFirst(selectionState, totalItems);

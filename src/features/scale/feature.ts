@@ -152,6 +152,27 @@ const TOUCH_VELOCITY_WINDOW = 100;
  * .build()
  * ```
  */
+/**
+ * Compute the bottom padding needed so that the linear compressed-index
+ * formula can address every item — including the very last one.
+ *
+ * Without this padding, maxScroll = virtualSize − containerSize maps to
+ * an index ~37 items from the end (for typical 72 px rows), leaving the
+ * tail unreachable.  The padding is always < containerSize and safe to
+ * add on top of MAX_VIRTUAL_SIZE.
+ */
+const compressedBottomPadding = (
+  virtualSize: number,
+  containerSize: number,
+  totalItems: number,
+  itemSize: number,
+): number => {
+  if (totalItems === 0 || !itemSize) return 0;
+  const fullyVisible = Math.max(1, Math.floor(containerSize / itemSize));
+  const compressedItemSize = virtualSize / totalItems;
+  return Math.max(0, containerSize - fullyVisible * compressedItemSize);
+};
+
 export const withScale = <
   T extends VListItem = VListItem,
 >(config?: ScaleConfig): VListFeature<T> => {
@@ -160,6 +181,7 @@ export const withScale = <
   let scrollbar: Scrollbar | null = null;
   let virtualScrollPosition = 0;
   let compressedModeActive = false;
+  let bottomPad = 0; // recomputed whenever compression state changes
 
   // Smooth scroll state — shared across the feature closure so that
   // external scroll position changes (scrollbar drag, scrollToIndex)
@@ -235,10 +257,17 @@ export const withScale = <
             targetScrollPosition = nativePos;
           }
 
-          // Set content size to virtual height (not actual height)
-          // This is critical - the content div must match the virtual height
-          // for scrolling and positioning to work correctly
-          ctx.updateContentSize(compression.virtualSize);
+          // Compute bottom padding so linear formula reaches every item
+          const itemSize = ctx.sizeCache.getSize(0);
+          bottomPad = compressedBottomPadding(
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
+            total,
+            itemSize,
+          );
+
+          // Set content size to virtual height + bottom padding
+          ctx.updateContentSize(compression.virtualSize + bottomPad);
 
           // Replace scroll functions with virtual scroll position.
           // In compressed mode the total height exceeds the browser's DOM
@@ -285,7 +314,7 @@ export const withScale = <
               // targetScrollPosition may have been set from a stale maxScroll
               // (e.g. wheel handler fired before compression updated bounds).
               const comp = ctx.getCachedCompression();
-              const maxScroll = Math.max(0, comp.virtualSize - ctx.state.viewportState.containerSize);
+              const maxScroll = Math.max(0, comp.virtualSize + bottomPad - ctx.state.viewportState.containerSize);
               virtualScrollPosition = Math.max(0, Math.min(targetScrollPosition, maxScroll));
               targetScrollPosition = virtualScrollPosition;
               smoothScrollId = null;
@@ -297,7 +326,7 @@ export const withScale = <
               // This is critical when user keeps scrolling at the bottom - targetScrollPosition
               // gets clamped to maxScroll, but virtualScrollPosition can drift beyond it during lerp
               const comp = ctx.getCachedCompression();
-              const maxScroll = comp.virtualSize - ctx.state.viewportState.containerSize;
+              const maxScroll = comp.virtualSize + bottomPad - ctx.state.viewportState.containerSize;
               virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
 
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
@@ -320,7 +349,7 @@ export const withScale = <
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize - ctx.state.viewportState.containerSize;
+              comp.virtualSize + bottomPad - ctx.state.viewportState.containerSize;
 
             targetScrollPosition = Math.max(
               0,
@@ -383,7 +412,7 @@ export const withScale = <
             const delta = touchStartPos - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize - ctx.state.viewportState.containerSize;
+              comp.virtualSize + bottomPad - ctx.state.viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -432,7 +461,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualSize - ctx.state.viewportState.containerSize;
+                comp.virtualSize + bottomPad - ctx.state.viewportState.containerSize;
 
               let newPos = virtualScrollPosition + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -633,19 +662,29 @@ export const withScale = <
           }
 
           // Restore content size to actual height
+          bottomPad = 0;
           ctx.updateContentSize(compression.actualSize);
         } else if (compression.isCompressed) {
           // Compression state changed (e.g. total items changed)
           ctx.scrollController.updateConfig({ compression });
 
-          // Update content size to new virtual height
-          ctx.updateContentSize(compression.virtualSize);
+          // Recompute bottom padding for new compression state
+          const itemSize = ctx.sizeCache.getSize(0);
+          bottomPad = compressedBottomPadding(
+            compression.virtualSize,
+            ctx.state.viewportState.containerSize,
+            total,
+            itemSize,
+          );
+
+          // Update content size to new virtual height + bottom padding
+          ctx.updateContentSize(compression.virtualSize + bottomPad);
         }
 
         // Update scrollbar bounds if we have a fallback scrollbar
         if (scrollbar) {
           scrollbar.updateBounds(
-            compression.virtualSize,
+            compression.virtualSize + bottomPad,
             ctx.state.viewportState.containerSize,
           );
         }
@@ -683,7 +722,7 @@ export const withScale = <
         if (compressedModeActive) {
           const maxScroll = Math.max(
             0,
-            compression.virtualSize - ctx.state.viewportState.containerSize,
+            compression.virtualSize + bottomPad - ctx.state.viewportState.containerSize,
           );
           let clamped = virtualScrollPosition;
           if (clamped > maxScroll) {
