@@ -27,11 +27,24 @@ export interface VListItem {
 /** Groups configuration for createVList */
 export interface GroupHeaderConfig {
   /** 
-   * Size of group header elements in pixels along the main axis.
+   * Header size in pixels along the main axis (vertical scrolling).
    * - `number` — Fixed size for all headers
    * - `(group: string, groupIndex: number) => number` — Variable size per group
+   *
+   * Required when `orientation` is `'vertical'` (default).
+   * Ignored when `orientation` is `'horizontal'`.
    */
-  height: number | ((group: string, groupIndex: number) => number);
+  height?: number | ((group: string, groupIndex: number) => number);
+
+  /**
+   * Header size in pixels along the main axis (horizontal scrolling).
+   * - `number` — Fixed size for all headers
+   * - `(group: string, groupIndex: number) => number` — Variable size per group
+   *
+   * Required when `orientation` is `'horizontal'`.
+   * Ignored when `orientation` is `'vertical'` (default).
+   */
+  width?: number | ((group: string, groupIndex: number) => number);
 
   /**
    * Template function to render a group header.

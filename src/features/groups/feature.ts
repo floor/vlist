@@ -53,8 +53,10 @@ export interface GroupsFeatureConfig {
 
   /** Group header configuration — mirrors the `item` config shape */
   header?: {
-    /** Height of group headers in pixels (required) */
-    height: number;
+    /** Header size in pixels — vertical scrolling (default) */
+    height?: number;
+    /** Header size in pixels — horizontal scrolling */
+    width?: number;
     /** Render function for headers (required) */
     template: (key: string, groupIndex: number) => HTMLElement | string;
   };
@@ -70,11 +72,19 @@ export interface GroupsFeatureConfig {
 
 /**
  * Normalize legacy flat config into the nested `header` shape.
- * Supports both `{ header: { height, template } }` (new)
+ * Supports both `{ header: { height/width, template } }` (new)
  * and `{ headerHeight, headerTemplate }` (legacy).
+ * Resolves `height` vs `width` based on orientation.
  */
-const normalizeConfig = (raw: GroupsFeatureConfig): GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } } => {
-  if (raw.header) return raw as any;
+const normalizeConfig = (
+  raw: GroupsFeatureConfig,
+  horizontal: boolean,
+): GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } } => {
+  if (raw.header) {
+    // Resolve main-axis size: width for horizontal, height for vertical
+    const size = horizontal ? (raw.header.width ?? raw.header.height) : (raw.header.height ?? raw.header.width);
+    return { ...raw, header: { ...raw.header, height: size as number } } as any;
+  }
   if (raw.headerHeight != null && raw.headerTemplate) {
     return { ...raw, header: { height: raw.headerHeight, template: raw.headerTemplate } };
   }
@@ -114,21 +124,27 @@ const normalizeConfig = (raw: GroupsFeatureConfig): GroupsFeatureConfig & { head
  * ```
  */
 export const withGroups = <T extends VListItem = VListItem>(
-  rawConfig: GroupsFeatureConfig,
+  groupsRawConfig: GroupsFeatureConfig,
 ): VListFeature<T> => {
-  // Compat: normalize legacy flat fields into nested header object
-  const config = normalizeConfig(rawConfig);
+  // Compat: normalize legacy flat fields into nested header object.
+  // Orientation isn't known yet — resolved lazily in setup().
+  // Validate eagerly using whichever size field is present.
+  const hasHeader = groupsRawConfig.header;
+  const earlySize = hasHeader
+    ? (hasHeader.height ?? hasHeader.width)
+    : groupsRawConfig.headerHeight;
+  const earlyTemplate = hasHeader?.template ?? groupsRawConfig.headerTemplate;
 
   // Validate
-  if (!config.getGroupForIndex) {
+  if (!groupsRawConfig.getGroupForIndex) {
     throw new Error("[vlist/builder] withGroups: getGroupForIndex is required");
   }
-  if (config.header?.height == null || config.header.height <= 0) {
+  if (earlySize == null || earlySize <= 0) {
     throw new Error(
       "[vlist/builder] withGroups: header.height must be a positive number",
     );
   }
-  if (!config.header?.template) {
+  if (!earlyTemplate) {
     throw new Error("[vlist/builder] withGroups: header.template is required");
   }
 
@@ -144,6 +160,9 @@ export const withGroups = <T extends VListItem = VListItem>(
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig, rawConfig } = ctx;
       const { classPrefix } = resolvedConfig;
+
+      // Now that orientation is known, normalize with the correct axis
+      const config = normalizeConfig(groupsRawConfig, resolvedConfig.horizontal);
 
       // Note: sticky headers work with both reverse mode and horizontal orientation!
       // - reverse: true - as you scroll up through history, the current section header sticks at top
