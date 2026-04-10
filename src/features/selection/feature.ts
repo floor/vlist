@@ -139,6 +139,38 @@ export const withSelection = <T extends VListItem = VListItem>(
       // ── Add selectable CSS class ──
       dom.root.classList.add(`${classPrefix}--selectable`);
 
+      // ── Group header awareness ──
+      // When withGroups is active (priority 10, runs before us at 50),
+      // it registers _isGroupHeader. Resolve once at setup time.
+      const isGroupHeaderFn = ctx.methods.get("_isGroupHeader") as
+        | ((index: number) => boolean)
+        | undefined;
+
+      /** Check whether a layout index is a group header */
+      const isHeader = (index: number): boolean =>
+        isGroupHeaderFn ? isGroupHeaderFn(index) : false;
+
+      /**
+       * Starting from `from`, scan in `dir` (+1 or -1) to find the first
+       * non-header index. Returns `from` unchanged when groups aren't active.
+       * Falls back to the opposite direction if all items in `dir` are headers.
+       */
+      const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
+        if (!isGroupHeaderFn) return from;
+        let i = from;
+        while (i >= 0 && i < total) {
+          if (!isHeader(i)) return i;
+          i += dir;
+        }
+        // Went out of bounds — try opposite direction
+        i = from - dir;
+        while (i >= 0 && i < total) {
+          if (!isHeader(i)) return i;
+          i -= dir;
+        }
+        return from; // all headers (shouldn't happen)
+      };
+
       // ── ID → index map for O(1) lookups (selection feature only) ──
       // Incrementally indexed: items are added as they load via the load:end
       // event, avoiding a full 0..total scan that would generate millions of
@@ -338,10 +370,13 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (totalItems === 0) return;
 
         // Restore previous focus position, or start at 0
-        const idx =
+        let idx =
           selectionState.focusedIndex >= 0
             ? Math.min(selectionState.focusedIndex, totalItems - 1)
             : 0;
+
+        // Skip group headers
+        idx = skipHeaders(idx, 1, totalItems);
 
         selectionState = setFocusedIndex(selectionState, idx);
         selectionState.focusVisible = true;
@@ -420,6 +455,9 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         const item = ctx.dataManager.getItem(index);
         if (!item) return;
+
+        // Ignore clicks on group headers
+        if (isHeader(index)) return;
 
         // Emit click event
         emitter.emit("item:click", { item, index, event });
@@ -511,7 +549,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case " ":
           case "Enter":
-            if (selectionState.focusedIndex >= 0) {
+            if (selectionState.focusedIndex >= 0 && !isHeader(selectionState.focusedIndex)) {
               const focusedItem = ctx.dataManager.getItem(
                 selectionState.focusedIndex,
               );
@@ -526,6 +564,12 @@ export const withSelection = <T extends VListItem = VListItem>(
               handled = true;
             }
             break;
+        }
+
+        // Skip group headers after directional movement
+        if (focusOnly && isGroupHeaderFn) {
+          const dir: 1 | -1 = newState.focusedIndex > previousFocusIndex ? 1 : -1;
+          newState.focusedIndex = skipHeaders(newState.focusedIndex, dir, totalItems);
         }
 
         // Optional: selection follows focus on arrow/page/home/end keys
@@ -640,6 +684,10 @@ export const withSelection = <T extends VListItem = VListItem>(
         selectionState = direction === "next"
           ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap)
           : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
+
+        // Skip group headers
+        const dir: 1 | -1 = direction === "next" ? 1 : -1;
+        selectionState.focusedIndex = skipHeaders(selectionState.focusedIndex, dir, totalItems);
 
         const idx = selectionState.focusedIndex;
         const item = ctx.dataManager.getItem(idx);

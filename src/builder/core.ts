@@ -1215,12 +1215,31 @@ function materialize<T extends VListItem = VListItem>(
     };
 
     // Tab into list → focus first (or last-focused) item (keyboard only)
+    /** Skip group headers: scan from `from` in `dir`, fall back to opposite direction. */
+    const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
+      let i = from;
+      while (i >= 0 && i < total) {
+        const item = $.dm ? $.dm.getItem(i) : $.it[i];
+        if (!item || !(item as any).__groupHeader) return i;
+        i += dir;
+      }
+      // Out of bounds — try opposite direction
+      i = from - dir;
+      while (i >= 0 && i < total) {
+        const item = $.dm ? $.dm.getItem(i) : $.it[i];
+        if (!item || !(item as any).__groupHeader) return i;
+        i -= dir;
+      }
+      return from;
+    };
+
     const onFocusIn = (): void => {
       if ($.id) return;
       if (!dom.root.matches(":focus-visible")) return;
       const total = $.vtf();
       if (total === 0) return;
-      const target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
+      let target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
+      target = skipHeaders(target, 1, total);
       moveFocus(target, total);
     };
     dom.root.addEventListener("focusin", onFocusIn);
@@ -1255,12 +1274,19 @@ function materialize<T extends VListItem = VListItem>(
         case "End":       n = total - 1; break;
         case " ":
         case "Enter":
-          if (p >= 0) coreSelect(p, total, true);
+          if (p >= 0) {
+            const focusedItem = ($.dm ? $.dm.getItem(p) : $.it[p]) as T | undefined;
+            if (focusedItem && !(focusedItem as any).__groupHeader) {
+              coreSelect(p, total, true);
+            }
+          }
           event.preventDefault();
           return;
         default: return;
       }
       event.preventDefault();
+      // Skip group headers
+      n = skipHeaders(n, n >= p ? 1 : -1, total);
       if (n !== p) moveFocus(n, total);
     });
 
