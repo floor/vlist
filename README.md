@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.4.3** — [Changelog](./changelog.txt)
+**v1.4.4** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~10.4 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~11.2 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -23,14 +23,15 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 ## Highlights
 
-
+- **WAI-ARIA Grid keyboard navigation** — grids and masonry layouts support full 2D arrow-key navigation (Up/Down by row, Left/Right by cell), row-scoped Home/End, Ctrl+Home/End, PageUp/Down. Horizontal orientation swaps axes correctly.
+- **Masonry lane-aware navigation** — ArrowUp/Down stay in the same visual column, ArrowLeft/Right move to the nearest item in the adjacent lane. O(1) same-lane / O(log k) adjacent-lane via pre-built per-lane index arrays.
 - **Data table** — virtualized columns with resize, sort, horizontal scroll, and grouped sections via `withTable()`
 - **Dimension-agnostic API** — semantically correct terminology for both orientations
 - **Performance optimized** — 13-pattern optimization playbook applied across the entire rendering pipeline
 - **Horizontal groups** — sticky headers work in horizontal carousels
 - **Horizontal grid layouts** — 2D grids work in both orientations
 - **Masonry** — shortest-lane placement via `withMasonry()`
-- **Keyboard accessible** — focus-visible outlines, arrow/Home/End/PageUp/PageDown navigation, smart edge-scroll, Tab support
+- **Keyboard accessible** — focus-visible outlines, full 2D keyboard navigation, smart edge-scroll, Tab support
 - **Responsive grid & masonry** — context-injected `columnWidth` auto-recalculates on resize
 
 ## Installation
@@ -88,15 +89,15 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 10.4 KB | Core virtualization, gap, padding, ARIA live region |
-| `withGrid()` | +4.0 KB | 2D grid layout with context injection |
-| `withMasonry()` | +2.7 KB | Pinterest-style masonry layout |
-| `withGroups()` | +4.3 KB | Grouped lists with sticky/inline headers |
+| **Base** | 11.2 KB | Core virtualization, gap, padding, ARIA live region |
+| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
+| `withMasonry()` | +3.4 KB | Pinterest-style masonry layout with lane-aware nav |
+| `withGroups()` | +4.6 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.4 KB | Lazy loading with adapters |
-| `withSelection()` | +2.1 KB | Single/multiple selection + keyboard nav |
-| `withScale()` | +3.0 KB | 1M+ items via scroll compression |
+| `withSelection()` | +2.5 KB | Single/multiple selection + 2D keyboard nav |
+| `withScale()` | +2.8 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +5.6 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.6 KB | Scroll save/restore |
 
@@ -416,11 +417,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 10.4 KB |
-| + Grid | 14.4 KB |
-| + Groups | 14.7 KB |
-| + Async | 14.8 KB |
-| + Table | 16.0 KB |
+| Base only | 11.2 KB |
+| + Grid | 15.1 KB |
+| + Groups | 15.9 KB |
+| + Async | 15.7 KB |
+| + Table | 16.7 KB |
 
 ### Memory Efficiency
 
