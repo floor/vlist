@@ -1285,6 +1285,85 @@ describe("integration — async + selection", () => {
     expect(indices.length).toBeGreaterThan(0);
     expect(Math.min(...indices)).toBe(0);
   });
+});
+
+// =============================================================================
+// Scroll Gutter Configuration
+// =============================================================================
+
+describe("integration — scroll.gutter", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem>;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) list.destroy();
+    container.remove();
+  });
+
+  it("should not add gutter class by default", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createTestItems(20),
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    expect(viewport.classList.contains("vlist-viewport--gutter-stable")).toBe(false);
+  });
+
+  it("should add gutter-stable class when scroll.gutter is 'stable'", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createTestItems(20),
+      scroll: { gutter: "stable" },
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    expect(viewport.classList.contains("vlist-viewport--gutter-stable")).toBe(true);
+  });
+
+  it("should not add gutter class when scroll.gutter is 'auto'", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createTestItems(20),
+      scroll: { gutter: "auto" },
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    expect(viewport.classList.contains("vlist-viewport--gutter-stable")).toBe(false);
+  });
+
+  it("should work alongside other scroll config options", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+      items: createTestItems(20),
+      scroll: { gutter: "stable", wrap: true },
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    expect(viewport.classList.contains("vlist-viewport--gutter-stable")).toBe(true);
+  });
+});
+
+describe("integration — async + selection", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem>;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    if (list) list.destroy();
+    container.remove();
+  });
 
   it("should emit selection:change with async-loaded items", async () => {
     const adapter = createMockAdapter(100);
@@ -2173,6 +2252,7 @@ describe("integration — async + grid", () => {
 
     const indicesAfter = getRenderedIndices(list);
     expect(indicesAfter.length).toBeGreaterThan(0);
+    expect(indicesAfter[0]).toBe(0);
   });
 });
 
