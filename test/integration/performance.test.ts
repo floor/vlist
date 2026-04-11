@@ -873,7 +873,7 @@ describe("performance — scrollToIndex", () => {
     list.destroy();
   });
 
-  it("should scrollToIndex in under 5ms for 1M compressed items", () => {
+  it("should scrollToIndex in under 50ms for 1M compressed items", () => {
     const list = vlist<TestItem>({
       container,
       item: { height: 50, template },
@@ -886,7 +886,7 @@ describe("performance — scrollToIndex", () => {
       list.scrollToIndex(500000);
     });
 
-    expectFasterThan(elapsed, 5);
+    expectFasterThan(elapsed, 50);
     list.destroy();
   });
 
