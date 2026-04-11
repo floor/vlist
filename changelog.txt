@@ -1,10 +1,14 @@
 vlist — full changelog
 initial commit → latest
-455 commits · 68 days · Feb 2 – Apr 11, 2026
+456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
 2026-04-11  v1.4.4
 
+  fix(selection): use scroll-if-needed on focusin instead of center-scroll
+    onFocusIn always centered the focused item, causing a large gap below
+    the last item when tabbing back after pressing End. Now uses scrollToFocus
+    which only scrolls when the item is outside the viewport.
   fix(grid): scroll jump to bottom when clicking items in grid mode
     commitFocus passed flat item indices to scrollToFocus but the size cache
     is indexed by rows. Added i2s (item-to-scroll-index) mapping.
