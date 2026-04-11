@@ -219,6 +219,139 @@ export const withMasonry = <T extends VListItem = VListItem>(
         resolvedConfig.ariaIdPrefix,
       );
 
+      // ── Wire updateItemClasses to the masonry renderer ──
+      // The core's $.uic uses the core rendered Map which is empty in masonry
+      // mode. Redirect to the masonry renderer's own updateItemClasses so that
+      // withSelection's targeted focus/selection class updates work.
+      ctx.setUpdateItemClassesFn((index: number, isSelected: boolean, isFocused: boolean): void => {
+        masonryRenderer?.updateItemClasses(index, isSelected, isFocused);
+      });
+
+      // ── Lane-aware navigation for masonry ──
+      // Unlike grid (uniform rows), masonry places items in the shortest lane.
+      // ±columns would land in a random lane. Instead, register a _navigate
+      // function that finds the prev/next item in the same lane for Up/Down,
+      // and uses ±1 for Left/Right (flat item order).
+      ctx.methods.set("_getNavTotal", () => ctx.dataManager.getTotal());
+
+      // Helper: find the item in `targetLane` whose y-center is closest
+      // to the given y-center. O(n) scan — acceptable on keypress.
+      const findNearestInLane = (targetLane: number, yCenter: number, total: number): number => {
+        let bestIndex = -1;
+        let bestDist = Infinity;
+        for (let i = 0; i < total; i++) {
+          const p = cachedPlacements[i];
+          if (!p || p.lane !== targetLane) continue;
+          const dist = Math.abs((p.y + p.size / 2) - yCenter);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIndex = i;
+          }
+        }
+        return bestIndex;
+      };
+
+      ctx.methods.set("_navigate", (currentIndex: number, key: string, total: number): number => {
+        const placement = cachedPlacements[currentIndex];
+        if (!placement) return currentIndex;
+        const lane = placement.lane;
+        const cols = masonryConfig.columns;
+
+        switch (key) {
+          case "ArrowDown": {
+            // Next item in the same lane (visually below)
+            for (let i = currentIndex + 1; i < total; i++) {
+              if (cachedPlacements[i]?.lane === lane) return i;
+            }
+            return currentIndex;
+          }
+          case "ArrowUp": {
+            // Previous item in the same lane (visually above)
+            for (let i = currentIndex - 1; i >= 0; i--) {
+              if (cachedPlacements[i]?.lane === lane) return i;
+            }
+            return currentIndex;
+          }
+          case "ArrowRight": {
+            // Nearest item in the lane to the right at similar y position
+            if (lane >= cols - 1) return currentIndex;
+            const yCenter = placement.y + placement.size / 2;
+            const found = findNearestInLane(lane + 1, yCenter, total);
+            return found >= 0 ? found : currentIndex;
+          }
+          case "ArrowLeft": {
+            // Nearest item in the lane to the left at similar y position
+            if (lane <= 0) return currentIndex;
+            const yCenter = placement.y + placement.size / 2;
+            const found = findNearestInLane(lane - 1, yCenter, total);
+            return found >= 0 ? found : currentIndex;
+          }
+          case "Home": {
+            return 0;
+          }
+          case "End": {
+            return total - 1;
+          }
+          case "PageDown": {
+            // Jump forward by ~visible-rows items in the same lane
+            const containerSize = ctx.state.viewportState.containerSize;
+            const itemSize = placement.size > 0 ? placement.size : 150;
+            const visiblePerLane = Math.max(1, Math.floor(containerSize / itemSize));
+            let count = 0;
+            for (let i = currentIndex + 1; i < total; i++) {
+              if (cachedPlacements[i]?.lane === lane) {
+                count++;
+                if (count >= visiblePerLane) return i;
+              }
+            }
+            // Reached end of lane — return last item in lane
+            for (let i = total - 1; i > currentIndex; i--) {
+              if (cachedPlacements[i]?.lane === lane) return i;
+            }
+            return currentIndex;
+          }
+          case "PageUp": {
+            const containerSize = ctx.state.viewportState.containerSize;
+            const itemSize = placement.size > 0 ? placement.size : 150;
+            const visiblePerLane = Math.max(1, Math.floor(containerSize / itemSize));
+            let count = 0;
+            for (let i = currentIndex - 1; i >= 0; i--) {
+              if (cachedPlacements[i]?.lane === lane) {
+                count++;
+                if (count >= visiblePerLane) return i;
+              }
+            }
+            // Reached start of lane — return first item in lane
+            for (let i = 0; i < currentIndex; i++) {
+              if (cachedPlacements[i]?.lane === lane) return i;
+            }
+            return currentIndex;
+          }
+        }
+        return currentIndex;
+      });
+
+      // ── Register placement-based scroll-into-view ──
+      // The core size cache has no meaningful per-item offsets in masonry mode.
+      // This method lets commitFocus and withSelection scroll a focused item
+      // into view using the pre-calculated placement coordinates.
+      ctx.methods.set("_scrollItemIntoView", (index: number): void => {
+        const placement = cachedPlacements[index];
+        if (!placement) return;
+
+        const scrollPos = ctx.scrollController.getScrollTop();
+        const containerSize = ctx.state.viewportState.containerSize;
+        const itemTop = placement.y;
+        const itemBottom = itemTop + placement.size;
+        const viewportBottom = scrollPos + containerSize;
+
+        if (itemTop < scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(Math.max(0, itemTop)));
+        } else if (itemBottom > viewportBottom) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
+        }
+      });
+
       // ── Cached selection method references ──
       // Resolved once after setup, avoiding Map.get() on every frame
       let selectedIdsGetter: (() => Set<string | number>) | null = null;

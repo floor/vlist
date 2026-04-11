@@ -238,6 +238,8 @@ function createMockContext(config?: {
     adjustScrollPosition: (pos: number) => pos,
     getStripeIndexFn: () => (index: number) => index,
     setStripeIndexFn: () => {},
+    getItemToScrollIndexFn: () => (index: number) => index,
+    setItemToScrollIndexFn: () => {},
   };
 
   // Mock setAttribute/removeAttribute for ARIA testing

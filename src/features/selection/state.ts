@@ -143,15 +143,17 @@ export const setFocusedIndex = (
 /**
  * Move focus up
  * Mutates state in-place to avoid allocation on hot path
+ * @param delta - Number of items to move by (default 1). Useful for grid layouts where row navigation moves by `columns`.
  */
 export const moveFocusUp = (
   state: SelectionState,
   totalItems: number,
   wrap: boolean = false,
+  delta: number = 1,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
-  let newIndex = state.focusedIndex - 1;
+  let newIndex = state.focusedIndex - delta;
 
   if (newIndex < 0) {
     newIndex = wrap ? totalItems - 1 : 0;
@@ -164,15 +166,17 @@ export const moveFocusUp = (
 /**
  * Move focus down
  * Mutates state in-place to avoid allocation on hot path
+ * @param delta - Number of items to move by (default 1). Useful for grid layouts where row navigation moves by `columns`.
  */
 export const moveFocusDown = (
   state: SelectionState,
   totalItems: number,
   wrap: boolean = false,
+  delta: number = 1,
 ): SelectionState => {
   if (totalItems === 0) return state;
 
-  let newIndex = state.focusedIndex + 1;
+  let newIndex = state.focusedIndex + delta;
 
   if (newIndex >= totalItems) {
     newIndex = wrap ? 0 : totalItems - 1;

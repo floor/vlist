@@ -153,6 +153,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   mp: number;
   /** stripeIndexFn — maps layout index to stripe index (-1 = skip) */
   sif: (index: number) => number;
+  /** itemToScrollIndex — maps flat item index to size-cache index (identity for list, floor(index/cols) for grid) */
+  i2s: (index: number) => number;
   /** updateItemClassesFn */
   uic: (index: number, isSelected: boolean, isFocused: boolean) => void;
 }
@@ -532,6 +534,14 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
 
     setStripeIndexFn(fn: (index: number) => number): void {
       $.sif = fn;
+    },
+
+    getItemToScrollIndexFn(): (index: number) => number {
+      return $.i2s;
+    },
+
+    setItemToScrollIndexFn(fn: (index: number) => number): void {
+      $.i2s = fn;
     },
 
     setUpdateItemClassesFn(
