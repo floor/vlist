@@ -428,16 +428,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           `${ariaIdPrefix}-item-${idx}`,
         );
 
-        ctx.scrollController.scrollTo(
-          ctx.adjustScrollPosition(
-            ctx.getScrollToPos(
-              idx,
-              ctx.state.viewportState.containerSize,
-              ctx.dataManager.getState().total,
-              "center",
-            ),
-          ),
-        );
+        scrollToFocus(idx);
 
         const item = ctx.dataManager.getItem(idx);
         if (item) {

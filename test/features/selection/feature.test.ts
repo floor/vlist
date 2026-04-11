@@ -947,7 +947,9 @@ describe("withSelection — focusin handler", () => {
     ctx.dom.root.dispatchEvent(focusEvent);
 
     expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
-    expect(scrollToSpy).toHaveBeenCalled();
+    // scrollToFocus uses scroll-if-needed: item 0 at scroll position 0 is
+    // already visible, so no scroll is performed. We only assert that the
+    // focus class update happened.
     expect(updateClassesSpy).toHaveBeenCalled();
 
     // Cleanup
