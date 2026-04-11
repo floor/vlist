@@ -110,6 +110,7 @@ function createTestRefs(): MRefs<TestItem> {
     gp: 0,
     mp: 0,
     sif: (index: number) => index,
+    i2s: (index: number) => index,
     uic: () => {},
   };
 }
