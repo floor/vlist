@@ -100,6 +100,10 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   // when striped: "data" to skip group headers from even/odd count.
   let stripeIndexFn: (index: number) => number = (index) => index;
 
+  // Default: identity (index as-is). withGrid overrides this to convert
+  // flat item indices to row indices for the size cache.
+  let itemToScrollIndexFn: (index: number) => number = (i) => i;
+
   // ── Helpers ───────────────────────────────────────────────────
 
   const getVirtualTotal = (): number => virtualTotalFn();
@@ -410,6 +414,10 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     getStripeIndexFn: () => stripeIndexFn,
     setStripeIndexFn: (fn: (index: number) => number) => {
       stripeIndexFn = fn;
+    },
+    getItemToScrollIndexFn: () => itemToScrollIndexFn,
+    setItemToScrollIndexFn: (fn: (index: number) => number) => {
+      itemToScrollIndexFn = fn;
     },
   };
 

@@ -1,7 +1,57 @@
 vlist — full changelog
 initial commit → latest
-448 commits · 67 days · Feb 2 – Apr 10, 2026
+456 commits · 68 days · Feb 2 – Apr 11, 2026
 
+
+2026-04-11  v1.4.4
+
+  fix(selection): use scroll-if-needed on focusin instead of center-scroll
+    onFocusIn always centered the focused item, causing a large gap below
+    the last item when tabbing back after pressing End. Now uses scrollToFocus
+    which only scrolls when the item is outside the viewport.
+  fix(grid): scroll jump to bottom when clicking items in grid mode
+    commitFocus passed flat item indices to scrollToFocus but the size cache
+    is indexed by rows. Added i2s (item-to-scroll-index) mapping.
+  fix(grid): baseline single-select keyboard nav for 2D grids
+    ArrowUp/Down move by ±columns (row nav), ArrowLeft/Right by ±1 (cell nav).
+    Home/End go to first/last cell in current row (WAI-ARIA Grid pattern).
+    Ctrl+Home/End go to first/last item overall.
+    PageUp/Down jump by visible rows while staying in column.
+  fix(grid): wire setUpdateItemClassesFn to grid renderer
+    withSelection focus/selection class updates were no-ops because the core
+    rendered Map is empty in grid mode — must delegate to grid renderer.
+  fix(grid): swap arrow keys for horizontal orientation
+    Left/Right = ±columns (scroll axis), Up/Down = ±1 (cross axis).
+  fix(masonry): lane-aware keyboard navigation
+    ArrowUp/Down find prev/next item in same lane (visual column).
+    ArrowLeft/Right find nearest item in adjacent lane by y-position.
+    PageUp/Down jump by visible items in same lane.
+    Horizontal orientation swaps axes correctly.
+  fix(masonry): placement-based scroll-into-view for focus
+    Core size cache has no meaningful per-item offsets in masonry mode.
+    Registered _scrollItemIntoView using pre-calculated placement coordinates.
+  fix(masonry): wire setUpdateItemClassesFn to masonry renderer
+  fix(masonry): separate template re-evaluation from CSS class updates
+    Clicking no longer flashes images — only CSS classes update on state change,
+    preserving loaded <img> elements (matches grid renderer pattern).
+  fix(selection): grid/masonry-aware keyboard navigation
+    ArrowUp/Down pass delta=columns for grids, use _navigate for masonry.
+    ArrowLeft/Right enabled for grid (±1) and masonry (adjacent lane).
+    Home/End row-scoped in grid, Ctrl+Home/End grid-scoped.
+    getPageSize uses i2s for correct row height lookup.
+    scrollToFocus uses _scrollItemIntoView when available.
+  fix(selection): moveFocusUp/moveFocusDown accept optional delta parameter
+  fix(core): preventDefault for recognized nav keys at boundaries
+  fix(groups): non-null assertion for groupLayout in renderInto (TS18047)
+  perf(masonry): O(1)/O(log k) navigation with per-lane index arrays
+    laneItems[lane] = sorted flat indices, itemLanePos[i] = position in lane,
+    laneYCenters[lane] = Float64Array for binary search on adjacent-lane nav.
+    ArrowUp/Down O(1), ArrowLeft/Right O(log k), PageUp/Down O(1).
+    Index arrays rebuilt after each layout calculation.
+  feat(photo-album): add withSelection to vanilla example
+  test: 25 integration tests for grid/masonry navigation
+    Vertical + horizontal orientation, baseline + withSelection,
+    lane-aware masonry nav, renderer updateItemClasses preservation.
 
 2026-04-10
 

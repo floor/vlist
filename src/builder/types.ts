@@ -492,6 +492,20 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * group headers from the even/odd alternation.
    */
   setStripeIndexFn(fn: (index: number) => number): void;
+
+  /**
+   * Returns the current item-to-scroll-index mapping function.
+   * Identity for flat lists; floor(index/columns) for grids where the
+   * size cache is indexed by row, not by flat item index.
+   */
+  getItemToScrollIndexFn(): (index: number) => number;
+
+  /**
+   * Replace the item-to-scroll-index mapping function.
+   * Called by withGrid to convert flat item indices to row indices
+   * so that scrollToFocus uses the correct size-cache entry.
+   */
+  setItemToScrollIndexFn(fn: (index: number) => number): void;
 }
 
 // =============================================================================

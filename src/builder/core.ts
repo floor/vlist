@@ -394,6 +394,7 @@ function materialize<T extends VListItem = VListItem>(
     gp: gap,
     mp: mainAxisPadding,
     sif: (index: number) => index,
+    i2s: (index: number) => index,
     uic: (index: number, isSelected: boolean, isFocused: boolean): void => {
       const element = rendered.get(index);
       if (!element) return;
@@ -1196,6 +1197,41 @@ function materialize<T extends VListItem = VListItem>(
     const endPad = isHorizontal ? pad.right : pad.bottom;
     let coreFocusVisible = false;
 
+    // ── 2D navigation hints (set by withGrid/withMasonry via ctx.methods) ──
+    // _getNavTotal: flat item count for bounds (default: $.vtf())
+    // _getNavDelta: { ud, lr, cols } — arrow-key index deltas (grid)
+    //   ud   = ArrowUp/Down delta  (1 for flat lists, columns for grids)
+    //   lr   = ArrowLeft/Right delta (0 = disabled for lists, 1 for grids)
+    //   cols = column count for row-aware Home/End (0 = flat list)
+    // _navigate: custom navigation fn (masonry) — overrides _getNavDelta
+    // _scrollItemIntoView: placement-based scroll (masonry)
+    let navTotalFn: (() => number) | null = null;
+    let navDeltaFn: (() => { ud: number; lr: number; cols: number }) | null = null;
+    let navigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
+    let scrollItemIntoViewFn: ((index: number) => void) | null = null;
+    let navHintsResolved = false;
+
+    const resolveNavHints = (): void => {
+      if (navHintsResolved) return;
+      navHintsResolved = true;
+      navTotalFn = (methods.get("_getNavTotal") as (() => number)) ?? null;
+      navDeltaFn = (methods.get("_getNavDelta") as (() => { ud: number; lr: number; cols: number })) ?? null;
+      navigateFn = (methods.get("_navigate") as ((currentIndex: number, key: string, total: number) => number)) ?? null;
+      scrollItemIntoViewFn = (methods.get("_scrollItemIntoView") as ((index: number) => void)) ?? null;
+    };
+
+    /** Flat item count for navigation bounds (row count for scroll stays $.vtf()). */
+    const navTotal = (): number => {
+      resolveNavHints();
+      return navTotalFn ? navTotalFn() : $.vtf();
+    };
+
+    /** Arrow-key deltas: ud for Up/Down, lr for Left/Right (0 = disabled), cols for Home/End. */
+    const navDelta = (): { ud: number; lr: number; cols: number } => {
+      resolveNavHints();
+      return navDeltaFn ? navDeltaFn() : { ud: 1, lr: 0, cols: 0 };
+    };
+
     // Register internal getter so the render loop respects focusVisible.
     // When false (mouse click), the render sees -1 → no --focused class.
     methods.set("_getFocusedIndex", (): number => {
@@ -1205,18 +1241,32 @@ function materialize<T extends VListItem = VListItem>(
     /** Scroll-if-needed + ARIA activedescendant + force render */
     const commitFocus = (index: number, total: number): void => {
       dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
-      const containerSize = isHorizontal ? $.cw : $.ch;
-      const newScroll = scrollToFocus(
-        index, $.hc, $.ls, containerSize,
-        startPad,
-        endPad,
-        sharedState.cachedCompression?.state,
-        total,
-        sharedState.viewportState.visibleRange,
-      );
-      if (newScroll !== $.ls) {
-        $.sst(newScroll);
-        $.ls = $.sgt();
+      resolveNavHints();
+
+      if (scrollItemIntoViewFn) {
+        // Placement-based scroll (masonry) — the feature owns its own
+        // coordinate system; the core size cache has no meaningful offsets.
+        scrollItemIntoViewFn(index);
+      } else {
+        // Size-cache-based scroll (flat list / grid).
+        // Convert flat item index → size-cache index (identity for lists,
+        // floor(index/columns) for grids where sizeCache is in row-space).
+        const containerSize = isHorizontal ? $.cw : $.ch;
+        const scrollIndex = $.i2s(index);
+
+        const newScroll = scrollToFocus(
+          scrollIndex, $.hc, $.ls, containerSize,
+          startPad,
+          endPad,
+          sharedState.cachedCompression?.state,
+          total,
+          sharedState.viewportState.visibleRange,
+        );
+
+        if (newScroll !== $.ls) {
+          $.sst(newScroll);
+          $.ls = $.sgt();
+        }
       }
       $.ffn();
     };
@@ -1267,11 +1317,11 @@ function materialize<T extends VListItem = VListItem>(
     const onFocusIn = (): void => {
       if ($.id) return;
       if (!dom.root.matches(":focus-visible")) return;
-      const total = $.vtf();
+      const total = navTotal();
       if (total === 0) return;
       let target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
       target = skipHeaders(target, 1, total);
-      moveFocus(target, total);
+      moveFocus(target, $.vtf());
     };
     dom.root.addEventListener("focusin", onFocusIn);
 
@@ -1289,36 +1339,86 @@ function materialize<T extends VListItem = VListItem>(
     };
     dom.root.addEventListener("focusout", onFocusOut);
 
-    // Keyboard handler — arrows move focus (wrap if scroll.wrap), Space/Enter selects
+    // Keyboard handler — arrows move focus, Space/Enter selects
+    // Supports three modes:
+    //   1. _navigate fn (masonry) — full custom lane-aware navigation
+    //   2. _getNavDelta (grid) — delta-based 2D navigation
+    //   3. default (flat list) — ±1 up/down
     keydownHandlers.push((event: KeyboardEvent): void => {
       if ($.id) return;
-      const total = $.vtf();
+      const total = navTotal();
       if (total === 0) return;
+      const scrollTotal = $.vtf();
       const p = $.fi;
       let n = p;
-      switch (event.key) {
-        case "ArrowUp":   n = p <= 0 ? (wrapEnabled ? total - 1 : 0) : p - 1; break;
-        case "ArrowDown": n = p >= total - 1 ? (wrapEnabled ? 0 : total - 1) : p + 1; break;
-        case "PageUp":    n = Math.max(0, p - Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
-        case "PageDown":  n = Math.min(total - 1, p + Math.max(1, Math.floor((isHorizontal ? $.cw : $.ch) / $.hc.getSize(Math.max(0, p))))); break;
-        case "Home":      n = 0; break;
-        case "End":       n = total - 1; break;
-        case " ":
-        case "Enter":
-          if (p >= 0) {
-            const focusedItem = ($.dm ? $.dm.getItem(p) : $.it[p]) as T | undefined;
-            if (focusedItem && !(focusedItem as any).__groupHeader) {
-              coreSelect(p, total, true);
-            }
+
+      // Space/Enter: select (same in all modes)
+      if (event.key === " " || event.key === "Enter") {
+        if (p >= 0) {
+          const focusedItem = ($.dm ? $.dm.getItem(p) : $.it[p]) as T | undefined;
+          if (focusedItem && !(focusedItem as any).__groupHeader) {
+            coreSelect(p, scrollTotal, true);
           }
-          event.preventDefault();
-          return;
-        default: return;
+        }
+        event.preventDefault();
+        return;
       }
+
+      resolveNavHints();
+
+      if (navigateFn) {
+        // ── Custom navigation (masonry): gate on recognized nav keys ──
+        switch (event.key) {
+          case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
+          case "PageUp": case "PageDown": case "Home": case "End":
+            n = navigateFn(p, event.key, total);
+            break;
+          default:
+            return; // unrecognized key — let browser handle it
+        }
+      } else {
+        // ── Delta-based navigation (grid / flat list) ──
+        const { ud, lr, cols } = navDelta();
+        switch (event.key) {
+          case "ArrowUp":    n = p - ud; break;
+          case "ArrowDown":  n = p + ud; break;
+          case "ArrowLeft":  if (!lr) return; n = p - lr; break;
+          case "ArrowRight": if (!lr) return; n = p + lr; break;
+          case "PageUp": {
+            const rowH = $.hc.getSize($.i2s(Math.max(0, p)));
+            n = p - Math.max(ud, Math.floor((isHorizontal ? $.cw : $.ch) / rowH) * ud);
+            break;
+          }
+          case "PageDown": {
+            const rowH = $.hc.getSize($.i2s(Math.max(0, p)));
+            n = p + Math.max(ud, Math.floor((isHorizontal ? $.cw : $.ch) / rowH) * ud);
+            break;
+          }
+          case "Home":
+            if (event.ctrlKey || !cols) {
+              n = 0;
+            } else {
+              n = p - (p % cols);
+            }
+            break;
+          case "End":
+            if (event.ctrlKey || !cols) {
+              n = total - 1;
+            } else {
+              n = Math.min(p - (p % cols) + cols - 1, total - 1);
+            }
+            break;
+          default: return;
+        }
+        // Clamp with optional wrap
+        if (n < 0) n = wrapEnabled ? total - 1 : 0;
+        else if (n >= total) n = wrapEnabled ? 0 : total - 1;
+      }
+
       event.preventDefault();
       // Skip group headers
       n = skipHeaders(n, n >= p ? 1 : -1, total);
-      if (n !== p) moveFocus(n, total);
+      if (n !== p) moveFocus(n, scrollTotal);
     });
 
     // Click → select + focus

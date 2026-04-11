@@ -199,6 +199,9 @@ export const withMasonry = <T extends VListItem = VListItem>(
           sizeFn,
         );
 
+        // Rebuild per-lane navigation index after layout
+        rebuildLaneIndex();
+
         // Update total size
         const totalSize = masonryLayout!.getTotalSize(cachedPlacements);
         ctx.sizeCache.getTotalSize = () => totalSize;
@@ -218,6 +221,182 @@ export const withMasonry = <T extends VListItem = VListItem>(
         () => ctx.dataManager.getTotal(),
         resolvedConfig.ariaIdPrefix,
       );
+
+      // ── Wire updateItemClasses to the masonry renderer ──
+      // The core's $.uic uses the core rendered Map which is empty in masonry
+      // mode. Redirect to the masonry renderer's own updateItemClasses so that
+      // withSelection's targeted focus/selection class updates work.
+      ctx.setUpdateItemClassesFn((index: number, isSelected: boolean, isFocused: boolean): void => {
+        masonryRenderer?.updateItemClasses(index, isSelected, isFocused);
+      });
+
+      // ── Per-lane navigation index ──
+      // Rebuilt after every layout calculation (O(n) build, then O(1) or
+      // O(log k) per keypress where k = items per lane).
+      //
+      // laneItems[lane] = flat item indices in that lane, sorted by y (which
+      //   is insertion order since items are placed top-to-bottom).
+      // itemLanePos[flatIndex] = position within its lane array.
+      // laneYCenters[lane] = y-center values parallel to laneItems, for
+      //   binary search on ArrowLeft/Right.
+      let laneItems: number[][] = [];
+      let itemLanePos: Int32Array = new Int32Array(0);
+      let laneYCenters: Float64Array[] = [];
+
+      const rebuildLaneIndex = (): void => {
+        const cols = masonryConfig.columns;
+        const total = cachedPlacements.length;
+
+        // Reset lane buckets
+        laneItems = Array.from({ length: cols }, () => []);
+
+        if (itemLanePos.length < total) {
+          itemLanePos = new Int32Array(total);
+        }
+
+        for (let i = 0; i < total; i++) {
+          const p = cachedPlacements[i]!;
+          const pos = laneItems[p.lane]!.length;
+          laneItems[p.lane]!.push(i);
+          itemLanePos[i] = pos;
+        }
+
+        // Build parallel y-center arrays for binary search
+        laneYCenters = new Array(cols);
+        for (let lane = 0; lane < cols; lane++) {
+          const items = laneItems[lane]!;
+          const yc = new Float64Array(items.length);
+          for (let j = 0; j < items.length; j++) {
+            const p = cachedPlacements[items[j]!]!;
+            yc[j] = p.y + p.size * 0.5;
+          }
+          laneYCenters[lane] = yc;
+        }
+      };
+
+      // ── Lane-aware navigation for masonry ──
+      // Unlike grid (uniform rows), masonry places items in the shortest lane.
+      // ±columns would land in a random lane. Instead, register a _navigate
+      // function that uses per-lane index arrays for O(1) same-lane movement
+      // and O(log k) adjacent-lane lookup.
+      ctx.methods.set("_getNavTotal", () => ctx.dataManager.getTotal());
+
+      /** Binary search on a sorted Float64Array: find index of closest value. O(log k). */
+      const bsNearest = (arr: Float64Array, target: number): number => {
+        const len = arr.length;
+        if (len === 0) return -1;
+        if (len === 1) return 0;
+        let lo = 0;
+        let hi = len - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (arr[mid]! < target) lo = mid + 1;
+          else hi = mid;
+        }
+        // lo is the first element >= target; compare with lo-1
+        if (lo > 0 && Math.abs(arr[lo - 1]! - target) <= Math.abs(arr[lo]! - target)) {
+          return lo - 1;
+        }
+        return lo;
+      };
+
+      ctx.methods.set("_navigate", (currentIndex: number, key: string, total: number): number => {
+        const placement = cachedPlacements[currentIndex];
+        if (!placement) return currentIndex;
+        const lane = placement.lane;
+        const cols = masonryConfig.columns;
+        const posInLane = itemLanePos[currentIndex]!;
+        const myLane = laneItems[lane]!;
+
+        // In horizontal orientation the scroll axis is Left/Right and the
+        // cross axis is Up/Down — swap so "main-axis forward" always maps
+        // to the same lane navigation and "cross-axis" always maps to
+        // adjacent-lane navigation.
+        const k = isHorizontal
+          ? key === "ArrowDown" ? "ArrowRight"
+            : key === "ArrowUp" ? "ArrowLeft"
+            : key === "ArrowRight" ? "ArrowDown"
+            : key === "ArrowLeft" ? "ArrowUp"
+            : key
+          : key;
+
+        switch (k) {
+          case "ArrowDown": {
+            // Next item in the same lane — O(1)
+            if (posInLane + 1 < myLane.length) return myLane[posInLane + 1]!;
+            return currentIndex;
+          }
+          case "ArrowUp": {
+            // Previous item in the same lane — O(1)
+            if (posInLane > 0) return myLane[posInLane - 1]!;
+            return currentIndex;
+          }
+          case "ArrowRight": {
+            // Nearest item in the lane to the right — O(log k)
+            if (lane >= cols - 1) return currentIndex;
+            const targetLane = lane + 1;
+            const yCenter = placement.y + placement.size * 0.5;
+            const targetItems = laneItems[targetLane]!;
+            if (targetItems.length === 0) return currentIndex;
+            const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+            return pos >= 0 ? targetItems[pos]! : currentIndex;
+          }
+          case "ArrowLeft": {
+            // Nearest item in the lane to the left — O(log k)
+            if (lane <= 0) return currentIndex;
+            const targetLane = lane - 1;
+            const yCenter = placement.y + placement.size * 0.5;
+            const targetItems = laneItems[targetLane]!;
+            if (targetItems.length === 0) return currentIndex;
+            const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+            return pos >= 0 ? targetItems[pos]! : currentIndex;
+          }
+          case "Home": {
+            return 0;
+          }
+          case "End": {
+            return total - 1;
+          }
+          case "PageDown": {
+            // Jump forward in same lane by ~visible items — O(1)
+            const containerSize = ctx.state.viewportState.containerSize;
+            const itemSize = placement.size > 0 ? placement.size : 150;
+            const jump = Math.max(1, Math.floor(containerSize / itemSize));
+            const target = Math.min(posInLane + jump, myLane.length - 1);
+            return myLane[target]!;
+          }
+          case "PageUp": {
+            // Jump backward in same lane by ~visible items — O(1)
+            const containerSize = ctx.state.viewportState.containerSize;
+            const itemSize = placement.size > 0 ? placement.size : 150;
+            const jump = Math.max(1, Math.floor(containerSize / itemSize));
+            const target = Math.max(0, posInLane - jump);
+            return myLane[target]!;
+          }
+        }
+        return currentIndex;
+      });
+
+      // ── Register placement-based scroll-into-view ──
+      // The core size cache has no meaningful per-item offsets in masonry mode.
+      // This method lets commitFocus and withSelection scroll a focused item
+      // into view using the pre-calculated placement coordinates.
+      ctx.methods.set("_scrollItemIntoView", (index: number): void => {
+        const placement = cachedPlacements[index];
+        if (!placement) return;
+
+        const scrollPos = ctx.scrollController.getScrollTop();
+        const containerSize = ctx.state.viewportState.containerSize;
+        const itemTop = placement.y;
+        const itemBottom = itemTop + placement.size;
+        const viewportBottom = scrollPos + containerSize;
+
+        if (itemTop < scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(Math.max(0, itemTop)));
+        } else if (itemBottom > viewportBottom) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
+        }
+      });
 
       // ── Cached selection method references ──
       // Resolved once after setup, avoiding Map.get() on every frame
