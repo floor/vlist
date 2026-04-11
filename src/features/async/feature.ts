@@ -520,7 +520,6 @@ export const withAsync = <T extends VListItem = VListItem>(
           && (snapshot.total ?? 0) > 0
           && snapshot.index > 0;
         const shouldSkipInitial = hasRestorable || (options?.skipInitialLoad === true);
-
         // Clear all rendered DOM elements so the renderer recreates them
         // from scratch. Without this, items whose ID didn't change
         // (e.g. same index → same id after switching data source) would
@@ -529,6 +528,15 @@ export const withAsync = <T extends VListItem = VListItem>(
 
         // Clear old data and reset total to 0
         await ctx.dataManager.reload();
+
+        // Reset scroll position to top so the viewport starts fresh.
+        // Without this, the stale scroll position persists after content
+        // shrinks to 0 and re-expands, leaving the viewport at the wrong
+        // offset (e.g. showing items 117-133 instead of 0-N).
+        // Skip when restoring a snapshot — that path sets its own position.
+        if (!hasRestorable) {
+          ctx.scrollController.scrollTo(0);
+        }
 
         if (!shouldSkipInitial) {
           // Load initial data first (this will update total and trigger onStateChange)
