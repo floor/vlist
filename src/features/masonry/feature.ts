@@ -199,6 +199,9 @@ export const withMasonry = <T extends VListItem = VListItem>(
           sizeFn,
         );
 
+        // Rebuild per-lane navigation index after layout
+        rebuildLaneIndex();
+
         // Update total size
         const totalSize = masonryLayout!.getTotalSize(cachedPlacements);
         ctx.sizeCache.getTotalSize = () => totalSize;
@@ -227,28 +230,74 @@ export const withMasonry = <T extends VListItem = VListItem>(
         masonryRenderer?.updateItemClasses(index, isSelected, isFocused);
       });
 
+      // ── Per-lane navigation index ──
+      // Rebuilt after every layout calculation (O(n) build, then O(1) or
+      // O(log k) per keypress where k = items per lane).
+      //
+      // laneItems[lane] = flat item indices in that lane, sorted by y (which
+      //   is insertion order since items are placed top-to-bottom).
+      // itemLanePos[flatIndex] = position within its lane array.
+      // laneYCenters[lane] = y-center values parallel to laneItems, for
+      //   binary search on ArrowLeft/Right.
+      let laneItems: number[][] = [];
+      let itemLanePos: Int32Array = new Int32Array(0);
+      let laneYCenters: Float64Array[] = [];
+
+      const rebuildLaneIndex = (): void => {
+        const cols = masonryConfig.columns;
+        const total = cachedPlacements.length;
+
+        // Reset lane buckets
+        laneItems = Array.from({ length: cols }, () => []);
+
+        if (itemLanePos.length < total) {
+          itemLanePos = new Int32Array(total);
+        }
+
+        for (let i = 0; i < total; i++) {
+          const p = cachedPlacements[i]!;
+          const pos = laneItems[p.lane]!.length;
+          laneItems[p.lane]!.push(i);
+          itemLanePos[i] = pos;
+        }
+
+        // Build parallel y-center arrays for binary search
+        laneYCenters = new Array(cols);
+        for (let lane = 0; lane < cols; lane++) {
+          const items = laneItems[lane]!;
+          const yc = new Float64Array(items.length);
+          for (let j = 0; j < items.length; j++) {
+            const p = cachedPlacements[items[j]!]!;
+            yc[j] = p.y + p.size * 0.5;
+          }
+          laneYCenters[lane] = yc;
+        }
+      };
+
       // ── Lane-aware navigation for masonry ──
       // Unlike grid (uniform rows), masonry places items in the shortest lane.
       // ±columns would land in a random lane. Instead, register a _navigate
-      // function that finds the prev/next item in the same lane for Up/Down,
-      // and uses ±1 for Left/Right (flat item order).
+      // function that uses per-lane index arrays for O(1) same-lane movement
+      // and O(log k) adjacent-lane lookup.
       ctx.methods.set("_getNavTotal", () => ctx.dataManager.getTotal());
 
-      // Helper: find the item in `targetLane` whose y-center is closest
-      // to the given y-center. O(n) scan — acceptable on keypress.
-      const findNearestInLane = (targetLane: number, yCenter: number, total: number): number => {
-        let bestIndex = -1;
-        let bestDist = Infinity;
-        for (let i = 0; i < total; i++) {
-          const p = cachedPlacements[i];
-          if (!p || p.lane !== targetLane) continue;
-          const dist = Math.abs((p.y + p.size / 2) - yCenter);
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestIndex = i;
-          }
+      /** Binary search on a sorted Float64Array: find index of closest value. O(log k). */
+      const bsNearest = (arr: Float64Array, target: number): number => {
+        const len = arr.length;
+        if (len === 0) return -1;
+        if (len === 1) return 0;
+        let lo = 0;
+        let hi = len - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (arr[mid]! < target) lo = mid + 1;
+          else hi = mid;
         }
-        return bestIndex;
+        // lo is the first element >= target; compare with lo-1
+        if (lo > 0 && Math.abs(arr[lo - 1]! - target) <= Math.abs(arr[lo]! - target)) {
+          return lo - 1;
+        }
+        return lo;
       };
 
       ctx.methods.set("_navigate", (currentIndex: number, key: string, total: number): number => {
@@ -256,6 +305,8 @@ export const withMasonry = <T extends VListItem = VListItem>(
         if (!placement) return currentIndex;
         const lane = placement.lane;
         const cols = masonryConfig.columns;
+        const posInLane = itemLanePos[currentIndex]!;
+        const myLane = laneItems[lane]!;
 
         // In horizontal orientation the scroll axis is Left/Right and the
         // cross axis is Up/Down — swap so "main-axis forward" always maps
@@ -271,32 +322,34 @@ export const withMasonry = <T extends VListItem = VListItem>(
 
         switch (k) {
           case "ArrowDown": {
-            // Next item in the same lane (visually below)
-            for (let i = currentIndex + 1; i < total; i++) {
-              if (cachedPlacements[i]?.lane === lane) return i;
-            }
+            // Next item in the same lane — O(1)
+            if (posInLane + 1 < myLane.length) return myLane[posInLane + 1]!;
             return currentIndex;
           }
           case "ArrowUp": {
-            // Previous item in the same lane (visually above)
-            for (let i = currentIndex - 1; i >= 0; i--) {
-              if (cachedPlacements[i]?.lane === lane) return i;
-            }
+            // Previous item in the same lane — O(1)
+            if (posInLane > 0) return myLane[posInLane - 1]!;
             return currentIndex;
           }
           case "ArrowRight": {
-            // Nearest item in the lane to the right at similar y position
+            // Nearest item in the lane to the right — O(log k)
             if (lane >= cols - 1) return currentIndex;
-            const yCenter = placement.y + placement.size / 2;
-            const found = findNearestInLane(lane + 1, yCenter, total);
-            return found >= 0 ? found : currentIndex;
+            const targetLane = lane + 1;
+            const yCenter = placement.y + placement.size * 0.5;
+            const targetItems = laneItems[targetLane]!;
+            if (targetItems.length === 0) return currentIndex;
+            const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+            return pos >= 0 ? targetItems[pos]! : currentIndex;
           }
           case "ArrowLeft": {
-            // Nearest item in the lane to the left at similar y position
+            // Nearest item in the lane to the left — O(log k)
             if (lane <= 0) return currentIndex;
-            const yCenter = placement.y + placement.size / 2;
-            const found = findNearestInLane(lane - 1, yCenter, total);
-            return found >= 0 ? found : currentIndex;
+            const targetLane = lane - 1;
+            const yCenter = placement.y + placement.size * 0.5;
+            const targetItems = laneItems[targetLane]!;
+            if (targetItems.length === 0) return currentIndex;
+            const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+            return pos >= 0 ? targetItems[pos]! : currentIndex;
           }
           case "Home": {
             return 0;
@@ -305,39 +358,20 @@ export const withMasonry = <T extends VListItem = VListItem>(
             return total - 1;
           }
           case "PageDown": {
-            // Jump forward by ~visible-rows items in the same lane
+            // Jump forward in same lane by ~visible items — O(1)
             const containerSize = ctx.state.viewportState.containerSize;
             const itemSize = placement.size > 0 ? placement.size : 150;
-            const visiblePerLane = Math.max(1, Math.floor(containerSize / itemSize));
-            let count = 0;
-            for (let i = currentIndex + 1; i < total; i++) {
-              if (cachedPlacements[i]?.lane === lane) {
-                count++;
-                if (count >= visiblePerLane) return i;
-              }
-            }
-            // Reached end of lane — return last item in lane
-            for (let i = total - 1; i > currentIndex; i--) {
-              if (cachedPlacements[i]?.lane === lane) return i;
-            }
-            return currentIndex;
+            const jump = Math.max(1, Math.floor(containerSize / itemSize));
+            const target = Math.min(posInLane + jump, myLane.length - 1);
+            return myLane[target]!;
           }
           case "PageUp": {
+            // Jump backward in same lane by ~visible items — O(1)
             const containerSize = ctx.state.viewportState.containerSize;
             const itemSize = placement.size > 0 ? placement.size : 150;
-            const visiblePerLane = Math.max(1, Math.floor(containerSize / itemSize));
-            let count = 0;
-            for (let i = currentIndex - 1; i >= 0; i--) {
-              if (cachedPlacements[i]?.lane === lane) {
-                count++;
-                if (count >= visiblePerLane) return i;
-              }
-            }
-            // Reached start of lane — return first item in lane
-            for (let i = 0; i < currentIndex; i++) {
-              if (cachedPlacements[i]?.lane === lane) return i;
-            }
-            return currentIndex;
+            const jump = Math.max(1, Math.floor(containerSize / itemSize));
+            const target = Math.max(0, posInLane - jump);
+            return myLane[target]!;
           }
         }
         return currentIndex;
