@@ -297,6 +297,21 @@ export interface ScrollConfig {
   wheel?: boolean;
 
   /**
+   * Scrollbar gutter behavior for the native scrollbar (default: 'auto').
+   *
+   * - `'auto'` — Default browser behavior. On macOS with overlay scrollbars,
+   *   no space is reserved. On Windows/Linux, the classic scrollbar takes
+   *   ~15-17px from the content area when it appears.
+   * - `'stable'` — Always reserves space for the scrollbar via
+   *   `scrollbar-gutter: stable`. Prevents layout shift when content
+   *   grows past the container. Recommended for Windows/Linux targets.
+   *
+   * Has no effect when `withScrollbar()` is active (the native scrollbar
+   * is hidden and replaced by an absolute-positioned custom scrollbar).
+   */
+  gutter?: "auto" | "stable";
+
+  /**
    * Wrap around when scrolling past boundaries (default: false).
    *
    * When `true`, `scrollToIndex` wraps around:
