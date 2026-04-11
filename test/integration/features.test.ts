@@ -1254,6 +1254,38 @@ describe("integration — async + selection", () => {
     expect(selectedAfter.length).toBe(1);
   });
 
+  it("should reset scroll position to 0 on reload", async () => {
+    const adapter = createMockAdapter(1000);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 50, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withSelection({ mode: "single" }))
+      .build();
+
+    await flush();
+
+    // Scroll down
+    simulateScroll(list, 2000);
+    await flush();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    expect(viewport.scrollTop).toBe(2000);
+
+    // Reload
+    await list.reload();
+    await flush();
+
+    // Scroll should be reset to 0
+    expect(viewport.scrollTop).toBe(0);
+
+    // Items should be rendered starting from the top
+    const indices = getRenderedIndices(list);
+    expect(indices.length).toBeGreaterThan(0);
+    expect(Math.min(...indices)).toBe(0);
+  });
+
   it("should emit selection:change with async-loaded items", async () => {
     const adapter = createMockAdapter(100);
     list = vlist<TestItem>({
