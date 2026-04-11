@@ -3596,7 +3596,7 @@ describe("withGroups sticky header behavior", () => {
       ".vlist-sticky-header",
     ) as HTMLElement;
     expect(stickyHeader).not.toBeNull();
-    expect(stickyHeader.style.position).toBe("absolute");
+    expect(stickyHeader.style.position).toBe("relative");
     expect(stickyHeader.style.top).toBe("0px");
   });
 

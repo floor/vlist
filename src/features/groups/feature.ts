@@ -307,15 +307,11 @@ export const withGroups = <T extends VListItem = VListItem>(
           (): number => config.header.height,
         );
 
-        // Push the viewport below the sticky header so that:
-        //  1. The scrollbar sits below the header (no overlap)
-        //  2. Items at the top of the viewport are naturally below the header
-        // The sticky header stays position:absolute over the reserved space.
+        // Shrink the viewport by the sticky header height so the
+        // scrollbar and content don't extend behind the sticky header.
         if (!resolvedConfig.horizontal) {
-          dom.viewport.style.marginTop = `${config.header.height}px`;
           dom.viewport.style.height = `calc(100% - ${config.header.height}px)`;
         } else {
-          dom.viewport.style.marginLeft = `${config.header.height}px`;
           dom.viewport.style.width = `calc(100% - ${config.header.height}px)`;
         }
       }
@@ -506,4 +502,3 @@ export const withGroups = <T extends VListItem = VListItem>(
     },
   };
 };
-

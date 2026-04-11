@@ -11,7 +11,7 @@
  * Header offsets and sizes are pre-cached into flat arrays on rebuild,
  * keeping the per-tick scroll handler free of function calls.
  *
- *   .vlist-sticky-header (position: absolute, overflow: hidden)
+ *   .vlist-sticky-header (position: relative, overflow: hidden)
  *   ├── .sticky-group  (active slot — translated during push)
  *   └── .sticky-group  (standby slot — translated during push)
  */
@@ -43,7 +43,7 @@ export const createStickyHeader = (
   container.setAttribute("role", "presentation");
   container.setAttribute("aria-hidden", "true");
   container.style.cssText =
-    `position:absolute;z-index:5;pointer-events:none;overflow:hidden;` +
+    `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
     (horizontal
       ? `top:0;bottom:0;left:${stickyOffset || 0}px`
       : `top:${stickyOffset || 0}px`);
