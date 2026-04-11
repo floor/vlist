@@ -1367,9 +1367,15 @@ function materialize<T extends VListItem = VListItem>(
       resolveNavHints();
 
       if (navigateFn) {
-        // ── Custom navigation (masonry): the feature handles all keys ──
-        n = navigateFn(p, event.key, total);
-        if (n === p) return; // not handled or no movement
+        // ── Custom navigation (masonry): gate on recognized nav keys ──
+        switch (event.key) {
+          case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
+          case "PageUp": case "PageDown": case "Home": case "End":
+            n = navigateFn(p, event.key, total);
+            break;
+          default:
+            return; // unrecognized key — let browser handle it
+        }
       } else {
         // ── Delta-based navigation (grid / flat list) ──
         const { ud, lr, cols } = navDelta();
