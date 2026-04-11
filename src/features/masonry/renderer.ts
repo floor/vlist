@@ -48,6 +48,13 @@ export interface MasonryRenderer<T extends VListItem = VListItem> {
   /** Get rendered item element by flat item index */
   getElement: (index: number) => HTMLElement | undefined;
 
+  /** Update only CSS classes on a rendered item (no template re-evaluation) */
+  updateItemClasses: (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ) => void;
+
   /**
    * Reorder DOM children to match logical item order (by data-index).
    * Called on scroll idle so screen readers encounter items in the correct
@@ -379,18 +386,23 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           existing.lastSize !== placement.size ||
           existing.lastCrossSize !== placement.crossSize;
 
-        // Template re-evaluation only when item data or selection/focus changed
-        if (idChanged || selectedChanged || focusedChanged) {
+        // Template re-evaluation only when item data actually changed
+        // (NOT on selection/focus change — that would destroy loaded images)
+        if (idChanged) {
           const state = getItemState(isSelected, isFocused);
           const result = template(item, itemIndex, state);
           applyTemplate(existing.element, result);
-          applyClasses(existing.element, isSelected, isFocused);
 
           // Update data attributes
           existing.element.dataset.id = String(item.id);
-          existing.element.ariaSelected = String(isSelected);
 
           existing.lastItemId = item.id;
+        }
+
+        // Class + aria updates only when selection/focus changed
+        if (idChanged || selectedChanged || focusedChanged) {
+          applyClasses(existing.element, isSelected, isFocused);
+          existing.element.ariaSelected = String(isSelected);
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
         }
@@ -462,9 +474,28 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     );
   };
 
+  const updateItemClasses = (
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+  ): void => {
+    const existing = rendered.get(index);
+    if (!existing) return;
+
+    const selectedChanged = existing.lastSelected !== isSelected;
+    const focusedChanged = existing.lastFocused !== isFocused;
+
+    if (selectedChanged || focusedChanged) {
+      applyClasses(existing.element, isSelected, isFocused);
+      existing.lastSelected = isSelected;
+      existing.lastFocused = isFocused;
+    }
+  };
+
   return {
     render,
     getElement: (index: number): HTMLElement | undefined => rendered.get(index)?.element,
+    updateItemClasses,
     sortDOM,
     clear,
     destroy,

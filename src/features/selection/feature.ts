@@ -297,36 +297,79 @@ export const withSelection = <T extends VListItem = VListItem>(
       const startPadding = resolvedConfig.horizontal ? resolvedPad.left : resolvedPad.top;
       const endPadding = resolvedConfig.horizontal ? resolvedPad.right : resolvedPad.bottom;
 
+      // Resolve item-to-scroll-index mapping once (identity for lists,
+      // floor(index/columns) for grids where sizeCache is in row-space).
+      const itemToScrollIndex = ctx.getItemToScrollIndexFn();
+
+      // ── 2D navigation hints (set by withGrid/withMasonry via ctx.methods) ──
+      // Resolved lazily so the layout feature (priority 10) has time to register.
+      // cols = column count for row-aware Home/End (0 = flat list)
+      // _navigate = custom navigation fn (masonry) — overrides _getNavDelta
+      // _scrollItemIntoView = placement-based scroll (masonry)
+      let navDeltaFn: (() => { ud: number; lr: number; cols: number }) | null = null;
+      let navigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
+      let scrollItemIntoViewFn: ((index: number) => void) | null = null;
+      let navHintsResolved = false;
+
+      const resolveNavHints = (): void => {
+        if (navHintsResolved) return;
+        navHintsResolved = true;
+        navDeltaFn = (ctx.methods.get("_getNavDelta") as (() => { ud: number; lr: number; cols: number })) ?? null;
+        navigateFn = (ctx.methods.get("_navigate") as ((currentIndex: number, key: string, total: number) => number)) ?? null;
+        scrollItemIntoViewFn = (ctx.methods.get("_scrollItemIntoView") as ((index: number) => void)) ?? null;
+      };
+
+      const navDelta = (): { ud: number; lr: number; cols: number } => {
+        resolveNavHints();
+        return navDeltaFn ? navDeltaFn() : { ud: 1, lr: 0, cols: 0 };
+      };
+
       const scrollToFocus = (idx: number): void => {
         if (idx < 0) return;
+        resolveNavHints();
 
-        const containerSize = ctx.state.viewportState.containerSize;
-        const scrollPos = ctx.state.viewportState.scrollPosition;
-        const totalItems = ctx.dataManager.getTotal();
-        const compression = ctx.getCachedCompression();
-        const { visibleRange } = ctx.state.viewportState;
+        if (scrollItemIntoViewFn) {
+          // Placement-based scroll (masonry) — the feature owns its own
+          // coordinate system; the core size cache has no meaningful offsets.
+          scrollItemIntoViewFn(idx);
+        } else {
+          // Size-cache-based scroll (flat list / grid).
+          const containerSize = ctx.state.viewportState.containerSize;
+          const scrollPos = ctx.state.viewportState.scrollPosition;
+          const totalItems = ctx.dataManager.getTotal();
+          const compression = ctx.getCachedCompression();
+          const { visibleRange } = ctx.state.viewportState;
 
-        const newScroll = sharedScrollToFocus(
-          idx,
-          ctx.sizeCache,
-          scrollPos,
-          containerSize,
-          startPadding,
-          endPadding,
-          compression,
-          totalItems,
-          visibleRange,
-        );
+          // Convert flat item index → size-cache index (row index for grids)
+          const scrollIdx = itemToScrollIndex(idx);
 
-        if (newScroll !== scrollPos) {
-          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
+          const newScroll = sharedScrollToFocus(
+            scrollIdx,
+            ctx.sizeCache,
+            scrollPos,
+            containerSize,
+            startPadding,
+            endPadding,
+            compression,
+            totalItems,
+            visibleRange,
+          );
+
+          if (newScroll !== scrollPos) {
+            ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
+          }
         }
       };
 
       // ── Helper: page size in items for PageUp/Down ──
+      // In grid mode the size cache is indexed by row, so convert via
+      // itemToScrollIndex before lookup, then scale by ud (columns) so
+      // the jump covers a full page of rows.
       const getPageSize = (): number => {
-        const h = ctx.sizeCache.getSize(Math.max(0, selectionState.focusedIndex));
-        return Math.max(1, Math.floor(ctx.state.viewportState.containerSize / h));
+        const scrollIdx = itemToScrollIndex(Math.max(0, selectionState.focusedIndex));
+        const h = ctx.sizeCache.getSize(scrollIdx);
+        const { ud } = navDelta();
+        return Math.max(ud, Math.floor(ctx.state.viewportState.containerSize / h) * ud);
       };
 
 
@@ -501,20 +544,73 @@ export const withSelection = <T extends VListItem = VListItem>(
         let focusOnly = false;
         let newState = selectionState;
 
-        switch (event.key) {
+        // Check for custom navigation function (masonry)
+        resolveNavHints();
+
+        if (navigateFn) {
+          // ── Custom navigation (masonry): the feature handles all directional keys ──
+          switch (event.key) {
+            case "ArrowUp":
+            case "ArrowDown":
+            case "ArrowLeft":
+            case "ArrowRight":
+            case "PageUp":
+            case "PageDown":
+            case "Home":
+            case "End": {
+              const newIndex = navigateFn(selectionState.focusedIndex, event.key, totalItems);
+              if (newIndex !== selectionState.focusedIndex) {
+                newState = setFocusedIndex(selectionState, newIndex);
+                newState.focusVisible = true;
+                handled = true;
+                focusOnly = true;
+              } else {
+                // No movement — still prevent default but skip render
+                event.preventDefault();
+                return;
+              }
+              break;
+            }
+          }
+        }
+
+        // ── Delta-based navigation (grid / flat list) — skip if _navigate handled it ──
+        if (!handled) switch (event.key) {
           case "ArrowUp":
-            newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
+            newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, navDelta().ud);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "ArrowDown":
-            newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap);
+            newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, navDelta().ud);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
+
+          case "ArrowLeft": {
+            const { lr } = navDelta();
+            if (lr) {
+              newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, lr);
+              newState.focusVisible = true;
+              handled = true;
+              focusOnly = true;
+            }
+            break;
+          }
+
+          case "ArrowRight": {
+            const { lr } = navDelta();
+            if (lr) {
+              newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, lr);
+              newState.focusVisible = true;
+              handled = true;
+              focusOnly = true;
+            }
+            break;
+          }
 
           case "PageUp":
             newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "up");
@@ -530,20 +626,35 @@ export const withSelection = <T extends VListItem = VListItem>(
             focusOnly = true;
             break;
 
-          case "Home":
-            newState = moveFocusToFirst(selectionState, totalItems);
+          case "Home": {
+            const { cols } = navDelta();
+            if (event.ctrlKey || !cols) {
+              newState = moveFocusToFirst(selectionState, totalItems);
+            } else {
+              newState = setFocusedIndex(selectionState, selectionState.focusedIndex - (selectionState.focusedIndex % cols));
+            }
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
+          }
 
-          case "End":
-            newState = moveFocusToLast(selectionState, totalItems);
+          case "End": {
+            const { cols } = navDelta();
+            if (event.ctrlKey || !cols) {
+              newState = moveFocusToLast(selectionState, totalItems);
+            } else {
+              const rowStart = selectionState.focusedIndex - (selectionState.focusedIndex % cols);
+              newState = setFocusedIndex(selectionState, Math.min(rowStart + cols - 1, totalItems - 1));
+            }
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
+          }
+        }
 
+        switch (event.key) {
           case " ":
           case "Enter":
             if (selectionState.focusedIndex >= 0 && !isHeader(selectionState.focusedIndex)) {
@@ -678,9 +789,17 @@ export const withSelection = <T extends VListItem = VListItem>(
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return;
 
-        selectionState = direction === "next"
-          ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap)
-          : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap);
+        resolveNavHints();
+        if (navigateFn) {
+          const key = direction === "next" ? "ArrowDown" : "ArrowUp";
+          const newIndex = navigateFn(selectionState.focusedIndex, key, totalItems);
+          selectionState = setFocusedIndex(selectionState, newIndex);
+        } else {
+          const { ud } = navDelta();
+          selectionState = direction === "next"
+            ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, ud)
+            : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, ud);
+        }
 
         // Skip group headers
         const dir: 1 | -1 = direction === "next" ? 1 : -1;
