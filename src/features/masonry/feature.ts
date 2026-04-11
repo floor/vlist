@@ -257,7 +257,19 @@ export const withMasonry = <T extends VListItem = VListItem>(
         const lane = placement.lane;
         const cols = masonryConfig.columns;
 
-        switch (key) {
+        // In horizontal orientation the scroll axis is Left/Right and the
+        // cross axis is Up/Down — swap so "main-axis forward" always maps
+        // to the same lane navigation and "cross-axis" always maps to
+        // adjacent-lane navigation.
+        const k = isHorizontal
+          ? key === "ArrowDown" ? "ArrowRight"
+            : key === "ArrowUp" ? "ArrowLeft"
+            : key === "ArrowRight" ? "ArrowDown"
+            : key === "ArrowLeft" ? "ArrowUp"
+            : key
+          : key;
+
+        switch (k) {
           case "ArrowDown": {
             // Next item in the same lane (visually below)
             for (let i = currentIndex + 1; i < total; i++) {

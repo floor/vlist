@@ -415,6 +415,208 @@ describe("grid — withSelection navigation", () => {
 });
 
 // =============================================================================
+// 2b. Grid — Horizontal Orientation Navigation
+// =============================================================================
+
+describe("grid — horizontal orientation navigation", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    list?.destroy();
+    list = null;
+    container.remove();
+  });
+
+  const buildHorizontalGrid = () => {
+    list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: { height: 100, width: 100, template },
+      items: createTestItems(100),
+    })
+      .use(withGrid({ columns: 4 }))
+      .build();
+    return list;
+  };
+
+  const buildHorizontalGridWithSelection = () => {
+    list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: { height: 100, width: 100, template },
+      items: createTestItems(100),
+    })
+      .use(withGrid({ columns: 4 }))
+      .use(withSelection({ mode: "single" }))
+      .build();
+    return list;
+  };
+
+  it("ArrowLeft moves by columns (scroll-axis navigation) in baseline", () => {
+    const l = buildHorizontalGrid();
+    const root = l.element;
+
+    triggerFocusIn(root);
+    expect(getFocusedIndex(root)).toBe(0);
+
+    // In horizontal mode, Left/Right = scroll axis = ±columns
+    // ArrowRight should move forward by columns (like ArrowDown in vertical)
+    pressKey(root, "ArrowRight");
+    expect(getFocusedIndex(root)).toBe(4);
+
+    // ArrowLeft should move back by columns
+    pressKey(root, "ArrowLeft");
+    expect(getFocusedIndex(root)).toBe(0);
+  });
+
+  it("ArrowUp/Down moves by 1 (cross-axis navigation) in baseline", () => {
+    const l = buildHorizontalGrid();
+    const root = l.element;
+
+    triggerFocusIn(root);
+    expect(getFocusedIndex(root)).toBe(0);
+
+    // In horizontal mode, Up/Down = cross axis = ±1 cell
+    pressKey(root, "ArrowDown");
+    expect(getFocusedIndex(root)).toBe(1);
+
+    pressKey(root, "ArrowUp");
+    expect(getFocusedIndex(root)).toBe(0);
+  });
+
+  it("ArrowLeft/Right moves by columns with withSelection", () => {
+    const l = buildHorizontalGridWithSelection();
+    const root = l.element;
+
+    clickItem(l, 0);
+
+    // ArrowRight = scroll-axis forward = +columns
+    pressKey(root, "ArrowRight");
+    expect(getFocusedIndex(root)).toBe(4);
+
+    // ArrowLeft = scroll-axis back = -columns
+    pressKey(root, "ArrowLeft");
+    expect(getFocusedIndex(root)).toBe(0);
+  });
+
+  it("ArrowUp/Down moves by 1 with withSelection", () => {
+    const l = buildHorizontalGridWithSelection();
+    const root = l.element;
+
+    clickItem(l, 0);
+
+    // ArrowDown = cross-axis = +1
+    pressKey(root, "ArrowDown");
+    expect(getFocusedIndex(root)).toBe(1);
+
+    // ArrowUp = cross-axis = -1
+    pressKey(root, "ArrowUp");
+    expect(getFocusedIndex(root)).toBe(0);
+  });
+});
+
+// =============================================================================
+// 2c. Masonry — Horizontal Orientation Navigation
+// =============================================================================
+
+describe("masonry — horizontal orientation navigation", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    list?.destroy();
+    list = null;
+    container.remove();
+  });
+
+  const buildHorizontalMasonry = () => {
+    list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: {
+        height: 100,
+        width: (index: number) => {
+          const ratios = [0.75, 1.0, 1.33, 1.5, 0.66];
+          return Math.round(100 * ratios[index % 5]!);
+        },
+        template,
+      },
+      items: createTestItems(30),
+    })
+      .use(withMasonry({ columns: 3 }))
+      .use(withSelection({ mode: "single" }))
+      .build();
+    return list;
+  };
+
+  it("ArrowRight navigates forward in same lane (scroll-axis)", () => {
+    const l = buildHorizontalMasonry();
+    const root = l.element;
+
+    // Click item 0
+    clickItem(l, 0);
+    const startIndex = getFocusedIndex(root);
+    const startEl = root.querySelector(`[data-index="${startIndex}"]`) as HTMLElement;
+    if (!startEl) return;
+    const startLane = startEl.dataset.lane;
+
+    // ArrowRight in horizontal = main-axis forward = same lane next item
+    pressKey(root, "ArrowRight");
+    const newIndex = getFocusedIndex(root);
+    expect(newIndex).not.toBe(startIndex);
+
+    const newEl = root.querySelector(`[data-index="${newIndex}"]`) as HTMLElement;
+    if (newEl) {
+      expect(newEl.dataset.lane).toBe(startLane);
+    }
+  });
+
+  it("ArrowDown navigates to adjacent lane (cross-axis)", () => {
+    const l = buildHorizontalMasonry();
+    const root = l.element;
+
+    // Click item 0 (should be lane 0)
+    clickItem(l, 0);
+    const startIndex = getFocusedIndex(root);
+    const startEl = root.querySelector(`[data-index="${startIndex}"]`) as HTMLElement;
+    if (!startEl) return;
+    const startLane = parseInt(startEl.dataset.lane ?? "0", 10);
+
+    // ArrowDown in horizontal = cross-axis = adjacent lane (+1)
+    pressKey(root, "ArrowDown");
+    const newIndex = getFocusedIndex(root);
+
+    const newEl = root.querySelector(`[data-index="${newIndex}"]`) as HTMLElement;
+    if (newEl) {
+      const newLane = parseInt(newEl.dataset.lane ?? "0", 10);
+      expect(newLane).toBe(startLane + 1);
+    }
+  });
+
+  it("ArrowUp at lane 0 does not move (cross-axis boundary)", () => {
+    const l = buildHorizontalMasonry();
+    const root = l.element;
+
+    // Click item 0 which should be in lane 0
+    clickItem(l, 0);
+    const startIndex = getFocusedIndex(root);
+
+    // ArrowUp in horizontal = cross-axis = adjacent lane (-1), but lane 0 has no lane -1
+    pressKey(root, "ArrowUp");
+    expect(getFocusedIndex(root)).toBe(startIndex);
+  });
+});
+
+// =============================================================================
 // 3. Masonry — Lane-Aware Navigation
 // =============================================================================
 
