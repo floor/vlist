@@ -141,6 +141,25 @@ export const withGrid = <T extends VListItem = VListItem>(
         return gridLayout!.getTotalRows(rawTotal);
       });
 
+      // ── Map flat item index → row index for scrollToFocus ──
+      // The size cache is in row-space, so the core's baseline single-select
+      // (commitFocus) must convert flat item indices before looking up offsets.
+      ctx.setItemToScrollIndexFn((index: number) =>
+        Math.floor(index / gridConfig.columns),
+      );
+
+      // ── Register 2D navigation hints for the core baseline single-select ──
+      // _getNavTotal: flat item count (not row count) for bounds checking
+      // _getNavDelta: { ud, lr, cols } — arrow-key index deltas
+      //   Vertical:   Up/Down = ±columns (row nav), Left/Right = ±1 (cell nav)
+      //   Horizontal: Left/Right = ±columns (scroll axis), Up/Down = ±1 (cross axis)
+      ctx.methods.set("_getNavTotal", () => ctx.dataManager.getTotal());
+      ctx.methods.set("_getNavDelta", () =>
+        isHorizontal
+          ? { ud: 1, lr: gridConfig.columns, cols: gridConfig.columns }
+          : { ud: gridConfig.columns, lr: 1, cols: gridConfig.columns },
+      );
+
       // ── Update height config to include gap and inject grid context ──
       // In grid mode, each row's size in the size cache = itemSize + gap
       // so that rows are spaced apart vertically. The grid renderer subtracts
@@ -249,6 +268,14 @@ export const withGrid = <T extends VListItem = VListItem>(
       };
 
       createAndSetGridRenderer();
+
+      // ── Wire updateItemClasses to the grid renderer ──
+      // The core's $.uic uses the core rendered Map which is empty in grid
+      // mode. Redirect to the grid renderer's own updateItemClasses so that
+      // withSelection's targeted focus/selection class updates work.
+      ctx.setUpdateItemClassesFn((index: number, isSelected: boolean, isFocused: boolean): void => {
+        gridRenderer?.updateItemClasses(index, isSelected, isFocused);
+      });
 
       // ── Expose updateItem for the builder API ──
       // The builder API's updateItem() needs to re-apply the template

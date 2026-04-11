@@ -262,6 +262,8 @@ function createMockContext(
     adjustScrollPosition: (pos: number) => pos,
     getStripeIndexFn: () => (index: number) => index,
     setStripeIndexFn: () => {},
+    getItemToScrollIndexFn: () => (index: number) => index,
+    setItemToScrollIndexFn: () => {},
   };
 
   return ctx;
