@@ -593,3 +593,8 @@
 .vlist-viewport--no-scrollbar::-webkit-scrollbar {
     display: none; /* Chrome/Safari/Opera */
 }
+
+/* Reserve stable gutter space for native scrollbar (scroll.gutter: 'stable') */
+.vlist-viewport--gutter-stable {
+    scrollbar-gutter: stable;
+}

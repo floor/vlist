@@ -282,6 +282,11 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.classList.add(`${classPrefix}-viewport--no-scrollbar`);
   }
 
+  // Handle scroll.gutter: "stable" - reserve space for native scrollbar
+  if (scrollCfg?.gutter === "stable") {
+    dom.viewport.classList.add(`${classPrefix}-viewport--gutter-stable`);
+  }
+
   // ── Apply padding to content element ────────────────────────────
   // Works like CSS padding — adds inset space around items.
   // Uses border-box so cross-axis padding (e.g. left/right in vertical
