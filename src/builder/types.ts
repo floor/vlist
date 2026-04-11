@@ -148,6 +148,13 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
     /** Wrap around when scrolling past boundaries (default: false) */
     wrap?: boolean;
 
+    /**
+     * Native scrollbar gutter behavior (default: 'auto').
+     * - `'auto'` — default browser behavior
+     * - `'stable'` — reserves space via `scrollbar-gutter: stable`
+     */
+    gutter?: "auto" | "stable";
+
     /** Scroll idle detection timeout in ms (default: 150) */
     idleTimeout?: number;
 
