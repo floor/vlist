@@ -3,6 +3,33 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-12  v1.4.5
+
+  feat(styles): modular CSS — extract grid and masonry into dedicated stylesheets
+    vlist-grid.css (1.2 KB) and vlist-masonry.css (1.3 KB) are now separate opt-in
+    imports, matching the existing vlist-table.css pattern. Core CSS reduced from
+    9.7 KB to 7.4 KB. New package exports: vlist/styles/grid, vlist/styles/masonry.
+  feat(styles): redesigned item state colors using rgba for clear visual hierarchy
+    Striped 2% → hover 4% → selected 12% blue → selected+hover 18% blue.
+    Selected+hover now goes darker (was incorrectly lighter). Works on any background.
+  feat(styles): restructured CSS custom properties
+    Theme-invariant tokens (spacing, transitions, scrollbar geometry) separated from
+    color tokens. All three dark mode blocks now contain identical color-only overrides.
+    Added --vlist-bg-striped and --vlist-group-header-bg to all theme blocks.
+  feat(styles): zebra striping with .vlist-item--odd compound selectors
+    Selected state always overrides striped background via background shorthand
+    and compound selectors (specificity 0,3,0).
+  fix(styles): animation name mismatch — fade-in → vlist-fade-in
+  fix(styles): table dark mode now supports all 3 patterns (data-theme-mode, prefers-color-scheme, .dark)
+  fix(styles): stale fallback values in table CSS updated to match current token defaults
+  fix(styles): loading overlay uses color-mix() for automatic dark mode adaptation
+  fix(styles): .vlist-item--enter uses own vlist-item-enter keyframe (was conflicting with core)
+  refactor(styles): remove broken .vlist--striped CSS-only approach (nth-child fails with DOM recycling)
+  refactor(styles): remove dangerous .vlist--animate transform transition (caused scroll jitter)
+  refactor(styles): remove redundant .vlist-scrollbar-hide (core has .vlist-viewport--no-scrollbar)
+  refactor(styles): remove dead commented-out border-left code from selected state
+
+
 2026-04-11  v1.4.4
 
   fix(selection): use scroll-if-needed on focusin instead of center-scroll
