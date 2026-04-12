@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.4.4** — [Changelog](./changelog.txt)
+**v1.4.5** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -17,7 +17,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Gap & padding** — built-in item spacing and content inset (CSS shorthand convention)
 - **Reverse, page-scroll, wrap** — every layout mode
 - **Accessible** — WAI-ARIA, keyboard navigation, focus-visible, screen-reader DOM ordering, ARIA live region
-- **React, Vue, Svelte** — framework adapters available
+- **React, Vue, Svelte, SolidJS** — framework adapters available
 
 **14+ interactive examples → [vlist.io](https://vlist.io)**
 
@@ -33,6 +33,8 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 - **Masonry** — shortest-lane placement via `withMasonry()`
 - **Keyboard accessible** — focus-visible outlines, full 2D keyboard navigation, smart edge-scroll, Tab support
 - **Responsive grid & masonry** — context-injected `columnWidth` auto-recalculates on resize
+- **Modular CSS** — core (7.4 KB) + opt-in grid, masonry, table, and extras stylesheets. Import only what you use.
+- **Composable dark mode** — three strategies (`prefers-color-scheme`, `.dark` class, `data-theme-mode` attribute) with rgba state colors for clear visual hierarchy
 
 ## Installation
 
@@ -372,11 +374,22 @@ Each adapter README has setup examples and API docs.
 ## Styling
 
 ```typescript
-import '@floor/vlist/styles'           // base styles (required)
-import '@floor/vlist/styles/extras'    // optional enhancements
+import '@floor/vlist/styles'           // core (always required)
+import '@floor/vlist/styles/grid'      // when using withGrid()
+import '@floor/vlist/styles/masonry'   // when using withMasonry()
+import '@floor/vlist/styles/table'     // when using withTable()
+import '@floor/vlist/styles/extras'    // optional (variants, loading states, animations)
 ```
 
-Override with your own CSS using the `.vlist`, `.vlist-item`, `.vlist-item--selected`, `.vlist-scrollbar` selectors. See [vlist.io](https://vlist.io) for theming examples.
+| Import | Size | Contents |
+|--------|------|----------|
+| `vlist/styles` | 7.4 KB | Tokens, base list, item states, scrollbar, groups, horizontal mode |
+| `vlist/styles/grid` | 1.2 KB | Grid layout |
+| `vlist/styles/masonry` | 1.3 KB | Masonry layout |
+| `vlist/styles/table` | 7.2 KB | Table layout (header, rows, cells, resize) |
+| `vlist/styles/extras` | 1.1 KB | Variants, loading/empty states, enter animation |
+
+Override tokens to match your design system. See [vlist.io/tutorials/styling](https://vlist.io/tutorials/styling) for the full guide.
 
 ### Dark Mode
 
@@ -388,7 +401,7 @@ Dark mode is supported out of the box via three mechanisms (no extra imports nee
 | **Tailwind `.dark` class** | Add `.dark` to any ancestor element |
 | **`data-theme-mode`** | Set `data-theme-mode="dark"` on `<html>` for explicit control |
 
-To force light mode when `prefers-color-scheme` would otherwise activate dark, set `data-theme-mode="light"` on the root element. All dark mode CSS variables and `color-scheme` declarations are handled automatically.
+To force light mode when `prefers-color-scheme` would otherwise activate dark, set `data-theme-mode="light"` on the root element.
 
 ## Architecture
 
