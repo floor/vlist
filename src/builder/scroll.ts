@@ -2,18 +2,9 @@
 /**
  * vlist/builder — Scroll Utilities
  * Easing, scroll-argument resolution, and smooth scroll animation.
- *
- * Shared by builder/core.ts, grid feature, and groups feature to
- * avoid duplicating ~70 lines of scroll helpers in each consumer.
  */
 
 import type { ScrollToOptions } from "../types";
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-export const SMOOTH_DURATION = 300;
 
 // =============================================================================
 // Easing
@@ -27,32 +18,13 @@ export const easeInOutQuad = (t: number): number =>
 // =============================================================================
 
 export const resolveScrollArgs = (
-  alignOrOptions?:
-    | "start"
-    | "center"
-    | "end"
-    | ScrollToOptions,
-): {
-  align: "start" | "center" | "end";
-  behavior: "auto" | "smooth";
-  duration: number;
-} => {
-  if (typeof alignOrOptions === "string")
-    return {
-      align: alignOrOptions,
-      behavior: "auto",
-      duration: SMOOTH_DURATION,
-    };
-  if (alignOrOptions && typeof alignOrOptions === "object")
-    return {
-      align: alignOrOptions.align ?? "start",
-      behavior: alignOrOptions.behavior ?? "auto",
-      duration: alignOrOptions.duration ?? SMOOTH_DURATION,
-    };
+  o?: "start" | "center" | "end" | ScrollToOptions,
+): { align: "start" | "center" | "end"; behavior: "auto" | "smooth"; duration: number } => {
+  const obj = typeof o === "object" && o ? o : null;
   return {
-    align: "start",
-    behavior: "auto",
-    duration: SMOOTH_DURATION,
+    align: typeof o === "string" ? o : obj?.align ?? "start",
+    behavior: obj?.behavior ?? "auto",
+    duration: obj?.duration ?? 300,
   };
 };
 
@@ -68,13 +40,6 @@ export interface ScrollController {
 
 /**
  * Create a smooth scroll animator with its own animation state.
- *
- * Each call returns an independent { animateScroll, cancelScroll } pair
- * with a private animationFrameId — multiple consumers won't stomp each
- * other's animations.
- *
- * @param scrollController - Object with scrollTo() method
- * @param renderFn - Called after each scroll step to update the viewport
  */
 export const createSmoothScroll = (
   scrollController: ScrollController,

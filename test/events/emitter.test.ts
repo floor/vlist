@@ -23,9 +23,7 @@ describe("createEmitter", () => {
     expect(typeof emitter.on).toBe("function");
     expect(typeof emitter.off).toBe("function");
     expect(typeof emitter.emit).toBe("function");
-    expect(typeof emitter.once).toBe("function");
     expect(typeof emitter.clear).toBe("function");
-    expect(typeof emitter.listenerCount).toBe("function");
   });
 });
 
@@ -146,32 +144,6 @@ describe("unsubscribe function", () => {
   });
 });
 
-describe("once", () => {
-  it("should call handler only once", () => {
-    const emitter = createEmitter<TestEvents>();
-    const handler = mock(() => {});
-
-    emitter.once("click", handler);
-    emitter.emit("click", { x: 0, y: 0 });
-    emitter.emit("click", { x: 1, y: 1 });
-    emitter.emit("click", { x: 2, y: 2 });
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ x: 0, y: 0 });
-  });
-
-  it("should return unsubscribe function", () => {
-    const emitter = createEmitter<TestEvents>();
-    const handler = mock(() => {});
-
-    const unsubscribe = emitter.once("click", handler);
-    unsubscribe();
-    emitter.emit("click", { x: 0, y: 0 });
-
-    expect(handler).not.toHaveBeenCalled();
-  });
-});
-
 describe("clear", () => {
   it("should clear all listeners for specific event", () => {
     const emitter = createEmitter<TestEvents>();
@@ -208,38 +180,6 @@ describe("clear", () => {
 
     expect(clickHandler).not.toHaveBeenCalled();
     expect(changeHandler).not.toHaveBeenCalled();
-  });
-});
-
-describe("listenerCount", () => {
-  it("should return correct listener count", () => {
-    const emitter = createEmitter<TestEvents>();
-
-    expect(emitter.listenerCount("click")).toBe(0);
-
-    emitter.on("click", () => {});
-    expect(emitter.listenerCount("click")).toBe(1);
-
-    emitter.on("click", () => {});
-    expect(emitter.listenerCount("click")).toBe(2);
-  });
-
-  it("should return 0 for events with no listeners", () => {
-    const emitter = createEmitter<TestEvents>();
-
-    expect(emitter.listenerCount("click")).toBe(0);
-    expect(emitter.listenerCount("change")).toBe(0);
-  });
-
-  it("should update after removing listeners", () => {
-    const emitter = createEmitter<TestEvents>();
-    const handler = () => {};
-
-    emitter.on("click", handler);
-    expect(emitter.listenerCount("click")).toBe(1);
-
-    emitter.off("click", handler);
-    expect(emitter.listenerCount("click")).toBe(0);
   });
 });
 

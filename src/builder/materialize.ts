@@ -157,6 +157,8 @@ export interface MRefs<T extends VListItem = VListItem> {
   i2s: (index: number) => number;
   /** updateItemClassesFn */
   uic: (index: number, isSelected: boolean, isFocused: boolean) => void;
+  /** constrainSizeForIndex — null = always constrain (Mode A default) */
+  csi: ((index: number) => boolean) | null;
 }
 
 // =============================================================================
@@ -188,6 +190,9 @@ export interface MDeps<T extends VListItem = VListItem> {
   readonly methods: Map<string, Function>;
   readonly onScrollFrame: () => void;
   readonly resizeObserver: ResizeObserver;
+  readonly afterRenderBatch: ReadonlyArray<
+    (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
+  >;
   readonly applyTemplate: (
     element: HTMLElement,
     result: string | HTMLElement,
@@ -224,6 +229,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     onScrollFrame,
     resizeObserver,
     renderRange,
+    afterRenderBatch,
   } = deps;
 
   return {
@@ -315,6 +321,9 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
 
     afterScroll,
     idleHandlers,
+    afterRenderBatch: afterRenderBatch as Array<
+      (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
+    >,
     clickHandlers,
     keydownHandlers,
     resizeHandlers,
@@ -586,55 +595,31 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     $.ffn();
   };
 
+  const n = () => $.it.length;
+
   return {
-    getState: () => ({
-      total: $.it.length,
-      cached: $.it.length,
-      isLoading: false,
-      pendingRanges: [],
-      error: undefined,
-      hasMore: false,
-      cursor: undefined,
-    }),
-    getTotal: () => $.it.length,
-    getCached: () => $.it.length,
+    getState: () => ({ total: n(), cached: n(), isLoading: false, pendingRanges: [], error: undefined as unknown, hasMore: false, cursor: undefined as unknown }),
+    getTotal: n,
+    getCached: n,
     getIsLoading: () => false,
     getHasMore: () => false,
     getStorage: () => null,
     getPlaceholders: () => null,
     getItem: (index: number) => $.it[index],
-    // getItemById and getIndexById removed for memory efficiency
-    // Users can maintain their own id→index Map if needed
-    isItemLoaded: (index: number) =>
-      index >= 0 && index < $.it.length && $.it[index] !== undefined,
+    isItemLoaded: (index: number) => index >= 0 && index < n() && $.it[index] !== undefined,
     getItemsInRange: (start: number, end: number) => {
-      const items = $.it;
       const result: T[] = [];
-      const s = Math.max(0, start);
-      const e = Math.min(end, items.length - 1);
-      for (let i = s; i <= e; i++) result.push(items[i] as T);
+      for (let i = Math.max(0, start), e = Math.min(end, n() - 1); i <= e; i++) result.push($.it[i] as T);
       return result;
     },
-    setTotal: (t: number) => {
-      // no-op for simple manager
-      void t;
-    },
+    setTotal: () => {},
     setItems: (newItems: T[], offset = 0, newTotal?: number) => {
-      const items = $.it;
-      if (offset === 0 && (newTotal !== undefined || items.length === 0)) {
+      if (offset === 0 && (newTotal !== undefined || n() === 0)) {
         $.it = newItems;
       } else {
-        // Ensure items array is large enough before assigning
-        const requiredLength = offset + newItems.length;
-        if (items.length < requiredLength) {
-          items.length = requiredLength;
-        }
-        for (let i = 0; i < newItems.length; i++) {
-          items[offset + i] = newItems[i]!;
-        }
-      }
-      if (newTotal !== undefined) {
-        // trim or leave
+        const req = offset + newItems.length;
+        if (n() < req) $.it.length = req;
+        for (let i = 0; i < newItems.length; i++) $.it[offset + i] = newItems[i]!;
       }
       if ($.ii) syncAfterChange();
     },

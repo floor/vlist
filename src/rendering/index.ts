@@ -81,4 +81,5 @@ export {
 // Smart Edge Scroll (shared by core baseline and selection feature)
 export {
   scrollToFocus,
+  scrollToFocusSimple,
 } from "./scroll";

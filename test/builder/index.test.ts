@@ -561,7 +561,7 @@ describe("builder validation", () => {
         container: null as any,
         item: { height: 40, template },
       });
-    }).toThrow("[vlist/builder] Container is required");
+    }).toThrow("[vlist] Container is required");
   });
 
   it("should throw when no item config provided", () => {
@@ -570,7 +570,7 @@ describe("builder validation", () => {
         container,
         item: null as any,
       });
-    }).toThrow("[vlist/builder] item configuration is required");
+    }).toThrow("[vlist] item configuration is required");
   });
 
   it("should throw when item height is missing", () => {
@@ -579,7 +579,7 @@ describe("builder validation", () => {
         container,
         item: { height: undefined as any, template },
       });
-    }).toThrow("[vlist/builder] item.height or item.estimatedHeight is required");
+    }).toThrow("[vlist] item.height or item.estimatedHeight is required");
   });
 
   it("should throw when item height is zero or negative", () => {
@@ -588,7 +588,7 @@ describe("builder validation", () => {
         container,
         item: { height: 0, template },
       });
-    }).toThrow("[vlist/builder] item.height must be a positive number");
+    }).toThrow("[vlist] item.height must be a positive number");
 
     expect(() => {
       vlist<TestItem>({

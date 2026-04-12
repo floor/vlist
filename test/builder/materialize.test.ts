@@ -112,6 +112,7 @@ function createTestRefs(): MRefs<TestItem> {
     sif: (index: number) => index,
     i2s: (index: number) => index,
     uic: () => {},
+    csi: null,
   };
 }
 
@@ -174,6 +175,7 @@ function createTestDeps(): MDeps<TestItem> {
     contentSizeHandlers: [],
     idleHandlers: [],
     afterScroll: [],
+    afterRenderBatch: [],
     clickHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],
