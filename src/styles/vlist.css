@@ -33,101 +33,105 @@
 
 /* Default tokens — work without any data-theme-mode attribute */
 :root {
-    /* Colors - Light Mode */
+    /* ── Theme-invariant tokens (set once, never overridden) ── */
+    --vlist-scrollbar-width: 8px;
+    --vlist-scrollbar-track-bg: transparent;
+    --vlist-scrollbar-custom-thumb-radius: 4px;
+    --vlist-item-padding-x: 1rem;
+    --vlist-item-padding-y: 0.75rem;
+    --vlist-border-radius: 0.5rem;
+    --vlist-transition-duration: 150ms;
+    --vlist-transition-timing: ease-in-out;
+
+    /* ── Light mode colors (default) ── */
     --vlist-bg: #ffffff;
-    --vlist-bg-hover: #f9fafb;
-    --vlist-bg-selected: #dbeafe;
-    --vlist-bg-selected-hover: #eff6ff;
+    --vlist-bg-hover: rgba(0, 0, 0, 0.04);
+    --vlist-bg-striped: rgba(0, 0, 0, 0.02);
+    --vlist-bg-selected: rgba(59, 130, 246, 0.12);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.18);
     --vlist-border: #e5e7eb;
     --vlist-border-selected: #3b82f6;
     --vlist-text: #111827;
     --vlist-text-muted: #6b7280;
     --vlist-focus-ring: #3b82f6;
+    --vlist-group-header-bg: #f3f4f6;
     --vlist-scrollbar-thumb: #d1d5db;
     --vlist-scrollbar-thumb-hover: #9ca3af;
-
-    /* Custom Scrollbar (for compressed mode) */
-    --vlist-scrollbar-width: 8px;
-    --vlist-scrollbar-track-bg: transparent;
     --vlist-scrollbar-custom-thumb-bg: rgba(0, 0, 0, 0.3);
     --vlist-scrollbar-custom-thumb-hover-bg: rgba(0, 0, 0, 0.5);
-    --vlist-scrollbar-custom-thumb-radius: 4px;
-
-    /* Spacing */
-    --vlist-item-padding-x: 1rem;
-    --vlist-item-padding-y: 0.75rem;
-    --vlist-border-radius: 0.5rem;
-
-    /* Transitions */
-    --vlist-transition-duration: 150ms;
-    --vlist-transition-timing: ease-in-out;
-
-    /* Placeholder */
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
-/* Dark Mode Class Override */
+/* =============================================================================
+   Dark Mode
+   Three selectors for different integration patterns — all override the
+   same set of color-only tokens defined above.
+
+   1. [data-theme-mode="dark"]  — explicit attribute (vlist.io, custom apps)
+   2. prefers-color-scheme       — OS-level automatic (no JS needed)
+   3. .dark                      — Tailwind convention
+   ============================================================================= */
+
+/* Dark — explicit attribute */
 [data-theme-mode="dark"] {
     --vlist-bg: #111827;
-    --vlist-bg-hover: #1f2937;
-    --vlist-bg-selected: rgba(59, 130, 246, 0.3);
-    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
+    --vlist-bg-hover: rgba(255, 255, 255, 0.06);
+    --vlist-bg-striped: rgba(255, 255, 255, 0.02);
+    --vlist-bg-selected: rgba(59, 130, 246, 0.2);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.28);
     --vlist-border: #374151;
     --vlist-border-selected: #3b82f6;
     --vlist-text: #f9fafb;
     --vlist-text-muted: #9ca3af;
-    --vlist-scrollbar-width: 8px;
+    --vlist-focus-ring: #3b82f6;
+    --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb: #4b5563;
     --vlist-scrollbar-thumb-hover: #6b7280;
     --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
     --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
-    --vlist-scrollbar-custom-thumb-radius: 4px;
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
-/* =============================================================================
-   Dark Mode — OS-level preference fallback
-   ============================================================================= */
-
+/* Dark — OS preference (skipped when explicit light/dark is set) */
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme-mode="light"]) {
+    :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"]) {
         --vlist-bg: #111827;
-        --vlist-bg-hover: #1f2937;
-        --vlist-bg-selected: rgba(59, 130, 246, 0.3);
-        --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
+        --vlist-bg-hover: rgba(255, 255, 255, 0.06);
+        --vlist-bg-striped: rgba(255, 255, 255, 0.02);
+        --vlist-bg-selected: rgba(59, 130, 246, 0.2);
+        --vlist-bg-selected-hover: rgba(59, 130, 246, 0.28);
         --vlist-border: #374151;
         --vlist-border-selected: #3b82f6;
         --vlist-text: #f9fafb;
         --vlist-text-muted: #9ca3af;
-        --vlist-scrollbar-width: 8px;
+        --vlist-focus-ring: #3b82f6;
+        --vlist-group-header-bg: #1e2433;
         --vlist-scrollbar-thumb: #4b5563;
         --vlist-scrollbar-thumb-hover: #6b7280;
         --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
         --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
-        --vlist-scrollbar-custom-thumb-radius: 4px;
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
-        --vlist-group-header-bg: #1e2433;
     }
 }
 
-/* Dark Mode — .dark class override (Tailwind convention) */
+/* Dark — .dark class (Tailwind convention) */
 .dark {
     --vlist-bg: #111827;
-    --vlist-bg-hover: #1f2937;
-    --vlist-bg-selected: rgba(59, 130, 246, 0.3);
-    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.2);
+    --vlist-bg-hover: rgba(255, 255, 255, 0.06);
+    --vlist-bg-striped: rgba(255, 255, 255, 0.02);
+    --vlist-bg-selected: rgba(59, 130, 246, 0.2);
+    --vlist-bg-selected-hover: rgba(59, 130, 246, 0.28);
     --vlist-border: #374151;
     --vlist-border-selected: #3b82f6;
     --vlist-text: #f9fafb;
     --vlist-text-muted: #9ca3af;
-    --vlist-scrollbar-width: 8px;
+    --vlist-focus-ring: #3b82f6;
+    --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb: #4b5563;
     --vlist-scrollbar-thumb-hover: #6b7280;
     --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
     --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
-    --vlist-scrollbar-custom-thumb-radius: 4px;
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
-    --vlist-group-header-bg: #1e2433;
 }
 
 /* =============================================================================
@@ -246,15 +250,30 @@
     background-color: var(--vlist-bg-hover);
 }
 
+/* Striped (odd) item state — use background shorthand so consumer
+   shorthand rules (e.g. .vlist-item--odd { background: ... }) don't
+   bleed through selected/hover states. */
+.vlist-item.vlist-item--odd {
+    background: var(--vlist-bg-striped);
+}
+
 /* Item selected state */
 .vlist-item.vlist-item--selected {
     background-color: var(--vlist-bg-selected);
-    /* border-left: 4px solid var(--vlist-border-selected); */
-    /* padding-left: calc(var(--vlist-item-padding-x) - 4px); */
+}
+
+/* Striped + selected — compound selector (0,3,0) guarantees override
+   even when consumers set background shorthand on the odd class */
+.vlist-item.vlist-item--odd.vlist-item--selected {
+    background: var(--vlist-bg-selected);
 }
 
 .vlist-item.vlist-item--selected:hover {
     background-color: var(--vlist-bg-selected-hover);
+}
+
+.vlist-item.vlist-item--odd.vlist-item--selected:hover {
+    background: var(--vlist-bg-selected-hover);
 }
 
 /* Item focused state (keyboard navigation) */
@@ -266,7 +285,7 @@
 
 /* Item replaced state - fade in when placeholder is replaced with real data */
 .vlist-item--replaced {
-    animation: fade-in 0.3s ease-out;
+    animation: vlist-fade-in 0.3s ease-out;
 }
 
 /* Placeholder item styling */
@@ -380,140 +399,6 @@
     right: 0;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
     border-bottom: 1px solid var(--vlist-border);
-}
-
-/* =============================================================================
-   Custom Scrollbar (for compressed mode)
-   ============================================================================= */
-
-/* =============================================================================
-   Grid Layout
-   ============================================================================= */
-
-/* Grid modifier on root */
-.vlist--grid .vlist-items {
-    contain: layout style;
-}
-
-/* Grid item — positioned absolutely with translate(x, y) */
-.vlist-grid-item {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
-    background-color: var(--vlist-bg);
-    cursor: default;
-    user-select: none;
-    transition: background-color var(--vlist-transition-duration)
-        var(--vlist-transition-timing);
-    contain: content;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-/* Override the default list item styles — grid items do NOT stretch full width */
-.vlist--grid .vlist-item {
-    right: auto;
-    border-bottom: none;
-}
-
-/* Suppress transitions during active scroll for better performance */
-.vlist--scrolling .vlist-grid-item {
-    transition: none;
-}
-
-/* Grid item pointer cursor (only when selection is active) */
-.vlist--selectable .vlist-grid-item {
-    cursor: pointer;
-}
-
-/* Grid item hover state (only when selection is active) */
-.vlist--selectable .vlist-grid-item:hover {
-    background-color: var(--vlist-bg-hover);
-}
-
-/* Grid item selected state */
-.vlist-grid-item.vlist-item--selected {
-    background-color: var(--vlist-bg-selected);
-}
-
-.vlist--selectable .vlist-grid-item.vlist-item--selected:hover {
-    background-color: var(--vlist-bg-selected-hover);
-}
-
-/* Grid item focused state */
-.vlist-grid-item.vlist-item--focused {
-    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
-    outline-offset: -2px;
-    z-index: 1;
-}
-
-/* =============================================================================
-   Masonry Layout
-   ============================================================================= */
-
-/* Masonry modifier on root */
-.vlist--masonry .vlist-items {
-    contain: layout style;
-}
-
-/* Masonry item — positioned absolutely with translate(x, y) */
-.vlist-masonry-item {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
-    background-color: var(--vlist-bg);
-    cursor: default;
-    user-select: none;
-    transition: background-color var(--vlist-transition-duration)
-        var(--vlist-transition-timing);
-    contain: content;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-/* Override the default list item styles — masonry items do NOT stretch full width */
-.vlist--masonry .vlist-item {
-    right: auto;
-    border-bottom: none;
-}
-
-/* Suppress transitions during active scroll for better performance */
-.vlist--scrolling .vlist-masonry-item {
-    transition: none;
-}
-
-/* Masonry item pointer cursor (only when selection is active) */
-.vlist--selectable .vlist-masonry-item {
-    cursor: pointer;
-}
-
-/* Masonry item hover state (only when selection is active) */
-.vlist--selectable .vlist-masonry-item:hover {
-    background-color: var(--vlist-bg-hover);
-}
-
-/* Masonry item selected state */
-.vlist-masonry-item.vlist-item--selected {
-    background-color: var(--vlist-bg-selected);
-}
-
-.vlist--selectable .vlist-masonry-item.vlist-item--selected:hover {
-    background-color: var(--vlist-bg-selected-hover);
-}
-
-/* Masonry item focused state */
-.vlist-masonry-item.vlist-item--focused {
-    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
-    outline-offset: -2px;
-    z-index: 1;
 }
 
 /* =============================================================================

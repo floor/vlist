@@ -40,6 +40,8 @@
       "default": "./dist/internals.js"
     },
     "./styles": "./dist/vlist.css",
+    "./styles/grid": "./dist/vlist-grid.css",
+    "./styles/masonry": "./dist/vlist-masonry.css",
     "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
     "./package.json": "./package.json"
