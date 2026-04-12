@@ -1,108 +1,47 @@
 // src/builder/velocity.ts
 /**
  * vlist/builder — Velocity Tracking
- * Circular-buffer velocity tracker for scroll momentum detection.
+ * Lightweight 2-sample velocity tracker for scroll momentum detection.
  */
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-export const VELOCITY_SAMPLE_COUNT = 5;
-export const STALE_GAP_MS = 100;
 export const MIN_RELIABLE_SAMPLES = 2;
 
-// =============================================================================
-// Types
-// =============================================================================
-
-export interface VelocitySample {
-  position: number;
-  time: number;
-}
-
-export interface VelocityTracker {
+/** Create a velocity tracker. */
+export const createVelocityTracker = (_initialPosition = 0): {
   velocity: number;
-  lastPosition: number;
-  lastTime: number;
-  samples: VelocitySample[];
-  sampleIndex: number;
   sampleCount: number;
-}
+} => ({
+  velocity: 0,
+  sampleCount: 0,
+});
 
-// =============================================================================
-// Factory
-// =============================================================================
-
-export const createVelocityTracker = (initialPosition = 0): VelocityTracker => {
-  const samples: VelocitySample[] = new Array(VELOCITY_SAMPLE_COUNT);
-  for (let i = 0; i < VELOCITY_SAMPLE_COUNT; i++) {
-    samples[i] = { position: 0, time: 0 };
-  }
-
-  return {
-    velocity: 0,
-    lastPosition: initialPosition,
-    lastTime: performance.now(),
-    samples,
-    sampleIndex: 0,
-    sampleCount: 0,
-  };
-};
-
-// =============================================================================
-// Update
-// =============================================================================
-
+/** Update velocity from new scroll position. Mutates tracker in place. */
 export const updateVelocityTracker = (
-  tracker: VelocityTracker,
+  tracker: { velocity: number; sampleCount: number; _lp?: number; _lt?: number },
   newPosition: number,
-): VelocityTracker => {
+): { velocity: number; sampleCount: number; _lp?: number; _lt?: number } => {
   const now = performance.now();
-  const timeDelta = now - tracker.lastTime;
+  const lastTime = tracker._lt ?? now;
+  const lastPos = tracker._lp ?? newPosition;
+  const dt = now - lastTime;
 
-  if (timeDelta === 0) return tracker;
+  tracker._lp = newPosition;
+  tracker._lt = now;
 
-  // Stale gap detection - reset if too much time passed
-  if (timeDelta > STALE_GAP_MS) {
-    tracker.sampleCount = 0;
-    tracker.sampleIndex = 0;
-    tracker.velocity = 0;
-    const baseline = tracker.samples[0]!;
-    baseline.position = newPosition;
-    baseline.time = now;
-    tracker.sampleIndex = 1;
-    tracker.sampleCount = 1;
-    tracker.lastPosition = newPosition;
-    tracker.lastTime = now;
+  // Zero time delta — record position but can't compute velocity
+  if (dt === 0) {
+    tracker.sampleCount = Math.min(tracker.sampleCount + 1, 5);
     return tracker;
   }
 
-  // Write to current slot in circular buffer
-  const currentSample = tracker.samples[tracker.sampleIndex]!;
-  currentSample.position = newPosition;
-  currentSample.time = now;
-
-  // Advance index (wrap around)
-  tracker.sampleIndex = (tracker.sampleIndex + 1) % VELOCITY_SAMPLE_COUNT;
-  tracker.sampleCount = Math.min(
-    tracker.sampleCount + 1,
-    VELOCITY_SAMPLE_COUNT,
-  );
-
-  // Calculate average velocity from samples
-  if (tracker.sampleCount >= MIN_RELIABLE_SAMPLES) {
-    const oldestIndex =
-      (tracker.sampleIndex - tracker.sampleCount + VELOCITY_SAMPLE_COUNT) %
-      VELOCITY_SAMPLE_COUNT;
-    const oldest = tracker.samples[oldestIndex]!;
-    const totalDistance = newPosition - oldest.position;
-    const totalTime = now - oldest.time;
-    tracker.velocity = totalTime > 0 ? Math.abs(totalDistance) / totalTime : 0;
+  // Stale gap — reset
+  if (dt > 100) {
+    tracker.velocity = 0;
+    tracker.sampleCount = 1;
+    return tracker;
   }
 
-  tracker.lastPosition = newPosition;
-  tracker.lastTime = now;
-
+  tracker.velocity = Math.abs(newPosition - lastPos) / dt;
+  tracker.sampleCount = Math.min(tracker.sampleCount + 1, 5);
   return tracker;
 };

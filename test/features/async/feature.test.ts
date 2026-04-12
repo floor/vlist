@@ -181,6 +181,7 @@ function createMockContext(config?: {
     } as any,
     getContainerWidth: mock(() => 800),
     afterScroll: afterScrollCallbacks,
+    afterRenderBatch: [],
     idleHandlers: [],
     clickHandlers: [],
     keydownHandlers: [],
