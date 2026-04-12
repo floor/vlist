@@ -22,8 +22,22 @@ async function build() {
   // Build main bundle
   const bundleStart = performance.now();
 
+  // Bun tree-shakes re-export barrels into empty stubs, so we
+  // reference all exports in a wrapper to force inclusion.
+  const entryAbs = resolve("./src/index.ts");
+  const wrapperCode = [
+    `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
+    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withAutoSize,`,
+    `  createStats } from "${entryAbs}";`,
+    `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
+    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withAutoSize,`,
+    `  createStats };`,
+  ].join("\n");
+  const wrapperPath = "/tmp/_vlist_build_entry.ts";
+  writeFileSync(wrapperPath, wrapperCode);
+
   const bundleResult = await Bun.build({
-    entrypoints: ["./src/index.ts"],
+    entrypoints: [wrapperPath],
     outdir: "./dist",
     format: "esm",
     target: "browser",
@@ -50,8 +64,12 @@ async function build() {
   // Build internals bundle (low-level exports for advanced users)
   const internalsStart = performance.now();
 
+  const intWrapperCode = `export * from "${resolve("./src/internals.ts")}";`;
+  const intWrapperPath = "/tmp/_vlist_build_internals.ts";
+  writeFileSync(intWrapperPath, intWrapperCode);
+
   const internalsResult = await Bun.build({
-    entrypoints: ["./src/internals.ts"],
+    entrypoints: [intWrapperPath],
     outdir: "./dist",
     format: "esm",
     target: "browser",
@@ -139,7 +157,7 @@ async function build() {
   const sizes: Record<string, { minified: string; gzipped: string }> = {};
 
   for (const { name, imports } of scenarios) {
-    const code = `import { ${imports.join(", ")} } from "${absEntry}"; globalThis._v = [${imports.join(", ")}];`;
+    const code = `import { ${imports.join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `/tmp/_vlist_size_${name}.ts`;
     writeFileSync(tmp, code);
 
