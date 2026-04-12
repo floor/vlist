@@ -33,7 +33,6 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
-import { resolvePadding, crossAxisPaddingFrom } from "../../utils/padding";
 
 import { createTableLayout } from "./layout";
 import { createTableHeader } from "./header";
@@ -99,13 +98,13 @@ export const withTable = <T extends VListItem = VListItem>(
   // ── Validate ──
   if (!config.columns || config.columns.length === 0) {
     throw new Error(
-      "[vlist/builder] withTable: columns must be a non-empty array",
+      "[vlist] withTable: columns must be a non-empty array",
     );
   }
 
   if (config.rowHeight === undefined && config.estimatedRowHeight === undefined) {
     throw new Error(
-      "[vlist/builder] withTable: either rowHeight or estimatedRowHeight is required",
+      "[vlist] withTable: either rowHeight or estimatedRowHeight is required",
     );
   }
 
@@ -128,13 +127,13 @@ export const withTable = <T extends VListItem = VListItem>(
       // ── Validate constraints ──
       if (resolvedConfig.horizontal) {
         throw new Error(
-          "[vlist/builder] withTable cannot be used with orientation: 'horizontal'",
+          "[vlist] withTable cannot be used with orientation: 'horizontal'",
         );
       }
 
       if (resolvedConfig.reverse) {
         throw new Error(
-          "[vlist/builder] withTable cannot be used with reverse: true",
+          "[vlist] withTable cannot be used with reverse: true",
         );
       }
 
@@ -146,8 +145,12 @@ export const withTable = <T extends VListItem = VListItem>(
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 
-      // ── Resolve cross-axis padding from config ──
-      const crossAxisPadding = crossAxisPaddingFrom(resolvePadding(ctx.rawConfig.padding), false);
+      // Cross-axis padding (tables are vertical → left + right).
+      // Inlined to avoid pulling utils/padding.ts into the bundle.
+      const pad = ctx.rawConfig.padding;
+      const crossAxisPadding = !pad ? 0
+        : typeof pad === "number" ? pad * 2
+        : pad.length === 2 ? pad[1]! * 2 : pad[1]! + pad[3]!;
 
       // Header height: explicit, or fixed rowHeight, or default 40
       const headerHeight = config.headerHeight ??
@@ -496,16 +499,11 @@ export const withTable = <T extends VListItem = VListItem>(
       };
 
       // Sync on every scroll frame (afterScroll fires after render)
-      ctx.afterScroll.push((): void => {
-        syncHeaderScroll();
-      });
+      ctx.afterScroll.push(syncHeaderScroll);
 
       // Also listen for horizontal scroll directly on the viewport
       // (afterScroll may only fire for vertical scroll changes)
-      const onViewportScroll = (): void => {
-        syncHeaderScroll();
-      };
-      dom.viewport.addEventListener("scroll", onViewportScroll, { passive: true });
+      dom.viewport.addEventListener("scroll", syncHeaderScroll, { passive: true });
 
       // ── Resize handler ──
       // When the container resizes, re-resolve column widths for flex columns.
@@ -671,7 +669,7 @@ export const withTable = <T extends VListItem = VListItem>(
 
       // ── Cleanup ──
       ctx.destroyHandlers.push((): void => {
-        dom.viewport.removeEventListener("scroll", onViewportScroll);
+        dom.viewport.removeEventListener("scroll", syncHeaderScroll);
 
         if (tableHeader) {
           tableHeader.destroy();
