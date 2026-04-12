@@ -343,6 +343,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     state,
 
     afterScroll,
+    afterRenderBatch: [],
     idleHandlers,
     clickHandlers,
     keydownHandlers,

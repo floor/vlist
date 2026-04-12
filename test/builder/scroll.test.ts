@@ -8,8 +8,9 @@ import {
   easeInOutQuad,
   resolveScrollArgs,
   createSmoothScroll,
-  SMOOTH_DURATION,
 } from "../../src/builder/scroll";
+
+const SMOOTH_DURATION = 300;
 
 // =============================================================================
 // Easing Function Tests

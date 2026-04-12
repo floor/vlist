@@ -293,6 +293,16 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    */
   afterScroll: Array<(scrollPosition: number, direction: string) => void>;
 
+  // ── After-render-batch actions ────────────────────────────────
+  /**
+   * Features register callbacks that run after a batch of new items
+   * is rendered. Receives the newly rendered items with their indices
+   * and DOM elements. Used by withAutoSize for ResizeObserver observation.
+   */
+  afterRenderBatch: Array<
+    (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
+  >;
+
   // ── Idle actions ──────────────────────────────────────────────
   /**
    * Features register callbacks that run when scrolling becomes idle.

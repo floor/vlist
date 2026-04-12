@@ -3,14 +3,9 @@
  * Shared scroll utility used by both core baseline and withSelection feature.
  * Only scrolls when the target item is outside the viewport; aligns to nearest edge.
  *
- * Handles both normal and compressed (withScale) modes:
- * - Normal: pixel-perfect offset comparison against scroll position
- * - Compressed: fractional index math because sizeCache offsets are in
- *   actual-pixel space but scrollPosition is in virtual/compressed space
- *
- * Padding-aware: CSS padding on the content element shifts items in scroll
- * space by `startPadding` (paddingTop for vertical, paddingLeft for horizontal).
- * The function accounts for this offset in both visibility checks and alignment.
+ * Split into two functions for tree-shaking:
+ * - scrollToFocusSimple: normal mode only (used by base builder)
+ * - scrollToFocus: handles both normal and compressed modes (used by features)
  */
 
 import type { SizeCache } from "./sizes";
@@ -18,8 +13,31 @@ import type { CompressionState } from "./scale";
 import type { Range } from "../types";
 
 /**
- * Calculate the scroll position needed to bring an item into view.
- * Returns the current scroll position unchanged if the item is already fully visible.
+ * Simple scroll-to-focus: normal (non-compressed) mode only.
+ * Padding-aware: accounts for CSS padding on the content element.
+ */
+export const scrollToFocusSimple = (
+  index: number,
+  sizeCache: SizeCache,
+  scrollPosition: number,
+  containerSize: number,
+  startPadding: number = 0,
+  endPadding: number = 0,
+): number => {
+  const itemOffset = sizeCache.getOffset(index);
+  const itemSize = sizeCache.getSize(index);
+  const adjustedTop = itemOffset + startPadding;
+  const adjustedBottom = adjustedTop + itemSize;
+  const viewportBottom = scrollPosition + containerSize;
+
+  if (adjustedTop < scrollPosition) return Math.max(0, itemOffset);
+  if (adjustedBottom > viewportBottom) return adjustedBottom + endPadding - containerSize;
+  return scrollPosition;
+};
+
+/**
+ * Full scroll-to-focus: handles both normal and compressed (withScale) modes.
+ * Used by withSelection feature which must work with compression.
  */
 export const scrollToFocus = (
   index: number,
@@ -38,28 +56,10 @@ export const scrollToFocus = (
     compression.ratio !== 1;
 
   if (!isCompressed) {
-    // ── Normal: pixel-perfect positioning ──
-    const itemOffset = sizeCache.getOffset(index);
-    const itemSize = sizeCache.getSize(index);
-    const adjustedTop = itemOffset + startPadding;
-    const adjustedBottom = adjustedTop + itemSize;
-    const viewportBottom = scrollPosition + containerSize;
-
-    if (adjustedTop < scrollPosition) {
-      return Math.max(0, itemOffset);
-    }
-
-    if (adjustedBottom > viewportBottom) {
-      return adjustedBottom + endPadding - containerSize;
-    }
-
-    return scrollPosition;
+    return scrollToFocusSimple(index, sizeCache, scrollPosition, containerSize, startPadding, endPadding);
   }
 
   // ── Compressed: linear index math ──
-  // With compression slack on the content div, the linear formula
-  // index * compressedItemSize is valid for ALL indices (no near-bottom
-  // interpolation hack needed).
   const total = totalItems!;
   const { virtualSize } = compression!;
   const itemSize = sizeCache.getSize(Math.max(0, index));
@@ -68,18 +68,13 @@ export const scrollToFocus = (
   const compressedItemSize = virtualSize / total;
 
   if (visibleRange) {
-    // Use >= / <= (inclusive) so items at the boundary get scrolled into view
     if (index >= visibleRange.start + fullyVisible) {
-      // Item is below the fully-visible area — align to bottom edge.
-      // Use fractional effectiveSize/itemSize (not integer fullyVisible)
-      // so the focused item's bottom aligns with the viewport's bottom.
       const exactVisible = effectiveSize / itemSize;
       const wantStart = index + 1 - exactVisible;
       return Math.max(0, wantStart * compressedItemSize);
     }
 
     if (index <= visibleRange.start) {
-      // Item is at or above the first (potentially clipped) visible item — align to top edge
       return Math.max(0, index * compressedItemSize);
     }
 

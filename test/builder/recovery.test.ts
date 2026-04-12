@@ -177,7 +177,7 @@ describe("Error Handling: Invalid Configuration", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]!.error.message).toBe("Template error");
-    expect(errors[0]!.context).toMatch(/^template\(/);
+    expect(errors[0]!.context).toMatch(/^tpl\(/);
 
     instance.destroy();
     restoreConsoleError();
@@ -335,7 +335,7 @@ describe("Error Handling: Contextual Error Reporting", () => {
 
     expect(errors.length).toBe(1);
     expect(errors[0]!.error.message).toBe("Setup failed");
-    expect(errors[0]!.context).toBe("feature.setup(kaboom)");
+    expect(errors[0]!.context).toBe("kaboom");
 
     instance.destroy();
   });
