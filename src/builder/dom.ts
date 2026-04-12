@@ -25,7 +25,7 @@ export const resolveContainer = (container: HTMLElement | string): HTMLElement =
   if (typeof container === "string") {
     const el = document.querySelector<HTMLElement>(container);
     if (!el)
-      throw new Error(`[vlist/builder] Container not found: ${container}`);
+      throw new Error(`[vlist] Container not found: ${container}`);
     return el;
   }
   return container;
@@ -35,6 +35,14 @@ export const resolveContainer = (container: HTMLElement | string): HTMLElement =
 // DOM Structure Factory
 // =============================================================================
 
+/** Create a div with className and optional inline styles */
+const el = (cls: string, css?: string): HTMLElement => {
+  const d = document.createElement("div");
+  d.className = cls;
+  if (css) d.style.cssText = css;
+  return d;
+};
+
 export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
@@ -42,60 +50,39 @@ export const createDOMStructure = (
   horizontal?: boolean,
   accessible?: boolean,
 ): DOMStructure => {
-  const root = document.createElement("div");
-  root.className = classPrefix;
-  if (horizontal) root.classList.add(`${classPrefix}--horizontal`);
+  const hz = horizontal;
+  const root = el(classPrefix);
+  if (hz) root.classList.add(`${classPrefix}--horizontal`);
   if (accessible !== false) root.setAttribute("tabindex", "0");
 
-  const viewport = document.createElement("div");
-  viewport.className = `${classPrefix}-viewport`;
+  const viewport = el(
+    `${classPrefix}-viewport`,
+    hz
+      ? "overflow-x:auto;overflow-y:hidden;height:100%;width:100%"
+      : "overflow:auto;height:100%;width:100%",
+  );
   viewport.setAttribute("tabindex", "-1");
-  if (horizontal) {
-    viewport.style.overflowX = "auto";
-    viewport.style.overflowY = "hidden";
-  } else {
-    viewport.style.overflow = "auto";
-  }
-  viewport.style.height = "100%";
-  viewport.style.width = "100%";
 
-  const content = document.createElement("div");
-  content.className = `${classPrefix}-content`;
-  content.style.position = "relative";
-  if (horizontal) {
-    content.style.height = "100%";
-    // Width will be set dynamically based on total items * width
-  } else {
-    content.style.width = "100%";
-  }
+  const content = el(
+    `${classPrefix}-content`,
+    hz ? "position:relative;height:100%" : "position:relative;width:100%",
+  );
 
-  const items = document.createElement("div");
-  items.className = `${classPrefix}-items`;
+  const items = el(
+    `${classPrefix}-items`,
+    hz ? "position:relative;height:100%" : "position:relative;width:100%",
+  );
   items.setAttribute("role", "listbox");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
-  if (horizontal) items.setAttribute("aria-orientation", "horizontal");
-  items.style.position = "relative";
-  if (horizontal) {
-    items.style.height = "100%";
-  } else {
-    items.style.width = "100%";
-  }
+  if (hz) items.setAttribute("aria-orientation", "horizontal");
 
-  // Visually-hidden ARIA live region for announcing visible range changes (#13b)
-  const liveRegion = document.createElement("div");
+  const liveRegion = el(
+    `${classPrefix}-live`,
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0",
+  );
   liveRegion.setAttribute("aria-live", "polite");
   liveRegion.setAttribute("aria-atomic", "true");
   liveRegion.setAttribute("role", "status");
-  liveRegion.className = `${classPrefix}-live`;
-  liveRegion.style.position = "absolute";
-  liveRegion.style.width = "1px";
-  liveRegion.style.height = "1px";
-  liveRegion.style.padding = "0";
-  liveRegion.style.margin = "-1px";
-  liveRegion.style.overflow = "hidden";
-  liveRegion.style.clip = "rect(0,0,0,0)";
-  liveRegion.style.whiteSpace = "nowrap";
-  liveRegion.style.border = "0";
 
   content.appendChild(items);
   viewport.appendChild(content);

@@ -23,6 +23,7 @@ import {
 import { JSDOM } from "jsdom";
 
 import { vlist } from "../../src/builder/core";
+import { withAutoSize } from "../../src/features/autosize";
 import type { VList } from "../../src/builder/types";
 import type { VListItem } from "../../src/types";
 
@@ -313,7 +314,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(list.element).toBeDefined();
     expect(list.total).toBe(50);
@@ -324,7 +325,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
@@ -337,7 +338,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Items should have been measured (mock fires synchronously)
     // After measurement, elements should have explicit heights set
@@ -353,7 +354,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(20),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Every rendered item should have been unobserved after measurement.
     // Note: elements may have been recycled by the time we inspect them
@@ -370,7 +371,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(totalItems),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const contentHeight = parseInt(content.style.height, 10);
@@ -393,7 +394,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const elements = getRenderedElements(list);
     const indices = Array.from(elements.keys()).sort((a, b) => a - b);
@@ -417,7 +418,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(list.total).toBe(50);
 
@@ -437,7 +438,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(20),
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(list.total).toBe(20);
 
@@ -454,7 +455,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: [],
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(list.total).toBe(0);
     const indices = getRenderedIndices(list);
@@ -466,7 +467,7 @@ describe("Mode B: estimatedHeight config", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const element = list.element;
     expect(element.parentElement).toBe(container);
@@ -507,7 +508,7 @@ describe("Mode B: scroll correction (Direction C)", () => {
       container,
       item: { estimatedHeight: 40, template },
       items: createTestItems(200),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Initial render measures visible items (near top)
     const scrollBefore = getViewportElement(list).scrollTop;
@@ -534,7 +535,7 @@ describe("Mode B: scroll correction (Direction C)", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     simulateScroll(list, 500);
 
@@ -551,7 +552,7 @@ describe("Mode B: scroll correction (Direction C)", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(200),
-    }).build();
+    }).use(withAutoSize()).build();
 
     list.on("scroll", () => {
       scrollCount++;
@@ -572,7 +573,7 @@ describe("Mode B: scroll correction (Direction C)", () => {
       container,
       item: { estimatedHeight: 40, template },
       items: createTestItems(200),
-    }).build();
+    }).use(withAutoSize()).build();
 
     list.on("range:change", () => {
       rangeChanged = true;
@@ -614,7 +615,7 @@ describe("Mode B: content size", () => {
       container,
       item: { estimatedHeight, template },
       items: createTestItems(totalItems),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const contentHeight = parseInt(content.style.height, 10);
@@ -632,7 +633,7 @@ describe("Mode B: content size", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(20),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const heightBefore = parseInt(content.style.height, 10);
@@ -651,7 +652,7 @@ describe("Mode B: content size", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const heightBefore = parseInt(content.style.height, 10);
@@ -688,7 +689,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(50),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(list.element).toBeDefined();
     const items = list.element.querySelector(".vlist-items");
@@ -703,7 +704,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(50),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     const indices = getRenderedIndices(list);
     expect(indices.length).toBeGreaterThan(0);
@@ -717,7 +718,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(50),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     // After measurement, elements should have explicit widths
     const elements = getRenderedElements(list);
@@ -733,7 +734,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(50),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     const elements = getRenderedElements(list);
     for (const [, el] of elements) {
@@ -748,7 +749,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(50),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     // Content width should be set (not height for horizontal)
@@ -767,7 +768,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth, template },
       items: createTestItems(totalItems),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const contentWidth = parseInt(content.style.width, 10);
@@ -784,7 +785,7 @@ describe("Mode B: horizontal mode (estimatedWidth)", () => {
       item: { estimatedWidth: 100, template },
       items: createTestItems(20),
       orientation: "horizontal",
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(unobservedElements.length).toBeGreaterThan(0);
   });
@@ -909,7 +910,7 @@ describe("Mode B: scrollToIndex", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(200),
-    }).build();
+    }).use(withAutoSize()).build();
 
     list.scrollToIndex(50);
 
@@ -927,7 +928,7 @@ describe("Mode B: scrollToIndex", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     expect(() => {
       list!.scrollToIndex(99, { align: "end" });
@@ -944,7 +945,7 @@ describe("Mode B: scrollToIndex", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Scroll away first
     simulateScroll(list, 2000);
@@ -990,7 +991,7 @@ describe("Mode B: variable measured sizes", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(200),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Elements should have varying heights based on mock sizes
     const elements = getRenderedElements(list);
@@ -1016,7 +1017,7 @@ describe("Mode B: variable measured sizes", () => {
       container,
       item: { estimatedHeight: 80, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const elements = getRenderedElements(list);
 
@@ -1051,7 +1052,7 @@ describe("Mode B: variable measured sizes", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const contentHeight = parseInt(content.style.height, 10);
@@ -1069,7 +1070,7 @@ describe("Mode B: variable measured sizes", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Content should be exactly 50 * 100 = 5000
     // (all rendered items measure at exactly the estimated size)
@@ -1103,7 +1104,7 @@ describe("Mode B: ARIA attributes", () => {
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
       ariaLabel: "Measured list",
-    }).build();
+    }).use(withAutoSize()).build();
 
     const items = list.element.querySelector(".vlist-items");
     expect(items).not.toBeNull();
@@ -1116,7 +1117,7 @@ describe("Mode B: ARIA attributes", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const elements = getRenderedElements(list);
     expect(elements.size).toBeGreaterThan(0);
@@ -1155,7 +1156,7 @@ describe("Mode B: interaction with scroll events", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(500),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const indicesBefore = getRenderedIndices(list);
     const maxBefore = Math.max(...indicesBefore);
@@ -1176,7 +1177,7 @@ describe("Mode B: interaction with scroll events", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(500),
-    }).build();
+    }).use(withAutoSize()).build();
 
     // Rapid scroll sequence
     simulateScroll(list, 500);
@@ -1195,7 +1196,7 @@ describe("Mode B: interaction with scroll events", () => {
       container,
       item: { estimatedHeight: 50, template },
       items: createTestItems(100),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const pos = list.getScrollPosition();
     expect(typeof pos).toBe("number");
@@ -1246,7 +1247,7 @@ describe("Mode B: stayAtEnd", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(30),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const viewport = getViewportElement(list);
     const content = getContentElement(list);
@@ -1321,7 +1322,7 @@ describe("Mode B: stayAtEnd", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(50),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const viewport = getViewportElement(list);
     const content = getContentElement(list);
@@ -1388,7 +1389,7 @@ describe("Mode B: flush (deferred content size update)", () => {
       container,
       item: { estimatedHeight: 100, template },
       items: createTestItems(30),
-    }).build();
+    }).use(withAutoSize()).build();
 
     const content = getContentElement(list);
     const heightAfterBuild = parseInt(content.style.height, 10);

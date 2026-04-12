@@ -24,6 +24,7 @@ export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
 export { withTable } from "./features/table";
+export { withAutoSize } from "./features/autosize";
 
 // Utils
 export { createStats } from "./utils/stats";

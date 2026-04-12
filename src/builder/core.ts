@@ -16,7 +16,6 @@ import type {
   ItemTemplate,
   ItemState,
   Range,
-  ErrorViewportSnapshot,
 } from "../types";
 
 import type { ScrollConfig } from "../types";
@@ -41,27 +40,24 @@ import {
   MIN_RELIABLE_SAMPLES,
 } from "./velocity";
 import { createSizeCache } from "../rendering/sizes";
-import { createMeasuredSizeCache, type MeasuredSizeCache } from "../rendering/measured";
 import { createEmitter } from "../events/emitter";
 import { resolveContainer, createDOMStructure } from "./dom";
 import { createElementPool } from "./pool";
 import { calcVisibleRange, applyOverscan, calcScrollToPosition } from "./range";
 import { resolvePadding, mainAxisPaddingFrom } from "../utils/padding";
 import { sortRenderedDOM } from "../rendering/sort";
-import { scrollToFocus } from "../rendering/scroll";
 import {
   createMaterializeCtx,
   createDefaultDataProxy,
   createDefaultScrollProxy,
 } from "./materialize";
 import type { MRefs } from "./materialize";
-import { createMeasurement } from "./measurement";
+import { setupBaselineA11y } from "./a11y";
 import { createApi } from "./api";
-import {
-  OVERSCAN,
-  CLASS_PREFIX,
-  SCROLL_IDLE_TIMEOUT,
-} from "../constants";
+// Inlined from constants.ts to avoid pulling in the full constants module
+const OVERSCAN = 3;
+const CLASS_PREFIX = "vlist";
+const SCROLL_IDLE_TIMEOUT = 150;
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
@@ -78,10 +74,10 @@ export const vlist = <T extends VListItem = VListItem>(
 ): VListBuilder<T> => {
   // ── Validate ────────────────────────────────────────────────────
   if (!config.container) {
-    throw new Error("[vlist/builder] Container is required");
+    throw new Error("[vlist] Container is required");
   }
   if (!config.item) {
-    throw new Error("[vlist/builder] item configuration is required");
+    throw new Error("[vlist] item configuration is required");
   }
 
   const isHorizontal = config.orientation === "horizontal";
@@ -95,14 +91,14 @@ export const vlist = <T extends VListItem = VListItem>(
   // Mode priority: explicit size (Mode A) > estimated size (Mode B)
   if (mainAxisValue == null && estimatedSize == null) {
     throw new Error(
-      `[vlist/builder] item.${mainAxisProp} or item.${estimatedProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
+      `[vlist] item.${mainAxisProp} or item.${estimatedProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
     );
   }
   if (mainAxisValue != null) {
     // Mode A validation
     if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
       throw new Error(
-        `[vlist/builder] item.${mainAxisProp} must be a positive number`,
+        `[vlist] item.${mainAxisProp} must be a positive number`,
       );
     }
     if (
@@ -110,23 +106,23 @@ export const vlist = <T extends VListItem = VListItem>(
       typeof mainAxisValue !== "function"
     ) {
       throw new Error(
-        `[vlist/builder] item.${mainAxisProp} must be a number or a function (index) => number`,
+        `[vlist] item.${mainAxisProp} must be a number or a function (index) => number`,
       );
     }
   } else if (estimatedSize != null) {
     // Mode B validation
     if (typeof estimatedSize !== "number" || estimatedSize <= 0) {
       throw new Error(
-        `[vlist/builder] item.${estimatedProp} must be a positive number`,
+        `[vlist] item.${estimatedProp} must be a positive number`,
       );
     }
   }
   if (!config.item.template) {
-    throw new Error("[vlist/builder] item.template is required");
+    throw new Error("[vlist] item.template is required");
   }
   if (isHorizontal && config.reverse) {
     throw new Error(
-      "[vlist/builder] horizontal direction cannot be combined with reverse mode",
+      "[vlist] horizontal direction cannot be combined with reverse mode",
     );
   }
 
@@ -137,7 +133,7 @@ export const vlist = <T extends VListItem = VListItem>(
   const builder: VListBuilder<T> = {
     use(feature: VListFeature<T>): VListBuilder<T> {
       if (built) {
-        throw new Error("[vlist/builder] Cannot call .use() after .build()");
+        throw new Error("[vlist] Cannot call .use() after .build()");
       }
       features.set(feature.name, feature);
       return builder;
@@ -145,7 +141,7 @@ export const vlist = <T extends VListItem = VListItem>(
 
     build(): VList<T> {
       if (built) {
-        throw new Error("[vlist/builder] .build() can only be called once");
+        throw new Error("[vlist] .build() can only be called once");
       }
       built = true;
       return materialize(
@@ -235,7 +231,7 @@ function materialize<T extends VListItem = VListItem>(
       for (const conflict of feature.conflicts) {
         if (featureNames.has(conflict)) {
           throw new Error(
-            `[vlist/builder] ${feature.name} and ${conflict} cannot be combined`,
+            `[vlist] ${feature.name} and ${conflict} cannot be combined`,
           );
         }
       }
@@ -250,7 +246,7 @@ function materialize<T extends VListItem = VListItem>(
   if (isReverse) {
     if (featureNames.has("withGrid")) {
       throw new Error(
-        "[vlist/builder] withGrid cannot be used with reverse: true",
+        "[vlist] withGrid cannot be used with reverse: true",
       );
     }
     // Note: withGroups validation moved to feature itself
@@ -327,15 +323,15 @@ function materialize<T extends VListItem = VListItem>(
         : (mainAxisSizeConfig as number) + gap
       : mainAxisSizeConfig;
 
-  const initialSizeCache = measurementEnabled
-    ? createMeasuredSizeCache(
-        estimatedSizeValue! + gap,
-        initialItemsArray.length,
-      )
-    : createSizeCache(
-        effectiveSizeConfig,
-        featureReplacesSizeCache ? 0 : initialItemsArray.length,
-      );
+  // Mode B (auto-measurement) uses estimatedSize as the initial fixed size.
+  // The withAutoSize feature replaces the cache with a MeasuredSizeCache at setup.
+  const initialSizeCfg = measurementEnabled
+    ? (estimatedSizeValue! + gap)
+    : effectiveSizeConfig;
+  const initialSizeCache = createSizeCache(
+    initialSizeCfg,
+    featureReplacesSizeCache ? 0 : initialItemsArray.length,
+  );
 
   // Fix trailing gap: the last item's slot includes a gap that shouldn't
   // add empty space at the bottom of the list.
@@ -403,10 +399,9 @@ function materialize<T extends VListItem = VListItem>(
     uic: (index: number, isSelected: boolean, isFocused: boolean): void => {
       const element = rendered.get(index);
       if (!element) return;
-      element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-      element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-      element.ariaSelected = isSelected ? "true" : "false";
+      applySelState(element, isSelected, isFocused);
     },
+    csi: null,
   };
 
   // virtualTotalFn must reference $ after creation
@@ -440,13 +435,9 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   // ── Error reporting helper ──────────────────────────────────────
-  const snapshotViewport = (): ErrorViewportSnapshot => ({
-    scrollPosition: sharedState.viewportState.scrollPosition,
-    containerSize: sharedState.viewportState.containerSize,
-    visibleRange: { ...sharedState.viewportState.visibleRange },
-    renderRange: { ...sharedState.viewportState.renderRange },
+  const snapshotViewport = () => ({
+    ...sharedState.viewportState,
     totalItems: $.vtf(),
-    isCompressed: sharedState.viewportState.isCompressed,
   });
 
   // Rendered item tracking
@@ -478,30 +469,26 @@ function materialize<T extends VListItem = VListItem>(
     }
   };
 
-  // ── Mode B: Measurement tracking ───────────────────────────────
-  const measuredCache = measurementEnabled
-    ? (initialSizeCache as MeasuredSizeCache)
-    : null;
-
-  const measurement = createMeasurement(
-    $,
-    dom,
-    isHorizontal,
-    visibleRange,
-    lastRenderRange,
-    () => isScrolling,
-    updateContentSize,
-    measuredCache,
-    measurementEnabled,
-    gap,
-  );
 
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
+  const selClass = `${classPrefix}-item--selected`;
+  const focClass = `${classPrefix}-item--focused`;
+
+  /** Apply selection + focus classes and aria-selected to an element. */
+  const applySelState = (el: HTMLElement, sel: boolean, foc: boolean): void => {
+    el.classList.toggle(selClass, sel);
+    el.classList.toggle(focClass, foc);
+    el.ariaSelected = sel ? "true" : "false";
+  };
+
   const stripedMode = itemConfig.striped;
   const striped = !!stripedMode;
   const stripedFn = stripedMode === "data" || stripedMode === "even" || stripedMode === "odd";
   const oddClass = `${classPrefix}-item--odd`;
+  const phClass = `${classPrefix}-item--placeholder`;
+  const rpClass = `${classPrefix}-item--replaced`;
+  const scClass = `${classPrefix}--scrolling`;
 
   // No ID → index map (removed for memory efficiency)
   // Users can implement their own Map if needed for O(1) lookups
@@ -515,8 +502,10 @@ function materialize<T extends VListItem = VListItem>(
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
   const contentSizeHandlers: Array<() => void> = [];
+  const afterRenderBatch: Array<(items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void> = [];
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
+  const PH = "__placeholder_";
 
   // ── Cached selection getter references ──
   // Resolved lazily on first render frame. The selection feature registers
@@ -568,11 +557,9 @@ function materialize<T extends VListItem = VListItem>(
     const element = pool.acquire();
     element.className = baseClass;
 
-    // Mode B: unmeasured items get no explicit size so ResizeObserver can
-    // measure the real content height. Measured items use their known size.
-    const shouldConstrainSize =
-      !measurementEnabled ||
-      (measurement.mc && measurement.mc.isMeasured(index));
+    // When autosize is active, unmeasured items get no explicit size so
+    // ResizeObserver can measure the real content height.
+    const shouldConstrainSize = !$.csi || $.csi(index);
 
     if (isHorizontal) {
       if (shouldConstrainSize) {
@@ -600,9 +587,9 @@ function materialize<T extends VListItem = VListItem>(
     element.setAttribute("aria-posinset", String(index + 1));
 
     // Add placeholder class if this is a placeholder item
-    const isPlaceholder = String(item.id).startsWith("__placeholder_");
+    const isPlaceholder = String(item.id).startsWith(PH);
     if (isPlaceholder) {
-      element.classList.add(`${classPrefix}-item--placeholder`);
+      element.classList.add(phClass);
     }
 
     // Striped: toggle odd class based on logical index (not DOM order)
@@ -623,7 +610,7 @@ function materialize<T extends VListItem = VListItem>(
       const error = err instanceof Error ? err : new Error(String(err));
       emitter.emit("error", {
         error,
-        context: `template(index=${index}, id=${item.id})`,
+        context: `tpl(${index},${item.id})`,
         viewport: snapshotViewport(),
       });
       element.textContent = "";
@@ -714,8 +701,8 @@ function materialize<T extends VListItem = VListItem>(
         const newId = String(item.id);
         if (existingId !== newId) {
           // Check if we're replacing a placeholder (ID starts with __placeholder_)
-          const wasPlaceholder = existingId?.startsWith("__placeholder_");
-          const isPlaceholder = newId.startsWith("__placeholder_");
+          const wasPlaceholder = existingId?.startsWith(PH);
+          const isPlaceholder = newId.startsWith(PH);
 
           try {
             applyTemplate(existing, $.at(item, i, itemState), i);
@@ -723,16 +710,13 @@ function materialize<T extends VListItem = VListItem>(
             const error = err instanceof Error ? err : new Error(String(err));
             emitter.emit("error", {
               error,
-              context: `template(index=${i}, id=${item.id})`,
+              context: `tpl(${i},${item.id})`,
               viewport: snapshotViewport(),
             });
             existing.textContent = "";
           }
           existing.dataset.id = newId;
-          // Mode B: unconstrain unmeasured items for ResizeObserver measurement
-          const shouldConstrain =
-            !measurementEnabled ||
-            (measurement.mc && measurement.mc.isMeasured(i));
+          const shouldConstrain = !$.csi || $.csi(i);
           if (isHorizontal) {
             existing.style.width = shouldConstrain
               ? `${$.hc.getSize(i) - gap}px`
@@ -745,16 +729,16 @@ function materialize<T extends VListItem = VListItem>(
 
           // Update placeholder class
           if (isPlaceholder) {
-            existing.classList.add(`${classPrefix}-item--placeholder`);
+            existing.classList.add(phClass);
           } else {
-            existing.classList.remove(`${classPrefix}-item--placeholder`);
+            existing.classList.remove(phClass);
           }
           // Add --replaced class for fade-in animation when placeholder is replaced
           if (wasPlaceholder && !isPlaceholder) {
-            existing.classList.add(`${classPrefix}-item--replaced`);
+            existing.classList.add(rpClass);
             // Remove class after animation completes to allow reuse
             setTimeout(() => {
-              existing.classList.remove(`${classPrefix}-item--replaced`);
+              existing.classList.remove(rpClass);
             }, 300);
           }
         }
@@ -763,9 +747,7 @@ function materialize<T extends VListItem = VListItem>(
         // Selection class updates
         const isSelected = selectedIds.has(item.id);
         const isFocused = i === focusedIndex;
-        existing.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-        existing.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-        existing.ariaSelected = isSelected ? "true" : "false";
+        applySelState(existing, isSelected, isFocused);
 
         if (setSizeChanged) {
           existing.setAttribute("aria-setsize", $.la);
@@ -777,12 +759,8 @@ function materialize<T extends VListItem = VListItem>(
         // Selection state for new elements
         const isSelected = selectedIds.has(item.id);
         const isFocused = i === focusedIndex;
-        if (isSelected) {
-          element.classList.add(`${classPrefix}-item--selected`);
-          element.ariaSelected = "true";
-        }
-        if (isFocused) {
-          element.classList.add(`${classPrefix}-item--focused`);
+        if (isSelected || isFocused) {
+          applySelState(element, isSelected, isFocused);
         }
 
         fragment.appendChild(element);
@@ -797,20 +775,10 @@ function materialize<T extends VListItem = VListItem>(
       }
     }
 
-    // Mode B: observe newly rendered items for auto-measurement immediately.
-    // ResizeObserver fires asynchronously; the callback defers content size
-    // updates and scroll correction until scroll idle for scrollbar stability.
-    if (
-      measurementEnabled &&
-      measurement.ob &&
-      measurement.mc &&
-      measurement.ei
-    ) {
-      for (const { index, element } of newlyRenderedForMeasurement) {
-        if (!measurement.mc.isMeasured(index)) {
-          measurement.ei.set(element, index);
-          measurement.ob.observe(element);
-        }
+    // Dispatch to after-render-batch hooks (used by withAutoSize for observation)
+    if (afterRenderBatch.length > 0) {
+      for (let h = 0; h < afterRenderBatch.length; h++) {
+        afterRenderBatch[h]!(newlyRenderedForMeasurement);
       }
     }
 
@@ -849,12 +817,11 @@ function materialize<T extends VListItem = VListItem>(
 
   /** Shared scroll-idle callback — resets state, flushes measurements, notifies features. */
   const onScrollIdle = (): void => {
-    dom.root.classList.remove(`${classPrefix}--scrolling`);
+    dom.root.classList.remove(scClass);
     isScrolling = false;
     $.vt.velocity = 0;
     $.vt.sampleCount = 0;
     emitter.emit("velocity:change", { velocity: 0, reliable: false });
-    measurement.fl();
     sortDOMChildren();
     for (let i = 0; i < idleHandlers.length; i++) idleHandlers[i]!();
     emitter.emit("scroll:idle", { scrollPosition: $.ls });
@@ -881,8 +848,8 @@ function materialize<T extends VListItem = VListItem>(
     // Update velocity tracker
     $.vt = updateVelocityTracker($.vt as any, scrollTop);
 
-    if (!dom.root.classList.contains(`${classPrefix}--scrolling`)) {
-      dom.root.classList.add(`${classPrefix}--scrolling`);
+    if (!dom.root.classList.contains(scClass)) {
+      dom.root.classList.add(scClass);
     }
     isScrolling = true;
 
@@ -1016,23 +983,20 @@ function materialize<T extends VListItem = VListItem>(
   dom.root.addEventListener("keydown", handleKeydown);
 
   // ── ARIA live region: announce visible range changes (#13b) ─────
-  // Debounced to ~300ms so fast scrolling doesn't spam screen readers.
-  let liveRegionTimer: ReturnType<typeof setTimeout> | null = null;
-  const updateLiveRegion = (data: { range: { start: number; end: number } }): void => {
-    if (liveRegionTimer) clearTimeout(liveRegionTimer);
-    liveRegionTimer = setTimeout(() => {
-      liveRegionTimer = null;
-      if ($.id) return;
-      const total = $.vtf();
-      const { start, end } = data.range;
-      dom.liveRegion.textContent = `Showing items ${start + 1} to ${Math.min(end + 1, total)} of ${total}`;
-    }, 300);
-  };
-  emitter.on("range:change", updateLiveRegion);
-  destroyHandlers.push(() => {
-    if (liveRegionTimer) clearTimeout(liveRegionTimer);
-    emitter.off("range:change", updateLiveRegion);
-  });
+  if (accessibleMode) {
+    let lrt: ReturnType<typeof setTimeout> | null = null;
+    const ulr = (data: { range: { start: number; end: number } }): void => {
+      if (lrt) clearTimeout(lrt);
+      lrt = setTimeout(() => {
+        lrt = null;
+        if ($.id) return;
+        const t = $.vtf();
+        dom.liveRegion.textContent = `Showing items ${data.range.start + 1} to ${Math.min(data.range.end + 1, t)} of ${t}`;
+      }, 300);
+    };
+    emitter.on("range:change", ulr);
+    destroyHandlers.push(() => { if (lrt) clearTimeout(lrt); emitter.off("range:change", ulr); });
+  }
 
   // ── ResizeObserver ──────────────────────────────────────────────
 
@@ -1115,6 +1079,7 @@ function materialize<T extends VListItem = VListItem>(
     methods,
     onScrollFrame,
     resizeObserver,
+    afterRenderBatch,
     applyTemplate,
     updateContentSize,
   };
@@ -1142,16 +1107,25 @@ function materialize<T extends VListItem = VListItem>(
         const error = err instanceof Error ? err : new Error(String(err));
         emitter.emit("error", {
           error,
-          context: `template(index=${index}, id=${item.id})`,
+          context: `tpl(${index},${item.id})`,
           viewport: snapshotViewport(),
         });
       }
       element.dataset.id = String(item.id);
-      element.classList.toggle(`${classPrefix}-item--selected`, isSelected);
-      element.classList.toggle(`${classPrefix}-item--focused`, isFocused);
-      element.ariaSelected = isSelected ? "true" : "false";
+      applySelState(element, isSelected, isFocused);
     },
   );
+
+  // ── Internal methods for withAutoSize feature ──────────────────
+  methods.set("_setSizeCache", (cache: import("../rendering/sizes").SizeCache): void => {
+    $.hc = cache;
+    if ($.gp > 0) {
+      const orig = $.hc.getTotalSize;
+      const g = $.gp;
+      $.hc.getTotalSize = (): number => { const t = orig(); return t > 0 ? t - g : 0; };
+    }
+  });
+  methods.set("_setConstrainSize", (fn: ((index: number) => boolean) | null): void => { $.csi = fn; });
 
   // ── Run feature setup ────────────────────────────────────────────
 
@@ -1163,7 +1137,7 @@ function materialize<T extends VListItem = VListItem>(
         const existing = allMethodNames.get(method);
         if (existing) {
           throw new Error(
-            `[vlist/builder] Method "${method}" is registered by both "${existing}" and "${feature.name}"`,
+            `[vlist] Method "${method}" is registered by both "${existing}" and "${feature.name}"`,
           );
         }
         allMethodNames.set(method, feature.name);
@@ -1181,9 +1155,16 @@ function materialize<T extends VListItem = VListItem>(
       }
       emitter.emit("error", {
         error,
-        context: `feature.setup(${feature.name})`,
+        context: feature.name,
         viewport: snapshotViewport(),
       });
+    }
+  }
+
+  // ── Dev warning: estimatedHeight without withAutoSize ──────────
+  if (process.env.NODE_ENV !== "production") {
+    if (measurementEnabled && !features.has("withAutoSize")) {
+      console.warn("[vlist] estimatedHeight/estimatedWidth requires .use(withAutoSize()). Items will use the estimated size as a fixed size.");
     }
   }
 
@@ -1197,253 +1178,13 @@ function materialize<T extends VListItem = VListItem>(
   // Lightweight: $.fi tracks focus, $.ss (Set with 0-1 entries) tracks selection.
 
   if (accessibleMode && !methods.has("_getFocusedIndex")) {
-    const focusedClass = `${classPrefix}-item--focused`;
     const startPad = isHorizontal ? pad.left : pad.top;
     const endPad = isHorizontal ? pad.right : pad.bottom;
-    let coreFocusVisible = false;
-
-    // ── 2D navigation hints (set by withGrid/withMasonry via ctx.methods) ──
-    // _getNavTotal: flat item count for bounds (default: $.vtf())
-    // _getNavDelta: { ud, lr, cols } — arrow-key index deltas (grid)
-    //   ud   = ArrowUp/Down delta  (1 for flat lists, columns for grids)
-    //   lr   = ArrowLeft/Right delta (0 = disabled for lists, 1 for grids)
-    //   cols = column count for row-aware Home/End (0 = flat list)
-    // _navigate: custom navigation fn (masonry) — overrides _getNavDelta
-    // _scrollItemIntoView: placement-based scroll (masonry)
-    let navTotalFn: (() => number) | null = null;
-    let navDeltaFn: (() => { ud: number; lr: number; cols: number }) | null = null;
-    let navigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
-    let scrollItemIntoViewFn: ((index: number) => void) | null = null;
-    let navHintsResolved = false;
-
-    const resolveNavHints = (): void => {
-      if (navHintsResolved) return;
-      navHintsResolved = true;
-      navTotalFn = (methods.get("_getNavTotal") as (() => number)) ?? null;
-      navDeltaFn = (methods.get("_getNavDelta") as (() => { ud: number; lr: number; cols: number })) ?? null;
-      navigateFn = (methods.get("_navigate") as ((currentIndex: number, key: string, total: number) => number)) ?? null;
-      scrollItemIntoViewFn = (methods.get("_scrollItemIntoView") as ((index: number) => void)) ?? null;
-    };
-
-    /** Flat item count for navigation bounds (row count for scroll stays $.vtf()). */
-    const navTotal = (): number => {
-      resolveNavHints();
-      return navTotalFn ? navTotalFn() : $.vtf();
-    };
-
-    /** Arrow-key deltas: ud for Up/Down, lr for Left/Right (0 = disabled), cols for Home/End. */
-    const navDelta = (): { ud: number; lr: number; cols: number } => {
-      resolveNavHints();
-      return navDeltaFn ? navDeltaFn() : { ud: 1, lr: 0, cols: 0 };
-    };
-
-    // Register internal getter so the render loop respects focusVisible.
-    // When false (mouse click), the render sees -1 → no --focused class.
-    methods.set("_getFocusedIndex", (): number => {
-      return coreFocusVisible ? $.fi : -1;
-    });
-
-    /** Scroll-if-needed + ARIA activedescendant + force render */
-    const commitFocus = (index: number, total: number): void => {
-      dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
-      resolveNavHints();
-
-      if (scrollItemIntoViewFn) {
-        // Placement-based scroll (masonry) — the feature owns its own
-        // coordinate system; the core size cache has no meaningful offsets.
-        scrollItemIntoViewFn(index);
-      } else {
-        // Size-cache-based scroll (flat list / grid).
-        // Convert flat item index → size-cache index (identity for lists,
-        // floor(index/columns) for grids where sizeCache is in row-space).
-        const containerSize = isHorizontal ? $.cw : $.ch;
-        const scrollIndex = $.i2s(index);
-
-        const newScroll = scrollToFocus(
-          scrollIndex, $.hc, $.ls, containerSize,
-          startPad,
-          endPad,
-          sharedState.cachedCompression?.state,
-          total,
-          sharedState.viewportState.visibleRange,
-        );
-
-        if (newScroll !== $.ls) {
-          $.sst(newScroll);
-          $.ls = $.sgt();
-        }
-      }
-      $.ffn();
-    };
-
-    /** Move focus ring only — does NOT change selection */
-    const moveFocus = (next: number, total: number): void => {
-      $.fi = next;
-      coreFocusVisible = true;
-      commitFocus(next, total);
-    };
-
-    /** Toggle selection on an item by index (updates aria-selected + --selected class) */
-    const coreSelect = (index: number, total: number, keyboard: boolean): void => {
-      $.fi = index;
-      if (keyboard) coreFocusVisible = true;
-
-      // Toggle: if already selected, deselect; otherwise select
-      const item = ($.dm ? $.dm.getItem(index) : $.it[index]) as T | undefined;
-      if (item && $.ss.has(item.id)) {
-        $.ss.clear();
-      } else {
-        $.ss.clear();
-        if (item) $.ss.add(item.id);
-      }
-
-      commitFocus(index, total);
-    };
-
-    // Tab into list → focus first (or last-focused) item (keyboard only)
-    /** Skip group headers: scan from `from` in `dir`, fall back to opposite direction. */
-    const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
-      let i = from;
-      while (i >= 0 && i < total) {
-        const item = $.dm ? $.dm.getItem(i) : $.it[i];
-        if (!item || !(item as any).__groupHeader) return i;
-        i += dir;
-      }
-      // Out of bounds — try opposite direction
-      i = from - dir;
-      while (i >= 0 && i < total) {
-        const item = $.dm ? $.dm.getItem(i) : $.it[i];
-        if (!item || !(item as any).__groupHeader) return i;
-        i -= dir;
-      }
-      return from;
-    };
-
-    const onFocusIn = (): void => {
-      if ($.id) return;
-      if (!dom.root.matches(":focus-visible")) return;
-      const total = navTotal();
-      if (total === 0) return;
-      let target = $.fi >= 0 ? Math.min($.fi, total - 1) : 0;
-      target = skipHeaders(target, 1, total);
-      moveFocus(target, $.vtf());
-    };
-    dom.root.addEventListener("focusin", onFocusIn);
-
-    // Blur — clear focus ring (but preserve $.fi and $.ss for re-focus)
-    const onFocusOut = (e: FocusEvent): void => {
-      if ($.id) return;
-      const related = e.relatedTarget as Node | null;
-      if (related && dom.root.contains(related)) return;
-
-      coreFocusVisible = false;
-      if ($.fi >= 0) {
-        rendered.get($.fi)?.classList.remove(focusedClass);
-      }
-      dom.root.removeAttribute("aria-activedescendant");
-    };
-    dom.root.addEventListener("focusout", onFocusOut);
-
-    // Keyboard handler — arrows move focus, Space/Enter selects
-    // Supports three modes:
-    //   1. _navigate fn (masonry) — full custom lane-aware navigation
-    //   2. _getNavDelta (grid) — delta-based 2D navigation
-    //   3. default (flat list) — ±1 up/down
-    keydownHandlers.push((event: KeyboardEvent): void => {
-      if ($.id) return;
-      const total = navTotal();
-      if (total === 0) return;
-      const scrollTotal = $.vtf();
-      const p = $.fi;
-      let n = p;
-
-      // Space/Enter: select (same in all modes)
-      if (event.key === " " || event.key === "Enter") {
-        if (p >= 0) {
-          const focusedItem = ($.dm ? $.dm.getItem(p) : $.it[p]) as T | undefined;
-          if (focusedItem && !(focusedItem as any).__groupHeader) {
-            coreSelect(p, scrollTotal, true);
-          }
-        }
-        event.preventDefault();
-        return;
-      }
-
-      resolveNavHints();
-
-      if (navigateFn) {
-        // ── Custom navigation (masonry): gate on recognized nav keys ──
-        switch (event.key) {
-          case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
-          case "PageUp": case "PageDown": case "Home": case "End":
-            n = navigateFn(p, event.key, total);
-            break;
-          default:
-            return; // unrecognized key — let browser handle it
-        }
-      } else {
-        // ── Delta-based navigation (grid / flat list) ──
-        const { ud, lr, cols } = navDelta();
-        switch (event.key) {
-          case "ArrowUp":    n = p - ud; break;
-          case "ArrowDown":  n = p + ud; break;
-          case "ArrowLeft":  if (!lr) return; n = p - lr; break;
-          case "ArrowRight": if (!lr) return; n = p + lr; break;
-          case "PageUp": {
-            const rowH = $.hc.getSize($.i2s(Math.max(0, p)));
-            n = p - Math.max(ud, Math.floor((isHorizontal ? $.cw : $.ch) / rowH) * ud);
-            break;
-          }
-          case "PageDown": {
-            const rowH = $.hc.getSize($.i2s(Math.max(0, p)));
-            n = p + Math.max(ud, Math.floor((isHorizontal ? $.cw : $.ch) / rowH) * ud);
-            break;
-          }
-          case "Home":
-            if (event.ctrlKey || !cols) {
-              n = 0;
-            } else {
-              n = p - (p % cols);
-            }
-            break;
-          case "End":
-            if (event.ctrlKey || !cols) {
-              n = total - 1;
-            } else {
-              n = Math.min(p - (p % cols) + cols - 1, total - 1);
-            }
-            break;
-          default: return;
-        }
-        // Clamp with optional wrap
-        if (n < 0) n = wrapEnabled ? total - 1 : 0;
-        else if (n >= total) n = wrapEnabled ? 0 : total - 1;
-      }
-
-      event.preventDefault();
-      // Skip group headers
-      n = skipHeaders(n, n >= p ? 1 : -1, total);
-      if (n !== p) moveFocus(n, scrollTotal);
-    });
-
-    // Click → select + focus
-    clickHandlers.push((event: MouseEvent): void => {
-      if ($.id) return;
-      const itemEl = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
-      if (!itemEl) return;
-      const index = parseInt(itemEl.dataset.index ?? "-1", 10);
-      if (index < 0) return;
-      const item = ($.dm?.getItem(index) ?? $.it[index]) as T | undefined;
-      if (!item || (item as any).__groupHeader) return;
-      coreFocusVisible = false;
-      dom.root.focus();
-      coreSelect(index, $.vtf(), false);
-    });
-
-    destroyHandlers.push(() => {
-      dom.root.removeEventListener("focusin", onFocusIn);
-      dom.root.removeEventListener("focusout", onFocusOut);
-    });
+    setupBaselineA11y(
+      $, dom, classPrefix, ariaIdPrefix, isHorizontal,
+      startPad, endPad, wrapEnabled, methods, rendered,
+      keydownHandlers, clickHandlers, destroyHandlers,
+    );
   }
 
   // ── Mark initialized ────────────────────────────────────────────
@@ -1481,11 +1222,7 @@ function materialize<T extends VListItem = VListItem>(
     handleKeydown,
     onScrollFrame,
     resizeObserver,
-    () => {
-      if (measurement.ob) {
-        measurement.ob.disconnect();
-      }
-    },
+    () => {},
     () => {
       if (idleTimer) clearTimeout(idleTimer);
     },
