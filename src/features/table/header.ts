@@ -106,19 +106,10 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   root.insertBefore(rowgroup, root.firstChild);
 
   // Offset the viewport so content starts below the header.
-  // Use position: absolute with insets so sizing works even when the
-  // root's height comes from min-height / max-height (where height: 100%
-  // on a static child would resolve to auto and break containment).
-  viewport.style.position = "absolute";
-  viewport.style.top = `${headerHeight}px`;
-  viewport.style.left = "0";
-  viewport.style.right = "0";
-  viewport.style.bottom = "0";
-  // Clear the height: 100% set by createDOMStructure — with absolute
-  // positioning and all four insets, height is determined by top/bottom.
-  // Keeping height: 100% would make the viewport overflow the root by
-  // headerHeight pixels (100% of parent + top offset).
-  viewport.style.height = "auto";
+  // Absolute positioning with insets so sizing works even when the root's
+  // height comes from min-height / max-height. Clear height: 100% from
+  // createDOMStructure — with all four insets, height is determined by top/bottom.
+  viewport.style.cssText = `position:absolute;top:${headerHeight}px;left:0px;right:0px;bottom:0px;height:auto`;
 
   // =========================================================================
   // State
@@ -471,12 +462,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("click", onCellClick);
 
-    // Reset viewport positioning
-    viewport.style.position = "";
-    viewport.style.top = "";
-    viewport.style.left = "";
-    viewport.style.right = "";
-    viewport.style.bottom = "";
+    // Reset all viewport inline styles set during setup (cssText assignment)
+    viewport.style.cssText = "";
 
     rowgroup.remove();
 

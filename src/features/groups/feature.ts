@@ -234,6 +234,9 @@ export const withGroups = <T extends VListItem = VListItem>(
       const updateGridLayoutForGroups = ctx.methods.get(
         "_updateGridLayoutForGroups",
       ) as ((isHeaderFn: (index: number) => boolean) => void) | undefined;
+      const gridRendererFactory = ctx.methods.get("_createGridRenderer") as
+        | ((...args: any[]) => any)
+        | undefined;
 
       // Table integration hooks
       const getTableLayout = ctx.methods.get("_getTableLayout") as
@@ -249,7 +252,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         | (() => number)
         | undefined;
 
-      if (getGridLayout && replaceGridRenderer) {
+      if (getGridLayout && replaceGridRenderer && gridRendererFactory) {
         // Grid renderer is active - make grid layout groups-aware
         if (updateGridLayoutForGroups) {
           // Update grid layout to handle full-width headers
@@ -260,10 +263,9 @@ export const withGroups = <T extends VListItem = VListItem>(
         }
 
         // Recreate grid renderer with unified template
-        const { createGridRenderer } = require("../grid/renderer");
         const gridLayout = getGridLayout();
 
-        const newGridRenderer = createGridRenderer(
+        const newGridRenderer = gridRendererFactory(
           dom.items,
           unifiedTemplate,
           ctx.sizeCache,
