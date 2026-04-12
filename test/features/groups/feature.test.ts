@@ -496,6 +496,14 @@ describe("withGroups — Setup", () => {
     ctx.methods.set("_replaceGridRenderer", (renderer: any) => {
       gridRendererReplaced = true;
     });
+    ctx.methods.set("_createGridRenderer", (...args: any[]) => ({
+      render: () => {},
+      updatePositions: () => {},
+      getElement: () => undefined,
+      updateColumnLayout: () => {},
+      clear: () => {},
+      destroy: () => {},
+    }));
     ctx.methods.set("_updateGridLayoutForGroups", (isHeaderFn: any) => {
       gridLayoutUpdated = true;
     });
@@ -529,6 +537,14 @@ describe("withGroups — Setup", () => {
       getTotalRows: () => 10,
     }));
     ctx.methods.set("_replaceGridRenderer", () => {});
+    ctx.methods.set("_createGridRenderer", (...args: any[]) => ({
+      render: () => {},
+      updatePositions: () => {},
+      getElement: () => undefined,
+      updateColumnLayout: () => {},
+      clear: () => {},
+      destroy: () => {},
+    }));
     ctx.methods.set("_updateGridLayoutForGroups", (fn: (index: number) => boolean) => {
       isHeaderFn = fn;
     });

@@ -97,50 +97,26 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
 // Element Pool (row-level)
 // =============================================================================
 
-interface ElementPool {
-  acquire: () => HTMLElement;
-  release: (element: HTMLElement) => void;
-  clear: () => void;
-}
-
-const createElementPool = (maxSize: number = 200): ElementPool => {
+const createElementPool = (): { acquire: () => HTMLElement; release: (el: HTMLElement) => void; clear: () => void } => {
   const pool: HTMLElement[] = [];
-
-  const acquire = (): HTMLElement => {
-    const element = pool.pop();
-    if (element) {
-      return element;
-    }
-    return document.createElement("div");
+  return {
+    acquire: (): HTMLElement => pool.pop() || document.createElement("div"),
+    release: (el: HTMLElement): void => {
+      el.parentNode?.removeChild(el);
+      if (pool.length < 200) {
+        el.className = "";
+        el.removeAttribute("data-id");
+        el.removeAttribute("data-index");
+        el.removeAttribute("aria-selected");
+        el.removeAttribute("aria-rowindex");
+        el.removeAttribute("role");
+        el.style.cssText = "";
+        el.textContent = "";
+        pool.push(el);
+      }
+    },
+    clear: (): void => { pool.length = 0; },
   };
-
-  const release = (element: HTMLElement): void => {
-    // Remove from DOM immediately
-    if (element.parentNode) {
-      element.parentNode.removeChild(element);
-    }
-
-    if (pool.length < maxSize) {
-      // Reset for reuse — clear dynamic attributes and child elements.
-      // Child clearing is critical: when column count changes, reused
-      // elements must not carry stale cells from a previous layout.
-      element.className = "";
-      element.removeAttribute("data-id");
-      element.removeAttribute("data-index");
-      element.removeAttribute("aria-selected");
-      element.removeAttribute("aria-rowindex");
-      element.removeAttribute("role");
-      element.style.cssText = "";
-      element.textContent = "";
-      pool.push(element);
-    }
-  };
-
-  const clear = (): void => {
-    pool.length = 0;
-  };
-
-  return { acquire, release, clear };
 };
 
 // =============================================================================
@@ -233,11 +209,21 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   // Helpers
   // =========================================================================
 
-  /** Toggle aria-selected attribute — avoids repeating the pattern 5 times */
+  /** Toggle aria-selected attribute */
   const setAriaSelected = (el: HTMLElement, selected: boolean): void => {
     if (selected) el.setAttribute("aria-selected", "true");
     else el.removeAttribute("aria-selected");
   };
+
+  /** Set common row data attributes */
+  const setRowAttrs = (el: HTMLElement, role: string, id: string | number, index: number): void => {
+    el.setAttribute("role", role);
+    el.setAttribute("data-id", String(id));
+    el.setAttribute("data-index", String(index));
+  };
+
+  /** Check if an item id represents a placeholder (async loading) */
+  const isPH = (id: string | number): boolean => String(id).startsWith("__placeholder_");
 
   // =========================================================================
   // CSS Classes (precomputed)
@@ -411,21 +397,15 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   ): TrackedRow => {
     const element = pool.acquire();
     const headerItem = item as unknown as GroupHeaderItem;
-
-    // Full-width row
-    element.style.width = `${currentLayout.totalWidth}px`;
-
-    // Row height from size cache (uses headerHeight via grouped size fn)
     const height = sc.getSize(index);
-    element.style.height = `${height}px`;
+    const offset = calculateRowOffset(index, sc, compressionCtx);
 
-    // CSS class — distinct from data rows
+    // Set all styles in one operation (element was reset by pool.release)
+    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
     element.className = groupHeaderRowClass;
 
     // ARIA — group header is presentational, not a data row
-    element.setAttribute("role", "presentation");
-    element.setAttribute("data-id", String(item.id));
-    element.setAttribute("data-index", String(index));
+    setRowAttrs(element, "presentation", item.id, index);
     element.removeAttribute("aria-selected");
     element.removeAttribute("aria-rowindex");
 
@@ -436,7 +416,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const content = document.createElement("div");
     content.className = groupHeaderContentClass;
 
-    // Render the group header template
     if (groupHeaderTemplate) {
       const result = groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex);
       if (typeof result === "string") {
@@ -447,10 +426,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     }
 
     element.appendChild(content);
-
-    // Position via translateY (compression-aware)
-    const offset = calculateRowOffset(index, sc, compressionCtx);
-    element.style.transform = `translateY(${offset}px)`;
 
     return {
       element,
@@ -477,31 +452,20 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     sc: SizeCache,
     compressionCtx?: CompressionContext,
   ): TrackedRow => {
-    // Note: applyRowClasses (called below) handles the striped odd class
     const element = pool.acquire();
-
-    // Dynamic row styles (width, height, transform are per-row)
-    element.style.width = `${currentLayout.totalWidth}px`;
-
-    // Row height from size cache
     const height = sc.getSize(index);
-    element.style.height = `${height}px`;
+    const offset = calculateRowOffset(index, sc, compressionCtx);
+    const isPlaceholder = isPH(item.id);
 
-    // Apply classes
-    const isPlaceholder = String(item.id).startsWith("__placeholder_");
+    // Set all row styles in one operation (element was reset by pool.release)
+    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
+
     applyRowClasses(element, index, isSelected, isFocused, isPlaceholder);
 
     // ARIA attributes
-    element.setAttribute("role", "row");
-    element.setAttribute("data-id", String(item.id));
-    element.setAttribute("data-index", String(index));
+    setRowAttrs(element, "row", item.id, index);
     element.id = `${ariaIdPrefix}-${index}`;
     element.setAttribute("aria-rowindex", String(index + 2)); // +2: header is row 1
-
-    const total = getTotalItems();
-    if (total !== lastAriaSetSize) {
-      lastAriaSetSize = total;
-    }
 
     setAriaSelected(element, isSelected);
 
@@ -513,22 +477,13 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       const cell = cells[i]!;
       const col = cols[i]!;
 
-      // Dynamic per-column styles (position and size)
-      cell.style.left = `${col.offset}px`;
-      cell.style.width = `${col.width}px`;
+      cell.style.cssText = `left:${col.offset}px;width:${col.width}px`;
       cell.setAttribute("role", "gridcell");
       cell.setAttribute("aria-colindex", String(i + 1));
 
-      // Alignment (CSS class toggle)
       applyCellAlign(cell, col);
-
-      // Content
       applyCellTemplate(cell, item, col, index, isPlaceholder);
     }
-
-    // Position row via translateY (compression-aware)
-    const offset = calculateRowOffset(index, sc, compressionCtx);
-    element.style.transform = `translateY(${offset}px)`;
 
     return {
       element,
@@ -662,8 +617,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
           if (idChanged) {
             // Different item at this index — full re-render of cells
-            const wasPlaceholder = existing.lastItemId != null && String(existing.lastItemId).startsWith("__placeholder_");
-            const isPlaceholder = String(item.id).startsWith("__placeholder_");
+            const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
+            const isPlaceholder = isPH(item.id);
 
             const cols = currentLayout.columns;
             for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
@@ -686,8 +641,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.lastFocused = isFocused;
           } else if (selectedChanged || focusedChanged) {
             // Same item — only update classes/aria if state changed
-            const isPlaceholder = String(item.id).startsWith("__placeholder_");
-            applyRowClasses(existing.element, i, isSelected, isFocused, isPlaceholder);
+            applyRowClasses(existing.element, i, isSelected, isFocused, isPH(item.id));
             setAriaSelected(existing.element, isSelected);
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
