@@ -1,6 +1,7 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
 import { readFileSync, writeFileSync, rmSync } from "fs";
+import { resolve } from "path";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -121,17 +122,61 @@ async function build() {
     `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + grid (${gridSize} KB) + masonry (${masonrySize} KB) + table (${tableSize} KB) + extras (${extrasSize} KB)`,
   );
 
-  // Size summary
-  const gzipSize = async (path: string): Promise<string> => {
-    const content = await Bun.file(path).arrayBuffer();
-    const compressed = Bun.gzipSync(new Uint8Array(content));
-    return (compressed.byteLength / 1024).toFixed(1);
-  };
+  // Size summary — tree-shaken base bundle (only vlist, no features)
+  const absEntry = resolve("./src/index.ts");
+  const baseCode = `import { vlist } from "${absEntry}"; globalThis._v = [vlist];`;
+  const tmpFile = "/tmp/_vlist_base_size.ts";
+  writeFileSync(tmpFile, baseCode);
 
-  const gzipped = await gzipSize("./dist/index.js");
+  const baseBuild = await Bun.build({
+    entrypoints: [tmpFile],
+    minify: true,
+    target: "browser",
+    format: "esm",
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+  });
+
+  let baseMinified = "0";
+  let baseGzipped = "0";
+
+  if (baseBuild.success) {
+    const output = await baseBuild.outputs[0]!.arrayBuffer();
+    const bytes = new Uint8Array(output);
+    const compressed = Bun.gzipSync(bytes);
+    baseMinified = (bytes.byteLength / 1024).toFixed(1);
+    baseGzipped = (compressed.byteLength / 1024).toFixed(1);
+
+    // Write size.json so vlist.io homepage can read the accurate value
+    writeFileSync(
+      "./dist/size.json",
+      JSON.stringify({
+        base: { minified: baseMinified, gzipped: baseGzipped },
+        full: { minified: bundleSize, gzipped: "0" },
+      }),
+    );
+  }
+
+  // Also compute full bundle gzip for display
+  const fullContent = await Bun.file("./dist/index.js").arrayBuffer();
+  const fullCompressed = Bun.gzipSync(new Uint8Array(fullContent));
+  const fullGzipped = (fullCompressed.byteLength / 1024).toFixed(1);
+
+  // Update size.json with full bundle size
+  if (baseBuild.success) {
+    writeFileSync(
+      "./dist/size.json",
+      JSON.stringify({
+        base: { minified: baseMinified, gzipped: baseGzipped },
+        full: { minified: bundleSize, gzipped: fullGzipped },
+      }),
+    );
+  }
 
   console.log("");
-  console.log(`  index.js    ${bundleSize} KB minified, ${gzipped} KB gzipped`);
+  console.log(`  index.js    ${bundleSize} KB minified, ${fullGzipped} KB gzipped`);
+  console.log(`  base        ${baseMinified} KB minified, ${baseGzipped} KB gzipped (tree-shaken)`);
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
