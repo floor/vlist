@@ -64,20 +64,6 @@ export const createEmitter = <T extends EventMap>() => {
   };
 
   /**
-   * Subscribe to an event once (auto-unsubscribe after first call)
-   */
-  const once = <K extends keyof T>(
-    event: K,
-    handler: EventHandler<T[K]>,
-  ): Unsubscribe => {
-    const onceHandler: EventHandler<T[K]> = (payload) => {
-      off(event, onceHandler);
-      handler(payload);
-    };
-    return on(event, onceHandler);
-  };
-
-  /**
    * Remove all listeners for an event (or all events if no event specified)
    */
   const clear = <K extends keyof T>(event?: K): void => {
@@ -90,21 +76,7 @@ export const createEmitter = <T extends EventMap>() => {
     }
   };
 
-  /**
-   * Get listener count for an event
-   */
-  const listenerCount = <K extends keyof T>(event: K): number => {
-    return listeners[event]?.size ?? 0;
-  };
-
-  return {
-    on,
-    off,
-    emit,
-    once,
-    clear,
-    listenerCount,
-  };
+  return { on, off, emit, clear };
 };
 
 /** Event emitter type */
