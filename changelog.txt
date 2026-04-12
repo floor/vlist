@@ -3,6 +3,38 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-12  v1.5.0
+
+  BREAKING: estimatedHeight/estimatedWidth now requires .use(withAutoSize())
+    Auto-measurement (Mode B) is no longer built into the base bundle. Users who
+    use estimatedHeight or estimatedWidth must add .use(withAutoSize()) to their
+    builder chain. Framework adapters (vlist-react, vlist-vue, vlist-svelte,
+    vlist-solidjs) auto-detect this and add the feature automatically — no changes
+    needed for adapter users.
+
+  feat(autosize): new withAutoSize() tree-shakeable feature (+0.7 KB gzip)
+    Extracted Mode B auto-measurement into a standalone feature plugin. Items are
+    rendered at the estimated size, measured via ResizeObserver, and pinned to their
+    real size. Includes scroll correction, content size deferral during scrolling,
+    and per-item observation via afterRenderBatch hook.
+
+  perf(core): reduce base bundle from 11.3 KB to 10.3 KB gzipped
+    - Extract ARIA keyboard navigation into builder/a11y.ts
+    - Split scrollToFocus into simple (base) and compressed (features) variants
+    - Simplify velocity tracker from circular buffer to 2-sample approach
+    - Remove unused emitter methods (once, listenerCount)
+    - Compact DOM structure creation with cssText and el() helper
+    - Pre-compute CSS class name constants
+    - Merge appendItems/prependItems reverse variants
+    - Simplify API method resolution with helper
+    - Inline constants (OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT)
+    - Remove countVisibleItems from base (use indexAtOffset instead)
+
+  fix(build): use wrapper entry points to prevent Bun tree-shaking dist
+    Bun's bundler strips re-export barrel files into empty stubs. Work around
+    this by generating wrapper entry points that force symbol inclusion.
+
+
 2026-04-12  v1.4.5
 
   feat(styles): modular CSS — extract grid and masonry into dedicated stylesheets

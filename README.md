@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.4.5** — [Changelog](./changelog.txt)
+**v1.5.0** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 - **Zero dependencies** — no external libraries
 - **Ultra memory efficient** — ~0.1-0.2 MB constant overhead regardless of dataset size
-- **~11.2 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
+- **~10.3 KB gzipped** — pay only for features you use (vs 20 KB+ monolithic alternatives)
 - **Builder API** — composable features with perfect tree-shaking
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Horizontal & vertical** — semantically correct orientation support
@@ -91,15 +91,16 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 11.2 KB | Core virtualization, gap, padding, ARIA live region |
-| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
+| **Base** | 10.3 KB | Core virtualization, gap, padding, ARIA live region |
+| `withGrid()` | +3.8 KB | 2D grid layout with context injection |
 | `withMasonry()` | +3.4 KB | Pinterest-style masonry layout with lane-aware nav |
 | `withGroups()` | +4.6 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.4 KB | Lazy loading with adapters |
 | `withSelection()` | +2.5 KB | Single/multiple selection + 2D keyboard nav |
 | `withScale()` | +2.8 KB | 1M+ items via scroll compression |
-| `withScrollbar()` | +1.2 KB | Custom scrollbar UI |
-| `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
+| `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
+| `withTable()` | +5.3 KB | Data table with columns, resize, sort, groups |
+| `withAutoSize()` | +0.7 KB | Auto-measure items via ResizeObserver |
 | `withPage()` | +0.4 KB | Document-level scrolling |
 | `withSnapshots()` | +0.6 KB | Scroll save/restore |
 
@@ -227,6 +228,7 @@ const list = vlist({
 | **1M+ items** | `withScale()` — auto-compresses scroll space |
 | **Wrap navigation** | `scroll: { wrap: true }` |
 | **Variable heights** | `item: { height: (index) => heights[index] }` |
+| **Auto-measured sizes** | `item: { estimatedHeight: 120 }` + `withAutoSize()` |
 | **Zebra striping** | `item: { striped: true }` or `striped: 'even'` / `'odd'` / `'data'` (group-aware) |
 
 See **[vlist.io](https://vlist.io)** for live demos of each.
@@ -347,6 +349,7 @@ withGroups({ getGroupForIndex, header: { height, template }, sticky?: true })
 withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
 withTable({ columns, rowHeight, headerHeight?, resizable?, columnBorders?, rowBorders? })
+withAutoSize()                        // auto-measure items (requires estimatedHeight)
 withScale()                           // auto-activates at 16.7M px
 withScale({ force: true })            // force compression on any list size
 withScrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
@@ -430,11 +433,11 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 11.2 KB |
-| + Grid | 15.1 KB |
-| + Groups | 15.9 KB |
-| + Async | 15.7 KB |
-| + Table | 16.7 KB |
+| Base only | 10.3 KB |
+| + Grid | 14.1 KB |
+| + Groups | 14.9 KB |
+| + Async | 14.7 KB |
+| + Table | 15.6 KB |
 
 ### Memory Efficiency
 

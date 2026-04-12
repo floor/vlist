@@ -22,8 +22,22 @@ async function build() {
   // Build main bundle
   const bundleStart = performance.now();
 
+  // Bun tree-shakes re-export barrels into empty stubs, so we
+  // reference all exports in a wrapper to force inclusion.
+  const entryAbs = resolve("./src/index.ts");
+  const wrapperCode = [
+    `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
+    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withAutoSize,`,
+    `  createStats } from "${entryAbs}";`,
+    `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
+    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withAutoSize,`,
+    `  createStats };`,
+  ].join("\n");
+  const wrapperPath = "/tmp/_vlist_build_entry.ts";
+  writeFileSync(wrapperPath, wrapperCode);
+
   const bundleResult = await Bun.build({
-    entrypoints: ["./src/index.ts"],
+    entrypoints: [wrapperPath],
     outdir: "./dist",
     format: "esm",
     target: "browser",
@@ -50,8 +64,12 @@ async function build() {
   // Build internals bundle (low-level exports for advanced users)
   const internalsStart = performance.now();
 
+  const intWrapperCode = `export * from "${resolve("./src/internals.ts")}";`;
+  const intWrapperPath = "/tmp/_vlist_build_internals.ts";
+  writeFileSync(intWrapperPath, intWrapperCode);
+
   const internalsResult = await Bun.build({
-    entrypoints: ["./src/internals.ts"],
+    entrypoints: [intWrapperPath],
     outdir: "./dist",
     format: "esm",
     target: "browser",
@@ -122,61 +140,56 @@ async function build() {
     `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + grid (${gridSize} KB) + masonry (${masonrySize} KB) + table (${tableSize} KB) + extras (${extrasSize} KB)`,
   );
 
-  // Size summary — tree-shaken base bundle (only vlist, no features)
-  const absEntry = resolve("./src/index.ts");
-  const baseCode = `import { vlist } from "${absEntry}"; globalThis._v = [vlist];`;
-  const tmpFile = "/tmp/_vlist_base_size.ts";
-  writeFileSync(tmpFile, baseCode);
+  // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
-  const baseBuild = await Bun.build({
-    entrypoints: [tmpFile],
-    minify: true,
-    target: "browser",
-    format: "esm",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-  });
+  const ALL_FEATURES = [
+    "withGrid", "withMasonry", "withGroups", "withAsync", "withSelection",
+    "withScale", "withScrollbar", "withPage", "withSnapshots", "withTable",
+    "withAutoSize",
+  ] as const;
 
-  let baseMinified = "0";
-  let baseGzipped = "0";
+  const scenarios = [
+    { name: "base", imports: ["vlist"] },
+    ...ALL_FEATURES.map((f) => ({ name: f, imports: ["vlist", f] })),
+  ];
 
-  if (baseBuild.success) {
-    const output = await baseBuild.outputs[0]!.arrayBuffer();
-    const bytes = new Uint8Array(output);
-    const compressed = Bun.gzipSync(bytes);
-    baseMinified = (bytes.byteLength / 1024).toFixed(1);
-    baseGzipped = (compressed.byteLength / 1024).toFixed(1);
+  const sizes: Record<string, { minified: string; gzipped: string }> = {};
 
-    // Write size.json so vlist.io homepage can read the accurate value
-    writeFileSync(
-      "./dist/size.json",
-      JSON.stringify({
-        base: { minified: baseMinified, gzipped: baseGzipped },
-        full: { minified: bundleSize, gzipped: "0" },
-      }),
-    );
+  for (const { name, imports } of scenarios) {
+    const code = `import { ${imports.join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`;
+    const tmp = `/tmp/_vlist_size_${name}.ts`;
+    writeFileSync(tmp, code);
+
+    const result = await Bun.build({
+      entrypoints: [tmp],
+      minify: true,
+      target: "browser",
+      format: "esm",
+      define: { "process.env.NODE_ENV": '"production"' },
+    });
+
+    if (result.success) {
+      const output = await result.outputs[0]!.arrayBuffer();
+      const bytes = new Uint8Array(output);
+      const compressed = Bun.gzipSync(bytes);
+      sizes[name] = {
+        minified: (bytes.byteLength / 1024).toFixed(1),
+        gzipped: (compressed.byteLength / 1024).toFixed(1),
+      };
+    }
   }
 
-  // Also compute full bundle gzip for display
-  const fullContent = await Bun.file("./dist/index.js").arrayBuffer();
-  const fullCompressed = Bun.gzipSync(new Uint8Array(fullContent));
-  const fullGzipped = (fullCompressed.byteLength / 1024).toFixed(1);
+  writeFileSync("./dist/size.json", JSON.stringify(sizes) + "\n");
 
-  // Update size.json with full bundle size
-  if (baseBuild.success) {
-    writeFileSync(
-      "./dist/size.json",
-      JSON.stringify({
-        base: { minified: baseMinified, gzipped: baseGzipped },
-        full: { minified: bundleSize, gzipped: fullGzipped },
-      }),
-    );
+  const base = sizes.base ?? { minified: "0", gzipped: "0" };
+  const baseGz = parseFloat(base.gzipped);
+  if (baseGz < 5 || baseGz > 50) {
+    console.error(`\n  ✗ Base gzipped size ${base.gzipped} KB is outside expected range (5–50 KB). Build or tree-shaking may be broken.\n`);
+    process.exit(1);
   }
 
   console.log("");
-  console.log(`  index.js    ${bundleSize} KB minified, ${fullGzipped} KB gzipped`);
-  console.log(`  base        ${baseMinified} KB minified, ${baseGzipped} KB gzipped (tree-shaken)`);
+  console.log(`  base        ${base.minified} KB minified, ${base.gzipped} KB gzipped (tree-shaken)`);
 
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);

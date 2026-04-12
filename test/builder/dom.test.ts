@@ -48,7 +48,7 @@ describe("resolveContainer", () => {
 
   it("should throw with builder-specific error message for missing selector", () => {
     expect(() => resolveContainer("#nonexistent-element")).toThrow(
-      "[vlist/builder] Container not found: #nonexistent-element",
+      "[vlist] Container not found: #nonexistent-element",
     );
   });
 });

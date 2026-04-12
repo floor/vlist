@@ -87,42 +87,28 @@ export const createApi = <T extends VListItem = VListItem>(
     ctx.dataManager.setItems(newItems, 0, newItems.length);
   };
 
-  const appendItems = isReverse
-    ? (newItems: T[]): void => {
-        const wasAtBottom = $.sab(2);
-        const currentTotal = $.it.length;
-        ctx.dataManager.setItems(newItems, currentTotal);
-        if (wasAtBottom && $.it.length > 0) {
-          const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
-          $.sst(pos);
-          $.ls = pos;
-          $.rfn();
-        }
-      }
-    : (newItems: T[]): void => {
-        const currentTotal = $.it.length;
-        ctx.dataManager.setItems(newItems, currentTotal);
-      };
+  const appendItems = (newItems: T[]): void => {
+    const wasAtBottom = isReverse && $.sab(2);
+    ctx.dataManager.setItems(newItems, $.it.length);
+    if (wasAtBottom && $.it.length > 0) {
+      const pos = $.gsp($.it.length - 1, $.hc, $.ch, $.it.length, "end");
+      $.sst(pos);
+      $.ls = pos;
+      $.rfn();
+    }
+  };
 
-  const prependItems = isReverse
-    ? (newItems: T[]): void => {
-        const scrollTop = $.sgt();
-        const heightBefore = $.hc.getTotalSize();
-        const existingItems = [...$.it];
-        ctx.dataManager.clear();
-        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-        const heightAfter = $.hc.getTotalSize();
-        const delta = heightAfter - heightBefore;
-        if (delta > 0) {
-          $.sst(scrollTop + delta);
-          $.ls = scrollTop + delta;
-        }
-      }
-    : (newItems: T[]): void => {
-        const existingItems = [...$.it];
-        ctx.dataManager.clear();
-        ctx.dataManager.setItems([...newItems, ...existingItems] as T[], 0);
-      };
+  const prependItems = (newItems: T[]): void => {
+    const scrollBefore = isReverse ? $.sgt() : 0;
+    const sizeBefore = isReverse ? $.hc.getTotalSize() : 0;
+    const existing = [...$.it];
+    ctx.dataManager.clear();
+    ctx.dataManager.setItems([...newItems, ...existing] as T[], 0);
+    if (isReverse) {
+      const delta = $.hc.getTotalSize() - sizeBefore;
+      if (delta > 0) { $.sst(scrollBefore + delta); $.ls = scrollBefore + delta; }
+    }
+  };
 
   // ── Cached method getters for updateItem ──
   // Resolved lazily on first call (features register these during setup).
@@ -180,66 +166,44 @@ export const createApi = <T extends VListItem = VListItem>(
   let ensureRangePending = false;
 
   const removeItem = (id: string | number): boolean => {
-    // Capture the focused element's item index before removal for focus recovery (#13d)
-    let focusedItemIndex = -1;
-    if (typeof document !== "undefined") {
-      const active = document.activeElement;
-      if (active && dom.items.contains(active)) {
-        const idx = (active as HTMLElement).dataset?.index;
-        if (idx !== undefined) focusedItemIndex = parseInt(idx, 10);
-      }
-    }
+    // Capture focused item index before removal for focus recovery (#13d)
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const focIdx = active && dom.items.contains(active)
+      ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
+      : -1;
 
     const result = ctx.dataManager.removeItem(id);
-    if (result) {
-      emitter.emit("data:change", { type: "remove", id });
-      // Force re-render: removeItem shifts all items after the deleted index
-      // down by 1, so the same render range now contains different items.
-      // renderIfNeeded (called via onStateChange) bails when the range
-      // start/end haven't changed, leaving stale data in the DOM.
-      ctx.forceRender();
-
-      // Refill gaps: when a deletion shifts items across chunk boundaries,
-      // the last slot(s) of the loaded range become empty (the item that
-      // should fill them lives in an unloaded chunk). Debounce via microtask
-      // so consecutive synchronous deletes produce a single fetch.
-      if (!ensureRangePending) {
-        const dm = ctx.dataManager as any;
-        if (typeof dm.ensureRange === "function") {
-          ensureRangePending = true;
-          queueMicrotask(() => {
-            ensureRangePending = false;
-            const totalNow = ctx.dataManager.getTotal();
-            const { start, end } = ctx.state.viewportState.renderRange;
-            // Skip refill if list is now empty — no slots to fill,
-            // and a fetch here would re-populate the just-removed item
-            // if the adapter returns a stale response.
-            if (totalNow === 0) return;
-            if (end >= start) {
-              dm.ensureRange(start, end).catch(() => {});
-            }
-          });
-        }
+    if (!result) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[vlist] removeItem() could not find item with id "${id}".`);
       }
-    }
-    if (!result && process.env.NODE_ENV !== "production") {
-      console.warn(`[vlist] removeItem() could not find item with id "${id}".`);
+      return false;
     }
 
-    // Focus recovery (#13d): when the focused item was removed, move focus
-    // to the nearest remaining item.
-    if (result && focusedItemIndex >= 0) {
-      const total = $.vtf();
-      if (total > 0) {
-        const nextIndex = Math.min(focusedItemIndex, total - 1);
-        const nextEl = rendered.get(nextIndex);
-        if (nextEl && typeof nextEl.focus === "function") {
-          nextEl.focus();
-        }
+    emitter.emit("data:change", { type: "remove", id });
+    ctx.forceRender();
+
+    // Refill gaps via debounced ensureRange (coalesces consecutive deletes)
+    if (!ensureRangePending) {
+      const dm = ctx.dataManager as any;
+      if (typeof dm.ensureRange === "function") {
+        ensureRangePending = true;
+        queueMicrotask(() => {
+          ensureRangePending = false;
+          const t = ctx.dataManager.getTotal();
+          const { start, end } = ctx.state.viewportState.renderRange;
+          if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
+        });
       }
     }
 
-    return result;
+    // Focus recovery (#13d)
+    if (focIdx >= 0) {
+      const t = $.vtf();
+      if (t > 0) rendered.get(Math.min(focIdx, t - 1))?.focus();
+    }
+
+    return true;
   };
 
   const getItemAt = (index: number): T | undefined => {
@@ -397,53 +361,34 @@ export const createApi = <T extends VListItem = VListItem>(
 
   // ── Assemble public API ───────────────────────────────────────────
 
+  /** Return the feature override for a method name, or the default. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = (name: string, def: any): any =>
+    methods.has(name) ? methods.get(name) : def;
+
   const api: VList<T> = {
-    get element() {
-      return dom.root;
-    },
+    get element() { return dom.root; },
     get items() {
-      // Check if a feature (e.g., groups) provides a custom items getter
-      if (methods.has("_getItems")) {
-        return (methods.get("_getItems") as any)();
-      }
-      return $.it as readonly T[];
+      const fn = methods.get("_getItems") as (() => readonly T[]) | undefined;
+      return fn ? fn() : $.it as readonly T[];
     },
     get total() {
-      // Check if a feature (e.g., groups) provides a custom total getter
-      if (methods.has("_getTotal")) {
-        return (methods.get("_getTotal") as any)();
-      }
-      return $.vtf();
+      const fn = methods.get("_getTotal") as (() => number) | undefined;
+      return fn ? fn() : $.vtf();
     },
 
-    setItems: methods.has("setItems")
-      ? (methods.get("setItems") as any)
-      : setItems,
-    appendItems: methods.has("appendItems")
-      ? (methods.get("appendItems") as any)
-      : appendItems,
-    prependItems: methods.has("prependItems")
-      ? (methods.get("prependItems") as any)
-      : prependItems,
-    updateItem: methods.has("updateItem")
-      ? (methods.get("updateItem") as any)
-      : updateItem,
-    removeItem: methods.has("removeItem")
-      ? (methods.get("removeItem") as any)
-      : removeItem,
-    reload: methods.has("reload") ? (methods.get("reload") as any) : reload,
+    setItems: m("setItems", setItems),
+    appendItems: m("appendItems", appendItems),
+    prependItems: m("prependItems", prependItems),
+    updateItem: m("updateItem", updateItem),
+    removeItem: m("removeItem", removeItem),
+    reload: m("reload", reload),
     getItemAt,
     getIndexById,
 
-    scrollToIndex: methods.has("scrollToIndex")
-      ? (methods.get("scrollToIndex") as any)
-      : scrollToIndex,
-    cancelScroll: methods.has("cancelScroll")
-      ? (methods.get("cancelScroll") as any)
-      : cancelScroll,
-    getScrollPosition: methods.has("getScrollPosition")
-      ? (methods.get("getScrollPosition") as any)
-      : getScrollPosition,
+    scrollToIndex: m("scrollToIndex", scrollToIndex),
+    cancelScroll: m("cancelScroll", cancelScroll),
+    getScrollPosition: m("getScrollPosition", getScrollPosition),
 
     on,
     off,
