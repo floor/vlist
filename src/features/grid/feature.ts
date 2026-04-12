@@ -299,6 +299,11 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridRenderer = newRenderer;
       });
 
+      // ── Expose grid renderer factory (for groups feature) ──
+      // This avoids groups importing grid/renderer.ts directly, which
+      // would pull the entire grid renderer into the groups bundle.
+      ctx.methods.set("_createGridRenderer", createGridRenderer);
+
       // ── Expose method to update grid layout with isHeaderFn (for groups feature) ──
       ctx.methods.set(
         "_updateGridLayoutForGroups",
