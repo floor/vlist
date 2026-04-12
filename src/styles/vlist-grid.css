@@ -1,0 +1,83 @@
+/**
+ * vlist - Grid Layout Styles
+ * Optional styles for the grid layout feature (withGrid).
+ * Import separately: import 'vlist/styles/grid'
+ */
+
+/* =============================================================================
+   Grid Layout
+   ============================================================================= */
+
+/* Grid modifier on root */
+.vlist--grid .vlist-items {
+    contain: layout style;
+}
+
+/* Grid item — positioned absolutely with translate(x, y) */
+.vlist-grid-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
+    background-color: var(--vlist-bg);
+    cursor: default;
+    user-select: none;
+    transition: background-color var(--vlist-transition-duration)
+        var(--vlist-transition-timing);
+    contain: content;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Override the default list item styles — grid items do NOT stretch full width */
+.vlist--grid .vlist-item {
+    right: auto;
+    border-bottom: none;
+}
+
+/* Suppress transitions during active scroll for better performance */
+.vlist--scrolling .vlist-grid-item {
+    transition: none;
+}
+
+/* Grid item pointer cursor (only when selection is active) */
+.vlist--selectable .vlist-grid-item {
+    cursor: pointer;
+}
+
+/* Grid item hover state (only when selection is active) */
+.vlist--selectable .vlist-grid-item:hover {
+    background-color: var(--vlist-bg-hover);
+}
+
+/* Grid item striped (odd) state */
+.vlist-grid-item.vlist-item--odd {
+    background: var(--vlist-bg-striped);
+}
+
+/* Grid item selected state */
+.vlist-grid-item.vlist-item--selected {
+    background-color: var(--vlist-bg-selected);
+}
+
+.vlist-grid-item.vlist-item--odd.vlist-item--selected {
+    background: var(--vlist-bg-selected);
+}
+
+.vlist--selectable .vlist-grid-item.vlist-item--selected:hover {
+    background-color: var(--vlist-bg-selected-hover);
+}
+
+.vlist--selectable .vlist-grid-item.vlist-item--odd.vlist-item--selected:hover {
+    background: var(--vlist-bg-selected-hover);
+}
+
+/* Grid item focused state */
+.vlist-grid-item.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: -2px;
+    z-index: 1;
+}

@@ -102,17 +102,23 @@ async function build() {
     writeFileSync(dest, minified);
   };
   minifyCss("./src/styles/vlist.css", "./dist/vlist.css");
+  minifyCss("./src/styles/vlist-grid.css", "./dist/vlist-grid.css");
+  minifyCss("./src/styles/vlist-masonry.css", "./dist/vlist-masonry.css");
   minifyCss("./src/styles/vlist-table.css", "./dist/vlist-table.css");
   minifyCss("./src/styles/vlist-extras.css", "./dist/vlist-extras.css");
   const cssTime = performance.now() - cssStart;
   const cssFile = Bun.file("./dist/vlist.css");
   const cssSize = (cssFile.size / 1024).toFixed(1);
+  const gridFile = Bun.file("./dist/vlist-grid.css");
+  const gridSize = (gridFile.size / 1024).toFixed(1);
+  const masonryFile = Bun.file("./dist/vlist-masonry.css");
+  const masonrySize = (masonryFile.size / 1024).toFixed(1);
   const tableFile = Bun.file("./dist/vlist-table.css");
   const tableSize = (tableFile.size / 1024).toFixed(1);
   const extrasFile = Bun.file("./dist/vlist-extras.css");
   const extrasSize = (extrasFile.size / 1024).toFixed(1);
   console.log(
-    `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + vlist-table.css (${tableSize} KB) + vlist-extras.css (${extrasSize} KB)`,
+    `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + grid (${gridSize} KB) + masonry (${masonrySize} KB) + table (${tableSize} KB) + extras (${extrasSize} KB)`,
   );
 
   // Size summary

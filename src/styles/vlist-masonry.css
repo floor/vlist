@@ -1,0 +1,84 @@
+/**
+ * vlist - Masonry Layout Styles
+ * Optional styles for the masonry layout feature (withMasonry).
+ * Import separately: import 'vlist/styles/masonry'
+ */
+
+/* =============================================================================
+   Masonry Layout
+   ============================================================================= */
+
+/* Masonry modifier on root */
+.vlist--masonry .vlist-items {
+    contain: layout style;
+}
+
+/* Masonry item — positioned absolutely with translate(x, y) */
+.vlist-masonry-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--vlist-item-padding-y) var(--vlist-item-padding-x);
+    background-color: var(--vlist-bg);
+    cursor: default;
+    user-select: none;
+    transition: background-color var(--vlist-transition-duration)
+        var(--vlist-transition-timing);
+    contain: content;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Override the default list item styles — masonry items do NOT stretch full width */
+.vlist--masonry .vlist-item {
+    right: auto;
+    border-bottom: none;
+}
+
+/* Suppress transitions during active scroll for better performance */
+.vlist--scrolling .vlist-masonry-item {
+    transition: none;
+}
+
+/* Masonry item pointer cursor (only when selection is active) */
+.vlist--selectable .vlist-masonry-item {
+    cursor: pointer;
+}
+
+/* Masonry item hover state (only when selection is active) */
+.vlist--selectable .vlist-masonry-item:hover {
+    background-color: var(--vlist-bg-hover);
+}
+
+/* Masonry item striped (odd) state */
+.vlist-masonry-item.vlist-item--odd {
+    background: var(--vlist-bg-striped);
+}
+
+/* Masonry item selected state */
+.vlist-masonry-item.vlist-item--selected {
+    background-color: var(--vlist-bg-selected);
+}
+
+.vlist-masonry-item.vlist-item--odd.vlist-item--selected {
+    background: var(--vlist-bg-selected);
+}
+
+.vlist--selectable .vlist-masonry-item.vlist-item--selected:hover {
+    background-color: var(--vlist-bg-selected-hover);
+}
+
+.vlist--selectable
+    .vlist-masonry-item.vlist-item--odd.vlist-item--selected:hover {
+    background: var(--vlist-bg-selected-hover);
+}
+
+/* Masonry item focused state */
+.vlist-masonry-item.vlist-item--focused {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: -2px;
+    z-index: 1;
+}

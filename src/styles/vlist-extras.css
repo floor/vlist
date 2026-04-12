@@ -13,17 +13,9 @@
     padding: 0.5rem 0.75rem;
 }
 
-.vlist--compact .vlist-item--selected {
-    padding-left: calc(0.75rem - 4px);
-}
-
 /* Comfortable variant */
 .vlist--comfortable .vlist-item {
     padding: 1rem 1.25rem;
-}
-
-.vlist--comfortable .vlist-item--selected {
-    padding-left: calc(1.25rem - 4px);
 }
 
 /* Borderless variant */
@@ -34,15 +26,6 @@
 
 .vlist--borderless .vlist-item {
     border-bottom: none;
-}
-
-/* Striped variant */
-.vlist--striped .vlist-item:nth-child(even) {
-    background-color: var(--vlist-bg-hover);
-}
-
-.vlist--striped .vlist-item:nth-child(even):hover {
-    background-color: var(--vlist-bg-selected);
 }
 
 /* =============================================================================
@@ -56,13 +39,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: color-mix(in srgb, var(--vlist-bg) 80%, transparent);
     backdrop-filter: blur(4px);
     z-index: 20;
-}
-
-.dark .vlist-loading {
-    background-color: rgba(17, 24, 39, 0.8);
 }
 
 .vlist-loading-spinner {
@@ -112,25 +91,11 @@
 }
 
 /* =============================================================================
-   Utility Classes
-   ============================================================================= */
-
-/* Hide scrollbar but keep functionality */
-.vlist-scrollbar-hide {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.vlist-scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-
-/* =============================================================================
    Animation
    ============================================================================= */
 
-/* Fade in animation for new items */
-@keyframes vlist-fade-in {
+/* Slide-in animation for new items */
+@keyframes vlist-item-enter {
     from {
         opacity: 0;
         transform: translateY(-8px);
@@ -142,14 +107,5 @@
 }
 
 .vlist-item--enter {
-    animation: vlist-fade-in 0.2s ease-out;
-}
-
-/* Smooth item transitions */
-.vlist--animate .vlist-item {
-    transition:
-        background-color var(--vlist-transition-duration)
-            var(--vlist-transition-timing),
-        transform 0.2s ease-out,
-        opacity 0.2s ease-out;
+    animation: vlist-item-enter 0.2s ease-out;
 }
