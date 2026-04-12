@@ -141,7 +141,6 @@ async function build() {
   );
 
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
-  const absEntry = resolve("./src/index.ts");
 
   const ALL_FEATURES = [
     "withGrid", "withMasonry", "withGroups", "withAsync", "withSelection",
