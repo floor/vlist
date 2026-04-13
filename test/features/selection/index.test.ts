@@ -24,6 +24,7 @@ import {
   isSelectionEmpty,
   selectFocused,
   selectRange,
+  claimPlaceholderSelection,
 } from "../../../src/features/selection";
 
 import type { VListItem } from "../../../src/types";
@@ -562,5 +563,55 @@ describe("selectRange", () => {
 
     expect(newState.selected.size).toBe(4); // 1 + 3 new items
     expect(newState.selected.has(1)).toBe(true);
+  });
+});
+
+describe("claimPlaceholderSelection", () => {
+  it("should transfer selection from placeholder to real item", () => {
+    const selected = new Set<string | number>(["__placeholder_5"]);
+    const result = claimPlaceholderSelection(selected, 5, 42);
+    expect(result).toBe(true);
+    expect(selected.has(42)).toBe(true);
+    expect(selected.has("__placeholder_5")).toBe(false);
+    expect(selected.size).toBe(1);
+  });
+
+  it("should return false when no placeholder is in the set", () => {
+    const selected = new Set<string | number>([1, 2, 3]);
+    const result = claimPlaceholderSelection(selected, 5, 42);
+    expect(result).toBe(false);
+    expect(selected.size).toBe(3);
+  });
+
+  it("should skip when item is itself a placeholder", () => {
+    const selected = new Set<string | number>(["__placeholder_5"]);
+    const result = claimPlaceholderSelection(selected, 5, "__placeholder_5");
+    expect(result).toBe(false);
+    expect(selected.has("__placeholder_5")).toBe(true);
+  });
+
+  it("should handle string item IDs", () => {
+    const selected = new Set<string | number>(["__placeholder_10"]);
+    const result = claimPlaceholderSelection(selected, 10, "abc-uuid");
+    expect(result).toBe(true);
+    expect(selected.has("abc-uuid")).toBe(true);
+    expect(selected.has("__placeholder_10")).toBe(false);
+  });
+
+  it("should not affect other entries in the set", () => {
+    const selected = new Set<string | number>([1, "__placeholder_3", 5]);
+    const result = claimPlaceholderSelection(selected, 3, 99);
+    expect(result).toBe(true);
+    expect(selected.has(99)).toBe(true);
+    expect(selected.has(1)).toBe(true);
+    expect(selected.has(5)).toBe(true);
+    expect(selected.size).toBe(3);
+  });
+
+  it("should handle index 0", () => {
+    const selected = new Set<string | number>(["__placeholder_0"]);
+    const result = claimPlaceholderSelection(selected, 0, 1);
+    expect(result).toBe(true);
+    expect(selected.has(1)).toBe(true);
   });
 });
