@@ -661,6 +661,51 @@ export const withTable = <T extends VListItem = VListItem>(
        */
       ctx.methods.set("_getTableHeaderHeight", () => headerHeight);
 
+      // ── Horizontal keyboard scroll (Left/Right arrows) ──
+      // In table mode with row-level focus, Left/Right scroll the viewport
+      // horizontally by one column width — snapping to column boundaries.
+      // This gives keyboard-only users access to off-screen columns without
+      // requiring cell-level navigation (the ARIA role is "grid" but focus
+      // stays on the row, not individual cells).
+      ctx.keydownHandlers.push((event: KeyboardEvent): void => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        if (!tableLayout) return;
+
+        const cols = tableLayout.columns;
+        if (cols.length === 0) return;
+
+        // Only handle when content overflows horizontally
+        const viewportWidth = dom.viewport.clientWidth;
+        if (tableLayout.totalWidth <= viewportWidth) return;
+
+        const scrollLeft = dom.viewport.scrollLeft;
+
+        if (event.key === "ArrowRight") {
+          // Snap to the next column boundary to the right
+          for (let i = 0; i < cols.length; i++) {
+            if (cols[i]!.offset > scrollLeft + 1) {
+              dom.viewport.scrollLeft = cols[i]!.offset;
+              event.preventDefault();
+              return;
+            }
+          }
+        } else {
+          // Snap to the previous column boundary to the left
+          for (let i = cols.length - 1; i >= 0; i--) {
+            if (cols[i]!.offset < scrollLeft - 1) {
+              dom.viewport.scrollLeft = cols[i]!.offset;
+              event.preventDefault();
+              return;
+            }
+          }
+          // Already near the first column — snap to start
+          if (scrollLeft > 0) {
+            dom.viewport.scrollLeft = 0;
+            event.preventDefault();
+          }
+        }
+      });
+
       // ── Content size handlers ──
       // When data changes, update content width too
       ctx.contentSizeHandlers.push((): void => {
