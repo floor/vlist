@@ -165,7 +165,7 @@ export const setupBaselineA11y = <T extends VListItem>(
           return;
       }
     } else {
-      const { ud, lr, cols } = nDelta();
+      const { ud, lr } = nDelta();
       switch (event.key) {
         case "ArrowUp":    n = p - ud; break;
         case "ArrowDown":  n = p + ud; break;
@@ -178,14 +178,8 @@ export const setupBaselineA11y = <T extends VListItem>(
           n = event.key === "PageUp" ? p - delta : p + delta;
           break;
         }
-        case "Home":
-          if (event.ctrlKey || !cols) { n = 0; }
-          else { n = p - (p % cols); }
-          break;
-        case "End":
-          if (event.ctrlKey || !cols) { n = total - 1; }
-          else { n = Math.min(p - (p % cols) + cols - 1, total - 1); }
-          break;
+        case "Home":  n = 0; break;
+        case "End":   n = total - 1; break;
         default: return;
       }
       if (n < 0) n = wr ? total - 1 : 0;

@@ -618,12 +618,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             break;
 
           case "Home": {
-            const { cols } = navDelta();
-            if (event.ctrlKey || !cols) {
-              newState = moveFocusToFirst(selectionState, totalItems);
-            } else {
-              newState = setFocusedIndex(selectionState, selectionState.focusedIndex - (selectionState.focusedIndex % cols));
-            }
+            newState = moveFocusToFirst(selectionState, totalItems);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -631,13 +626,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           }
 
           case "End": {
-            const { cols } = navDelta();
-            if (event.ctrlKey || !cols) {
-              newState = moveFocusToLast(selectionState, totalItems);
-            } else {
-              const rowStart = selectionState.focusedIndex - (selectionState.focusedIndex % cols);
-              newState = setFocusedIndex(selectionState, Math.min(rowStart + cols - 1, totalItems - 1));
-            }
+            newState = moveFocusToLast(selectionState, totalItems);
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
