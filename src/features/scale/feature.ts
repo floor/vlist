@@ -29,6 +29,7 @@ import {
   calculateCompressedScrollToIndex,
   calculateCompressedItemPosition,
 } from "../../rendering/scale";
+import { scrollToFocus } from "../../rendering/scroll";
 import type { Range } from "../../types";
 import { createScrollbar, type Scrollbar } from "../scrollbar";
 
@@ -891,6 +892,42 @@ export const withScale = <
           el.style.transform = horizontal
             ? `translateX(${offset}px)`
             : `translateY(${offset}px)`;
+        }
+      });
+
+      // ── Register compression-aware scroll-into-view for baseline a11y ──
+      // The baseline a11y (a11y.ts) uses scrollToFocusSimple which operates
+      // in uncompressed space — useless when the scale feature remaps scroll
+      // positions.  By registering _scrollItemIntoView we override that path
+      // with the full compression-aware scrollToFocus.
+      const startPad = horizontal ? resolvedPad.left : resolvedPad.top;
+      const endPad = horizontal ? resolvedPad.right : resolvedPad.bottom;
+      const itemToScrollIndex = ctx.getItemToScrollIndexFn();
+
+      ctx.methods.set("_scrollItemIntoView", (index: number): void => {
+        const compression = ctx.getCachedCompression();
+        const containerSize = ctx.state.viewportState.containerSize;
+        const scrollPos = ctx.state.viewportState.scrollPosition;
+        const totalItems = ctx.getVirtualTotal();
+        const { visibleRange } = ctx.state.viewportState;
+
+        // Convert flat item index → size-cache index (row index for grids)
+        const scrollIdx = itemToScrollIndex(index);
+
+        const newScroll = scrollToFocus(
+          scrollIdx,
+          ctx.sizeCache,
+          scrollPos,
+          containerSize,
+          startPad,
+          endPad,
+          compression,
+          totalItems,
+          visibleRange,
+        );
+
+        if (newScroll !== scrollPos) {
+          ctx.scrollController.scrollTo(newScroll);
         }
       });
 
