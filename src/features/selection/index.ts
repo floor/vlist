@@ -27,5 +27,6 @@ export {
   getSelectionCount,
   isSelected,
   isSelectionEmpty,
+  claimPlaceholderSelection,
   type SelectionState,
 } from "./state";
