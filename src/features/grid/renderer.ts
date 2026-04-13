@@ -31,6 +31,7 @@ import type {
 } from "../../types";
 
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
+import { claimPlaceholderSelection } from "../selection/state";
 import {
   calculateCompressedItemPosition,
 } from "../../rendering/scale";
@@ -511,7 +512,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         continue;
       }
 
-      const isSelected = selectedIds.has(item.id);
+      let isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
       const existing = rendered.get(i);
 
@@ -527,6 +528,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
           const newId = String(item.id);
           const wasPlaceholder = existingId.startsWith(PLACEHOLDER_ID_PREFIX);
           const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+
+          // Transfer selection from placeholder → real item ID (async loading)
+          if (!isPlaceholder && claimPlaceholderSelection(selectedIds, i, item.id)) {
+            isSelected = true;
+          }
 
           const state = getItemState(isSelected, isFocused);
           const result = template(item, i, state);
@@ -568,6 +574,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
           existing.element.setAttribute("aria-setsize", lastAriaSetSize);
         }
       } else {
+        // Transfer selection from placeholder → real item ID (async loading)
+        if (claimPlaceholderSelection(selectedIds, i, item.id)) {
+          isSelected = true;
+        }
+
         // Render new item — collect in fragment for batched insertion
         const transform = buildTransform(i, compressionCtx);
         const tracked = renderItem(

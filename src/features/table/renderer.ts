@@ -38,6 +38,7 @@ import type {
 import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
 import { calculateCompressedItemPosition } from "../../rendering/scale";
+import { claimPlaceholderSelection } from "../selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
 
@@ -553,7 +554,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       const item = items[itemIndex];
       if (!item) continue;
 
-      const isSelected = selectedIds.has(item.id);
+      let isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
 
       // ── Check if this item is a group header ──
@@ -620,6 +621,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
             const isPlaceholder = isPH(item.id);
 
+            // Transfer selection from placeholder → real item ID (async loading)
+            if (!isPlaceholder && claimPlaceholderSelection(selectedIds, i, item.id)) {
+              isSelected = true;
+            }
+
             const cols = currentLayout.columns;
             for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
               applyCellTemplate(existing.cells[c]!, item, cols[c]!, i, isPlaceholder);
@@ -634,6 +640,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               setTimeout(() => {
                 existing.element.classList.remove(replacedClass);
               }, 300);
+
+
             }
 
             existing.lastItemId = item.id;
@@ -668,6 +676,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
         }
       } else {
+        // Transfer selection from placeholder → real item ID (async loading)
+        if (claimPlaceholderSelection(selectedIds, i, item.id)) {
+          isSelected = true;
+        }
+
         // New row — create and collect in fragment for batched insertion
         const tracked = isHeader
           ? renderGroupHeaderRow(item, i, sc, compressionCtx)

@@ -81,7 +81,7 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   // State
   let lengthProfiles: LengthProfile[] = [];
   let hasAnalyzed = false;
-  let idCounter = 0;
+
 
   // ==========================================================================
   // Structure Analysis
@@ -138,7 +138,7 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
    */
   const generate = (index: number): T => {
     const placeholder: Record<string, unknown> = {
-      id: `${PLACEHOLDER_ID_PREFIX}${idCounter++}`,
+      id: `${PLACEHOLDER_ID_PREFIX}${index}`,
       [PLACEHOLDER_FLAG]: true,
       _index: index,
     };
@@ -182,7 +182,6 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
   const clear = (): void => {
     lengthProfiles = [];
     hasAnalyzed = false;
-    idCounter = 0;
   };
 
   // ==========================================================================

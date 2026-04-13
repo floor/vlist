@@ -4,9 +4,39 @@
  */
 
 import type { VListItem, SelectionMode, SelectionState } from "../../types";
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 
 // Re-export SelectionState for convenience
 export type { SelectionState } from "../../types";
+
+// =============================================================================
+// Placeholder Selection Transfer
+// =============================================================================
+
+/**
+ * Transfer selection from a placeholder ID to a real item ID.
+ *
+ * When select-all or shift-click ranges include unloaded async items, the
+ * selection Set contains index-based placeholder IDs (`__placeholder_{index}`).
+ * When those items load, this function swaps the placeholder entry for the
+ * real item ID so the item renders as selected.
+ *
+ * @returns `true` if a transfer occurred (the item was selected via its placeholder).
+ */
+export const claimPlaceholderSelection = (
+  selectedIds: Set<string | number>,
+  index: number,
+  itemId: string | number,
+): boolean => {
+  if (String(itemId).startsWith(PLACEHOLDER_ID_PREFIX)) return false;
+  const phId = PLACEHOLDER_ID_PREFIX + index;
+  if (selectedIds.has(phId)) {
+    selectedIds.delete(phId);
+    selectedIds.add(itemId);
+    return true;
+  }
+  return false;
+};
 
 // =============================================================================
 // State Creation

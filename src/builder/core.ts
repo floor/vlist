@@ -53,6 +53,7 @@ import {
 } from "./materialize";
 import type { MRefs } from "./materialize";
 import { setupBaselineA11y } from "./a11y";
+import { claimPlaceholderSelection } from "../features/selection/state";
 import { createApi } from "./api";
 // Inlined from constants.ts to avoid pulling in the full constants module
 const OVERSCAN = 3;
@@ -741,6 +742,11 @@ function materialize<T extends VListItem = VListItem>(
               existing.classList.remove(rpClass);
             }, 300);
           }
+
+          // Transfer selection from placeholder → real item ID (async loading)
+          if (!isPlaceholder) {
+            claimPlaceholderSelection(selectedIds, i, item.id);
+          }
         }
         $.pef(existing, i);
 
@@ -755,6 +761,9 @@ function materialize<T extends VListItem = VListItem>(
       } else {
         const element = renderItem(i, item);
         newlyRenderedForMeasurement.push({ index: i, element });
+
+        // Transfer selection from placeholder → real item ID (async loading)
+        claimPlaceholderSelection(selectedIds, i, item.id);
 
         // Selection state for new elements
         const isSelected = selectedIds.has(item.id);
