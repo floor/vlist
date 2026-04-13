@@ -259,7 +259,7 @@ describe("grid — baseline single-select navigation", () => {
     expect(getFocusedIndex(root)).toBe(1);
   });
 
-  it("Home goes to first cell in current row", () => {
+  it("Home goes to first item", () => {
     const l = buildGrid();
     const root = l.element;
 
@@ -271,12 +271,12 @@ describe("grid — baseline single-select navigation", () => {
     pressKey(root, "ArrowRight"); // → 6
     expect(getFocusedIndex(root)).toBe(6);
 
-    // Home without ctrl → first cell in current row (index 4)
+    // Home → first item (index 0)
     pressKey(root, "Home");
-    expect(getFocusedIndex(root)).toBe(4);
+    expect(getFocusedIndex(root)).toBe(0);
   });
 
-  it("End goes to last cell in current row", () => {
+  it("End goes to last item", () => {
     const l = buildGrid();
     const root = l.element;
 
@@ -286,12 +286,12 @@ describe("grid — baseline single-select navigation", () => {
     pressKey(root, "ArrowDown"); // → 4
     expect(getFocusedIndex(root)).toBe(4);
 
-    // End without ctrl → last cell in current row (index 7)
+    // End → last item (index 99)
     pressKey(root, "End");
-    expect(getFocusedIndex(root)).toBe(7);
+    expect(getFocusedIndex(root)).toBe(99);
   });
 
-  it("Ctrl+Home goes to first item", () => {
+  it("Ctrl+Home goes to first item (Ctrl is optional, same as Home)", () => {
     const l = buildGrid();
     const root = l.element;
 
@@ -310,7 +310,7 @@ describe("grid — baseline single-select navigation", () => {
     expect(getFocusedIndex(root)).toBe(0);
   });
 
-  it("Ctrl+End goes to last item", () => {
+  it("Ctrl+End goes to last item (Ctrl is optional, same as End)", () => {
     const l = buildGrid();
     const root = l.element;
 
