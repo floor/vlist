@@ -314,6 +314,23 @@ describe("createPlaceholderManager", () => {
         1,
       );
     });
+
+    it("should generate index-based deterministic IDs", () => {
+      const manager = createPlaceholderManager<TestItem>();
+      manager.analyzeStructure(createTestItems(5));
+
+      const p0 = manager.generate(0);
+      const p7 = manager.generate(7);
+      const p42 = manager.generate(42);
+
+      expect(String(p0.id)).toBe("__placeholder_0");
+      expect(String(p7.id)).toBe("__placeholder_7");
+      expect(String(p42.id)).toBe("__placeholder_42");
+
+      // Same index always produces the same ID
+      const p7Again = manager.generate(7);
+      expect(String(p7Again.id)).toBe(String(p7.id));
+    });
   });
 
   // ===========================================================================
