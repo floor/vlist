@@ -3,6 +3,20 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-14  v1.5.3
+
+  feat(selection): add Shift+keyboard range selection in multiple mode
+    Holding Shift while pressing Arrow/Page/Home/End keys now selects a
+    contiguous range from an anchor point to the new focus position:
+    - Shift+Arrow extends or shrinks the range by one item (or row/lane)
+    - Shift+Page Up/Down extends the range by one page
+    - Shift+Home/End extends the range to the first/last item
+    - Anchor is set on non-shift navigation, Space/Enter, or click
+    - Shift+click also uses the shared anchor for consistency
+    - No effect in single mode (guarded by mode === 'multiple')
+    Works with flat lists, grids, and masonry layouts.
+    Closes #24.
+
 2026-04-13  v1.5.2
 
   feat(snapshots): add autoSave for automatic sessionStorage save/restore
