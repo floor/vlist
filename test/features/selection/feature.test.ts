@@ -1845,3 +1845,308 @@ describe("withSelection — group header skipping", () => {
     expect(getSelected()).toEqual([4]);
   });
 });
+
+// =============================================================================
+// withSelection — Shift+keyboard range selection
+// =============================================================================
+
+describe("withSelection — Shift+keyboard range selection", () => {
+  function setupShiftTest() {
+    const feature = withSelection<TestItem>({ mode: "multiple" });
+    const ctx = createMockContextWithEmitter();
+    const scrollToSpy = mock(() => {});
+    (ctx.scrollController as any).scrollTo = scrollToSpy;
+    (ctx.scrollController as any).getScrollTop = () => 0;
+    (ctx.renderer as any).updateItemClasses = mock(() => {});
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string, opts?: { shiftKey?: boolean }) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        shiftKey: opts?.shiftKey ?? false,
+        bubbles: true,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+      return event;
+    };
+
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+
+    return { feature, ctx, fireKey, getSelected, scrollToSpy };
+  }
+
+  it("Shift+ArrowDown should select a range from anchor to new focus", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move focus to item 2 (non-shift sets anchor)
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+
+    // Now Shift+ArrowDown should select range [2, 3]
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 3
+
+    const selected = getSelected();
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected.length).toBe(2);
+  });
+
+  it("Shift+ArrowDown multiple times should extend the range", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 1
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+
+    // Shift+ArrowDown three times: range from 1 → 4
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 2
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 3
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 4
+
+    const selected = getSelected();
+    expect(selected).toContain(1);
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected.length).toBe(4);
+  });
+
+  it("Shift+ArrowUp should select a range upward", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 4
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+    fireKey("ArrowDown"); // focus → 3
+    fireKey("ArrowDown"); // focus → 4
+
+    // Shift+ArrowUp twice: range from 4 → 2
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 3
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 2
+
+    const selected = getSelected();
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected.length).toBe(3);
+  });
+
+  it("Shift+Home should select from anchor to first item", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 5
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+    fireKey("ArrowDown"); // focus → 3
+    fireKey("ArrowDown"); // focus → 4
+    fireKey("ArrowDown"); // focus → 5
+
+    // Shift+Home: range from 5 → 0
+    fireKey("Home", { shiftKey: true });
+
+    const selected = getSelected();
+    for (let i = 0; i <= 5; i++) {
+      expect(selected).toContain(i);
+    }
+    expect(selected.length).toBe(6);
+  });
+
+  it("Shift+End should select from anchor to last item", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 2
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+
+    // Shift+End: range from 2 → 99 (100 items)
+    fireKey("End", { shiftKey: true });
+
+    const selected = getSelected();
+    for (let i = 2; i <= 99; i++) {
+      expect(selected).toContain(i);
+    }
+    expect(selected.length).toBe(98);
+  });
+
+  it("Shift+PageDown should select a page-sized range", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 2
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+
+    // Shift+PageDown
+    fireKey("PageDown", { shiftKey: true });
+
+    const selected = getSelected();
+    // Should include item 2 (anchor) and items up to new focus
+    expect(selected).toContain(2);
+    expect(selected.length).toBeGreaterThan(1);
+  });
+
+  it("Shift+PageUp should select a page-sized range upward", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 20
+    for (let i = 0; i <= 20; i++) fireKey("ArrowDown");
+
+    // Shift+PageUp
+    fireKey("PageUp", { shiftKey: true });
+
+    const selected = getSelected();
+    expect(selected).toContain(20);
+    expect(selected.length).toBeGreaterThan(1);
+  });
+
+  it("non-shift navigation after shift-selection should reset anchor", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 2
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+
+    // Shift+ArrowDown selects [2, 3]
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 3
+
+    let selected = getSelected();
+    expect(selected.length).toBe(2);
+
+    // Non-shift ArrowDown resets anchor to the new position
+    fireKey("ArrowDown"); // focus → 4, anchor resets
+
+    // Now Shift+ArrowDown should start a new range from 4
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 5
+
+    selected = getSelected();
+    // Previous shift-selection (2, 3) is gone because selectRange replaces
+    // The new range is [4, 5]
+    expect(selected).toContain(4);
+    expect(selected).toContain(5);
+    expect(selected.length).toBe(2);
+  });
+
+  it("Space/Enter after shift-selection should reset anchor", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 2
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+
+    // Toggle item 2 with Space (sets anchor to 2)
+    fireKey(" ");
+
+    // Shift+ArrowDown should start range from 2
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 3
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 4
+
+    const selected = getSelected();
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+  });
+
+  it("should be a no-op in single mode", () => {
+    const feature = withSelection<TestItem>({ mode: "single" });
+    const ctx = createMockContextWithEmitter();
+    (ctx.scrollController as any).scrollTo = mock(() => {});
+    (ctx.scrollController as any).getScrollTop = () => 0;
+    (ctx.renderer as any).updateItemClasses = mock(() => {});
+
+    feature.setup!(ctx);
+
+    const fireKey = (key: string, opts?: { shiftKey?: boolean }) => {
+      const event = new (dom.window as any).KeyboardEvent("keydown", {
+        key,
+        shiftKey: opts?.shiftKey ?? false,
+        bubbles: true,
+      });
+      event.preventDefault = mock(() => {});
+      ctx.keydownHandlers[0]!(event);
+    };
+
+    const getSelected = ctx.methods.get("getSelected") as () => Array<string | number>;
+
+    // Move to item 2
+    fireKey("ArrowDown");
+    fireKey("ArrowDown");
+    fireKey("ArrowDown");
+
+    // Shift+ArrowDown in single mode — should not create a range selection
+    fireKey("ArrowDown", { shiftKey: true });
+
+    const selected = getSelected();
+    // In single mode, shift has no range-selection effect
+    expect(selected.length).toBeLessThanOrEqual(1);
+  });
+
+  it("Shift+ArrowDown then Shift+ArrowUp should shrink the range", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 3
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+    fireKey("ArrowDown"); // focus → 3
+
+    // Extend down: anchor=3, range [3,4,5]
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 4
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 5
+
+    let selected = getSelected();
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected).toContain(5);
+    expect(selected.length).toBe(3);
+
+    // Shift+ArrowUp shrinks: anchor=3, range [3,4]
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 4
+
+    selected = getSelected();
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected.length).toBe(2);
+  });
+
+  it("Shift+ArrowDown past anchor then Shift+ArrowUp past anchor should invert", () => {
+    const { fireKey, getSelected } = setupShiftTest();
+
+    // Move to item 5
+    fireKey("ArrowDown"); // focus → 0
+    fireKey("ArrowDown"); // focus → 1
+    fireKey("ArrowDown"); // focus → 2
+    fireKey("ArrowDown"); // focus → 3
+    fireKey("ArrowDown"); // focus → 4
+    fireKey("ArrowDown"); // focus → 5
+
+    // Extend down from anchor=5 to 7
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 6
+    fireKey("ArrowDown", { shiftKey: true }); // focus → 7
+
+    let selected = getSelected();
+    expect(selected).toContain(5);
+    expect(selected).toContain(6);
+    expect(selected).toContain(7);
+
+    // Now go back up past anchor: 7 → 6 → 5 → 4 → 3
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 6
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 5
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 4
+    fireKey("ArrowUp", { shiftKey: true }); // focus → 3
+
+    selected = getSelected();
+    // Range is now anchor=5 to focus=3, so [3,4,5]
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected).toContain(5);
+    expect(selected.length).toBe(3);
+  });
+});
