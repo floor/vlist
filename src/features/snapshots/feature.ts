@@ -7,6 +7,8 @@
  * What it wires:
  * - getScrollSnapshot() — captures current scroll position (item index + sub-pixel offset)
  * - restoreScroll() — restores scroll position from snapshot
+ * - autoSave — automatically saves snapshots to sessionStorage on scroll idle
+ *   and selection change, and auto-restores on next build()
  *
  * Snapshots capture the first visible item index and the pixel offset within
  * that item — not raw scrollTop. This means:
@@ -15,6 +17,10 @@
  * - Snapshots include selection state if selection is installed
  *
  * Added methods: getScrollSnapshot, restoreScroll
+ *
+ * Helper:
+ * - getAutoSaveSnapshot(key) — read a saved snapshot from sessionStorage
+ *   so that withAsync can derive `autoLoad` and `total` from it.
  */
 
 import type { VListItem, ScrollSnapshot } from "../../types";
@@ -48,6 +54,33 @@ export interface SnapshotConfig {
    * ```
    */
   restore?: ScrollSnapshot;
+
+  /**
+   * Automatically save and restore snapshots via sessionStorage.
+   *
+   * Pass a string key to enable — snapshots are saved to
+   * `sessionStorage` under that key whenever scroll becomes idle
+   * or selection changes. On the next `build()`, the snapshot is
+   * automatically restored if a matching key exists.
+   *
+   * This replaces the manual save/restore pattern — no event
+   * listeners, debounce timers, or sessionStorage calls needed.
+   *
+   * ```ts
+   * // That's it — save and restore are fully automatic:
+   * const list = vlist({ ... })
+   *   .use(withAsync({ adapter }))
+   *   .use(withSnapshots({ autoSave: 'my-list-scroll' }))
+   *   .build();
+   * ```
+   *
+   * When `autoSave` is set, the `restore` option is ignored —
+   * the saved snapshot is read from sessionStorage automatically.
+   * The `autoLoad` and `total` options on `withAsync` are also
+   * configured automatically (autoLoad is skipped when restoring,
+   * and total is read from the snapshot).
+   */
+  autoSave?: string;
 }
 
 // =============================================================================
@@ -76,10 +109,31 @@ export interface SnapshotConfig {
  * if (saved) list.restoreScroll(saved)
  * ```
  */
+/**
+ * Read a snapshot from sessionStorage by key.
+ * Returns undefined if not found or corrupt.
+ */
+const readSnapshot = (key: string): ScrollSnapshot | undefined => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return undefined;
+    return JSON.parse(raw) as ScrollSnapshot;
+  } catch {
+    return undefined;
+  }
+};
+
+
 export const withSnapshots = <T extends VListItem = VListItem>(
   config?: SnapshotConfig,
 ): VListFeature<T> => {
-  const restoreSnapshot = config?.restore;
+  const autoSaveKey = config?.autoSave;
+
+  // When autoSave is set, read the restore snapshot from sessionStorage
+  // automatically — the `restore` option is ignored.
+  const restoreSnapshot = autoSaveKey
+    ? readSnapshot(autoSaveKey)
+    : config?.restore;
 
   return {
     name: "withSnapshots",
@@ -111,7 +165,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         let offsetInItem: number;
 
         if (compression.isCompressed) {
-          // Compressed: scroll position maps linearly to item index
+          // Compressed: scroll position maps linearly to item index.
+          // Use compression.virtualSize (not viewportState.totalSize) so
+          // that save and restore use the exact same divisor — totalSize
+          // includes compression slack which differs between runtime and
+          // restore bootstrap, causing cumulative drift.
           const scrollRatio = scrollTop / compression.virtualSize;
           const exactIndex = scrollRatio * totalItems;
           index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
@@ -178,7 +236,8 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         let scrollPosition: number;
 
         if (compression.isCompressed) {
-          // Compressed: reverse the linear mapping
+          // Compressed: reverse the linear mapping.
+          // Must use compression.virtualSize (same as save) for lossless roundtrip.
           const itemSize = ctx.sizeCache.getSize(safeIndex);
           const fraction = itemSize > 0 ? offsetInItem / itemSize : 0;
           scrollPosition =
@@ -258,9 +317,64 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
       ctx.methods.set("restoreScroll", restoreScroll);
 
+      // ── Auto-save ──
+      // When autoSave is configured, save snapshots to sessionStorage
+      // on scroll idle and selection change.
+      //
+      // During restore, ALL saves are guarded until the position has
+      // settled. The first scroll:idle after restore marks the settle
+      // point — we save once (capturing the fully settled state) and
+      // lift the guard. After that, every idle and selection change
+      // saves immediately.
+      if (autoSaveKey) {
+        let restoreGuard = !!restoreSnapshot;
+
+        const saveToStorage = (): void => {
+          if (restoreGuard) return;
+          const getSnapshotFn = ctx.methods.get("getScrollSnapshot") as
+            | (() => ScrollSnapshot)
+            | undefined;
+          if (!getSnapshotFn) return;
+          const snap = getSnapshotFn();
+          try {
+            sessionStorage.setItem(autoSaveKey, JSON.stringify(snap));
+          } catch {
+            // sessionStorage full or unavailable — silently skip
+          }
+        };
+
+        // Save on scroll idle (fires after scroll.idleTimeout, default 150ms).
+        // During restore, the first idle lifts the guard and saves the
+        // settled state. Subsequent idles save normally.
+        ctx.idleHandlers.push(() => {
+          if (restoreGuard) {
+            restoreGuard = false;
+          }
+          saveToStorage();
+        });
+
+        // Save on selection change (guarded during restore like everything else)
+        ctx.emitter.on("selection:change", saveToStorage);
+
+        // ── Coordinate with withAsync ──
+        // When restoring a snapshot, cancel withAsync's deferred autoLoad
+        // and bootstrap the total from the snapshot. This eliminates the
+        // need for the user to manually pass autoLoad/total to withAsync.
+        if (restoreSnapshot && restoreSnapshot.total && restoreSnapshot.total > 0) {
+          const cancelAutoLoad = ctx.methods.get("_cancelAutoLoad") as
+            | (() => void)
+            | undefined;
+          if (cancelAutoLoad) cancelAutoLoad();
+
+          // Bootstrap total so sizeCache/compression are ready for restore
+          ctx.dataManager.setTotal(restoreSnapshot.total);
+        }
+      }
+
       // ── Auto-restore ──
-      // If a restore snapshot was provided via config, schedule restoration
-      // via queueMicrotask. This runs right after build() returns (all
+      // If a restore snapshot was provided via config (or read from
+      // sessionStorage by autoSave), schedule restoration via
+      // queueMicrotask. This runs right after build() returns (all
       // synchronous setup, isInitialized=true, initial render) but before
       // the browser paints — so the user never sees position 0.
       if (restoreSnapshot) {

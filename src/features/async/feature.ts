@@ -576,10 +576,22 @@ export const withAsync = <T extends VListItem = VListItem>(
       });
 
       // ── Load initial data (if autoLoad is enabled) ──
+      // Deferred to queueMicrotask so that features with higher priority
+      // numbers (e.g. withSnapshots at 50) can cancel the autoLoad during
+      // their own setup() and handle data loading themselves.
+      let autoLoadCancelled = false;
+
+      ctx.methods.set("_cancelAutoLoad", () => {
+        autoLoadCancelled = true;
+      });
+
       if (autoLoad) {
-        emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
-        ctx.dataManager.loadInitial().catch((error) => {
-          emitter.emit("error", { error, context: "loadInitial" });
+        queueMicrotask(() => {
+          if (autoLoadCancelled) return;
+          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+          ctx.dataManager.loadInitial().catch((error) => {
+            emitter.emit("error", { error, context: "loadInitial" });
+          });
         });
       } else if (total !== undefined) {
         // If autoLoad is disabled but total is provided, set it so the vlist knows the size
