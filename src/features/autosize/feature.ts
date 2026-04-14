@@ -227,17 +227,38 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
         // preventing the user from reaching the true end.
         const atBottom = isAtBottom(oldTotalSize);
 
-        if (atBottom || !ctx.scrollController.isScrolling()) {
+        // Also skip deferral when the render range includes the last item.
+        // During a smooth scroll toward the bottom the browser clamps
+        // scrollTop to the current DOM maxScroll.  If content size is
+        // deferred the animation can never reach the true bottom, causing
+        // a visible snap when the flush finally applies the update.
+        const totalItems = ctx.getVirtualTotal();
+        const renderEnd = ctx.state.viewportState.renderRange.end;
+        const nearEnd = totalItems > 0 && renderEnd >= totalItems - 1;
+
+        // Capture DOM maxScroll BEFORE updating content size so we can
+        // detect if the scroll position was clamped at the old bottom.
+        const viewport = ctx.dom.viewport as HTMLElement;
+        const preUpdateMaxScroll = viewport.scrollHeight - viewport.clientHeight;
+        const currentScroll = ctx.scrollController.getScrollTop();
+        const atDomBottom = preUpdateMaxScroll > 0 && currentScroll >= preUpdateMaxScroll - BOTTOM_THRESHOLD;
+
+        if (atBottom || nearEnd || !ctx.scrollController.isScrolling()) {
           // Update content size immediately
           updateContentSize();
           pendingContentSizeUpdate = false;
 
-          // Keep scroll pinned to the bottom when measurements grow the content
-          if (atBottom) {
+          // Keep scroll pinned to the bottom when measurements grow the content.
+          // Snap when:
+          //  - atBottom: we were at the calculated bottom from prefix sums
+          //  - nearEnd + atDomBottom: the last item is rendered and the scroll
+          //    position was clamped at the DOM maxScroll (smooth scroll animation
+          //    tried to go further but the browser wouldn't allow it)
+          if (atBottom || (nearEnd && atDomBottom)) {
             // Force synchronous layout so the browser's scrollHeight reflects
             // the new content height. Without this, setting viewport.scrollTop
             // would be clamped to the OLD maxScroll.
-            void (ctx.dom.viewport as HTMLElement).scrollHeight;
+            void viewport.scrollHeight;
             snapToBottom();
           }
         } else {
