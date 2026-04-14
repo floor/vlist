@@ -124,7 +124,7 @@ function createMockOptions(
       wrap: false,
       horizontal: false,
       ariaIdPrefix: "vlist",
-      accessible: true,
+      interactive: true,
     },
     dom: domStructure,
     sizeCache: {
@@ -535,7 +535,7 @@ describe("createBuilderContext", () => {
           wrap: false,
           horizontal: true,
           ariaIdPrefix: "vlist",
-      accessible: true,
+      interactive: true,
         },
       });
 

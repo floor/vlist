@@ -139,7 +139,7 @@ function createMockContext(
       wrap: false,
       horizontal: options?.horizontal ?? false,
       ariaIdPrefix: "vlist-test",
-      accessible: true,
+      interactive: true,
     },
     rawConfig: {
       container: document.createElement("div"),

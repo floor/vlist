@@ -91,7 +91,7 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 10.4 KB | Core virtualization, gap, padding, ARIA live region |
+| **Base** | 10.4 KB | Core virtualization, gap, padding, ARIA live region, baseline keyboard nav |
 | `withGrid()` | +3.8 KB | 2D grid layout with context injection |
 | `withMasonry()` | +3.4 KB | Pinterest-style masonry layout with lane-aware nav |
 | `withGroups()` | +2.7 KB | Grouped lists with sticky/inline headers |
@@ -358,6 +358,51 @@ withSnapshots()                       // included by default
 ```
 
 Full configuration reference → **[vlist.io](https://vlist.io)**
+
+## Base Configuration
+
+The `vlist()` factory accepts these base options alongside `container`, `items`, and `item`:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `overscan` | `3` | Extra items rendered outside viewport |
+| `classPrefix` | `'vlist'` | CSS class prefix for all generated elements |
+| `ariaLabel` | — | Accessible label for the listbox (`aria-label`) |
+| `orientation` | `'vertical'` | `'vertical'` or `'horizontal'` scroll direction |
+| `padding` | `0` | Content inset — number, `[v, h]`, or `[top, right, bottom, left]` |
+| `interactive` | `true` | Enable built-in keyboard navigation (see below) |
+| `reverse` | `false` | Reverse mode for chat UIs (new items appear at bottom) |
+| `scroll.wheel` | `true` | Enable mouse wheel scrolling |
+| `scroll.wrap` | `false` | Wrap focus around at boundaries |
+| `scroll.gutter` | `'auto'` | Scrollbar gutter: `'auto'` or `'stable'` |
+| `scroll.idleTimeout` | `150` | Scroll idle detection timeout (ms) |
+
+### `interactive` — Baseline Keyboard Navigation
+
+By default, every vlist is keyboard-navigable following the [WAI-ARIA listbox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/):
+
+- **Arrow keys** move focus between items (with a visible focus ring)
+- **Space / Enter** selects the focused item
+- **Home / End** jump to first / last item
+- **Click** selects + focuses the clicked item
+
+This works **without** `withSelection()` — it's built into the base. The `withSelection()` feature adds multi-select, range select, `selectAll()`, and other advanced selection APIs on top.
+
+Set `interactive: false` to disable all built-in keyboard handling:
+
+```typescript
+const feed = vlist({
+  container: '#feed',
+  items: posts,
+  item: { height: 120, template: renderPost },
+  interactive: false,  // no item-level keyboard nav or focus ring
+}).build()
+```
+
+Use this when:
+- The list is **display-only** (log viewer, activity feed, chat history)
+- Your app provides its **own keyboard navigation**
+- Items contain **interactive elements** (inputs, buttons) that need to own focus
 
 ## Framework Adapters
 
