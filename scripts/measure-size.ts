@@ -69,7 +69,7 @@ const FEATURE_MARKERS: Record<FeatureName, readonly string[]> = {
   withMasonry:   ["-masonry-item"],
   withGroups:    ["__group_header_", "-sticky-header"],
   withAsync:     ["loadVisibleRange"],
-  withSelection: ["selection:change", "selectAll"],
+  withSelection: ["selectAll"],
   withScale:     ["touchcancel"],
   withScrollbar: ["-scrollbar-thumb"],
   withPage:      ["innerWidth"],

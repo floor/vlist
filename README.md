@@ -92,17 +92,17 @@ const list = vlist({
 | Feature | Size | Description |
 |---------|------|-------------|
 | **Base** | 10.4 KB | Core virtualization, gap, padding, ARIA live region, baseline keyboard nav |
-| `withGrid()` | +3.8 KB | 2D grid layout with context injection |
-| `withMasonry()` | +3.4 KB | Pinterest-style masonry layout with lane-aware nav |
+| `withGrid()` | +3.9 KB | 2D grid layout with context injection |
+| `withMasonry()` | +3.3 KB | Pinterest-style masonry layout with lane-aware nav |
 | `withGroups()` | +2.7 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.4 KB | Lazy loading with adapters |
 | `withSelection()` | +2.5 KB | Single/multiple selection + 2D keyboard nav |
-| `withScale()` | +2.8 KB | 1M+ items via scroll compression |
+| `withScale()` | +3.1 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
-| `withTable()` | +5.3 KB | Data table with columns, resize, sort, groups |
+| `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `withPage()` | +0.4 KB | Document-level scrolling |
-| `withSnapshots()` | +0.6 KB | Scroll save/restore |
+| `withSnapshots()` | +0.7 KB | Scroll save/restore with autoSave |
 
 ## Examples
 
@@ -266,7 +266,8 @@ const list = vlist(config).use(...features).build()
 
 | Method | Description |
 |--------|-------------|
-| `list.getScrollSnapshot()` | Save scroll state (for SPA navigation) |
+| `withSnapshots({ autoSave: 'key' })` | Automatic save/restore via sessionStorage |
+| `list.getScrollSnapshot()` | Save scroll state (for manual patterns) |
 | `list.restoreScroll(snapshot)` | Restore saved scroll state |
 
 ### Selection (with `withSelection()`)
@@ -354,7 +355,8 @@ withScale()                           // auto-activates at 16.7M px
 withScale({ force: true })            // force compression on any list size
 withScrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 withPage()                            // no config — uses document scroll
-withSnapshots()                       // included by default
+withSnapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
+withSnapshots({ restore: snapshot })  // manual restore from saved snapshot
 ```
 
 Full configuration reference → **[vlist.io](https://vlist.io)**
