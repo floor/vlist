@@ -3,6 +3,37 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-13  v1.5.2
+
+  feat(snapshots): add autoSave for automatic sessionStorage save/restore
+    withSnapshots({ autoSave: 'key' }) handles everything automatically:
+    - Saves to sessionStorage on scroll:idle and selection:change
+    - Restores scroll position + selection on next build()
+    - Cancels withAsync's autoLoad and bootstraps total from snapshot
+    - Event-based restore guard (lifts on first scroll:idle, no timers)
+    Eliminates all manual snapshot plumbing — no event listeners,
+    debounce timers, or sessionStorage calls needed in user code.
+
+  feat(core): rename accessible config to interactive
+    Rename `accessible` → `interactive` for clarity — `accessible: false`
+    sounds like it hurts accessibility when it really just disables
+    item-level keyboard focus. The old name is kept as a deprecated alias.
+
+  feat(async): defer autoLoad to queueMicrotask (cancellable)
+    autoLoad is now deferred via queueMicrotask so that higher-priority
+    features (e.g. withSnapshots) can cancel it during their own setup.
+    Exposes _cancelAutoLoad on ctx.methods for inter-feature coordination.
+
+  fix(snapshots): compressed-mode save/restore roundtrip drift
+    Use compression.virtualSize consistently for both save and restore.
+    viewportState.totalSize includes compression slack which differs
+    between runtime and restore bootstrap, causing cumulative ~224px
+    drift per roundtrip at scale.
+
+  docs(core): add Base Configuration section to README
+    Document all base vlist() options (interactive, overscan, padding,
+    orientation, scroll.*) — previously undiscoverable.
+
 2026-04-13  v1.5.1
 
   fix(autoSize): scroll-to-bottom not reaching the end with auto-sized items
