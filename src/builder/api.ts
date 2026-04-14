@@ -231,7 +231,7 @@ export const createApi = <T extends VListItem = VListItem>(
     }
   };
 
-  const animateScroll = (from: number, to: number, duration: number): void => {
+  const animateScroll = (from: number, to: number, duration: number, toFn?: () => number): void => {
     cancelScroll();
     if (Math.abs(to - from) < 1) {
       $.sst(to);
@@ -243,7 +243,11 @@ export const createApi = <T extends VListItem = VListItem>(
     const tick = (now: number): void => {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const newPos = from + (to - from) * easeInOutQuad(t);
+      // When a dynamic target function is provided, recalculate the
+      // target each frame so the animation adapts to measurement
+      // changes (e.g. autoSize updating prefix sums mid-scroll).
+      const currentTo = toFn ? toFn() : to;
+      const newPos = from + (currentTo - from) * easeInOutQuad(t);
       $.sst(newPos);
       // Update lastScrollTop BEFORE rendering so range calculation uses correct value
       $.ls = newPos;
@@ -276,7 +280,13 @@ export const createApi = <T extends VListItem = VListItem>(
     const position = $.gsp(idx, $.hc, $.ch, total, align);
 
     if (behavior === "smooth") {
-      animateScroll($.sgt(), position, duration);
+      // Pass a dynamic target function so the animation adapts when
+      // autoSize measurements change the size cache during scrolling.
+      const targetIdx = idx;
+      const targetAlign = align;
+      animateScroll($.sgt(), position, duration, () =>
+        $.gsp(targetIdx, $.hc, $.ch, $.vtf(), targetAlign),
+      );
     } else {
       cancelScroll();
       $.sst(position);
