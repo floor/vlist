@@ -928,8 +928,13 @@ describe("withAsync plugin", () => {
     expect(adapter.read).toHaveBeenCalled();
   });
 
-  it("should set aria-busy during initial load", () => {
-    const adapter = createMockAdapter(100);
+  it("should set aria-busy during initial load", async () => {
+    // Use a slow adapter so the load is still in-flight after the microtask
+    const adapter: VListAdapter<TestItem> = {
+      read: () => new Promise((resolve) =>
+        setTimeout(() => resolve({ items: [], total: 100, hasMore: false }), 500),
+      ),
+    };
 
     list = vlist<TestItem>({
       container,
@@ -938,7 +943,12 @@ describe("withAsync plugin", () => {
       .use(withAsync({ adapter }))
       .build();
 
-    // aria-busy should be set synchronously before the async load completes
+    // autoLoad is deferred via queueMicrotask — flush to let it fire,
+    // but the adapter is still loading (500ms delay)
+    await new Promise(r => queueMicrotask(r));
+    await new Promise(r => queueMicrotask(r));
+
+    // aria-busy should be set while the slow adapter is still loading
     expect(list.element.getAttribute("aria-busy")).toBe("true");
   });
 

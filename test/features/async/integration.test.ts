@@ -181,7 +181,7 @@ describe("Async Adapter: Loading State Transitions", () => {
     container.remove();
   });
 
-  it("should set aria-busy during initial load", () => {
+  it("should set aria-busy during initial load", async () => {
     const adapter = createMockAdapter(100, { delay: 100 });
 
     list = vlist<TestItem>({
@@ -189,7 +189,9 @@ describe("Async Adapter: Loading State Transitions", () => {
       item: { height: 50, template },
     }).use(withAsync({ adapter })).build();
 
-    // aria-busy should be set synchronously before async load completes
+    await new Promise(r => queueMicrotask(r));
+
+    // aria-busy should be set before async load completes
     expect(list.element.getAttribute("aria-busy")).toBe("true");
   });
 
@@ -469,6 +471,9 @@ describe("Async Adapter: Loading Transitions", () => {
       container,
       item: { height: 50, template },
     }).use(withAsync({ adapter })).build();
+
+    // autoLoad now uses queueMicrotask, flush it before checking
+    await new Promise(r => queueMicrotask(r));
 
     // aria-busy should be set during load
     expect(list.element.getAttribute("aria-busy")).toBe("true");

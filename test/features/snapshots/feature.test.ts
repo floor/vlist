@@ -18,6 +18,7 @@ let dom: JSDOM;
 let originalDocument: any;
 let originalWindow: any;
 let originalQueueMicrotask: any;
+let originalSessionStorage: any;
 
 let originalRAF: any;
 
@@ -30,11 +31,13 @@ beforeAll(() => {
   originalDocument = global.document;
   originalWindow = global.window;
   originalQueueMicrotask = global.queueMicrotask;
+  originalSessionStorage = (global as any).sessionStorage;
   originalRAF = global.requestAnimationFrame;
 
   global.document = dom.window.document;
   global.window = dom.window as any;
   global.HTMLElement = dom.window.HTMLElement;
+  (global as any).sessionStorage = dom.window.sessionStorage;
 
   // JSDOM doesn't provide requestAnimationFrame — polyfill with setTimeout
   if (!global.requestAnimationFrame) {
@@ -50,6 +53,7 @@ afterAll(() => {
   global.document = originalDocument;
   global.window = originalWindow;
   global.queueMicrotask = originalQueueMicrotask;
+  (global as any).sessionStorage = originalSessionStorage;
   global.requestAnimationFrame = originalRAF;
 });
 
@@ -1216,5 +1220,200 @@ describe("withSnapshots - Edge Cases", () => {
     expect(history.length).toBe(1);
     // 42*48 + 15.5 = 2031.5
     expect(history[0]).toBe(2031.5);
+  });
+});
+
+// =============================================================================
+// withSnapshots - autoSave Tests
+// =============================================================================
+
+describe("withSnapshots - autoSave", () => {
+  const AUTO_SAVE_KEY = "test-autosave";
+
+  function clearAutoSave() {
+    try {
+      sessionStorage.removeItem(AUTO_SAVE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  it("should save snapshot to sessionStorage on scroll idle", () => {
+    clearAutoSave();
+    const ctx = createMockContext({ totalItems: 50, scrollTop: 100, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    // Overwrite getScrollSnapshot with a controlled mock
+    const knownSnapshot: ScrollSnapshot = { index: 5, offsetInItem: 10, total: 50 };
+    ctx.methods.set("getScrollSnapshot", () => knownSnapshot);
+
+    // Fire the idle handler
+    expect(ctx.idleHandlers.length).toBeGreaterThan(0);
+    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(knownSnapshot);
+  });
+
+  it("should save snapshot on selection:change", () => {
+    clearAutoSave();
+    const ctx = createMockContext({ totalItems: 50, scrollTop: 100, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const knownSnapshot: ScrollSnapshot = { index: 7, offsetInItem: 20, total: 50 };
+    ctx.methods.set("getScrollSnapshot", () => knownSnapshot);
+
+    // Emit selection:change
+    ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(knownSnapshot);
+  });
+
+  it("should guard all saves during restore settle", () => {
+    clearAutoSave();
+    // Pre-populate sessionStorage so readSnapshot returns a value → restoreGuard = true
+    const originalSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(originalSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    // Overwrite getScrollSnapshot with a different snapshot
+    const differentSnapshot: ScrollSnapshot = { index: 99, offsetInItem: 0, total: 100 };
+    ctx.methods.set("getScrollSnapshot", () => differentSnapshot);
+
+    // Emit selection:change — should NOT write (guard active)
+    ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
+
+    // sessionStorage should still have the original snapshot
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(originalSnapshot);
+  });
+
+  it("should lift guard and save on first scroll idle after restore", () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const newSnapshot: ScrollSnapshot = { index: 75, offsetInItem: 0, total: 100 };
+    ctx.methods.set("getScrollSnapshot", () => newSnapshot);
+
+    // Call idle handler — should lift guard AND save
+    expect(ctx.idleHandlers.length).toBeGreaterThan(0);
+    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(newSnapshot);
+  });
+
+  it("should save normally after guard is lifted", () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const postGuardSnapshot: ScrollSnapshot = { index: 30, offsetInItem: 5, total: 100 };
+    ctx.methods.set("getScrollSnapshot", () => postGuardSnapshot);
+
+    // First idle call lifts the guard
+    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+
+    // Now update the snapshot to something new
+    const afterLiftSnapshot: ScrollSnapshot = { index: 42, offsetInItem: 12, total: 100 };
+    ctx.methods.set("getScrollSnapshot", () => afterLiftSnapshot);
+
+    // Emit selection:change — should save now that guard is lifted
+    ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(afterLiftSnapshot);
+  });
+
+  it("should read and auto-restore snapshot from sessionStorage", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 42, offsetInItem: 10, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    await flushAsync();
+
+    const history = (ctx as any)._scrollToHistory as number[];
+    expect(history.length).toBeGreaterThan(0);
+  });
+
+  it("should cancel withAsync autoLoad when restoring", () => {
+    clearAutoSave();
+    const cancelAutoLoad = mock(() => {});
+    const ctx = createMockContext({
+      totalItems: 100,
+      itemHeight: 48,
+      extraMethods: { _cancelAutoLoad: cancelAutoLoad },
+    });
+
+    const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    expect(cancelAutoLoad).toHaveBeenCalled();
+  });
+
+  it("should not guard saves when no restore snapshot exists", () => {
+    clearAutoSave();
+    // No snapshot in sessionStorage — guard should not activate
+
+    const ctx = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const knownSnapshot: ScrollSnapshot = { index: 3, offsetInItem: 8, total: 50 };
+    ctx.methods.set("getScrollSnapshot", () => knownSnapshot);
+
+    // Emit selection:change — should save immediately (no guard)
+    ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(knownSnapshot);
+  });
+
+  it("should handle corrupt sessionStorage data gracefully", () => {
+    clearAutoSave();
+    sessionStorage.setItem(AUTO_SAVE_KEY, "not-json{{{");
+
+    const ctx = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
+    // Should not throw
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const knownSnapshot: ScrollSnapshot = { index: 1, offsetInItem: 0, total: 50 };
+    ctx.methods.set("getScrollSnapshot", () => knownSnapshot);
+
+    // Idle handler should save normally (no guard since readSnapshot returned undefined)
+    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(knownSnapshot);
   });
 });

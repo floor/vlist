@@ -359,12 +359,13 @@ describe("withAsync - Setup", () => {
     expect(adapter.read).toHaveBeenCalled();
   });
 
-  it("should emit load:start on initial load", () => {
+  it("should emit load:start on initial load", async () => {
     const adapter = createMockAdapter();
     const plugin = withAsync({ adapter });
     const ctx = createMockContext();
 
     plugin.setup(ctx);
+    await new Promise(r => queueMicrotask(r));
 
     expect(ctx.emitter.emit).toHaveBeenCalledWith("load:start", {
       offset: 0,
@@ -2094,6 +2095,7 @@ describe("withAsync - Reload with Snapshot", () => {
 
     const ctx = createMockContext();
     plugin.setup(ctx);
+    await new Promise(r => queueMicrotask(r));
 
     const dataManager = ctx.capturedDataManager();
     const loadInitialSpy = mock(() => Promise.resolve());
@@ -2248,6 +2250,7 @@ describe("withAsync - Reload with Snapshot", () => {
 
     const ctx = createMockContext();
     plugin.setup(ctx);
+    await new Promise(r => queueMicrotask(r));
 
     const dataManager = ctx.capturedDataManager();
     const loadInitialSpy = mock(() => Promise.resolve());
