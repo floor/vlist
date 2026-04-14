@@ -48,12 +48,12 @@ export const createDOMStructure = (
   classPrefix: string,
   ariaLabel?: string,
   horizontal?: boolean,
-  accessible?: boolean,
+  interactive?: boolean,
 ): DOMStructure => {
   const hz = horizontal;
   const root = el(classPrefix);
   if (hz) root.classList.add(`${classPrefix}--horizontal`);
-  if (accessible !== false) root.setAttribute("tabindex", "0");
+  if (interactive !== false) root.setAttribute("tabindex", "0");
 
   const viewport = el(
     `${classPrefix}-viewport`,

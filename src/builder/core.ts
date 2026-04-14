@@ -179,8 +179,11 @@ function materialize<T extends VListItem = VListItem>(
     padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
-    accessible: accessibleMode = true,
+    accessible: _deprecatedAccessible,
+    interactive: _interactive,
   } = config;
+
+  const interactiveMode = _interactive ?? _deprecatedAccessible ?? true;
 
   const scrollCfg: ScrollConfig | undefined = scrollConfig;
 
@@ -218,7 +221,7 @@ function materialize<T extends VListItem = VListItem>(
     wrap: wrapEnabled,
     horizontal: isHorizontal,
     ariaIdPrefix,
-    accessible: accessibleMode,
+    interactive: interactiveMode,
   };
 
   // ── Sort and validate features ───────────────────────────────────
@@ -261,7 +264,7 @@ function materialize<T extends VListItem = VListItem>(
     classPrefix,
     ariaLabel,
     isHorizontal,
-    accessibleMode,
+    interactiveMode,
   );
 
   // ── Apply scroll config to viewport ─────────────────────────────
@@ -992,7 +995,7 @@ function materialize<T extends VListItem = VListItem>(
   dom.root.addEventListener("keydown", handleKeydown);
 
   // ── ARIA live region: announce visible range changes (#13b) ─────
-  if (accessibleMode) {
+  if (interactiveMode) {
     let lrt: ReturnType<typeof setTimeout> | null = null;
     const ulr = (data: { range: { start: number; end: number } }): void => {
       if (lrt) clearTimeout(lrt);
@@ -1188,7 +1191,7 @@ function materialize<T extends VListItem = VListItem>(
   // outside viewport, aligns to nearest edge).
   // Lightweight: $.fi tracks focus, $.ss (Set with 0-1 entries) tracks selection.
 
-  if (accessibleMode && !methods.has("_getFocusedIndex")) {
+  if (interactiveMode && !methods.has("_getFocusedIndex")) {
     const startPad = isHorizontal ? pad.left : pad.top;
     const endPad = isHorizontal ? pad.right : pad.bottom;
     setupBaselineA11y(

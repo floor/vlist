@@ -228,7 +228,7 @@ initial commit → latest
 2026-03-24
 
   feat(selection): add selectNext and selectPrevious methods
-  feat(core): add accessible config to disable keyboard navigation
+  feat(core): add interactive config to disable keyboard navigation
   perf(builder): base bundle 27.0 KB minified (10.1 KB gzipped)
 
   → v1.3.9
