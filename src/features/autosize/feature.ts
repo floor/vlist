@@ -29,6 +29,7 @@ import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
 import type { SizeCache } from "../../rendering/sizes";
 import { createMeasuredSizeCache } from "../../rendering/measured";
+import { resolvePadding, mainAxisPaddingFrom } from "../../utils/padding";
 
 /**
  * Create an auto-size measurement feature for items with unknown sizes.
@@ -56,6 +57,10 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
       const gap = (ri.gap as number) ?? 0;
       const total = ctx.getVirtualTotal();
 
+      // Resolve main-axis padding so we can compute maxScroll accurately
+      const resolvedPad = resolvePadding(ctx.rawConfig.padding);
+      const mainAxisPadding = mainAxisPaddingFrom(resolvedPad, hz);
+
       // Create measured size cache (wraps variable SizeCache with measurement tracking)
       const measuredCache = createMeasuredSizeCache(estimatedSize + gap, total);
 
@@ -75,6 +80,39 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
       let pendingScrollDelta = 0;
       let pendingContentSizeUpdate = false;
 
+      // Bottom-snapping threshold (px). If scrollTop is within this distance
+      // of the current maxScroll we consider the viewport "at the bottom".
+      const BOTTOM_THRESHOLD = 2;
+
+      /**
+       * Check whether the viewport is currently scrolled to the bottom.
+       * Uses the OLD totalSize (before a rebuild) so the check reflects
+       * the state the user sees right now, not the post-measurement state.
+       */
+      const isAtBottom = (oldTotalSize: number): boolean => {
+        const scrollTop = ctx.scrollController.getScrollTop();
+        const containerSize = ctx.state.viewportState.containerSize;
+        if (containerSize <= 0) return false;
+        const maxScroll = Math.max(0, oldTotalSize + mainAxisPadding - containerSize);
+        return scrollTop >= maxScroll - BOTTOM_THRESHOLD;
+      };
+
+      /**
+       * Snap the scroll position to the true bottom (new maxScroll).
+       * Called after content size has been updated so the browser allows
+       * scrolling to the new extent.
+       */
+      const snapToBottom = (): void => {
+        const newTotalSize = measuredCache.getTotalSize();
+        const containerSize = ctx.state.viewportState.containerSize;
+        if (containerSize <= 0) return;
+        const newMaxScroll = Math.max(0, newTotalSize + mainAxisPadding - containerSize);
+        const scrollTop = ctx.scrollController.getScrollTop();
+        if (newMaxScroll > scrollTop) {
+          ctx.scrollController.scrollTo(newMaxScroll);
+        }
+      };
+
       // Content size updater
       const updateContentSize = (): void => {
         const totalSize = measuredCache.getTotalSize();
@@ -84,8 +122,50 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
       // Flush deferred content size updates (called on scroll idle)
       const flush = (): void => {
         if (pendingContentSizeUpdate) {
+          // Determine if the viewport was "at the bottom" before applying
+          // the deferred content-size update.
+          //
+          // Primary check: scrollTop is at/near the DOM maxScroll (which
+          // still reflects the OLD content height).
+          //
+          // Secondary check: during a smooth scroll animation toward the
+          // bottom, early RO batches may update content size immediately
+          // (isScrolling was still false), growing the DOM maxScroll AFTER
+          // the animation target was computed.  The animation ends at the
+          // stale target, landing short of the new DOM maxScroll.  To
+          // catch this, we also check if the render range includes the
+          // last item AND scrollTop is within the size-drift distance of
+          // DOM maxScroll.  Size drift = |newCacheTotal − oldDOMTotal|.
+          const viewport = ctx.dom.viewport as HTMLElement;
+          const oldScrollHeight = viewport.scrollHeight;
+          const currentMaxScroll = oldScrollHeight - viewport.clientHeight;
+          const scrollTop = ctx.scrollController.getScrollTop();
+
+          const atDomBottom = currentMaxScroll > 0 && scrollTop >= currentMaxScroll - BOTTOM_THRESHOLD;
+
+          const totalItems = ctx.getVirtualTotal();
+          const renderEnd = ctx.state.viewportState.renderRange.end;
+          const nearEnd = totalItems > 0 && renderEnd >= totalItems - 1;
+          const newContentHeight = measuredCache.getTotalSize() + mainAxisPadding;
+          const sizeDrift = Math.abs(newContentHeight - oldScrollHeight);
+          const atBottomWithDrift = nearEnd && currentMaxScroll > 0 &&
+            scrollTop >= currentMaxScroll - sizeDrift - BOTTOM_THRESHOLD;
+
+          const atBottom = atDomBottom || atBottomWithDrift;
+
           updateContentSize();
           pendingContentSizeUpdate = false;
+
+          // If the user was at the bottom, keep them there after the
+          // content height grows due to deferred measurement updates.
+          if (atBottom) {
+            // Force synchronous layout so the browser's scrollHeight reflects
+            // the new content height. Without this, setting viewport.scrollTop
+            // would be clamped to the OLD maxScroll.
+            void viewport.scrollHeight;
+            snapToBottom();
+            ctx.forceRender();
+          }
         }
       };
 
@@ -127,9 +207,12 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
 
         if (!hasNewMeasurements) return;
 
+        // Capture old total BEFORE rebuild so the at-bottom check reflects
+        // the size the user currently sees (estimated sizes for unmeasured items).
+        const oldTotalSize = measuredCache.getTotalSize();
+
         // Rebuild prefix sums
         measuredCache.rebuild(ctx.getVirtualTotal());
-        setSizeCache(measuredCache);
 
         // Apply scroll correction immediately
         if (pendingScrollDelta !== 0) {
@@ -138,12 +221,28 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
           pendingScrollDelta = 0;
         }
 
-        // Defer content size updates during scrolling for scrollbar stability
-        if (ctx.scrollController.isScrolling()) {
-          pendingContentSizeUpdate = true;
-        } else {
+        // Check if viewport is at the bottom (using old total, before rebuild
+        // changed the size). When at the bottom we must update content size
+        // immediately — deferring would leave the scrollable area too short,
+        // preventing the user from reaching the true end.
+        const atBottom = isAtBottom(oldTotalSize);
+
+        if (atBottom || !ctx.scrollController.isScrolling()) {
+          // Update content size immediately
           updateContentSize();
           pendingContentSizeUpdate = false;
+
+          // Keep scroll pinned to the bottom when measurements grow the content
+          if (atBottom) {
+            // Force synchronous layout so the browser's scrollHeight reflects
+            // the new content height. Without this, setting viewport.scrollTop
+            // would be clamped to the OLD maxScroll.
+            void (ctx.dom.viewport as HTMLElement).scrollHeight;
+            snapToBottom();
+          }
+        } else {
+          // Defer content size updates during scrolling for scrollbar stability
+          pendingContentSizeUpdate = true;
         }
 
         // Reposition items with corrected prefix sums

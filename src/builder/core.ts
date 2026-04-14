@@ -1126,9 +1126,11 @@ function materialize<T extends VListItem = VListItem>(
   );
 
   // ── Internal methods for withAutoSize feature ──────────────────
+  const gapWrappedCaches = new WeakSet<object>();
   methods.set("_setSizeCache", (cache: import("../rendering/sizes").SizeCache): void => {
     $.hc = cache;
-    if ($.gp > 0) {
+    if ($.gp > 0 && !gapWrappedCaches.has(cache)) {
+      gapWrappedCaches.add(cache);
       const orig = $.hc.getTotalSize;
       const g = $.gp;
       $.hc.getTotalSize = (): number => { const t = orig(); return t > 0 ? t - g : 0; };
