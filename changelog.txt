@@ -3,6 +3,50 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-13  v1.5.1
+
+  fix(autoSize): scroll-to-bottom not reaching the end with auto-sized items
+    Three issues prevented scrollToIndex(last, 'end') from reaching the true
+    bottom when using withAutoSize():
+    - _setSizeCache gap-subtraction stacking: each ResizeObserver batch re-wrapped
+      getTotalSize() with another gap subtraction, making content height shrink by
+      N×gap pixels. Fixed with a WeakSet guard for idempotent wrapping and by
+      removing the redundant setSizeCache call from the RO callback.
+    - Content size deferred at bottom: now checks isAtBottom and updates immediately
+      when at the bottom, with a forced layout reflow before snapping scroll position.
+    - Stale smooth-scroll target in flush: two-tier at-bottom detection using DOM
+      maxScroll and size-drift tolerance when the render range includes the last item.
+
+  fix(autoSize): smooth scroll to bottom without visible correction jump
+    - Dynamic animation target: animateScroll recalculates the target each frame
+      from the current size cache so the destination adapts as measurements arrive.
+    - Skip content-size deferral near the end: when the render range includes the
+      last item, content size is always updated immediately so the browser does not
+      clamp scrollTop during the animation.
+    - Snap on measurement near end: when nearEnd is true and scrollTop was at the
+      DOM maxScroll before the update, snap to the new bottom immediately.
+
+  fix(selection): preserve selection across async loading
+    Selection state is now transferred from placeholder items to their loaded
+    replacements during async data fetching.
+
+  fix(scale): keyboard navigation broken in compressed scroll mode
+    Fixed scroll position calculation for keyboard navigation when withScale
+    compression is active.
+
+  feat(table): Left/Right arrow keys scroll horizontally by column width
+    Arrow keys now scroll the table viewport horizontally by one column width,
+    improving keyboard navigation in wide tables.
+
+  fix(a11y): Home/End navigate to first/last item in grid mode
+    Home and End keys now correctly navigate to the first and last items in
+    grid layouts instead of being handled as row-level navigation.
+
+  perf(groups,table): optimize feature bundle sizes
+    withGroups reduced by 1.9 KB gzipped through code deduplication and
+    simplified group header management.
+
+
 2026-04-12  v1.5.0
 
   BREAKING: estimatedHeight/estimatedWidth now requires .use(withAutoSize())
