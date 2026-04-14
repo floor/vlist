@@ -10,6 +10,7 @@
  * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
  *   - In single mode with followFocus: true, selection follows focus on arrow keys
  *   - In multiple mode, arrow keys move focus only; Space/Enter toggles selection
+ *   - In multiple mode, Shift+Arrow/Page/Home/End extends selection range from anchor
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
  * - Render integration — registers internal getters (_getSelectedIds,
@@ -99,6 +100,11 @@ export const withSelection = <T extends VListItem = VListItem>(
   // Selection state — lives for the lifetime of the list
   let selectionState = createSelectionState(initial);
   let liveRegion: HTMLDivElement | null = null;
+
+  // Shift-selection anchor — the index where the user started a shift-range.
+  // Set on any non-shift navigation or selection action; used as the "from"
+  // index when Shift+Arrow/Page/Home/End extends a contiguous range.
+  let shiftAnchor = -1;
 
   return {
     name: "withSelection",
@@ -495,8 +501,11 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         // Shift+click range selection (multiple mode only)
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
+          // Use shiftAnchor if set, otherwise fall back to current focus
+          const anchor = shiftAnchor >= 0 ? shiftAnchor : selectionState.focusedIndex;
+          if (shiftAnchor < 0) shiftAnchor = selectionState.focusedIndex;
           const items = ctx.getAllLoadedItems();
-          selectionState = selectRange(selectionState, items, selectionState.focusedIndex, index, mode);
+          selectionState = selectRange(selectionState, items, anchor, index, mode);
           selectionState = setFocusedIndex(selectionState, index);
           selectionState.focusVisible = false;
           dom.root.setAttribute(
@@ -506,6 +515,9 @@ export const withSelection = <T extends VListItem = VListItem>(
           forceRenderAndEmit();
           return;
         }
+
+        // Reset shift anchor on non-shift click
+        shiftAnchor = index;
 
         // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
@@ -649,6 +661,8 @@ export const withSelection = <T extends VListItem = VListItem>(
                 );
                 newState.focusVisible = true;
               }
+              // Reset shift anchor to current position after explicit toggle
+              shiftAnchor = selectionState.focusedIndex;
               handled = true;
             }
             break;
@@ -658,6 +672,20 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (focusOnly && isGroupHeaderFn) {
           const dir: 1 | -1 = newState.focusedIndex > previousFocusIndex ? 1 : -1;
           newState.focusedIndex = skipHeaders(newState.focusedIndex, dir, totalItems);
+        }
+
+        // ── Shift+nav range selection (multiple mode) ──
+        if (event.shiftKey && mode === "multiple" && focusOnly && newState.focusedIndex >= 0) {
+          // Establish anchor on the first shift-nav if not already set
+          if (shiftAnchor < 0) shiftAnchor = previousFocusIndex >= 0 ? previousFocusIndex : 0;
+          const items = ctx.getAllLoadedItems();
+          // Clear existing selection so the range *replaces* rather than accumulates
+          newState = clearSelection(newState);
+          newState = selectRange(newState, items, shiftAnchor, newState.focusedIndex, mode);
+          focusOnly = false; // trigger full re-render + selection:change event
+        } else if (focusOnly) {
+          // Non-shift directional movement resets the anchor
+          shiftAnchor = newState.focusedIndex;
         }
 
         // Optional: selection follows focus on arrow/page/home/end keys
