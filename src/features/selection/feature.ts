@@ -4,13 +4,18 @@
  *
  * Priority: 50 (runs after renderer and data are ready)
  *
+ * Follows the WAI-ARIA APG "Recommended" multi-select listbox model:
+ *
  * What it wires:
  * - Click handler on items container — toggles selection on item click
- *   - Shift+click in multiple mode selects a range from the last-focused item
+ *   - Shift+click in multiple mode selects a contiguous range from last-selected item
  * - Keyboard handler on root — ArrowUp/Down/PageUp/PageDown/Home/End for focus, Space/Enter for toggle
  *   - In single mode with followFocus: true, selection follows focus on arrow keys
  *   - In multiple mode, arrow keys move focus only; Space/Enter toggles selection
- *   - In multiple mode, Shift+Arrow/Page/Home/End extends selection range from anchor
+ *   - Shift+Arrow toggles the destination item (additive, one at a time)
+ *   - Shift+Space selects a contiguous range from last-selected item to focused item
+ *   - Ctrl+Shift+Home/End selects from focused item to first/last item
+ *   - Ctrl+A / Cmd+A selects all (or deselects all if all are selected)
  * - ARIA attributes — aria-selected on items, aria-activedescendant on root
  * - Live region — announces selection changes to screen readers
  * - Render integration — registers internal getters (_getSelectedIds,
@@ -69,6 +74,17 @@ export interface SelectionFeatureConfig {
    * Ignored in multiple mode (focus and selection are always independent).
    */
   followFocus?: boolean;
+
+  /**
+   * Which item Shift+Arrow toggles in multiple mode.
+   * - `'origin'` (default) — toggles the item you're moving FROM (macOS-style).
+   * - `'destination'` — toggles the item you're moving TO
+   *   (WAI-ARIA APG recommended model).
+   *
+   * Only affects Shift+Arrow keys; has no effect on Shift+Space,
+   * Shift+Click, or Ctrl+Shift+Home/End.
+   */
+  shiftArrowToggle?: "origin" | "destination";
 }
 
 // =============================================================================
@@ -96,15 +112,17 @@ export const withSelection = <T extends VListItem = VListItem>(
   const mode: SelectionMode = config?.mode ?? "single";
   const followFocus = config?.followFocus ?? false;
   const initial = config?.initial;
+  const shiftArrowToggle = config?.shiftArrowToggle ?? "origin";
 
   // Selection state — lives for the lifetime of the list
   let selectionState = createSelectionState(initial);
   let liveRegion: HTMLDivElement | null = null;
 
-  // Shift-selection anchor — the index where the user started a shift-range.
-  // Set on any non-shift navigation or selection action; used as the "from"
-  // index when Shift+Arrow/Page/Home/End extends a contiguous range.
-  let shiftAnchor = -1;
+  // Last-selected index — tracks the index of the most recently selected item.
+  // Used as the anchor for Shift+Space range selection and Shift+click range.
+  // Updated when: Space toggles an item, Shift+Arrow toggles an item, or a
+  // click selects an item.
+  let lastSelectedIndex = -1;
 
   return {
     name: "withSelection",
@@ -501,13 +519,13 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         // Shift+click range selection (multiple mode only)
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
-          // Use shiftAnchor if set, otherwise fall back to current focus
-          const anchor = shiftAnchor >= 0 ? shiftAnchor : selectionState.focusedIndex;
-          if (shiftAnchor < 0) shiftAnchor = selectionState.focusedIndex;
+          // Use lastSelectedIndex as anchor, fall back to current focus
+          const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : selectionState.focusedIndex;
           const items = ctx.getAllLoadedItems();
           selectionState = selectRange(selectionState, items, anchor, index, mode);
           selectionState = setFocusedIndex(selectionState, index);
           selectionState.focusVisible = false;
+          lastSelectedIndex = index;
           dom.root.setAttribute(
             "aria-activedescendant",
             `${ariaIdPrefix}-item-${index}`,
@@ -516,8 +534,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           return;
         }
 
-        // Reset shift anchor on non-shift click
-        shiftAnchor = index;
+        // Update lastSelectedIndex on non-shift click
+        lastSelectedIndex = index;
 
         // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
@@ -649,6 +667,17 @@ export const withSelection = <T extends VListItem = VListItem>(
         switch (event.key) {
           case " ":
           case "Enter":
+            // Shift+Space: range select from lastSelectedIndex to focused (ARIA model)
+            if (event.key === " " && event.shiftKey && mode === "multiple" && selectionState.focusedIndex >= 0) {
+              if (lastSelectedIndex >= 0) {
+                const items = ctx.getAllLoadedItems();
+                newState = selectRange(newState, items, lastSelectedIndex, selectionState.focusedIndex, mode);
+              }
+              newState.focusVisible = true;
+              handled = true;
+              break;
+            }
+            // Regular Space/Enter: toggle selection of focused item
             if (selectionState.focusedIndex >= 0 && !isHeader(selectionState.focusedIndex)) {
               const focusedItem = ctx.dataManager.getItem(
                 selectionState.focusedIndex,
@@ -661,9 +690,23 @@ export const withSelection = <T extends VListItem = VListItem>(
                 );
                 newState.focusVisible = true;
               }
-              // Reset shift anchor to current position after explicit toggle
-              shiftAnchor = selectionState.focusedIndex;
+              lastSelectedIndex = selectionState.focusedIndex;
               handled = true;
+            }
+            break;
+
+          case "a":
+            if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
+              const allItems = ctx.getAllLoadedItems();
+              // If all selected, deselect all; otherwise select all
+              if (selectionState.selected.size === allItems.length) {
+                newState = clearSelection(newState);
+              } else {
+                newState = selectAll(newState, allItems, mode);
+              }
+              newState.focusVisible = true;
+              handled = true;
+              focusOnly = false;
             }
             break;
         }
@@ -674,18 +717,41 @@ export const withSelection = <T extends VListItem = VListItem>(
           newState.focusedIndex = skipHeaders(newState.focusedIndex, dir, totalItems);
         }
 
-        // ── Shift+nav range selection (multiple mode) ──
+        // ── Shift+Arrow: toggle destination item (ARIA recommended model) ──
+        // ── Ctrl+Shift+Home/End: select range to first/last ──
         if (event.shiftKey && mode === "multiple" && focusOnly && newState.focusedIndex >= 0) {
-          // Establish anchor on the first shift-nav if not already set
-          if (shiftAnchor < 0) shiftAnchor = previousFocusIndex >= 0 ? previousFocusIndex : 0;
-          const items = ctx.getAllLoadedItems();
-          // Clear existing selection so the range *replaces* rather than accumulates
-          newState = clearSelection(newState);
-          newState = selectRange(newState, items, shiftAnchor, newState.focusedIndex, mode);
-          focusOnly = false; // trigger full re-render + selection:change event
-        } else if (focusOnly) {
-          // Non-shift directional movement resets the anchor
-          shiftAnchor = newState.focusedIndex;
+          const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown"
+            || event.key === "ArrowLeft" || event.key === "ArrowRight";
+          const isCtrlHomeEnd = (event.ctrlKey || event.metaKey)
+            && (event.key === "Home" || event.key === "End");
+
+          if (isArrow) {
+            if (shiftArrowToggle === "origin") {
+              // Toggle the item being left (macOS-style)
+              if (previousFocusIndex >= 0) {
+                const originItem = ctx.dataManager.getItem(previousFocusIndex);
+                if (originItem) {
+                  newState = toggleSelection(newState, originItem.id, mode);
+                }
+              }
+            } else {
+              // Toggle the item being moved to (ARIA recommended model)
+              const destItem = ctx.dataManager.getItem(newState.focusedIndex);
+              if (destItem) {
+                newState = toggleSelection(newState, destItem.id, mode);
+              }
+            }
+            lastSelectedIndex = newState.focusedIndex;
+            focusOnly = false; // trigger full re-render + selection:change event
+          } else if (isCtrlHomeEnd) {
+            // Ctrl+Shift+Home/End: select from previous focus to first/last item
+            const items = ctx.getAllLoadedItems();
+            const anchor = previousFocusIndex >= 0 ? previousFocusIndex : newState.focusedIndex;
+            newState = selectRange(newState, items, anchor, newState.focusedIndex, mode);
+            lastSelectedIndex = newState.focusedIndex;
+            focusOnly = false; // trigger full re-render + selection:change event
+          }
+          // Shift+Page/Home/End (without Ctrl): just move focus, no selection change
         }
 
         // Optional: selection follows focus on arrow/page/home/end keys
