@@ -3,6 +3,22 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-15  v1.5.4
+
+  feat(selection): implement ARIA multi-select keyboard model (#27)
+    Rewrites the multi-select keyboard interaction to follow the WAI-ARIA
+    APG recommended listbox pattern, replacing the anchor-based range model:
+    - Shift+Arrow toggles one item at a time (additive, not range-based)
+    - Shift+Space selects contiguous range from last selected to focused
+    - Ctrl+Shift+Home/End selects from focused item to first/last item
+    - Ctrl+A / Cmd+A selects all (or deselects all if all selected)
+    - Shift+Click range selection uses lastSelectedIndex as anchor
+    New shiftArrowToggle config option:
+    - 'origin' (default) — toggles the item being left (macOS-style)
+    - 'destination' — toggles the item being moved to (ARIA literal)
+    Both modes are additive — prior selections are always preserved.
+    Closes #27.
+
 2026-04-14  v1.5.3
 
   feat(selection): add Shift+keyboard range selection in multiple mode
