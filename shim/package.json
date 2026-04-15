@@ -1,0 +1,51 @@
+{
+  "name": "@floor/vlist",
+  "version": "1.5.5",
+  "description": "This package has moved to 'vlist'. Install with: npm install vlist",
+  "author": {
+    "name": "Floor IO",
+    "url": "https://floor.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/floor/vlist.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "module": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./internals": {
+      "types": "./internals.d.ts",
+      "import": "./internals.js",
+      "default": "./internals.js"
+    },
+    "./styles": "./styles.css",
+    "./styles/grid": "./styles-grid.css",
+    "./styles/masonry": "./styles-masonry.css",
+    "./styles/table": "./styles-table.css",
+    "./styles/extras": "./styles-extras.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "internals.js",
+    "internals.d.ts",
+    "styles.css",
+    "styles-grid.css",
+    "styles-masonry.css",
+    "styles-table.css",
+    "styles-extras.css"
+  ],
+  "dependencies": {
+    "vlist": "^1.5.4"
+  },
+  "deprecated": "This package has moved to 'vlist'. Install with: npm install vlist"
+}
