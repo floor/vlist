@@ -3,6 +3,33 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-15  v1.5.6
+
+  perf(memory): eliminate scroll-path heap growth at 1M items
+    Cap content element at 16M px when compression is not active — the
+    browser already clamps scrollHeight internally, but declaring 48M px
+    forced Chrome to allocate internal layout/compositor structures
+    proportional to the element size (~6 MB at 1M items).
+    - 1M items scroll delta: 6.14 MB → 0.19 MB (97% reduction)
+    - 10K items scroll delta: 0.02 MB → ~0 MB (net GC reclaim)
+
+  perf(memory): reuse event payloads on the scroll hot path
+    Pre-allocate shared objects for scroll, velocity:change, and
+    range:change events — mutated in-place before each emit.
+    Eliminates ~3 object allocations per scroll frame (180/sec at 60 fps).
+
+  perf(memory): reduce per-frame allocations in render loop
+    - Eliminate newElements array — add to rendered Map directly
+    - Skip newlyRendered array + per-item wrapper objects when no
+      afterRenderBatch hooks exist (vanilla lists without withAutoSize)
+    - Guard claimPlaceholderSelection behind $.dm check — skip string
+      allocations when no async data manager is active
+
+  perf(dev): cap duplicate ID check at 10K items
+    The dev-mode setItems() duplicate ID scan created a Set of ALL items.
+    At 1M items this added ~70 ms to every setItems() call.  Now capped
+    at the first 10K items — still catches bugs, zero cost at scale.
+
 2026-04-15  v1.5.5
 
   chore: rename package from @floor/vlist to vlist

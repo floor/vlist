@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.5.5** — [Changelog](./changelog.txt)
+**v1.5.6** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -490,16 +490,17 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 vlist uses **constant memory** regardless of dataset size through optimized internal architecture:
 
-| Dataset Size | Memory Usage | Notes |
-|--------------|--------------|-------|
-| 10K items | ~0.2 MB | Constant baseline |
-| 100K items | ~0.2 MB | 10× items, same memory |
-| 1M items | ~0.4 MB | 100× items, 2× memory |
+| Dataset Size | After Render | Scroll Delta | Notes |
+|--------------|-------------|--------------|-------|
+| 10K items | 0.07 MB | ~0 MB | Constant baseline |
+| 100K items | 0.08 MB | ~0 MB | 10× items, same memory |
+| 1M items | 0.09 MB | 0.19 MB | 100× items, near-zero scroll overhead |
 
 **Key advantages:**
 - No array copying — uses references for zero-copy performance
 - No ID indexing overhead — O(1) memory complexity
-- Industry-leading memory efficiency for virtual list libraries
+- Reusable event payloads — zero per-frame object allocation on scroll
+- Content height cap at 16M px — avoids browser overhead for extremely large lists
 
 ### DOM Efficiency
 
