@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.5.3** — [Changelog](./changelog.txt)
+**v1.5.4** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -96,7 +96,7 @@ const list = vlist({
 | `withMasonry()` | +3.3 KB | Pinterest-style masonry layout with lane-aware nav |
 | `withGroups()` | +2.7 KB | Grouped lists with sticky/inline headers |
 | `withAsync()` | +4.4 KB | Lazy loading with adapters |
-| `withSelection()` | +2.5 KB | Single/multiple selection + 2D keyboard nav |
+| `withSelection()` | +2.7 KB | Single/multiple selection + 2D keyboard nav |
 | `withScale()` | +3.1 KB | 1M+ items via scroll compression |
 | `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
@@ -347,7 +347,7 @@ Each feature's config is fully typed — hover in your IDE for details.
 withGrid({ columns: 4, gap: 16 })
 withMasonry({ columns: 4, gap: 16 })
 withGroups({ getGroupForIndex, header: { height, template }, sticky?: true })
-withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
+withSelection({ mode: 'single' | 'multiple', initial?: [...ids], shiftArrowToggle?: 'origin' | 'destination' })
 withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
 withTable({ columns, rowHeight, headerHeight?, resizable?, columnBorders?, rowBorders? })
 withAutoSize()                        // auto-measure items (requires estimatedHeight)
@@ -388,7 +388,7 @@ By default, every vlist is keyboard-navigable following the [WAI-ARIA listbox pa
 - **Home / End** jump to first / last item
 - **Click** selects + focuses the clicked item
 
-This works **without** `withSelection()` — it's built into the base. The `withSelection()` feature adds multi-select, range select, `selectAll()`, and other advanced selection APIs on top.
+This works **without** `withSelection()` — it's built into the base. The `withSelection()` feature adds multi-select, Shift+Arrow toggle, Shift+Space range select, Ctrl+A, and other advanced selection APIs on top — following the [WAI-ARIA APG recommended listbox model](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/).
 
 Set `interactive: false` to disable all built-in keyboard handling:
 
