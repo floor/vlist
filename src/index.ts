@@ -4,7 +4,7 @@
  * Builder-only API for optimal tree-shaking
  *
  * For low-level internals (size cache, renderers, selection state, etc.),
- * import from '@floor/vlist/internals' instead.
+ * import from 'vlist/internals' instead.
  *
  * @packageDocumentation
  */

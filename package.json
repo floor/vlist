@@ -1,5 +1,5 @@
 {
-  "name": "@floor/vlist",
+  "name": "vlist",
   "version": "1.5.4",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {

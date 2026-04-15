@@ -13,7 +13,7 @@
  *
  * @example
  * ```ts
- * import { vlist, withAutoSize } from '@floor/vlist';
+ * import { vlist, withAutoSize } from 'vlist';
  *
  * vlist({
  *   container: '#app',
