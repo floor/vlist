@@ -284,10 +284,12 @@ describe("Edge Cases: Extreme Dataset Sizes", () => {
     const items = instance.element.querySelectorAll("[data-index]");
     expect(items.length).toBeLessThan(100);
 
-    // Total content height should be massive
+    // Content height is capped at MAX_CONTENT_SIZE (16M px) to avoid
+    // browser overhead from extremely tall elements.  Without compression,
+    // items beyond the cap are unreachable via native scroll anyway.
     const content = instance.element.querySelector(".vlist-content") as HTMLElement;
-    const expectedHeight = 1_000_000 * 50;
-    expect(parseInt(content.style.height)).toBeCloseTo(expectedHeight, -3); // Within 1000px
+    const contentHeight = parseInt(content.style.height);
+    expect(contentHeight).toBe(16_000_000);
 
     instance.destroy();
   });
