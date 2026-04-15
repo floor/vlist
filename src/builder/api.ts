@@ -71,8 +71,11 @@ export const createApi = <T extends VListItem = VListItem>(
         console.warn('[vlist] Items must have an "id" property. First item:', newItems[0]);
       }
       // Check for duplicate IDs (#10d)
+      // Cap at 10K to avoid O(n) cost on large datasets — duplicates in the
+      // first 10K items are enough to surface the warning during development.
+      const scanLimit = Math.min(newItems.length, 10_000);
       const seen = new Set<string | number>();
-      for (let i = 0; i < newItems.length; i++) {
+      for (let i = 0; i < scanLimit; i++) {
         const item = newItems[i];
         if (item && 'id' in item) {
           if (seen.has(item.id as string | number)) {
