@@ -1,6 +1,6 @@
 {
   "name": "@floor/vlist",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "This package has moved to 'vlist'. Install with: npm install vlist",
   "author": {
     "name": "Floor IO",
@@ -45,7 +45,7 @@
     "styles-extras.css"
   ],
   "dependencies": {
-    "vlist": "^1.5.4"
+    "vlist": "^1.5.5"
   },
   "deprecated": "This package has moved to 'vlist'. Install with: npm install vlist"
 }
