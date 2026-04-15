@@ -59,6 +59,7 @@ import { createApi } from "./api";
 const OVERSCAN = 3;
 const CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
+const MAX_CONTENT_SIZE = 16_000_000; // Cap content element to avoid browser overhead for extremely tall elements
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
@@ -465,7 +466,15 @@ function materialize<T extends VListItem = VListItem>(
 
   const updateContentSize = (): void => {
     const totalSize = $.hc.getTotalSize();
-    const size = `${totalSize + mainAxisPadding}px`;
+    // Cap content element size to MAX_CONTENT_SIZE when compression is not
+    // active.  Without this cap, 1M × 48 px = 48 M px forces the browser to
+    // allocate internal layout / compositor structures proportional to the
+    // element size, causing measurable heap growth (~6 MB at 1 M items).
+    // The browser already clamps scrollHeight internally, so items beyond the
+    // cap are unreachable via native scroll regardless — the cap just makes
+    // it explicit and avoids the extra browser overhead.
+    const capped = $.sic ? totalSize : Math.min(totalSize, MAX_CONTENT_SIZE);
+    const size = `${capped + mainAxisPadding}px`;
     if (isHorizontal) {
       dom.content.style.width = size;
     } else {
@@ -510,6 +519,13 @@ function materialize<T extends VListItem = VListItem>(
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
   const PH = "__placeholder_";
+
+  // ── Reusable event payloads (avoid per-frame object allocation) ──
+  // Mutated in-place before each emit. Subscribers must read values
+  // synchronously — storing a reference will see stale data on next emit.
+  const _scrollEvt = { scrollPosition: 0, direction: "down" as "up" | "down" };
+  const _velEvt = { velocity: 0, reliable: false };
+  const _rangeEvt = { range: { start: 0, end: 0 } };
 
   // ── Cached selection getter references ──
   // Resolved lazily on first render frame. The selection feature registers
@@ -689,11 +705,11 @@ function materialize<T extends VListItem = VListItem>(
 
     // Add / update items in range
     const fragment = document.createDocumentFragment();
-    const newElements: Array<{ index: number; element: HTMLElement }> = [];
-    const newlyRenderedForMeasurement: Array<{
-      index: number;
-      element: HTMLElement;
-    }> = [];
+    let hasNewElements = false;
+    // Only allocate measurement tracking when afterRenderBatch hooks exist
+    // (e.g. withAutoSize). Vanilla lists skip the array + per-item objects entirely.
+    const newlyRendered: Array<{ index: number; element: HTMLElement }> | null =
+      afterRenderBatch.length > 0 ? [] : null;
 
     for (let i = renderRange.start; i <= renderRange.end; i++) {
       const item = ($.dm ? $.dm.getItem(i) : $.it[i]) as T | undefined;
@@ -747,7 +763,7 @@ function materialize<T extends VListItem = VListItem>(
           }
 
           // Transfer selection from placeholder → real item ID (async loading)
-          if (!isPlaceholder) {
+          if ($.dm && !isPlaceholder) {
             claimPlaceholderSelection(selectedIds, i, item.id);
           }
         }
@@ -763,10 +779,10 @@ function materialize<T extends VListItem = VListItem>(
         }
       } else {
         const element = renderItem(i, item);
-        newlyRenderedForMeasurement.push({ index: i, element });
+        if (newlyRendered) newlyRendered.push({ index: i, element });
 
         // Transfer selection from placeholder → real item ID (async loading)
-        claimPlaceholderSelection(selectedIds, i, item.id);
+        if ($.dm) claimPlaceholderSelection(selectedIds, i, item.id);
 
         // Selection state for new elements
         const isSelected = selectedIds.has(item.id);
@@ -776,21 +792,19 @@ function materialize<T extends VListItem = VListItem>(
         }
 
         fragment.appendChild(element);
-        newElements.push({ index: i, element });
+        rendered.set(i, element);
+        hasNewElements = true;
       }
     }
 
-    if (newElements.length > 0) {
+    if (hasNewElements) {
       dom.items.appendChild(fragment);
-      for (const { index, element } of newElements) {
-        rendered.set(index, element);
-      }
     }
 
     // Dispatch to after-render-batch hooks (used by withAutoSize for observation)
-    if (afterRenderBatch.length > 0) {
+    if (newlyRendered && newlyRendered.length > 0) {
       for (let h = 0; h < afterRenderBatch.length; h++) {
-        afterRenderBatch[h]!(newlyRenderedForMeasurement);
+        afterRenderBatch[h]!(newlyRendered);
       }
     }
 
@@ -810,9 +824,9 @@ function materialize<T extends VListItem = VListItem>(
     sharedState.viewportState.renderRange.start = renderRange.start;
     sharedState.viewportState.renderRange.end = renderRange.end;
 
-    emitter.emit("range:change", {
-      range: { start: renderRange.start, end: renderRange.end },
-    });
+    _rangeEvt.range.start = renderRange.start;
+    _rangeEvt.range.end = renderRange.end;
+    emitter.emit("range:change", _rangeEvt);
   };
 
   const coreForceRender = (): void => {
@@ -833,7 +847,9 @@ function materialize<T extends VListItem = VListItem>(
     isScrolling = false;
     $.vt.velocity = 0;
     $.vt.sampleCount = 0;
-    emitter.emit("velocity:change", { velocity: 0, reliable: false });
+    _velEvt.velocity = 0;
+    _velEvt.reliable = false;
+    emitter.emit("velocity:change", _velEvt);
     sortDOMChildren();
     for (let i = 0; i < idleHandlers.length; i++) idleHandlers[i]!();
     emitter.emit("scroll:idle", { scrollPosition: $.ls });
@@ -868,13 +884,14 @@ function materialize<T extends VListItem = VListItem>(
     $.ls = scrollTop;
     $.rfn();
 
-    emitter.emit("scroll", { scrollPosition: scrollTop, direction });
+    _scrollEvt.scrollPosition = scrollTop;
+    _scrollEvt.direction = direction;
+    emitter.emit("scroll", _scrollEvt);
 
     // Emit velocity change
-    emitter.emit("velocity:change", {
-      velocity: $.vt.velocity,
-      reliable: $.vt.sampleCount >= MIN_RELIABLE_SAMPLES,
-    });
+    _velEvt.velocity = $.vt.velocity;
+    _velEvt.reliable = $.vt.sampleCount >= MIN_RELIABLE_SAMPLES;
+    emitter.emit("velocity:change", _velEvt);
 
     // Feature post-scroll actions
     for (let i = 0; i < afterScroll.length; i++) {
