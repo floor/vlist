@@ -4,7 +4,7 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 
 **v1.5.4** — [Changelog](./changelog.txt)
 
-[![npm version](https://img.shields.io/npm/v/%40floor%2Fvlist.svg)](https://www.npmjs.com/package/@floor/vlist)
+[![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
@@ -39,14 +39,14 @@ Lightweight, high-performance virtual list with zero dependencies and dimension-
 ## Installation
 
 ```bash
-npm install @floor/vlist
+npm install vlist
 ```
 
 ## Quick Start
 
 ```typescript
-import { vlist } from '@floor/vlist'
-import '@floor/vlist/styles'
+import { vlist } from 'vlist'
+import 'vlist/styles'
 
 const list = vlist({
   container: '#my-list',
@@ -71,7 +71,7 @@ list.on('item:click', ({ item }) => console.log(item))
 Start with the base, add only what you need:
 
 ```typescript
-import { vlist, withGrid, withGroups, withSelection } from '@floor/vlist'
+import { vlist, withGrid, withGroups, withSelection } from 'vlist'
 
 const list = vlist({
   container: '#app',
@@ -111,7 +111,7 @@ More examples at **[vlist.io](https://vlist.io)**.
 ### Data Table
 
 ```typescript
-import { vlist, withTable, withSelection } from '@floor/vlist'
+import { vlist, withTable, withSelection } from 'vlist'
 
 const table = vlist({
   container: '#my-table',
@@ -139,7 +139,7 @@ table.on('column:resize', ({ key, width }) => { /* persist widths */ })
 ### Grid Layout
 
 ```typescript
-import { vlist, withGrid, withScrollbar } from '@floor/vlist'
+import { vlist, withGrid, withScrollbar } from 'vlist'
 
 const gallery = vlist({
   container: '#gallery',
@@ -162,7 +162,7 @@ const gallery = vlist({
 ### Sticky Headers
 
 ```typescript
-import { vlist, withGroups } from '@floor/vlist'
+import { vlist, withGroups } from 'vlist'
 
 const contacts = vlist({
   container: '#contacts',
@@ -188,7 +188,7 @@ Set `sticky: false` for inline headers (iMessage/WhatsApp style).
 ### Async Loading
 
 ```typescript
-import { vlist, withAsync } from '@floor/vlist'
+import { vlist, withAsync } from 'vlist'
 
 const list = vlist({
   container: '#list',
@@ -416,7 +416,7 @@ Use this when:
 | SolidJS | [`vlist-solidjs`](https://github.com/floor/vlist-solidjs) | 0.5 KB gzip |
 
 ```bash
-npm install @floor/vlist vlist-react   # or vlist-vue / vlist-svelte / vlist-solidjs
+npm install vlist vlist-react   # or vlist-vue / vlist-svelte / vlist-solidjs
 ```
 
 Each adapter README has setup examples and API docs.
@@ -424,11 +424,11 @@ Each adapter README has setup examples and API docs.
 ## Styling
 
 ```typescript
-import '@floor/vlist/styles'           // core (always required)
-import '@floor/vlist/styles/grid'      // when using withGrid()
-import '@floor/vlist/styles/masonry'   // when using withMasonry()
-import '@floor/vlist/styles/table'     // when using withTable()
-import '@floor/vlist/styles/extras'    // optional (variants, loading states, animations)
+import 'vlist/styles'           // core (always required)
+import 'vlist/styles/grid'      // when using withGrid()
+import 'vlist/styles/masonry'   // when using withMasonry()
+import 'vlist/styles/table'     // when using withTable()
+import 'vlist/styles/extras'    // optional (variants, loading states, animations)
 ```
 
 | Import | Size | Contents |
@@ -516,7 +516,7 @@ With 100K items: **~26 DOM nodes** in the document (visible + overscan) instead 
 Fully typed. Generic over your item type:
 
 ```typescript
-import { vlist, withGrid, type VList } from '@floor/vlist'
+import { vlist, withGrid, type VList } from 'vlist'
 
 interface Photo { id: number; url: string; title: string }
 
@@ -550,7 +550,7 @@ See [CHANGELOG.md](https://vlist.io/docs/CHANGELOG.md) for the full release hist
 - **Docs & Examples:** [vlist.io](https://vlist.io)
 - **Migration Guide:** [v0.9.0 Migration](https://vlist.io/docs/refactoring/v0.9.0-migration-guide.md)
 - **GitHub:** [github.com/floor/vlist](https://github.com/floor/vlist)
-- **NPM:** [@floor/vlist](https://www.npmjs.com/package/@floor/vlist)
+- **NPM:** [vlist](https://www.npmjs.com/package/vlist)
 - **Issues:** [GitHub Issues](https://github.com/floor/vlist/issues)
 
 ---

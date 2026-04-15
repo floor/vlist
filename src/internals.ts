@@ -4,7 +4,7 @@
  * Advanced utilities for feature authors, custom renderers, and power users.
  * These are implementation details — use at your own risk.
  *
- * For the stable public API, import from '@floor/vlist' instead.
+ * For the stable public API, import from 'vlist' instead.
  *
  * @packageDocumentation
  */

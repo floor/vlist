@@ -101,7 +101,7 @@ const normalizeConfig = (
  * Adds grouped lists with sticky section headers.
  *
  * ```ts
- * import { vlist, withGroups } from '@floor/vlist'
+ * import { vlist, withGroups } from 'vlist'
  *
  * const contacts = vlist({
  *   container: '#contacts',
