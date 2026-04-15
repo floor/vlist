@@ -3,6 +3,14 @@ initial commit → latest
 456 commits · 68 days · Feb 2 – Apr 11, 2026
 
 
+2026-04-15  v1.5.5
+
+  chore: rename package from @floor/vlist to vlist
+    All imports, docs, and framework adapters updated.
+    @floor/vlist published as a shim that re-exports from vlist.
+
+  ci: add npm publish workflow with Trusted Publishers (OIDC)
+
 2026-04-15  v1.5.4
 
   feat(selection): implement ARIA multi-select keyboard model (#27)
