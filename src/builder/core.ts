@@ -201,12 +201,6 @@ function materialize<T extends VListItem = VListItem>(
 
   // Detect touch-primary devices once at creation time — preserve native touch
   // scrolling with momentum/bounce. Uses capability detection (pointer: coarse)
-  // instead of UA sniffing: works on foldables, touch laptops, Chrome OS tablets,
-  // and doesn't break when browsers freeze/reduce the UA string.
-  const isMobile =
-    typeof matchMedia === "function" &&
-    matchMedia("(pointer: coarse)").matches &&
-    !matchMedia("(pointer: fine)").matches;
   const crossAxisSize: number | undefined = isHorizontal
     ? typeof itemConfig.height === "number"
       ? itemConfig.height
@@ -907,68 +901,70 @@ function materialize<T extends VListItem = VListItem>(
   // Attach scroll listener to initial target ($.st set during $ init)
   $.st.addEventListener("scroll", onScrollFrame, { passive: true });
 
-  // Setup wheel handling for consistent synchronous rendering
-  // Intercept wheel events and render before scroll position updates
-  // This prevents blank areas during fast scrolling on desktop browsers
-  // Skip on mobile to preserve native touch scrolling with momentum/bounce
-  if (wheelEnabled && !isHorizontal && !isMobile) {
-    // Intercept wheel events for synchronous rendering — prevents blank
-    // areas during fast desktop scrolling. We preventDefault, compute the
-    // clamped position, set scrollTop, then call onScrollFrame directly so
-    // velocity tracking, event emission, afterScroll hooks, and idle
-    // scheduling all go through one code path. The guard in onScrollFrame
-    // skips the redundant native `scroll` event that fires after we set
-    // scrollTop programmatically.
-    wheelHandler = (event: WheelEvent): void => {
-      // When compression is active (withScale), the scale feature has its
-      // own wheel handler that manages virtual scroll position with smooth
-      // interpolation. The core handler must not run — it would compute
-      // maxScroll from DOM dimensions (much smaller than the virtual space)
-      // and reset the scroll position to near-zero.
-      if (sharedState.viewportState.isCompressed) return;
+  // Intercept wheel events for synchronous rendering — preventDefault,
+  // compute the clamped position, set scroll, call onScrollFrame directly.
+  // This prevents blank areas during fast scrolling. Touch scrolling fires
+  // `scroll` events (not `wheel`), so this only activates for mouse/trackpad.
+  // In horizontal mode, vertical wheel delta is converted to horizontal scroll.
+  //
+  // Two closures resolve the orientation branch once at build time so the
+  // handler itself has zero branching on isHorizontal per frame.
+  if (wheelEnabled) {
+    const vp = dom.viewport;
 
-      // When the viewport has horizontal overflow (e.g. table with wide
-      // columns) and the user is scrolling horizontally (trackpad or
-      // shift+wheel), let the browser handle it natively so horizontal
-      // scrolling works. Only intercept predominantly-vertical gestures.
-      const hasHorizontalOverflow = dom.viewport.scrollWidth > dom.viewport.clientWidth;
-      if (hasHorizontalOverflow && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-        return;
-      }
+    if (isHorizontal) {
+      wheelHandler = (event: WheelEvent): void => {
+        if (sharedState.viewportState.isCompressed) return;
 
-      event.preventDefault();
+        // Bail on predominantly-horizontal gestures — that's the native
+        // scroll axis, handled by the browser's scroll event.
+        if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
-      // Forward any horizontal delta to the viewport so trackpad diagonal
-      // gestures still move the content sideways (table horizontal scroll).
-      if (hasHorizontalOverflow && event.deltaX !== 0) {
-        dom.viewport.scrollLeft += event.deltaX;
-      }
+        const currentScroll = $.sgt();
+        const maxScroll = vp.scrollWidth - vp.clientWidth;
+        const newScroll = Math.max(0, Math.min(currentScroll + event.deltaY, maxScroll));
 
-      const currentScroll = $.sgt();
-      const maxScroll = dom.viewport.scrollHeight - dom.viewport.clientHeight;
-      const newScroll = Math.max(0, Math.min(currentScroll + event.deltaY, maxScroll));
+        // Clamped at boundary — nothing moved, let the page scroll.
+        if (Math.abs(newScroll - currentScroll) < 1) return;
 
-      // Clamped at boundary — nothing moved, skip.
-      if (Math.abs(newScroll - currentScroll) < 1) return;
+        event.preventDefault();
+        $.sst(newScroll);
+        onScrollFrame();
+      };
+    } else {
+      wheelHandler = (event: WheelEvent): void => {
+        if (sharedState.viewportState.isCompressed) return;
 
-      // Set scroll position then run onScrollFrame synchronously.
-      // onScrollFrame reads $.sgt() which returns the new scrollTop,
-      // computes direction from the delta vs $.ls, and handles everything:
-      // velocity, render, events, afterScroll, idle scheduling.
-      $.sst(newScroll);
-      onScrollFrame();
-    };
+        // When there's horizontal overflow (e.g. table with wide columns)
+        // and the gesture is predominantly horizontal, let the browser
+        // handle it natively.
+        const crossOverflow = vp.scrollWidth > vp.clientWidth;
+        if (crossOverflow && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+          return;
+        }
+
+        // Forward cross-axis delta so trackpad diagonal gestures still
+        // move content sideways (table horizontal scroll).
+        if (crossOverflow && event.deltaX !== 0) {
+          event.preventDefault();
+          vp.scrollLeft += event.deltaX;
+        }
+
+        const currentScroll = $.sgt();
+        const maxScroll = vp.scrollHeight - vp.clientHeight;
+        const newScroll = Math.max(0, Math.min(currentScroll + event.deltaY, maxScroll));
+
+        // Clamped at boundary — nothing moved, let the page scroll.
+        if (Math.abs(newScroll - currentScroll) < 1) return;
+
+        event.preventDefault();
+        $.sst(newScroll);
+        onScrollFrame();
+      };
+    }
+
     $.wh = wheelHandler;
-    dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
-  } else if (isHorizontal && wheelEnabled) {
-    // Horizontal mode: convert vertical wheel to horizontal scroll
-    wheelHandler = (event: WheelEvent): void => {
-      if (event.deltaX) return; // native horizontal scroll handles it
-      event.preventDefault();
-      dom.viewport.scrollLeft += event.deltaY;
-    };
-    $.wh = wheelHandler;
-    dom.viewport.addEventListener("wheel", wheelHandler, { passive: false });
+    vp.addEventListener("wheel", wheelHandler, { passive: false });
   }
 
   // Note: The custom-scrollbar class is added by withScrollbar feature when used

@@ -549,6 +549,9 @@ describe("wheel handler — horizontal scroll passthrough", () => {
       value: viewport.clientWidth + overflowPx,
       configurable: true,
     });
+    // Give the viewport vertical scroll room so the boundary guard doesn't bail
+    Object.defineProperty(viewport, "scrollHeight", { value: 4000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 500, configurable: true });
     // Make scrollLeft writable for assertions
     let _scrollLeft = 0;
     Object.defineProperty(viewport, "scrollLeft", {
@@ -798,6 +801,10 @@ describe("builder/core — horizontal mode", () => {
 
     const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
 
+    // Give viewport non-zero dimensions so the boundary guard doesn't bail
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 500, configurable: true });
+
     // Vertical wheel event should be converted to horizontal scroll
     const evt = createWheelEvent(0, 100);
     let defaultPrevented = false;
@@ -833,6 +840,124 @@ describe("builder/core — horizontal mode", () => {
     viewport.dispatchEvent(evt);
 
     expect(defaultPrevented).toBe(false);
+    list.destroy();
+  });
+
+  it("should let page scroll at horizontal boundary (start)", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: {
+        width: 100,
+        template: (item: TestItem) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(50),
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+
+    // Viewport at start: scrollLeft = 0, scrolling up (negative deltaY)
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 500, configurable: true });
+
+    const evt = createWheelEvent(0, -100);
+    let defaultPrevented = false;
+    Object.defineProperty(evt, "preventDefault", {
+      value: () => { defaultPrevented = true; },
+    });
+    viewport.dispatchEvent(evt);
+
+    // At boundary — should NOT preventDefault, letting the page scroll
+    expect(defaultPrevented).toBe(false);
+    list.destroy();
+  });
+
+  it("should let page scroll at horizontal boundary (end)", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: {
+        width: 100,
+        template: (item: TestItem) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(50),
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+
+    // Viewport at end: scrollLeft = maxScroll
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 500, configurable: true });
+    viewport.scrollLeft = 4500; // at the end
+
+    const evt = createWheelEvent(0, 100);
+    let defaultPrevented = false;
+    Object.defineProperty(evt, "preventDefault", {
+      value: () => { defaultPrevented = true; },
+    });
+    viewport.dispatchEvent(evt);
+
+    expect(defaultPrevented).toBe(false);
+    list.destroy();
+  });
+
+  it("should not intercept predominantly-horizontal trackpad in horizontal mode", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: {
+        width: 100,
+        template: (item: TestItem) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(50),
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 500, configurable: true });
+
+    // Trackpad diagonal with dominant horizontal component
+    const evt = createWheelEvent(80, 20);
+    let defaultPrevented = false;
+    Object.defineProperty(evt, "preventDefault", {
+      value: () => { defaultPrevented = true; },
+    });
+    viewport.dispatchEvent(evt);
+
+    expect(defaultPrevented).toBe(false);
+    list.destroy();
+  });
+
+  it("should intercept predominantly-vertical trackpad in horizontal mode", () => {
+    const container = createContainer();
+    const list = vlist<TestItem>({
+      container,
+      orientation: "horizontal",
+      item: {
+        width: 100,
+        template: (item: TestItem) => `<div>${item.name}</div>`,
+      },
+      items: createTestItems(50),
+    }).build();
+
+    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
+
+    Object.defineProperty(viewport, "scrollWidth", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 500, configurable: true });
+
+    // Trackpad diagonal with dominant vertical component
+    const evt = createWheelEvent(20, 80);
+    let defaultPrevented = false;
+    Object.defineProperty(evt, "preventDefault", {
+      value: () => { defaultPrevented = true; },
+    });
+    viewport.dispatchEvent(evt);
+
+    expect(defaultPrevented).toBe(true);
     list.destroy();
   });
 });
@@ -1437,143 +1562,10 @@ describe("builder/core — resize observer", () => {
 });
 
 // =============================================================================
-// Touch Detection — pointer: coarse (replaces UA sniffing)
+// Touch Detection — removed
 // =============================================================================
-// The wheel handler is skipped on touch-primary devices to preserve native
-// touch scrolling with momentum/bounce. Detection uses matchMedia("(pointer:
-// coarse)") instead of navigator.userAgent regex.
-
-describe("builder/core — touch device detection", () => {
-  let originalMatchMedia: typeof globalThis.matchMedia;
-
-  beforeAll(() => {
-    originalMatchMedia = global.matchMedia;
-  });
-
-  afterEach(() => {
-    // Restore default matchMedia (JSDOM doesn't provide one, so it may be undefined)
-    if (originalMatchMedia) {
-      global.matchMedia = originalMatchMedia;
-    } else {
-      delete (global as any).matchMedia;
-    }
-  });
-
-  const mockMatchMedia = (coarse: boolean, fine: boolean) => {
-    global.matchMedia = ((query: string) => ({
-      matches:
-        query === "(pointer: coarse)" ? coarse :
-        query === "(pointer: fine)" ? fine :
-        false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    })) as typeof matchMedia;
-  };
-
-  it("should attach wheel handler on desktop (pointer: fine, no coarse)", () => {
-    mockMatchMedia(false, true);
-
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(50),
-    }).build();
-
-    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
-    const evt = createWheelEvent(0, 100);
-    let defaultPrevented = false;
-    Object.defineProperty(evt, "preventDefault", {
-      value: () => { defaultPrevented = true; },
-    });
-
-    viewport.dispatchEvent(evt);
-
-    // Desktop: wheel handler intercepts and calls preventDefault
-    expect(defaultPrevented).toBe(true);
-
-    list.destroy();
-  });
-
-  it("should skip wheel handler on touch-only device (pointer: coarse, no fine)", () => {
-    mockMatchMedia(true, false);
-
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(50),
-    }).build();
-
-    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
-    const evt = createWheelEvent(0, 100);
-    let defaultPrevented = false;
-    Object.defineProperty(evt, "preventDefault", {
-      value: () => { defaultPrevented = true; },
-    });
-
-    viewport.dispatchEvent(evt);
-
-    // Touch device: no wheel handler, browser handles scroll natively
-    expect(defaultPrevented).toBe(false);
-
-    list.destroy();
-  });
-
-  it("should attach wheel handler on hybrid device with mouse (coarse + fine)", () => {
-    // e.g. Surface with touch screen AND mouse/trackpad connected
-    mockMatchMedia(true, true);
-
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(50),
-    }).build();
-
-    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
-    const evt = createWheelEvent(0, 100);
-    let defaultPrevented = false;
-    Object.defineProperty(evt, "preventDefault", {
-      value: () => { defaultPrevented = true; },
-    });
-
-    viewport.dispatchEvent(evt);
-
-    // Hybrid: fine pointer present, so wheel handler should be active
-    expect(defaultPrevented).toBe(true);
-
-    list.destroy();
-  });
-
-  it("should fall back to desktop behavior when matchMedia is unavailable", () => {
-    // e.g. SSR or very old environment — matchMedia not defined
-    delete (global as any).matchMedia;
-
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { height: 40, template: (item: TestItem) => `<div>${item.name}</div>` },
-      items: createTestItems(50),
-    }).build();
-
-    const viewport = list.element.querySelector(".vlist-viewport") as HTMLElement;
-    const evt = createWheelEvent(0, 100);
-    let defaultPrevented = false;
-    Object.defineProperty(evt, "preventDefault", {
-      value: () => { defaultPrevented = true; },
-    });
-
-    viewport.dispatchEvent(evt);
-
-    // No matchMedia: isMobile is false, wheel handler active (safe default)
-    expect(defaultPrevented).toBe(true);
-
-    list.destroy();
-  });
-});
+// The isMobile / matchMedia("(pointer: coarse)") guard was removed because
+// touch-only devices don't fire wheel events — touch scrolling produces
+// `scroll` events, not `wheel`. The only scenario where a "mobile" device
+// fires wheel is an external mouse/trackpad on a tablet, where the
+// synchronous wheel handler is beneficial.
