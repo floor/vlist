@@ -1,6 +1,28 @@
 vlist — full changelog
 initial commit → latest
-456 commits · 68 days · Feb 2 – Apr 11, 2026
+456 commits · 68 days · Feb 2 – Apr 16, 2026
+
+
+2026-04-16  v1.6.0
+
+  feat: export ItemConfig, GridConfig, MasonryConfig, GroupsConfig,
+  GroupHeaderConfig types from public API
+    Users building item or layout configs in helper functions outside
+    the inline vlist() call needed these types but couldn't import them.
+    All types referenced in VListConfig are now importable from "vlist".
+
+  fix(core): unify wheel handler, add boundary passthrough and sync
+  rendering for horizontal mode
+    Horizontal lists now use the same wheel-handling logic as vertical
+    lists — boundary passthrough lets the parent scroll when the list
+    reaches its scroll limits, and rendering is synchronous on wheel
+    events to eliminate visual lag.
+
+  feat(adapters): re-export core types from framework adapters
+    vlist-react, vlist-vue, vlist-solidjs, and vlist-svelte now
+    re-export VListItem, VListEvents, VList, VListConfig, ItemConfig,
+    ItemTemplate, EventHandler, and Unsubscribe — users no longer need
+    "vlist" as a direct dependency just for types.
 
 
 2026-04-15  v1.5.6
