@@ -37,6 +37,7 @@ export type {
   VListEvents,
 
   // Template
+  ItemConfig,
   ItemTemplate,
   ItemState,
 
@@ -66,6 +67,12 @@ export type {
   // Events
   EventHandler,
   Unsubscribe,
+
+  // Grid / Masonry / Groups config
+  GridConfig,
+  MasonryConfig,
+  GroupsConfig,
+  GroupHeaderConfig,
 
   // Grid (axis-neutral name + deprecated alias)
   GridSizeContext,
