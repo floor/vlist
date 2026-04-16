@@ -8,6 +8,21 @@ High-performance virtual scrolling library. Zero dependencies, plugin architectu
 - **Repo:** `github.com/floor/vlist` (core) + separate repos for `vlist-react`, `vlist-vue`, `vlist-svelte`, `vlist-solidjs`
 - **Docs:** [vlist.io](https://vlist.io)
 
+## Positioning
+
+vlist targets developers who don't use React. The React virtual list space is saturated (TanStack Virtual, react-window, react-virtuoso). Non-React frameworks (Vue, Svelte, Solid, vanilla JS) are underserved. Lead with framework breadth and accessibility — not React.
+
+## README Strategy
+
+Two READMEs:
+- `README.md` — full version, shown on GitHub
+- `README.npm.md` — slim version (~80 lines), shown on npmjs.com
+
+The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing:
+- **GitHub audience** → edit `README.md`
+- **npm audience** → edit `README.npm.md`
+- Never manually swap them — `npm publish` handles it
+
 ## Commands
 
 - `bun install` — install deps
