@@ -45,3 +45,6 @@ bun.lockb
 
 # Dependency graphs
 *.svg
+
+# Temp file during npm publish
+README.github.md
