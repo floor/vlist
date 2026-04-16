@@ -2,7 +2,7 @@
 
 Lightweight, high-performance virtual list with zero dependencies and dimension-agnostic architecture.
 
-**v1.5.6** — [Changelog](./changelog.txt)
+**v1.6.0** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -480,9 +480,9 @@ This makes the codebase clearer and eliminates semantic confusion when working w
 
 | Configuration | Gzipped |
 |---------------|---------|
-| Base only | 10.4 KB |
+| Base only | 10.5 KB |
 | + Grid | 14.3 KB |
-| + Groups | 13.1 KB |
+| + Groups | 13.2 KB |
 | + Async | 14.8 KB |
 | + Table | 15.9 KB |
 
