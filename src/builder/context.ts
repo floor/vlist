@@ -380,6 +380,21 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setVisibleRangeFn: () => {
       // Stub - not used in simplified context
     },
+    getVisibleRange(
+      scrollTop: number,
+      containerHeight: number,
+      totalItems: number,
+      out: Range,
+    ): void {
+      // Simplified context — use basic sizeCache lookup
+      if (totalItems === 0 || containerHeight === 0) {
+        out.start = 0;
+        out.end = 0;
+        return;
+      }
+      out.start = Math.max(0, sizeCache.indexAtOffset(scrollTop));
+      out.end = Math.min(totalItems - 1, Math.max(0, sizeCache.indexAtOffset(scrollTop + containerHeight - 1)));
+    },
     setScrollToPosFn: () => {
       // Stub - not used in simplified context
     },

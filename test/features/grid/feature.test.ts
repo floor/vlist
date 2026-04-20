@@ -214,6 +214,15 @@ function createMockContext(): BuilderContext<TestItem> {
     },
     updateCompressionMode: () => {},
     setVisibleRangeFn: () => {},
+    getVisibleRange: (scrollTop: number, containerHeight: number, totalItems: number, out: { start: number; end: number }) => {
+      if (totalItems === 0 || containerHeight === 0) {
+        out.start = 0;
+        out.end = 0;
+        return;
+      }
+      out.start = Math.max(0, sizeCache.indexAtOffset(scrollTop));
+      out.end = Math.min(totalItems - 1, Math.max(0, sizeCache.indexAtOffset(scrollTop + containerHeight - 1)));
+    },
     setScrollToPosFn: () => {},
     getScrollToPos: () => 0,
     setPositionElementFn: () => {},

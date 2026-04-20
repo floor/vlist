@@ -410,6 +410,18 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   ): void;
 
   /**
+   * Calculate the visible range using the current visible-range function.
+   * This uses the compression-aware version if withScale has replaced it.
+   * Used by withTable and withGrid to correctly compute ranges in compressed mode.
+   */
+  getVisibleRange(
+    scrollTop: number,
+    containerHeight: number,
+    totalItems: number,
+    out: Range,
+  ): void;
+
+  /**
    * Replace the scroll-to-index position calculator.
    * Used by withCompression to inject compressed position calculation.
    */
