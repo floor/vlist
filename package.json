@@ -64,7 +64,7 @@
     "test:changed": "bun test --changed",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "size": "bun run scripts/measure-size.ts",
-    "prepublishOnly": "bun run build --types && cp README.md README.github.md && cp README.npm.md README.md",
+    "prepublishOnly": "bun run build --types && cp README.md README.github.md && cp npm-readme.md README.md",
     "postpublish": "cp README.github.md README.md && rm README.github.md"
   },
   "bugs": {
