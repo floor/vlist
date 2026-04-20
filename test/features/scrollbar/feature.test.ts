@@ -230,6 +230,7 @@ function createMockContext(): BuilderContext<TestItem> {
     getStripeIndexFn: () => (index: number) => index,
     setStripeIndexFn: () => {},
     getItemToScrollIndexFn: () => (index: number) => index,
+    getVisibleRange: () => {},
     setItemToScrollIndexFn: () => {},
   };
 

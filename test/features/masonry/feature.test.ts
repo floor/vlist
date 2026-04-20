@@ -275,6 +275,7 @@ function createMockContext(
     getStripeIndexFn: () => (index: number) => index,
     setStripeIndexFn: () => {},
     getItemToScrollIndexFn: () => (index: number) => index,
+    getVisibleRange: () => {},
     setItemToScrollIndexFn: () => {},
   };
 
