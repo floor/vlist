@@ -457,6 +457,14 @@ export interface AdapterParams {
 
   /** Optional cursor for cursor-based pagination */
   cursor: string | undefined;
+
+  /**
+   * Abort signal tied to this chunk's lifecycle.
+   * Aborted when the chunk is no longer needed — reload, reset, or item
+   * removal invalidating the offset map.  Pass directly to fetch() or any
+   * other cancellable async operation in the adapter.
+   */
+  signal: AbortSignal;
 }
 
 /** Response from adapter.read */
