@@ -221,6 +221,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
   let error: Error | undefined;
   let hasMore = true;
   let cursor: string | undefined;
+  // The offset for which the stored cursor is valid. A server cursor returned
+  // for offset N is only meaningful as input for the request at offset N+limit.
+  // Passing it to any other offset would return wrong data.
+  let cursorValidForOffset: number | undefined;
   let pendingRanges: Range[] = [];
 
   // Track the furthest loaded offset so that concurrent chunk responses
@@ -595,7 +599,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
           const params: AdapterParams = {
             offset: chunk.start,
             limit,
-            cursor: undefined,
+            cursor: chunk.start === cursorValidForOffset ? cursor : undefined,
             signal: controller.signal,
           };
 
@@ -604,9 +608,11 @@ export const createDataManager = <T extends VListItem = VListItem>(
           // Store items
           setItems(response.items, chunk.start, response.total);
 
-          // Update cursor and hasMore
+          // Update cursor — record the offset at which this cursor is valid
+          // (the next sequential offset after this chunk).
           if (response.cursor) {
             cursor = response.cursor;
+            cursorValidForOffset = chunk.start + response.items.length;
           }
           // Update hasMore — but only if this chunk covers a range at or
           // beyond anything we've seen before. This prevents an earlier
@@ -699,6 +705,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     pendingRanges = [];
     isLoading = false;
     cursor = undefined;
+    cursorValidForOffset = undefined;
     hasMore = true;
     hasMoreHighWater = 0;
     error = undefined;
@@ -727,6 +734,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     storage.clear();
     idToIndex.clear();
     cursor = undefined;
+    cursorValidForOffset = undefined;
     error = undefined;
     pendingRanges = [];
     isLoading = false;
@@ -738,6 +746,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     idToIndex.clear();
     if (placeholders) placeholders.clear();
     cursor = undefined;
+    cursorValidForOffset = undefined;
     hasMore = true;
     hasMoreHighWater = 0;
     error = undefined;
