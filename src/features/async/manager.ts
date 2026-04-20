@@ -231,6 +231,17 @@ export const createDataManager = <T extends VListItem = VListItem>(
   // Track active load requests to prevent duplicates
   const activeLoads = new Map<string, Promise<void>>();
 
+  // AbortController for each in-flight chunk request — aborted when the chunk
+  // is no longer needed (reload, reset, item removal).
+  const activeControllers = new Map<string, AbortController>();
+
+  /** Abort all in-flight requests and clear both tracking maps. */
+  const abortAndClearLoads = (): void => {
+    for (const controller of activeControllers.values()) controller.abort();
+    activeControllers.clear();
+    activeLoads.clear();
+  };
+
   // ==========================================================================
   // Internal Helpers
   // ==========================================================================
@@ -466,7 +477,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     rebuildIdIndex();
 
     // Stale range keys in activeLoads may now refer to wrong offsets.
-    activeLoads.clear();
+    abortAndClearLoads();
 
     notifyStateChange();
     return true;
@@ -503,6 +514,24 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
     // Split missing ranges into individual chunks to properly deduplicate
     const chunkSize = storage.chunkSize;
+
+    // Abort in-flight loads that belong to a previous scroll position.
+    // Keep a buffer of 2 chunks around the new range — anything further is
+    // stale (the user has scrolled away) and should be cancelled immediately
+    // to free browser connections and server resources.
+    // 2 chunks keeps at most 3 concurrent requests (current + 1 on each side),
+    // well under the browser's 6-connection HTTP/1.1 limit.
+    const keepBuffer = chunkSize * 2;
+    for (const [loadKey, controller] of activeControllers) {
+      const dash = loadKey.indexOf("-");
+      const loadStart = parseInt(loadKey.slice(0, dash), 10);
+      if (Math.abs(loadStart - start) > keepBuffer) {
+        controller.abort();
+        activeControllers.delete(loadKey);
+        activeLoads.delete(loadKey);
+      }
+    }
+
     const chunksToLoad: Array<{ start: number; end: number }> = [];
 
     for (const range of missingRanges) {
@@ -552,6 +581,9 @@ export const createDataManager = <T extends VListItem = VListItem>(
       const key = getRangeKey(chunk.start, chunk.end);
 
       // Create the load promise for this chunk
+      const controller = new AbortController();
+      activeControllers.set(key, controller);
+
       const loadPromise = (async () => {
         pendingRanges.push(chunk);
         isLoading = true;
@@ -564,6 +596,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
             offset: chunk.start,
             limit,
             cursor: undefined,
+            signal: controller.signal,
           };
 
           const response = await adapter.read(params);
@@ -589,9 +622,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
             }
           }
         } catch (err) {
+          // AbortError is intentional cancellation — don't surface as an error
+          if ((err as Error)?.name === "AbortError") return;
           error = err instanceof Error ? err : new Error(String(err));
         } finally {
           activeLoads.delete(key);
+          activeControllers.delete(key);
           pendingRanges = pendingRanges.filter(
             (r) => r.start !== chunk.start || r.end !== chunk.end,
           );
@@ -659,7 +695,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     storage.setTotal(0); // Reset total to 0 so scrollbar updates correctly
     idToIndex.clear();
     if (placeholders) placeholders.clear();
-    activeLoads.clear();
+    abortAndClearLoads();
     pendingRanges = [];
     isLoading = false;
     cursor = undefined;

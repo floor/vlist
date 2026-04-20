@@ -61,6 +61,7 @@
     "build": "bun run build.ts",
     "dev": "bun run build.ts --watch",
     "test": "bun test",
+    "test:changed": "bun test --changed",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "size": "bun run scripts/measure-size.ts",
     "prepublishOnly": "bun run build --types && cp README.md README.github.md && cp README.npm.md README.md",
