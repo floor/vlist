@@ -442,22 +442,10 @@ export const withGrid = <T extends VListItem = VListItem>(
         const totalRows = ctx.getVirtualTotal();
 
         // Calculate visible row range (mutate in place)
-        if (totalRows === 0 || containerHeight === 0) {
-          visibleRange.start = 0;
-          visibleRange.end = 0;
-        } else {
-          visibleRange.start = Math.max(
-            0,
-            ctx.sizeCache.indexAtOffset(scrollTop),
-          );
-          // containerHeight is exclusive: pixel at (scrollTop + containerHeight) is
-          // the first pixel NOT shown.  Using -1 converts to the last visible pixel
-          // so we don't include a row whose first pixel sits exactly on the boundary.
-          visibleRange.end = Math.min(
-            totalRows - 1,
-            Math.max(0, ctx.sizeCache.indexAtOffset(scrollTop + containerHeight - 1)),
-          );
-        }
+        // Use the context's visible range function — this delegates to the
+        // compression-aware version when withScale is active, so the grid
+        // correctly maps virtual scroll positions to row indices.
+        ctx.getVisibleRange(scrollTop, containerHeight, totalRows, visibleRange);
 
         // Apply overscan (mutate in place)
         renderRange.start = Math.max(0, visibleRange.start - overscan);
@@ -473,6 +461,23 @@ export const withGrid = <T extends VListItem = VListItem>(
 
         const lastRange = ctx.state.lastRenderRange;
         const isCompressed = viewportState.isCompressed;
+        const rangeChanged =
+          lastRange.start !== renderRange.start ||
+          lastRange.end !== renderRange.end;
+
+        // ── Fast path: range unchanged in compressed mode ──
+        // In compressed mode items are positioned relative to the viewport,
+        // so every scroll-position change requires a transform update.
+        // When the range itself hasn't changed we can skip the full render
+        // (item diffing, selection checks, cell templates) and only
+        // reposition the already-rendered items — much cheaper per frame.
+        // NOTE: we do NOT early-exit for non-compressed unchanged ranges
+        // because the grid renderer uses a grace-period release mechanism
+        // that needs render() calls to advance its frame counter.
+        if (!rangeChanged && isCompressed) {
+          gridRenderer!.updatePositions(ctx.getCompressionContext());
+          return;
+        }
 
         // Convert row range to flat item range
         const totalItems = ctx.dataManager.getTotal();
@@ -497,12 +502,6 @@ export const withGrid = <T extends VListItem = VListItem>(
         const selectedIds = selectionIdsGetter ? selectionIdsGetter() : EMPTY_ID_SET;
         const focusedIndex = selectionFocusGetter ? selectionFocusGetter() : -1;
 
-        // Always call render() — the renderer's change tracking makes unchanged
-        // items a no-op (skips template, class, and position updates). This
-        // eliminates the need for a separate tick() path: the grace-period
-        // release loop inside render() advances the frame counter on every call,
-        // so items that left the range are eventually released even when the
-        // row-level range is unchanged.
         gridRenderer!.render(
           items,
           itemRange,
@@ -512,7 +511,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         );
 
         // Emit range:change only when range actually changed
-        if (lastRange.start !== renderRange.start || lastRange.end !== renderRange.end) {
+        if (rangeChanged) {
           lastRange.start = renderRange.start;
           lastRange.end = renderRange.end;
           emitter.emit("range:change", { range: { start: renderRange.start, end: renderRange.end } });

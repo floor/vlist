@@ -389,23 +389,10 @@ export const withTable = <T extends VListItem = VListItem>(
           dom.root.setAttribute("aria-rowcount", String(ariaRowCount));
         }
 
-        // Calculate visible range from size cache (mutate in place)
-        if (totalItems === 0 || containerHeight === 0) {
-          visibleRange.start = 0;
-          visibleRange.end = 0;
-        } else {
-          visibleRange.start = Math.max(
-            0,
-            ctx.sizeCache.indexAtOffset(scrollTop),
-          );
-          // containerHeight is exclusive: pixel at (scrollTop + containerHeight) is
-          // the first pixel NOT shown.  Using -1 converts to the last visible pixel
-          // so we don't include a row whose first pixel sits exactly on the boundary.
-          visibleRange.end = Math.min(
-            totalItems - 1,
-            Math.max(0, ctx.sizeCache.indexAtOffset(scrollTop + containerHeight - 1)),
-          );
-        }
+        // Use the context's visible range function — this delegates to the
+        // compression-aware version when withScale is active, so the table
+        // correctly maps virtual scroll positions to item indices.
+        ctx.getVisibleRange(scrollTop, containerHeight, totalItems, visibleRange);
 
         // Apply overscan (mutate in place)
         renderRange.start = Math.max(0, visibleRange.start - overscan);
@@ -420,6 +407,23 @@ export const withTable = <T extends VListItem = VListItem>(
         viewportState.renderRange.end = renderRange.end;
 
         const lastRange = ctx.state.lastRenderRange;
+        const rangeChanged =
+          lastRange.start !== renderRange.start ||
+          lastRange.end !== renderRange.end;
+
+        // ── Fast path: range unchanged in compressed mode ──
+        // In compressed mode items are positioned relative to the viewport,
+        // so every scroll-position change requires a transform update.
+        // When the range itself hasn't changed we can skip the full render
+        // (item diffing, selection checks, cell templates) and only
+        // reposition the already-rendered rows — much cheaper per frame.
+        if (!rangeChanged && isCompressed) {
+          tableRenderer!.updatePositions(ctx.getCompressionContext());
+          return;
+        }
+
+        // Non-compressed, range unchanged — nothing to do
+        if (!rangeChanged) return;
 
         const compressionCtx = isCompressed
           ? ctx.getCompressionContext()
@@ -443,14 +447,12 @@ export const withTable = <T extends VListItem = VListItem>(
         // each, so lingering rows are expensive).
         tableRenderer!.render(items, renderRange, selectedIds, focusedIndex, compressionCtx);
 
-        // Emit range:change only when range actually changed
-        if (lastRange.start !== renderRange.start || lastRange.end !== renderRange.end) {
-          lastRange.start = renderRange.start;
-          lastRange.end = renderRange.end;
-          emitter.emit("range:change", {
-            range: { start: renderRange.start, end: renderRange.end },
-          });
-        }
+        // Update lastRange — only reached when range actually changed
+        lastRange.start = renderRange.start;
+        lastRange.end = renderRange.end;
+        emitter.emit("range:change", {
+          range: { start: renderRange.start, end: renderRange.end },
+        });
       };
 
       // =====================================================================

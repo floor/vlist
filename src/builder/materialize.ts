@@ -460,6 +460,15 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       $.gvr = fn;
     },
 
+    getVisibleRange(
+      scrollTop: number,
+      containerHeight: number,
+      totalItems: number,
+      out: Range,
+    ): void {
+      $.gvr(scrollTop, containerHeight, $.hc, totalItems, out);
+    },
+
     setScrollToPosFn(
       fn: (
         index: number,
