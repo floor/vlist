@@ -1,6 +1,39 @@
 vlist — full changelog
 initial commit → latest
-456 commits · 68 days · Feb 2 – Apr 16, 2026
+462 commits · 77 days · Feb 2 – Apr 20, 2026
+
+
+2026-04-20  v1.6.1
+
+  feat(async): per-chunk AbortController with keepBuffer cancellation
+    Each in-flight chunk request now has its own AbortController. When the
+    user scrolls to a new position, any chunk more than chunkSize * 2 rows
+    from the new viewport is aborted immediately, keeping concurrent requests
+    to ≤ 3 (current + 1 on each side) — well under the browser's 6-connection
+    HTTP/1.1 limit. Previously, stale requests were only removed from the
+    internal tracking map but the underlying HTTP connection stayed open,
+    causing connection pool saturation during fast scrolls over large datasets.
+    AbortErrors are silently dropped and never surfaced as user-visible errors.
+
+  feat(async): expose signal: AbortSignal in AdapterParams
+    Adapters now receive an AbortSignal tied to the chunk's lifecycle.
+    Pass it directly to fetch() to cancel the underlying TCP request when
+    the chunk is no longer needed — not just remove it from vlist's map.
+    See the updated async docs for the recommended adapter pattern.
+
+  feat(grid/table): compression-aware visible range calculation
+    withGrid and withTable now call ctx.getVisibleRange() instead of
+    reading the size cache directly. This delegates to the compression-aware
+    range function installed by withScale, so virtual scroll positions are
+    correctly mapped to row/item indices under scroll compression.
+    Previously, grid and table features bypassed the compressed range
+    function and produced wrong visible ranges when withScale was active.
+
+  perf(grid/table): fast path for unchanged range in compressed mode
+    When the render range is unchanged and the list is in compressed mode,
+    skip the full render (item diffing, template calls, selection checks)
+    and call updatePositions() only — repositioning already-rendered
+    elements is much cheaper per frame during smooth scrolling.
 
 
 2026-04-16  v1.6.0
