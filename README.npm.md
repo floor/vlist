@@ -53,11 +53,11 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 | Feature | Size | Description |
 |---------|------|-------------|
 | **Base** | 10.5 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `withGrid()` | +3.9 KB | 2D grid layout |
+| `withGrid()` | +3.8 KB | 2D grid layout |
 | `withMasonry()` | +3.3 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort |
 | `withGroups()` | +2.7 KB | Sticky/inline headers |
-| `withAsync()` | +4.4 KB | Lazy loading with velocity-aware fetching |
+| `withAsync()` | +4.5 KB | Lazy loading with velocity-aware fetching |
 | `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.1 KB | 1M+ items via scroll compression |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
