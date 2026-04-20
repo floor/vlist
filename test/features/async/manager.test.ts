@@ -1073,6 +1073,55 @@ describe("createDataManager", () => {
       expect(manager.getState().cursor).toBe("next_page_token");
     });
 
+    it("should forward cursor to next sequential request", async () => {
+      const capturedCursors: (string | undefined)[] = [];
+      const adapter: VListAdapter = {
+        read: mock(async ({ offset, limit, cursor }) => {
+          capturedCursors.push(cursor);
+          return {
+            items: createTestItems(limit, offset + 1),
+            total: 200,
+            hasMore: true,
+            cursor: `cursor_after_${offset + limit}`,
+          };
+        }),
+      };
+      // Use chunkSize=50 so two sequential chunks cover offsets 0-49 and 50-99
+      const manager = createDataManager({ adapter, storage: { chunkSize: 50 } });
+
+      await manager.loadRange(0, 49);
+      await manager.loadRange(50, 99);
+
+      // First request: no prior cursor
+      expect(capturedCursors[0]).toBeUndefined();
+      // Second request: cursor from first response forwarded
+      expect(capturedCursors[1]).toBe("cursor_after_50");
+    });
+
+    it("should not forward cursor for non-sequential (jump) request", async () => {
+      const capturedCursors: (string | undefined)[] = [];
+      const adapter: VListAdapter = {
+        read: mock(async ({ offset, limit, cursor }) => {
+          capturedCursors.push(cursor);
+          return {
+            items: createTestItems(limit, offset + 1),
+            total: 500,
+            hasMore: true,
+            cursor: `cursor_after_${offset + limit}`,
+          };
+        }),
+      };
+      const manager = createDataManager({ adapter, storage: { chunkSize: 50 } });
+
+      await manager.loadRange(0, 49);
+      // Jump to offset 200 — skips over the cursor's valid offset (50)
+      await manager.loadRange(200, 249);
+
+      expect(capturedCursors[0]).toBeUndefined();
+      // Non-sequential: cursor must not be forwarded
+      expect(capturedCursors[1]).toBeUndefined();
+    });
+
     it("should handle hasMore from adapter response", async () => {
       const adapter: VListAdapter = {
         read: async ({ offset, limit }) => ({
