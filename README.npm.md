@@ -8,7 +8,7 @@ The virtual list library for every framework. Accessible by default, batteries-i
 
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
-- **10.5 KB gzipped** — composable features, pay only for what you use
+- **10.5 KB gzipped** — composable features with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 
 ## Install
