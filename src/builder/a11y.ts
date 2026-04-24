@@ -200,7 +200,7 @@ export const setupBaselineA11y = <T extends VListItem>(
     const item = ($.dm?.getItem(idx) ?? $.it[idx]) as T | undefined;
     if (!item || (item as Record<string, unknown>).__groupHeader) return;
     fv = false;
-    dom.root.focus();
+    dom.root.focus({ preventScroll: true });
     select(idx, false);
   });
 

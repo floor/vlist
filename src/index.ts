@@ -18,6 +18,7 @@ export type { ScaleConfig } from "./features/scale";
 export { withAsync } from "./features/async";
 export { withScrollbar } from "./features/scrollbar";
 export { withPage } from "./features/page";
+export type { WithPageOptions } from "./features/page";
 export { withGroups } from "./features/groups";
 export { withGrid } from "./features/grid";
 export { withMasonry } from "./features/masonry";
