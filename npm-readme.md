@@ -62,7 +62,7 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 | `withScale()` | +3.1 KB | 1M+ items via scroll compression |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
-| `withPage()` | +0.4 KB | Window-level scrolling |
+| `withPage()` | +0.9 KB | Window-level scrolling |
 | `withSnapshots()` | +0.7 KB | Scroll position save/restore |
 
 ## Framework Adapters
