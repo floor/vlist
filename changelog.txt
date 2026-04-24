@@ -1,6 +1,36 @@
 vlist — full changelog
 initial commit → latest
-462 commits · 77 days · Feb 2 – Apr 20, 2026
+470 commits · 82 days · Feb 2 – Apr 24, 2026
+
+
+2026-04-24  v1.6.2
+
+  feat(async): forward response cursor to AdapterParams on sequential reads
+    Track cursorValidForOffset alongside the stored cursor. The cursor is
+    forwarded to AdapterParams only when chunk.start matches exactly —
+    ensuring a server cursor for offset N is never sent to a different offset.
+    Cleared on reload, reset, and clear.
+
+  fix(a11y): prevent erratic scroll on click in window mode (#23)
+    Use preventScroll: true on dom.root.focus() to stop the browser's
+    native scroll-into-view from fighting with window scroll mode.
+
+  feat(page): add scrollPadding option to withPage
+    Accepts { top, bottom, left, right } as numbers or () => number.
+    Adjusts scrollToIndex alignment (start/center/end) to land items
+    inside the safe area, clearing fixed/sticky chrome. Registers
+    _scrollItemIntoView for keyboard focus navigation with the same
+    inset-aware logic. Allows negative scroll positions down to -startPad
+    so top items can clear the header, and extends maxScroll by endPad so
+    bottom items can clear the footer.
+
+  fix(page): use behavior:'instant' on all window.scrollTo calls
+    Overrides CSS scroll-behavior:smooth that may be set on the page,
+    which caused window.scrollTo to animate instead of jumping — making
+    keyboard focus scroll-into-view lag behind during rapid key repeat.
+    Also cleans up _scrollItemIntoView to use absolute document coordinates
+    with targetScroll tracking to avoid stale DOM reads during rapid
+    key repeat.
 
 
 2026-04-20  v1.6.1

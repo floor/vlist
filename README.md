@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.5 KB.
 
-**v1.6.1** — [Changelog](./changelog.txt)
+**v1.6.2** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -103,7 +103,7 @@ const list = vlist({
 | `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
-| `withPage()` | +0.4 KB | Document-level scrolling |
+| `withPage()` | +0.9 KB | Document-level scrolling |
 | `withSnapshots()` | +0.7 KB | Scroll save/restore with autoSave |
 
 ## Examples
