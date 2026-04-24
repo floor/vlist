@@ -782,74 +782,132 @@ describe("withPage — scrollPadding", () => {
     expect(ctx.methods.has("_scrollItemIntoView")).toBe(false);
   });
 
-  it("should scroll down when item is hidden behind top inset", () => {
+  it("should scroll up when item is above the safe area (behind top inset)", () => {
     const feature = withPage<TestItem>({ scrollPadding: { top: 100 } });
     const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
-    // Simulate: scrolled to position 500, container is 600px,
-    // so visible area with top padding = [600, 1100].
-    // Item at index 8 has offset 400 (8 * 50), which is < 600.
-    ctx.state.viewportState.scrollPosition = 500;
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    // Mock getBoundingClientRect: list scrolled well past viewport top
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -500, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
-    scrollItemIntoView(8); // offset = 400, which is < 500 + 100 = 600
 
-    // Should scroll so item sits just below the top inset: 400 - 100 = 300
-    expect(scrollToSpy).toHaveBeenCalledWith(300);
+    // Item 8: offset = 400, screenStart = -500 + 400 = -100
+    // safeStart = 100. -100 < 100 → newTarget = listDocPos + 400 - 100 = -200
+    scrollItemIntoView(8);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: -200, behavior: "instant" });
 
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 
-  it("should scroll up when item is hidden behind bottom inset", () => {
+  it("should scroll down when item is below the safe area (behind bottom inset)", () => {
     const feature = withPage<TestItem>({ scrollPadding: { bottom: 80 } });
     const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
-    // Simulate: scrolled to position 0, container is 600px,
-    // so visible area with bottom padding = [0, 520].
-    // Item at index 11 has offset 550 (11 * 50), bottom edge = 600.
-    // 600 > 520 (visible end), so it's behind the bottom inset.
-    ctx.state.viewportState.scrollPosition = 0;
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    // Mock getBoundingClientRect: list slightly scrolled
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -100, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
-    scrollItemIntoView(11); // offset = 550, bottom = 600, visibleEnd = 0 + 600 - 80 = 520
 
-    // Should scroll so item's bottom edge sits above the bottom inset:
-    // itemEnd + endPad - containerSize = 600 + 80 - 600 = 80
-    expect(scrollToSpy).toHaveBeenCalledWith(80);
+    // Item 14: offset = 700, screenStart = -100 + 700 = 600, screenEnd = 600 + 50 = 650
+    // safeEnd = 600 - 80 = 520. 650 > 520 → newTarget = listDocPos + 700 + 50 - 520 = 130
+    scrollItemIntoView(14);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 130, behavior: "instant" });
 
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 
-  it("should not scroll when item is within the visible (padded) area", () => {
+  it("should not scroll when item is within the safe area", () => {
     const feature = withPage<TestItem>({ scrollPadding: { top: 60, bottom: 60 } });
     const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
-    // Simulate: scrolled to position 200, container is 600px,
-    // visible area = [260, 540].
-    // Item at index 6 has offset 300 (6 * 50), bottom = 350.
-    // 300 >= 260 and 350 <= 540 → item is fully visible.
-    ctx.state.viewportState.scrollPosition = 200;
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -100, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
-    scrollItemIntoView(6);
 
+    // Item 5: offset = 250, screenStart = -100 + 250 = 150, screenEnd = 150 + 50 = 200
+    // safeStart = 60, safeEnd = 600 - 60 = 540. 150 >= 60 and 200 <= 540 → no scroll
+    scrollItemIntoView(5);
     expect(scrollToSpy).not.toHaveBeenCalled();
 
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should NOT scroll when list is below the sticky bar (hero visible)", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100 } });
+    const ctx = createMockContext();
+
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+
+    // List is well below the sticky bar (hero still visible)
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 400, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+
+    // Item 0: offset = 0, screenStart = 400 + 0 = 400, screenEnd = 400 + 50 = 450
+    // safeStart = 100. 400 >= 100. safeEnd = 800 - 0 = 800. 450 <= 800 → no scroll
+    scrollItemIntoView(0);
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should scroll when list partially overlaps the sticky bar", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100 } });
+    const ctx = createMockContext();
+
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+
+    // List top is at 40, which is above the sticky bar bottom (100)
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 40, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+
+    // Item 0: offset = 0, screenStart = 40 + 0 = 40
+    // safeStart = 100. 40 < 100 → newTarget = listDocPos + 0 - 100 = -60
+    scrollItemIntoView(0);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: -60, behavior: "instant" });
+
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 
@@ -859,102 +917,93 @@ describe("withPage — scrollPadding", () => {
       scrollPadding: { top: () => topPad },
     });
     const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
-    ctx.state.viewportState.scrollPosition = 500;
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -200, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
 
-    // Item 9: offset = 450, visible start = 500 + 60 = 560 → needs scroll
-    scrollItemIntoView(9);
-    expect(scrollToSpy).toHaveBeenCalledWith(390); // 450 - 60
+    // Item 3: offset = 150, screenStart = -200 + 150 = -50
+    // safeStart = 60. -50 < 60 → newTarget = listDocPos + 150 - 60 = -110
+    scrollItemIntoView(3);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: -110, behavior: "instant" });
 
     scrollToSpy.mockClear();
 
     // Now increase the dynamic padding — same item should scroll further
     topPad = 120;
-    scrollItemIntoView(9);
-    expect(scrollToSpy).toHaveBeenCalledWith(330); // 450 - 120
+    // Item 3: screenStart still -50. safeStart = 120.
+    // newTarget = listDocPos + 150 - 120 = -170
+    scrollItemIntoView(3);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: -170, behavior: "instant" });
 
-    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
-  });
-
-  it("should allow negative scroll to -startPad for top items", () => {
-    const feature = withPage<TestItem>({ scrollPadding: { top: 200 } });
-    const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
-
-    // Item 0: offset = 0. scroll = 0 - 200 = -200 (allowed in window mode).
-    ctx.state.viewportState.scrollPosition = 100;
-    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
-
-    feature.setup!(ctx);
-
-    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
-    scrollItemIntoView(0);
-
-    expect(scrollToSpy).toHaveBeenCalledWith(-200);
-
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 
   it("should use left/right padding in horizontal mode", () => {
     const feature = withPage<TestItem>({ scrollPadding: { left: 80, right: 40 } });
     const ctx = createMockContext({ horizontal: true });
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
-    // Horizontal: containerSize = window.innerWidth, startPad = left, endPad = right
-    ctx.state.viewportState.scrollPosition = 300;
     Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
+
+    // Mock getBoundingClientRect for horizontal: use rect.left
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 0, left: -100 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
 
-    // Item 6: offset = 300, visible start = 300 + 80 = 380 → 300 < 380, needs scroll
-    scrollItemIntoView(6);
-    expect(scrollToSpy).toHaveBeenCalledWith(220); // 300 - 80
+    // Item 0: offset = 0, screenStart = -100 + 0 = -100
+    // safeStart = 80. -100 < 80 → newTarget = listDocPos + 0 - 80 = -180
+    scrollItemIntoView(0);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: -180, top: 0, behavior: "instant" });
 
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
   });
 
   it("should handle both top and bottom padding together", () => {
     const feature = withPage<TestItem>({ scrollPadding: { top: 100, bottom: 50 } });
     const ctx = createMockContext();
-    const scrollToSpy = mock(() => {});
-    ctx.scrollController.scrollTo = scrollToSpy as any;
 
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -500, left: 0 }) as DOMRect;
+
+    const scrollToSpy = mock((..._args: any[]) => {});
+    window.scrollTo = scrollToSpy as any;
 
     feature.setup!(ctx);
 
     const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
 
-    // Test top: scroll at 500, item 8 offset = 400, visibleStart = 600 → hidden
-    ctx.state.viewportState.scrollPosition = 500;
+    // Test top: item 8, offset = 400, screenStart = -500 + 400 = -100
+    // safeStart = 100. -100 < 100 → newTarget = -500 + 400 - 100 = -200
     scrollItemIntoView(8);
-    expect(scrollToSpy).toHaveBeenCalledWith(300); // 400 - 100
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: -200, behavior: "instant" });
 
     scrollToSpy.mockClear();
 
-    // Test bottom: scroll at 0, item 10 offset = 500, bottom = 550,
-    // visibleEnd = 0 + 600 - 50 = 550 → exactly at boundary, no scroll
-    ctx.state.viewportState.scrollPosition = 0;
-    scrollItemIntoView(10);
-    expect(scrollToSpy).not.toHaveBeenCalled();
+    // Test bottom: item 22, offset = 1100, screenStart = -500 + 1100 = 600,
+    // screenEnd = 600 + 50 = 650. safeEnd = 600 - 50 = 550.
+    // 650 > 550 → newTarget = -500 + 1100 + 50 - 550 = 100
+    scrollItemIntoView(22);
+    expect(scrollToSpy).toHaveBeenCalledWith({ left: 0, top: 100, behavior: "instant" });
 
-    scrollToSpy.mockClear();
-
-    // Test bottom: item 11 offset = 550, bottom = 600, visibleEnd = 550 → hidden
-    scrollItemIntoView(11);
-    expect(scrollToSpy).toHaveBeenCalledWith(50); // 600 + 50 - 600
-
+    ctx.dom.viewport.getBoundingClientRect = origGetBCR;
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
   });
 });
