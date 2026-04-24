@@ -118,6 +118,22 @@ function createMockContext(
   let virtualTotalFn = () => testItems.length;
   let renderIfNeededFn = () => {};
   let forceRenderFn = () => {};
+  let scrollToPosFn = (index: number, sc: any, containerHeight: number, totalItems: number, align: string) => {
+    // Default: simplified calcScrollToPosition
+    if (totalItems === 0) return 0;
+    const clamped = Math.max(0, Math.min(index, totalItems - 1));
+    const offset = sc.getOffset(clamped);
+    const itemH = sc.getSize(clamped);
+    const totalSize = sc.getTotalSize();
+    const maxScroll = Math.max(0, totalSize - containerHeight);
+    let pos: number;
+    switch (align) {
+      case "center": pos = offset - (containerHeight - itemH) / 2; break;
+      case "end": pos = offset - containerHeight + itemH; break;
+      default: pos = offset;
+    }
+    return Math.max(0, Math.min(pos, maxScroll));
+  };
 
   // Track calls to context methods for assertions
   const disableViewportResize = mock(() => {});
@@ -250,8 +266,10 @@ function createMockContext(
     updateContentSize: () => {},
     updateCompressionMode: () => {},
     setVisibleRangeFn: () => {},
-    setScrollToPosFn: () => {},
-    getScrollToPos: () => 0,
+    setScrollToPosFn: (fn: any) => { scrollToPosFn = fn; },
+    getScrollToPos: (index: number, containerHeight: number, totalItems: number, align: string) => {
+      return scrollToPosFn(index, sizeCache, containerHeight, totalItems, align);
+    },
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: setScrollFns as any,
@@ -544,7 +562,7 @@ describe("withPage — Handler Registration", () => {
     // The destroy handler cleans up the window listener.
   });
 
-  it("should not add any public methods", () => {
+  it("should not add any public methods (no scrollPadding)", () => {
     const feature = withPage<TestItem>();
     const ctx = createMockContext();
 
@@ -728,5 +746,353 @@ describe("withPage — Destroy Cleanup", () => {
     expect(emitSpy).not.toHaveBeenCalled();
 
     Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+});
+
+// =============================================================================
+// withPage — scrollPadding
+// =============================================================================
+
+describe("withPage — scrollPadding", () => {
+  it("should register _scrollItemIntoView when scrollPadding is provided", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 60 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.methods.has("_scrollItemIntoView")).toBe(true);
+    expect(typeof ctx.methods.get("_scrollItemIntoView")).toBe("function");
+  });
+
+  it("should NOT register _scrollItemIntoView when no scrollPadding", () => {
+    const feature = withPage<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.methods.has("_scrollItemIntoView")).toBe(false);
+  });
+
+  it("should NOT register _scrollItemIntoView when scrollPadding is empty", () => {
+    const feature = withPage<TestItem>({});
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.methods.has("_scrollItemIntoView")).toBe(false);
+  });
+
+  it("should scroll down when item is hidden behind top inset", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100 } });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    // Simulate: scrolled to position 500, container is 600px,
+    // so visible area with top padding = [600, 1100].
+    // Item at index 8 has offset 400 (8 * 50), which is < 600.
+    ctx.state.viewportState.scrollPosition = 500;
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+    scrollItemIntoView(8); // offset = 400, which is < 500 + 100 = 600
+
+    // Should scroll so item sits just below the top inset: 400 - 100 = 300
+    expect(scrollToSpy).toHaveBeenCalledWith(300);
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should scroll up when item is hidden behind bottom inset", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { bottom: 80 } });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    // Simulate: scrolled to position 0, container is 600px,
+    // so visible area with bottom padding = [0, 520].
+    // Item at index 11 has offset 550 (11 * 50), bottom edge = 600.
+    // 600 > 520 (visible end), so it's behind the bottom inset.
+    ctx.state.viewportState.scrollPosition = 0;
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+    scrollItemIntoView(11); // offset = 550, bottom = 600, visibleEnd = 0 + 600 - 80 = 520
+
+    // Should scroll so item's bottom edge sits above the bottom inset:
+    // itemEnd + endPad - containerSize = 600 + 80 - 600 = 80
+    expect(scrollToSpy).toHaveBeenCalledWith(80);
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should not scroll when item is within the visible (padded) area", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 60, bottom: 60 } });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    // Simulate: scrolled to position 200, container is 600px,
+    // visible area = [260, 540].
+    // Item at index 6 has offset 300 (6 * 50), bottom = 350.
+    // 300 >= 260 and 350 <= 540 → item is fully visible.
+    ctx.state.viewportState.scrollPosition = 200;
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+    scrollItemIntoView(6);
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should support dynamic (function) padding values", () => {
+    let topPad = 60;
+    const feature = withPage<TestItem>({
+      scrollPadding: { top: () => topPad },
+    });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    ctx.state.viewportState.scrollPosition = 500;
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+
+    // Item 9: offset = 450, visible start = 500 + 60 = 560 → needs scroll
+    scrollItemIntoView(9);
+    expect(scrollToSpy).toHaveBeenCalledWith(390); // 450 - 60
+
+    scrollToSpy.mockClear();
+
+    // Now increase the dynamic padding — same item should scroll further
+    topPad = 120;
+    scrollItemIntoView(9);
+    expect(scrollToSpy).toHaveBeenCalledWith(330); // 450 - 120
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should allow negative scroll to -startPad for top items", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 200 } });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    // Item 0: offset = 0. scroll = 0 - 200 = -200 (allowed in window mode).
+    ctx.state.viewportState.scrollPosition = 100;
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+    scrollItemIntoView(0);
+
+    expect(scrollToSpy).toHaveBeenCalledWith(-200);
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+
+  it("should use left/right padding in horizontal mode", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { left: 80, right: 40 } });
+    const ctx = createMockContext({ horizontal: true });
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    // Horizontal: containerSize = window.innerWidth, startPad = left, endPad = right
+    ctx.state.viewportState.scrollPosition = 300;
+    Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+
+    // Item 6: offset = 300, visible start = 300 + 80 = 380 → 300 < 380, needs scroll
+    scrollItemIntoView(6);
+    expect(scrollToSpy).toHaveBeenCalledWith(220); // 300 - 80
+
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+  });
+
+  it("should handle both top and bottom padding together", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100, bottom: 50 } });
+    const ctx = createMockContext();
+    const scrollToSpy = mock(() => {});
+    ctx.scrollController.scrollTo = scrollToSpy as any;
+
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+
+    feature.setup!(ctx);
+
+    const scrollItemIntoView = ctx.methods.get("_scrollItemIntoView") as (index: number) => void;
+
+    // Test top: scroll at 500, item 8 offset = 400, visibleStart = 600 → hidden
+    ctx.state.viewportState.scrollPosition = 500;
+    scrollItemIntoView(8);
+    expect(scrollToSpy).toHaveBeenCalledWith(300); // 400 - 100
+
+    scrollToSpy.mockClear();
+
+    // Test bottom: scroll at 0, item 10 offset = 500, bottom = 550,
+    // visibleEnd = 0 + 600 - 50 = 550 → exactly at boundary, no scroll
+    ctx.state.viewportState.scrollPosition = 0;
+    scrollItemIntoView(10);
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    scrollToSpy.mockClear();
+
+    // Test bottom: item 11 offset = 550, bottom = 600, visibleEnd = 550 → hidden
+    scrollItemIntoView(11);
+    expect(scrollToSpy).toHaveBeenCalledWith(50); // 600 + 50 - 600
+
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+  });
+});
+
+// =============================================================================
+// withPage — scrollPadding + scrollToIndex
+// =============================================================================
+
+describe("withPage — scrollPadding scrollToIndex", () => {
+  it("should override setScrollToPosFn when scrollPadding is provided", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 60 } });
+    const ctx = createMockContext();
+    const setScrollToPosSpy = mock(ctx.setScrollToPosFn);
+    ctx.setScrollToPosFn = setScrollToPosSpy as any;
+
+    feature.setup!(ctx);
+
+    expect(setScrollToPosSpy).toHaveBeenCalled();
+  });
+
+  it("align 'start' should offset by top padding", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 10: offset = 500 (10 * 50). Without padding: pos = 500.
+    // With top padding 100: pos = 500 - 100 = 400.
+    const pos = ctx.getScrollToPos(10, 600, 100, "start");
+    expect(pos).toBe(400);
+  });
+
+  it("align 'end' should offset by bottom padding", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { bottom: 80 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 10: offset = 500, itemH = 50. containerHeight = 600.
+    // Without padding: pos = 500 - 600 + 50 = -50 → clamped to 0.
+    // With bottom padding 80: pos = 500 - 600 + 50 + 80 = 30.
+    const pos = ctx.getScrollToPos(10, 600, 100, "end");
+    expect(pos).toBe(30);
+  });
+
+  it("align 'center' should center within the padded area", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100, bottom: 50 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 20: offset = 1000, itemH = 50. containerHeight = 600.
+    // effectiveH = 600 - 100 - 50 = 450.
+    // pos = 1000 - 100 - (450 - 50) / 2 = 1000 - 100 - 200 = 700.
+    const pos = ctx.getScrollToPos(20, 600, 100, "center");
+    expect(pos).toBe(700);
+  });
+
+  it("should clamp to -startPad for start align (not 0)", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 200 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 0: offset = 0. pos = 0 - 200 = -200 → clamped to -startPad = -200.
+    const pos0 = ctx.getScrollToPos(0, 600, 100, "start");
+    expect(pos0).toBe(-200);
+
+    // Item 2: offset = 100. pos = 100 - 200 = -100 → above -startPad, not clamped.
+    const pos2 = ctx.getScrollToPos(2, 600, 100, "start");
+    expect(pos2).toBe(-100);
+  });
+
+  it("should clamp to maxScroll (which includes endPad) for end align", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { bottom: 80 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 99 (last): offset = 4950, itemH = 50. containerHeight = 600.
+    // totalSize = 5000. maxScroll = 5000 - 600 + 80 = 4480.
+    // pos = 4950 - 600 + 50 + 80 = 4480 → NOT clamped (maxScroll includes endPad).
+    const pos = ctx.getScrollToPos(99, 600, 100, "end");
+    expect(pos).toBe(4480);
+  });
+
+  it("should fall through to original when padding values are 0", () => {
+    let dynamicPad = 0;
+    const feature = withPage<TestItem>({ scrollPadding: { top: () => dynamicPad } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // With 0 padding, should behave like no padding:
+    // Item 10: offset = 500, align "start" → pos = 500.
+    const pos = ctx.getScrollToPos(10, 600, 100, "start");
+    expect(pos).toBe(500);
+  });
+
+  it("should use left/right for horizontal mode", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { left: 80, right: 40 } });
+    const ctx = createMockContext({ horizontal: true });
+
+    feature.setup!(ctx);
+
+    // Horizontal: startPad = left = 80, endPad = right = 40.
+    // Item 10: offset = 500, itemH = 50. containerHeight = 800.
+    // align "start": pos = 500 - 80 = 420.
+    Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
+    const pos = ctx.getScrollToPos(10, 800, 100, "start");
+    expect(pos).toBe(420);
+
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+  });
+
+  it("should support dynamic padding for scrollToIndex", () => {
+    let topPad = 60;
+    const feature = withPage<TestItem>({ scrollPadding: { top: () => topPad } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    // Item 10: offset = 500. With topPad=60: pos = 500 - 60 = 440.
+    expect(ctx.getScrollToPos(10, 600, 100, "start")).toBe(440);
+
+    // Change padding dynamically
+    topPad = 120;
+    expect(ctx.getScrollToPos(10, 600, 100, "start")).toBe(380); // 500 - 120
+  });
+
+  it("should return 0 for empty list", () => {
+    const feature = withPage<TestItem>({ scrollPadding: { top: 100, bottom: 50 } });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.getScrollToPos(0, 600, 0, "start")).toBe(0);
+    expect(ctx.getScrollToPos(0, 600, 0, "center")).toBe(0);
+    expect(ctx.getScrollToPos(0, 600, 0, "end")).toBe(0);
   });
 });

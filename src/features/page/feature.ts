@@ -13,12 +13,59 @@
  * - Uses window.innerWidth/innerHeight for container dimensions
  * - Listens to window resize events instead of ResizeObserver
  * - Adjusts DOM styles (overflow: visible, height: auto)
+ * - Optionally accounts for fixed/sticky chrome via scrollPadding
  *
  * Bundle impact: ~0.3 KB gzipped when used
  */
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+
+/**
+ * Options for the window scroll mode feature.
+ */
+export interface WithPageOptions {
+  /**
+   * Scroll padding — insets from the viewport edges where fixed/sticky
+   * elements (headers, footers, toolbars) live.
+   *
+   * When keyboard focus moves an item behind a sticky bar, the list
+   * auto-scrolls to keep it within the visible (unobstructed) area.
+   *
+   * Mirrors CSS `scroll-padding` semantics: defines the optimal viewing
+   * region within the scrollport.
+   *
+   * Values can be numbers (pixels) or functions that return pixels
+   * (useful when the sticky element's height is dynamic).
+   *
+   * @example
+   * ```ts
+   * withPage({
+   *   scrollPadding: { top: 60, bottom: 50 }
+   * })
+   * ```
+   *
+   * @example Dynamic values
+   * ```ts
+   * withPage({
+   *   scrollPadding: {
+   *     top: () => document.getElementById('sticky-header')!.offsetHeight,
+   *     bottom: 50
+   *   }
+   * })
+   * ```
+   */
+  scrollPadding?: {
+    top?: number | (() => number);
+    bottom?: number | (() => number);
+    left?: number | (() => number);
+    right?: number | (() => number);
+  };
+}
+
+/** Resolve a padding value — number or function returning number. */
+const resolvePad = (v: number | (() => number) | undefined): number =>
+  v == null ? 0 : typeof v === "function" ? v() : v;
 
 /**
  * Create a window scroll mode feature.
@@ -40,6 +87,17 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
  * .build()
  * ```
  *
+ * @example With scroll padding for sticky chrome
+ * ```ts
+ * const feed = vlist({
+ *   container: '#infinite-feed',
+ *   item: { height: 200, template: renderPost },
+ *   items: posts
+ * })
+ * .use(withPage({ scrollPadding: { top: 60, bottom: 50 } }))
+ * .build()
+ * ```
+ *
  * @example Horizontal window scrolling
  * ```ts
  * const timeline = vlist({
@@ -53,8 +111,9 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
  */
 export const withPage = <
   T extends VListItem = VListItem,
->(): VListFeature<T> => {
+>(options?: WithPageOptions): VListFeature<T> => {
   let cleanupResize: (() => void) | null = null;
+  const scrollPadding = options?.scrollPadding;
 
   return {
     name: "withPage",
@@ -140,7 +199,93 @@ export const withPage = <
       // Update dimensions immediately
       state.viewportState.containerSize = window.innerHeight;
 
-      // ── 6. Window resize handler ───────────────────────────────
+      // ── 6. Scroll padding — scroll-into-view with insets ───────
+      // When scrollPadding is provided, register a custom
+      // _scrollItemIntoView that keeps focused items inside the
+      // visible area (viewport minus the padded insets), so they
+      // are never hidden behind fixed/sticky chrome.
+
+      if (scrollPadding) {
+        const hz = config.horizontal;
+        const itemToScrollIndex = ctx.getItemToScrollIndexFn();
+
+        // ── 6a. Override scrollToIndex position calculator ────────
+        // Wrap the default calcScrollToPosition so that align "start",
+        // "center", and "end" land items inside the padded safe area
+        // instead of at the raw viewport edges.
+        // Note: when padding resolves to 0 the math is identical to
+        // the default calculator — no special-case needed.
+
+        ctx.setScrollToPosFn(
+          (index, sc, containerHeight, totalItems, align) => {
+            const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
+            const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
+
+            if (totalItems === 0) return 0;
+            const clamped = Math.max(0, Math.min(index, totalItems - 1));
+            const offset = sc.getOffset(clamped);
+            const itemH = sc.getSize(clamped);
+            const totalSize = sc.getTotalSize();
+            const maxScroll = Math.max(0, totalSize - containerHeight + endPad);
+
+            let pos: number;
+            switch (align) {
+              case "start":
+                // Item top sits just below the start inset
+                pos = offset - startPad;
+                break;
+              case "center": {
+                // Item centered within the effective (padded) area
+                const effectiveH = containerHeight - startPad - endPad;
+                pos = offset - startPad - (effectiveH - itemH) / 2;
+                break;
+              }
+              case "end":
+                // Item bottom sits just above the end inset
+                pos = offset - containerHeight + itemH + endPad;
+                break;
+            }
+            return Math.max(-startPad, Math.min(pos, maxScroll));
+          },
+        );
+
+        // ── 6b. Override keyboard-focus scroll-into-view ─────────
+
+        ctx.methods.set("_scrollItemIntoView", (index: number): void => {
+          const si = itemToScrollIndex(index);
+          const scrollPos = state.viewportState.scrollPosition;
+          const containerSize = hz ? window.innerWidth : window.innerHeight;
+
+          const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
+          const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
+
+          const itemOffset = ctx.sizeCache.getOffset(si);
+          const itemSize = ctx.sizeCache.getSize(si);
+          const itemEnd = itemOffset + itemSize;
+
+          // Visible region = [scrollPos + startPad, scrollPos + containerSize - endPad]
+          const visibleStart = scrollPos + startPad;
+          const visibleEnd = scrollPos + containerSize - endPad;
+
+          let newScroll = scrollPos;
+
+          if (itemOffset < visibleStart) {
+            // Item is above/before the visible area — scroll so item
+            // sits just below the start inset.
+            newScroll = Math.max(-startPad, itemOffset - startPad);
+          } else if (itemEnd > visibleEnd) {
+            // Item is below/after the visible area — scroll so item's
+            // bottom edge sits just above the end inset.
+            newScroll = itemEnd + endPad - containerSize;
+          }
+
+          if (newScroll !== scrollPos) {
+            ctx.scrollController.scrollTo(newScroll);
+          }
+        });
+      }
+
+      // ── 7. Window resize handler ───────────────────────────────
 
       let previousHeight = window.innerHeight;
       let previousWidth = window.innerWidth;
