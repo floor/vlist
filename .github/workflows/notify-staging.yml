@@ -1,0 +1,28 @@
+# GitHub Actions — Notify vlist.io to redeploy staging
+# When vlist staging branch is updated (and CI passes),
+# triggers a staging redeploy on vlist.io so it picks up the latest vlist code.
+
+name: Notify Staging Deploy
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  # Wait for CI to pass first
+  notify:
+    name: Trigger staging.vlist.io redeploy
+    runs-on: ubuntu-latest
+    needs: []
+    # Only run after CI workflow succeeds (CI runs on same push event)
+    if: success()
+    timeout-minutes: 2
+
+    steps:
+      - name: Dispatch to vlist.io
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DISPATCH_TOKEN }}
+          repository: floor/vlist.io
+          event-type: vlist-staging-updated
+          client-payload: '{"ref": "${{ github.sha }}", "message": "${{ github.event.head_commit.message }}"}'
