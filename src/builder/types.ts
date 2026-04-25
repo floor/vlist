@@ -139,6 +139,18 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
    */
   interactive?: boolean;
 
+  /**
+   * Show focus ring on mouse click (default: false).
+   * By default, clicking an item updates the focused index but does not
+   * show the focus ring — matching the web platform's :focus-visible
+   * convention. Set to true for file-manager or spreadsheet-style UIs
+   * where the focus indicator doubles as a "current item" marker.
+   *
+   * Applies to the baseline single-select keyboard navigation. When
+   * using withSelection(), pass focusOnClick in its own config instead.
+   */
+  focusOnClick?: boolean;
+
   /** @deprecated Use `interactive` instead */
   accessible?: boolean;
 

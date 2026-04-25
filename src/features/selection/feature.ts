@@ -85,6 +85,15 @@ export interface SelectionFeatureConfig {
    * Shift+Click, or Ctrl+Shift+Home/End.
    */
   shiftArrowToggle?: "origin" | "destination";
+
+  /**
+   * Show focus ring on mouse click (default: false).
+   * By default, clicking an item selects it but does not show the focus
+   * ring — matching the web platform's :focus-visible convention.
+   * Set to true for file-manager or spreadsheet-style UIs where the
+   * focus indicator doubles as a "current item" marker.
+   */
+  focusOnClick?: boolean;
 }
 
 // =============================================================================
@@ -113,6 +122,7 @@ export const withSelection = <T extends VListItem = VListItem>(
   const followFocus = config?.followFocus ?? false;
   const initial = config?.initial;
   const shiftArrowToggle = config?.shiftArrowToggle ?? "origin";
+  const focusOnClick = config?.focusOnClick ?? false;
 
   // Selection state — lives for the lifetime of the list
   let selectionState = createSelectionState(initial);
@@ -524,7 +534,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           const items = ctx.getAllLoadedItems();
           selectionState = selectRange(selectionState, items, anchor, index, mode);
           selectionState = setFocusedIndex(selectionState, index);
-          selectionState.focusVisible = false;
+          selectionState.focusVisible = focusOnClick;
           lastSelectedIndex = index;
           dom.root.setAttribute(
             "aria-activedescendant",
@@ -539,7 +549,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         // Update focused index (mouse — no focus ring)
         selectionState = setFocusedIndex(selectionState, index);
-        selectionState.focusVisible = false;
+        selectionState.focusVisible = focusOnClick;
 
         // ARIA: update aria-activedescendant
         dom.root.setAttribute(

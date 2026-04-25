@@ -30,6 +30,7 @@ export const setupBaselineA11y = <T extends VListItem>(
   keydownHandlers: Array<(event: KeyboardEvent) => void>,
   clickHandlers: Array<(event: MouseEvent) => void>,
   destroyHandlers: Array<() => void>,
+  foc: boolean,
 ): void => {
   const focusedClass = `${cp}-item--focused`;
   let fv = false; // focusVisible
@@ -87,7 +88,7 @@ export const setupBaselineA11y = <T extends VListItem>(
 
   const select = (idx: number, kbd: boolean): void => {
     $.fi = idx;
-    if (kbd) fv = true;
+    if (kbd || foc) fv = true;
     const item = ($.dm ? $.dm.getItem(idx) : $.it[idx]) as T | undefined;
     if (item && $.ss.has(item.id)) {
       $.ss.clear();

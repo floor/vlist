@@ -1211,6 +1211,7 @@ function materialize<T extends VListItem = VListItem>(
       $, dom, classPrefix, ariaIdPrefix, isHorizontal,
       startPad, endPad, wrapEnabled, methods, rendered,
       keydownHandlers, clickHandlers, destroyHandlers,
+      !!config.focusOnClick,
     );
   }
 
