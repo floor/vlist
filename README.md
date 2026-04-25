@@ -355,10 +355,11 @@ const list: VList<Photo> = vlist<Photo>({
 ## Links
 
 - **Docs & Examples:** [vlist.io](https://vlist.io)
+- **Staging:** [staging.vlist.io](https://staging.vlist.io)
 - **GitHub:** [github.com/floor/vlist](https://github.com/floor/vlist)
 - **NPM:** [vlist](https://www.npmjs.com/package/vlist)
 - **Issues:** [GitHub Issues](https://github.com/floor/vlist/issues)
 
 ---
 
-Built by [Floor IO](https://floor.io)
+Built by [FloorIO](https://floor.io)
