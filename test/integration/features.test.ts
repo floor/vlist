@@ -2811,3 +2811,159 @@ describe("integration — baseline a11y click vs keyboard scroll", () => {
     }
   });
 });
+
+// =============================================================================
+// focusOnClick — baseline a11y + withSelection
+// =============================================================================
+
+describe("integration — focusOnClick", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    list?.destroy();
+    list = null;
+    container.remove();
+  });
+
+  const focusedClass = "vlist-item--focused";
+
+  const clickItem = (l: VList<any>, index: number) => {
+    const el = l.element.querySelector(`[data-index="${index}"]`) as HTMLElement;
+    if (el) el.click();
+  };
+
+  const hasFocusRing = (l: VList<any>, index: number): boolean => {
+    const el = l.element.querySelector(`[data-index="${index}"]`) as HTMLElement;
+    return el ? el.classList.contains(focusedClass) : false;
+  };
+
+  // ── Baseline a11y ──
+
+  it("baseline: click should NOT show focus ring by default", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    }).build();
+
+    clickItem(list, 3);
+    expect(hasFocusRing(list, 3)).toBe(false);
+  });
+
+  it("baseline: click should show focus ring when focusOnClick is true", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+      focusOnClick: true,
+    }).build();
+
+    clickItem(list, 3);
+    expect(hasFocusRing(list, 3)).toBe(true);
+  });
+
+  it("baseline: focusOnClick ring moves to new item on subsequent click", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+      focusOnClick: true,
+    }).build();
+
+    clickItem(list, 2);
+    expect(hasFocusRing(list, 2)).toBe(true);
+
+    clickItem(list, 5);
+    expect(hasFocusRing(list, 5)).toBe(true);
+    expect(hasFocusRing(list, 2)).toBe(false);
+  });
+
+  // ── withSelection ──
+
+  it("withSelection: click should NOT show focus ring by default", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    })
+      .use(withSelection({ mode: "single" }))
+      .build();
+
+    clickItem(list, 4);
+    expect(hasFocusRing(list, 4)).toBe(false);
+  });
+
+  it("withSelection: click should show focus ring when focusOnClick is true", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    })
+      .use(withSelection({ mode: "single", focusOnClick: true }))
+      .build();
+
+    clickItem(list, 4);
+    expect(hasFocusRing(list, 4)).toBe(true);
+  });
+
+  it("withSelection: focusOnClick ring moves on subsequent click", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    })
+      .use(withSelection({ mode: "single", focusOnClick: true }))
+      .build();
+
+    clickItem(list, 1);
+    expect(hasFocusRing(list, 1)).toBe(true);
+
+    clickItem(list, 6);
+    expect(hasFocusRing(list, 6)).toBe(true);
+    expect(hasFocusRing(list, 1)).toBe(false);
+  });
+
+  it("withSelection multiple: shift+click should show focus ring when focusOnClick is true", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    })
+      .use(withSelection({ mode: "multiple", focusOnClick: true }))
+      .build();
+
+    // First click to set anchor
+    clickItem(list, 2);
+    expect(hasFocusRing(list, 2)).toBe(true);
+
+    // Shift+click for range selection
+    const el = list.element.querySelector('[data-index="5"]') as HTMLElement;
+    if (el) {
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+      expect(hasFocusRing(list, 5)).toBe(true);
+    }
+  });
+
+  it("withSelection multiple: shift+click should NOT show focus ring by default", () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(20),
+    })
+      .use(withSelection({ mode: "multiple" }))
+      .build();
+
+    clickItem(list, 2);
+
+    const el = list.element.querySelector('[data-index="5"]') as HTMLElement;
+    if (el) {
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+      expect(hasFocusRing(list, 5)).toBe(false);
+    }
+  });
+});
