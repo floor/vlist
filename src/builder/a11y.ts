@@ -59,19 +59,21 @@ export const setupBaselineA11y = <T extends VListItem>(
 
   methods.set("_getFocusedIndex", (): number => fv ? $.fi : -1);
 
-  const commit = (idx: number): void => {
+  const commit = (idx: number, scroll = true): void => {
     dom.root.setAttribute("aria-activedescendant", `${ap}-item-${idx}`);
     resolve();
 
-    if (sivFn) {
-      sivFn(idx);
-    } else {
-      const cs = hz ? $.cw : $.ch;
-      const si = $.i2s(idx);
-      const ns = scrollToFocusSimple(si, $.hc, $.ls, cs, ps, pe);
-      if (ns !== $.ls) {
-        $.sst(ns);
-        $.ls = $.sgt();
+    if (scroll) {
+      if (sivFn) {
+        sivFn(idx);
+      } else {
+        const cs = hz ? $.cw : $.ch;
+        const si = $.i2s(idx);
+        const ns = scrollToFocusSimple(si, $.hc, $.ls, cs, ps, pe);
+        if (ns !== $.ls) {
+          $.sst(ns);
+          $.ls = $.sgt();
+        }
       }
     }
     $.ffn();
@@ -93,7 +95,7 @@ export const setupBaselineA11y = <T extends VListItem>(
       $.ss.clear();
       if (item) $.ss.add(item.id);
     }
-    commit(idx);
+    commit(idx, kbd);
   };
 
   const skipHdr = (from: number, dir: 1 | -1, total: number): number => {

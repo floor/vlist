@@ -2689,3 +2689,125 @@ describe("integration — async + table", () => {
     expect(selected.length).toBe(1);
   });
 });
+
+// =============================================================================
+// Baseline a11y — click vs keyboard scroll behavior
+// =============================================================================
+
+describe("integration — baseline a11y click vs keyboard scroll", () => {
+  let container: HTMLElement;
+  let list: VList<TestItem> | null = null;
+
+  beforeEach(() => {
+    container = createContainer();
+  });
+
+  afterEach(() => {
+    list?.destroy();
+    list = null;
+    container.remove();
+  });
+
+  const pressKey = (element: HTMLElement, key: string) => {
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", { key, bubbles: true }),
+    );
+  };
+
+  const triggerFocusIn = (root: HTMLElement) => {
+    const origMatches = root.matches;
+    root.matches = (selector: string) =>
+      selector === ":focus-visible" ? true : origMatches.call(root, selector);
+    root.dispatchEvent(new dom.window.Event("focusin", { bubbles: true }));
+  };
+
+  const getFocusedIndex = (root: HTMLElement): number => {
+    const attr = root.getAttribute("aria-activedescendant");
+    if (!attr) return -1;
+    const match = attr.match(/item-(\d+)$/);
+    return match ? parseInt(match[1], 10) : -1;
+  };
+
+  const getViewportScrollTop = (l: VList<any>): number => {
+    const viewport = l.element.querySelector(".vlist-viewport") as HTMLElement;
+    return viewport ? viewport.scrollTop : 0;
+  };
+
+  it("should not scroll when clicking a visible item", () => {
+    // 100 items × 40px = 4000px total, 500px container → ~12 visible
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(100),
+    }).build();
+
+    // Scroll to position 200 (items ~5–17 visible)
+    simulateScroll(list, 200);
+    const scrollBefore = getViewportScrollTop(list);
+
+    // Click item 8 — well within the visible range
+    const el = list.element.querySelector('[data-index="8"]') as HTMLElement;
+    expect(el).toBeTruthy();
+    el.click();
+
+    // Scroll position must not change — the item was already visible
+    expect(getViewportScrollTop(list)).toBe(scrollBefore);
+  });
+
+  it("should scroll when keyboard navigates past viewport edge", () => {
+    // 100 items × 40px, 500px container → 12 visible (indices 0–11)
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(100),
+    }).build();
+
+    const root = list.element;
+
+    // Focus in — sets focus to item 0
+    triggerFocusIn(root);
+    expect(getFocusedIndex(root)).toBe(0);
+
+    // Press ArrowDown 13 times to move focus past the viewport
+    // (item 13 at offset 520px exceeds the 500px container)
+    for (let i = 0; i < 13; i++) {
+      pressKey(root, "ArrowDown");
+    }
+
+    expect(getFocusedIndex(root)).toBe(13);
+
+    // Scroll should have adjusted to keep item 13 visible
+    const scrollTop = getViewportScrollTop(list);
+    expect(scrollTop).toBeGreaterThan(0);
+  });
+
+  it("should not scroll when clicking an item after keyboard navigation", () => {
+    // Regression: after scrolling via keyboard, a subsequent click on a
+    // visible item must not re-scroll (the bug that prompted this fix).
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(100),
+    }).build();
+
+    const root = list.element;
+
+    // Keyboard-navigate down to trigger scroll
+    triggerFocusIn(root);
+    for (let i = 0; i < 15; i++) {
+      pressKey(root, "ArrowDown");
+    }
+    expect(getFocusedIndex(root)).toBe(15);
+
+    const scrollAfterNav = getViewportScrollTop(list);
+    expect(scrollAfterNav).toBeGreaterThan(0);
+
+    // Now click a different visible item — scroll must stay put
+    const el = root.querySelector('[data-index="13"]') as HTMLElement;
+    if (el) {
+      el.click();
+      expect(getFocusedIndex(root)).toBe(13);
+      expect(getViewportScrollTop(list)).toBe(scrollAfterNav);
+    }
+  });
+});
