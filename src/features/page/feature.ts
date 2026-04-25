@@ -155,17 +155,11 @@ export const withPage = <
 
       // ── 4. Override scroll position functions ──────────────────
       //
-      // During rapid keyboard navigation the browser may not have
-      // painted the last window.scrollTo yet, so DOM reads can be
-      // stale.  _scrollItemIntoView tracks an intended target in
-      // `targetScroll` and computes from that — but getTop always
-      // reads the DOM so the render range follows the actual
-      // browser position (keeping visible items rendered).
-      //
-      // All scrollTo calls use behavior:"instant" to override any
-      // CSS scroll-behavior:smooth on the page.
-
-      let targetScroll: number | null = null;
+      // All scrollTo calls use behavior:"instant" which updates
+      // window.scrollY synchronously — no animation, no in-flight
+      // state.  DOM reads (getBoundingClientRect, scrollY) are
+      // always fresh, so no tracking of intended scroll position
+      // is needed.
 
       ctx.setScrollFns(
         // getTop — list-relative scroll position from DOM
@@ -258,8 +252,7 @@ export const withPage = <
           const rect = dom.viewport.getBoundingClientRect();
           const domScroll = hz ? window.scrollX : window.scrollY;
           const listDocPos = (hz ? rect.left : rect.top) + domScroll;
-          const effectiveScroll = targetScroll ?? domScroll;
-          const listScreenPos = listDocPos - effectiveScroll;
+          const listScreenPos = listDocPos - domScroll;
 
           const itemOffset = ctx.sizeCache.getOffset(si);
           const itemSize = ctx.sizeCache.getSize(si);
@@ -269,7 +262,7 @@ export const withPage = <
           const safeStart = startPad;
           const safeEnd = containerSize - endPad;
 
-          let newTarget = effectiveScroll;
+          let newTarget = domScroll;
 
           if (itemScreenStart < safeStart) {
             newTarget = listDocPos + itemOffset - safeStart;
@@ -277,8 +270,7 @@ export const withPage = <
             newTarget = listDocPos + itemOffset + itemSize - safeEnd;
           }
 
-          if (newTarget !== effectiveScroll) {
-            targetScroll = newTarget;
+          if (newTarget !== domScroll) {
             if (hz) {
               window.scrollTo({ left: newTarget, top: window.scrollY, behavior: "instant" });
             } else {
