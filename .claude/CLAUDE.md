@@ -165,6 +165,21 @@ Conventional Commits: `type(scope): description`
 - **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
 - **Scopes:** `core`, `builder`, `render`, `styles`, or feature name (`grid`, `selection`, `table`, `async`, `scale`, `scrollbar`, `page`, `masonry`, `groups`, `snapshots`)
 
+## Git Workflow
+
+**Working branch is `staging`.** The `main` branch is protected and requires a pull request.
+
+- ❌ **NEVER push directly to `main`** — it is protected on GitHub and will be rejected
+- ❌ **NEVER commit on `main`** — always work on `staging` or feature branches
+- ✅ Push to `staging`: `git push origin staging`
+- ✅ Merge to `main` via PR: `staging` → `main`
+- ✅ Feature branches branch off `staging`, merge back to `staging`
+
+**Before any git operation**, verify you're on the right branch:
+```
+git branch --show-current  # Should show 'staging' or a feature branch, NEVER 'main'
+```
+
 ## Zero Dependencies
 
 Never add runtime dependencies. Everything is built from scratch. Dev dependencies for testing/building are fine.
