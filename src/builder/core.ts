@@ -282,6 +282,30 @@ function materialize<T extends VListItem = VListItem>(
     dom.viewport.classList.add(`${classPrefix}-viewport--gutter-stable`);
   }
 
+  // ── Horizontal: reserve room for native scrollbar ────────────────
+  // On platforms with persistent scrollbars (Windows), the horizontal
+  // scrollbar reduces clientHeight, cropping items behind it.
+  // Fix: size the root to item.height + actual scrollbar height so the
+  // scrollbar sits below the item content area rather than overlapping it.
+  // We measure the real scrollbar height (post-CSS) to handle DPI rounding
+  // at any scale factor. Skip when the scrollbar is hidden.
+  // Grid and masonry manage their own cross-axis sizing from the container
+  // dimensions — skip the adjustment for those features.
+  const hasLayoutFeature = featureNames.has("withGrid") || featureNames.has("withMasonry");
+  if (isHorizontal && crossAxisSize != null && scrollCfg?.scrollbar !== "none" && !hasLayoutFeature) {
+    // Set an explicit root height first so the viewport has a measurable size.
+    dom.root.style.height = `${crossAxisSize}px`;
+    // Force the scrollbar to appear so offsetHeight - clientHeight gives the
+    // actual rendered scrollbar height (accounts for CSS overrides + DPI).
+    const savedOverflowX = dom.viewport.style.overflowX;
+    dom.viewport.style.overflowX = "scroll";
+    const scrollbarHeight = dom.viewport.offsetHeight - dom.viewport.clientHeight;
+    dom.viewport.style.overflowX = savedOverflowX;
+    if (scrollbarHeight > 0) {
+      dom.root.style.height = `${crossAxisSize + scrollbarHeight}px`;
+    }
+  }
+
   // ── Apply padding to content element ────────────────────────────
   // Works like CSS padding — adds inset space around items.
   // Uses border-box so cross-axis padding (e.g. left/right in vertical
