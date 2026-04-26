@@ -481,6 +481,17 @@
     height: 100%;
 }
 
+/* Scrollbar gutter — reserve layout space so the custom scrollbar never overlaps items.
+   Equivalent to CSS scrollbar-gutter: stable. Enabled via withScrollbar({ gutter: true }). */
+.vlist--scrollbar-gutter .vlist-items {
+    padding-right: var(--vlist-custom-scrollbar-width);
+}
+
+.vlist--scrollbar-gutter.vlist--horizontal .vlist-items {
+    padding-right: 0;
+    padding-bottom: var(--vlist-custom-scrollbar-width);
+}
+
 /* Hide native scrollbar when custom scrollbar is active */
 .vlist-viewport--custom-scrollbar {
     scrollbar-width: none;
