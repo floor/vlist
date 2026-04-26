@@ -2,6 +2,8 @@
 
 High-performance virtual scrolling library. Zero dependencies, plugin architecture, TypeScript strict mode.
 
+- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses latest staging branch code)
+
 **Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
 
 - **Package:** `@floor/vlist` on npm
@@ -164,6 +166,34 @@ Conventional Commits: `type(scope): description`
 
 - **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
 - **Scopes:** `core`, `builder`, `render`, `styles`, or feature name (`grid`, `selection`, `table`, `async`, `scale`, `scrollbar`, `page`, `masonry`, `groups`, `snapshots`)
+
+## Git Workflow
+
+**Working branch is `staging`.** The `main` branch is protected and requires a pull request.
+
+- ❌ **NEVER push directly to `main`** — it is protected on GitHub and will be rejected
+- ❌ **NEVER commit on `main`** — always work on `staging` or feature branches
+- ❌ **NEVER commit or push without explicit user permission**
+- ✅ Push to `staging`: `git push origin staging`
+- ✅ Merge to `main` via PR: `staging` → `main`
+- ✅ Feature branches branch off `staging`, merge back to `staging`
+
+**Before any git operation**, verify you're on the right branch:
+```
+git branch --show-current  # Should show 'staging' or a feature branch, NEVER 'main'
+```
+
+## CI/CD
+
+### CI (`ci.yml`)
+Runs on push to `staging`/`main` and on PRs:
+- Typecheck → Test → Coverage threshold (85%) → Build → Bundle size
+
+### Publish (`publish.yml`)
+Publishes to npm when a version tag is pushed.
+
+### Cross-Repo Staging Deploy (`notify-staging.yml`)
+When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
 
 ## Zero Dependencies
 

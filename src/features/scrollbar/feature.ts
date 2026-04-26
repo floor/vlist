@@ -53,6 +53,13 @@ export interface ScrollbarFeatureConfig {
    * When false, the scrollbar only appears on scroll or hover near edge.
    */
   showOnViewportEnter?: boolean;
+
+  /**
+   * Reserve layout space for the scrollbar (default: false).
+   * When true, content shrinks to make room for the scrollbar track so it
+   * never overlaps items. Equivalent to CSS `scrollbar-gutter: stable`.
+   */
+  gutter?: boolean;
 }
 
 // =============================================================================
@@ -103,6 +110,13 @@ export const withScrollbar = <T extends VListItem = VListItem>(
         )
       ) {
         dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+      }
+
+      // Reserve layout space for the scrollbar track when gutter: true.
+      // Class goes on the viewport (consistent with --custom-scrollbar, --no-scrollbar)
+      // so the viewport padding-right shrinks the scrollable content box.
+      if (config?.gutter) {
+        dom.viewport.classList.add(`${classPrefix}-viewport--gutter`);
       }
 
       // Set initial bounds — use viewportState.totalSize which includes

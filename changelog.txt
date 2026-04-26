@@ -3,6 +3,62 @@ initial commit → latest
 470 commits · 82 days · Feb 2 – Apr 24, 2026
 
 
+2026-04-26  v1.6.3
+
+  feat(a11y): add focusOnClick option (#32)
+    Show the focus ring on mouse click for file-manager / spreadsheet UIs.
+    Defaults to false (standard :focus-visible convention — click selects
+    but does not show the focus ring).
+    - BuilderConfig.focusOnClick for baseline single-select lists
+    - SelectionFeatureConfig.focusOnClick for withSelection
+    - Applies to regular clicks and Shift+clicks in multiple mode
+
+  feat(scrollbar): add gutter option to withScrollbar
+    withScrollbar({ gutter: true }) reserves stable layout space for the
+    custom scrollbar track so it never overlaps content — equivalent to
+    CSS scrollbar-gutter: stable. Default: false (overlay behavior).
+    Implemented via vlist-viewport--gutter on the viewport element, which
+    pads the scrollable content box by the track width.
+
+  fix(page): remove stale targetScroll — use domScroll directly
+    targetScroll tracked an intended scroll position across keydown events
+    to handle rapid key repeat. All scrollTo calls use behavior:instant
+    which updates window.scrollY synchronously — no in-flight state exists.
+    The stale variable persisted across manual scroll + click interactions,
+    causing _scrollItemIntoView to compute coordinates against the wrong
+    position and jump the list to the wrong location.
+
+  fix(core): auto-size horizontal root height on Windows
+    On platforms with persistent scrollbars, the native horizontal scrollbar
+    reduces clientHeight and clips item content. When item.height is set and
+    the scrollbar is visible, vlist now measures the rendered scrollbar height
+    (offsetHeight − clientHeight after a brief overflow-x: scroll probe) and
+    sizes the root to item.height + scrollbarHeight so the bar sits below the
+    content. Returns 0 on macOS overlay scrollbars. Skipped for withGrid,
+    withMasonry, and scroll.scrollbar: 'none'.
+
+  fix(scrollbar): gutter class moved to viewport element
+    vlist-viewport--gutter replaces the former vlist--scrollbar-gutter on
+    the root, consistent with vlist-viewport--custom-scrollbar and
+    vlist-viewport--no-scrollbar. Padding is applied to the viewport so the
+    scrollable content area correctly excludes the track width.
+
+  style(scrollbar): split and rename CSS token namespaces
+    Native and custom overlay scrollbar tokens are now separate:
+    - Native:  --vlist-scrollbar-*        (thumb-color, track-color, width, radius…)
+    - Custom:  --vlist-custom-scrollbar-* (thumb-color, track-color, width, radius…)
+    Native scrollbar is wired to both scrollbar-width/scrollbar-color (standard,
+    Chrome 121+ / Firefox 128+) and ::-webkit-scrollbar (WebKit fallback).
+    Removed scrollbar-width: thin — Chrome 121+ treats keyword values as size
+    presets that override ::-webkit-scrollbar { width }, making the width
+    variable ineffective.
+
+  style(scrollbar): auto-radius for custom scrollbar thumb
+    --vlist-custom-scrollbar-radius defaults to calc(width / 2) so the thumb
+    stays perfectly pill-shaped as the track width changes. Override the
+    variable to use a fixed radius.
+
+
 2026-04-24  v1.6.2
 
   feat(async): forward response cursor to AdapterParams on sequential reads

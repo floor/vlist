@@ -285,6 +285,11 @@ describe("withScrollbar — Factory", () => {
     });
     expect(feature).toBeDefined();
   });
+
+  it("should accept gutter config", () => {
+    expect(withScrollbar<TestItem>({ gutter: true })).toBeDefined();
+    expect(withScrollbar<TestItem>({ gutter: false })).toBeDefined();
+  });
 });
 
 // =============================================================================
@@ -427,5 +432,49 @@ describe("withScrollbar — Feature Destroy", () => {
   it("should be safe to call feature.destroy() without setup", () => {
     const feature = withScrollbar<TestItem>();
     expect(() => feature.destroy!()).not.toThrow();
+  });
+});
+
+// =============================================================================
+// withScrollbar — Gutter
+// =============================================================================
+
+describe("withScrollbar — Gutter", () => {
+  it("should add gutter class to viewport when gutter: true", () => {
+    const feature = withScrollbar<TestItem>({ gutter: true });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(true);
+  });
+
+  it("should not add gutter class by default", () => {
+    const feature = withScrollbar<TestItem>();
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+  });
+
+  it("should not add gutter class when gutter: false", () => {
+    const feature = withScrollbar<TestItem>({ gutter: false });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+  });
+
+  it("should run destroy handler without error when gutter is set", () => {
+    const feature = withScrollbar<TestItem>({ gutter: true });
+    const ctx = createMockContext();
+
+    feature.setup!(ctx);
+
+    expect(() => {
+      for (const handler of ctx.destroyHandlers) handler();
+    }).not.toThrow();
   });
 });

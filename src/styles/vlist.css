@@ -34,12 +34,23 @@
 /* Default tokens — work without any data-theme-mode attribute */
 :root {
     /* ── Theme-invariant tokens (set once, never overridden) ── */
+
+    /* Native (webkit) scrollbar */
     --vlist-scrollbar-width: 8px;
-    --vlist-scrollbar-track-bg: transparent;
-    --vlist-scrollbar-custom-thumb-radius: 4px;
+    --vlist-scrollbar-track-color: transparent;
+    --vlist-scrollbar-radius: 4px;
+
+    /* Custom overlay scrollbar (withScrollbar feature) */
+    --vlist-custom-scrollbar-width: 8px;
+    --vlist-custom-scrollbar-track-color: transparent;
+    --vlist-custom-scrollbar-radius: calc(var(--vlist-custom-scrollbar-width) / 2);
+
+    /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
     --vlist-item-padding-y: 0.75rem;
     --vlist-border-radius: 0.5rem;
+
+    /* Transitions */
     --vlist-transition-duration: 150ms;
     --vlist-transition-timing: ease-in-out;
 
@@ -55,10 +66,10 @@
     --vlist-text-muted: #6b7280;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #f3f4f6;
-    --vlist-scrollbar-thumb: #d1d5db;
-    --vlist-scrollbar-thumb-hover: #9ca3af;
-    --vlist-scrollbar-custom-thumb-bg: rgba(0, 0, 0, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(0, 0, 0, 0.5);
+    --vlist-scrollbar-thumb-color: #d1d5db;
+    --vlist-scrollbar-thumb-hover-color: #9ca3af;
+    --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.3);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.5);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
@@ -85,10 +96,10 @@
     --vlist-text-muted: #9ca3af;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #1e2433;
-    --vlist-scrollbar-thumb: #4b5563;
-    --vlist-scrollbar-thumb-hover: #6b7280;
-    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-thumb-color: #4b5563;
+    --vlist-scrollbar-thumb-hover-color: #6b7280;
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -106,10 +117,10 @@
         --vlist-text-muted: #9ca3af;
         --vlist-focus-ring: #3b82f6;
         --vlist-group-header-bg: #1e2433;
-        --vlist-scrollbar-thumb: #4b5563;
-        --vlist-scrollbar-thumb-hover: #6b7280;
-        --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-        --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+        --vlist-scrollbar-thumb-color: #4b5563;
+        --vlist-scrollbar-thumb-hover-color: #6b7280;
+        --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
+        --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
     }
 }
@@ -127,10 +138,10 @@
     --vlist-text-muted: #9ca3af;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #1e2433;
-    --vlist-scrollbar-thumb: #4b5563;
-    --vlist-scrollbar-thumb-hover: #6b7280;
-    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-thumb-color: #4b5563;
+    --vlist-scrollbar-thumb-hover-color: #6b7280;
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -178,27 +189,38 @@
     width: 100%;
     height: 100%;
     overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--vlist-scrollbar-thumb) transparent;
+    /* Firefox: color the native scrollbar. Chrome uses ::-webkit-scrollbar-thumb below. */
+    scrollbar-color: var(--vlist-scrollbar-thumb-color)
+        var(--vlist-scrollbar-track-color);
 }
 
-/* Webkit scrollbar */
+/* Firefox 128+: exact scrollbar width via length value.
+   -moz-appearance is Firefox-exclusive, so Chrome never enters this block.
+   Do NOT set scrollbar-width on the base rule — Chrome 121+ treats any keyword
+   (including 'thin') as a size preset that overrides ::-webkit-scrollbar { width }. */
+@supports (-moz-appearance: none) and (scrollbar-width: 1px) {
+    .vlist-viewport {
+        scrollbar-width: var(--vlist-scrollbar-width);
+    }
+}
+
+/* WebKit scrollbar — Chrome/Safari: size, color, radius, hover */
 .vlist-viewport::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--vlist-scrollbar-width);
+    height: var(--vlist-scrollbar-width);
 }
 
 .vlist-viewport::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--vlist-scrollbar-track-color);
 }
 
 .vlist-viewport::-webkit-scrollbar-thumb {
-    background-color: var(--vlist-scrollbar-thumb);
-    border-radius: 3px;
+    background-color: var(--vlist-scrollbar-thumb-color);
+    border-radius: var(--vlist-scrollbar-radius);
 }
 
 .vlist-viewport::-webkit-scrollbar-thumb:hover {
-    background-color: var(--vlist-scrollbar-thumb-hover);
+    background-color: var(--vlist-scrollbar-thumb-hover-color);
 }
 
 /* Content container (sets total height) */
@@ -310,9 +332,9 @@
     position: absolute;
     top: 0;
     right: 0;
-    width: var(--vlist-scrollbar-width);
+    width: var(--vlist-custom-scrollbar-width);
     height: 100%;
-    background-color: var(--vlist-scrollbar-track-bg);
+    background-color: var(--vlist-custom-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
     z-index: 10;
@@ -353,14 +375,14 @@
     left: 0;
     right: 0;
     width: 100%;
-    background-color: var(--vlist-scrollbar-custom-thumb-bg);
-    border-radius: var(--vlist-scrollbar-custom-thumb-radius);
+    background-color: var(--vlist-custom-scrollbar-thumb-color);
+    border-radius: var(--vlist-custom-scrollbar-radius);
     cursor: pointer;
     transition: background-color 0.15s ease-out;
 }
 
 .vlist-scrollbar-thumb:hover {
-    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+    background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
 /* Dragging state */
@@ -370,7 +392,7 @@
 }
 
 .vlist-scrollbar--dragging .vlist-scrollbar-thumb {
-    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+    background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
 /* =============================================================================
@@ -449,7 +471,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: var(--vlist-scrollbar-width);
+    height: var(--vlist-custom-scrollbar-width);
 }
 
 .vlist-scrollbar--horizontal .vlist-scrollbar-thumb {
@@ -457,6 +479,19 @@
     left: 0;
     width: auto;
     height: 100%;
+}
+
+/* Scrollbar gutter — reserve layout space so the custom scrollbar never overlaps items.
+   Equivalent to CSS scrollbar-gutter: stable. Enabled via withScrollbar({ gutter: true }).
+   Padding is on the viewport so the scrollable content box shrinks — items are absolutely
+   positioned and unaffected by padding on inner containers. */
+.vlist-viewport--gutter {
+    padding-right: var(--vlist-custom-scrollbar-width);
+}
+
+.vlist--horizontal .vlist-viewport--gutter {
+    padding-right: 0;
+    padding-bottom: var(--vlist-custom-scrollbar-width);
 }
 
 /* Hide native scrollbar when custom scrollbar is active */
