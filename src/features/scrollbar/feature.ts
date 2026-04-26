@@ -112,9 +112,11 @@ export const withScrollbar = <T extends VListItem = VListItem>(
         dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
       }
 
-      // Reserve layout space for the scrollbar track when gutter: true
+      // Reserve layout space for the scrollbar track when gutter: true.
+      // Class goes on the viewport (consistent with --custom-scrollbar, --no-scrollbar)
+      // so the viewport padding-right shrinks the scrollable content box.
       if (config?.gutter) {
-        dom.root.classList.add(`${classPrefix}--scrollbar-gutter`);
+        dom.viewport.classList.add(`${classPrefix}-viewport--gutter`);
       }
 
       // Set initial bounds — use viewportState.totalSize which includes
