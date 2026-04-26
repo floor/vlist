@@ -43,7 +43,7 @@
     /* Custom overlay scrollbar (withScrollbar feature) */
     --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
-    --vlist-custom-scrollbar-radius: 8px;
+    --vlist-custom-scrollbar-radius: calc(var(--vlist-custom-scrollbar-width) / 2);
 
     /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
