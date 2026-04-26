@@ -34,12 +34,19 @@
 /* Default tokens — work without any data-theme-mode attribute */
 :root {
     /* ── Theme-invariant tokens (set once, never overridden) ── */
+
+    /* Scrollbar geometry — width and track-color are shared by native + custom overlay */
     --vlist-scrollbar-width: 8px;
-    --vlist-scrollbar-track-bg: transparent;
-    --vlist-scrollbar-custom-thumb-radius: 4px;
+    --vlist-scrollbar-track-color: transparent;
+    --vlist-scrollbar-radius: 4px;        /* native webkit thumb radius */
+    --vlist-scrollbar-custom-radius: 4px; /* custom overlay thumb radius */
+
+    /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
     --vlist-item-padding-y: 0.75rem;
     --vlist-border-radius: 0.5rem;
+
+    /* Transitions */
     --vlist-transition-duration: 150ms;
     --vlist-transition-timing: ease-in-out;
 
@@ -55,10 +62,10 @@
     --vlist-text-muted: #6b7280;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #f3f4f6;
-    --vlist-scrollbar-thumb: #d1d5db;
-    --vlist-scrollbar-thumb-hover: #9ca3af;
-    --vlist-scrollbar-custom-thumb-bg: rgba(0, 0, 0, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(0, 0, 0, 0.5);
+    --vlist-scrollbar-thumb-color: #d1d5db;
+    --vlist-scrollbar-thumb-hover-color: #9ca3af;
+    --vlist-scrollbar-custom-thumb-color: rgba(0, 0, 0, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-color: rgba(0, 0, 0, 0.5);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
@@ -85,10 +92,10 @@
     --vlist-text-muted: #9ca3af;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #1e2433;
-    --vlist-scrollbar-thumb: #4b5563;
-    --vlist-scrollbar-thumb-hover: #6b7280;
-    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-thumb-color: #4b5563;
+    --vlist-scrollbar-thumb-hover-color: #6b7280;
+    --vlist-scrollbar-custom-thumb-color: rgba(255, 255, 255, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-color: rgba(255, 255, 255, 0.5);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -106,10 +113,10 @@
         --vlist-text-muted: #9ca3af;
         --vlist-focus-ring: #3b82f6;
         --vlist-group-header-bg: #1e2433;
-        --vlist-scrollbar-thumb: #4b5563;
-        --vlist-scrollbar-thumb-hover: #6b7280;
-        --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-        --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+        --vlist-scrollbar-thumb-color: #4b5563;
+        --vlist-scrollbar-thumb-hover-color: #6b7280;
+        --vlist-scrollbar-custom-thumb-color: rgba(255, 255, 255, 0.3);
+        --vlist-scrollbar-custom-thumb-hover-color: rgba(255, 255, 255, 0.5);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
     }
 }
@@ -127,10 +134,10 @@
     --vlist-text-muted: #9ca3af;
     --vlist-focus-ring: #3b82f6;
     --vlist-group-header-bg: #1e2433;
-    --vlist-scrollbar-thumb: #4b5563;
-    --vlist-scrollbar-thumb-hover: #6b7280;
-    --vlist-scrollbar-custom-thumb-bg: rgba(255, 255, 255, 0.3);
-    --vlist-scrollbar-custom-thumb-hover-bg: rgba(255, 255, 255, 0.5);
+    --vlist-scrollbar-thumb-color: #4b5563;
+    --vlist-scrollbar-thumb-hover-color: #6b7280;
+    --vlist-scrollbar-custom-thumb-color: rgba(255, 255, 255, 0.3);
+    --vlist-scrollbar-custom-thumb-hover-color: rgba(255, 255, 255, 0.5);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -178,27 +185,35 @@
     width: 100%;
     height: 100%;
     overflow: auto;
+    /* Standard API — keyword fallback for Firefox 64+, Chrome < 121 */
     scrollbar-width: thin;
-    scrollbar-color: var(--vlist-scrollbar-thumb) transparent;
+    scrollbar-color: var(--vlist-scrollbar-thumb-color) var(--vlist-scrollbar-track-color);
 }
 
-/* Webkit scrollbar */
+/* Length-value support: Chrome 121+, Firefox 128+ */
+@supports (scrollbar-width: 1px) {
+    .vlist-viewport {
+        scrollbar-width: var(--vlist-scrollbar-width);
+    }
+}
+
+/* WebKit scrollbar — Safari + hover state + border-radius */
 .vlist-viewport::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--vlist-scrollbar-width);
+    height: var(--vlist-scrollbar-width);
 }
 
 .vlist-viewport::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--vlist-scrollbar-track-color);
 }
 
 .vlist-viewport::-webkit-scrollbar-thumb {
-    background-color: var(--vlist-scrollbar-thumb);
-    border-radius: 3px;
+    background-color: var(--vlist-scrollbar-thumb-color);
+    border-radius: var(--vlist-scrollbar-radius);
 }
 
 .vlist-viewport::-webkit-scrollbar-thumb:hover {
-    background-color: var(--vlist-scrollbar-thumb-hover);
+    background-color: var(--vlist-scrollbar-thumb-hover-color);
 }
 
 /* Content container (sets total height) */
@@ -312,7 +327,7 @@
     right: 0;
     width: var(--vlist-scrollbar-width);
     height: 100%;
-    background-color: var(--vlist-scrollbar-track-bg);
+    background-color: var(--vlist-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
     z-index: 10;
@@ -353,14 +368,14 @@
     left: 0;
     right: 0;
     width: 100%;
-    background-color: var(--vlist-scrollbar-custom-thumb-bg);
-    border-radius: var(--vlist-scrollbar-custom-thumb-radius);
+    background-color: var(--vlist-scrollbar-custom-thumb-color);
+    border-radius: var(--vlist-scrollbar-custom-radius);
     cursor: pointer;
     transition: background-color 0.15s ease-out;
 }
 
 .vlist-scrollbar-thumb:hover {
-    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+    background-color: var(--vlist-scrollbar-custom-thumb-hover-color);
 }
 
 /* Dragging state */
@@ -370,7 +385,7 @@
 }
 
 .vlist-scrollbar--dragging .vlist-scrollbar-thumb {
-    background-color: var(--vlist-scrollbar-custom-thumb-hover-bg);
+    background-color: var(--vlist-scrollbar-custom-thumb-hover-color);
 }
 
 /* =============================================================================
