@@ -4,16 +4,54 @@
 
 /* Table modifier on root */
 .vlist--table {
+    /* Flex column: header is a static flex item, viewport fills the rest.
+       This avoids position:absolute on the viewport, which would make it
+       the containing block for the custom scrollbar track and cause the
+       track to scroll with the content instead of staying fixed. */
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    /* Inherit container's min-height so the root doesn't collapse to 0 when
-       the parent only uses min-height/max-height (not an explicit height).
-       Without this, the absolute-positioned viewport and header have no
-       reference height and render inside a 0px-tall root. */
     min-height: inherit;
 }
 
 .vlist--table .vlist-viewport {
+    flex: 1;
+    min-height: 0;   /* allow flex to shrink below intrinsic height */
+    height: auto;    /* override height:100% from base */
     overflow: auto;
+}
+
+/* Header is in flex flow — no absolute positioning needed */
+.vlist--table .vlist-table-header {
+    position: static;
+}
+
+/* =============================================================================
+   Scrollbar positioning in table mode
+   The custom scrollbar track and hover zone are positioned relative to the
+   root (not the viewport), so they must be offset below the table header row.
+   --vlist-table-header-height is set as an inline CSS variable by header.ts.
+   ============================================================================= */
+
+.vlist--table .vlist-scrollbar {
+    top: calc(var(--vlist-table-header-height, 0px) + var(--vlist-custom-scrollbar-padding-top, 2px));
+}
+
+.vlist--table .vlist-scrollbar-hover {
+    top: var(--vlist-table-header-height, 0px);
+    height: calc(100% - var(--vlist-table-header-height, 0px));
+}
+
+/* In table mode, the viewport scrolls both vertically (rows) and horizontally
+   (columns). The custom scrollbar replaces only the vertical native scrollbar —
+   the horizontal one must remain visible for column navigation.
+   WebKit: re-enable the scrollbar system and zero-out only the vertical width
+   so the horizontal bar stays visible at its normal height.
+   Firefox: scrollbar-width cannot hide a single axis, so both native scrollbars
+   remain hidden; horizontal scrolling is available via trackpad or keyboard. */
+.vlist--table .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
+    display: block;
+    width: 0; /* vertical scrollbar: hidden (custom replaces it) */
 }
 
 .vlist--table .vlist-items {

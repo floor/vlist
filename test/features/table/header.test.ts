@@ -119,16 +119,14 @@ describe("createTableHeader - DOM setup", () => {
     expect(scrollContainer.getAttribute("role")).toBe("presentation");
   });
 
-  it("should offset viewport below header", () => {
+  it("should set header height CSS variable on root for scrollbar offset", () => {
     const { root, viewport } = createTestDOM();
     createTableHeader(root, viewport, 48, "vlist", mock());
 
-    expect(viewport.style.position).toBe("absolute");
-    expect(viewport.style.top).toBe("48px");
-    expect(viewport.style.left).toBe("0px");
-    expect(viewport.style.right).toBe("0px");
-    expect(viewport.style.bottom).toBe("0px");
-    expect(viewport.style.height).toBe("auto");
+    // Layout is now handled by CSS flex — no inline styles on viewport.
+    // The CSS variable on root allows the custom scrollbar to offset its track.
+    expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("48px");
+    expect(viewport.style.position).toBe("");
   });
 
   it("should use custom class prefix", () => {
@@ -884,19 +882,15 @@ describe("createTableHeader - destroy", () => {
     expect(root.querySelector("[role='rowgroup']")).toBeNull();
   });
 
-  it("should reset viewport positioning", () => {
+  it("should clear the header height CSS variable on root after destroy", () => {
     const { root, viewport } = createTestDOM();
-    createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
-
-    expect(viewport.style.position).toBe("absolute");
-
     const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+
+    expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("40px");
+
     header.destroy();
 
+    expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("");
     expect(viewport.style.position).toBe("");
-    expect(viewport.style.top).toBe("");
-    expect(viewport.style.left).toBe("");
-    expect(viewport.style.right).toBe("");
-    expect(viewport.style.bottom).toBe("");
   });
 });

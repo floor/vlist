@@ -425,7 +425,7 @@ describe("withTable - Setup", () => {
     cleanupCtx(ctx);
   });
 
-  it("should offset viewport by header height", () => {
+  it("should set header height CSS variable on root for layout and scrollbar offset", () => {
     const feature = withTable({
       columns: testColumns,
       rowHeight: 40,
@@ -435,7 +435,10 @@ describe("withTable - Setup", () => {
 
     feature.setup(ctx);
 
-    expect(ctx.dom.viewport.style.top).toBe("44px");
+    // Layout is handled by CSS flex — the CSS variable drives both
+    // the flex-based header offset and the custom scrollbar track position.
+    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("44px");
+    expect(ctx.dom.viewport.style.position).toBe("");
     cleanupCtx(ctx);
   });
 
@@ -445,28 +448,7 @@ describe("withTable - Setup", () => {
 
     feature.setup(ctx);
 
-    expect(ctx.dom.viewport.style.top).toBe("36px");
-    cleanupCtx(ctx);
-  });
-
-  it("should use absolute positioning on viewport for proper containment", () => {
-    const feature = withTable({
-      columns: testColumns,
-      rowHeight: 40,
-      headerHeight: 44,
-    });
-    const ctx = createMockContext();
-
-    feature.setup(ctx);
-
-    // Viewport must be position: absolute with insets so it sizes correctly
-    // even when the root's height comes from min-height / max-height
-    // (where height: 100% on a static child resolves to auto).
-    expect(ctx.dom.viewport.style.position).toBe("absolute");
-    expect(ctx.dom.viewport.style.top).toBe("44px");
-    expect(ctx.dom.viewport.style.left).toBe("0px");
-    expect(ctx.dom.viewport.style.right).toBe("0px");
-    expect(ctx.dom.viewport.style.bottom).toBe("0px");
+    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("36px");
     cleanupCtx(ctx);
   });
 
@@ -1106,7 +1088,7 @@ describe("withTable - Configuration", () => {
 
     feature.setup(ctx);
 
-    expect(ctx.dom.viewport.style.top).toBe("40px");
+    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("40px");
     cleanupCtx(ctx);
   });
 
@@ -1120,7 +1102,7 @@ describe("withTable - Configuration", () => {
 
     feature.setup(ctx);
 
-    expect(ctx.dom.viewport.style.top).toBe("56px");
+    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("56px");
     cleanupCtx(ctx);
   });
 
