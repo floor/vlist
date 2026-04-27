@@ -203,8 +203,14 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           // Rebuild sizeCache and compression with the new total
           ctx.sizeCache.rebuild(snapshot.total);
           ctx.updateCompressionMode();
+          // withScale's enhancedUpdateCompressionMode already set the correct
+          // content size (virtualSize + slack) when compressed. Only update it
+          // ourselves for non-compressed lists — calling updateContentSize with
+          // just virtualSize would strip the slack and make the last items unreachable.
           const freshCompression = ctx.getCachedCompression();
-          ctx.updateContentSize(freshCompression.virtualSize);
+          if (!freshCompression.isCompressed) {
+            ctx.updateContentSize(freshCompression.virtualSize);
+          }
         } else if (totalItems === 0) {
           return;
         }
@@ -226,8 +232,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         if (sizeCacheTotal !== effectiveTotal) {
           ctx.sizeCache.rebuild(effectiveTotal);
           ctx.updateCompressionMode();
+          // Same as above: withScale already updated content size with slack included.
           const freshCompression = ctx.getCachedCompression();
-          ctx.updateContentSize(freshCompression.virtualSize);
+          if (!freshCompression.isCompressed) {
+            ctx.updateContentSize(freshCompression.virtualSize);
+          }
         }
 
         const compression = ctx.getCachedCompression();
@@ -248,12 +257,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           scrollPosition = offset + offsetInItem;
         }
 
-        // Clamp to valid range
+        // Clamp to valid range.
+        // When withScale is active, viewportState.totalSize = virtualSize + slack
+        // (set by enhancedUpdateCompressionMode). Using just compression.virtualSize
+        // here clips the last ~37 items off — the same drift bug as the original #12.
+        // For non-compressed lists, totalSize === virtualSize, so this is safe either way.
         const containerSize = ctx.state.viewportState.containerSize;
-        const maxScroll = Math.max(
-          0,
-          compression.virtualSize - containerSize,
-        );
+        const effectiveTotalSize = compression.isCompressed
+          ? ctx.state.viewportState.totalSize
+          : compression.virtualSize;
+        const maxScroll = Math.max(0, effectiveTotalSize - containerSize);
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
         ctx.scrollController.scrollTo(scrollPosition);
