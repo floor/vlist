@@ -17,17 +17,8 @@
 // Types
 // =============================================================================
 
-/**
- * Per-side padding for the scrollbar track.
- * Each side defaults to the global `PADDING` constant when omitted.
- * A plain number is shorthand for all four sides.
- */
-export type ScrollbarPadding = number | {
-  top?: number;
-  right?: number;
-  bottom?: number;
-  left?: number;
-};
+import type { ScrollbarPadding } from "../../types";
+export type { ScrollbarPadding } from "../../types";
 
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
