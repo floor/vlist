@@ -46,12 +46,13 @@ export interface ScrollbarConfig {
   showOnHover?: boolean;
 
   /**
-   * Width of the invisible hover zone in pixels.
-   * Only used when `showOnHover` is true.
-   * Defaults to `padding + 16` so the zone always covers the full inset track
-   * area plus a comfortable reach buffer, regardless of how much padding is set.
-   * A wider zone makes the scrollbar easier to discover;
-   * a narrower zone avoids interference with content near the edge.
+   * Width of the edge zone in pixels (default: `wallPadding + 16`).
+   * The edge zone covers the scrollbar edge including the padding margin, making
+   * the full area clickable regardless of `showOnHover`. When `showOnHover` is
+   * true, it also acts as the hover-to-reveal target.
+   * Defaults to wall-side padding (`right` for vertical, `bottom` for horizontal)
+   * plus 16px reach, so the zone always covers the full inset track plus a
+   * comfortable buffer.
    */
   hoverZoneWidth?: number;
 
@@ -75,10 +76,10 @@ export interface ScrollbarConfig {
   padding?: ScrollbarPadding;
 
   /**
-   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'jump').
-   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'page').
    * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
-   *               matching macOS native scrollbar behavior.
+   *               matching macOS native scrollbar behavior. Hold to scroll continuously.
+   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
    */
   clickBehavior?: 'jump' | 'page';
 }
