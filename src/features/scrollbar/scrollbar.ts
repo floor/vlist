@@ -17,6 +17,18 @@
 // Types
 // =============================================================================
 
+/**
+ * Per-side padding for the scrollbar track.
+ * Each side defaults to the global `PADDING` constant when omitted.
+ * A plain number is shorthand for all four sides.
+ */
+export type ScrollbarPadding = number | {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+};
+
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
   /** Enable scrollbar (default: true when compressed) */
@@ -60,13 +72,16 @@ export interface ScrollbarConfig {
   showOnViewportEnter?: boolean;
 
   /**
-   * Padding between the scrollbar track and the viewport edges in pixels (default: 1).
-   * Insets the track from the right wall and from the top and bottom, so the scrollbar
-   * floats rather than sitting flush against the edges. Also adjusts the thumb travel
-   * range to keep position accurate.
-   * Can also be set globally via the `--vlist-custom-scrollbar-padding` CSS variable.
+   * Padding between the scrollbar track and the viewport edges (default: 2).
+   * Insets the track from the edges so the scrollbar floats rather than sitting flush.
+   * Also adjusts the thumb travel range to keep position accurate.
+   *
+   * Accepts a single number (all sides) or an object for per-side control:
+   * `{ top?, right?, bottom?, left? }` — omitted sides default to 2px.
+   *
+   * Can also be set globally via the `--vlist-custom-scrollbar-padding-{side}` CSS variables.
    */
-  padding?: number;
+  padding?: ScrollbarPadding;
 
   /**
    * Behavior when clicking on the scrollbar track (not the thumb) (default: 'jump').
@@ -111,10 +126,34 @@ const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
 const HOVER_ZONE_REACH = 16; // px of reach beyond the visible track (added to padding for the default)
 const SHOW_ON_VIEWPORT_ENTER = true;
-const PADDING = 1;
+const PADDING = 2;
 const TRACK_CLICK_BEHAVIOR = 'page' as const;
 const PAGE_SCROLL_INITIAL_DELAY = 350; // ms before continuous scroll starts (matches keyboard repeat)
 const PAGE_SCROLL_SPEED_PPS = 12;      // pages per second during held continuous scroll
+
+// =============================================================================
+// Padding resolver
+// =============================================================================
+
+interface ResolvedPadding {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const resolvePadding = (raw: ScrollbarPadding | undefined): ResolvedPadding => {
+  if (raw === undefined || typeof raw === 'number') {
+    const v = raw ?? PADDING;
+    return { top: v, right: v, bottom: v, left: v };
+  }
+  return {
+    top: raw.top ?? PADDING,
+    right: raw.right ?? PADDING,
+    bottom: raw.bottom ?? PADDING,
+    left: raw.left ?? PADDING,
+  };
+};
 
 // =============================================================================
 // Factory
@@ -142,12 +181,18 @@ export const createScrollbar = (
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
-    padding = PADDING,
     clickBehavior = TRACK_CLICK_BEHAVIOR,
   } = config;
 
-  // Hover zone covers padding offset + fixed reach beyond the track edge
-  const hoverZoneWidth = config.hoverZoneWidth ?? (padding + HOVER_ZONE_REACH);
+  const pad = resolvePadding(config.padding);
+
+  // Axis-aware padding: start/end along the scroll axis, wall-side for hover zone default
+  const scrollAxisStartPad = horizontal ? pad.left : pad.top;
+  const scrollAxisEndPad   = horizontal ? pad.right : pad.bottom;
+  const wallPad            = horizontal ? pad.bottom : pad.right;
+
+  // Hover zone covers wall-gap + fixed reach beyond the track edge
+  const hoverZoneWidth = config.hoverZoneWidth ?? (wallPad + HOVER_ZONE_REACH);
 
   // State
   let totalSize = 0;
@@ -195,7 +240,10 @@ export const createScrollbar = (
     }
 
     if (config.padding !== undefined) {
-      track.style.setProperty("--vlist-custom-scrollbar-padding", `${padding}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-top",    `${pad.top}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-right",  `${pad.right}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-bottom", `${pad.bottom}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-left",   `${pad.left}px`);
     }
 
     if (config.minThumbSize !== undefined) {
@@ -288,8 +336,8 @@ export const createScrollbar = (
       return;
     }
 
-    // Effective track length shrinks by the margin on both ends
-    const trackLength = Math.max(0, containerSize - 2 * padding);
+    // Effective track length shrinks by the margin on both ends (start + end along scroll axis)
+    const trackLength = Math.max(0, containerSize - scrollAxisStartPad - scrollAxisEndPad);
 
     // Calculate thumb size (proportional to visible content, scaled to track)
     const scrollRatio = containerSize / totalSize;
@@ -585,6 +633,12 @@ export const createScrollbar = (
         hoverZone.parentNode.removeChild(hoverZone);
       }
     }
+
+    // Remove inline CSS variable overrides from viewport
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-top");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-right");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-bottom");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-left");
 
     // Remove DOM elements
     if (track.parentNode) {

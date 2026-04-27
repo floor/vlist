@@ -156,8 +156,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
-      // 40% of trackLength (400 - 2×defaultPadding = 398) ≈ 159.2px
-      expect(thumbHeight).toBeCloseTo(398 * (400 / 1000), 0);
+      // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
+      expect(thumbHeight).toBeCloseTo(396 * (400 / 1000), 0);
     });
 
     it("should respect minimum thumb size", () => {
@@ -196,7 +196,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
-      const maxThumbTravel = 398 - thumbHeight; // trackLength = 400 - 2×defaultPadding
+      const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
 
       // Thumb should be at max travel position
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
@@ -213,7 +213,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
-      const maxThumbTravel = 398 - thumbHeight; // trackLength = 400 - 2×defaultPadding
+      const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateY(${expectedPosition}px)`);
@@ -292,7 +292,7 @@ describe("createScrollbar", () => {
     });
 
     it("'jump' — does not call onScroll when thumb fills the track (maxThumbTravel ≤ 0)", () => {
-      // minThumbSize (500) > trackLength (398) — maxThumbTravel is negative
+      // minThumbSize (500) > trackLength (396) — maxThumbTravel is negative
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'jump',
@@ -589,6 +589,20 @@ describe("createScrollbar", () => {
       // If no error thrown, test passes
       expect(true).toBe(true);
     });
+
+    it("should remove all four padding CSS variables from viewport on destroy", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+
+      scrollbar.destroy();
+      scrollbar = null as unknown as typeof scrollbar; // prevent afterEach double-destroy
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
+    });
   });
 
   describe("viewport hover", () => {
@@ -631,35 +645,59 @@ describe("createScrollbar", () => {
       expect(thumbHeight).toBeGreaterThanOrEqual(100);
     });
 
-    it("should apply padding as CSS variable on track", () => {
+    it("should apply uniform padding as CSS variables on viewport", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
 
-      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
-      expect(track.style.getPropertyValue("--vlist-custom-scrollbar-padding")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("8px");
     });
 
-    it("should set CSS variable to 0px when padding is explicitly 0", () => {
+    it("should apply per-side padding as CSS variables on viewport", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: { top: 4, right: 6, bottom: 8, left: 10 },
+      });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("4px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("6px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("10px");
+    });
+
+    it("should fill omitted sides with the default when padding is a partial object", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 8 } });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("2px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("2px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("2px");
+    });
+
+    it("should set all CSS variables to 0px when padding is explicitly 0", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: 0 });
 
-      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
-      expect(track.style.getPropertyValue("--vlist-custom-scrollbar-padding")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("0px");
     });
 
-    it("should not set CSS variable when padding is not specified (CSS wins)", () => {
+    it("should not set CSS variables when padding is not specified (CSS wins)", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {});
 
-      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
-      expect(track.style.getPropertyValue("--vlist-custom-scrollbar-padding")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
     });
 
-    it("should reduce thumb travel range by 2× padding", () => {
+    it("should reduce thumb travel range by top + bottom padding (uniform)", () => {
       const padding = 10;
       scrollbar = createScrollbar(viewport, onScrollMock, { padding });
       scrollbar.updateBounds(1000, 400); // 40% visible
 
-      // trackLength = 400 - 2*10 = 380
-      // thumbSize = 0.4 * 380 = 152
-      // maxThumbTravel = 380 - 152 = 228
+      // trackLength = 400 - 10 - 10 = 380
       const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
       const trackLength = 400 - 2 * padding;
@@ -671,7 +709,33 @@ describe("createScrollbar", () => {
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
     });
 
-    it("hover zone default width equals padding + 16", () => {
+    it("should use asymmetric top + bottom padding for thumb travel when object form is used", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 5, bottom: 15 } });
+      scrollbar.updateBounds(1000, 400); // 40% visible
+
+      // trackLength = 400 - 5 - 15 = 380
+      const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
+      const thumbHeight = parseFloat(thumb.style.height);
+      const trackLength = 400 - 5 - 15;
+
+      expect(thumbHeight).toBeCloseTo(trackLength * (400 / 1000), 0);
+
+      scrollbar.updatePosition(1000 - 400); // scrolled to bottom
+      const maxThumbTravel = trackLength - thumbHeight;
+      expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
+    });
+
+    it("hover zone default width uses right padding (wall side) + 16", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        showOnHover: true,
+        padding: { top: 0, right: 10, bottom: 0, left: 0 },
+      });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(10 + 16);
+    });
+
+    it("hover zone default width equals right padding + 16 for uniform padding", () => {
       const padding = 6;
       scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: true, padding });
 
@@ -723,8 +787,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
 
-      // 40% of trackLength (400 - 2×defaultPadding = 398) ≈ 159.2px
-      expect(thumbWidth).toBeCloseTo(398 * (400 / 1000), 0);
+      // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
+      expect(thumbWidth).toBeCloseTo(396 * (400 / 1000), 0);
     });
 
     it("should use translateX instead of translateY for thumb positioning", () => {
@@ -749,7 +813,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
-      const maxThumbTravel = 398 - thumbWidth; // trackLength = 400 - 2×defaultPadding
+      const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
 
       expect(thumb.style.transform).toBe(`translateX(${maxThumbTravel}px)`);
     });
@@ -765,7 +829,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
-      const maxThumbTravel = 398 - thumbWidth; // trackLength = 400 - 2×defaultPadding
+      const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateX(${expectedPosition}px)`);
