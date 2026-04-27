@@ -156,8 +156,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
-      // 40% of 400px container = 160px
-      expect(thumbHeight).toBeCloseTo(160, 0);
+      // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
+      expect(thumbHeight).toBeCloseTo(396 * (400 / 1000), 0);
     });
 
     it("should respect minimum thumb size", () => {
@@ -196,7 +196,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
-      const maxThumbTravel = 400 - thumbHeight;
+      const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
 
       // Thumb should be at max travel position
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
@@ -213,7 +213,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
-      const maxThumbTravel = 400 - thumbHeight;
+      const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateY(${expectedPosition}px)`);
@@ -258,27 +258,228 @@ describe("createScrollbar", () => {
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
-      // Mock getBoundingClientRect
       track.getBoundingClientRect = () => ({
-        top: 0,
-        left: 0,
-        right: 300,
-        bottom: 400,
-        width: 8,
-        height: 400,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
+        top: 0, left: 0, right: 300, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      // Simulate click at middle of track
-      const clickEvent = new MouseEvent("click", {
-        clientY: 200,
-        bubbles: true,
-      });
-      track.dispatchEvent(clickEvent);
+      // Default is 'page' — uses mousedown
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
+    });
+  });
+
+  describe("clickBehavior", () => {
+    it("'jump' — centers thumb at click position", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false, clickBehavior: 'jump' });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      // Click at top of track (clientY: 0) — thumb should jump near start
+      track.dispatchEvent(new MouseEvent("click", { clientY: 0, bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBeGreaterThanOrEqual(0);
+      expect(position).toBeLessThan(200); // should be near the start
+    });
+
+    it("'jump' — does not call onScroll when thumb fills the track (maxThumbTravel ≤ 0)", () => {
+      // minThumbSize (500) > trackLength (396) — maxThumbTravel is negative
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'jump',
+        minThumbSize: 500,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("click", { clientY: 200, bubbles: true }));
+
+      expect(onScrollMock).not.toHaveBeenCalled();
+    });
+
+    it("'page' — scrolls forward by containerSize when pressing below thumb", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBe(400);
+    });
+
+    it("'page' — scrolls backward by containerSize when pressing above thumb", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+      scrollbar.updatePosition(600);
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 10, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBe(200);
+    });
+
+    it("'page' — clamps to 0 when scrolling backward at start", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+      scrollbar.updatePosition(100);
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBe(0);
+    });
+
+    it("'page' — clamps to maxScroll when scrolling forward at end", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+      scrollbar.updatePosition(500);
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBe(600);
+    });
+
+    it("'page' — repeats scroll while held, stops on mouseup", async () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      // Press and hold
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
+
+      // Wait past initial delay + at least one repeat interval
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Release
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      // Should have scrolled more than once
+      expect(onScrollMock.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it("'page' — stops repeating when thumb catches cursor", async () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'page',
+      });
+      // Small list — thumb covers most of the track, one page scroll reaches the end
+      scrollbar.updateBounds(500, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
+
+      // Simulate the scroll position updating after first scroll
+      scrollbar.updatePosition(100); // maxScroll = 100
+
+      // Wait past initial delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      // Should not have fired indefinitely — clamped
+      const calls = onScrollMock.mock.calls.length;
+      expect(calls).toBeGreaterThanOrEqual(1);
+    });
+
+    it("'page' — schedules auto-hide after mouse release", async () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: true,
+        autoHideDelay: 50,
+        clickBehavior: 'page',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      // Scrollbar should still be visible immediately after release
+      expect(scrollbar.isVisible()).toBe(true);
+
+      // After autoHideDelay, it should be hidden
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(scrollbar.isVisible()).toBe(false);
     });
   });
 
@@ -388,6 +589,20 @@ describe("createScrollbar", () => {
       // If no error thrown, test passes
       expect(true).toBe(true);
     });
+
+    it("should remove all four padding CSS variables from viewport on destroy", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+
+      scrollbar.destroy();
+      scrollbar = null as unknown as typeof scrollbar; // prevent afterEach double-destroy
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
+    });
   });
 
   describe("viewport hover", () => {
@@ -412,8 +627,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
-      // Default minThumbSize is 30
-      expect(thumbHeight).toBeGreaterThanOrEqual(30);
+      // Default minThumbSize is 15
+      expect(thumbHeight).toBeGreaterThanOrEqual(15);
     });
 
     it("should allow custom minThumbSize", () => {
@@ -428,6 +643,216 @@ describe("createScrollbar", () => {
       const thumbHeight = parseFloat(thumb.style.height);
 
       expect(thumbHeight).toBeGreaterThanOrEqual(100);
+    });
+
+    it("should apply uniform padding as CSS variables on viewport", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("8px");
+    });
+
+    it("should apply per-side padding as CSS variables on viewport", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: { top: 4, right: 6, bottom: 8, left: 10 },
+      });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("4px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("6px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("10px");
+    });
+
+    it("should fill omitted sides with the default when padding is a partial object", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 8 } });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("2px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("2px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("2px");
+    });
+
+    it("should set all CSS variables to 0px when padding is explicitly 0", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: 0 });
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("0px");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("0px");
+    });
+
+    it("should not set CSS variables when padding is not specified (CSS wins)", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {});
+
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
+      expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
+    });
+
+    it("should reduce thumb travel range by top + bottom padding (uniform)", () => {
+      const padding = 10;
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding });
+      scrollbar.updateBounds(1000, 400); // 40% visible
+
+      // trackLength = 400 - 10 - 10 = 380
+      const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
+      const thumbHeight = parseFloat(thumb.style.height);
+      const trackLength = 400 - 2 * padding;
+
+      expect(thumbHeight).toBeCloseTo(trackLength * (400 / 1000), 0);
+
+      scrollbar.updatePosition(1000 - 400); // scrolled to bottom
+      const maxThumbTravel = trackLength - thumbHeight;
+      expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
+    });
+
+    it("should use asymmetric top + bottom padding for thumb travel when object form is used", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 5, bottom: 15 } });
+      scrollbar.updateBounds(1000, 400); // 40% visible
+
+      // trackLength = 400 - 5 - 15 = 380
+      const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
+      const thumbHeight = parseFloat(thumb.style.height);
+      const trackLength = 400 - 5 - 15;
+
+      expect(thumbHeight).toBeCloseTo(trackLength * (400 / 1000), 0);
+
+      scrollbar.updatePosition(1000 - 400); // scrolled to bottom
+      const maxThumbTravel = trackLength - thumbHeight;
+      expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
+    });
+
+    it("hover zone default width uses right padding (wall side) + 16", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        showOnHover: true,
+        padding: { top: 0, right: 10, bottom: 0, left: 0 },
+      });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(10 + 16);
+    });
+
+    it("hover zone default width equals right padding + 16 for uniform padding", () => {
+      const padding = 6;
+      scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: true, padding });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(padding + 16);
+    });
+
+    it("explicit hoverZoneWidth overrides the padding-based default", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        showOnHover: true,
+        padding: 8,
+        hoverZoneWidth: 12,
+      });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(12);
+    });
+
+    it("edge zone is always present even when showOnHover is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: false });
+
+      expect(viewport.querySelector(".vlist-scrollbar-hover")).not.toBeNull();
+    });
+
+    it("clicking in the padding margin above the track triggers page scroll upward", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(400); // scrolled down — not at top
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      // Click at y=5 — above the track (top padding area)
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeLessThan(400);
+    });
+
+    it("clicking in the padding margin below the track triggers page scroll downward", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(0); // scrolled to top
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      // Click at y=395 — below the track (bottom padding area)
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 395, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeGreaterThan(0);
+    });
+
+    it("clicking in the padding margin with jump behavior clamps to track bounds", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "jump",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      // Click above the track → clamps to top (position 0)
+      hoverZone.dispatchEvent(new MouseEvent("click", { clientY: 5, bubbles: true }));
+      expect(onScrollMock).toHaveBeenCalledWith(0);
+    });
+
+    it("clicking in the padding margin works even when showOnHover is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        showOnHover: false,
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(400);
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeLessThan(400);
     });
   });
 
@@ -463,8 +888,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
 
-      // 40% of 400px container = 160px
-      expect(thumbWidth).toBeCloseTo(160, 0);
+      // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
+      expect(thumbWidth).toBeCloseTo(396 * (400 / 1000), 0);
     });
 
     it("should use translateX instead of translateY for thumb positioning", () => {
@@ -489,7 +914,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
-      const maxThumbTravel = 400 - thumbWidth;
+      const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
 
       expect(thumb.style.transform).toBe(`translateX(${maxThumbTravel}px)`);
     });
@@ -505,7 +930,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar-thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
-      const maxThumbTravel = 400 - thumbWidth;
+      const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateX(${expectedPosition}px)`);
@@ -531,12 +956,9 @@ describe("createScrollbar", () => {
         toJSON: () => ({}),
       });
 
-      // Simulate click at middle of horizontal track
-      const clickEvent = new MouseEvent("click", {
-        clientX: 200,
-        bubbles: true,
-      });
-      track.dispatchEvent(clickEvent);
+      // Default is 'page' — uses mousedown
+      track.dispatchEvent(new MouseEvent("mousedown", { clientX: 350, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
     });

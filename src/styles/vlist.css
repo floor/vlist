@@ -43,7 +43,12 @@
     /* Custom overlay scrollbar (withScrollbar feature) */
     --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
-    --vlist-custom-scrollbar-radius: calc(var(--vlist-custom-scrollbar-width) / 2);
+    --vlist-custom-scrollbar-radius: 4px;
+    --vlist-custom-scrollbar-padding-top: 2px;
+    --vlist-custom-scrollbar-padding-right: 2px;
+    --vlist-custom-scrollbar-padding-bottom: 2px;
+    --vlist-custom-scrollbar-padding-left: 2px;
+    --vlist-custom-scrollbar-min-thumb-size: 15px;
 
     /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
@@ -68,8 +73,8 @@
     --vlist-group-header-bg: #f3f4f6;
     --vlist-scrollbar-thumb-color: #d1d5db;
     --vlist-scrollbar-thumb-hover-color: #9ca3af;
-    --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.3);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
@@ -98,8 +103,8 @@
     --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb-color: #4b5563;
     --vlist-scrollbar-thumb-hover-color: #6b7280;
-    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -119,8 +124,8 @@
         --vlist-group-header-bg: #1e2433;
         --vlist-scrollbar-thumb-color: #4b5563;
         --vlist-scrollbar-thumb-hover-color: #6b7280;
-        --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-        --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+        --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+        --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
     }
 }
@@ -140,8 +145,8 @@
     --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb-color: #4b5563;
     --vlist-scrollbar-thumb-hover-color: #6b7280;
-    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -330,10 +335,10 @@
 /* Scrollbar track */
 .vlist-scrollbar {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: var(--vlist-custom-scrollbar-padding-top);
+    right: var(--vlist-custom-scrollbar-padding-right);
+    bottom: var(--vlist-custom-scrollbar-padding-bottom);
     width: var(--vlist-custom-scrollbar-width);
-    height: 100%;
     background-color: var(--vlist-custom-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
@@ -467,10 +472,10 @@
 /* Horizontal custom scrollbar — track at bottom, thumb moves on X axis */
 .vlist-scrollbar--horizontal {
     top: auto;
-    right: auto;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    left: var(--vlist-custom-scrollbar-padding-left);
+    right: var(--vlist-custom-scrollbar-padding-right);
+    bottom: var(--vlist-custom-scrollbar-padding-bottom);
+    width: auto;
     height: var(--vlist-custom-scrollbar-width);
 }
 
@@ -484,14 +489,16 @@
 /* Scrollbar gutter — reserve layout space so the custom scrollbar never overlaps items.
    Equivalent to CSS scrollbar-gutter: stable. Enabled via withScrollbar({ gutter: true }).
    Padding is on the viewport so the scrollable content box shrinks — items are absolutely
-   positioned and unaffected by padding on inner containers. */
+   positioned and unaffected by padding on inner containers.
+   Vertical: right-wall inset + track width + left breathing room.
+   Horizontal: bottom-wall inset + track height + top breathing room. */
 .vlist-viewport--gutter {
-    padding-right: var(--vlist-custom-scrollbar-width);
+    padding-right: calc(var(--vlist-custom-scrollbar-padding-right) + var(--vlist-custom-scrollbar-width) + var(--vlist-custom-scrollbar-padding-left));
 }
 
 .vlist--horizontal .vlist-viewport--gutter {
     padding-right: 0;
-    padding-bottom: var(--vlist-custom-scrollbar-width);
+    padding-bottom: calc(var(--vlist-custom-scrollbar-padding-bottom) + var(--vlist-custom-scrollbar-width) + var(--vlist-custom-scrollbar-padding-top));
 }
 
 /* Hide native scrollbar when custom scrollbar is active */
