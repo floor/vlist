@@ -93,18 +93,18 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 10.5 KB | Core virtualization, gap, padding, ARIA live region, baseline keyboard nav |
-| `withGrid()` | +3.8 KB | 2D grid layout with context injection |
-| `withMasonry()` | +3.3 KB | Pinterest-style masonry layout with lane-aware nav |
-| `withGroups()` | +2.7 KB | Grouped lists with sticky/inline headers |
-| `withAsync()` | +4.5 KB | Lazy loading with adapters |
-| `withSelection()` | +2.7 KB | Single/multiple selection + 2D keyboard nav |
+| **Base** | 10.6 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
+| `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.1 KB | 1M+ items via scroll compression |
-| `withScrollbar()` | +1.1 KB | Custom scrollbar UI |
-| `withTable()` | +5.5 KB | Data table with columns, resize, sort, groups |
+| `withGroups()` | +2.7 KB | Sticky/inline headers |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
-| `withPage()` | +0.9 KB | Document-level scrolling |
-| `withSnapshots()` | +0.7 KB | Scroll save/restore with autoSave |
+| `withScrollbar()` | +1.7 KB | Custom scrollbar UI |
+| `withGrid()` | +3.9 KB | 2D grid layout |
+| `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `withTable()` | +5.5 KB | Data table with columns, resize, sort |
+| `withPage()` | +0.8 KB | Window-level scrolling |
+| `withSnapshots()` | +0.8 KB | Scroll position save/restore |
 
 ## Examples
 
