@@ -25,4 +25,4 @@ jobs:
           token: ${{ secrets.DISPATCH_TOKEN }}
           repository: floor/vlist.io
           event-type: vlist-staging-updated
-          client-payload: '{"ref": "${{ github.sha }}", "message": "${{ github.event.head_commit.message }}"}'
+          client-payload: '{"ref": "${{ github.sha }}", "message": ${{ toJSON(github.event.head_commit.message) }}}'
