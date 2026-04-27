@@ -17,6 +17,9 @@
 // Types
 // =============================================================================
 
+import type { ScrollbarPadding } from "../../types";
+export type { ScrollbarPadding } from "../../types";
+
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
   /** Enable scrollbar (default: true when compressed) */
@@ -28,7 +31,10 @@ export interface ScrollbarConfig {
   /** Auto-hide delay in milliseconds (default: 1000) */
   autoHideDelay?: number;
 
-  /** Minimum thumb size in pixels (default: 30) */
+  /**
+   * Minimum thumb size in pixels (default: 15).
+   * Can also be set globally via the `--vlist-custom-scrollbar-min-thumb-size` CSS variable.
+   */
   minThumbSize?: number;
 
   /**
@@ -40,10 +46,13 @@ export interface ScrollbarConfig {
   showOnHover?: boolean;
 
   /**
-   * Width of the invisible hover zone in pixels (default: 16).
-   * Only used when `showOnHover` is true.
-   * A wider zone makes the scrollbar easier to discover;
-   * a narrower zone avoids interference with content near the edge.
+   * Width of the edge zone in pixels (default: `wallPadding + 16`).
+   * The edge zone covers the scrollbar edge including the padding margin, making
+   * the full area clickable regardless of `showOnHover`. When `showOnHover` is
+   * true, it also acts as the hover-to-reveal target.
+   * Defaults to wall-side padding (`right` for vertical, `bottom` for horizontal)
+   * plus 16px reach, so the zone always covers the full inset track plus a
+   * comfortable buffer.
    */
   hoverZoneWidth?: number;
 
@@ -53,6 +62,26 @@ export interface ScrollbarConfig {
    * near the scrollbar edge (if `showOnHover` is true).
    */
   showOnViewportEnter?: boolean;
+
+  /**
+   * Padding between the scrollbar track and the viewport edges (default: 2).
+   * Insets the track from the edges so the scrollbar floats rather than sitting flush.
+   * Also adjusts the thumb travel range to keep position accurate.
+   *
+   * Accepts a single number (all sides) or an object for per-side control:
+   * `{ top?, right?, bottom?, left? }` — omitted sides default to 2px.
+   *
+   * Can also be set globally via the `--vlist-custom-scrollbar-padding-{side}` CSS variables.
+   */
+  padding?: ScrollbarPadding;
+
+  /**
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'page').
+   * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
+   *               matching macOS native scrollbar behavior. Hold to scroll continuously.
+   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
+   */
+  clickBehavior?: 'jump' | 'page';
 }
 
 /** Scrollbar instance */
@@ -85,10 +114,40 @@ export type ScrollCallback = (position: number) => void;
 
 const AUTO_HIDE = true;
 const AUTO_HIDE_DELAY = 1000;
-const MIN_THUMB_SIZE = 30;
+const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
-const HOVER_ZONE_WIDTH = 16;
+const HOVER_ZONE_REACH = 16; // px of reach beyond the visible track (added to padding for the default)
 const SHOW_ON_VIEWPORT_ENTER = true;
+const PADDING = 2;
+const TRACK_CLICK_BEHAVIOR = 'page' as const;
+const PAGE_SCROLL_INITIAL_DELAY = 350; // ms before continuous scroll starts (matches keyboard repeat)
+const PAGE_SCROLL_SPEED_PPS = 12;      // pages per second during held continuous scroll
+
+// =============================================================================
+// Padding resolver
+// =============================================================================
+
+interface ResolvedPadding {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const resolvePadding = (raw: ScrollbarPadding | undefined): ResolvedPadding => {
+  // typeof !== 'object' narrows raw to number | undefined in the true branch,
+  // avoiding a narrowing gap that occurs with the equivalent (raw === undefined || typeof raw === 'number') OR form.
+  if (typeof raw !== 'object') {
+    const v = raw ?? PADDING;
+    return { top: v, right: v, bottom: v, left: v };
+  }
+  return {
+    top: raw.top ?? PADDING,
+    right: raw.right ?? PADDING,
+    bottom: raw.bottom ?? PADDING,
+    left: raw.left ?? PADDING,
+  };
+};
 
 // =============================================================================
 // Factory
@@ -115,9 +174,19 @@ export const createScrollbar = (
     autoHideDelay = AUTO_HIDE_DELAY,
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
-    hoverZoneWidth = HOVER_ZONE_WIDTH,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
+    clickBehavior = TRACK_CLICK_BEHAVIOR,
   } = config;
+
+  const pad = resolvePadding(config.padding);
+
+  // Axis-aware padding: start/end along the scroll axis, wall-side for hover zone default
+  const scrollAxisStartPad = horizontal ? pad.left : pad.top;
+  const scrollAxisEndPad   = horizontal ? pad.right : pad.bottom;
+  const wallPad            = horizontal ? pad.bottom : pad.right;
+
+  // Hover zone covers wall-gap + fixed reach beyond the track edge
+  const hoverZoneWidth = config.hoverZoneWidth ?? (wallPad + HOVER_ZONE_REACH);
 
   // State
   let totalSize = 0;
@@ -133,6 +202,11 @@ export const createScrollbar = (
   let visible = false;
   let animationFrameId: number | null = null;
   let lastRequestedPosition: number | null = null;
+  let pageClickPos = 0;
+  let pageScrollPosition = 0; // internal tracker — updated synchronously each tick
+  let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  let repeatRafId: number | null = null;
+  let repeatLastTime: number | null = null;
 
   // Axis helpers — select CSS property / mouse coordinate once
   const thumbSizeProp = horizontal ? "width" : "height";
@@ -145,7 +219,8 @@ export const createScrollbar = (
   // DOM elements
   const track = document.createElement("div");
   const thumb = document.createElement("div");
-  const hoverZone = showOnHover ? document.createElement("div") : null;
+  // Always created: extends click target into the padding margin + handles hover when showOnHover
+  const hoverZone = document.createElement("div");
 
   // =============================================================================
   // DOM Setup
@@ -159,21 +234,31 @@ export const createScrollbar = (
       track.classList.add(`${classPrefix}-scrollbar--horizontal`);
     }
 
+    if (config.padding !== undefined) {
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-top",    `${pad.top}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-right",  `${pad.right}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-bottom", `${pad.bottom}px`);
+      viewport.style.setProperty("--vlist-custom-scrollbar-padding-left",   `${pad.left}px`);
+    }
+
+    if (config.minThumbSize !== undefined) {
+      track.style.setProperty("--vlist-custom-scrollbar-min-thumb-size", `${minThumbSize}px`);
+    }
+
     track.appendChild(thumb);
     viewport.appendChild(track);
 
-    // Hover zone — always pointer-events:auto so mouseenter fires
-    // even when the track is hidden (opacity:0 / pointer-events:none)
-    if (hoverZone) {
-      hoverZone.className = `${classPrefix}-scrollbar-hover`;
-      if (horizontal) {
-        hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
-        hoverZone.style.height = `${hoverZoneWidth}px`;
-      } else {
-        hoverZone.style.width = `${hoverZoneWidth}px`;
-      }
-      viewport.appendChild(hoverZone);
+    // Edge zone — covers the padding margin + track area along the scrollbar edge.
+    // Always present so clicks in the padding margin are captured regardless of showOnHover.
+    // pointer-events:auto so events fire even when the track is hidden (opacity:0).
+    hoverZone.className = `${classPrefix}-scrollbar-hover`;
+    if (horizontal) {
+      hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
+      hoverZone.style.height = `${hoverZoneWidth}px`;
+    } else {
+      hoverZone.style.width = `${hoverZoneWidth}px`;
     }
+    viewport.appendChild(hoverZone);
   };
 
   // =============================================================================
@@ -245,13 +330,16 @@ export const createScrollbar = (
       return;
     }
 
-    // Calculate thumb size (proportional to visible content)
+    // Effective track length shrinks by the margin on both ends (start + end along scroll axis)
+    const trackLength = Math.max(0, containerSize - scrollAxisStartPad - scrollAxisEndPad);
+
+    // Calculate thumb size (proportional to visible content, scaled to track)
     const scrollRatio = containerSize / totalSize;
-    thumbSize = Math.max(minThumbSize, scrollRatio * containerSize);
+    thumbSize = Math.max(minThumbSize, scrollRatio * trackLength);
     thumb.style[thumbSizeProp] = `${thumbSize}px`;
 
     // Calculate max thumb travel distance
-    maxThumbTravel = containerSize - thumbSize;
+    maxThumbTravel = trackLength - thumbSize;
 
     // Update position with current scroll
     updatePosition(currentScrollPosition);
@@ -272,33 +360,119 @@ export const createScrollbar = (
   };
 
   // =============================================================================
-  // Track Click Handler
+  // Track Click Handlers
   // =============================================================================
 
+  // 'jump' — instantly center thumb at clicked position
   const handleTrackClick = (e: MouseEvent): void => {
-    // Ignore clicks on thumb
-    if (e.target === thumb) return;
+    if (e.target === thumb || clickBehavior !== 'jump' || maxThumbTravel <= 0) return;
 
+    const maxScroll = totalSize - containerSize;
     const trackRect = track.getBoundingClientRect();
     const clickPos = mousePos(e) - trackRect[rectStart];
-
-    // Center thumb at click position
-    const targetThumbCenter = clickPos;
-    const targetThumbStart = targetThumbCenter - thumbSize / 2;
-
-    // Clamp to valid range
     const clampedThumbStart = Math.max(
       0,
-      Math.min(targetThumbStart, maxThumbTravel),
+      Math.min(clickPos - thumbSize / 2, maxThumbTravel),
     );
-
-    // Convert to scroll position
-    const scrollRatio = clampedThumbStart / maxThumbTravel;
-    const maxScroll = totalSize - containerSize;
-    const targetScrollPosition = scrollRatio * maxScroll;
-
-    onScroll(targetScrollPosition);
+    onScroll((clampedThumbStart / maxThumbTravel) * maxScroll);
     show();
+  };
+
+  const clearRepeat = (): void => {
+    if (repeatTimeout !== null) { clearTimeout(repeatTimeout); repeatTimeout = null; }
+    if (repeatRafId !== null) { cancelAnimationFrame(repeatRafId); repeatRafId = null; }
+    repeatLastTime = null;
+  };
+
+  // Compute direction toward pageClickPos; returns -1 (back), 1 (forward), or 0 (arrived).
+  // Caller must provide maxScroll to avoid recomputing it.
+  const pageScrollDirection = (maxScroll: number): -1 | 0 | 1 => {
+    const thumbCurrentStart =
+      maxThumbTravel > 0 ? (pageScrollPosition / maxScroll) * maxThumbTravel : 0;
+    if (pageClickPos < thumbCurrentStart) return -1;
+    if (pageClickPos >= thumbCurrentStart + thumbSize) return 1;
+    return 0;
+  };
+
+  // 'page' — immediate first scroll by one containerSize toward click
+  const firePageScroll = (): void => {
+    const maxScroll = totalSize - containerSize;
+    const dir = pageScrollDirection(maxScroll);
+    if (dir === 0) { clearRepeat(); return; }
+    if (dir === -1) {
+      if (pageScrollPosition <= 0) { clearRepeat(); return; }
+      const newPos = Math.max(0, pageScrollPosition - containerSize);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    } else {
+      if (pageScrollPosition >= maxScroll) { clearRepeat(); return; }
+      const newPos = Math.min(maxScroll, pageScrollPosition + containerSize);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    }
+    show();
+  };
+
+  // Continuous RAF loop — runs after initial delay while mouse is held
+  const tickContinuousScroll = (timestamp: number): void => {
+    // First frame: record baseline time and reschedule without scrolling
+    if (repeatLastTime === null) {
+      repeatLastTime = timestamp;
+      repeatRafId = requestAnimationFrame(tickContinuousScroll);
+      return;
+    }
+
+    const maxScroll = totalSize - containerSize;
+    const dt = timestamp - repeatLastTime;
+    repeatLastTime = timestamp;
+
+    const dir = pageScrollDirection(maxScroll);
+    if (dir === 0) { clearRepeat(); return; }
+
+    // Speed in px/ms, capped so one frame never overshoots more than containerSize
+    const speed = (PAGE_SCROLL_SPEED_PPS * containerSize) / 1000;
+    const delta = Math.min(speed * dt, containerSize);
+
+    if (dir === -1) {
+      if (pageScrollPosition <= 0) { clearRepeat(); return; }
+      const newPos = Math.max(0, pageScrollPosition - delta);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    } else {
+      if (pageScrollPosition >= maxScroll) { clearRepeat(); return; }
+      const newPos = Math.min(maxScroll, pageScrollPosition + delta);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    }
+    // Keep scrollbar visible without creating a new hide timer every frame
+    clearHideTimeout();
+    repeatRafId = requestAnimationFrame(tickContinuousScroll);
+  };
+
+  const handleRepeatMouseUp = (): void => {
+    clearRepeat();
+    // Begin auto-hide now that the hold has ended
+    scheduleHide();
+    document.removeEventListener('mouseup', handleRepeatMouseUp);
+  };
+
+  // 'page' — immediate first scroll then smooth continuous scroll while held
+  const handleTrackMouseDown = (e: MouseEvent): void => {
+    if (e.target === thumb || clickBehavior !== 'page') return;
+    e.preventDefault();
+
+    const trackRect = track.getBoundingClientRect();
+    pageClickPos = mousePos(e) - trackRect[rectStart];
+    pageScrollPosition = currentScrollPosition;
+
+    firePageScroll();
+
+    // After initial delay, begin smooth RAF-driven continuous scroll
+    repeatTimeout = setTimeout(() => {
+      repeatRafId = requestAnimationFrame(tickContinuousScroll);
+    }, PAGE_SCROLL_INITIAL_DELAY);
+
+    document.addEventListener('mouseup', handleRepeatMouseUp);
   };
 
   // =============================================================================
@@ -427,6 +601,7 @@ export const createScrollbar = (
   const destroy = (): void => {
     // Clear timers
     clearHideTimeout();
+    clearRepeat();
 
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
@@ -435,7 +610,9 @@ export const createScrollbar = (
 
     // Remove event listeners
     track.removeEventListener("click", handleTrackClick);
+    track.removeEventListener("mousedown", handleTrackMouseDown);
     track.removeEventListener("mouseenter", handleScrollbarAreaEnter);
+    document.removeEventListener("mouseup", handleRepeatMouseUp);
     track.removeEventListener("mouseleave", handleScrollbarAreaLeave);
     thumb.removeEventListener("mousedown", handleThumbMouseDown);
     viewport.removeEventListener("mouseenter", handleViewportEnter);
@@ -443,13 +620,21 @@ export const createScrollbar = (
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
 
-    if (hoverZone) {
+    hoverZone.removeEventListener("click", handleTrackClick);
+    hoverZone.removeEventListener("mousedown", handleTrackMouseDown);
+    if (showOnHover) {
       hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
       hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
-      if (hoverZone.parentNode) {
-        hoverZone.parentNode.removeChild(hoverZone);
-      }
     }
+    if (hoverZone.parentNode) {
+      hoverZone.parentNode.removeChild(hoverZone);
+    }
+
+    // Remove inline CSS variable overrides from viewport
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-top");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-right");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-bottom");
+    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-left");
 
     // Remove DOM elements
     if (track.parentNode) {
@@ -465,13 +650,18 @@ export const createScrollbar = (
 
   // Attach event listeners
   track.addEventListener("click", handleTrackClick);
+  track.addEventListener("mousedown", handleTrackMouseDown);
   track.addEventListener("mouseenter", handleScrollbarAreaEnter);
   track.addEventListener("mouseleave", handleScrollbarAreaLeave);
   thumb.addEventListener("mousedown", handleThumbMouseDown);
   viewport.addEventListener("mouseenter", handleViewportEnter);
   viewport.addEventListener("mouseleave", handleViewportLeave);
 
-  if (hoverZone) {
+  // Always: clicks in the padding margin behave the same as track clicks
+  hoverZone.addEventListener("click", handleTrackClick);
+  hoverZone.addEventListener("mousedown", handleTrackMouseDown);
+  // Conditional: hover-to-reveal behavior
+  if (showOnHover) {
     hoverZone.addEventListener("mouseenter", handleScrollbarAreaEnter);
     hoverZone.addEventListener("mouseleave", handleScrollbarAreaLeave);
   }
