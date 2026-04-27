@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.5 KB.
 
-**v1.6.2** — [Changelog](./changelog.txt)
+**v1.6.4** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -10,7 +10,7 @@ The virtual list library for every framework. Accessible by default, batteries-i
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering, ARIA live region
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **10.5 KB gzipped** — composable features with perfect tree-shaking
+- **10.6 KB gzipped** — composable features with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Grid, masonry, table, groups, async, selection, scale** — all opt-in
 - **Vertical & horizontal** — dimension-agnostic API, every layout mode works in both orientations
