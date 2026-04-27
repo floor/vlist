@@ -815,6 +815,96 @@ describe("withSnapshots - sizeCache Rebuild", () => {
     expect(history.length).toBe(1);
     expect(history[0]).toBe(50698);
   });
+
+  it("should not over-clamp last items when withScale sets totalSize with slack (regression #30)", () => {
+    // Repro: withScale sets viewportState.totalSize = virtualSize + slack after
+    // updateCompressionMode(). restoreScroll used to clamp maxScroll to
+    // virtualSize - containerSize (ignoring slack), putting the scroll position
+    // ~466px short — enough to hide the last ~37 items (shows 999,962 not 999,999).
+    const totalItems = 1_000_000;
+    const itemHeight = 72;
+    const containerSize = 600;
+    const actualSize = totalItems * itemHeight; // 72,000,000
+    const virtualSize = 16_000_000; // compressed (MAX_VIRTUAL_SIZE)
+    const ratio = virtualSize / actualSize; // ≈ 0.2222
+    // Simulate the slack withScale computes: containerSize * (1 - ratio)
+    const slack = Math.round(containerSize * (1 - ratio)); // ≈ 466
+    const totalSizeWithSlack = virtualSize + slack; // what withScale stores in totalSize
+
+    const ctx = createMockContext({
+      totalItems,
+      itemHeight,
+      containerSize,
+      isCompressed: true,
+      virtualSize,
+      actualSize,
+      compressionRatio: ratio,
+      sizeCacheTotal: 0, // stale — triggers sizeCache rebuild path in restoreScroll
+    });
+
+    // Simulate withScale's enhancedUpdateCompressionMode: it sets totalSize = virtualSize + slack
+    ctx.updateCompressionMode = mock(() => {
+      ctx.state.viewportState.totalSize = totalSizeWithSlack;
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 999_999, offsetInItem: 0, total: totalItems });
+
+    const history = (ctx as any)._scrollToHistory;
+    expect(history.length).toBe(1);
+
+    // Without the fix: maxScroll = virtualSize - containerSize = 15,999,400
+    //   → scroll clamped to 15,999,400 → shows item ~999,962 (not the last)
+    // With the fix: maxScroll = totalSizeWithSlack - containerSize = 15,999,866
+    //   → scroll clamped to 15,999,866 → last items are reachable
+    const buggyMaxScroll = virtualSize - containerSize; // 15,999,400
+    const correctMaxScroll = totalSizeWithSlack - containerSize; // 15,999,866
+    expect(history[0]).toBeGreaterThan(buggyMaxScroll);
+    expect(history[0]).toBeLessThanOrEqual(correctMaxScroll);
+  });
+
+  it("should not call updateContentSize with slack-less virtualSize when compressed (regression #30)", () => {
+    // restoreScroll used to call updateContentSize(freshCompression.virtualSize) after
+    // updateCompressionMode(), which overwrote the withScale-set content size
+    // (virtualSize + slack) with just virtualSize. This made the DOM's scrollable
+    // range too small, preventing the last items from being reached.
+    const totalItems = 1_000_000;
+    const itemHeight = 72;
+    const containerSize = 600;
+    const actualSize = totalItems * itemHeight;
+    const virtualSize = 16_000_000;
+    const ratio = virtualSize / actualSize;
+    const slack = Math.round(containerSize * (1 - ratio));
+    const totalSizeWithSlack = virtualSize + slack;
+
+    const ctx = createMockContext({
+      totalItems,
+      itemHeight,
+      containerSize,
+      isCompressed: true,
+      virtualSize,
+      actualSize,
+      compressionRatio: ratio,
+      sizeCacheTotal: 0, // stale
+    });
+
+    ctx.updateCompressionMode = mock(() => {
+      ctx.state.viewportState.totalSize = totalSizeWithSlack;
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 500_000, offsetInItem: 0, total: totalItems });
+
+    const contentHistory = (ctx as any)._contentSizeHistory as number[];
+    // updateContentSize must NOT be called with the slack-less virtualSize
+    expect(contentHistory).not.toContain(virtualSize);
+  });
 });
 
 // =============================================================================
