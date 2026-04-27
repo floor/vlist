@@ -216,7 +216,8 @@ export const createScrollbar = (
   // DOM elements
   const track = document.createElement("div");
   const thumb = document.createElement("div");
-  const hoverZone = showOnHover ? document.createElement("div") : null;
+  // Always created: extends click target into the padding margin + handles hover when showOnHover
+  const hoverZone = document.createElement("div");
 
   // =============================================================================
   // DOM Setup
@@ -244,18 +245,17 @@ export const createScrollbar = (
     track.appendChild(thumb);
     viewport.appendChild(track);
 
-    // Hover zone — always pointer-events:auto so mouseenter fires
-    // even when the track is hidden (opacity:0 / pointer-events:none)
-    if (hoverZone) {
-      hoverZone.className = `${classPrefix}-scrollbar-hover`;
-      if (horizontal) {
-        hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
-        hoverZone.style.height = `${hoverZoneWidth}px`;
-      } else {
-        hoverZone.style.width = `${hoverZoneWidth}px`;
-      }
-      viewport.appendChild(hoverZone);
+    // Edge zone — covers the padding margin + track area along the scrollbar edge.
+    // Always present so clicks in the padding margin are captured regardless of showOnHover.
+    // pointer-events:auto so events fire even when the track is hidden (opacity:0).
+    hoverZone.className = `${classPrefix}-scrollbar-hover`;
+    if (horizontal) {
+      hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
+      hoverZone.style.height = `${hoverZoneWidth}px`;
+    } else {
+      hoverZone.style.width = `${hoverZoneWidth}px`;
     }
+    viewport.appendChild(hoverZone);
   };
 
   // =============================================================================
@@ -617,12 +617,14 @@ export const createScrollbar = (
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
 
-    if (hoverZone) {
+    hoverZone.removeEventListener("click", handleTrackClick);
+    hoverZone.removeEventListener("mousedown", handleTrackMouseDown);
+    if (showOnHover) {
       hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
       hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
-      if (hoverZone.parentNode) {
-        hoverZone.parentNode.removeChild(hoverZone);
-      }
+    }
+    if (hoverZone.parentNode) {
+      hoverZone.parentNode.removeChild(hoverZone);
     }
 
     // Remove inline CSS variable overrides from viewport
@@ -652,7 +654,11 @@ export const createScrollbar = (
   viewport.addEventListener("mouseenter", handleViewportEnter);
   viewport.addEventListener("mouseleave", handleViewportLeave);
 
-  if (hoverZone) {
+  // Always: clicks in the padding margin behave the same as track clicks
+  hoverZone.addEventListener("click", handleTrackClick);
+  hoverZone.addEventListener("mousedown", handleTrackMouseDown);
+  // Conditional: hover-to-reveal behavior
+  if (showOnHover) {
     hoverZone.addEventListener("mouseenter", handleScrollbarAreaEnter);
     hoverZone.addEventListener("mouseleave", handleScrollbarAreaLeave);
   }

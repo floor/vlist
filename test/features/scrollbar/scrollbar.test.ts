@@ -753,6 +753,45 @@ describe("createScrollbar", () => {
       const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(12);
     });
+
+    it("edge zone is always present even when showOnHover is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: false });
+
+      expect(viewport.querySelector(".vlist-scrollbar-hover")).not.toBeNull();
+    });
+
+    it("clicking in the padding margin above the track triggers page scroll upward", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(400); // scrolled down — not at top
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+
+      // Simulate click above the track (in the top padding area)
+      // Track starts at y=20 (paddingTop), so clicking at y=5 is above the track
+      Object.defineProperty(hoverZone, "getBoundingClientRect", {
+        value: () => ({ top: 0, left: 0, right: 20, bottom: 400 }),
+        configurable: true,
+      });
+      // track rect: top=20, height=360 (400 - 2*20)
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      // Scroll should have moved backward (toward top)
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeLessThan(400);
+    });
   });
 
   // ===========================================================================
