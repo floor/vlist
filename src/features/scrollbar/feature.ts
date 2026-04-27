@@ -69,6 +69,14 @@ export interface ScrollbarFeatureConfig {
    * Can also be set globally via the `--vlist-custom-scrollbar-padding` CSS variable.
    */
   padding?: number;
+
+  /**
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'jump').
+   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
+   * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
+   *               matching macOS native scrollbar behavior.
+   */
+  clickBehavior?: 'jump' | 'page';
 }
 
 // =============================================================================
