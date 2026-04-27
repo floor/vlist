@@ -105,11 +105,10 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   rowgroup.appendChild(element);
   root.insertBefore(rowgroup, root.firstChild);
 
-  // Offset the viewport so content starts below the header.
-  // Absolute positioning with insets so sizing works even when the root's
-  // height comes from min-height / max-height. Clear height: 100% from
-  // createDOMStructure — with all four insets, height is determined by top/bottom.
-  viewport.style.cssText = `position:absolute;top:${headerHeight}px;left:0px;right:0px;bottom:0px;height:auto`;
+  // Expose the header height as a CSS variable on the root so the custom
+  // scrollbar (if active) can offset its track below the header row.
+  // The viewport layout is handled entirely by CSS flex — no inline style needed.
+  root.style.setProperty('--vlist-table-header-height', `${headerHeight}px`);
 
   // =========================================================================
   // State
@@ -462,8 +461,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("click", onCellClick);
 
-    // Reset all viewport inline styles set during setup (cssText assignment)
-    viewport.style.cssText = "";
+    // Clear the CSS variable set during setup
+    root.style.removeProperty('--vlist-table-header-height');
 
     rowgroup.remove();
 
