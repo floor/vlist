@@ -613,8 +613,8 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
-      // Default minThumbSize is 30
-      expect(thumbHeight).toBeGreaterThanOrEqual(30);
+      // Default minThumbSize is 15
+      expect(thumbHeight).toBeGreaterThanOrEqual(15);
     });
 
     it("should allow custom minThumbSize", () => {
@@ -669,6 +669,25 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(1000 - 400); // scrolled to bottom
       const maxThumbTravel = trackLength - thumbHeight;
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
+    });
+
+    it("hover zone default width equals padding + 16", () => {
+      const padding = 6;
+      scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: true, padding });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(padding + 16);
+    });
+
+    it("explicit hoverZoneWidth overrides the padding-based default", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        showOnHover: true,
+        padding: 8,
+        hoverZoneWidth: 12,
+      });
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      expect(parseFloat(hoverZone.style.width)).toBe(12);
     });
   });
 

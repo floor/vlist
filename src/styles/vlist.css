@@ -45,6 +45,7 @@
     --vlist-custom-scrollbar-track-color: transparent;
     --vlist-custom-scrollbar-radius: 4px;
     --vlist-custom-scrollbar-padding: 1px;
+    --vlist-custom-scrollbar-min-thumb-size: 15px;
 
     /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
