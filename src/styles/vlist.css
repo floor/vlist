@@ -43,7 +43,7 @@
     /* Custom overlay scrollbar (withScrollbar feature) */
     --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
-    --vlist-custom-scrollbar-radius: calc(var(--vlist-custom-scrollbar-width) / 2);
+    --vlist-custom-scrollbar-radius: 4px;
     --vlist-custom-scrollbar-padding: 1px;
 
     /* Spacing & shape */
@@ -69,8 +69,8 @@
     --vlist-group-header-bg: #f3f4f6;
     --vlist-scrollbar-thumb-color: #d1d5db;
     --vlist-scrollbar-thumb-hover-color: #9ca3af;
-    --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.3);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
 }
 
@@ -99,8 +99,8 @@
     --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb-color: #4b5563;
     --vlist-scrollbar-thumb-hover-color: #6b7280;
-    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 
@@ -120,8 +120,8 @@
         --vlist-group-header-bg: #1e2433;
         --vlist-scrollbar-thumb-color: #4b5563;
         --vlist-scrollbar-thumb-hover-color: #6b7280;
-        --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-        --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+        --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+        --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
     }
 }
@@ -141,8 +141,8 @@
     --vlist-group-header-bg: #1e2433;
     --vlist-scrollbar-thumb-color: #4b5563;
     --vlist-scrollbar-thumb-hover-color: #6b7280;
-    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.3);
-    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
+    --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+    --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
 }
 

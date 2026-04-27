@@ -62,6 +62,14 @@ export interface ScrollbarConfig {
    * Can also be set globally via the `--vlist-custom-scrollbar-padding` CSS variable.
    */
   padding?: number;
+
+  /**
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'jump').
+   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
+   * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
+   *               matching macOS native scrollbar behavior.
+   */
+  clickBehavior?: 'jump' | 'page';
 }
 
 /** Scrollbar instance */
@@ -99,6 +107,9 @@ const SHOW_ON_HOVER = true;
 const HOVER_ZONE_WIDTH = 16;
 const SHOW_ON_VIEWPORT_ENTER = true;
 const PADDING = 1;
+const TRACK_CLICK_BEHAVIOR = 'page' as const;
+const PAGE_SCROLL_INITIAL_DELAY = 350; // ms before continuous scroll starts (matches keyboard repeat)
+const PAGE_SCROLL_SPEED_PPS = 12;      // pages per second during held continuous scroll
 
 // =============================================================================
 // Factory
@@ -128,6 +139,7 @@ export const createScrollbar = (
     hoverZoneWidth = HOVER_ZONE_WIDTH,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
     padding = PADDING,
+    clickBehavior = TRACK_CLICK_BEHAVIOR,
   } = config;
 
   // State
@@ -144,6 +156,11 @@ export const createScrollbar = (
   let visible = false;
   let animationFrameId: number | null = null;
   let lastRequestedPosition: number | null = null;
+  let pageClickPos = 0;
+  let pageScrollPosition = 0; // internal tracker — updated synchronously each tick
+  let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  let repeatRafId: number | null = null;
+  let repeatLastTime: number | null = null;
 
   // Axis helpers — select CSS property / mouse coordinate once
   const thumbSizeProp = horizontal ? "width" : "height";
@@ -290,33 +307,119 @@ export const createScrollbar = (
   };
 
   // =============================================================================
-  // Track Click Handler
+  // Track Click Handlers
   // =============================================================================
 
+  // 'jump' — instantly center thumb at clicked position
   const handleTrackClick = (e: MouseEvent): void => {
-    // Ignore clicks on thumb
-    if (e.target === thumb) return;
+    if (e.target === thumb || clickBehavior !== 'jump' || maxThumbTravel <= 0) return;
 
+    const maxScroll = totalSize - containerSize;
     const trackRect = track.getBoundingClientRect();
     const clickPos = mousePos(e) - trackRect[rectStart];
-
-    // Center thumb at click position
-    const targetThumbCenter = clickPos;
-    const targetThumbStart = targetThumbCenter - thumbSize / 2;
-
-    // Clamp to valid range
     const clampedThumbStart = Math.max(
       0,
-      Math.min(targetThumbStart, maxThumbTravel),
+      Math.min(clickPos - thumbSize / 2, maxThumbTravel),
     );
-
-    // Convert to scroll position
-    const scrollRatio = clampedThumbStart / maxThumbTravel;
-    const maxScroll = totalSize - containerSize;
-    const targetScrollPosition = scrollRatio * maxScroll;
-
-    onScroll(targetScrollPosition);
+    onScroll((clampedThumbStart / maxThumbTravel) * maxScroll);
     show();
+  };
+
+  const clearRepeat = (): void => {
+    if (repeatTimeout !== null) { clearTimeout(repeatTimeout); repeatTimeout = null; }
+    if (repeatRafId !== null) { cancelAnimationFrame(repeatRafId); repeatRafId = null; }
+    repeatLastTime = null;
+  };
+
+  // Compute direction toward pageClickPos; returns -1 (back), 1 (forward), or 0 (arrived).
+  // Caller must provide maxScroll to avoid recomputing it.
+  const pageScrollDirection = (maxScroll: number): -1 | 0 | 1 => {
+    const thumbCurrentStart =
+      maxThumbTravel > 0 ? (pageScrollPosition / maxScroll) * maxThumbTravel : 0;
+    if (pageClickPos < thumbCurrentStart) return -1;
+    if (pageClickPos >= thumbCurrentStart + thumbSize) return 1;
+    return 0;
+  };
+
+  // 'page' — immediate first scroll by one containerSize toward click
+  const firePageScroll = (): void => {
+    const maxScroll = totalSize - containerSize;
+    const dir = pageScrollDirection(maxScroll);
+    if (dir === 0) { clearRepeat(); return; }
+    if (dir === -1) {
+      if (pageScrollPosition <= 0) { clearRepeat(); return; }
+      const newPos = Math.max(0, pageScrollPosition - containerSize);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    } else {
+      if (pageScrollPosition >= maxScroll) { clearRepeat(); return; }
+      const newPos = Math.min(maxScroll, pageScrollPosition + containerSize);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    }
+    show();
+  };
+
+  // Continuous RAF loop — runs after initial delay while mouse is held
+  const tickContinuousScroll = (timestamp: number): void => {
+    // First frame: record baseline time and reschedule without scrolling
+    if (repeatLastTime === null) {
+      repeatLastTime = timestamp;
+      repeatRafId = requestAnimationFrame(tickContinuousScroll);
+      return;
+    }
+
+    const maxScroll = totalSize - containerSize;
+    const dt = timestamp - repeatLastTime;
+    repeatLastTime = timestamp;
+
+    const dir = pageScrollDirection(maxScroll);
+    if (dir === 0) { clearRepeat(); return; }
+
+    // Speed in px/ms, capped so one frame never overshoots more than containerSize
+    const speed = (PAGE_SCROLL_SPEED_PPS * containerSize) / 1000;
+    const delta = Math.min(speed * dt, containerSize);
+
+    if (dir === -1) {
+      if (pageScrollPosition <= 0) { clearRepeat(); return; }
+      const newPos = Math.max(0, pageScrollPosition - delta);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    } else {
+      if (pageScrollPosition >= maxScroll) { clearRepeat(); return; }
+      const newPos = Math.min(maxScroll, pageScrollPosition + delta);
+      pageScrollPosition = newPos;
+      onScroll(newPos);
+    }
+    // Keep scrollbar visible without creating a new hide timer every frame
+    clearHideTimeout();
+    repeatRafId = requestAnimationFrame(tickContinuousScroll);
+  };
+
+  const handleRepeatMouseUp = (): void => {
+    clearRepeat();
+    // Begin auto-hide now that the hold has ended
+    scheduleHide();
+    document.removeEventListener('mouseup', handleRepeatMouseUp);
+  };
+
+  // 'page' — immediate first scroll then smooth continuous scroll while held
+  const handleTrackMouseDown = (e: MouseEvent): void => {
+    if (e.target === thumb || clickBehavior !== 'page') return;
+    e.preventDefault();
+
+    const trackRect = track.getBoundingClientRect();
+    pageClickPos = mousePos(e) - trackRect[rectStart];
+    pageScrollPosition = currentScrollPosition;
+
+    firePageScroll();
+
+    // After initial delay, begin smooth RAF-driven continuous scroll
+    repeatTimeout = setTimeout(() => {
+      repeatRafId = requestAnimationFrame(tickContinuousScroll);
+    }, PAGE_SCROLL_INITIAL_DELAY);
+
+    document.addEventListener('mouseup', handleRepeatMouseUp);
   };
 
   // =============================================================================
@@ -445,6 +548,7 @@ export const createScrollbar = (
   const destroy = (): void => {
     // Clear timers
     clearHideTimeout();
+    clearRepeat();
 
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
@@ -453,7 +557,9 @@ export const createScrollbar = (
 
     // Remove event listeners
     track.removeEventListener("click", handleTrackClick);
+    track.removeEventListener("mousedown", handleTrackMouseDown);
     track.removeEventListener("mouseenter", handleScrollbarAreaEnter);
+    document.removeEventListener("mouseup", handleRepeatMouseUp);
     track.removeEventListener("mouseleave", handleScrollbarAreaLeave);
     thumb.removeEventListener("mousedown", handleThumbMouseDown);
     viewport.removeEventListener("mouseenter", handleViewportEnter);
@@ -483,6 +589,7 @@ export const createScrollbar = (
 
   // Attach event listeners
   track.addEventListener("click", handleTrackClick);
+  track.addEventListener("mousedown", handleTrackMouseDown);
   track.addEventListener("mouseenter", handleScrollbarAreaEnter);
   track.addEventListener("mouseleave", handleScrollbarAreaLeave);
   thumb.addEventListener("mousedown", handleThumbMouseDown);
