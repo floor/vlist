@@ -135,7 +135,9 @@ interface ResolvedPadding {
 }
 
 const resolvePadding = (raw: ScrollbarPadding | undefined): ResolvedPadding => {
-  if (raw === undefined || typeof raw === 'number') {
+  // typeof !== 'object' narrows raw to number | undefined in the true branch,
+  // avoiding a narrowing gap that occurs with the equivalent (raw === undefined || typeof raw === 'number') OR form.
+  if (typeof raw !== 'object') {
     const v = raw ?? PADDING;
     return { top: v, right: v, bottom: v, left: v };
   }
