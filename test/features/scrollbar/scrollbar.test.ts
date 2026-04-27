@@ -770,14 +770,77 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(400); // scrolled down — not at top
 
       const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
-
-      // Simulate click above the track (in the top padding area)
-      // Track starts at y=20 (paddingTop), so clicking at y=5 is above the track
-      Object.defineProperty(hoverZone, "getBoundingClientRect", {
-        value: () => ({ top: 0, left: 0, right: 20, bottom: 400 }),
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
         configurable: true,
       });
-      // track rect: top=20, height=360 (400 - 2*20)
+
+      // Click at y=5 — above the track (top padding area)
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeLessThan(400);
+    });
+
+    it("clicking in the padding margin below the track triggers page scroll downward", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(0); // scrolled to top
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      // Click at y=395 — below the track (bottom padding area)
+      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 395, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      expect(newPos).toBeGreaterThan(0);
+    });
+
+    it("clicking in the padding margin with jump behavior clamps to track bounds", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "jump",
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      Object.defineProperty(track, "getBoundingClientRect", {
+        value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
+        configurable: true,
+      });
+
+      // Click above the track → clamps to top (position 0)
+      hoverZone.dispatchEvent(new MouseEvent("click", { clientY: 5, bubbles: true }));
+      expect(onScrollMock).toHaveBeenCalledWith(0);
+    });
+
+    it("clicking in the padding margin works even when showOnHover is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        padding: 20,
+        clickBehavior: "page",
+        showOnHover: false,
+        autoHide: false,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.updatePosition(400);
+
+      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       Object.defineProperty(track, "getBoundingClientRect", {
         value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
@@ -787,7 +850,6 @@ describe("createScrollbar", () => {
       hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
-      // Scroll should have moved backward (toward top)
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
       expect(newPos).toBeLessThan(400);
