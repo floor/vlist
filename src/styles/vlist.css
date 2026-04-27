@@ -44,6 +44,7 @@
     --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
     --vlist-custom-scrollbar-radius: calc(var(--vlist-custom-scrollbar-width) / 2);
+    --vlist-custom-scrollbar-padding: 1px;
 
     /* Spacing & shape */
     --vlist-item-padding-x: 1rem;
@@ -330,10 +331,10 @@
 /* Scrollbar track */
 .vlist-scrollbar {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: var(--vlist-custom-scrollbar-padding);
+    right: var(--vlist-custom-scrollbar-padding);
+    bottom: var(--vlist-custom-scrollbar-padding);
     width: var(--vlist-custom-scrollbar-width);
-    height: 100%;
     background-color: var(--vlist-custom-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
@@ -467,10 +468,8 @@
 /* Horizontal custom scrollbar — track at bottom, thumb moves on X axis */
 .vlist-scrollbar--horizontal {
     top: auto;
-    right: auto;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    left: var(--vlist-custom-scrollbar-padding);
+    width: auto;
     height: var(--vlist-custom-scrollbar-width);
 }
 
