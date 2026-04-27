@@ -3,6 +3,41 @@ initial commit → latest
 470 commits · 82 days · Feb 2 – Apr 24, 2026
 
 
+2026-04-27  v1.6.4
+
+  feat(scrollbar): per-side padding support
+    padding now accepts a number (all sides) or { top?, right?, bottom?, left? }
+    for independent control per edge. Omitted sides default to 2px.
+    - New ScrollbarPadding type exported from public API
+    - Replaces --vlist-custom-scrollbar-padding with four per-side CSS variables:
+      --vlist-custom-scrollbar-padding-{top,right,bottom,left}
+    - Thumb travel uses scroll-axis sides (top+bottom / left+right)
+    - Hover zone default uses wall-side padding (right for vertical, bottom for horizontal)
+    - Stable gutter reserves right-padding + width + left-padding per axis
+
+  feat(scrollbar): add padding, clickBehavior, minThumbSize, and hoverZoneWidth options
+    - padding: inset the track from viewport edges (default: 2px)
+    - clickBehavior: 'page' (default) scrolls by one page toward the click with
+      smooth continuous scroll on hold; 'jump' centers the thumb instantly
+    - minThumbSize: minimum thumb length in pixels (default: 15); also settable
+      via --vlist-custom-scrollbar-min-thumb-size CSS variable
+    - hoverZoneWidth defaults to wall-side padding + 16px so the hover zone
+      always covers the full inset track area regardless of padding
+
+  fix(scrollbar): extend click target into padding margin
+    The edge zone element is now always created (not only when showOnHover is
+    true) so clicks anywhere in the padding margin trigger the same page/jump
+    behavior as clicking the track itself. Existing position clamping handles
+    out-of-track coordinates: above the track scrolls back, below scrolls forward.
+
+  fix(scrollbar): gutter correctly reserves padding on both sides
+    Stable gutter now reserves right-padding + width + left-padding (vertical)
+    or bottom-padding + height + top-padding (horizontal), ensuring the track
+    never overlaps content even when asymmetric padding is configured.
+    CSS variable scope fixed: padding variables are set on the viewport element
+    so the gutter calc() can read them (CSS custom properties only cascade down).
+
+
 2026-04-26  v1.6.3
 
   feat(a11y): add focusOnClick option (#32)
