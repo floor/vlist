@@ -28,7 +28,10 @@ export interface ScrollbarConfig {
   /** Auto-hide delay in milliseconds (default: 1000) */
   autoHideDelay?: number;
 
-  /** Minimum thumb size in pixels (default: 30) */
+  /**
+   * Minimum thumb size in pixels (default: 15).
+   * Can also be set globally via the `--vlist-custom-scrollbar-min-thumb-size` CSS variable.
+   */
   minThumbSize?: number;
 
   /**
@@ -40,8 +43,10 @@ export interface ScrollbarConfig {
   showOnHover?: boolean;
 
   /**
-   * Width of the invisible hover zone in pixels (default: 16).
+   * Width of the invisible hover zone in pixels.
    * Only used when `showOnHover` is true.
+   * Defaults to `padding + 16` so the zone always covers the full inset track
+   * area plus a comfortable reach buffer, regardless of how much padding is set.
    * A wider zone makes the scrollbar easier to discover;
    * a narrower zone avoids interference with content near the edge.
    */
@@ -102,9 +107,9 @@ export type ScrollCallback = (position: number) => void;
 
 const AUTO_HIDE = true;
 const AUTO_HIDE_DELAY = 1000;
-const MIN_THUMB_SIZE = 30;
+const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
-const HOVER_ZONE_WIDTH = 16;
+const HOVER_ZONE_REACH = 16; // px of reach beyond the visible track (added to padding for the default)
 const SHOW_ON_VIEWPORT_ENTER = true;
 const PADDING = 1;
 const TRACK_CLICK_BEHAVIOR = 'page' as const;
@@ -136,11 +141,13 @@ export const createScrollbar = (
     autoHideDelay = AUTO_HIDE_DELAY,
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
-    hoverZoneWidth = HOVER_ZONE_WIDTH,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
     padding = PADDING,
     clickBehavior = TRACK_CLICK_BEHAVIOR,
   } = config;
+
+  // Hover zone covers padding offset + fixed reach beyond the track edge
+  const hoverZoneWidth = config.hoverZoneWidth ?? (padding + HOVER_ZONE_REACH);
 
   // State
   let totalSize = 0;
@@ -189,6 +196,10 @@ export const createScrollbar = (
 
     if (config.padding !== undefined) {
       track.style.setProperty("--vlist-custom-scrollbar-padding", `${padding}px`);
+    }
+
+    if (config.minThumbSize !== undefined) {
+      track.style.setProperty("--vlist-custom-scrollbar-min-thumb-size", `${minThumbSize}px`);
     }
 
     track.appendChild(thumb);
