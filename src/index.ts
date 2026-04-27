@@ -49,6 +49,7 @@ export type {
 
   // Scrollbar
   ScrollbarConfig,
+  ScrollbarPadding,
   ScrollbarOptions,
 
   // Scroll
