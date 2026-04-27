@@ -53,6 +53,15 @@ export interface ScrollbarConfig {
    * near the scrollbar edge (if `showOnHover` is true).
    */
   showOnViewportEnter?: boolean;
+
+  /**
+   * Padding between the scrollbar track and the viewport edges in pixels (default: 1).
+   * Insets the track from the right wall and from the top and bottom, so the scrollbar
+   * floats rather than sitting flush against the edges. Also adjusts the thumb travel
+   * range to keep position accurate.
+   * Can also be set globally via the `--vlist-custom-scrollbar-padding` CSS variable.
+   */
+  padding?: number;
 }
 
 /** Scrollbar instance */
@@ -89,6 +98,7 @@ const MIN_THUMB_SIZE = 30;
 const SHOW_ON_HOVER = true;
 const HOVER_ZONE_WIDTH = 16;
 const SHOW_ON_VIEWPORT_ENTER = true;
+const PADDING = 1;
 
 // =============================================================================
 // Factory
@@ -117,6 +127,7 @@ export const createScrollbar = (
     showOnHover = SHOW_ON_HOVER,
     hoverZoneWidth = HOVER_ZONE_WIDTH,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
+    padding = PADDING,
   } = config;
 
   // State
@@ -157,6 +168,10 @@ export const createScrollbar = (
 
     if (horizontal) {
       track.classList.add(`${classPrefix}-scrollbar--horizontal`);
+    }
+
+    if (config.padding !== undefined) {
+      track.style.setProperty("--vlist-custom-scrollbar-padding", `${padding}px`);
     }
 
     track.appendChild(thumb);
@@ -245,13 +260,16 @@ export const createScrollbar = (
       return;
     }
 
-    // Calculate thumb size (proportional to visible content)
+    // Effective track length shrinks by the margin on both ends
+    const trackLength = Math.max(0, containerSize - 2 * padding);
+
+    // Calculate thumb size (proportional to visible content, scaled to track)
     const scrollRatio = containerSize / totalSize;
-    thumbSize = Math.max(minThumbSize, scrollRatio * containerSize);
+    thumbSize = Math.max(minThumbSize, scrollRatio * trackLength);
     thumb.style[thumbSizeProp] = `${thumbSize}px`;
 
     // Calculate max thumb travel distance
-    maxThumbTravel = containerSize - thumbSize;
+    maxThumbTravel = trackLength - thumbSize;
 
     // Update position with current scroll
     updatePosition(currentScrollPosition);
