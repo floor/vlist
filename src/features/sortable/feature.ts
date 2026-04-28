@@ -311,16 +311,12 @@ export const withSortable = <T extends VListItem = VListItem>(
       // the pointer leaves the edge zone (via onPointerMove).
       let inEdgeZone = false;
 
-      const isInEdgeZone = (): boolean => {
+      const isPointerOutsideViewport = (): boolean => {
         const viewportRect = dom.viewport.getBoundingClientRect();
         if (horizontal) {
-          const distFromStart = pointerCurrentX - viewportRect.left;
-          const distFromEnd = viewportRect.right - pointerCurrentX;
-          return distFromStart < edgeScrollZone || distFromEnd < edgeScrollZone;
+          return pointerCurrentX < viewportRect.left || pointerCurrentX > viewportRect.right;
         }
-        const distFromTop = pointerCurrentY - viewportRect.top;
-        const distFromBottom = viewportRect.bottom - pointerCurrentY;
-        return distFromTop < edgeScrollZone || distFromBottom < edgeScrollZone;
+        return pointerCurrentY < viewportRect.top || pointerCurrentY > viewportRect.bottom;
       };
 
       const startEdgeScroll = (): void => {
@@ -355,11 +351,26 @@ export const withSortable = <T extends VListItem = VListItem>(
             }
           }
 
-          inEdgeZone = delta !== 0;
+          const outsideViewport = isPointerOutsideViewport();
 
           if (delta !== 0) {
             const currentScroll = ctx.scrollController.getScrollTop();
-            ctx.scrollController.scrollTo(currentScroll + delta);
+            const maxScroll = ctx.sizeCache.getTotalSize() - (horizontal
+              ? dom.viewport.clientWidth
+              : dom.viewport.clientHeight);
+            const atLimit = (delta < 0 && currentScroll <= 0)
+              || (delta > 0 && currentScroll >= maxScroll);
+
+            if (atLimit) {
+              // At scroll limit: only allow shifts if pointer is inside viewport
+              inEdgeZone = outsideViewport;
+            } else {
+              inEdgeZone = true;
+              ctx.scrollController.scrollTo(currentScroll + delta);
+            }
+          } else {
+            // Not in edge zone but pointer could still be outside viewport
+            inEdgeZone = outsideViewport;
           }
 
           scrollRafId = requestAnimationFrame(tick);
