@@ -395,6 +395,9 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // Save on selection change (guarded during restore like everything else)
         ctx.emitter.on("selection:change", saveToStorage);
 
+        // Save on focus change so arrow-key navigation is preserved on reload
+        ctx.emitter.on("focus:change", saveToStorage);
+
         // ── Coordinate with withAsync ──
         // When restoring a snapshot, cancel withAsync's deferred autoLoad
         // and bootstrap the total from the snapshot. This eliminates the
