@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.5 KB.
 
-**v1.6.4** — [Changelog](./changelog.txt)
+**v1.6.5** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -96,7 +96,7 @@ const list = vlist({
 | **Base** | 10.6 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
 | `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
-| `withScale()` | +3.1 KB | 1M+ items via scroll compression |
+| `withScale()` | +3.7 KB | 1M+ items via scroll compression |
 | `withGroups()` | +2.7 KB | Sticky/inline headers |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `withScrollbar()` | +1.7 KB | Custom scrollbar UI |
