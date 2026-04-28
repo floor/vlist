@@ -539,6 +539,52 @@ export const withSortable = <T extends VListItem = VListItem>(
         }
       };
 
+      // ── Animate ghost to drop target, then finalize ──
+      const animateDrop = (fromIndex: number, toIndex: number): void => {
+        if (!ghost) {
+          cleanupDrag();
+          if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
+            emitter.emit("sort:end", { fromIndex, toIndex });
+          }
+          return;
+        }
+
+        // Compute where the drop slot is on screen.
+        // The target position is the sizeCache offset for `toIndex`,
+        // converted to viewport-relative coordinates.
+        // Animate both axes so the ghost slides to the exact target position.
+        const viewportRect = dom.viewport.getBoundingClientRect();
+        const scrollPos = ctx.scrollController.getScrollTop();
+        const targetOffset = ctx.sizeCache.getOffset(toIndex);
+
+        const duration = shiftDuration > 0 ? shiftDuration : 150;
+        ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
+
+        if (horizontal) {
+          ghost.style.left = `${viewportRect.left - dom.viewport.scrollLeft + targetOffset - scrollPos}px`;
+          ghost.style.top = `${viewportRect.top}px`;
+        } else {
+          ghost.style.left = `${viewportRect.left}px`;
+          ghost.style.top = `${viewportRect.top + targetOffset - scrollPos}px`;
+        }
+
+        let settled = false;
+        const onEnd = (): void => {
+          if (settled) return;
+          settled = true;
+          ghost?.removeEventListener("transitionend", onEnd);
+          cleanupDrag();
+          if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
+            emitter.emit("sort:end", { fromIndex, toIndex });
+          }
+        };
+
+        ghost.addEventListener("transitionend", onEnd);
+
+        // Safety fallback — if transitionend doesn't fire (e.g. ghost already at target)
+        setTimeout(onEnd, duration + 50);
+      };
+
       const onPointerUp = (event: PointerEvent): void => {
         if (!dragInitiated) {
           // Never crossed threshold — just cleanup listeners
@@ -551,15 +597,13 @@ export const withSortable = <T extends VListItem = VListItem>(
 
         event.preventDefault();
 
-        const fromIndex = dragIndex;
-        const toIndex = dropIndex;
+        // Stop tracking pointer and edge scroll, but keep ghost visible
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        document.removeEventListener("pointercancel", onPointerCancel);
+        stopEdgeScroll();
 
-        cleanupDrag();
-
-        // Emit sort:end with the reorder intent
-        if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
-          emitter.emit("sort:end", { fromIndex, toIndex });
-        }
+        animateDrop(dragIndex, dropIndex);
       };
 
       const onPointerCancel = (): void => {
