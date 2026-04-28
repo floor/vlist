@@ -7,9 +7,7 @@
  * What it wires:
  * - Pointer event handlers on the items container for drag initiation
  * - Creates a drag ghost element that follows the pointer
- * - Two visual feedback modes:
- *   - `liveReorder: true` (default) — items shift via CSS transforms to make room
- *   - `liveReorder: false` — a static placeholder gap marks the drop position
+ * - Items shift via CSS transforms to make room (like iOS list reordering)
  * - Auto-scrolls when dragging near viewport edges
  * - Emits sort:start and sort:end events
  *
@@ -19,7 +17,7 @@
  * calling `setItems()` with the new order.
  *
  * IMPORTANT: vlist positions items via `style.transform: translateY(offset)`.
- * The live-reorder shift must ADD to that existing offset, not replace it.
+ * The shift must ADD to that existing offset, not replace it.
  *
  * Added methods: isSorting
  * Added events: sort:start, sort:end
@@ -52,25 +50,8 @@ export interface SortableConfig {
   ghostClass?: string;
 
   /**
-   * CSS class added to the placeholder gap (default: 'vlist-sort-placeholder').
-   * Only used when `liveReorder` is false.
-   */
-  placeholderClass?: string;
-
-  /**
-   * Enable live reorder mode (default: true).
-   *
-   * When true, visible items shift out of the way as you drag — like iOS
-   * list reordering. Items slide via CSS transforms to make room for the
-   * dragged item at its current hover position.
-   *
-   * When false, a static placeholder element marks the drop position.
-   */
-  liveReorder?: boolean;
-
-  /**
    * Transition duration for item shift animations in milliseconds (default: 150).
-   * Only used when `liveReorder` is true. Set to 0 for instant shifts.
+   * Set to 0 for instant shifts.
    */
   shiftDuration?: number;
 
@@ -122,8 +103,6 @@ export const withSortable = <T extends VListItem = VListItem>(
 ): VListFeature<T> => {
   const handleSelector = config?.handle ?? null;
   const ghostClass = config?.ghostClass ?? "vlist-sort-ghost";
-  const placeholderClass = config?.placeholderClass ?? "vlist-sort-placeholder";
-  const liveReorder = config?.liveReorder ?? true;
   const shiftDuration = config?.shiftDuration ?? 150;
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
   const edgeScrollSpeed = config?.edgeScrollSpeed ?? 8;
@@ -152,7 +131,6 @@ export const withSortable = <T extends VListItem = VListItem>(
       let pointerCurrentY = 0;
       let dragInitiated = false;
       let ghost: HTMLElement | null = null;
-      let placeholder: HTMLElement | null = null;
       let scrollRafId = 0;
       let draggedElement: HTMLElement | null = null;
       let draggedItemSize = 0;
@@ -194,18 +172,6 @@ export const withSortable = <T extends VListItem = VListItem>(
         ].join(";");
         document.body.appendChild(clone);
         return clone;
-      };
-
-      // ── Helper: create the placeholder element (static mode only) ──
-      const createPlaceholder = (size: number): HTMLElement => {
-        const el = document.createElement("div");
-        el.className = `${classPrefix}-sort-placeholder ${placeholderClass}`;
-        if (horizontal) {
-          el.style.cssText = `width:${size}px;height:100%;flex-shrink:0`;
-        } else {
-          el.style.cssText = `height:${size}px;width:100%`;
-        }
-        return el;
       };
 
       // ── Helper: update ghost position ──
@@ -270,7 +236,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         return Math.max(0, Math.min(insertBefore, totalItems - 1));
       };
 
-      // ── Live reorder: apply CSS transforms to shift items ──
+      // ── Apply CSS transforms to shift items out of the way ──
       // vlist positions items via style.transform = translateY(offset).
       // We must READ the base offset from sizeCache and ADD the shift,
       // not overwrite the transform with just the shift value.
@@ -315,8 +281,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         }
       };
 
-      // ── Clear all CSS transforms from items ──
-      // Restore each item to its sizeCache base offset (what vlist would set)
+      // ── Restore items to their sizeCache base offsets ──
       const clearShifts = (): void => {
         const itemElements = dom.items.querySelectorAll("[data-index]");
         const prop = horizontal ? "translateX" : "translateY";
@@ -336,39 +301,30 @@ export const withSortable = <T extends VListItem = VListItem>(
         const newDropIndex = computeDropIndex();
         if (newDropIndex === dropIndex) return;
         dropIndex = newDropIndex;
-
-        if (liveReorder) {
-          applyShifts();
-        } else {
-          updatePlaceholderPosition();
-        }
-      };
-
-      // ── Static mode: update placeholder position in DOM ──
-      const updatePlaceholderPosition = (): void => {
-        if (!placeholder) return;
-
-        const itemElements = dom.items.querySelectorAll("[data-index]");
-        let insertBeforeEl: HTMLElement | null = null;
-
-        for (let i = 0; i < itemElements.length; i++) {
-          const itemEl = itemElements[i] as HTMLElement;
-          const idx = getIndex(itemEl);
-          const effectiveTarget = dropIndex >= dragIndex ? dropIndex + 1 : dropIndex;
-          if (idx === effectiveTarget) {
-            insertBeforeEl = itemEl;
-            break;
-          }
-        }
-
-        if (insertBeforeEl) {
-          dom.items.insertBefore(placeholder, insertBeforeEl);
-        } else {
-          dom.items.appendChild(placeholder);
-        }
+        applyShifts();
       };
 
       // ── Edge auto-scroll ──
+      // When the pointer is in the edge zone, only scroll — don't update
+      // the drop position. This avoids items shifting while scrolling,
+      // which creates a jarring double-movement. Shifts resume when
+      // the pointer leaves the edge zone (via onPointerMove).
+      let inEdgeZone = false;
+
+      const isInEdgeZone = (): boolean => {
+        const viewportRect = dom.viewport.getBoundingClientRect();
+        if (horizontal) {
+          const distFromStart = pointerCurrentX - viewportRect.left;
+          const distFromEnd = viewportRect.right - pointerCurrentX;
+          return (distFromStart < edgeScrollZone && distFromStart >= 0)
+            || (distFromEnd < edgeScrollZone && distFromEnd >= 0);
+        }
+        const distFromTop = pointerCurrentY - viewportRect.top;
+        const distFromBottom = viewportRect.bottom - pointerCurrentY;
+        return (distFromTop < edgeScrollZone && distFromTop >= 0)
+          || (distFromBottom < edgeScrollZone && distFromBottom >= 0);
+      };
+
       const startEdgeScroll = (): void => {
         const tick = (): void => {
           if (!sorting) return;
@@ -394,10 +350,11 @@ export const withSortable = <T extends VListItem = VListItem>(
             }
           }
 
+          inEdgeZone = delta !== 0;
+
           if (delta !== 0) {
             const currentScroll = ctx.scrollController.getScrollTop();
             ctx.scrollController.scrollTo(currentScroll + delta);
-            updateDropPosition();
           }
 
           scrollRafId = requestAnimationFrame(tick);
@@ -422,21 +379,13 @@ export const withSortable = <T extends VListItem = VListItem>(
         }
         ghost = null;
 
-        if (placeholder && placeholder.parentNode) {
-          placeholder.remove();
-        }
-        placeholder = null;
-
         if (draggedElement) {
           draggedElement.style.opacity = "";
           draggedElement.style.pointerEvents = "";
           draggedElement = null;
         }
 
-        if (liveReorder) {
-          clearShifts();
-        }
-
+        clearShifts();
         stopEdgeScroll();
 
         dom.root.classList.remove(`${classPrefix}--sorting`);
@@ -518,11 +467,6 @@ export const withSortable = <T extends VListItem = VListItem>(
             // Hide the original element
             draggedElement.style.opacity = "0";
             draggedElement.style.pointerEvents = "none";
-          }
-
-          // Static mode: create placeholder
-          if (!liveReorder) {
-            placeholder = createPlaceholder(draggedItemSize);
           }
 
           // Emit sort:start
