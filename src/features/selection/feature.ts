@@ -922,9 +922,9 @@ export const withSelection = <T extends VListItem = VListItem>(
       ctx.methods.set("_focusById", (id: string | number): void => {
         const index = idToIndexMap.get(id);
         if (index === undefined) return;
+        // Set the index without focusVisible — the ring will appear when
+        // the user tabs into the list and focusin fires.
         selectionState = setFocusedIndex(selectionState, index);
-        selectionState.focusVisible = true;
-        capturedForceRender();
       });
 
       // ── Internal: get focused item ID regardless of focusVisible ──
