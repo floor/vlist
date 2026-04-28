@@ -173,7 +173,6 @@ export const withSortable = <T extends VListItem = VListItem>(
           `height:${rect.height}px`,
           `left:${rect.left}px`,
           `top:${rect.top}px`,
-          "opacity:0.8",
           "transition:none",
           "will-change:transform",
         ].join(";");
