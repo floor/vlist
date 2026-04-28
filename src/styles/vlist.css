@@ -525,3 +525,19 @@
 .vlist-viewport--gutter-stable {
     scrollbar-gutter: stable;
 }
+
+/* =============================================================================
+   Sortable
+   ============================================================================= */
+
+/* Drag ghost — visual appearance (structural styles set inline by JS) */
+.vlist-sort-ghost {
+    opacity: 0.85;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    cursor: grabbing;
+}
+
+/* Sorting state on root */
+.vlist--sorting {
+    user-select: none;
+}
