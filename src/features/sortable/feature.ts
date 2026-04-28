@@ -121,6 +121,12 @@ export const withSortable = <T extends VListItem = VListItem>(
       const { classPrefix } = resolvedConfig;
       const horizontal = resolvedConfig.horizontal;
 
+      // Pre-compute reusable values
+      const prop = horizontal ? "translateX" : "translateY";
+      const shiftTransition = shiftDuration > 0
+        ? `transform ${shiftDuration}ms ease`
+        : "none";
+
       // ── Drag state ──
       let sorting = false;
       let dragIndex = -1;
@@ -149,7 +155,8 @@ export const withSortable = <T extends VListItem = VListItem>(
 
       // ── Helper: get index from item element ──
       const getIndex = (el: HTMLElement): number => {
-        return parseInt(el.dataset.index ?? "-1", 10);
+        const attr = el.dataset.index;
+        return attr === undefined ? -1 : +attr;
       };
 
       // ── Helper: create the ghost element ──
@@ -241,56 +248,35 @@ export const withSortable = <T extends VListItem = VListItem>(
       // We must READ the base offset from sizeCache and ADD the shift,
       // not overwrite the transform with just the shift value.
       const applyShifts = (): void => {
-        const itemElements = dom.items.querySelectorAll("[data-index]");
+        const children = dom.items.children;
         const shiftPx = draggedItemSize;
-        const transition = shiftDuration > 0
-          ? `transform ${shiftDuration}ms ease`
-          : "none";
-        const prop = horizontal ? "translateX" : "translateY";
 
-        for (let i = 0; i < itemElements.length; i++) {
-          const itemEl = itemElements[i] as HTMLElement;
+        for (let i = 0; i < children.length; i++) {
+          const itemEl = children[i] as HTMLElement;
           const idx = getIndex(itemEl);
-          if (idx < 0) continue;
+          if (idx < 0 || idx === dragIndex) continue;
 
-          // The dragged element is hidden — skip it
-          if (idx === dragIndex) continue;
-
-          // Determine if this item needs to shift.
-          // When dragging DOWN (dropIndex > dragIndex):
-          //   Items between (dragIndex, dropIndex] shift UP by one item size
-          // When dragging UP (dropIndex < dragIndex):
-          //   Items between [dropIndex, dragIndex) shift DOWN by one item size
           let shift = 0;
           if (dropIndex > dragIndex) {
-            if (idx > dragIndex && idx <= dropIndex) {
-              shift = -shiftPx;
-            }
+            if (idx > dragIndex && idx <= dropIndex) shift = -shiftPx;
           } else if (dropIndex < dragIndex) {
-            if (idx >= dropIndex && idx < dragIndex) {
-              shift = shiftPx;
-            }
+            if (idx >= dropIndex && idx < dragIndex) shift = shiftPx;
           }
 
-          // Read the item's base offset from sizeCache and add shift
-          const baseOffset = ctx.sizeCache.getOffset(idx);
-          const finalOffset = Math.round(baseOffset + shift);
-
-          itemEl.style.transition = transition;
+          const finalOffset = Math.round(ctx.sizeCache.getOffset(idx) + shift);
+          itemEl.style.transition = shiftTransition;
           itemEl.style.transform = `${prop}(${finalOffset}px)`;
         }
       };
 
       // ── Restore items to their sizeCache base offsets ──
       const clearShifts = (): void => {
-        const itemElements = dom.items.querySelectorAll("[data-index]");
-        const prop = horizontal ? "translateX" : "translateY";
-        for (let i = 0; i < itemElements.length; i++) {
-          const itemEl = itemElements[i] as HTMLElement;
+        const children = dom.items.children;
+        for (let i = 0; i < children.length; i++) {
+          const itemEl = children[i] as HTMLElement;
           const idx = getIndex(itemEl);
           if (idx >= 0) {
-            const baseOffset = ctx.sizeCache.getOffset(idx);
-            itemEl.style.transform = `${prop}(${Math.round(baseOffset)}px)`;
+            itemEl.style.transform = `${prop}(${Math.round(ctx.sizeCache.getOffset(idx))}px)`;
           }
           itemEl.style.transition = "";
         }
