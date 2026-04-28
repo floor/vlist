@@ -186,12 +186,24 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
         if (selectedIds) snapshot.selectedIds = selectedIds;
+
+        // Capture focused item ID — use _getFocusedId which bypasses the
+        // focusVisible gate, so clicking away from the list before calling
+        // getScrollSnapshot() (e.g. "Navigate Away" button) doesn't lose focus.
+        const getFocusedId = ctx.methods.get("_getFocusedId") as
+          | (() => string | number | undefined)
+          | undefined;
+        if (getFocusedId) {
+          const focusedId = getFocusedId();
+          if (focusedId !== undefined) snapshot.focusedId = focusedId;
+        }
+
         return snapshot;
       });
 
       // ── restoreScroll ──
       const restoreScroll = (snapshot: ScrollSnapshot): void => {
-        const { index, offsetInItem, selectedIds } = snapshot;
+        const { index, offsetInItem, selectedIds, focusedId } = snapshot;
         const totalItems = ctx.getVirtualTotal();
 
         // If total is 0 but the snapshot carries a total, bootstrap the
@@ -203,8 +215,14 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           // Rebuild sizeCache and compression with the new total
           ctx.sizeCache.rebuild(snapshot.total);
           ctx.updateCompressionMode();
+          // withScale's enhancedUpdateCompressionMode already set the correct
+          // content size (virtualSize + slack) when compressed. Only update it
+          // ourselves for non-compressed lists — calling updateContentSize with
+          // just virtualSize would strip the slack and make the last items unreachable.
           const freshCompression = ctx.getCachedCompression();
-          ctx.updateContentSize(freshCompression.virtualSize);
+          if (!freshCompression.isCompressed) {
+            ctx.updateContentSize(freshCompression.virtualSize);
+          }
         } else if (totalItems === 0) {
           return;
         }
@@ -226,8 +244,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         if (sizeCacheTotal !== effectiveTotal) {
           ctx.sizeCache.rebuild(effectiveTotal);
           ctx.updateCompressionMode();
+          // Same as above: withScale already updated content size with slack included.
           const freshCompression = ctx.getCachedCompression();
-          ctx.updateContentSize(freshCompression.virtualSize);
+          if (!freshCompression.isCompressed) {
+            ctx.updateContentSize(freshCompression.virtualSize);
+          }
         }
 
         const compression = ctx.getCachedCompression();
@@ -248,12 +269,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           scrollPosition = offset + offsetInItem;
         }
 
-        // Clamp to valid range
+        // Clamp to valid range.
+        // When withScale is active, viewportState.totalSize = virtualSize + slack
+        // (set by enhancedUpdateCompressionMode). Using just compression.virtualSize
+        // here clips the last ~37 items off — the same drift bug as the original #12.
+        // For non-compressed lists, totalSize === virtualSize, so this is safe either way.
         const containerSize = ctx.state.viewportState.containerSize;
-        const maxScroll = Math.max(
-          0,
-          compression.virtualSize - containerSize,
-        );
+        const effectiveTotalSize = compression.isCompressed
+          ? ctx.state.viewportState.totalSize
+          : compression.virtualSize;
+        const maxScroll = Math.max(0, effectiveTotalSize - containerSize);
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
         ctx.scrollController.scrollTo(scrollPosition);
@@ -277,6 +302,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           | (() => Promise<void>)
           | undefined;
 
+        // Helper: restore focus after data is ready at the restored position.
+        // Called after loadVisibleRange (async) or via rAF (sync lists).
+        const restoreFocus = (): void => {
+          if (focusedId === undefined) return;
+          const focusByIdFn = ctx.methods.get("_focusById") as
+            | ((id: string | number) => void)
+            | undefined;
+          if (focusByIdFn) focusByIdFn(focusedId);
+        };
+
         if (loadVisibleFn) {
           // Wait for the viewport container to have a real size before loading.
           // On page reload, the ResizeObserver hasn't fired yet when restoreScroll
@@ -295,7 +330,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
               if (Math.abs(currentScrollTop - savedScrollPosition) > 1) {
                 ctx.scrollController.scrollTo(savedScrollPosition);
               }
-              loadVisibleFn();
+              loadVisibleFn().then(restoreFocus);
             } else if (polls < MAX_POLLS) {
               requestAnimationFrame(pollUntilReady);
             }
@@ -309,8 +344,12 @@ export const withSnapshots = <T extends VListItem = VListItem>(
             | undefined;
           if (reloadFn) {
             requestAnimationFrame(() => {
-              reloadFn();
+              reloadFn().then(restoreFocus);
             });
+          } else {
+            // Synchronous list — data is already in memory, restore focus
+            // after the scroll+render settles.
+            requestAnimationFrame(restoreFocus);
           }
         }
       };
@@ -355,6 +394,9 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         // Save on selection change (guarded during restore like everything else)
         ctx.emitter.on("selection:change", saveToStorage);
+
+        // Save on focus change so arrow-key navigation is preserved on reload
+        ctx.emitter.on("focus:change", saveToStorage);
 
         // ── Coordinate with withAsync ──
         // When restoring a snapshot, cancel withAsync's deferred autoLoad
