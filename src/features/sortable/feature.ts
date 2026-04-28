@@ -499,6 +499,12 @@ export const withSortable = <T extends VListItem = VListItem>(
           // avoids jarring shift + scroll double-movement
           if (!inEdgeZone) {
             updateDropPosition();
+          } else if (isPointerOutsideViewport()) {
+            // Clear shifts when pointer leaves viewport
+            if (dropIndex !== dragIndex) {
+              dropIndex = dragIndex;
+              clearShifts();
+            }
           }
         }
       };
