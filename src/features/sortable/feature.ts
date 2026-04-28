@@ -222,12 +222,21 @@ export const withSortable = <T extends VListItem = VListItem>(
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return 0;
 
-        // Convert pointer to content-relative coordinate
+        // Use the ghost's LEADING EDGE based on drag direction:
+        // - Dragging down → bottom edge of the ghost
+        // - Dragging up → top edge of the ghost
+        // The shift triggers when this edge crosses the midpoint of a target item.
         const viewportRect = dom.viewport.getBoundingClientRect();
         const scrollPos = ctx.scrollController.getScrollTop();
+        const movingDown = horizontal
+          ? pointerCurrentX > pointerStartX
+          : pointerCurrentY > pointerStartY;
+        const ghostEdge = horizontal
+          ? pointerCurrentX - ghostOffsetX + (movingDown ? draggedItemSize : 0)
+          : pointerCurrentY - ghostOffsetY + (movingDown ? draggedItemSize : 0);
         const pointerInContent = horizontal
-          ? pointerCurrentX - viewportRect.left + dom.viewport.scrollLeft + scrollPos
-          : pointerCurrentY - viewportRect.top + scrollPos;
+          ? ghostEdge - viewportRect.left + dom.viewport.scrollLeft + scrollPos
+          : ghostEdge - viewportRect.top + scrollPos;
 
         // Walk visible items to find the insertion point
         const itemElements = dom.items.querySelectorAll("[data-index]");
