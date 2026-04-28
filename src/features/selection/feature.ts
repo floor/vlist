@@ -925,6 +925,10 @@ export const withSelection = <T extends VListItem = VListItem>(
         // Set the index without focusVisible — the ring will appear when
         // the user tabs into the list and focusin fires.
         selectionState = setFocusedIndex(selectionState, index);
+        // Emit so live snapshot previews and external listeners update.
+        // focusVisible is false so no ring is shown prematurely.
+        const item = ctx.dataManager.getItem(index);
+        if (item) emitter.emit("focus:change", { id: item.id, index });
       });
 
       // ── Internal: get focused item ID regardless of focusVisible ──
