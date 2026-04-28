@@ -60,7 +60,6 @@ const SORT_DESC = "\u25BC"; // ▼
  * Create a TableHeader instance.
  *
  * @param root - The vlist root element (.vlist)
- * @param viewport - The vlist viewport element (for scroll sync)
  * @param headerHeight - Height of the header row in pixels
  * @param classPrefix - CSS class prefix (default: 'vlist')
  * @param onResize - Callback when a column is resized (receives column index and new width)
@@ -70,7 +69,6 @@ const SORT_DESC = "\u25BC"; // ▼
  */
 export const createTableHeader = <T extends VListItem = VListItem>(
   root: HTMLElement,
-  viewport: HTMLElement,
   headerHeight: number,
   classPrefix: string,
   onResize: (columnIndex: number, newWidth: number) => void,

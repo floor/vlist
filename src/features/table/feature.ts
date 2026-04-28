@@ -278,7 +278,6 @@ export const withTable = <T extends VListItem = VListItem>(
 
       tableHeader = createTableHeader<T>(
         dom.root,
-        dom.viewport,
         headerHeight,
         classPrefix,
         onColumnResize,

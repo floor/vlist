@@ -89,7 +89,7 @@ function createResolvedLayout(columns: TableColumn<TestItem>[], containerWidth =
 describe("createTableHeader - DOM setup", () => {
   it("should insert header rowgroup before viewport", () => {
     const { root, viewport } = createTestDOM();
-    createTableHeader(root, viewport, 40, "vlist", mock());
+    createTableHeader(root, 40, "vlist", mock());
 
     const rowgroup = root.firstChild as HTMLElement;
     expect(rowgroup.getAttribute("role")).toBe("rowgroup");
@@ -97,8 +97,8 @@ describe("createTableHeader - DOM setup", () => {
   });
 
   it("should create header row element with correct ARIA", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader(root, 40, "vlist", mock());
 
     expect(header.element.getAttribute("role")).toBe("row");
     expect(header.element.getAttribute("aria-rowindex")).toBe("1");
@@ -106,32 +106,31 @@ describe("createTableHeader - DOM setup", () => {
   });
 
   it("should set header height from config", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader(root, viewport, 36, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader(root, 36, "vlist", mock());
     expect(header.element.style.height).toBe("36px");
   });
 
   it("should create scroll container inside header", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader(root, 40, "vlist", mock());
     const scrollContainer = header.element.firstChild as HTMLElement;
     expect(scrollContainer.className).toBe("vlist-table-header-scroll");
     expect(scrollContainer.getAttribute("role")).toBe("presentation");
   });
 
   it("should set header height CSS variable on root for scrollbar offset", () => {
-    const { root, viewport } = createTestDOM();
-    createTableHeader(root, viewport, 48, "vlist", mock());
+    const { root } = createTestDOM();
+    createTableHeader(root, 48, "vlist", mock());
 
     // Layout is now handled by CSS flex — no inline styles on viewport.
     // The CSS variable on root allows the custom scrollbar to offset its track.
     expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("48px");
-    expect(viewport.style.position).toBe("");
   });
 
   it("should use custom class prefix", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader(root, viewport, 40, "mytable", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader(root, 40, "mytable", mock());
     expect(header.element.className).toBe("mytable-table-header");
   });
 });
@@ -142,8 +141,8 @@ describe("createTableHeader - DOM setup", () => {
 
 describe("createTableHeader - rebuild", () => {
   it("should create cells for each column", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name"), col("value")]);
 
     header.rebuild(layout);
@@ -153,8 +152,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should set columnheader role and aria-colindex on cells", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name"), col("value")]);
 
     header.rebuild(layout);
@@ -169,8 +168,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should set data-column-key on cells", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name"), col("value")]);
 
     header.rebuild(layout);
@@ -181,8 +180,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should render string labels as text content", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name", { label: "Full Name" })]);
 
     header.rebuild(layout);
@@ -194,8 +193,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should render DOM element labels by appending", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const labelEl = document.createElement("strong");
     labelEl.textContent = "Bold";
 
@@ -210,8 +209,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should use custom header template when provided", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     const layout = createResolvedLayout([
       col("name", { header: (c) => `Custom: ${c.label}` }),
@@ -224,8 +223,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should use custom header template returning DOM element", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     const layout = createResolvedLayout([
       col("name", {
@@ -244,8 +243,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should add alignment modifier class for center", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("value", { align: "center" })]);
 
     header.rebuild(layout);
@@ -256,8 +255,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should add alignment modifier class for right", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("value", { align: "right" })]);
 
     header.rebuild(layout);
@@ -268,8 +267,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should not add alignment class for left (default)", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name", { align: "left" })]);
 
     header.rebuild(layout);
@@ -281,8 +280,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should add sortable class and sort indicator for sortable columns", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name", { sortable: true })]);
 
     header.rebuild(layout);
@@ -297,8 +296,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should not add sort indicator for non-sortable columns", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name")]);
 
     header.rebuild(layout);
@@ -309,8 +308,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should add resize handles for resizable columns", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { width: 200, resizable: true }),
       col("value", { width: 200, resizable: false }),
@@ -328,8 +327,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should clear existing cells on rebuild", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     const layout1 = createResolvedLayout([col("a"), col("b"), col("c")]);
     header.rebuild(layout1);
@@ -342,8 +341,8 @@ describe("createTableHeader - rebuild", () => {
   });
 
   it("should restore sort indicator after rebuild", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     const layout = createResolvedLayout([
       col("name", { sortable: true }),
@@ -369,8 +368,8 @@ describe("createTableHeader - rebuild", () => {
 
 describe("createTableHeader - update", () => {
   it("should set scroll container width to layout totalWidth", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { width: 200 }),
       col("value", { width: 300 }),
@@ -383,8 +382,8 @@ describe("createTableHeader - update", () => {
   });
 
   it("should set individual cell widths", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { width: 200 }),
       col("value", { width: 300 }),
@@ -398,8 +397,8 @@ describe("createTableHeader - update", () => {
   });
 
   it("should update widths when called with new layout", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const columns = [
       col("name", { width: 200 }),
       col("value", { width: 300 }),
@@ -423,8 +422,8 @@ describe("createTableHeader - update", () => {
 
 describe("createTableHeader - sort", () => {
   it("should show ascending indicator", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { sortable: true }),
       col("value", { sortable: true }),
@@ -443,8 +442,8 @@ describe("createTableHeader - sort", () => {
   });
 
   it("should show descending indicator", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name", { sortable: true })]);
 
     header.rebuild(layout);
@@ -459,8 +458,8 @@ describe("createTableHeader - sort", () => {
   });
 
   it("should clear indicator when sorting different column", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { sortable: true }),
       col("value", { sortable: true }),
@@ -486,8 +485,8 @@ describe("createTableHeader - sort", () => {
   });
 
   it("should clear all indicators when key is null", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([col("name", { sortable: true })]);
 
     header.rebuild(layout);
@@ -504,8 +503,8 @@ describe("createTableHeader - sort", () => {
   });
 
   it("should handle updateSort before rebuild (no layout)", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     // Should not throw
     expect(() => header.updateSort("name", "asc")).not.toThrow();
@@ -518,8 +517,8 @@ describe("createTableHeader - sort", () => {
 
 describe("createTableHeader - syncScroll", () => {
   it("should translate scroll container by negative scrollLeft", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock()) as any;
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock()) as any;
 
     header.syncScroll(150);
 
@@ -528,8 +527,8 @@ describe("createTableHeader - syncScroll", () => {
   });
 
   it("should handle zero scroll", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock()) as any;
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock()) as any;
 
     header.syncScroll(0);
 
@@ -544,9 +543,9 @@ describe("createTableHeader - syncScroll", () => {
 
 describe("createTableHeader - click interaction", () => {
   it("should call onSort when clicking a sortable header cell", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onSort = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
     const layout = createResolvedLayout([col("name", { sortable: true })]);
 
     header.rebuild(layout);
@@ -567,10 +566,10 @@ describe("createTableHeader - click interaction", () => {
   });
 
   it("should call onClick when clicking any header cell", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onClick = mock(() => {});
     const header = createTableHeader<TestItem>(
-      root, viewport, 40, "vlist", mock(), undefined, onClick,
+      root, 40, "vlist", mock(), undefined, onClick,
     );
     const layout = createResolvedLayout([col("name")]);
 
@@ -591,10 +590,10 @@ describe("createTableHeader - click interaction", () => {
   });
 
   it("should cycle sort: asc → desc → null", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const sortCalls: any[] = [];
     const onSort = mock((e: any) => sortCalls.push(e));
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
     const layout = createResolvedLayout([col("name", { sortable: true })]);
 
     header.rebuild(layout);
@@ -624,9 +623,9 @@ describe("createTableHeader - click interaction", () => {
   });
 
   it("should not emit sort for non-sortable columns", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onSort = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
     const layout = createResolvedLayout([col("name", { sortable: false })]);
 
     header.rebuild(layout);
@@ -641,9 +640,9 @@ describe("createTableHeader - click interaction", () => {
   });
 
   it("should ignore clicks on resize handles", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onSort = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
     const layout = createResolvedLayout([
       col("name", { width: 200, sortable: true, resizable: true }),
     ]);
@@ -658,9 +657,9 @@ describe("createTableHeader - click interaction", () => {
   });
 
   it("should handle click when no layout is set", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onSort = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
 
     // Click with no cells — should not throw
     const event = new MouseEvent("click", { bubbles: true });
@@ -675,9 +674,9 @@ describe("createTableHeader - click interaction", () => {
 
 describe("createTableHeader - resize interaction", () => {
   it("should call onResize during pointer drag on resize handle", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onResize = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", onResize);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
     const layout = createResolvedLayout([
       col("name", { width: 200, resizable: true }),
       col("value", { width: 200 }),
@@ -727,9 +726,9 @@ describe("createTableHeader - resize interaction", () => {
   });
 
   it("should ignore small drags below MIN_DRAG_DELTA", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onResize = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", onResize);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
     const layout = createResolvedLayout([
       col("name", { width: 200, resizable: true }),
     ]);
@@ -763,9 +762,9 @@ describe("createTableHeader - resize interaction", () => {
   });
 
   it("should ignore pointerdown on non-resize elements", () => {
-    const { root, viewport } = createTestDOM();
+    const { root } = createTestDOM();
     const onResize = mock(() => {});
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", onResize);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
     const layout = createResolvedLayout([col("name", { width: 200 })]);
 
     header.rebuild(layout);
@@ -782,8 +781,8 @@ describe("createTableHeader - resize interaction", () => {
   });
 
   it("should handle pointerup when not dragging", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     // Should not throw
     expect(() => {
@@ -793,8 +792,8 @@ describe("createTableHeader - resize interaction", () => {
   });
 
   it("should add active class to handle during drag", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { width: 200, resizable: true }),
     ]);
@@ -829,16 +828,16 @@ describe("createTableHeader - resize interaction", () => {
 
 describe("createTableHeader - visibility", () => {
   it("should hide the header", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     header.hide();
     expect(header.element.style.display).toBe("none");
   });
 
   it("should show the header after hiding", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     header.hide();
     header.show();
@@ -846,8 +845,8 @@ describe("createTableHeader - visibility", () => {
   });
 
   it("should not re-show if already visible", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     // Already visible by default — show should be a no-op
     header.show();
@@ -855,8 +854,8 @@ describe("createTableHeader - visibility", () => {
   });
 
   it("should not re-hide if already hidden", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     header.hide();
     header.hide(); // Should be a no-op
@@ -870,8 +869,8 @@ describe("createTableHeader - visibility", () => {
 
 describe("createTableHeader - destroy", () => {
   it("should remove the rowgroup from DOM", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     const rowgroup = root.firstChild as HTMLElement;
     expect(rowgroup.getAttribute("role")).toBe("rowgroup");
@@ -883,14 +882,13 @@ describe("createTableHeader - destroy", () => {
   });
 
   it("should clear the header height CSS variable on root after destroy", () => {
-    const { root, viewport } = createTestDOM();
-    const header = createTableHeader<TestItem>(root, viewport, 40, "vlist", mock());
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
 
     expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("40px");
 
     header.destroy();
 
     expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("");
-    expect(viewport.style.position).toBe("");
   });
 });
