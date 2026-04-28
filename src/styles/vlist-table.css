@@ -177,9 +177,6 @@
     transition: background-color 0.15s ease;
 }
 
-.vlist-table-header-cell:hover .vlist-table-header-resize {
-    opacity: 1;
-}
 
 .vlist-table-header-resize:hover::after {
     background-color: var(--vlist-focus-ring, #3b82f6);
