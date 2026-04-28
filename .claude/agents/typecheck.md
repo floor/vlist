@@ -2,7 +2,7 @@
 name: typecheck
 description: Run TypeScript strict-mode type checking for vlist and diagnose any errors. Use proactively after code changes.
 tools: Read, Glob, Grep, Bash
-model: sonnet
+model: haiku
 color: blue
 ---
 
