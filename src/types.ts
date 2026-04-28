@@ -273,6 +273,9 @@ export interface ScrollSnapshot {
 
   /** Selected item IDs (optional, included for convenience) */
   selectedIds?: Array<string | number>;
+
+  /** Focused item ID (optional, restores keyboard navigation position) */
+  focusedId?: string | number;
 }
 
 /** Options for scrollToIndex / scrollToItem */
