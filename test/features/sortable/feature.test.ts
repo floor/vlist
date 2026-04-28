@@ -262,29 +262,12 @@ describe("withSortable — factory", () => {
     const feature = withSortable({
       handle: ".grip",
       ghostClass: "my-ghost",
-      placeholderClass: "my-placeholder",
-      liveReorder: false,
       shiftDuration: 200,
       edgeScrollZone: 60,
       edgeScrollSpeed: 12,
       dragThreshold: 10,
     });
     expect(feature.name).toBe("withSortable");
-  });
-
-  it("defaults liveReorder to true", () => {
-    // Verify it doesn't throw when setup with default config
-    const feature = withSortable();
-    const ctx = createMockContext();
-    feature.setup(ctx);
-    expect(ctx.methods.has("isSorting")).toBe(true);
-  });
-
-  it("accepts liveReorder: false for placeholder mode", () => {
-    const feature = withSortable({ liveReorder: false });
-    const ctx = createMockContext();
-    feature.setup(ctx);
-    expect(ctx.methods.has("isSorting")).toBe(true);
   });
 });
 
