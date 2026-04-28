@@ -182,6 +182,10 @@
     background-color: var(--vlist-focus-ring, #3b82f6);
 }
 
+.vlist-table-header-cell:hover .vlist-table-header-resize {
+    opacity: 1;
+}
+
 /* Active drag state (toggled via JS) */
 .vlist-table-header-resize--active {
     opacity: 1;
