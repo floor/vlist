@@ -2,7 +2,7 @@
 name: size-check
 description: Build the vlist library and measure gzipped bundle sizes per feature. Use after code changes to detect size regressions.
 tools: Read, Bash
-model: sonnet
+model: haiku
 color: cyan
 ---
 
