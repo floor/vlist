@@ -105,7 +105,7 @@ export const withSortable = <T extends VListItem = VListItem>(
   const ghostClass = config?.ghostClass ?? "vlist-sort-ghost";
   const shiftDuration = config?.shiftDuration ?? 150;
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
-  const edgeScrollSpeed = config?.edgeScrollSpeed ?? 8;
+  const edgeScrollSpeed = config?.edgeScrollSpeed ?? 20;
   const dragThreshold = config?.dragThreshold ?? 5;
 
   return {
@@ -316,13 +316,11 @@ export const withSortable = <T extends VListItem = VListItem>(
         if (horizontal) {
           const distFromStart = pointerCurrentX - viewportRect.left;
           const distFromEnd = viewportRect.right - pointerCurrentX;
-          return (distFromStart < edgeScrollZone && distFromStart >= 0)
-            || (distFromEnd < edgeScrollZone && distFromEnd >= 0);
+          return distFromStart < edgeScrollZone || distFromEnd < edgeScrollZone;
         }
         const distFromTop = pointerCurrentY - viewportRect.top;
         const distFromBottom = viewportRect.bottom - pointerCurrentY;
-        return (distFromTop < edgeScrollZone && distFromTop >= 0)
-          || (distFromBottom < edgeScrollZone && distFromBottom >= 0);
+        return distFromTop < edgeScrollZone || distFromBottom < edgeScrollZone;
       };
 
       const startEdgeScroll = (): void => {
@@ -332,21 +330,28 @@ export const withSortable = <T extends VListItem = VListItem>(
           const viewportRect = dom.viewport.getBoundingClientRect();
           let delta = 0;
 
+          // Quadratic ramp: gentle at zone boundary, aggressive at the edge.
+          // Beyond the viewport, speed grows further but is capped at 3x.
+          const maxT = 3;
           if (horizontal) {
             const distFromStart = pointerCurrentX - viewportRect.left;
             const distFromEnd = viewportRect.right - pointerCurrentX;
-            if (distFromStart < edgeScrollZone && distFromStart >= 0) {
-              delta = -edgeScrollSpeed * (1 - distFromStart / edgeScrollZone);
-            } else if (distFromEnd < edgeScrollZone && distFromEnd >= 0) {
-              delta = edgeScrollSpeed * (1 - distFromEnd / edgeScrollZone);
+            if (distFromStart < edgeScrollZone) {
+              const t = Math.min(maxT, 1 - distFromStart / edgeScrollZone);
+              delta = -edgeScrollSpeed * t * t;
+            } else if (distFromEnd < edgeScrollZone) {
+              const t = Math.min(maxT, 1 - distFromEnd / edgeScrollZone);
+              delta = edgeScrollSpeed * t * t;
             }
           } else {
             const distFromTop = pointerCurrentY - viewportRect.top;
             const distFromBottom = viewportRect.bottom - pointerCurrentY;
-            if (distFromTop < edgeScrollZone && distFromTop >= 0) {
-              delta = -edgeScrollSpeed * (1 - distFromTop / edgeScrollZone);
-            } else if (distFromBottom < edgeScrollZone && distFromBottom >= 0) {
-              delta = edgeScrollSpeed * (1 - distFromBottom / edgeScrollZone);
+            if (distFromTop < edgeScrollZone) {
+              const t = Math.min(maxT, 1 - distFromTop / edgeScrollZone);
+              delta = -edgeScrollSpeed * t * t;
+            } else if (distFromBottom < edgeScrollZone) {
+              const t = Math.min(maxT, 1 - distFromBottom / edgeScrollZone);
+              delta = edgeScrollSpeed * t * t;
             }
           }
 
@@ -479,7 +484,11 @@ export const withSortable = <T extends VListItem = VListItem>(
         if (sorting) {
           event.preventDefault();
           updateGhostPosition();
-          updateDropPosition();
+          // Don't update drop position while edge-scrolling —
+          // avoids jarring shift + scroll double-movement
+          if (!inEdgeZone) {
+            updateDropPosition();
+          }
         }
       };
 
