@@ -186,12 +186,25 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
         if (selectedIds) snapshot.selectedIds = selectedIds;
+
+        // Capture focused item ID if selection feature is present
+        const getFocusedIndex = ctx.methods.get("_getFocusedIndex") as
+          | (() => number)
+          | undefined;
+        if (getFocusedIndex) {
+          const focusedIndex = getFocusedIndex();
+          if (focusedIndex >= 0) {
+            const focusedItem = ctx.dataManager.getItem(focusedIndex);
+            if (focusedItem) snapshot.focusedId = focusedItem.id;
+          }
+        }
+
         return snapshot;
       });
 
       // ── restoreScroll ──
       const restoreScroll = (snapshot: ScrollSnapshot): void => {
-        const { index, offsetInItem, selectedIds } = snapshot;
+        const { index, offsetInItem, selectedIds, focusedId } = snapshot;
         const totalItems = ctx.getVirtualTotal();
 
         // If total is 0 but the snapshot carries a total, bootstrap the
@@ -308,7 +321,14 @@ export const withSnapshots = <T extends VListItem = VListItem>(
               if (Math.abs(currentScrollTop - savedScrollPosition) > 1) {
                 ctx.scrollController.scrollTo(savedScrollPosition);
               }
-              loadVisibleFn();
+              loadVisibleFn().then(() => {
+                if (focusedId !== undefined) {
+                  const focusByIdFn = ctx.methods.get("_focusById") as
+                    | ((id: string | number) => void)
+                    | undefined;
+                  if (focusByIdFn) focusByIdFn(focusedId);
+                }
+              });
             } else if (polls < MAX_POLLS) {
               requestAnimationFrame(pollUntilReady);
             }

@@ -166,6 +166,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         ctx.methods.set("setSelectionMode", () => {});
         ctx.methods.set("selectNext", () => {});
         ctx.methods.set("selectPrevious", () => {});
+        ctx.methods.set("_focusById", () => {});
         return;
       }
 
@@ -906,6 +907,15 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       ctx.methods.set("selectPrevious", (): void => {
         moveFocusAndSelect("previous");
+      });
+
+      // ── Internal: restore focus by item ID (used by withSnapshots) ──
+      ctx.methods.set("_focusById", (id: string | number): void => {
+        const index = idToIndexMap.get(id);
+        if (index === undefined) return;
+        selectionState = setFocusedIndex(selectionState, index);
+        selectionState.focusVisible = true;
+        capturedForceRender();
       });
 
       // ── Cleanup handler ──
