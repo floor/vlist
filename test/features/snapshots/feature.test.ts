@@ -815,6 +815,96 @@ describe("withSnapshots - sizeCache Rebuild", () => {
     expect(history.length).toBe(1);
     expect(history[0]).toBe(50698);
   });
+
+  it("should not over-clamp last items when withScale sets totalSize with slack (regression #30)", () => {
+    // Repro: withScale sets viewportState.totalSize = virtualSize + slack after
+    // updateCompressionMode(). restoreScroll used to clamp maxScroll to
+    // virtualSize - containerSize (ignoring slack), putting the scroll position
+    // ~466px short — enough to hide the last ~37 items (shows 999,962 not 999,999).
+    const totalItems = 1_000_000;
+    const itemHeight = 72;
+    const containerSize = 600;
+    const actualSize = totalItems * itemHeight; // 72,000,000
+    const virtualSize = 16_000_000; // compressed (MAX_VIRTUAL_SIZE)
+    const ratio = virtualSize / actualSize; // ≈ 0.2222
+    // Simulate the slack withScale computes: containerSize * (1 - ratio)
+    const slack = Math.round(containerSize * (1 - ratio)); // ≈ 466
+    const totalSizeWithSlack = virtualSize + slack; // what withScale stores in totalSize
+
+    const ctx = createMockContext({
+      totalItems,
+      itemHeight,
+      containerSize,
+      isCompressed: true,
+      virtualSize,
+      actualSize,
+      compressionRatio: ratio,
+      sizeCacheTotal: 0, // stale — triggers sizeCache rebuild path in restoreScroll
+    });
+
+    // Simulate withScale's enhancedUpdateCompressionMode: it sets totalSize = virtualSize + slack
+    ctx.updateCompressionMode = mock(() => {
+      ctx.state.viewportState.totalSize = totalSizeWithSlack;
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 999_999, offsetInItem: 0, total: totalItems });
+
+    const history = (ctx as any)._scrollToHistory;
+    expect(history.length).toBe(1);
+
+    // Without the fix: maxScroll = virtualSize - containerSize = 15,999,400
+    //   → scroll clamped to 15,999,400 → shows item ~999,962 (not the last)
+    // With the fix: maxScroll = totalSizeWithSlack - containerSize = 15,999,866
+    //   → scroll clamped to 15,999,866 → last items are reachable
+    const buggyMaxScroll = virtualSize - containerSize; // 15,999,400
+    const correctMaxScroll = totalSizeWithSlack - containerSize; // 15,999,866
+    expect(history[0]).toBeGreaterThan(buggyMaxScroll);
+    expect(history[0]).toBeLessThanOrEqual(correctMaxScroll);
+  });
+
+  it("should not call updateContentSize with slack-less virtualSize when compressed (regression #30)", () => {
+    // restoreScroll used to call updateContentSize(freshCompression.virtualSize) after
+    // updateCompressionMode(), which overwrote the withScale-set content size
+    // (virtualSize + slack) with just virtualSize. This made the DOM's scrollable
+    // range too small, preventing the last items from being reached.
+    const totalItems = 1_000_000;
+    const itemHeight = 72;
+    const containerSize = 600;
+    const actualSize = totalItems * itemHeight;
+    const virtualSize = 16_000_000;
+    const ratio = virtualSize / actualSize;
+    const slack = Math.round(containerSize * (1 - ratio));
+    const totalSizeWithSlack = virtualSize + slack;
+
+    const ctx = createMockContext({
+      totalItems,
+      itemHeight,
+      containerSize,
+      isCompressed: true,
+      virtualSize,
+      actualSize,
+      compressionRatio: ratio,
+      sizeCacheTotal: 0, // stale
+    });
+
+    ctx.updateCompressionMode = mock(() => {
+      ctx.state.viewportState.totalSize = totalSizeWithSlack;
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 500_000, offsetInItem: 0, total: totalItems });
+
+    const contentHistory = (ctx as any)._contentSizeHistory as number[];
+    // updateContentSize must NOT be called with the slack-less virtualSize
+    expect(contentHistory).not.toContain(virtualSize);
+  });
 });
 
 // =============================================================================
@@ -1416,5 +1506,254 @@ describe("withSnapshots - autoSave", () => {
     const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
     expect(stored).not.toBeNull();
     expect(JSON.parse(stored!)).toEqual(knownSnapshot);
+  });
+
+  it("should save snapshot on focus:change", () => {
+    clearAutoSave();
+    const ctx = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const knownSnapshot: ScrollSnapshot = { index: 3, offsetInItem: 0, total: 50, focusedId: 7 };
+    ctx.methods.set("getScrollSnapshot", () => knownSnapshot);
+
+    ctx.emitter.emit("focus:change", { id: 7, index: 6 });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(knownSnapshot);
+  });
+
+  it("should guard focus:change saves during restore settle", () => {
+    clearAutoSave();
+    const originalSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100, focusedId: 50 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(originalSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    const differentSnapshot: ScrollSnapshot = { index: 99, offsetInItem: 0, total: 100, focusedId: 99 };
+    ctx.methods.set("getScrollSnapshot", () => differentSnapshot);
+
+    // Guard is active — focus:change should NOT overwrite the saved snapshot
+    ctx.emitter.emit("focus:change", { id: 99, index: 98 });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(JSON.parse(stored!)).toEqual(originalSnapshot);
+  });
+
+  it("should save focus:change normally after restore guard is lifted", () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    // Lift guard via idle
+    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+
+    const newSnapshot: ScrollSnapshot = { index: 30, offsetInItem: 0, total: 100, focusedId: 31 };
+    ctx.methods.set("getScrollSnapshot", () => newSnapshot);
+
+    // Guard lifted — focus:change should now save
+    ctx.emitter.emit("focus:change", { id: 31, index: 30 });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(JSON.parse(stored!)).toEqual(newSnapshot);
+  });
+});
+
+// =============================================================================
+// withSnapshots - Focus Save/Restore
+// =============================================================================
+
+describe("withSnapshots - Focus Save/Restore", () => {
+  let savedRAF: typeof globalThis.requestAnimationFrame;
+
+  beforeAll(() => {
+    savedRAF = global.requestAnimationFrame;
+    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 0;
+    }) as typeof requestAnimationFrame;
+  });
+
+  afterAll(() => {
+    global.requestAnimationFrame = savedRAF;
+  });
+
+  // ── getScrollSnapshot ──────────────────────────────────────────────────────
+
+  it("should capture focusedId when _getFocusedId is present", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+    ctx.methods.set("_getFocusedId", () => 42);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(getSnapshot().focusedId).toBe(42);
+  });
+
+  it("should capture string focusedId", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+    ctx.methods.set("_getFocusedId", () => "abc-123");
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(getSnapshot().focusedId).toBe("abc-123");
+  });
+
+  it("should omit focusedId when _getFocusedId returns undefined", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+    ctx.methods.set("_getFocusedId", () => undefined);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(getSnapshot().focusedId).toBeUndefined();
+  });
+
+  it("should omit focusedId when no selection feature present", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(getSnapshot().focusedId).toBeUndefined();
+  });
+
+  it("should omit focusedId when totalItems is 0 (early return path)", () => {
+    const ctx = createMockContext({ totalItems: 0 });
+    ctx.methods.set("_getFocusedId", () => 42);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    // totalItems=0 returns early — focusedId is not captured
+    expect(getSnapshot().focusedId).toBeUndefined();
+  });
+
+  it("should include focusedId alongside selectedIds in snapshot", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+    ctx.methods.set("getSelected", () => [3, 7]);
+    ctx.methods.set("_getFocusedId", () => 7);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+    expect(snapshot.selectedIds).toEqual([3, 7]);
+    expect(snapshot.focusedId).toBe(7);
+  });
+
+  // ── restoreScroll — sync path (no loadVisibleRange / reload) ──────────────
+
+  it("should call _focusById via rAF after sync restore", () => {
+    const focusByIdFn = mock((_id: string | number) => {});
+    const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
+    ctx.methods.set("_focusById", focusByIdFn);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 5, offsetInItem: 0, focusedId: 42 });
+
+    // rAF is synchronous in this describe block
+    expect(focusByIdFn).toHaveBeenCalledWith(42);
+  });
+
+  it("should not call _focusById when snapshot has no focusedId", () => {
+    const focusByIdFn = mock((_id: string | number) => {});
+    const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
+    ctx.methods.set("_focusById", focusByIdFn);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 5, offsetInItem: 0 });
+
+    expect(focusByIdFn).not.toHaveBeenCalled();
+  });
+
+  it("should not crash when _focusById is absent and focusedId is present", () => {
+    const ctx = createMockContext({ totalItems: 100, itemHeight: 48 });
+    // No _focusById registered
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    expect(() => restore({ index: 5, offsetInItem: 0, focusedId: 42 })).not.toThrow();
+  });
+
+  // ── restoreScroll — async path (loadVisibleRange) ──────────────────────────
+
+  it("should call _focusById after loadVisibleRange resolves", async () => {
+    const focusByIdFn = mock((_id: string | number) => {});
+    const loadVisibleFn = mock(async () => {});
+
+    const ctx = createMockContext({ totalItems: 100, itemHeight: 48, containerSize: 500 });
+    ctx.methods.set("_focusById", focusByIdFn);
+    ctx.methods.set("loadVisibleRange", loadVisibleFn);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 5, offsetInItem: 0, focusedId: 42 });
+
+    await flushAsync();
+
+    expect(loadVisibleFn).toHaveBeenCalled();
+    expect(focusByIdFn).toHaveBeenCalledWith(42);
+  });
+
+  it("should not call _focusById after loadVisibleRange when focusedId absent", async () => {
+    const focusByIdFn = mock((_id: string | number) => {});
+    const loadVisibleFn = mock(async () => {});
+
+    const ctx = createMockContext({ totalItems: 100, itemHeight: 48, containerSize: 500 });
+    ctx.methods.set("_focusById", focusByIdFn);
+    ctx.methods.set("loadVisibleRange", loadVisibleFn);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 5, offsetInItem: 0 }); // no focusedId
+
+    await flushAsync();
+
+    expect(loadVisibleFn).toHaveBeenCalled();
+    expect(focusByIdFn).not.toHaveBeenCalled();
+  });
+
+  // ── roundtrip ─────────────────────────────────────────────────────────────
+
+  it("should preserve focusedId through JSON serialization roundtrip", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 240 });
+    ctx.methods.set("_getFocusedId", () => 99);
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    // Simulate sessionStorage roundtrip
+    const parsed: ScrollSnapshot = JSON.parse(JSON.stringify(snapshot));
+    expect(parsed.focusedId).toBe(99);
   });
 });

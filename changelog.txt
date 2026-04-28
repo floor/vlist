@@ -1,6 +1,41 @@
 vlist — full changelog
 initial commit → latest
-577 commits · 83 days · Feb 2 – Apr 27, 2026
+592 commits · 85 days · Feb 2 – Apr 28, 2026
+
+
+2026-04-28  v1.6.5
+
+  feat(snapshots): save and restore keyboard focus across navigation
+    getScrollSnapshot() now captures focusedId (the currently focused item ID)
+    alongside scroll position and selection. restoreScroll() restores it after
+    data loads at the restored position — for both sync lists (via rAF) and
+    async lists (after loadVisibleRange resolves).
+    - Focus ring is not shown immediately on restore — it appears only when
+      the user tabs into the list, landing directly on the saved item
+    - autoSave now also saves on focus:change so arrow-key navigation is
+      persisted on page reload, not just scroll and selection
+    - New focus:change event emitted when keyboard focus moves to a new item
+    - New _getFocusedId() internal method bypasses the focusVisible gate so
+      focusedId is captured correctly even after clicking away from the list
+    Closes #29.
+
+  fix(snapshots): restoreScroll clips last items when withScale is active
+    maxScroll was computed as virtualSize − containerSize, ignoring the
+    compression slack that withScale adds. For 1M-item lists this was ~466 px
+    short — enough to restore to item 999,962 instead of the true last items.
+    A second bug overwrote the correct content height (set by withScale's
+    enhancedUpdateCompressionMode) with the slack-less virtualSize immediately
+    after updateCompressionMode(), undoing the correct value.
+    Both issues are fixed: maxScroll now reads viewportState.totalSize (which
+    includes slack), and content size is only updated for non-compressed lists.
+    Closes #30.
+
+  fix(table): custom scrollbar invisible/doubled in table mode
+    scrollbar-width: none (set to hide the native scrollbar) applies to both
+    axes in Firefox, making the horizontal scrollbar disappear too. Native
+    horizontal scrolling via trackpad and keyboard arrow keys still worked but
+    the scrollbar thumb was invisible. Fixed by scoping the hide to the
+    vertical axis only when horizontal overflow is present.
 
 
 2026-04-27  v1.6.4

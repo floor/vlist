@@ -166,6 +166,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         ctx.methods.set("setSelectionMode", () => {});
         ctx.methods.set("selectNext", () => {});
         ctx.methods.set("selectPrevious", () => {});
+        ctx.methods.set("_focusById", () => {});
+        ctx.methods.set("_getFocusedId", () => undefined);
         return;
       }
 
@@ -823,6 +825,14 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Full re-render for selection changes (Space/Enter)
             forceRenderAndEmit();
           }
+
+          // Emit focus:change whenever the focused item moves
+          if (newFocusIndex >= 0 && newFocusIndex !== previousFocusIndex) {
+            const focusedItem = ctx.dataManager.getItem(newFocusIndex);
+            if (focusedItem) {
+              emitter.emit("focus:change", { id: focusedItem.id, index: newFocusIndex });
+            }
+          }
         }
       });
 
@@ -906,6 +916,27 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       ctx.methods.set("selectPrevious", (): void => {
         moveFocusAndSelect("previous");
+      });
+
+      // ── Internal: restore focus by item ID (used by withSnapshots) ──
+      ctx.methods.set("_focusById", (id: string | number): void => {
+        const index = idToIndexMap.get(id);
+        if (index === undefined) return;
+        // Set the index without focusVisible — the ring will appear when
+        // the user tabs into the list and focusin fires.
+        selectionState = setFocusedIndex(selectionState, index);
+        // Emit so live snapshot previews and external listeners update.
+        // focusVisible is false so no ring is shown prematurely.
+        const item = ctx.dataManager.getItem(index);
+        if (item) emitter.emit("focus:change", { id: item.id, index });
+      });
+
+      // ── Internal: get focused item ID regardless of focusVisible ──
+      // Used by withSnapshots to capture focus before focusout clears focusVisible.
+      ctx.methods.set("_getFocusedId", (): string | number | undefined => {
+        const idx = selectionState.focusedIndex;
+        if (idx < 0) return undefined;
+        return ctx.dataManager.getItem(idx)?.id;
       });
 
       // ── Cleanup handler ──

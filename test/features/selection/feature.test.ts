@@ -417,16 +417,18 @@ describe("withSelection — Methods", () => {
     expect(typeof ctx.methods.get("getSelectedItems")).toBe("function");
   });
 
-  it("should register 7 public + 2 internal methods", () => {
+  it("should register 7 public + 4 internal methods", () => {
     const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
 
-    // 9 public methods + 2 internal getters (_getSelectedIds, _getFocusedIndex)
-    expect(ctx.methods.size).toBe(11);
+    // 9 public methods + 4 internal methods (_getSelectedIds, _getFocusedIndex, _focusById, _getFocusedId)
+    expect(ctx.methods.size).toBe(13);
     expect(ctx.methods.has("_getSelectedIds")).toBe(true);
     expect(ctx.methods.has("_getFocusedIndex")).toBe(true);
+    expect(ctx.methods.has("_focusById")).toBe(true);
+    expect(ctx.methods.has("_getFocusedId")).toBe(true);
     expect(ctx.methods.has("selectNext")).toBe(true);
     expect(ctx.methods.has("selectPrevious")).toBe(true);
   });

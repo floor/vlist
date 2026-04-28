@@ -273,6 +273,9 @@ export interface ScrollSnapshot {
 
   /** Selected item IDs (optional, included for convenience) */
   selectedIds?: Array<string | number>;
+
+  /** Focused item ID (optional, restores keyboard navigation position) */
+  focusedId?: string | number;
 }
 
 /** Options for scrollToIndex / scrollToItem */
@@ -555,6 +558,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Selection changed */
   "selection:change": { selected: Array<string | number>; items: T[] };
+
+  /** Focused item changed (keyboard navigation) */
+  "focus:change": { id: string | number; index: number };
 
   /** Scroll position changed */
   scroll: { scrollPosition: number; direction: "up" | "down" };
