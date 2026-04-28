@@ -167,6 +167,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         ctx.methods.set("selectNext", () => {});
         ctx.methods.set("selectPrevious", () => {});
         ctx.methods.set("_focusById", () => {});
+        ctx.methods.set("_getFocusedId", () => undefined);
         return;
       }
 
@@ -824,6 +825,14 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Full re-render for selection changes (Space/Enter)
             forceRenderAndEmit();
           }
+
+          // Emit focus:change whenever the focused item moves
+          if (newFocusIndex >= 0 && newFocusIndex !== previousFocusIndex) {
+            const focusedItem = ctx.dataManager.getItem(newFocusIndex);
+            if (focusedItem) {
+              emitter.emit("focus:change", { id: focusedItem.id, index: newFocusIndex });
+            }
+          }
         }
       });
 
@@ -916,6 +925,14 @@ export const withSelection = <T extends VListItem = VListItem>(
         selectionState = setFocusedIndex(selectionState, index);
         selectionState.focusVisible = true;
         capturedForceRender();
+      });
+
+      // ── Internal: get focused item ID regardless of focusVisible ──
+      // Used by withSnapshots to capture focus before focusout clears focusVisible.
+      ctx.methods.set("_getFocusedId", (): string | number | undefined => {
+        const idx = selectionState.focusedIndex;
+        if (idx < 0) return undefined;
+        return ctx.dataManager.getItem(idx)?.id;
       });
 
       // ── Cleanup handler ──
