@@ -187,16 +187,15 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
         if (selectedIds) snapshot.selectedIds = selectedIds;
 
-        // Capture focused item ID if selection feature is present
-        const getFocusedIndex = ctx.methods.get("_getFocusedIndex") as
-          | (() => number)
+        // Capture focused item ID — use _getFocusedId which bypasses the
+        // focusVisible gate, so clicking away from the list before calling
+        // getScrollSnapshot() (e.g. "Navigate Away" button) doesn't lose focus.
+        const getFocusedId = ctx.methods.get("_getFocusedId") as
+          | (() => string | number | undefined)
           | undefined;
-        if (getFocusedIndex) {
-          const focusedIndex = getFocusedIndex();
-          if (focusedIndex >= 0) {
-            const focusedItem = ctx.dataManager.getItem(focusedIndex);
-            if (focusedItem) snapshot.focusedId = focusedItem.id;
-          }
+        if (getFocusedId) {
+          const focusedId = getFocusedId();
+          if (focusedId !== undefined) snapshot.focusedId = focusedId;
         }
 
         return snapshot;
