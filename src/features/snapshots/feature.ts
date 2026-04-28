@@ -303,6 +303,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           | (() => Promise<void>)
           | undefined;
 
+        // Helper: restore focus after data is ready at the restored position.
+        // Called after loadVisibleRange (async) or via rAF (sync lists).
+        const restoreFocus = (): void => {
+          if (focusedId === undefined) return;
+          const focusByIdFn = ctx.methods.get("_focusById") as
+            | ((id: string | number) => void)
+            | undefined;
+          if (focusByIdFn) focusByIdFn(focusedId);
+        };
+
         if (loadVisibleFn) {
           // Wait for the viewport container to have a real size before loading.
           // On page reload, the ResizeObserver hasn't fired yet when restoreScroll
@@ -321,14 +331,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
               if (Math.abs(currentScrollTop - savedScrollPosition) > 1) {
                 ctx.scrollController.scrollTo(savedScrollPosition);
               }
-              loadVisibleFn().then(() => {
-                if (focusedId !== undefined) {
-                  const focusByIdFn = ctx.methods.get("_focusById") as
-                    | ((id: string | number) => void)
-                    | undefined;
-                  if (focusByIdFn) focusByIdFn(focusedId);
-                }
-              });
+              loadVisibleFn().then(restoreFocus);
             } else if (polls < MAX_POLLS) {
               requestAnimationFrame(pollUntilReady);
             }
@@ -342,8 +345,12 @@ export const withSnapshots = <T extends VListItem = VListItem>(
             | undefined;
           if (reloadFn) {
             requestAnimationFrame(() => {
-              reloadFn();
+              reloadFn().then(restoreFocus);
             });
+          } else {
+            // Synchronous list — data is already in memory, restore focus
+            // after the scroll+render settles.
+            requestAnimationFrame(restoreFocus);
           }
         }
       };
