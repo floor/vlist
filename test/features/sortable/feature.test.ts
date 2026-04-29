@@ -63,16 +63,20 @@ function createTestDOM(): {
   viewport: HTMLElement;
   content: HTMLElement;
   items: HTMLElement;
+  liveRegion: HTMLElement;
 } {
   const root = document.createElement("div");
   const viewport = document.createElement("div");
   const content = document.createElement("div");
   const items = document.createElement("div");
+  const liveRegion = document.createElement("div");
 
   root.className = "vlist";
   viewport.className = "vlist-viewport";
   content.className = "vlist-content";
   items.className = "vlist-items";
+  liveRegion.className = "vlist-live";
+  liveRegion.setAttribute("aria-live", "polite");
 
   Object.defineProperty(viewport, "clientHeight", {
     value: 600,
@@ -85,10 +89,11 @@ function createTestDOM(): {
 
   content.appendChild(items);
   viewport.appendChild(content);
+  root.appendChild(liveRegion);
   root.appendChild(viewport);
   document.body.appendChild(root);
 
-  return { root, viewport, content, items };
+  return { root, viewport, content, items, liveRegion };
 }
 
 function createMockContext(): BuilderContext<TestItem> {
@@ -101,6 +106,7 @@ function createMockContext(): BuilderContext<TestItem> {
     const el = document.createElement("div");
     el.className = "vlist-item";
     el.setAttribute("data-index", String(i));
+    el.setAttribute("data-id", String(testItems[i]!.id));
     el.innerHTML = `<div class="item">${testItems[i]!.name}</div>`;
     testDom.items.appendChild(el);
   }
@@ -623,5 +629,357 @@ describe("withSortable — destroy", () => {
       (c: any[]) => c[0] === "pointerdown",
     );
     expect(pointerdownCall).toBeDefined();
+  });
+});
+
+// =============================================================================
+// Keyboard Reordering Tests
+// =============================================================================
+
+describe("withSortable — keyboard reordering", () => {
+  /** Helper: set up a sortable context with _getFocusedIndex mock */
+  function setupKeyboard(focusedIndex: number) {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    // Mock selection's _getFocusedIndex to return the focused item
+    ctx.methods.set("_getFocusedIndex", () => focusedIndex);
+    ctx.methods.set("_focusById", mock(() => {}));
+
+    feature.setup(ctx);
+
+    return { feature, ctx };
+  }
+
+  function dispatchKey(
+    target: HTMLElement,
+    key: string,
+    opts: Partial<KeyboardEventInit> = {},
+  ): KeyboardEvent {
+    const event = new dom.window.KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...opts,
+    });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  it("Space on focused item enters grab mode and emits sort:start", () => {
+    const { ctx } = setupKeyboard(3);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+
+    const sortStart = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:start",
+    );
+    expect(sortStart).toBeDefined();
+    expect(sortStart![1]).toEqual({ index: 3 });
+  });
+
+  it("Space on focused item adds --sorting class to root", () => {
+    const { ctx } = setupKeyboard(3);
+
+    dispatchKey(ctx.dom.root, " ");
+
+    expect(ctx.dom.root.classList.contains("vlist--sorting")).toBe(true);
+  });
+
+  it("Space on focused item adds --kb-sorting class to grabbed item", () => {
+    const { ctx } = setupKeyboard(3);
+
+    dispatchKey(ctx.dom.root, " ");
+
+    const el = ctx.dom.items.querySelector('[data-id="3"]');
+    expect(el?.classList.contains("vlist-item--kb-sorting")).toBe(true);
+  });
+
+  it("ArrowDown in grab mode emits sort:end with adjacent swap", () => {
+    const { ctx } = setupKeyboard(3);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    // Grab
+    dispatchKey(ctx.dom.root, " ");
+    emitSpy.mock.calls.length = 0; // Clear sort:start
+
+    // Move down
+    dispatchKey(ctx.dom.root, "ArrowDown");
+
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeDefined();
+    expect(sortEnd![1]).toEqual({ fromIndex: 3, toIndex: 4 });
+  });
+
+  it("ArrowUp in grab mode emits sort:end with upward swap", () => {
+    const { ctx } = setupKeyboard(3);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    emitSpy.mock.calls.length = 0;
+
+    dispatchKey(ctx.dom.root, "ArrowUp");
+
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeDefined();
+    expect(sortEnd![1]).toEqual({ fromIndex: 3, toIndex: 2 });
+  });
+
+  it("multiple ArrowDown moves accumulate position", () => {
+    const { ctx } = setupKeyboard(1);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    emitSpy.mock.calls.length = 0;
+
+    dispatchKey(ctx.dom.root, "ArrowDown");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+
+    const sortEnds = emitSpy.mock.calls.filter(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnds.length).toBe(2);
+    expect(sortEnds[0]![1]).toEqual({ fromIndex: 1, toIndex: 2 });
+    expect(sortEnds[1]![1]).toEqual({ fromIndex: 2, toIndex: 3 });
+  });
+
+  it("ArrowDown at last index does nothing", () => {
+    // Focus on item 9 (last visible in DOM)
+    const { ctx } = setupKeyboard(9);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    emitSpy.mock.calls.length = 0;
+
+    dispatchKey(ctx.dom.root, "ArrowDown");
+
+    // Total is 20, so index 9 can still move down
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeDefined();
+    expect(sortEnd![1]).toEqual({ fromIndex: 9, toIndex: 10 });
+  });
+
+  it("ArrowUp at index 0 does nothing", () => {
+    const { ctx } = setupKeyboard(0);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    emitSpy.mock.calls.length = 0;
+
+    dispatchKey(ctx.dom.root, "ArrowUp");
+
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeUndefined();
+  });
+
+  it("Space in grab mode drops the item (no redundant sort:end)", () => {
+    const { ctx } = setupKeyboard(3);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown"); // sort:end already emitted here
+    emitSpy.mock.calls.length = 0;
+
+    // Drop — should NOT emit sort:end (data already reordered per move)
+    dispatchKey(ctx.dom.root, " ");
+
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeUndefined();
+
+    // Root should no longer have --sorting
+    expect(ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
+  });
+
+  it("Escape cancels grab and removes --sorting class", () => {
+    const { ctx } = setupKeyboard(3);
+
+    dispatchKey(ctx.dom.root, " ");
+    expect(ctx.dom.root.classList.contains("vlist--sorting")).toBe(true);
+
+    dispatchKey(ctx.dom.root, "Escape");
+    expect(ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
+  });
+
+  it("Escape after move emits sort:end to restore original position", () => {
+    const { ctx } = setupKeyboard(3);
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+    emitSpy.mock.calls.length = 0;
+
+    dispatchKey(ctx.dom.root, "Escape");
+
+    // Should emit sort:end from current (5) back to original (3)
+    const sortEnd = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(sortEnd).toBeDefined();
+    expect(sortEnd![1]).toEqual({ fromIndex: 5, toIndex: 3 });
+  });
+
+  it("keys are intercepted (stopImmediatePropagation) in grab mode", () => {
+    const { ctx } = setupKeyboard(3);
+
+    dispatchKey(ctx.dom.root, " ");
+
+    // In grab mode, ArrowDown should be intercepted
+    const event = dispatchKey(ctx.dom.root, "ArrowDown");
+    // The event's defaultPrevented should be true
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Space without focused item does not enter grab mode", () => {
+    const { ctx } = setupKeyboard(-1); // No focused item
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+
+    const sortStart = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:start",
+    );
+    expect(sortStart).toBeUndefined();
+  });
+
+  it("calls _focusById after keyboard move", () => {
+    const { ctx } = setupKeyboard(3);
+    const focusByIdSpy = ctx.methods.get("_focusById") as ReturnType<typeof mock>;
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+
+    // _focusById should be called with the moved item's id
+    expect(focusByIdSpy.mock.calls.length).toBeGreaterThan(0);
+    // Item at index 3 has id=3
+    expect(focusByIdSpy.mock.calls[0]![0]).toBe(3);
+  });
+});
+
+// =============================================================================
+// ARIA Attributes Tests
+// =============================================================================
+
+describe("withSortable — ARIA attributes", () => {
+  it("creates a hidden instructions element in the root", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    const instructions = document.getElementById("vlist-sort-instructions");
+    expect(instructions).not.toBeNull();
+    expect(instructions!.textContent).toContain("Press Space to reorder");
+  });
+
+  it("applies aria-roledescription via afterRenderBatch", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Simulate a render batch
+    const el = document.createElement("div");
+    for (const handler of ctx.afterRenderBatch) {
+      handler([{ index: 0, element: el }]);
+    }
+
+    expect(el.getAttribute("aria-roledescription")).toBe("sortable item");
+    expect(el.getAttribute("aria-describedby")).toBe("vlist-sort-instructions");
+  });
+
+  it("removes instructions element on destroy", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Count children before destroy (includes liveRegion, viewport, instructions)
+    const childrenBefore = ctx.dom.root.children.length;
+
+    for (const handler of ctx.destroyHandlers) {
+      handler();
+    }
+
+    // One child removed (the instructions element)
+    expect(ctx.dom.root.children.length).toBe(childrenBefore - 1);
+  });
+});
+
+// =============================================================================
+// Live Region Announcements Tests
+// =============================================================================
+
+describe("withSortable — live region announcements", () => {
+  function setupWithLiveRegion(focusedIndex: number) {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => focusedIndex);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+    return { ctx };
+  }
+
+  function dispatchKey(target: HTMLElement, key: string): void {
+    target.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }
+
+  it("announces grab with position info", () => {
+    const { ctx } = setupWithLiveRegion(2);
+
+    dispatchKey(ctx.dom.root, " ");
+
+    const text = ctx.dom.liveRegion.textContent ?? "";
+    expect(text).toContain("Grabbed");
+    expect(text).toContain("position 3 of 20");
+  });
+
+  it("announces move with new position", () => {
+    const { ctx } = setupWithLiveRegion(2);
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+
+    const text = ctx.dom.liveRegion.textContent ?? "";
+    expect(text).toContain("moved");
+    expect(text).toContain("position 4 of 20");
+  });
+
+  it("announces drop with final position", () => {
+    const { ctx } = setupWithLiveRegion(2);
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown"); // moved from 2→3
+    dispatchKey(ctx.dom.root, " "); // Drop
+
+    const text = ctx.dom.liveRegion.textContent ?? "";
+    expect(text).toContain("dropped");
+    expect(text).toContain("position 4 of 20"); // index 3 → position 4
+  });
+
+  it("announces cancel with original position", () => {
+    const { ctx } = setupWithLiveRegion(2);
+
+    dispatchKey(ctx.dom.root, " ");
+    dispatchKey(ctx.dom.root, "ArrowDown");
+    dispatchKey(ctx.dom.root, "Escape");
+
+    const text = ctx.dom.liveRegion.textContent ?? "";
+    expect(text).toContain("cancelled");
+    expect(text).toContain("position 3 of 20");
   });
 });

@@ -25,6 +25,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
+import { scrollToFocusSimple } from "../../rendering/scroll";
 
 // =============================================================================
 // Feature Config
@@ -629,10 +630,321 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Attach pointerdown to items container ──
       dom.items.addEventListener("pointerdown", onPointerDown);
 
+      // ================================================================
+      // Keyboard reordering
+      // ================================================================
+
+      let kbGrabbed = false;
+      let kbGrabbedItemId: string | number = "";
+      let kbFromIndex = -1;
+      let kbCurrentIndex = -1;
+      // Snapshot of items at grab time — used to restore on Escape
+      let kbOriginalItems: T[] = [];
+
+      // ── Helpers to interact with selection (when present) ──
+      const getFocusedIndex = (): number => {
+        const fn = ctx.methods.get("_getFocusedIndex") as (() => number) | undefined;
+        return fn ? fn() : -1;
+      };
+
+      const focusById = (id: string | number): void => {
+        const fn = ctx.methods.get("_focusById") as ((id: string | number) => void) | undefined;
+        if (fn) fn(id);
+      };
+
+      // ── Helper: scroll index into view ──
+      const scrollIntoView = (index: number): void => {
+        const containerSize = horizontal
+          ? dom.viewport.clientWidth
+          : dom.viewport.clientHeight;
+        const scrollPos = ctx.scrollController.getScrollTop();
+        const newScroll = scrollToFocusSimple(
+          index, ctx.sizeCache, scrollPos, containerSize,
+        );
+        if (newScroll !== scrollPos) {
+          ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
+        }
+      };
+
+      // ── Helper: announce to screen readers via live region ──
+      const announce = (message: string): void => {
+        dom.liveRegion.textContent = "";
+        // Force a DOM mutation so the same message is re-announced
+        void dom.liveRegion.offsetHeight;
+        dom.liveRegion.textContent = message;
+      };
+
+      // ── Helper: get item label for announcements ──
+      const getItemLabel = (index: number): string => {
+        const item = ctx.dataManager.getItem(index);
+        if (!item) return "";
+        // Use the item's text content or fall back to id
+        const el = dom.items.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
+        const text = el?.textContent?.trim();
+        return text || String(item.id);
+      };
+
+      const totalLabel = (): string => String(ctx.dataManager.getTotal());
+
+      // ── Keyboard grab/drop/move ──
+      const kbGrab = (index: number): void => {
+        const item = ctx.dataManager.getItem(index);
+        if (!item) return;
+
+        kbGrabbed = true;
+        kbGrabbedItemId = item.id;
+        kbFromIndex = index;
+        kbCurrentIndex = index;
+
+        // Snapshot current items for cancel
+        const total = ctx.dataManager.getTotal();
+        kbOriginalItems = [];
+        for (let i = 0; i < total; i++) {
+          kbOriginalItems.push(ctx.dataManager.getItem(i) as T);
+        }
+
+        dom.root.classList.add(`${classPrefix}--sorting`);
+        emitter.emit("sort:start", { index });
+
+        // Apply grabbed visual to the item
+        applyKbGrabbedClass();
+
+        announce(
+          `Grabbed ${getItemLabel(index)}. Current position ${index + 1} of ${totalLabel()}. ` +
+          `Use Up and Down arrow keys to move, Space to drop, Escape to cancel.`,
+        );
+      };
+
+      const kbDrop = (): void => {
+        if (!kbGrabbed) return;
+        kbGrabbed = false;
+
+        const toIndex = kbCurrentIndex;
+        const label = getItemLabel(toIndex);
+
+        // Suppress transitions before removing sorting class (same as pointer drop)
+        const children = dom.items.children;
+        for (let i = 0; i < children.length; i++) {
+          (children[i] as HTMLElement).style.transition = "none";
+        }
+
+        dom.root.classList.remove(`${classPrefix}--sorting`);
+        clearKbGrabbedClass();
+
+        // No sort:end here — each arrow move already emitted one and the
+        // consumer already reordered the data. Drop is just confirmation.
+
+        // Update selection focus to the dropped position
+        focusById(kbGrabbedItemId);
+
+        announce(
+          `${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`,
+        );
+
+        kbOriginalItems = [];
+
+        // Re-enable transitions next frame
+        requestAnimationFrame(() => {
+          const ch = dom.items.children;
+          for (let i = 0; i < ch.length; i++) {
+            (ch[i] as HTMLElement).style.transition = "";
+          }
+        });
+      };
+
+      const kbCancel = (): void => {
+        if (!kbGrabbed) return;
+        kbGrabbed = false;
+
+        const label = getItemLabel(kbCurrentIndex);
+        const originalIndex = kbFromIndex;
+
+        // Suppress transitions
+        const children = dom.items.children;
+        for (let i = 0; i < children.length; i++) {
+          (children[i] as HTMLElement).style.transition = "none";
+        }
+
+        dom.root.classList.remove(`${classPrefix}--sorting`);
+        clearKbGrabbedClass();
+
+        // Restore original order — emit sort:end only if position changed
+        // so consumer restores via setItems
+        if (kbCurrentIndex !== originalIndex) {
+          emitter.emit("sort:end", { fromIndex: kbCurrentIndex, toIndex: originalIndex });
+        }
+
+        // Update selection focus back to original position
+        focusById(kbGrabbedItemId);
+
+        announce(
+          `${label} reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`,
+        );
+
+        kbOriginalItems = [];
+
+        requestAnimationFrame(() => {
+          const ch = dom.items.children;
+          for (let i = 0; i < ch.length; i++) {
+            (ch[i] as HTMLElement).style.transition = "";
+          }
+        });
+      };
+
+      const kbMove = (direction: 1 | -1): void => {
+        if (!kbGrabbed) return;
+        const total = ctx.dataManager.getTotal();
+        const newIndex = kbCurrentIndex + direction;
+        if (newIndex < 0 || newIndex >= total) return;
+
+        const fromIndex = kbCurrentIndex;
+        const toIndex = newIndex;
+
+        // Suppress transitions for instant snap
+        const children = dom.items.children;
+        for (let i = 0; i < children.length; i++) {
+          (children[i] as HTMLElement).style.transition = "none";
+        }
+
+        // Emit sort:end — consumer reorders data and calls setItems()
+        emitter.emit("sort:end", { fromIndex, toIndex });
+
+        kbCurrentIndex = toIndex;
+
+        // Update selection focus to follow the moved item
+        focusById(kbGrabbedItemId);
+
+        // Scroll the moved item into view
+        scrollIntoView(toIndex);
+
+        // Re-apply grabbed visual (force render from setItems cleared it)
+        applyKbGrabbedClass();
+
+        announce(
+          `${getItemLabel(toIndex)} moved. New position ${toIndex + 1} of ${totalLabel()}.`,
+        );
+
+        requestAnimationFrame(() => {
+          const ch = dom.items.children;
+          for (let i = 0; i < ch.length; i++) {
+            (ch[i] as HTMLElement).style.transition = "";
+          }
+        });
+      };
+
+      // ── Grabbed item visual indicator ──
+      const kbGrabbedClassName = `${classPrefix}-item--kb-sorting`;
+
+      const clearKbGrabbedClass = (): void => {
+        const els = dom.items.querySelectorAll(`.${kbGrabbedClassName}`);
+        for (let i = 0; i < els.length; i++) {
+          els[i]!.classList.remove(kbGrabbedClassName);
+        }
+      };
+
+      const applyKbGrabbedClass = (): void => {
+        clearKbGrabbedClass();
+        const el = dom.items.querySelector(
+          `[data-id="${kbGrabbedItemId}"]`,
+        ) as HTMLElement | null;
+        if (el) el.classList.add(kbGrabbedClassName);
+      };
+
+      // Re-apply grabbed class after re-renders (setItems triggers force render)
+      ctx.afterRenderBatch.push(() => {
+        if (kbGrabbed) applyKbGrabbedClass();
+      });
+
+      // ── Keyboard event listener ──
+      // Registered directly on dom.root (not via ctx.keydownHandlers) so it
+      // fires BEFORE the builder's dispatcher. In grab mode, we call
+      // stopImmediatePropagation to prevent selection from processing keys.
+      const onKeydown = (event: KeyboardEvent): void => {
+        if (ctx.state.isDestroyed) return;
+        // Ignore when a pointer drag is active
+        if (sorting) return;
+
+        if (kbGrabbed) {
+          switch (event.key) {
+            case " ":
+            case "Enter":
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              kbDrop();
+              return;
+            case "Escape":
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              kbCancel();
+              return;
+            case "ArrowUp":
+            case "ArrowLeft":
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              kbMove(-1);
+              return;
+            case "ArrowDown":
+            case "ArrowRight":
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              kbMove(1);
+              return;
+            default:
+              // Block all other keys during grab
+              if (!event.key.startsWith("F") && event.key !== "Tab") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+              }
+              return;
+          }
+        }
+
+        // Not in grab mode — Space on a focused item initiates grab
+        if (event.key === " " && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          const focusedIndex = getFocusedIndex();
+          if (focusedIndex >= 0) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            kbGrab(focusedIndex);
+          }
+        }
+      };
+
+      dom.root.addEventListener("keydown", onKeydown);
+
+      // ================================================================
+      // ARIA: sortable item attributes + instructions
+      // ================================================================
+
+      // Hidden instructions element for aria-describedby
+      const instructionsId = `${classPrefix}-sort-instructions`;
+      const instructionsEl = document.createElement("div");
+      instructionsEl.id = instructionsId;
+      instructionsEl.style.cssText =
+        "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+        "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      instructionsEl.textContent =
+        "Press Space to reorder. Use arrow keys to move, Space to drop, Escape to cancel.";
+      dom.root.appendChild(instructionsEl);
+
+      // Apply ARIA attributes to newly rendered items
+      ctx.afterRenderBatch.push(
+        (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => {
+          for (let i = 0; i < items.length; i++) {
+            const el = items[i]!.element;
+            el.setAttribute("aria-roledescription", "sortable item");
+            el.setAttribute("aria-describedby", instructionsId);
+          }
+        },
+      );
+
       // ── Destroy cleanup ──
       ctx.destroyHandlers.push(() => {
+        if (kbGrabbed) kbCancel();
         cleanupDrag();
         dom.items.removeEventListener("pointerdown", onPointerDown);
+        dom.root.removeEventListener("keydown", onKeydown);
+        instructionsEl.remove();
       });
     },
   };
