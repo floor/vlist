@@ -673,6 +673,9 @@ export interface VList<T extends VListItem = VListItem> {
   getScrollSnapshot?: () => ScrollSnapshot;
   restoreScroll?: (snapshot: ScrollSnapshot) => void;
 
+  // Sortable (added by withSortable)
+  isSorting?: () => boolean;
+
   // Data (added by withData — override reload)
   // reload is always present but withData makes it functional
 

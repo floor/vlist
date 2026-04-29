@@ -25,6 +25,8 @@ export { withMasonry } from "./features/masonry";
 export { withSelection } from "./features/selection";
 export { withSnapshots } from "./features/snapshots";
 export { withTable } from "./features/table";
+export { withSortable } from "./features/sortable";
+export type { SortableConfig } from "./features/sortable";
 export { withAutoSize } from "./features/autosize";
 
 // Utils

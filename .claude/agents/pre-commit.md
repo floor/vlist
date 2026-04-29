@@ -13,7 +13,7 @@ You run the full quality pipeline to validate changes before committing. You orc
 ## Pipeline
 
 ### Phase 1 — Parallel checks
-Spawn these three sub-agents **in parallel**:
+Spawn these sub-agents **in parallel**:
 - `@typecheck` — run TypeScript strict-mode checking
 - `@test-runner` — run the full test suite (`bun test`)
 

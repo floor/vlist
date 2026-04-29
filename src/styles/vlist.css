@@ -525,3 +525,27 @@
 .vlist-viewport--gutter-stable {
     scrollbar-gutter: stable;
 }
+
+/* =============================================================================
+   Sortable
+   ============================================================================= */
+
+/* Drag ghost — visual appearance (structural styles set inline by JS) */
+.vlist-sort-ghost {
+    opacity: 0.85;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    cursor: grabbing;
+}
+
+/* Sorting state on root */
+.vlist--sorting {
+    user-select: none;
+}
+
+/* Keyboard grab — highlight the grabbed item */
+.vlist-item--kb-sorting {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: -2px;
+    background-color: var(--vlist-bg-selected);
+    z-index: 1;
+}
