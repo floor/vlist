@@ -811,7 +811,7 @@ describe("withSortable — keyboard reordering", () => {
     expect(ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
   });
 
-  it("Escape after move emits sort:end to restore original position", () => {
+  it("Escape after move emits sort:cancel with original items", () => {
     const { ctx } = setupKeyboard(3);
     const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
 
@@ -822,12 +822,14 @@ describe("withSortable — keyboard reordering", () => {
 
     dispatchKey(ctx.dom.root, "Escape");
 
-    // Should emit sort:end from current (5) back to original (3)
-    const sortEnd = emitSpy.mock.calls.find(
-      (c: unknown[]) => c[0] === "sort:end",
+    // Should emit sort:cancel with the original items snapshot
+    const sortCancel = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:cancel",
     );
-    expect(sortEnd).toBeDefined();
-    expect(sortEnd![1]).toEqual({ fromIndex: 5, toIndex: 3 });
+    expect(sortCancel).toBeDefined();
+    const payload = sortCancel![1] as { originalItems: unknown[] };
+    expect(payload.originalItems).toBeArray();
+    expect(payload.originalItems.length).toBe(20);
   });
 
   it("keys are intercepted (stopImmediatePropagation) in grab mode", () => {
