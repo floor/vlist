@@ -371,7 +371,11 @@ export const withSortable = <T extends VListItem = VListItem>(
       };
 
       // ── Cleanup drag state ──
-      const cleanupDrag = (): void => {
+      // When `skipRender` is true, the consumer's setItems() already
+      // triggered a force render — calling clearShifts + forceRender
+      // again would be redundant and destructive (ctx.forceRender
+      // passes empty selection, causing selected items to blink).
+      const cleanupDrag = (skipRender = false): void => {
         sorting = false;
         dragInitiated = false;
 
@@ -386,7 +390,9 @@ export const withSortable = <T extends VListItem = VListItem>(
           draggedElement = null;
         }
 
-        clearShifts();
+        if (!skipRender) {
+          clearShifts();
+        }
         stopEdgeScroll();
 
         dom.root.classList.remove(`${classPrefix}--sorting`);
@@ -395,8 +401,10 @@ export const withSortable = <T extends VListItem = VListItem>(
         document.removeEventListener("pointerup", onPointerUp);
         document.removeEventListener("pointercancel", onPointerCancel);
 
-        // Re-render to restore clean DOM state
-        ctx.forceRender();
+        if (!skipRender) {
+          // Re-render to restore clean DOM state
+          ctx.forceRender();
+        }
       };
 
       // ── Pointer event handlers ──
@@ -497,9 +505,24 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Animate ghost to drop target, then finalize ──
       const animateDrop = (fromIndex: number, toIndex: number): void => {
         if (!ghost) {
-          cleanupDrag();
-          if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
+          const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
+          if (posChanged) {
+            // Suppress transitions, then let sort:end → setItems → force render
+            const children = dom.items.children;
+            for (let i = 0; i < children.length; i++) {
+              (children[i] as HTMLElement).style.transition = "none";
+            }
+            dom.root.classList.remove(`${classPrefix}--sorting`);
             emitter.emit("sort:end", { fromIndex, toIndex });
+          }
+          cleanupDrag(posChanged);
+          if (posChanged) {
+            requestAnimationFrame(() => {
+              const children = dom.items.children;
+              for (let i = 0; i < children.length; i++) {
+                (children[i] as HTMLElement).style.transition = "";
+              }
+            });
           }
           return;
         }
@@ -528,9 +551,47 @@ export const withSortable = <T extends VListItem = VListItem>(
           if (settled) return;
           settled = true;
           ghost?.removeEventListener("transitionend", onEnd);
-          cleanupDrag();
-          if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
+          const positionChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
+
+          if (positionChanged) {
+            // Restore the dragged element before emitting sort:end
+            if (draggedElement) {
+              draggedElement.style.opacity = "";
+              draggedElement.style.pointerEvents = "";
+            }
+
+            // Suppress ALL transitions on items before any class/style changes.
+            // Base vlist.css has `transition: opacity 150ms` on .vlist-item.
+            // Example CSS may add `.vlist--sorting .vlist-item { opacity: 0.85 }`.
+            // Without suppression, removing .vlist--sorting triggers a visible
+            // opacity fade. We also suppress transform transitions so the force
+            // render (triggered by the consumer's setItems) snaps positions
+            // instantly instead of animating from the shifted offsets.
+            const children = dom.items.children;
+            for (let i = 0; i < children.length; i++) {
+              (children[i] as HTMLElement).style.transition = "none";
+            }
+
+            // Now safe to remove sorting class — transitions are suppressed
+            dom.root.classList.remove(`${classPrefix}--sorting`);
+
+            // Emit sort:end — consumer calls setItems() which triggers
+            // a force render that corrects all transforms and templates.
+            // No need to call clearShifts() — the force render handles it.
             emitter.emit("sort:end", { fromIndex, toIndex });
+          }
+          cleanupDrag(positionChanged);
+
+          // Re-enable transitions on the next frame. By now the browser
+          // has committed the final styles, so restoring transitions
+          // won't re-trigger any animations.
+          if (positionChanged) {
+            requestAnimationFrame(() => {
+              const children = dom.items.children;
+              for (let i = 0; i < children.length; i++) {
+                (children[i] as HTMLElement).style.transition = "";
+              }
+            });
           }
         };
 
