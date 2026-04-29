@@ -410,6 +410,10 @@ export const withSortable = <T extends VListItem = VListItem>(
 
         dom.root.classList.remove(`${classPrefix}--sorting`);
 
+        // Clear text selection that Safari may apply after pointer release
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+
         document.removeEventListener("pointermove", onPointerMove);
         document.removeEventListener("pointerup", onPointerUp);
         document.removeEventListener("pointercancel", onPointerCancel);
