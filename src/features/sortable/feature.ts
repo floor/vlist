@@ -790,6 +790,9 @@ export const withSortable = <T extends VListItem = VListItem>(
         focusById(kbGrabbedItemId);
         ctx.forceRender();
 
+        // Scroll back to the original position so the restored item is visible
+        scrollIntoView(originalIndex);
+
         announce(
           `Reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`,
         );
