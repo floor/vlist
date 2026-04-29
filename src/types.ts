@@ -589,6 +589,19 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Data changed — fired after item removal or other data mutations */
   "data:change": { type: "remove"; id: string | number } | { type: "update"; id: string | number };
 
+  /** Sort started — fired when a drag begins */
+  "sort:start": { index: number };
+
+  /** Sort move — fired when the drop position changes during drag */
+  "sort:move": { fromIndex: number; currentIndex: number };
+
+  /** Sort ended — fired on drop with reorder intent */
+  "sort:end": { fromIndex: number; toIndex: number };
+
+  /** Sort cancelled — fired when keyboard reorder is cancelled via Escape.
+   *  Contains the original items array so the consumer can restore order. */
+  "sort:cancel": { originalItems: unknown[] };
+
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;
 }
