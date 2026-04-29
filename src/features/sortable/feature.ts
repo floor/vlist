@@ -383,8 +383,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Cleanup drag state ──
       // When `skipRender` is true, the consumer's setItems() already
       // triggered a force render — calling clearShifts + forceRender
-      // again would be redundant and destructive (ctx.forceRender
-      // passes empty selection, causing selected items to blink).
+      // again would be redundant.
       const cleanupDrag = (skipRender = false): void => {
         sorting = false;
         dragInitiated = false;
@@ -743,8 +742,10 @@ export const withSortable = <T extends VListItem = VListItem>(
         // No sort:end here — each arrow move already emitted one and the
         // consumer already reordered the data. Drop is just confirmation.
 
-        // Update selection focus to the dropped position
+        // Update selection focus to the dropped position and re-render
+        // so the --focused class reflects the correct item
         focusById(kbGrabbedItemId);
+        ctx.forceRender();
 
         announce(
           `${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`,
@@ -783,8 +784,11 @@ export const withSortable = <T extends VListItem = VListItem>(
           emitter.emit("sort:cancel", { originalItems: kbOriginalItems });
         }
 
-        // Update selection focus back to original position
+        // Update selection focus back to original position and re-render.
+        // The consumer's setItems() already force-rendered with the stale
+        // focused index — this second render corrects the --focused class.
         focusById(kbGrabbedItemId);
+        ctx.forceRender();
 
         announce(
           `Reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`,
@@ -820,8 +824,10 @@ export const withSortable = <T extends VListItem = VListItem>(
 
         kbCurrentIndex = toIndex;
 
-        // Update selection focus to follow the moved item
+        // Update selection focus to follow the moved item and re-render
+        // so --focused tracks the correct index after setItems()
         focusById(kbGrabbedItemId);
+        ctx.forceRender();
 
         // Scroll the moved item into view
         scrollIntoView(toIndex);
