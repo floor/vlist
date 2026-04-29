@@ -156,7 +156,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       let ghostOffsetY = 0;
 
       // ── Register public method ──
-      ctx.methods.set("isSorting", (): boolean => sorting);
+      ctx.methods.set("isSorting", (): boolean => sorting || kbGrabbed);
 
       // ── Helper: find the item element from an event target ──
       const findItemElement = (target: HTMLElement): HTMLElement | null => {
