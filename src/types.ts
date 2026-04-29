@@ -592,6 +592,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Sort started — fired when a drag begins */
   "sort:start": { index: number };
 
+  /** Sort move — fired when the drop position changes during drag */
+  "sort:move": { fromIndex: number; currentIndex: number };
+
   /** Sort ended — fired on drop with reorder intent */
   "sort:end": { fromIndex: number; toIndex: number };
 

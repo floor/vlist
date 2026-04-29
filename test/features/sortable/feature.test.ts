@@ -410,6 +410,88 @@ describe("withSortable — isSorting", () => {
     const isSorting = ctx.methods.get("isSorting") as () => boolean;
     expect(isSorting()).toBe(false);
   });
+
+  it("returns true during keyboard grab", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => 3);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(false);
+
+    // Grab via Space
+    ctx.dom.root.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key: " ",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(isSorting()).toBe(true);
+  });
+
+  it("returns false after keyboard drop", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => 3);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+
+    // Grab
+    ctx.dom.root.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key: " ",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(isSorting()).toBe(true);
+
+    // Drop
+    ctx.dom.root.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key: " ",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(isSorting()).toBe(false);
+  });
+
+  it("returns false after keyboard cancel", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => 3);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+
+    // Grab
+    ctx.dom.root.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key: " ",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(isSorting()).toBe(true);
+
+    // Cancel
+    ctx.dom.root.dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(isSorting()).toBe(false);
+  });
 });
 
 // =============================================================================
@@ -539,6 +621,57 @@ describe("withSortable — sort events", () => {
     // This is correct — sort:end only fires when position changed
     // With a 20px move on a 56px item, drop stays at index 3
     expect(sortEndCall).toBeUndefined();
+  });
+
+  it("emits sort:move when drop position changes during drag", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 600,
+        width: 400,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    feature.setup(ctx);
+
+    // Drag item 1 down past the midpoint of item 2 (> 56px)
+    const emitSpy = simulateDrag(ctx, 1, 80);
+
+    const sortMove = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:move",
+    );
+
+    if (sortMove) {
+      const payload = sortMove[1] as {
+        fromIndex: number;
+        currentIndex: number;
+      };
+      expect(payload.fromIndex).toBe(1);
+      expect(payload.currentIndex).not.toBe(1);
+    }
+  });
+
+  it("does not emit sort:move when drop position stays the same", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Small move — stays within the same item's zone
+    const emitSpy = simulateDrag(ctx, 3, 10);
+
+    const sortMove = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:move",
+    );
+    // 10px move on a 56px item shouldn't cross the midpoint
+    expect(sortMove).toBeUndefined();
   });
 
   it("emits sort:end with fromIndex and toIndex when position changes", async () => {
