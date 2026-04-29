@@ -34,6 +34,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
+- `bun run release [patch|minor|major]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI)
 
 ## Project Structure
 
@@ -190,7 +191,25 @@ Runs on push to `staging`/`main` and on PRs:
 - Typecheck → Test → Coverage threshold (85%) → Build → Bundle size
 
 ### Publish (`publish.yml`)
-Publishes to npm when a version tag is pushed.
+Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
+1. Checks out main, installs, builds
+2. Publishes to npm (`npm publish`)
+3. Creates a GitHub Release automatically (`gh release create`) with auto-generated notes
+
+**Do not manually create GitHub Releases** — the workflow handles it.
+
+### Release Script (`scripts/release.ts`)
+`bun run release [patch|minor|major]` automates the full release flow:
+1. Verifies you're on `staging` with a clean tree, pulls latest
+2. Bumps version in `package.json`
+3. Updates README version badge and changelog stats
+4. Commits `chore(release): vX.Y.Z` and pushes `staging`
+5. Creates PR `staging → main` via `gh` CLI
+6. Polls every 10s until the PR is merged (max 10 min)
+7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
+8. Returns to `staging`
+
+Bundle sizes in README/npm-readme are updated **manually** when features change significantly.
 
 ### Cross-Repo Staging Deploy (`notify-staging.yml`)
 When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
