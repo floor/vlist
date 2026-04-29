@@ -1433,7 +1433,7 @@ describe("withSortable — focus preservation", () => {
     await new Promise((r) => setTimeout(r, 300));
 
     // _focusById should have been called with id 5 (the originally-focused item)
-    const focusCalls = focusByIdSpy.mock.calls;
+    const focusCalls = focusByIdSpy.mock.calls as unknown[][];
     if (focusCalls.length > 0) {
       expect(focusCalls[focusCalls.length - 1]![0]).toBe(5);
     }
