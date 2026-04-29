@@ -119,22 +119,22 @@ export const withSortable = <T extends VListItem = VListItem>(
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig } = ctx;
       const { classPrefix } = resolvedConfig;
-      const horizontal = resolvedConfig.horizontal;
+      const hz = resolvedConfig.horizontal;
 
-      // Pre-compute reusable values
-      const prop = horizontal ? "translateX" : "translateY";
+      // Pre-compute orientation-dependent values
+      const prop = hz ? "translateX" : "translateY";
       const shiftTransition = shiftDuration > 0
         ? `transform ${shiftDuration}ms ease`
         : "none";
+      const sortingClass = `${classPrefix}--sorting`;
 
       // ── Drag state ──
       let sorting = false;
       let dragIndex = -1;
       let dropIndex = -1;
-      let pointerStartX = 0;
-      let pointerStartY = 0;
-      let pointerCurrentX = 0;
-      let pointerCurrentY = 0;
+      let pointerStartMain = 0;
+      let pointerMain = 0;
+      let pointerCross = 0;
       let dragInitiated = false;
       let ghost: HTMLElement | null = null;
       let scrollRafId = 0;
@@ -142,21 +142,35 @@ export const withSortable = <T extends VListItem = VListItem>(
       let draggedItemSize = 0;
 
       // Offset from pointer to top-left corner of dragged item
-      let ghostOffsetX = 0;
-      let ghostOffsetY = 0;
+      let ghostOffsetMain = 0;
+      let ghostOffsetCross = 0;
 
       // ── Register public method ──
       ctx.methods.set("isSorting", (): boolean => sorting);
-
-      // ── Helper: find the item element from an event target ──
-      const findItemElement = (target: HTMLElement): HTMLElement | null => {
-        return target.closest("[data-index]") as HTMLElement | null;
-      };
 
       // ── Helper: get index from item element ──
       const getIndex = (el: HTMLElement): number => {
         const attr = el.dataset.index;
         return attr === undefined ? -1 : +attr;
+      };
+
+      // ── Helper: set transition on all item children ──
+      const setTransitions = (value: string): void => {
+        const c = dom.items.children;
+        for (let i = 0; i < c.length; i++) {
+          (c[i] as HTMLElement).style.transition = value;
+        }
+      };
+
+      // ── Helper: split pointer event into main/cross axes ──
+      const readPointer = (e: PointerEvent): void => {
+        if (hz) {
+          pointerMain = e.clientX;
+          pointerCross = e.clientY;
+        } else {
+          pointerMain = e.clientY;
+          pointerCross = e.clientX;
+        }
       };
 
       // ── Helper: create the ghost element ──
@@ -165,17 +179,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         const clone = sourceEl.cloneNode(true) as HTMLElement;
         clone.className = `${classPrefix}-item ${ghostClass}`;
         clone.removeAttribute("data-index");
-        clone.style.cssText = [
-          "position:fixed",
-          "pointer-events:none",
-          "z-index:10000",
-          `width:${rect.width}px`,
-          `height:${rect.height}px`,
-          `left:${rect.left}px`,
-          `top:${rect.top}px`,
-          "transition:none",
-          "will-change:transform",
-        ].join(";");
+        clone.style.cssText = `position:fixed;pointer-events:none;z-index:10000;width:${rect.width}px;height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;transition:none;will-change:transform`;
         document.body.appendChild(clone);
         return clone;
       };
@@ -183,10 +187,22 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Helper: update ghost position ──
       const updateGhostPosition = (): void => {
         if (!ghost) return;
-        const x = pointerCurrentX - ghostOffsetX;
-        const y = pointerCurrentY - ghostOffsetY;
-        ghost.style.left = `${x}px`;
-        ghost.style.top = `${y}px`;
+        if (hz) {
+          ghost.style.left = `${pointerMain - ghostOffsetMain}px`;
+          ghost.style.top = `${pointerCross - ghostOffsetCross}px`;
+        } else {
+          ghost.style.left = `${pointerCross - ghostOffsetCross}px`;
+          ghost.style.top = `${pointerMain - ghostOffsetMain}px`;
+        }
+      };
+
+      // ── Helper: viewport edges on main axis (avoids tuple allocation) ──
+      let vpStart = 0;
+      let vpEnd = 0;
+      const readViewport = (): void => {
+        const r = dom.viewport.getBoundingClientRect();
+        if (hz) { vpStart = r.left; vpEnd = r.right; }
+        else { vpStart = r.top; vpEnd = r.bottom; }
       };
 
       // ── Helper: determine drop index from pointer position ──
@@ -195,57 +211,36 @@ export const withSortable = <T extends VListItem = VListItem>(
         if (totalItems === 0) return 0;
 
         // Use the ghost's LEADING EDGE based on drag direction:
-        // - Dragging down → bottom edge of the ghost
-        // - Dragging up → top edge of the ghost
-        // The shift triggers when this edge crosses the midpoint of a target item.
-        const viewportRect = dom.viewport.getBoundingClientRect();
+        // - Dragging down/right → trailing edge of the ghost
+        // - Dragging up/left → leading edge of the ghost
+        readViewport();
         const scrollPos = ctx.scrollController.getScrollTop();
-        const movingDown = horizontal
-          ? pointerCurrentX > pointerStartX
-          : pointerCurrentY > pointerStartY;
-        const ghostEdge = horizontal
-          ? pointerCurrentX - ghostOffsetX + (movingDown ? draggedItemSize : 0)
-          : pointerCurrentY - ghostOffsetY + (movingDown ? draggedItemSize : 0);
-        const pointerInContent = horizontal
-          ? ghostEdge - viewportRect.left + dom.viewport.scrollLeft + scrollPos
-          : ghostEdge - viewportRect.top + scrollPos;
+        const movingForward = pointerMain > pointerStartMain;
+        const ghostEdge = pointerMain - ghostOffsetMain + (movingForward ? draggedItemSize : 0);
+        const posInContent = ghostEdge - vpStart + scrollPos;
 
         // Walk visible items to find the insertion point
-        const itemElements = dom.items.querySelectorAll("[data-index]");
-        let insertBefore = totalItems; // default: end of list
+        const children = dom.items.children;
+        let insertBefore = totalItems;
 
-        for (let i = 0; i < itemElements.length; i++) {
-          const itemEl = itemElements[i] as HTMLElement;
+        for (let i = 0; i < children.length; i++) {
+          const itemEl = children[i] as HTMLElement;
           const idx = getIndex(itemEl);
-          if (idx < 0) continue;
+          if (idx < 0 || idx === dragIndex) continue;
 
-          // Skip the dragged item itself
-          if (idx === dragIndex) continue;
+          const itemMid = ctx.sizeCache.getOffset(idx) + ctx.sizeCache.getSize(idx) / 2;
 
-          // Use the original position from sizeCache (not the visual position
-          // which may be shifted by transforms)
-          const itemOffset = ctx.sizeCache.getOffset(idx);
-          const itemSize = ctx.sizeCache.getSize(idx);
-          const itemMid = itemOffset + itemSize / 2;
-
-          if (pointerInContent < itemMid) {
+          if (posInContent < itemMid) {
             insertBefore = idx > dragIndex ? idx - 1 : idx;
             break;
           }
         }
 
-        // If we iterated past all items, drop at end
-        if (insertBefore === totalItems) {
-          insertBefore = totalItems - 1;
-        }
-
+        if (insertBefore === totalItems) insertBefore = totalItems - 1;
         return Math.max(0, Math.min(insertBefore, totalItems - 1));
       };
 
       // ── Apply CSS transforms to shift items out of the way ──
-      // vlist positions items via style.transform = translateY(offset).
-      // We must READ the base offset from sizeCache and ADD the shift,
-      // not overwrite the transform with just the shift value.
       const applyShifts = (): void => {
         const children = dom.items.children;
         const shiftPx = draggedItemSize;
@@ -289,73 +284,55 @@ export const withSortable = <T extends VListItem = VListItem>(
         applyShifts();
       };
 
-      // ── Edge auto-scroll ──
+      // ─�� Edge auto-scroll ──
       // When the pointer is in the edge zone, only scroll — don't update
       // the drop position. This avoids items shifting while scrolling,
       // which creates a jarring double-movement. Shifts resume when
       // the pointer leaves the edge zone (via onPointerMove).
       let inEdgeZone = false;
 
-      const isPointerOutsideViewport = (): boolean => {
-        const viewportRect = dom.viewport.getBoundingClientRect();
-        if (horizontal) {
-          return pointerCurrentX < viewportRect.left || pointerCurrentX > viewportRect.right;
-        }
-        return pointerCurrentY < viewportRect.top || pointerCurrentY > viewportRect.bottom;
+      const isPointerOutside = (): boolean => {
+        readViewport();
+        return pointerMain < vpStart || pointerMain > vpEnd;
       };
 
       const startEdgeScroll = (): void => {
         const tick = (): void => {
           if (!sorting) return;
 
-          const viewportRect = dom.viewport.getBoundingClientRect();
+          readViewport();
           let delta = 0;
 
           // Quadratic ramp: gentle at zone boundary, aggressive at the edge.
           // Beyond the viewport, speed grows further but is capped at 3x.
           const maxT = 3;
-          if (horizontal) {
-            const distFromStart = pointerCurrentX - viewportRect.left;
-            const distFromEnd = viewportRect.right - pointerCurrentX;
-            if (distFromStart < edgeScrollZone) {
-              const t = Math.min(maxT, 1 - distFromStart / edgeScrollZone);
-              delta = -edgeScrollSpeed * t * t;
-            } else if (distFromEnd < edgeScrollZone) {
-              const t = Math.min(maxT, 1 - distFromEnd / edgeScrollZone);
-              delta = edgeScrollSpeed * t * t;
-            }
-          } else {
-            const distFromTop = pointerCurrentY - viewportRect.top;
-            const distFromBottom = viewportRect.bottom - pointerCurrentY;
-            if (distFromTop < edgeScrollZone) {
-              const t = Math.min(maxT, 1 - distFromTop / edgeScrollZone);
-              delta = -edgeScrollSpeed * t * t;
-            } else if (distFromBottom < edgeScrollZone) {
-              const t = Math.min(maxT, 1 - distFromBottom / edgeScrollZone);
-              delta = edgeScrollSpeed * t * t;
-            }
+          const distFromStart = pointerMain - vpStart;
+          const distFromEnd = vpEnd - pointerMain;
+          if (distFromStart < edgeScrollZone) {
+            const t = Math.min(maxT, 1 - distFromStart / edgeScrollZone);
+            delta = -edgeScrollSpeed * t * t;
+          } else if (distFromEnd < edgeScrollZone) {
+            const t = Math.min(maxT, 1 - distFromEnd / edgeScrollZone);
+            delta = edgeScrollSpeed * t * t;
           }
 
-          const outsideViewport = isPointerOutsideViewport();
+          const outside = isPointerOutside();
 
           if (delta !== 0) {
             const currentScroll = ctx.scrollController.getScrollTop();
-            const maxScroll = ctx.sizeCache.getTotalSize() - (horizontal
-              ? dom.viewport.clientWidth
-              : dom.viewport.clientHeight);
+            const containerSize = hz ? dom.viewport.clientWidth : dom.viewport.clientHeight;
+            const maxScroll = ctx.sizeCache.getTotalSize() - containerSize;
             const atLimit = (delta < 0 && currentScroll <= 0)
               || (delta > 0 && currentScroll >= maxScroll);
 
             if (atLimit) {
-              // At scroll limit: only allow shifts if pointer is inside viewport
-              inEdgeZone = outsideViewport;
+              inEdgeZone = outside;
             } else {
               inEdgeZone = true;
               ctx.scrollController.scrollTo(currentScroll + delta);
             }
           } else {
-            // Not in edge zone but pointer could still be outside viewport
-            inEdgeZone = outsideViewport;
+            inEdgeZone = outside;
           }
 
           scrollRafId = requestAnimationFrame(tick);
@@ -379,9 +356,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         sorting = false;
         dragInitiated = false;
 
-        if (ghost && ghost.parentNode) {
-          ghost.remove();
-        }
+        if (ghost && ghost.parentNode) ghost.remove();
         ghost = null;
 
         if (draggedElement) {
@@ -390,110 +365,105 @@ export const withSortable = <T extends VListItem = VListItem>(
           draggedElement = null;
         }
 
-        if (!skipRender) {
-          clearShifts();
-        }
+        if (!skipRender) clearShifts();
         stopEdgeScroll();
-
-        dom.root.classList.remove(`${classPrefix}--sorting`);
-
+        dom.root.classList.remove(sortingClass);
         document.removeEventListener("pointermove", onPointerMove);
         document.removeEventListener("pointerup", onPointerUp);
         document.removeEventListener("pointercancel", onPointerCancel);
+        if (!skipRender) ctx.forceRender();
+      };
 
-        if (!skipRender) {
-          // Re-render to restore clean DOM state
-          ctx.forceRender();
+      // ── Finalize a successful sort ──
+      // Suppress transitions, remove sorting class, emit sort:end,
+      // then restore transitions in the next frame.
+      const finalizeDrop = (fromIndex: number, toIndex: number): void => {
+        if (draggedElement) {
+          draggedElement.style.opacity = "";
+          draggedElement.style.pointerEvents = "";
         }
+        // Suppress ALL transitions before class/style changes.
+        // Base vlist.css has `transition: opacity 150ms` on .vlist-item —
+        // without this, removing .vlist--sorting triggers a visible fade.
+        setTransitions("none");
+        dom.root.classList.remove(sortingClass);
+        // Consumer calls setItems() which triggers a force render
+        // that corrects all transforms and templates.
+        emitter.emit("sort:end", { fromIndex, toIndex });
+        cleanupDrag(true);
+        requestAnimationFrame(() => setTransitions(""));
       };
 
       // ── Pointer event handlers ──
       const onPointerDown = (event: PointerEvent): void => {
         if (ctx.state.isDestroyed) return;
         if (sorting) return;
-        // Only primary button
         if (event.button !== 0) return;
 
         const target = event.target as HTMLElement;
 
-        // If handle is configured, check that the target matches
         if (handleSelector) {
-          const handle = target.closest(handleSelector);
-          if (!handle) return;
+          if (!target.closest(handleSelector)) return;
         }
 
-        const itemEl = findItemElement(target);
+        const itemEl = target.closest("[data-index]") as HTMLElement | null;
         if (!itemEl) return;
 
         const index = getIndex(itemEl);
         if (index < 0) return;
 
-        // Store initial pointer position for threshold check
-        pointerStartX = event.clientX;
-        pointerStartY = event.clientY;
-        pointerCurrentX = event.clientX;
-        pointerCurrentY = event.clientY;
+        readPointer(event);
+        pointerStartMain = pointerMain;
         dragIndex = index;
         dragInitiated = false;
         draggedElement = itemEl;
 
         // Compute ghost offset (pointer position relative to item top-left)
         const rect = itemEl.getBoundingClientRect();
-        ghostOffsetX = event.clientX - rect.left;
-        ghostOffsetY = event.clientY - rect.top;
+        if (hz) {
+          ghostOffsetMain = event.clientX - rect.left;
+          ghostOffsetCross = event.clientY - rect.top;
+        } else {
+          ghostOffsetMain = event.clientY - rect.top;
+          ghostOffsetCross = event.clientX - rect.left;
+        }
 
-        // Attach move/up listeners to document for reliable tracking
         document.addEventListener("pointermove", onPointerMove);
         document.addEventListener("pointerup", onPointerUp);
         document.addEventListener("pointercancel", onPointerCancel);
       };
 
       const onPointerMove = (event: PointerEvent): void => {
-        pointerCurrentX = event.clientX;
-        pointerCurrentY = event.clientY;
+        readPointer(event);
 
         if (!dragInitiated) {
-          // Check threshold
-          const dx = pointerCurrentX - pointerStartX;
-          const dy = pointerCurrentY - pointerStartY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          if (distance < dragThreshold) return;
+          const dx = event.clientX - (hz ? pointerStartMain : pointerCross);
+          const dy = event.clientY - (hz ? pointerCross : pointerStartMain);
+          if (Math.sqrt(dx * dx + dy * dy) < dragThreshold) return;
 
-          // Threshold crossed — start the drag
           dragInitiated = true;
           sorting = true;
           dropIndex = dragIndex;
 
-          dom.root.classList.add(`${classPrefix}--sorting`);
-
-          // Cache the dragged item's size for shift calculations
+          dom.root.classList.add(sortingClass);
           draggedItemSize = ctx.sizeCache.getSize(dragIndex);
 
-          // Create ghost
           if (draggedElement) {
             ghost = createGhost(draggedElement);
-
-            // Hide the original element
             draggedElement.style.opacity = "0";
             draggedElement.style.pointerEvents = "none";
           }
 
-          // Emit sort:start
           emitter.emit("sort:start", { index: dragIndex });
-
-          // Start edge scrolling
           startEdgeScroll();
         }
 
         if (sorting) {
           event.preventDefault();
           updateGhostPosition();
-          // Don't update drop position while edge-scrolling —
-          // avoids jarring shift + scroll double-movement
           if (!inEdgeZone) {
             updateDropPosition();
-          } else if (isPointerOutsideViewport()) {
-            // Clear shifts when pointer leaves viewport
+          } else if (isPointerOutside()) {
             if (dropIndex !== dragIndex) {
               dropIndex = dragIndex;
               clearShifts();
@@ -504,46 +474,28 @@ export const withSortable = <T extends VListItem = VListItem>(
 
       // ── Animate ghost to drop target, then finalize ──
       const animateDrop = (fromIndex: number, toIndex: number): void => {
+        const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
+
         if (!ghost) {
-          const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
-          if (posChanged) {
-            // Suppress transitions, then let sort:end → setItems → force render
-            const children = dom.items.children;
-            for (let i = 0; i < children.length; i++) {
-              (children[i] as HTMLElement).style.transition = "none";
-            }
-            dom.root.classList.remove(`${classPrefix}--sorting`);
-            emitter.emit("sort:end", { fromIndex, toIndex });
-          }
-          cleanupDrag(posChanged);
-          if (posChanged) {
-            requestAnimationFrame(() => {
-              const children = dom.items.children;
-              for (let i = 0; i < children.length; i++) {
-                (children[i] as HTMLElement).style.transition = "";
-              }
-            });
-          }
+          if (posChanged) finalizeDrop(fromIndex, toIndex);
+          else cleanupDrag();
           return;
         }
 
-        // Compute where the drop slot is on screen.
-        // The target position is the sizeCache offset for `toIndex`,
-        // converted to viewport-relative coordinates.
-        // Animate both axes so the ghost slides to the exact target position.
-        const viewportRect = dom.viewport.getBoundingClientRect();
+        // Compute where the drop slot is on screen
+        const vpRect = dom.viewport.getBoundingClientRect();
         const scrollPos = ctx.scrollController.getScrollTop();
         const targetOffset = ctx.sizeCache.getOffset(toIndex);
 
         const duration = shiftDuration > 0 ? shiftDuration : 150;
         ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
 
-        if (horizontal) {
-          ghost.style.left = `${viewportRect.left - dom.viewport.scrollLeft + targetOffset - scrollPos}px`;
-          ghost.style.top = `${viewportRect.top}px`;
+        if (hz) {
+          ghost.style.left = `${vpRect.left - dom.viewport.scrollLeft + targetOffset - scrollPos}px`;
+          ghost.style.top = `${vpRect.top}px`;
         } else {
-          ghost.style.left = `${viewportRect.left}px`;
-          ghost.style.top = `${viewportRect.top + targetOffset - scrollPos}px`;
+          ghost.style.left = `${vpRect.left}px`;
+          ghost.style.top = `${vpRect.top + targetOffset - scrollPos}px`;
         }
 
         let settled = false;
@@ -551,74 +503,26 @@ export const withSortable = <T extends VListItem = VListItem>(
           if (settled) return;
           settled = true;
           ghost?.removeEventListener("transitionend", onEnd);
-          const positionChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
-
-          if (positionChanged) {
-            // Restore the dragged element before emitting sort:end
-            if (draggedElement) {
-              draggedElement.style.opacity = "";
-              draggedElement.style.pointerEvents = "";
-            }
-
-            // Suppress ALL transitions on items before any class/style changes.
-            // Base vlist.css has `transition: opacity 150ms` on .vlist-item.
-            // Example CSS may add `.vlist--sorting .vlist-item { opacity: 0.85 }`.
-            // Without suppression, removing .vlist--sorting triggers a visible
-            // opacity fade. We also suppress transform transitions so the force
-            // render (triggered by the consumer's setItems) snaps positions
-            // instantly instead of animating from the shifted offsets.
-            const children = dom.items.children;
-            for (let i = 0; i < children.length; i++) {
-              (children[i] as HTMLElement).style.transition = "none";
-            }
-
-            // Now safe to remove sorting class — transitions are suppressed
-            dom.root.classList.remove(`${classPrefix}--sorting`);
-
-            // Emit sort:end — consumer calls setItems() which triggers
-            // a force render that corrects all transforms and templates.
-            // No need to call clearShifts() — the force render handles it.
-            emitter.emit("sort:end", { fromIndex, toIndex });
-          }
-          cleanupDrag(positionChanged);
-
-          // Re-enable transitions on the next frame. By now the browser
-          // has committed the final styles, so restoring transitions
-          // won't re-trigger any animations.
-          if (positionChanged) {
-            requestAnimationFrame(() => {
-              const children = dom.items.children;
-              for (let i = 0; i < children.length; i++) {
-                (children[i] as HTMLElement).style.transition = "";
-              }
-            });
-          }
+          if (posChanged) finalizeDrop(fromIndex, toIndex);
+          else cleanupDrag();
         };
 
         ghost.addEventListener("transitionend", onEnd);
-
-        // Safety fallback — if transitionend doesn't fire (e.g. ghost already at target)
         setTimeout(onEnd, duration + 50);
       };
 
       const onPointerUp = (event: PointerEvent): void => {
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        document.removeEventListener("pointercancel", onPointerCancel);
+
         if (!dragInitiated) {
-          // Never crossed threshold — just cleanup listeners
-          document.removeEventListener("pointermove", onPointerMove);
-          document.removeEventListener("pointerup", onPointerUp);
-          document.removeEventListener("pointercancel", onPointerCancel);
           draggedElement = null;
           return;
         }
 
         event.preventDefault();
-
-        // Stop tracking pointer and edge scroll, but keep ghost visible
-        document.removeEventListener("pointermove", onPointerMove);
-        document.removeEventListener("pointerup", onPointerUp);
-        document.removeEventListener("pointercancel", onPointerCancel);
         stopEdgeScroll();
-
         animateDrop(dragIndex, dropIndex);
       };
 
@@ -626,10 +530,8 @@ export const withSortable = <T extends VListItem = VListItem>(
         cleanupDrag();
       };
 
-      // ── Attach pointerdown to items container ──
       dom.items.addEventListener("pointerdown", onPointerDown);
 
-      // ── Destroy cleanup ──
       ctx.destroyHandlers.push(() => {
         cleanupDrag();
         dom.items.removeEventListener("pointerdown", onPointerDown);
