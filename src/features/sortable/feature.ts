@@ -155,6 +155,9 @@ export const withSortable = <T extends VListItem = VListItem>(
       let ghostOffsetX = 0;
       let ghostOffsetY = 0;
 
+      // ID of the focused item at drag start — used to restore focus after drop
+      let dragFocusedItemId: string | number | null = null;
+
       // ── Register public method ──
       ctx.methods.set("isSorting", (): boolean => sorting || kbGrabbed);
 
@@ -297,6 +300,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         if (newDropIndex === dropIndex) return;
         dropIndex = newDropIndex;
         applyShifts();
+        emitter.emit("sort:move", { fromIndex: dragIndex, currentIndex: dropIndex });
       };
 
       // ── Edge auto-scroll ──
@@ -420,6 +424,8 @@ export const withSortable = <T extends VListItem = VListItem>(
       const onPointerDown = (event: PointerEvent): void => {
         if (ctx.state.isDestroyed) return;
         if (sorting) return;
+        // Cancel any active keyboard grab before starting a pointer drag
+        if (kbGrabbed) kbCancel();
         // Only primary button
         if (event.button !== 0) return;
 
@@ -487,6 +493,15 @@ export const withSortable = <T extends VListItem = VListItem>(
             draggedElement.style.pointerEvents = "none";
           }
 
+          // Capture focused item ID so we can restore focus after reorder
+          const focusIdx = getFocusedIndex();
+          if (focusIdx >= 0) {
+            const focusItem = ctx.dataManager.getItem(focusIdx);
+            dragFocusedItemId = focusItem ? focusItem.id : null;
+          } else {
+            dragFocusedItemId = null;
+          }
+
           // Emit sort:start
           emitter.emit("sort:start", { index: dragIndex });
 
@@ -523,6 +538,11 @@ export const withSortable = <T extends VListItem = VListItem>(
             }
             dom.root.classList.remove(`${classPrefix}--sorting`);
             emitter.emit("sort:end", { fromIndex, toIndex });
+            // Restore focus to the originally-focused item (by ID, since indices shifted)
+            if (dragFocusedItemId !== null) {
+              focusById(dragFocusedItemId);
+              ctx.forceRender();
+            }
           }
           cleanupDrag(posChanged);
           if (posChanged) {
@@ -588,6 +608,11 @@ export const withSortable = <T extends VListItem = VListItem>(
             // a force render that corrects all transforms and templates.
             // No need to call clearShifts() — the force render handles it.
             emitter.emit("sort:end", { fromIndex, toIndex });
+            // Restore focus to the originally-focused item (by ID, since indices shifted)
+            if (dragFocusedItemId !== null) {
+              focusById(dragFocusedItemId);
+              ctx.forceRender();
+            }
           }
           cleanupDrag(positionChanged);
 
