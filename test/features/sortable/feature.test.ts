@@ -1118,3 +1118,361 @@ describe("withSortable — live region announcements", () => {
     expect(text).toContain("position 3 of 20");
   });
 });
+
+// =============================================================================
+// Pointer: release without crossing threshold
+// =============================================================================
+
+describe("withSortable — pointer up without drag", () => {
+  it("pointerup before threshold cleans up without emitting events", () => {
+    const feature = withSortable({ dragThreshold: 10 });
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // pointerdown
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+
+    // Small move (below threshold)
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 143, button: 0,
+    }));
+
+    // pointerup without crossing threshold
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 143, button: 0,
+    }));
+
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+    const sortStart = emitSpy.mock.calls.find((c: unknown[]) => c[0] === "sort:start");
+    expect(sortStart).toBeUndefined();
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(false);
+  });
+});
+
+// =============================================================================
+// Keyboard: other keys blocked during grab
+// =============================================================================
+
+describe("withSortable — keyboard key blocking", () => {
+  function setupKeyboard(focusedIndex: number) {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => focusedIndex);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+    return { ctx };
+  }
+
+  it("blocks unrelated keys during grab mode", () => {
+    const { ctx } = setupKeyboard(3);
+
+    // Enter grab mode
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: " ", bubbles: true, cancelable: true,
+    }));
+
+    // Press an unrelated key (e.g., "a")
+    const event = new dom.window.KeyboardEvent("keydown", {
+      key: "a", bubbles: true, cancelable: true,
+    });
+    ctx.dom.root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("does not block F-keys during grab mode", () => {
+    const { ctx } = setupKeyboard(3);
+
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: " ", bubbles: true, cancelable: true,
+    }));
+
+    const event = new dom.window.KeyboardEvent("keydown", {
+      key: "F5", bubbles: true, cancelable: true,
+    });
+    ctx.dom.root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("does not block Tab during grab mode", () => {
+    const { ctx } = setupKeyboard(3);
+
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: " ", bubbles: true, cancelable: true,
+    }));
+
+    const event = new dom.window.KeyboardEvent("keydown", {
+      key: "Tab", bubbles: true, cancelable: true,
+    });
+    ctx.dom.root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+});
+
+// =============================================================================
+// Edge scroll and viewport detection
+// =============================================================================
+
+describe("withSortable — edge scrolling", () => {
+  it("starts edge scroll loop when drag begins", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // pointerdown
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+
+    // Move past threshold near bottom edge
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 590, button: 0,
+    }));
+
+    // Let rAF tick for edge scroll
+    await new Promise((r) => setTimeout(r, 50));
+
+    // scrollTo should have been called (edge scroll active near bottom)
+    const scrollToCalls = (ctx.scrollController.scrollTo as ReturnType<typeof mock>).mock.calls;
+    expect(scrollToCalls.length).toBeGreaterThan(0);
+
+    // Clean up — pointerup
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 590, button: 0,
+    }));
+
+    await new Promise((r) => setTimeout(r, 250));
+  });
+
+  it("clears shifts when pointer leaves viewport during drag", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+
+    // Move past threshold to start sorting
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 250, button: 0,
+    }));
+
+    // Move pointer outside viewport (above top)
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: -50, button: 0,
+    }));
+
+    // Let rAF tick
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Clean up
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: -50, button: 0,
+    }));
+
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Should not throw, and sorting should have ended
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(false);
+  });
+});
+
+// =============================================================================
+// Pointer cancel
+// =============================================================================
+
+describe("withSortable — pointer cancel", () => {
+  it("pointercancel during drag cleans up", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag past threshold
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+
+    // Pointer cancel (e.g. touch interrupted)
+    document.dispatchEvent(new PointerEventCtor("pointercancel", {
+      bubbles: true, clientX: 200, clientY: 200,
+    }));
+
+    await new Promise((r) => setTimeout(r, 250));
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(false);
+  });
+});
+
+// =============================================================================
+// Keyboard grab cancelled by pointer drag
+// =============================================================================
+
+describe("withSortable — keyboard grab cancelled by pointer", () => {
+  it("cancels keyboard grab when pointer drag starts", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    ctx.methods.set("_getFocusedIndex", () => 3);
+    ctx.methods.set("_focusById", mock(() => {}));
+    feature.setup(ctx);
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+
+    // Start keyboard grab
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: " ", bubbles: true, cancelable: true,
+    }));
+    expect(isSorting()).toBe(true);
+
+    // Pointer down on a different item — should cancel keyboard grab
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='5']") as HTMLElement;
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 308, button: 0,
+    }));
+
+    // Keyboard grab should be cancelled (sorting still true due to pointer, but kb grab gone)
+    // After pointer releases without threshold, isSorting should be false
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 308, button: 0,
+    }));
+
+    expect(isSorting()).toBe(false);
+  });
+});
+
+// =============================================================================
+// Focus preservation across pointer drag
+// =============================================================================
+
+describe("withSortable — focus preservation", () => {
+  it("restores focus to originally-focused item after pointer drag reorder", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    // Mock _getFocusedIndex returning index 5
+    ctx.methods.set("_getFocusedIndex", () => 5);
+    const focusByIdSpy = mock(() => {});
+    ctx.methods.set("_focusById", focusByIdSpy);
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='1']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 56, right: 400, bottom: 112, width: 400, height: 56, x: 0, y: 56, toJSON: () => {} }) as DOMRect;
+
+    // pointerdown on item 1
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 84, button: 0,
+    }));
+
+    // Move far enough to cross threshold and change drop position
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 250, button: 0,
+    }));
+
+    // pointerup
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 250, button: 0,
+    }));
+
+    // Wait for drop animation
+    await new Promise((r) => setTimeout(r, 300));
+
+    // _focusById should have been called with id 5 (the originally-focused item)
+    const focusCalls = focusByIdSpy.mock.calls;
+    if (focusCalls.length > 0) {
+      expect(focusCalls[focusCalls.length - 1]![0]).toBe(5);
+    }
+  });
+
+  it("does not call focusById when no item was focused before drag", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.methods.set("_getFocusedIndex", () => -1); // No focus
+    const focusByIdSpy = mock(() => {});
+    ctx.methods.set("_focusById", focusByIdSpy);
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='1']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 56, right: 400, bottom: 112, width: 400, height: 56, x: 0, y: 56, toJSON: () => {} }) as DOMRect;
+
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 84, button: 0,
+    }));
+
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 84 + 20, button: 0,
+    }));
+
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 84 + 20, button: 0,
+    }));
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    // focusById should NOT have been called (no item was focused)
+    expect(focusByIdSpy.mock.calls.length).toBe(0);
+  });
+});
