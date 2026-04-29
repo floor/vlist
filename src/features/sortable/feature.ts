@@ -9,18 +9,27 @@
  * - Creates a drag ghost element that follows the pointer
  * - Items shift via CSS transforms to make room (like iOS list reordering)
  * - Auto-scrolls when dragging near viewport edges
- * - Emits sort:start and sort:end events
+ * - Keyboard reordering: Space to grab, arrows to move, Space to drop, Escape to cancel
+ * - ARIA attributes (aria-roledescription, aria-describedby) and live region announcements
+ * - Emits sort:start, sort:end, and sort:cancel events
  *
  * The feature is purely visual during drag — it does NOT reorder data.
  * On drop, it emits a `sort:end` event with `{ fromIndex, toIndex }`.
  * The consumer is responsible for reordering their data array and
  * calling `setItems()` with the new order.
  *
+ * Keyboard reordering emits `sort:end` per arrow key press (incremental moves).
+ * On Escape, it emits `sort:cancel` with `{ originalItems }` so the consumer
+ * can restore the original order via `setItems(originalItems)`.
+ *
+ * When composed with withSelection, Space is intercepted for grab/drop.
+ * Use Enter to toggle selection on focused items.
+ *
  * IMPORTANT: vlist positions items via `style.transform: translateY(offset)`.
  * The shift must ADD to that existing offset, not replace it.
  *
  * Added methods: isSorting
- * Added events: sort:start, sort:end
+ * Added events: sort:start, sort:end, sort:cancel
  */
 
 import type { VListItem } from "../../types";
@@ -756,7 +765,6 @@ export const withSortable = <T extends VListItem = VListItem>(
         if (!kbGrabbed) return;
         kbGrabbed = false;
 
-        const label = getItemLabel(kbCurrentIndex);
         const originalIndex = kbFromIndex;
 
         // Suppress transitions
@@ -768,17 +776,18 @@ export const withSortable = <T extends VListItem = VListItem>(
         dom.root.classList.remove(`${classPrefix}--sorting`);
         clearKbGrabbedClass();
 
-        // Restore original order — emit sort:end only if position changed
-        // so consumer restores via setItems
+        // Restore original order by emitting sort:cancel with the snapshot.
+        // The consumer cannot undo incremental moves with a single sort:end,
+        // so we provide the original items array for a full restore.
         if (kbCurrentIndex !== originalIndex) {
-          emitter.emit("sort:end", { fromIndex: kbCurrentIndex, toIndex: originalIndex });
+          emitter.emit("sort:cancel", { originalItems: kbOriginalItems });
         }
 
         // Update selection focus back to original position
         focusById(kbGrabbedItemId);
 
         announce(
-          `${label} reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`,
+          `Reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`,
         );
 
         kbOriginalItems = [];
