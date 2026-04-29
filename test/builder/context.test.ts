@@ -73,17 +73,19 @@ function createTestDOM() {
   const viewport = document.createElement("div");
   const content = document.createElement("div");
   const items = document.createElement("div");
+  const liveRegion = document.createElement("div");
   items.setAttribute("role", "listbox");
 
   content.appendChild(items);
   viewport.appendChild(content);
+  root.appendChild(liveRegion);
   root.appendChild(viewport);
   document.body.appendChild(root);
 
   Object.defineProperty(viewport, "clientWidth", { value: 300 });
   Object.defineProperty(viewport, "clientHeight", { value: 500 });
 
-  return { root, viewport, content, items };
+  return { root, viewport, content, items, liveRegion };
 }
 
 function createInitialState(): BuilderState {

@@ -77,6 +77,8 @@ export interface DOMStructure {
   viewport: HTMLElement;
   content: HTMLElement;
   items: HTMLElement;
+  /** Visually-hidden live region for screen reader announcements */
+  liveRegion: HTMLElement;
 }
 
 /** Renderer instance */
@@ -781,13 +783,24 @@ export const createDOMStructure = (
     items.style.width = "100%";
   }
 
+  // Live region for screen reader announcements
+  const liveRegion = document.createElement("div");
+  liveRegion.className = `${classPrefix}-live`;
+  liveRegion.style.cssText =
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+    "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.setAttribute("role", "status");
+
   // Assemble structure
   content.appendChild(items);
   viewport.appendChild(content);
+  root.appendChild(liveRegion);
   root.appendChild(viewport);
   container.appendChild(root);
 
-  return { root, viewport, content, items };
+  return { root, viewport, content, items, liveRegion };
 };
 
 /**

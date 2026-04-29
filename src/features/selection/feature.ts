@@ -918,10 +918,19 @@ export const withSelection = <T extends VListItem = VListItem>(
         moveFocusAndSelect("previous");
       });
 
-      // ── Internal: restore focus by item ID (used by withSnapshots) ──
+      // ── Internal: restore focus by item ID (used by withSnapshots, withSortable) ──
       ctx.methods.set("_focusById", (id: string | number): void => {
-        const index = idToIndexMap.get(id);
-        if (index === undefined) return;
+        let index = idToIndexMap.get(id);
+        // Validate — map may be stale after setItems() reorders data
+        if (index !== undefined) {
+          const check = ctx.dataManager.getItem(index);
+          if (!check || check.id !== id) index = undefined;
+        }
+        if (index === undefined) {
+          rebuildIdIndex();
+          index = idToIndexMap.get(id);
+          if (index === undefined) return;
+        }
         // Set the index without focusVisible — the ring will appear when
         // the user tabs into the list and focusin fires.
         selectionState = setFocusedIndex(selectionState, index);
