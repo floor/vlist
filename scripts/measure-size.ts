@@ -28,6 +28,7 @@ const ALL_FEATURES = [
   "withSnapshots",
   "withTable",
   "withAutoSize",
+  "withSortable",
 ] as const;
 
 type FeatureName = (typeof ALL_FEATURES)[number];
@@ -76,6 +77,7 @@ const FEATURE_MARKERS: Record<FeatureName, readonly string[]> = {
   withSnapshots: ["getScrollSnapshot", "restoreScroll"],
   withTable:     ["aria-colcount", "gridcell"],
   withAutoSize:  ["setMeasuredSize", "isMeasured"],
+  withSortable:  ["sort-ghost", "isSorting"],
 };
 
 // ── Feature scenarios ─────────────────────────────────────────────
@@ -116,6 +118,7 @@ const scenarios: Scenario[] = [
   { name: "withSnapshots", imports: ["vlist", "withSnapshots"] },
   { name: "withTable",     imports: ["vlist", "withTable"] },
   { name: "withAutoSize",  imports: ["vlist", "withAutoSize"] },
+  { name: "withSortable",  imports: ["vlist", "withSortable"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────
