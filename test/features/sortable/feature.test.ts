@@ -1481,6 +1481,100 @@ describe("withSortable — pointer cancel", () => {
 });
 
 // =============================================================================
+// Escape cancels pointer drag
+// =============================================================================
+
+describe("withSortable — escape cancels pointer drag", () => {
+  it("Escape during pointer drag emits sort:cancel and cleans up", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag past threshold
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 300, button: 0,
+    }));
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(true);
+
+    // Press Escape
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: "Escape", bubbles: true, cancelable: true,
+    }));
+
+    expect(isSorting()).toBe(false);
+
+    const cancelCall = (ctx.emitter.emit as ReturnType<typeof mock>).mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:cancel",
+    );
+    expect(cancelCall).toBeDefined();
+  });
+});
+
+// =============================================================================
+// Drop at same position emits sort:cancel
+// =============================================================================
+
+describe("withSortable — drop at same position", () => {
+  it("emits sort:cancel when item is returned to original position", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='3']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 168, right: 400, bottom: 224, width: 400, height: 56, x: 0, y: 168, toJSON: () => {} }) as DOMRect;
+
+    // Start drag with small move (stays within same item zone)
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 196, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 216, button: 0,
+    }));
+
+    // Release — dropIndex should still equal dragIndex
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 216, button: 0,
+    }));
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+
+    const cancelCall = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:cancel",
+    );
+    expect(cancelCall).toBeDefined();
+
+    const endCall = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:end",
+    );
+    expect(endCall).toBeUndefined();
+  });
+});
+
+// =============================================================================
 // Keyboard grab cancelled by pointer drag
 // =============================================================================
 
