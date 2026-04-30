@@ -6,10 +6,12 @@ The virtual list library for every framework. Accessible by default, batteries-i
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
+- **New: `withSortable()`** — drag-and-drop reordering with auto-scroll, keyboard support, and ARIA announcements
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **10.6 KB gzipped** — composable features with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
+- **Vertical & horizontal** — single axis-neutral code path, every feature works in both orientations
 
 ## Install
 
@@ -54,7 +56,7 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 |---------|------|-------------|
 | **Base** | 10.6 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
-| `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
+| `withSelection()` | +2.9 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.7 KB | 1M+ items via scroll compression |
 | `withGroups()` | +2.7 KB | Sticky/inline headers |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
@@ -63,6 +65,7 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 | `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort |
 | `withPage()` | +0.8 KB | Window-level scrolling |
+| `withSortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
 | `withSnapshots()` | +0.8 KB | Scroll position save/restore |
 
 ## Framework Adapters
