@@ -272,6 +272,7 @@ describe("withSortable — factory", () => {
       edgeScrollZone: 60,
       edgeScrollSpeed: 12,
       dragThreshold: 10,
+      ghostContainer: document.createElement("div"),
     });
     expect(feature.name).toBe("withSortable");
   });
@@ -735,6 +736,133 @@ describe("withSortable — sort events", () => {
       expect(payload.toIndex).not.toBe(1);
       expect(payload.toIndex).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+// =============================================================================
+// Ghost Container Tests
+// =============================================================================
+
+describe("withSortable — ghostContainer", () => {
+  function startDrag(
+    ctx: BuilderContext<TestItem>,
+    fromIndex: number,
+  ): void {
+    const PointerEventCtor =
+      dom.window.PointerEvent ?? dom.window.MouseEvent;
+
+    const itemEl = ctx.dom.items.querySelector(
+      `[data-index='${fromIndex}']`,
+    ) as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: fromIndex * 56,
+        right: 400,
+        bottom: fromIndex * 56 + 56,
+        width: 400,
+        height: 56,
+        x: 0,
+        y: fromIndex * 56,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    itemEl.dispatchEvent(
+      new PointerEventCtor("pointerdown", {
+        bubbles: true,
+        clientX: 200,
+        clientY: fromIndex * 56 + 28,
+        button: 0,
+      }),
+    );
+
+    document.dispatchEvent(
+      new PointerEventCtor("pointermove", {
+        bubbles: true,
+        clientX: 200,
+        clientY: fromIndex * 56 + 28 + 20,
+        button: 0,
+      }),
+    );
+  }
+
+  it("appends ghost to document.body by default", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    startDrag(ctx, 2);
+
+    const ghost = document.body.querySelector(".vlist-sort-ghost");
+    expect(ghost).not.toBeNull();
+
+    for (const h of ctx.destroyHandlers) h();
+    ghost?.remove();
+  });
+
+  it("appends ghost to ghostContainer when specified", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const feature = withSortable({ ghostContainer: container });
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    startDrag(ctx, 2);
+
+    const ghost = container.querySelector(".vlist-sort-ghost");
+    expect(ghost).not.toBeNull();
+    expect(
+      document.body.querySelectorAll(":scope > .vlist-sort-ghost").length,
+    ).toBe(0);
+
+    for (const h of ctx.destroyHandlers) h();
+    ghost?.remove();
+    container.remove();
+  });
+
+  it("removes ghost from ghostContainer on cleanup", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const feature = withSortable({ ghostContainer: container });
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 600,
+        width: 400,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    feature.setup(ctx);
+
+    startDrag(ctx, 2);
+    expect(container.querySelector(".vlist-sort-ghost")).not.toBeNull();
+
+    const PointerEventCtor =
+      dom.window.PointerEvent ?? dom.window.MouseEvent;
+    document.dispatchEvent(
+      new PointerEventCtor("pointerup", {
+        bubbles: true,
+        clientX: 200,
+        clientY: 2 * 56 + 28 + 20,
+        button: 0,
+      }),
+    );
+
+    await new Promise((r) => setTimeout(r, 250));
+
+    expect(container.querySelector(".vlist-sort-ghost")).toBeNull();
+
+    container.remove();
   });
 });
 
