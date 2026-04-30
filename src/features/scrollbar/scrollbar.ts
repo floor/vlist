@@ -343,6 +343,10 @@ export const createScrollbar = (
 
     // Update position with current scroll
     updatePosition(currentScrollPosition);
+
+    if (!autoHide) {
+      show();
+    }
   };
 
   const updatePosition = (scrollTop: number): void => {
