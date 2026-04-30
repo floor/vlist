@@ -493,12 +493,20 @@
    Vertical: right-wall inset + track width + left breathing room.
    Horizontal: bottom-wall inset + track height + top breathing room. */
 .vlist-viewport--gutter {
-    padding-right: calc(var(--vlist-custom-scrollbar-padding-right) + var(--vlist-custom-scrollbar-width) + var(--vlist-custom-scrollbar-padding-left));
+    padding-right: calc(
+        var(--vlist-custom-scrollbar-padding-right) +
+            var(--vlist-custom-scrollbar-width) +
+            var(--vlist-custom-scrollbar-padding-left)
+    );
 }
 
 .vlist--horizontal .vlist-viewport--gutter {
     padding-right: 0;
-    padding-bottom: calc(var(--vlist-custom-scrollbar-padding-bottom) + var(--vlist-custom-scrollbar-width) + var(--vlist-custom-scrollbar-padding-top));
+    padding-bottom: calc(
+        var(--vlist-custom-scrollbar-padding-bottom) +
+            var(--vlist-custom-scrollbar-width) +
+            var(--vlist-custom-scrollbar-padding-top)
+    );
 }
 
 /* Hide native scrollbar when custom scrollbar is active */
@@ -539,7 +547,9 @@
 
 /* Sorting state on root */
 .vlist--sorting {
+    -webkit-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
 }
 
 /* Keyboard grab — highlight the grabbed item */
