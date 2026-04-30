@@ -2,18 +2,19 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.5 KB.
 
-**v1.7.0** — [Changelog](./changelog.txt)
+**v1.7.1** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
+- **New: `withSortable()`** — drag-and-drop reordering with auto-scroll, keyboard support, and ARIA announcements
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering, ARIA live region
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
 - **10.6 KB gzipped** — composable features with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
-- **Grid, masonry, table, groups, async, selection, scale** — all opt-in
-- **Vertical & horizontal** — dimension-agnostic API, every layout mode works in both orientations
+- **Grid, masonry, table, groups, async, selection, sortable, scale** — all opt-in
+- **Vertical & horizontal** — single axis-neutral code path, every feature works in both orientations
 
 **18 interactive examples, docs & benchmarks → [vlist.io](https://vlist.io)**
 
@@ -95,7 +96,7 @@ const list = vlist({
 |---------|------|-------------|
 | **Base** | 10.6 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
-| `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
+| `withSelection()` | +2.9 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.7 KB | 1M+ items via scroll compression |
 | `withGroups()` | +2.7 KB | Sticky/inline headers |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
@@ -104,6 +105,7 @@ const list = vlist({
 | `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort |
 | `withPage()` | +0.8 KB | Window-level scrolling |
+| `withSortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
 | `withSnapshots()` | +0.8 KB | Scroll position save/restore |
 
 ## Examples
@@ -253,6 +255,8 @@ list.on('selection:change', ({ selectedIds, selectedItems }) => {})
 list.on('load:start', ({ offset, limit }) => {})
 list.on('load:end', ({ items, offset, total }) => {})
 list.on('load:error', ({ error, offset, limit }) => {})
+list.on('sort:end', ({ fromIndex, toIndex }) => {})
+list.on('sort:cancel', ({ originalItems }) => {})
 ```
 
 ### Properties
@@ -278,6 +282,7 @@ withTable({ columns, rowHeight, headerHeight?, resizable? })
 withAutoSize()                        // auto-measure items (requires estimatedHeight)
 withScale()                           // auto-activates at 16.7M px
 withScrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
+withSortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
 withPage()                            // no config — uses document scroll
 withSnapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
 ```

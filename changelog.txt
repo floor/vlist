@@ -1,6 +1,33 @@
 vlist — full changelog
 initial commit → latest
-617 commits · 86 days · Feb 2 – Apr 29, 2026
+621 commits · 88 days · Feb 2 – Apr 30, 2026
+
+
+2026-04-30  v1.7.1
+
+  fix(sortable): fix drop index oscillation on direction change
+    The old computeDropIndex switched between ghost bottom/top edge based
+    on a direction flag, causing a discontinuity of draggedItemSize when
+    the drag reversed — triggering double-shifts or oscillation near the
+    reversal point. Replaced with a stateless, direction-agnostic approach
+    that scans from dragIndex using the natural leading edge for each
+    direction: bottom edge for downward checks, top edge for upward checks.
+
+  perf(sortable): use O(log n) binary search in computeDropIndex
+    Replace linear scan from dragIndex with sizeCache.indexAtOffset()
+    binary search. Avoids iterating through all items between dragIndex
+    and the ghost position after auto-scrolling large distances.
+
+  fix(sortable): refactor drop index calculation and element recycling
+    - Replace DOM-walking computeDropIndex with sizeCache.indexAtOffset()
+      to avoid wrong results from element recycling shuffling DOM order
+    - Add afterRenderBatch handler to maintain drag visual state when
+      virtual scrolling recycles elements (hide dragIndex, re-apply shifts)
+    - Simplify cleanupDrag to reset ALL children's opacity/pointerEvents
+      instead of only the tracked draggedElement
+    - Add withScale to conflicts list
+
+  fix(sortable): clear text selection after drop (Safari)
 
 
 2026-04-28  v1.6.5
