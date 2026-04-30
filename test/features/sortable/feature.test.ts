@@ -1476,3 +1476,265 @@ describe("withSortable — focus preservation", () => {
     expect(focusByIdSpy.mock.calls.length).toBe(0);
   });
 });
+
+// =============================================================================
+// Drop Index Calculation Tests
+// =============================================================================
+
+describe("withSortable — drop index calculation", () => {
+  // Helper: start a drag on an item, then move to specific Y positions
+  // and collect sort:move events to track the drop index at each step.
+  function setupDragSession(ctx: BuilderContext<TestItem>, fromIndex: number): {
+    moveTo: (clientY: number) => void;
+    getDropIndices: () => number[];
+    cleanup: () => void;
+  } {
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector(
+      `[data-index='${fromIndex}']`,
+    ) as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: fromIndex * 56,
+        right: 400,
+        bottom: fromIndex * 56 + 56,
+        width: 400,
+        height: 56,
+        x: 0,
+        y: fromIndex * 56,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 600,
+        width: 400,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      }) as DOMRect;
+
+    // pointerdown
+    itemEl.dispatchEvent(
+      new PointerEventCtor("pointerdown", {
+        bubbles: true,
+        clientX: 200,
+        clientY: fromIndex * 56 + 28,
+        button: 0,
+      }),
+    );
+
+    // Initial move to cross drag threshold
+    document.dispatchEvent(
+      new PointerEventCtor("pointermove", {
+        bubbles: true,
+        clientX: 200,
+        clientY: fromIndex * 56 + 28 + 10,
+        button: 0,
+      }),
+    );
+
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+    const dropIndices: number[] = [];
+
+    const moveTo = (clientY: number): void => {
+      // Clear previous calls to track new emissions
+      const callsBefore = emitSpy.mock.calls.length;
+
+      document.dispatchEvent(
+        new PointerEventCtor("pointermove", {
+          bubbles: true,
+          clientX: 200,
+          clientY,
+          button: 0,
+        }),
+      );
+
+      // Collect sort:move events from this move
+      for (let i = callsBefore; i < emitSpy.mock.calls.length; i++) {
+        const call = emitSpy.mock.calls[i] as unknown[];
+        if (call[0] === "sort:move") {
+          const payload = call[1] as { currentIndex: number };
+          dropIndices.push(payload.currentIndex);
+        }
+      }
+    };
+
+    const cleanup = (): void => {
+      document.dispatchEvent(
+        new PointerEventCtor("pointercancel", { bubbles: true }),
+      );
+    };
+
+    return { moveTo, getDropIndices: () => dropIndices, cleanup };
+  }
+
+  it("shifts one item at a time when dragging down", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 3 (offset=168, mid=196) downward
+    // Item 4: offset=224, mid=252 — ghost bottom must cross 252
+    // Item 5: offset=280, mid=308 — ghost bottom must cross 308
+    const session = setupDragSession(ctx, 3);
+
+    // Ghost bottom = clientY - ghostOffsetY + draggedItemSize
+    // ghostOffsetY = 28 (pointer started at mid-item)
+    // So ghost bottom = clientY - 28 + 56 = clientY + 28
+
+    // Move ghost bottom just past mid of item 4 (252)
+    // clientY + 28 > 252 → clientY > 224
+    session.moveTo(225);
+    expect(session.getDropIndices()).toEqual([4]);
+
+    // Move ghost bottom just past mid of item 5 (308)
+    // clientY + 28 > 308 → clientY > 280
+    session.moveTo(281);
+    expect(session.getDropIndices()).toEqual([4, 5]);
+
+    session.cleanup();
+  });
+
+  it("shifts one item at a time when dragging up", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 5 (offset=280, mid=308) upward
+    // Item 4: offset=224, mid=252 — ghost top must cross BELOW 252
+    // Item 3: offset=168, mid=196 — ghost top must cross BELOW 196
+    const session = setupDragSession(ctx, 5);
+
+    // Ghost top = clientY - ghostOffsetY
+    // ghostOffsetY = 28 (pointer started at mid-item)
+    // So ghost top = clientY - 28
+
+    // Move ghost top just below mid of item 4 (252)
+    // clientY - 28 < 252 → clientY < 280
+    // But we also need to be above the drag slot (offset=280)
+    // ghost top < 280 → clientY < 308, which is true
+    session.moveTo(279);
+    expect(session.getDropIndices()).toEqual([4]);
+
+    // Move ghost top just below mid of item 3 (196)
+    // clientY - 28 < 196 → clientY < 224
+    session.moveTo(223);
+    expect(session.getDropIndices()).toEqual([4, 3]);
+
+    session.cleanup();
+  });
+
+  it("does not oscillate when reversing drag direction", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 4 (offset=224, mid=252) downward past items 5 and 6
+    const session = setupDragSession(ctx, 4);
+
+    // Move past item 5 (mid=308): clientY + 28 > 308 → clientY > 280
+    session.moveTo(281);
+    expect(session.getDropIndices()).toEqual([5]);
+
+    // Move past item 6 (mid=364): clientY + 28 > 364 → clientY > 336
+    session.moveTo(337);
+    expect(session.getDropIndices()).toEqual([5, 6]);
+
+    // Now reverse direction — move back up slowly
+    // The drop index should NOT oscillate between values
+    const indicesBefore = session.getDropIndices().length;
+
+    // Small upward movements within the hysteresis zone — should stay at 6
+    session.moveTo(335);
+    session.moveTo(333);
+    session.moveTo(330);
+
+    // Verify no oscillation: either stayed at 6 or moved to 5 once
+    const indicesAfter = session.getDropIndices().slice(indicesBefore);
+    for (let i = 1; i < indicesAfter.length; i++) {
+      // No back-and-forth: each consecutive index should be the same or
+      // monotonically decreasing (retreating)
+      expect(indicesAfter[i]!).toBeLessThanOrEqual(indicesAfter[i - 1]!);
+    }
+
+    session.cleanup();
+  });
+
+  it("handles large displacement correctly (e.g. after auto-scroll)", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 2 (offset=112, mid=140) far down past many items
+    const session = setupDragSession(ctx, 2);
+
+    // Jump ghost far down — past items 3 through 8
+    // Item 8: offset=448, mid=476. clientY + 28 > 476 → clientY > 448
+    session.moveTo(449);
+
+    const indices = session.getDropIndices();
+    // Should have jumped to 8 in one step (binary search, not scanning)
+    expect(indices[indices.length - 1]).toBe(8);
+
+    session.cleanup();
+  });
+
+  it("returns dragIndex when ghost is within the drag slot", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 4 (offset=224) — small move that stays within the slot
+    const session = setupDragSession(ctx, 4);
+
+    // Move within item 4's area — no sort:move should fire
+    session.moveTo(4 * 56 + 28 + 15);
+    expect(session.getDropIndices()).toEqual([]);
+
+    session.cleanup();
+  });
+
+  it("each step shifts exactly one item when moving down then back up", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+    feature.setup(ctx);
+
+    // Drag item 3 downward past items 4, 5, 6
+    const session = setupDragSession(ctx, 3);
+
+    // Past item 4 (mid=252): clientY > 224
+    session.moveTo(225);
+    // Past item 5 (mid=308): clientY > 280
+    session.moveTo(281);
+    // Past item 6 (mid=364): clientY > 336
+    session.moveTo(337);
+
+    expect(session.getDropIndices()).toEqual([4, 5, 6]);
+
+    // Now move back up — each step should retreat by exactly 1
+    // Ghost top must cross below item midpoints to retreat
+    // ghost top = clientY - 28
+    // Retreat from 6: ghost top < mid(6) = 364 → clientY < 392 (already true)
+    //   BUT ghost bottom must also be < mid(7) = 420 → clientY + 28 < 420 → clientY < 392
+    //   We need ghost top to go above the drag slot boundary for retreat
+    //   Retreat from dropIndex 6: ghost top < mid(6) = 364 → clientY - 28 < 364 → clientY < 392
+    //   But we're already at 337 < 392, so why didn't it retreat?
+    //   Because the downward check still holds: ghost bottom = 337 + 28 = 365 > mid(6) = 364
+    //   So result stays at 6. We need ghost bottom <= 364 → clientY <= 336
+
+    session.moveTo(335); // ghost bottom = 363 < 364 → retreat from 6 to 5
+    session.moveTo(278); // ghost bottom = 306 < 308 → retreat from 5 to 4
+    session.moveTo(222); // ghost bottom = 250 < 252 → retreat from 4 to 3
+
+    expect(session.getDropIndices()).toEqual([4, 5, 6, 5, 4, 3]);
+
+    session.cleanup();
+  });
+});
