@@ -81,6 +81,13 @@ export interface SortableConfig {
    * Prevents accidental drags on click.
    */
   dragThreshold?: number;
+
+  /**
+   * Container element for the drag ghost (default: document.body).
+   * Set this to keep the ghost inside a specific ancestor so it inherits
+   * scoped CSS (e.g. theme variables, list-specific item styles).
+   */
+  ghostContainer?: HTMLElement;
 }
 
 // =============================================================================
@@ -117,6 +124,7 @@ export const withSortable = <T extends VListItem = VListItem>(
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
   const edgeScrollSpeed = config?.edgeScrollSpeed ?? 20;
   const dragThreshold = config?.dragThreshold ?? 5;
+  const ghostContainer = config?.ghostContainer ?? null;
 
   return {
     name: "withSortable",
@@ -189,7 +197,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           "transition:none",
           "will-change:transform",
         ].join(";");
-        document.body.appendChild(clone);
+        (ghostContainer || document.body).appendChild(clone);
         return clone;
       };
 
