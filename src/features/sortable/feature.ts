@@ -203,51 +203,41 @@ export const withSortable = <T extends VListItem = VListItem>(
       };
 
       // ── Helper: determine drop index from pointer position ──
-      // Uses sizeCache.indexAtOffset() instead of walking DOM elements,
-      // because element recycling can shuffle DOM order and produce
-      // wrong results when iterating querySelectorAll in DOM order.
+      // Stateless, direction-agnostic: scans from dragIndex in both
+      // directions using the appropriate leading edge for each.
+      // - Downward: ghost BOTTOM edge vs item midpoint (shift triggers early)
+      // - Upward: ghost TOP edge vs item midpoint (shift triggers early)
+      // No direction flag needed — avoids the discontinuity that caused
+      // oscillation when switching between top/bottom edges.
       const computeDropIndex = (): number => {
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return 0;
 
-        // Use the ghost's LEADING EDGE based on drag direction:
-        // - Dragging down → bottom edge of the ghost
-        // - Dragging up → top edge of the ghost
-        // The shift triggers when this edge crosses the midpoint of a target item.
         const viewportRect = dom.viewport.getBoundingClientRect();
         const scrollPos = ctx.scrollController.getScrollTop();
-        const movingDown = horizontal
-          ? pointerCurrentX > pointerStartX
-          : pointerCurrentY > pointerStartY;
-        const ghostEdge = horizontal
-          ? pointerCurrentX - ghostOffsetX + (movingDown ? draggedItemSize : 0)
-          : pointerCurrentY - ghostOffsetY + (movingDown ? draggedItemSize : 0);
-        const pointerInContent = horizontal
-          ? ghostEdge - viewportRect.left + dom.viewport.scrollLeft + scrollPos
-          : ghostEdge - viewportRect.top + scrollPos;
+        const ghostTop = horizontal
+          ? pointerCurrentX - ghostOffsetX - viewportRect.left + dom.viewport.scrollLeft + scrollPos
+          : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
+        const ghostBottom = ghostTop + draggedItemSize;
 
-        // Find the item slot at the pointer position via sizeCache
-        const rawIndex = ctx.sizeCache.indexAtOffset(pointerInContent);
-        const itemOffset = ctx.sizeCache.getOffset(rawIndex);
-        const itemSize = ctx.sizeCache.getSize(rawIndex);
-        const itemMid = itemOffset + itemSize / 2;
-
-        // Determine insertion point based on which half of the item
-        // the pointer falls in
-        let insertAt: number;
-        if (pointerInContent < itemMid) {
-          insertAt = rawIndex;
-        } else {
-          insertAt = rawIndex + 1;
+        // Scan downward: find the furthest item whose midpoint the ghost
+        // bottom edge has crossed
+        let result = dragIndex;
+        for (let i = dragIndex + 1; i < totalItems; i++) {
+          const mid = ctx.sizeCache.getOffset(i) + ctx.sizeCache.getSize(i) / 2;
+          if (ghostBottom > mid) result = i;
+          else break;
         }
+        if (result > dragIndex) return result;
 
-        // Adjust for the dragged item gap — indices above dragIndex
-        // shift down by 1 when the dragged item is "removed"
-        if (insertAt > dragIndex) {
-          insertAt -= 1;
+        // Scan upward: find the furthest item whose midpoint the ghost
+        // top edge has crossed
+        for (let i = dragIndex - 1; i >= 0; i--) {
+          const mid = ctx.sizeCache.getOffset(i) + ctx.sizeCache.getSize(i) / 2;
+          if (ghostTop < mid) result = i;
+          else break;
         }
-
-        return Math.max(0, Math.min(insertAt, totalItems - 1));
+        return Math.max(0, Math.min(result, totalItems - 1));
       };
 
       // ── Apply CSS transforms to shift items out of the way ──
@@ -257,8 +247,6 @@ export const withSortable = <T extends VListItem = VListItem>(
       const applyShifts = (): void => {
         const children = dom.items.children;
         const shiftPx = draggedItemSize;
-
-        console.log(`[sort] applyShifts: dragIndex=${dragIndex} dropIndex=${dropIndex} shiftPx=${shiftPx} children=${children.length}`);
 
         for (let i = 0; i < children.length; i++) {
           const itemEl = children[i] as HTMLElement;
@@ -274,9 +262,6 @@ export const withSortable = <T extends VListItem = VListItem>(
 
           const baseOffset = ctx.sizeCache.getOffset(idx);
           const finalOffset = Math.round(baseOffset + shift);
-          if (shift !== 0) {
-            console.log(`  [sort] shift idx=${idx} base=${baseOffset} shift=${shift} final=${finalOffset}`);
-          }
           itemEl.style.transition = shiftTransition;
           itemEl.style.transform = `${prop}(${finalOffset}px)`;
         }
@@ -299,7 +284,6 @@ export const withSortable = <T extends VListItem = VListItem>(
       const updateDropPosition = (): void => {
         const newDropIndex = computeDropIndex();
         if (newDropIndex === dropIndex) return;
-        console.log(`[sort] updateDropPosition: ${dropIndex} → ${newDropIndex} (dragIndex=${dragIndex})`);
         dropIndex = newDropIndex;
         applyShifts();
         emitter.emit("sort:move", { fromIndex: dragIndex, currentIndex: dropIndex });
@@ -391,7 +375,6 @@ export const withSortable = <T extends VListItem = VListItem>(
       // triggered a force render — calling clearShifts + forceRender
       // again would be redundant.
       const cleanupDrag = (skipRender = false): void => {
-        console.log(`[sort] cleanupDrag: skipRender=${skipRender} dragIndex=${dragIndex} dropIndex=${dropIndex}`);
         sorting = false;
         dragInitiated = false;
 
@@ -493,7 +476,6 @@ export const withSortable = <T extends VListItem = VListItem>(
           dragInitiated = true;
           sorting = true;
           dropIndex = dragIndex;
-          console.log(`[sort] drag started: dragIndex=${dragIndex} itemId=${ctx.dataManager.getItem(dragIndex)?.id}`);
           dom.root.classList.add(`${classPrefix}--sorting`);
 
           // Cache the dragged item's size for shift calculations
@@ -534,7 +516,6 @@ export const withSortable = <T extends VListItem = VListItem>(
           } else if (isPointerOutsideViewport()) {
             // Clear shifts when pointer leaves viewport
             if (dropIndex !== dragIndex) {
-              console.log(`[sort] outside viewport: clearing shifts, dropIndex ${dropIndex} → ${dragIndex}`);
               dropIndex = dragIndex;
               clearShifts();
             }
@@ -957,11 +938,9 @@ export const withSortable = <T extends VListItem = VListItem>(
       ctx.afterRenderBatch.push(
         (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => {
           if (!sorting) return;
-          console.log(`[sort] afterRenderBatch: sorting=${sorting} dragIndex=${dragIndex} dropIndex=${dropIndex} batchSize=${items.length}`);
           for (let i = 0; i < items.length; i++) {
             const { index, element } = items[i]!;
             if (index === dragIndex) {
-              console.log(`  [sort] hide dragIndex=${index}`);
               element.style.opacity = "0";
               element.style.pointerEvents = "none";
               draggedElement = element;
@@ -975,9 +954,6 @@ export const withSortable = <T extends VListItem = VListItem>(
                 if (index >= dropIndex && index < dragIndex) shift = draggedItemSize;
               }
               const finalOffset = Math.round(ctx.sizeCache.getOffset(index) + shift);
-              if (shift !== 0) {
-                console.log(`  [sort] renderBatch shift idx=${index} shift=${shift} final=${finalOffset}`);
-              }
               element.style.transform = `${prop}(${finalOffset}px)`;
             }
           }
