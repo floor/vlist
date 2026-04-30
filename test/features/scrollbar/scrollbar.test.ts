@@ -171,6 +171,46 @@ describe("createScrollbar", () => {
 
       expect(thumbHeight).toBeGreaterThanOrEqual(50);
     });
+
+    it("should auto-show scrollbar when autoHide is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
+      scrollbar.updateBounds(1000, 400);
+
+      expect(scrollbar.isVisible()).toBe(true);
+    });
+
+    it("should not auto-show scrollbar when autoHide is true", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: true });
+      scrollbar.updateBounds(1000, 400);
+
+      expect(scrollbar.isVisible()).toBe(false);
+    });
+
+    it("should remain visible after successive updateBounds calls when autoHide is false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
+      scrollbar.updateBounds(1000, 400);
+
+      expect(scrollbar.isVisible()).toBe(true);
+
+      scrollbar.updateBounds(2000, 400);
+
+      expect(scrollbar.isVisible()).toBe(true);
+    });
+
+    it("should hide then re-show on updateBounds when content toggles overflow with autoHide false", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
+      scrollbar.updateBounds(1000, 400);
+
+      expect(scrollbar.isVisible()).toBe(true);
+
+      scrollbar.updateBounds(300, 400); // No overflow
+
+      expect(scrollbar.isVisible()).toBe(false);
+
+      scrollbar.updateBounds(1000, 400); // Overflow again
+
+      expect(scrollbar.isVisible()).toBe(true);
+    });
   });
 
   describe("updatePosition", () => {
