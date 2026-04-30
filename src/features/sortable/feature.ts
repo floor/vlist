@@ -203,11 +203,11 @@ export const withSortable = <T extends VListItem = VListItem>(
       };
 
       // ── Helper: determine drop index from pointer position ──
-      // Stateless, direction-agnostic: scans from dragIndex in both
-      // directions using the appropriate leading edge for each.
-      // - Downward: ghost BOTTOM edge vs item midpoint (shift triggers early)
-      // - Upward: ghost TOP edge vs item midpoint (shift triggers early)
-      // No direction flag needed — avoids the discontinuity that caused
+      // Stateless, direction-agnostic — uses O(log n) binary search via
+      // indexAtOffset instead of scanning from dragIndex.
+      // - Downward: ghost BOTTOM edge vs item midpoint
+      // - Upward: ghost TOP edge vs item midpoint
+      // No direction flag — avoids the discontinuity that caused
       // oscillation when switching between top/bottom edges.
       const computeDropIndex = (): number => {
         const totalItems = ctx.dataManager.getTotal();
@@ -220,24 +220,27 @@ export const withSortable = <T extends VListItem = VListItem>(
           : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
         const ghostBottom = ghostTop + draggedItemSize;
 
-        // Scan downward: find the furthest item whose midpoint the ghost
-        // bottom edge has crossed
-        let result = dragIndex;
-        for (let i = dragIndex + 1; i < totalItems; i++) {
-          const mid = ctx.sizeCache.getOffset(i) + ctx.sizeCache.getSize(i) / 2;
-          if (ghostBottom > mid) result = i;
-          else break;
-        }
-        if (result > dragIndex) return result;
+        const dragEnd = ctx.sizeCache.getOffset(dragIndex) + ctx.sizeCache.getSize(dragIndex);
 
-        // Scan upward: find the furthest item whose midpoint the ghost
-        // top edge has crossed
-        for (let i = dragIndex - 1; i >= 0; i--) {
-          const mid = ctx.sizeCache.getOffset(i) + ctx.sizeCache.getSize(i) / 2;
-          if (ghostTop < mid) result = i;
-          else break;
+        // Downward: ghost bottom past the drag slot
+        if (ghostBottom > dragEnd) {
+          const rawIndex = ctx.sizeCache.indexAtOffset(ghostBottom);
+          const mid = ctx.sizeCache.getOffset(rawIndex) + ctx.sizeCache.getSize(rawIndex) / 2;
+          const result = ghostBottom > mid ? rawIndex : rawIndex - 1;
+          return Math.min(Math.max(result, dragIndex), totalItems - 1);
         }
-        return Math.max(0, Math.min(result, totalItems - 1));
+
+        // Upward: ghost top above the drag slot
+        const dragStart = ctx.sizeCache.getOffset(dragIndex);
+        if (ghostTop < dragStart) {
+          const rawIndex = ctx.sizeCache.indexAtOffset(ghostTop);
+          const mid = ctx.sizeCache.getOffset(rawIndex) + ctx.sizeCache.getSize(rawIndex) / 2;
+          const result = ghostTop < mid ? rawIndex : rawIndex + 1;
+          return Math.max(Math.min(result, dragIndex), 0);
+        }
+
+        // Ghost still within the drag slot — no shift
+        return dragIndex;
       };
 
       // ── Apply CSS transforms to shift items out of the way ──
