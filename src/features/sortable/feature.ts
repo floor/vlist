@@ -124,7 +124,7 @@ export const withSortable = <T extends VListItem = VListItem>(
 
     methods: ["isSorting"] as const,
 
-    conflicts: ["withGrid", "withMasonry", "withTable"] as const,
+    conflicts: ["withGrid", "withMasonry", "withTable", "withScale"] as const,
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig } = ctx;
@@ -203,6 +203,9 @@ export const withSortable = <T extends VListItem = VListItem>(
       };
 
       // ── Helper: determine drop index from pointer position ──
+      // Uses sizeCache.indexAtOffset() instead of walking DOM elements,
+      // because element recycling can shuffle DOM order and produce
+      // wrong results when iterating querySelectorAll in DOM order.
       const computeDropIndex = (): number => {
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return 0;
@@ -223,36 +226,28 @@ export const withSortable = <T extends VListItem = VListItem>(
           ? ghostEdge - viewportRect.left + dom.viewport.scrollLeft + scrollPos
           : ghostEdge - viewportRect.top + scrollPos;
 
-        // Walk visible items to find the insertion point
-        const itemElements = dom.items.querySelectorAll("[data-index]");
-        let insertBefore = totalItems; // default: end of list
+        // Find the item slot at the pointer position via sizeCache
+        const rawIndex = ctx.sizeCache.indexAtOffset(pointerInContent);
+        const itemOffset = ctx.sizeCache.getOffset(rawIndex);
+        const itemSize = ctx.sizeCache.getSize(rawIndex);
+        const itemMid = itemOffset + itemSize / 2;
 
-        for (let i = 0; i < itemElements.length; i++) {
-          const itemEl = itemElements[i] as HTMLElement;
-          const idx = getIndex(itemEl);
-          if (idx < 0) continue;
-
-          // Skip the dragged item itself
-          if (idx === dragIndex) continue;
-
-          // Use the original position from sizeCache (not the visual position
-          // which may be shifted by transforms)
-          const itemOffset = ctx.sizeCache.getOffset(idx);
-          const itemSize = ctx.sizeCache.getSize(idx);
-          const itemMid = itemOffset + itemSize / 2;
-
-          if (pointerInContent < itemMid) {
-            insertBefore = idx > dragIndex ? idx - 1 : idx;
-            break;
-          }
+        // Determine insertion point based on which half of the item
+        // the pointer falls in
+        let insertAt: number;
+        if (pointerInContent < itemMid) {
+          insertAt = rawIndex;
+        } else {
+          insertAt = rawIndex + 1;
         }
 
-        // If we iterated past all items, drop at end
-        if (insertBefore === totalItems) {
-          insertBefore = totalItems - 1;
+        // Adjust for the dragged item gap — indices above dragIndex
+        // shift down by 1 when the dragged item is "removed"
+        if (insertAt > dragIndex) {
+          insertAt -= 1;
         }
 
-        return Math.max(0, Math.min(insertBefore, totalItems - 1));
+        return Math.max(0, Math.min(insertAt, totalItems - 1));
       };
 
       // ── Apply CSS transforms to shift items out of the way ──
@@ -262,6 +257,8 @@ export const withSortable = <T extends VListItem = VListItem>(
       const applyShifts = (): void => {
         const children = dom.items.children;
         const shiftPx = draggedItemSize;
+
+        console.log(`[sort] applyShifts: dragIndex=${dragIndex} dropIndex=${dropIndex} shiftPx=${shiftPx} children=${children.length}`);
 
         for (let i = 0; i < children.length; i++) {
           const itemEl = children[i] as HTMLElement;
@@ -275,7 +272,11 @@ export const withSortable = <T extends VListItem = VListItem>(
             if (idx >= dropIndex && idx < dragIndex) shift = shiftPx;
           }
 
-          const finalOffset = Math.round(ctx.sizeCache.getOffset(idx) + shift);
+          const baseOffset = ctx.sizeCache.getOffset(idx);
+          const finalOffset = Math.round(baseOffset + shift);
+          if (shift !== 0) {
+            console.log(`  [sort] shift idx=${idx} base=${baseOffset} shift=${shift} final=${finalOffset}`);
+          }
           itemEl.style.transition = shiftTransition;
           itemEl.style.transform = `${prop}(${finalOffset}px)`;
         }
@@ -298,6 +299,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       const updateDropPosition = (): void => {
         const newDropIndex = computeDropIndex();
         if (newDropIndex === dropIndex) return;
+        console.log(`[sort] updateDropPosition: ${dropIndex} → ${newDropIndex} (dragIndex=${dragIndex})`);
         dropIndex = newDropIndex;
         applyShifts();
         emitter.emit("sort:move", { fromIndex: dragIndex, currentIndex: dropIndex });
@@ -389,6 +391,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       // triggered a force render — calling clearShifts + forceRender
       // again would be redundant.
       const cleanupDrag = (skipRender = false): void => {
+        console.log(`[sort] cleanupDrag: skipRender=${skipRender} dragIndex=${dragIndex} dropIndex=${dropIndex}`);
         sorting = false;
         dragInitiated = false;
 
@@ -396,16 +399,25 @@ export const withSortable = <T extends VListItem = VListItem>(
           ghost.remove();
         }
         ghost = null;
+        draggedElement = null;
 
-        if (draggedElement) {
-          draggedElement.style.opacity = "";
-          draggedElement.style.pointerEvents = "";
-          draggedElement = null;
+        // Reset opacity/pointerEvents/transforms on ALL children.
+        // During drag, the afterRenderBatch handler may have set opacity: 0
+        // on multiple elements (as they were recycled through dragIndex).
+        // clearShifts only resets transforms — we also need to clear
+        // inline opacity and pointerEvents to avoid stale styles.
+        const children = dom.items.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i] as HTMLElement;
+          el.style.opacity = "";
+          el.style.pointerEvents = "";
+          const idx = getIndex(el);
+          if (idx >= 0) {
+            el.style.transform = `${prop}(${Math.round(ctx.sizeCache.getOffset(idx))}px)`;
+          }
+          el.style.transition = "";
         }
 
-        if (!skipRender) {
-          clearShifts();
-        }
         stopEdgeScroll();
 
         dom.root.classList.remove(`${classPrefix}--sorting`);
@@ -419,7 +431,6 @@ export const withSortable = <T extends VListItem = VListItem>(
         document.removeEventListener("pointercancel", onPointerCancel);
 
         if (!skipRender) {
-          // Re-render to restore clean DOM state
           ctx.forceRender();
         }
       };
@@ -482,7 +493,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           dragInitiated = true;
           sorting = true;
           dropIndex = dragIndex;
-
+          console.log(`[sort] drag started: dragIndex=${dragIndex} itemId=${ctx.dataManager.getItem(dragIndex)?.id}`);
           dom.root.classList.add(`${classPrefix}--sorting`);
 
           // Cache the dragged item's size for shift calculations
@@ -523,6 +534,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           } else if (isPointerOutsideViewport()) {
             // Clear shifts when pointer leaves viewport
             if (dropIndex !== dragIndex) {
+              console.log(`[sort] outside viewport: clearing shifts, dropIndex ${dropIndex} → ${dragIndex}`);
               dropIndex = dragIndex;
               clearShifts();
             }
@@ -533,30 +545,17 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Animate ghost to drop target, then finalize ──
       const animateDrop = (fromIndex: number, toIndex: number): void => {
         if (!ghost) {
+          // Disable sorting flag before emit so that the consumer's
+          // setItems() render doesn't trigger stale shifts in afterRenderBatch
+          sorting = false;
           const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
           if (posChanged) {
-            // Suppress transitions, then let sort:end → setItems → force render
-            const children = dom.items.children;
-            for (let i = 0; i < children.length; i++) {
-              (children[i] as HTMLElement).style.transition = "none";
-            }
-            dom.root.classList.remove(`${classPrefix}--sorting`);
             emitter.emit("sort:end", { fromIndex, toIndex });
-            // Restore focus to the originally-focused item (by ID, since indices shifted)
             if (dragFocusedItemId !== null) {
               focusById(dragFocusedItemId);
-              ctx.forceRender();
             }
           }
-          cleanupDrag(posChanged);
-          if (posChanged) {
-            requestAnimationFrame(() => {
-              const children = dom.items.children;
-              for (let i = 0; i < children.length; i++) {
-                (children[i] as HTMLElement).style.transition = "";
-              }
-            });
-          }
+          cleanupDrag(false);
           return;
         }
 
@@ -584,53 +583,19 @@ export const withSortable = <T extends VListItem = VListItem>(
           if (settled) return;
           settled = true;
           ghost?.removeEventListener("transitionend", onEnd);
+
+          // Disable sorting flag before emit so that the consumer's
+          // setItems() render doesn't trigger stale shifts in afterRenderBatch
+          sorting = false;
+
           const positionChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
-
           if (positionChanged) {
-            // Restore the dragged element before emitting sort:end
-            if (draggedElement) {
-              draggedElement.style.opacity = "";
-              draggedElement.style.pointerEvents = "";
-            }
-
-            // Suppress ALL transitions on items before any class/style changes.
-            // Base vlist.css has `transition: opacity 150ms` on .vlist-item.
-            // Example CSS may add `.vlist--sorting .vlist-item { opacity: 0.85 }`.
-            // Without suppression, removing .vlist--sorting triggers a visible
-            // opacity fade. We also suppress transform transitions so the force
-            // render (triggered by the consumer's setItems) snaps positions
-            // instantly instead of animating from the shifted offsets.
-            const children = dom.items.children;
-            for (let i = 0; i < children.length; i++) {
-              (children[i] as HTMLElement).style.transition = "none";
-            }
-
-            // Now safe to remove sorting class — transitions are suppressed
-            dom.root.classList.remove(`${classPrefix}--sorting`);
-
-            // Emit sort:end — consumer calls setItems() which triggers
-            // a force render that corrects all transforms and templates.
-            // No need to call clearShifts() — the force render handles it.
             emitter.emit("sort:end", { fromIndex, toIndex });
-            // Restore focus to the originally-focused item (by ID, since indices shifted)
             if (dragFocusedItemId !== null) {
               focusById(dragFocusedItemId);
-              ctx.forceRender();
             }
           }
-          cleanupDrag(positionChanged);
-
-          // Re-enable transitions on the next frame. By now the browser
-          // has committed the final styles, so restoring transitions
-          // won't re-trigger any animations.
-          if (positionChanged) {
-            requestAnimationFrame(() => {
-              const children = dom.items.children;
-              for (let i = 0; i < children.length; i++) {
-                (children[i] as HTMLElement).style.transition = "";
-              }
-            });
-          }
+          cleanupDrag(false);
         };
 
         ghost.addEventListener("transitionend", onEnd);
@@ -981,6 +946,40 @@ export const withSortable = <T extends VListItem = VListItem>(
             const el = items[i]!.element;
             el.setAttribute("aria-roledescription", "sortable item");
             el.setAttribute("aria-describedby", instructionsId);
+          }
+        },
+      );
+
+      // Maintain drag visual state when virtual scrolling recycles elements.
+      // Without this, the hidden dragged item's element may be reused for
+      // a different item (still hidden), and newly rendered elements at
+      // dragIndex won't be hidden. Also re-applies shifts to new elements.
+      ctx.afterRenderBatch.push(
+        (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => {
+          if (!sorting) return;
+          console.log(`[sort] afterRenderBatch: sorting=${sorting} dragIndex=${dragIndex} dropIndex=${dropIndex} batchSize=${items.length}`);
+          for (let i = 0; i < items.length; i++) {
+            const { index, element } = items[i]!;
+            if (index === dragIndex) {
+              console.log(`  [sort] hide dragIndex=${index}`);
+              element.style.opacity = "0";
+              element.style.pointerEvents = "none";
+              draggedElement = element;
+            } else {
+              element.style.opacity = "";
+              element.style.pointerEvents = "";
+              let shift = 0;
+              if (dropIndex > dragIndex) {
+                if (index > dragIndex && index <= dropIndex) shift = -draggedItemSize;
+              } else if (dropIndex < dragIndex) {
+                if (index >= dropIndex && index < dragIndex) shift = draggedItemSize;
+              }
+              const finalOffset = Math.round(ctx.sizeCache.getOffset(index) + shift);
+              if (shift !== 0) {
+                console.log(`  [sort] renderBatch shift idx=${index} shift=${shift} final=${finalOffset}`);
+              }
+              element.style.transform = `${prop}(${finalOffset}px)`;
+            }
           }
         },
       );
