@@ -1,6 +1,31 @@
 vlist — full changelog
 initial commit → latest
-626 commits · 89 days · Feb 2 – May 1, 2026
+639 commits · 89 days · Feb 2 – May 1, 2026
+
+
+2026-05-01  v1.7.3
+
+  fix(sortable): prevent neighbor item blink on drop
+    Add --settling CSS class to suppress background-color/opacity
+    transitions during sort finalize. When setItems() reorders data,
+    the renderer toggles selection/focus classes on reordered items —
+    the CSS transition was causing a visible blink on neighbor items.
+
+  fix(sortable): smooth drop transition for drag source item
+    Replace inline opacity:0 with a CSS class (vlist-item--drag-source)
+    for the dragged item's original element. The --settling class
+    suppresses the opacity transition on drop, preventing the fade-in
+    blink when the ghost returns to the original position.
+
+  fix(sortable): animate ghost back to origin on Escape cancel
+    Pressing Escape during a pointer drag now animates the ghost back
+    to the original position before emitting sort:cancel, matching the
+    behavior of dropping outside the viewport.
+
+  fix(selection): seed selection state before first render on snapshot restore
+    Add _seedSelection internal method to populate selection state
+    synchronously before the first render, eliminating the selection
+    blink when recreating a list with snapshot restore.
 
 
 2026-05-01  v1.7.2
