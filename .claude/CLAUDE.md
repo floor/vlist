@@ -209,7 +209,13 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
 8. Returns to `staging`
 
-Bundle sizes in README/npm-readme are updated **manually** when features change significantly.
+### Pre-Release Checklist
+Before tagging a new version, complete ALL of these steps:
+1. Bump the version in `package.json`
+2. Update `changelog.txt` with the new version entries
+3. Run `bun run size` to get current bundle sizes
+4. Update `README.md` — version reference AND bundle size numbers
+5. Update `npm-readme.md` — bundle size numbers
 
 ### Cross-Repo Staging Deploy (`notify-staging.yml`)
 When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
