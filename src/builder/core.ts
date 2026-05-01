@@ -530,6 +530,7 @@ function materialize<T extends VListItem = VListItem>(
   > = [];
   const idleHandlers: Array<() => void> = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
+  const contextMenuHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
   const contentSizeHandlers: Array<() => void> = [];
@@ -1008,17 +1009,26 @@ function materialize<T extends VListItem = VListItem>(
   };
 
   const handleClick = (event: MouseEvent): void => {
-    const hit = findClickTarget(event);
-    if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event });
-
     for (let i = 0; i < clickHandlers.length; i++) {
       clickHandlers[i]!(event);
     }
+
+    const hit = findClickTarget(event);
+    if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event });
   };
 
   const handleDblClick = (event: MouseEvent): void => {
     const hit = findClickTarget(event);
     if (hit) emitter.emit("item:dblclick", { item: hit.item, index: hit.index, event });
+  };
+
+  const handleContextMenu = (event: MouseEvent): void => {
+    for (let i = 0; i < contextMenuHandlers.length; i++) {
+      contextMenuHandlers[i]!(event);
+    }
+
+    const hit = findClickTarget(event);
+    if (hit) emitter.emit("item:contextmenu", { item: hit.item, index: hit.index, event });
   };
 
   const handleKeydown = (event: KeyboardEvent): void => {
@@ -1029,6 +1039,7 @@ function materialize<T extends VListItem = VListItem>(
 
   dom.items.addEventListener("click", handleClick);
   dom.items.addEventListener("dblclick", handleDblClick);
+  dom.items.addEventListener("contextmenu", handleContextMenu);
   dom.root.addEventListener("keydown", handleKeydown);
 
   // ── ARIA live region: announce visible range changes (#13b) ─────
@@ -1122,6 +1133,7 @@ function materialize<T extends VListItem = VListItem>(
     idleHandlers,
     afterScroll,
     clickHandlers,
+    contextMenuHandlers,
     keydownHandlers,
     resizeHandlers,
     destroyHandlers,
@@ -1271,6 +1283,7 @@ function materialize<T extends VListItem = VListItem>(
     wrapEnabled,
     handleClick,
     handleDblClick,
+    handleContextMenu,
     handleKeydown,
     onScrollFrame,
     resizeObserver,

@@ -556,8 +556,14 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Item double-clicked */
   "item:dblclick": { item: T; index: number; event: MouseEvent };
 
+  /** Item right-clicked */
+  "item:contextmenu": { item: T; index: number; event: MouseEvent };
+
   /** Selection changed */
   "selection:change": { selected: Array<string | number>; items: T[] };
+
+  /** Delete requested via keyboard (Delete/Backspace) on selected items */
+  "delete": { selected: Array<string | number>; items: T[] };
 
   /** Focused item changed (keyboard navigation) */
   "focus:change": { id: string | number; index: number };

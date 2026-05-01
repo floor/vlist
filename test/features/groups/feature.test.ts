@@ -180,6 +180,7 @@ function createMockContext(): BuilderContext<TestItem> {
     afterRenderBatch: [],
     idleHandlers: [],
     clickHandlers: [],
+    contextMenuHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],
     contentSizeHandlers: [],
