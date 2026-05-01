@@ -1511,10 +1511,13 @@ describe("withSortable — escape cancels pointer drag", () => {
     const isSorting = ctx.methods.get("isSorting") as () => boolean;
     expect(isSorting()).toBe(true);
 
-    // Press Escape
+    // Press Escape — triggers animateDrop(dragIndex, dragIndex) with ghost animation
     ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
       key: "Escape", bubbles: true, cancelable: true,
     }));
+
+    // Wait for ghost animation to complete (setTimeout fallback)
+    await new Promise((r) => setTimeout(r, 300));
 
     expect(isSorting()).toBe(false);
 
@@ -1958,5 +1961,231 @@ describe("withSortable — drop index calculation", () => {
     expect(session.getDropIndices()).toEqual([4, 5, 6, 5, 4, 3]);
 
     session.cleanup();
+  });
+});
+
+// =============================================================================
+// Settling class — transition suppression during finalize
+// =============================================================================
+
+describe("withSortable — settling class", () => {
+  it("adds --settling class during finalize when position changed", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='1']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 56, right: 400, bottom: 112, width: 400, height: 56, x: 0, y: 56, toJSON: () => {} }) as DOMRect;
+
+    // Drag item 1 down past item 2
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 84, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+
+    // Wait for ghost animation + finalize
+    await new Promise((r) => setTimeout(r, 300));
+
+    // --settling should have been removed after rAF
+    expect(ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
+  });
+
+  it("adds --settling class during finalize when dropped at same position", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='3']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 168, right: 400, bottom: 224, width: 400, height: 56, x: 0, y: 168, toJSON: () => {} }) as DOMRect;
+
+    // Drag just past threshold but within same index zone
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 196, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 216, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 216, button: 0,
+    }));
+
+    // Wait for ghost animation + finalize + rAF
+    await new Promise((r) => setTimeout(r, 300));
+
+    // --settling added and removed in both paths
+    expect(ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
+  });
+});
+
+// =============================================================================
+// Drag-source class — replaces inline opacity during drag
+// =============================================================================
+
+describe("withSortable — drag-source class", () => {
+  it("adds drag-source class to dragged item instead of inline opacity", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag past threshold
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+
+    expect(itemEl.classList.contains("vlist-item--drag-source")).toBe(true);
+    expect(itemEl.style.opacity).toBe("");
+  });
+
+  it("removes drag-source class on cleanup", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointerup", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(itemEl.classList.contains("vlist-item--drag-source")).toBe(false);
+  });
+
+  it("re-applies drag-source class via afterRenderBatch when element is recycled", () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 200, button: 0,
+    }));
+
+    // Simulate element recycling via afterRenderBatch
+    const newEl = document.createElement("div");
+    newEl.setAttribute("data-index", "2");
+    for (const handler of ctx.afterRenderBatch) {
+      handler([{ index: 2, element: newEl }]);
+    }
+
+    expect(newEl.classList.contains("vlist-item--drag-source")).toBe(true);
+  });
+});
+
+// =============================================================================
+// Escape cancel animates ghost back
+// =============================================================================
+
+describe("withSortable — escape animates ghost return", () => {
+  it("Escape during pointer drag goes through animateDrop to animate ghost back", async () => {
+    const feature = withSortable();
+    const ctx = createMockContext();
+
+    ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+
+    feature.setup(ctx);
+
+    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const itemEl = ctx.dom.items.querySelector("[data-index='2']") as HTMLElement;
+
+    itemEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 112, right: 400, bottom: 168, width: 400, height: 56, x: 0, y: 112, toJSON: () => {} }) as DOMRect;
+
+    // Start drag past threshold — moves item down
+    itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
+      bubbles: true, clientX: 200, clientY: 140, button: 0,
+    }));
+    document.dispatchEvent(new PointerEventCtor("pointermove", {
+      bubbles: true, clientX: 200, clientY: 300, button: 0,
+    }));
+
+    const isSorting = ctx.methods.get("isSorting") as () => boolean;
+    expect(isSorting()).toBe(true);
+
+    // Press Escape — should NOT finalize immediately (ghost animates back)
+    ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+      key: "Escape", bubbles: true, cancelable: true,
+    }));
+
+    // Ghost animation is in progress — sorting is still true
+    expect(isSorting()).toBe(true);
+
+    // sort:cancel should NOT have fired yet
+    const emitSpy = ctx.emitter.emit as ReturnType<typeof mock>;
+    const earlyCancel = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:cancel",
+    );
+    expect(earlyCancel).toBeUndefined();
+
+    // Wait for animation to complete
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Now sorting is done and sort:cancel has been emitted
+    expect(isSorting()).toBe(false);
+    const cancelCall = emitSpy.mock.calls.find(
+      (c: unknown[]) => c[0] === "sort:cancel",
+    );
+    expect(cancelCall).toBeDefined();
   });
 });

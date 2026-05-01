@@ -417,20 +417,38 @@ describe("withSelection — Methods", () => {
     expect(typeof ctx.methods.get("getSelectedItems")).toBe("function");
   });
 
-  it("should register 7 public + 4 internal methods", () => {
+  it("should register 7 public + 5 internal methods", () => {
     const feature = withSelection<TestItem>();
     const ctx = createMockContext();
 
     feature.setup!(ctx);
 
-    // 9 public methods + 4 internal methods (_getSelectedIds, _getFocusedIndex, _focusById, _getFocusedId)
-    expect(ctx.methods.size).toBe(13);
+    // 9 public methods + 5 internal methods (_getSelectedIds, _getFocusedIndex, _focusById, _getFocusedId, _seedSelection)
+    expect(ctx.methods.size).toBe(14);
     expect(ctx.methods.has("_getSelectedIds")).toBe(true);
     expect(ctx.methods.has("_getFocusedIndex")).toBe(true);
     expect(ctx.methods.has("_focusById")).toBe(true);
     expect(ctx.methods.has("_getFocusedId")).toBe(true);
+    expect(ctx.methods.has("_seedSelection")).toBe(true);
     expect(ctx.methods.has("selectNext")).toBe(true);
     expect(ctx.methods.has("selectPrevious")).toBe(true);
+  });
+
+  it("_seedSelection should populate selection state without events", () => {
+    const feature = withSelection<TestItem>();
+    const ctx = createMockContext();
+    feature.setup!(ctx);
+
+    const seedSelection = ctx.methods.get("_seedSelection") as (ids: Array<string | number>) => void;
+    const getSelectedIds = ctx.methods.get("_getSelectedIds") as () => Set<string | number>;
+
+    seedSelection([1, 2, 3]);
+
+    const selected = getSelectedIds();
+    expect(selected.has(1)).toBe(true);
+    expect(selected.has(2)).toBe(true);
+    expect(selected.has(3)).toBe(true);
+    expect(selected.size).toBe(3);
   });
 
   it("selectNext should move focus and select next item", () => {
