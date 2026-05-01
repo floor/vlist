@@ -76,12 +76,12 @@ export interface ScrollbarConfig {
   padding?: ScrollbarPadding;
 
   /**
-   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'page').
-   * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
-   *               matching macOS native scrollbar behavior. Hold to scroll continuously.
-   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'scroll').
+   * - `'scroll'` — scrolls toward the clicked position, matching macOS native scrollbar
+   *                behavior. Hold to scroll continuously.
+   * - `'jump'`   — jumps directly to the clicked position (centers the thumb there).
    */
-  clickBehavior?: 'jump' | 'page';
+  clickBehavior?: 'jump' | 'scroll' | 'page';
 }
 
 /** Scrollbar instance */
@@ -119,7 +119,7 @@ const SHOW_ON_HOVER = true;
 const HOVER_ZONE_REACH = 16; // px of reach beyond the visible track (added to padding for the default)
 const SHOW_ON_VIEWPORT_ENTER = true;
 const PADDING = 2;
-const TRACK_CLICK_BEHAVIOR = 'page' as const;
+const TRACK_CLICK_BEHAVIOR = 'scroll' as const;
 const PAGE_SCROLL_INITIAL_DELAY = 350; // ms before continuous scroll starts (matches keyboard repeat)
 const PAGE_SCROLL_SPEED_PPS = 12;      // pages per second during held continuous scroll
 
@@ -175,8 +175,10 @@ export const createScrollbar = (
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
     showOnViewportEnter = SHOW_ON_VIEWPORT_ENTER,
-    clickBehavior = TRACK_CLICK_BEHAVIOR,
+    clickBehavior: rawClickBehavior = TRACK_CLICK_BEHAVIOR,
   } = config;
+
+  const clickBehavior = rawClickBehavior === 'page' ? 'scroll' : rawClickBehavior;
 
   const pad = resolvePadding(config.padding);
 
@@ -398,7 +400,7 @@ export const createScrollbar = (
     return 0;
   };
 
-  // 'page' — immediate first scroll by one containerSize toward click
+  // 'scroll' — immediate first scroll by one containerSize toward click
   const firePageScroll = (): void => {
     const maxScroll = totalSize - containerSize;
     const dir = pageScrollDirection(maxScroll);
@@ -460,9 +462,9 @@ export const createScrollbar = (
     document.removeEventListener('mouseup', handleRepeatMouseUp);
   };
 
-  // 'page' — immediate first scroll then smooth continuous scroll while held
+  // 'scroll' — immediate first scroll then smooth continuous scroll while held
   const handleTrackMouseDown = (e: MouseEvent): void => {
-    if (e.target === thumb || clickBehavior !== 'page') return;
+    if (e.target === thumb || clickBehavior !== 'scroll') return;
     e.preventDefault();
 
     const trackRect = track.getBoundingClientRect();

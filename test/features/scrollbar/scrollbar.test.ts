@@ -303,7 +303,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      // Default is 'page' — uses mousedown
+      // Default is 'scroll' — uses mousedown
       track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
@@ -352,7 +352,7 @@ describe("createScrollbar", () => {
       expect(onScrollMock).not.toHaveBeenCalled();
     });
 
-    it("'page' — scrolls forward by containerSize when pressing below thumb", () => {
+    it("'page' is accepted as a backwards-compatible alias for 'scroll'", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'page',
@@ -373,10 +373,31 @@ describe("createScrollbar", () => {
       expect(position).toBe(400);
     });
 
-    it("'page' — scrolls backward by containerSize when pressing above thumb", () => {
+    it("'scroll' — scrolls forward by containerSize when pressing below thumb", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+      const position = onScrollMock.mock.calls[0]?.[0] as number;
+      expect(position).toBe(400);
+    });
+
+    it("'scroll' — scrolls backward by containerSize when pressing above thumb", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'scroll',
       });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -395,10 +416,10 @@ describe("createScrollbar", () => {
       expect(position).toBe(200);
     });
 
-    it("'page' — clamps to 0 when scrolling backward at start", () => {
+    it("'scroll' — clamps to 0 when scrolling backward at start", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
       });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -417,10 +438,10 @@ describe("createScrollbar", () => {
       expect(position).toBe(0);
     });
 
-    it("'page' — clamps to maxScroll when scrolling forward at end", () => {
+    it("'scroll' — clamps to maxScroll when scrolling forward at end", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
       });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -439,10 +460,10 @@ describe("createScrollbar", () => {
       expect(position).toBe(600);
     });
 
-    it("'page' — repeats scroll while held, stops on mouseup", async () => {
+    it("'scroll' — repeats scroll while held, stops on mouseup", async () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
       });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -466,10 +487,10 @@ describe("createScrollbar", () => {
       expect(onScrollMock.mock.calls.length).toBeGreaterThan(1);
     });
 
-    it("'page' — stops repeating when thumb catches cursor", async () => {
+    it("'scroll' — stops repeating when thumb catches cursor", async () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
       });
       // Small list — thumb covers most of the track, one page scroll reaches the end
       scrollbar.updateBounds(500, 400);
@@ -496,11 +517,11 @@ describe("createScrollbar", () => {
       expect(calls).toBeGreaterThanOrEqual(1);
     });
 
-    it("'page' — schedules auto-hide after mouse release", async () => {
+    it("'scroll' — schedules auto-hide after mouse release", async () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50,
-        clickBehavior: 'page',
+        clickBehavior: 'scroll',
       });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -803,7 +824,7 @@ describe("createScrollbar", () => {
     it("clicking in the padding margin above the track triggers page scroll upward", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
-        clickBehavior: "page",
+        clickBehavior: "scroll",
         autoHide: false,
       });
       scrollbar.updateBounds(1000, 400);
@@ -828,7 +849,7 @@ describe("createScrollbar", () => {
     it("clicking in the padding margin below the track triggers page scroll downward", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
-        clickBehavior: "page",
+        clickBehavior: "scroll",
         autoHide: false,
       });
       scrollbar.updateBounds(1000, 400);
@@ -873,7 +894,7 @@ describe("createScrollbar", () => {
     it("clicking in the padding margin works even when showOnHover is false", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
-        clickBehavior: "page",
+        clickBehavior: "scroll",
         showOnHover: false,
         autoHide: false,
       });
@@ -996,7 +1017,7 @@ describe("createScrollbar", () => {
         toJSON: () => ({}),
       });
 
-      // Default is 'page' — uses mousedown
+      // Default is 'scroll' — uses mousedown
       track.dispatchEvent(new MouseEvent("mousedown", { clientX: 350, bubbles: true }));
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 

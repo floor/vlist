@@ -71,12 +71,12 @@ export interface ScrollbarFeatureConfig {
   padding?: number;
 
   /**
-   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'jump').
-   * - `'jump'`  — jumps directly to the clicked position (centers the thumb there).
-   * - `'page'`  — scrolls by one page (containerSize) toward the clicked position,
-   *               matching macOS native scrollbar behavior.
+   * Behavior when clicking on the scrollbar track (not the thumb) (default: 'scroll').
+   * - `'scroll'` — scrolls toward the clicked position, matching macOS native scrollbar
+   *                behavior. Hold to scroll continuously.
+   * - `'jump'`   — jumps directly to the clicked position (centers the thumb there).
    */
-  clickBehavior?: 'jump' | 'page';
+  clickBehavior?: 'jump' | 'scroll' | 'page';
 }
 
 // =============================================================================
