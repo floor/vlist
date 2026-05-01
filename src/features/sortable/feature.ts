@@ -630,9 +630,8 @@ export const withSortable = <T extends VListItem = VListItem>(
         document.removeEventListener("pointerup", onPointerUp);
         document.removeEventListener("pointercancel", onPointerCancel);
         stopEdgeScroll();
-        sorting = false;
-        emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
-        cleanupDrag(false);
+        clearShifts();
+        animateDrop(dragIndex, dragIndex);
       };
 
       const onPointerCancel = (): void => {
