@@ -94,6 +94,15 @@ export interface SelectionFeatureConfig {
    * focus indicator doubles as a "current item" marker.
    */
   focusOnClick?: boolean;
+
+  /**
+   * How right-click affects selection (default: 'select').
+   * - `'select'` — if the item is not selected, clear selection and select it;
+   *   if already selected, keep current selection (file explorer behavior).
+   * - `'keep'` — never change selection on right-click.
+   * - `false` — don't register a contextmenu handler at all.
+   */
+  contextMenu?: "select" | "keep" | false;
 }
 
 // =============================================================================
@@ -123,6 +132,7 @@ export const withSelection = <T extends VListItem = VListItem>(
   const initial = config?.initial;
   const shiftArrowToggle = config?.shiftArrowToggle ?? "origin";
   const focusOnClick = config?.focusOnClick ?? false;
+  const contextMenuMode = config?.contextMenu ?? "select";
 
   // Selection state — lives for the lifetime of the list
   let selectionState = createSelectionState(initial);
@@ -515,64 +525,59 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       if (resolvedConfig.interactive) dom.root.addEventListener("focusout", onFocusOut);
 
+      const findItemTarget = (event: MouseEvent): { item: T; index: number } | null => {
+        const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
+        if (!el) return null;
+        const index = parseInt(el.dataset.index ?? "-1", 10);
+        if (index < 0) return null;
+        const item = ctx.dataManager.getItem(index);
+        if (!item || isHeader(index)) return null;
+        return { item, index };
+      };
+
+      const focusItem = (index: number): void => {
+        selectionState = setFocusedIndex(selectionState, index);
+        selectionState.focusVisible = focusOnClick;
+        lastSelectedIndex = index;
+        dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+      };
+
       // ── Click handler ──
       ctx.clickHandlers.push((event: MouseEvent): void => {
         if (ctx.state.isDestroyed) return;
+        const hit = findItemTarget(event);
+        if (!hit) return;
+        const { item, index } = hit;
 
-        const target = event.target as HTMLElement;
-        const itemElement = target.closest(
-          "[data-index]",
-        ) as HTMLElement | null;
-        if (!itemElement) return;
-
-        const index = parseInt(itemElement.dataset.index ?? "-1", 10);
-        if (index < 0) return;
-
-        const item = ctx.dataManager.getItem(index);
-        if (!item) return;
-
-        // Ignore clicks on group headers
-        if (isHeader(index)) return;
-
-        // Emit click event
         emitter.emit("item:click", { item, index, event });
 
-        // Shift+click range selection (multiple mode only)
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
-          // Use lastSelectedIndex as anchor, fall back to current focus
           const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : selectionState.focusedIndex;
-          const items = ctx.getAllLoadedItems();
-          selectionState = selectRange(selectionState, items, anchor, index, mode);
-          selectionState = setFocusedIndex(selectionState, index);
-          selectionState.focusVisible = focusOnClick;
-          lastSelectedIndex = index;
-          dom.root.setAttribute(
-            "aria-activedescendant",
-            `${ariaIdPrefix}-item-${index}`,
-          );
+          selectionState = selectRange(selectionState, ctx.getAllLoadedItems(), anchor, index, mode);
+          focusItem(index);
           forceRenderAndEmit();
           return;
         }
 
-        // Update lastSelectedIndex on non-shift click
-        lastSelectedIndex = index;
-
-        // Update focused index (mouse — no focus ring)
-        selectionState = setFocusedIndex(selectionState, index);
-        selectionState.focusVisible = focusOnClick;
-
-        // ARIA: update aria-activedescendant
-        dom.root.setAttribute(
-          "aria-activedescendant",
-          `${ariaIdPrefix}-item-${index}`,
-        );
-
-        // Toggle selection
+        focusItem(index);
         selectionState = toggleSelection(selectionState, item.id, mode);
-
-        // Re-render with new selection state + emit
         forceRenderAndEmit();
       });
+
+      // ── Context menu handler ──
+      if (contextMenuMode === "select") {
+        ctx.contextMenuHandlers.push((event: MouseEvent): void => {
+          if (ctx.state.isDestroyed) return;
+          const hit = findItemTarget(event);
+          if (!hit) return;
+
+          if (!selectionState.selected.has(hit.item.id)) {
+            selectionState = { ...selectionState, selected: new Set([hit.item.id]) };
+            focusItem(hit.index);
+            forceRenderAndEmit();
+          }
+        });
+      }
 
       // ── Keyboard handler (skipped when interactive: false) ──
       if (resolvedConfig.interactive) ctx.keydownHandlers.push((event: KeyboardEvent): void => {
@@ -727,6 +732,21 @@ export const withSelection = <T extends VListItem = VListItem>(
               newState.focusVisible = true;
               handled = true;
               focusOnly = false;
+            }
+            break;
+
+          case "Delete":
+          case "Backspace":
+            if (selectionState.selected.size > 0) {
+              const getItemByIdFn = (id: string | number): T | undefined => {
+                const index = idToIndexMap.get(id);
+                return index === undefined ? undefined : ctx.dataManager.getItem(index);
+              };
+              emitter.emit("delete", {
+                selected: getSelectedIds(selectionState),
+                items: getSelectedItems(selectionState, getItemByIdFn),
+              });
+              handled = true;
             }
             break;
         }

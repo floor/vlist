@@ -88,6 +88,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
   > = [];
   const idleHandlers: Array<() => void> = [];
   const clickHandlers: Array<(event: MouseEvent) => void> = [];
+  const contextMenuHandlers: Array<(event: MouseEvent) => void> = [];
   const keydownHandlers: Array<(event: KeyboardEvent) => void> = [];
   const resizeHandlers: Array<(width: number, height: number) => void> = [];
   const destroyHandlers: Array<() => void> = [];
@@ -346,6 +347,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     afterRenderBatch: [],
     idleHandlers,
     clickHandlers,
+    contextMenuHandlers,
     keydownHandlers,
     resizeHandlers,
     contentSizeHandlers: [],

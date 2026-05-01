@@ -184,6 +184,7 @@ function createMockContext(config?: {
     afterRenderBatch: [],
     idleHandlers: [],
     clickHandlers: [],
+    contextMenuHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],
     contentSizeHandlers: [],
