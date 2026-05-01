@@ -263,7 +263,8 @@
 }
 
 /* Suppress transitions during active scroll for better performance */
-.vlist--scrolling .vlist-item {
+.vlist--scrolling .vlist-item,
+.vlist--settling .vlist-item {
     transition: none;
 }
 

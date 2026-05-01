@@ -543,14 +543,24 @@ export const withSortable = <T extends VListItem = VListItem>(
         const finalize = (): void => {
           sorting = false;
           if (posChanged) {
+            // Suppress CSS transitions (background-color/opacity) during settle.
+            // setItems() causes the renderer to toggle selection/focus classes on
+            // reordered items — without this, the CSS transition blinks neighbors.
+            dom.root.classList.add(`${classPrefix}--settling`);
+
             emitter.emit("sort:end", { fromIndex, toIndex });
             if (dragFocusedItemId !== null) {
               focusById(dragFocusedItemId);
             }
+            cleanupDrag(true);
+
+            requestAnimationFrame(() => {
+              dom.root.classList.remove(`${classPrefix}--settling`);
+            });
           } else {
             emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
+            cleanupDrag(false);
           }
-          cleanupDrag(false);
         };
 
         if (!ghost) {
