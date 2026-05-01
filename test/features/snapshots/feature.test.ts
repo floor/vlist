@@ -1388,7 +1388,7 @@ describe("withSnapshots - autoSave", () => {
     expect(JSON.parse(stored!)).toEqual(originalSnapshot);
   });
 
-  it("should lift guard and save on first scroll idle after restore", () => {
+  it("should lift guard and save after restoreScroll completes", async () => {
     clearAutoSave();
     const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
     sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
@@ -1400,16 +1400,15 @@ describe("withSnapshots - autoSave", () => {
     const newSnapshot: ScrollSnapshot = { index: 75, offsetInItem: 0, total: 100 };
     ctx.methods.set("getScrollSnapshot", () => newSnapshot);
 
-    // Call idle handler — should lift guard AND save
-    expect(ctx.idleHandlers.length).toBeGreaterThan(0);
-    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+    // Guard is lifted after restoreScroll completes in microtask
+    await flushAsync();
 
     const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
     expect(stored).not.toBeNull();
     expect(JSON.parse(stored!)).toEqual(newSnapshot);
   });
 
-  it("should save normally after guard is lifted", () => {
+  it("should save normally after guard is lifted", async () => {
     clearAutoSave();
     const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
     sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
@@ -1418,13 +1417,9 @@ describe("withSnapshots - autoSave", () => {
     const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
     feature.setup(ctx);
 
-    const postGuardSnapshot: ScrollSnapshot = { index: 30, offsetInItem: 5, total: 100 };
-    ctx.methods.set("getScrollSnapshot", () => postGuardSnapshot);
+    // Flush microtask to lift guard
+    await flushAsync();
 
-    // First idle call lifts the guard
-    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
-
-    // Now update the snapshot to something new
     const afterLiftSnapshot: ScrollSnapshot = { index: 42, offsetInItem: 12, total: 100 };
     ctx.methods.set("getScrollSnapshot", () => afterLiftSnapshot);
 
@@ -1543,7 +1538,7 @@ describe("withSnapshots - autoSave", () => {
     expect(JSON.parse(stored!)).toEqual(originalSnapshot);
   });
 
-  it("should save focus:change normally after restore guard is lifted", () => {
+  it("should save focus:change normally after restore guard is lifted", async () => {
     clearAutoSave();
     const savedSnapshot: ScrollSnapshot = { index: 50, offsetInItem: 0, total: 100 };
     sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
@@ -1552,8 +1547,8 @@ describe("withSnapshots - autoSave", () => {
     const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
     feature.setup(ctx);
 
-    // Lift guard via idle
-    ctx.idleHandlers[ctx.idleHandlers.length - 1]();
+    // Flush microtask to lift guard
+    await flushAsync();
 
     const newSnapshot: ScrollSnapshot = { index: 30, offsetInItem: 0, total: 100, focusedId: 31 };
     ctx.methods.set("getScrollSnapshot", () => newSnapshot);
@@ -1563,6 +1558,113 @@ describe("withSnapshots - autoSave", () => {
 
     const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
     expect(JSON.parse(stored!)).toEqual(newSnapshot);
+  });
+});
+
+// =============================================================================
+// withSnapshots - Selection Seeding
+// =============================================================================
+
+describe("withSnapshots - Selection Seeding", () => {
+  const AUTO_SAVE_KEY = "test-seed-selection";
+
+  const clearAutoSave = (): void => {
+    sessionStorage.removeItem(AUTO_SAVE_KEY);
+  };
+
+  it("should seed selection synchronously via _seedSelection before first render", () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42, 99] };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const seeded: Array<string | number> = [];
+    const ctx = createMockContext({
+      totalItems: 100,
+      scrollTop: 0,
+      itemHeight: 48,
+      extraMethods: { _seedSelection: (ids: Array<string | number>) => { seeded.push(...ids); } },
+    });
+
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    // _seedSelection called synchronously during setup, before any microtask
+    expect(seeded).toEqual([42, 99]);
+  });
+
+  it("should strip selectedIds from restoreScroll when seeded", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42] };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    let selectCalled = false;
+    const ctx = createMockContext({
+      totalItems: 100,
+      scrollTop: 0,
+      itemHeight: 48,
+      extraMethods: {
+        _seedSelection: () => {},
+        select: (..._ids: any[]) => { selectCalled = true; },
+      },
+    });
+
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    await flushAsync();
+
+    // select() should NOT have been called since selectedIds was stripped
+    expect(selectCalled).toBe(false);
+  });
+
+  it("should persist seeded selection via post-restore save", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42] };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const ctx = createMockContext({
+      totalItems: 100,
+      scrollTop: 0,
+      itemHeight: 48,
+      extraMethods: { _seedSelection: () => {} },
+    });
+
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    // Mock getScrollSnapshot to return snapshot with selectedIds (as if selection was seeded)
+    const snapshotWithSelection: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42] };
+    ctx.methods.set("getScrollSnapshot", () => snapshotWithSelection);
+
+    await flushAsync();
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!).selectedIds).toEqual([42]);
+  });
+
+  it("should not seed when _seedSelection is not registered", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42] };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    let selectCalled = false;
+    const ctx = createMockContext({
+      totalItems: 100,
+      scrollTop: 0,
+      itemHeight: 48,
+      extraMethods: {
+        select: (..._ids: any[]) => { selectCalled = true; },
+      },
+    });
+
+    const feature = withSnapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    feature.setup(ctx);
+
+    await flushAsync();
+
+    // Without _seedSelection, restoreScroll gets the full snapshot and calls select()
+    expect(selectCalled).toBe(true);
   });
 });
 

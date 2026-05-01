@@ -358,17 +358,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
       // ── Auto-save ──
       // When autoSave is configured, save snapshots to sessionStorage
-      // on scroll idle and selection change.
+      // on scroll idle, selection change, and focus change.
       //
-      // During restore, ALL saves are guarded until the position has
-      // settled. The first scroll:idle after restore marks the settle
-      // point — we save once (capturing the fully settled state) and
-      // lift the guard. After that, every idle and selection change
-      // saves immediately.
-      if (autoSaveKey) {
-        let restoreGuard = !!restoreSnapshot;
+      // During restore, saves are guarded until restoreScroll completes.
+      // The guard is lifted in the same microtask as restoreScroll, then
+      // an immediate save captures the fully settled state.
+      let restoreGuard = !!restoreSnapshot && !!autoSaveKey;
+      let saveToStorage: (() => void) | null = null;
 
-        const saveToStorage = (): void => {
+      if (autoSaveKey) {
+        saveToStorage = (): void => {
           if (restoreGuard) return;
           const getSnapshotFn = ctx.methods.get("getScrollSnapshot") as
             | (() => ScrollSnapshot)
@@ -382,46 +381,45 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           }
         };
 
-        // Save on scroll idle (fires after scroll.idleTimeout, default 150ms).
-        // During restore, the first idle lifts the guard and saves the
-        // settled state. Subsequent idles save normally.
-        ctx.idleHandlers.push(() => {
-          if (restoreGuard) {
-            restoreGuard = false;
-          }
-          saveToStorage();
-        });
-
-        // Save on selection change (guarded during restore like everything else)
-        ctx.emitter.on("selection:change", saveToStorage);
-
-        // Save on focus change so arrow-key navigation is preserved on reload
-        ctx.emitter.on("focus:change", saveToStorage);
+        const saveFn = saveToStorage;
+        ctx.idleHandlers.push(saveFn);
+        ctx.emitter.on("selection:change", saveFn);
+        ctx.emitter.on("focus:change", saveFn);
 
         // ── Coordinate with withAsync ──
-        // When restoring a snapshot, cancel withAsync's deferred autoLoad
-        // and bootstrap the total from the snapshot. This eliminates the
-        // need for the user to manually pass autoLoad/total to withAsync.
         if (restoreSnapshot && restoreSnapshot.total && restoreSnapshot.total > 0) {
           const cancelAutoLoad = ctx.methods.get("_cancelAutoLoad") as
             | (() => void)
             | undefined;
           if (cancelAutoLoad) cancelAutoLoad();
-
-          // Bootstrap total so sizeCache/compression are ready for restore
           ctx.dataManager.setTotal(restoreSnapshot.total);
         }
       }
 
       // ── Auto-restore ──
-      // If a restore snapshot was provided via config (or read from
-      // sessionStorage by autoSave), schedule restoration via
-      // queueMicrotask. This runs right after build() returns (all
-      // synchronous setup, isInitialized=true, initial render) but before
-      // the browser paints — so the user never sees position 0.
+      // Seed selection synchronously so the first render already shows
+      // the correct selection state (no blink). Scroll position still
+      // needs queueMicrotask because DOM layout isn't ready yet.
       if (restoreSnapshot) {
+        let selectionSeeded = false;
+        if (restoreSnapshot.selectedIds && restoreSnapshot.selectedIds.length > 0) {
+          const seedFn = ctx.methods.get("_seedSelection") as
+            | ((ids: Array<string | number>) => void)
+            | undefined;
+          if (seedFn) {
+            seedFn(restoreSnapshot.selectedIds);
+            selectionSeeded = true;
+          }
+        }
+
+        const snapshotForScroll = selectionSeeded
+          ? (({ selectedIds: _, ...rest }) => rest as ScrollSnapshot)(restoreSnapshot)
+          : restoreSnapshot;
+
         queueMicrotask(() => {
-          restoreScroll(restoreSnapshot);
+          restoreScroll(snapshotForScroll);
+          restoreGuard = false;
+          if (saveToStorage) saveToStorage();
         });
       }
     },
