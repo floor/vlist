@@ -114,7 +114,7 @@ async function build() {
     const raw = readFileSync(src, "utf-8");
     const minified = raw
       .replace(/\/\*[\s\S]*?\*\//g, "") // strip comments
-      .replace(/\s*([{}:;,>~+])\s*/g, "$1") // collapse around symbols
+      .replace(/\s*([{}:;,>~])\s*/g, "$1") // collapse around symbols (not + or -, calc needs them spaced)
       .replace(/;\}/g, "}") // drop trailing semicolons
       .replace(/\s+/g, " ") // collapse whitespace
       .trim();

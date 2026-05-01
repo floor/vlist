@@ -81,6 +81,13 @@ export interface SortableConfig {
    * Prevents accidental drags on click.
    */
   dragThreshold?: number;
+
+  /**
+   * Container element for the drag ghost (default: document.body).
+   * Set this to keep the ghost inside a specific ancestor so it inherits
+   * scoped CSS (e.g. theme variables, list-specific item styles).
+   */
+  ghostContainer?: HTMLElement;
 }
 
 // =============================================================================
@@ -117,6 +124,7 @@ export const withSortable = <T extends VListItem = VListItem>(
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
   const edgeScrollSpeed = config?.edgeScrollSpeed ?? 20;
   const dragThreshold = config?.dragThreshold ?? 5;
+  const ghostContainer = config?.ghostContainer ?? null;
 
   return {
     name: "withSortable",
@@ -189,7 +197,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           "transition:none",
           "will-change:transform",
         ].join(";");
-        document.body.appendChild(clone);
+        (ghostContainer || document.body).appendChild(clone);
         return clone;
       };
 
@@ -407,6 +415,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         stopEdgeScroll();
 
         dom.root.classList.remove(`${classPrefix}--sorting`);
+        document.body.style.cursor = "";
 
         // Clear text selection that Safari may apply after pointer release
         const sel = window.getSelection();
@@ -480,6 +489,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           sorting = true;
           dropIndex = dragIndex;
           dom.root.classList.add(`${classPrefix}--sorting`);
+          document.body.style.cursor = "grabbing";
 
           // Cache the dragged item's size for shift calculations
           draggedItemSize = ctx.sizeCache.getSize(dragIndex);
@@ -528,18 +538,23 @@ export const withSortable = <T extends VListItem = VListItem>(
 
       // ── Animate ghost to drop target, then finalize ──
       const animateDrop = (fromIndex: number, toIndex: number): void => {
-        if (!ghost) {
-          // Disable sorting flag before emit so that the consumer's
-          // setItems() render doesn't trigger stale shifts in afterRenderBatch
+        const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
+
+        const finalize = (): void => {
           sorting = false;
-          const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
           if (posChanged) {
             emitter.emit("sort:end", { fromIndex, toIndex });
             if (dragFocusedItemId !== null) {
               focusById(dragFocusedItemId);
             }
+          } else {
+            emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
           }
           cleanupDrag(false);
+        };
+
+        if (!ghost) {
+          finalize();
           return;
         }
 
@@ -567,19 +582,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           if (settled) return;
           settled = true;
           ghost?.removeEventListener("transitionend", onEnd);
-
-          // Disable sorting flag before emit so that the consumer's
-          // setItems() render doesn't trigger stale shifts in afterRenderBatch
-          sorting = false;
-
-          const positionChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
-          if (positionChanged) {
-            emitter.emit("sort:end", { fromIndex, toIndex });
-            if (dragFocusedItemId !== null) {
-              focusById(dragFocusedItemId);
-            }
-          }
-          cleanupDrag(false);
+          finalize();
         };
 
         ghost.addEventListener("transitionend", onEnd);
@@ -609,8 +612,19 @@ export const withSortable = <T extends VListItem = VListItem>(
         animateDrop(dragIndex, dropIndex);
       };
 
+      const cancelPointerDrag = (): void => {
+        if (!dragInitiated) return;
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        document.removeEventListener("pointercancel", onPointerCancel);
+        stopEdgeScroll();
+        sorting = false;
+        emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
+        cleanupDrag(false);
+      };
+
       const onPointerCancel = (): void => {
-        cleanupDrag();
+        cancelPointerDrag();
       };
 
       // ── Attach pointerdown to items container ──
@@ -857,8 +871,15 @@ export const withSortable = <T extends VListItem = VListItem>(
       // stopImmediatePropagation to prevent selection from processing keys.
       const onKeydown = (event: KeyboardEvent): void => {
         if (ctx.state.isDestroyed) return;
-        // Ignore when a pointer drag is active
-        if (sorting) return;
+        // Escape cancels an active pointer drag
+        if (sorting) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            cancelPointerDrag();
+          }
+          return;
+        }
 
         if (kbGrabbed) {
           switch (event.key) {

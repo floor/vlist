@@ -547,6 +547,7 @@
 
 /* Sorting state on root */
 .vlist--sorting {
+    cursor: grabbing;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;

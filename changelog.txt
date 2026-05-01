@@ -1,6 +1,31 @@
 vlist — full changelog
 initial commit → latest
-621 commits · 88 days · Feb 2 – Apr 30, 2026
+626 commits · 89 days · Feb 2 – May 1, 2026
+
+
+2026-05-01  v1.7.2
+
+  fix(scrollbar): show scrollbar immediately when autoHide is false (#43)
+    updateBounds() always left the scrollbar hidden on creation/rebuild,
+    requiring a user interaction to reveal it. Now calls show() when
+    autoHide is disabled.
+
+  feat(sortable): add ghostContainer config option
+    Allows specifying a custom parent element for the drag ghost so it
+    inherits scoped CSS (theme variables, list-specific item styles).
+
+  fix(sortable): fix cursor, escape cancel, and drop-at-same-position (#42)
+    - Keep grabbing cursor during drag via CSS and document.body.style
+    - Escape key cancels an active pointer drag
+    - Emit sort:cancel when item is dropped back at original position
+    - Emit sort:cancel on pointercancel
+
+  fix(build): preserve spaces around + and - in CSS minifier
+    calc() expressions need spaces around operators to be valid.
+
+  refactor(scrollbar): rename clickBehavior 'page' to 'scroll'
+    'scroll' better describes the behavior from the user's perspective.
+    'page' is kept as a backwards-compatible alias, normalized at runtime.
 
 
 2026-04-30  v1.7.1
