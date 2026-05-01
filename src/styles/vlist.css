@@ -263,7 +263,8 @@
 }
 
 /* Suppress transitions during active scroll for better performance */
-.vlist--scrolling .vlist-item {
+.vlist--scrolling .vlist-item,
+.vlist--settling .vlist-item {
     transition: none;
 }
 
@@ -543,6 +544,12 @@
     opacity: 0.85;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     cursor: grabbing;
+}
+
+/* Hide the original item while its ghost is being dragged */
+.vlist-item--drag-source {
+    opacity: 0 !important;
+    pointer-events: none;
 }
 
 /* Sorting state on root */

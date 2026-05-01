@@ -395,16 +395,15 @@ export const withSortable = <T extends VListItem = VListItem>(
         ghost = null;
         draggedElement = null;
 
-        // Reset opacity/pointerEvents/transforms on ALL children.
-        // During drag, the afterRenderBatch handler may have set opacity: 0
-        // on multiple elements (as they were recycled through dragIndex).
-        // clearShifts only resets transforms — we also need to clear
-        // inline opacity and pointerEvents to avoid stale styles.
+        // Reset drag styles on ALL children.
+        // During drag, the afterRenderBatch handler may have added the
+        // drag-source class to multiple elements (as they were recycled
+        // through dragIndex). Also clear inline shift transitions/transforms.
+        const dragSourceClass = `${classPrefix}-item--drag-source`;
         const children = dom.items.children;
         for (let i = 0; i < children.length; i++) {
           const el = children[i] as HTMLElement;
-          el.style.opacity = "";
-          el.style.pointerEvents = "";
+          el.classList.remove(dragSourceClass);
           const idx = getIndex(el);
           if (idx >= 0) {
             el.style.transform = `${prop}(${Math.round(ctx.sizeCache.getOffset(idx))}px)`;
@@ -499,8 +498,7 @@ export const withSortable = <T extends VListItem = VListItem>(
             ghost = createGhost(draggedElement);
 
             // Hide the original element
-            draggedElement.style.opacity = "0";
-            draggedElement.style.pointerEvents = "none";
+            draggedElement.classList.add(`${classPrefix}-item--drag-source`);
           }
 
           // Capture focused item ID so we can restore focus after reorder
@@ -543,14 +541,28 @@ export const withSortable = <T extends VListItem = VListItem>(
         const finalize = (): void => {
           sorting = false;
           if (posChanged) {
+            // Suppress CSS transitions (background-color/opacity) during settle.
+            // setItems() causes the renderer to toggle selection/focus classes on
+            // reordered items — without this, the CSS transition blinks neighbors.
+            dom.root.classList.add(`${classPrefix}--settling`);
+
             emitter.emit("sort:end", { fromIndex, toIndex });
             if (dragFocusedItemId !== null) {
               focusById(dragFocusedItemId);
             }
+            cleanupDrag(true);
+
+            requestAnimationFrame(() => {
+              dom.root.classList.remove(`${classPrefix}--settling`);
+            });
           } else {
+            dom.root.classList.add(`${classPrefix}--settling`);
             emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
+            cleanupDrag(false);
+            requestAnimationFrame(() => {
+              dom.root.classList.remove(`${classPrefix}--settling`);
+            });
           }
-          cleanupDrag(false);
         };
 
         if (!ghost) {
@@ -618,9 +630,8 @@ export const withSortable = <T extends VListItem = VListItem>(
         document.removeEventListener("pointerup", onPointerUp);
         document.removeEventListener("pointercancel", onPointerCancel);
         stopEdgeScroll();
-        sorting = false;
-        emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
-        cleanupDrag(false);
+        clearShifts();
+        animateDrop(dragIndex, dragIndex);
       };
 
       const onPointerCancel = (): void => {
@@ -965,12 +976,10 @@ export const withSortable = <T extends VListItem = VListItem>(
           for (let i = 0; i < items.length; i++) {
             const { index, element } = items[i]!;
             if (index === dragIndex) {
-              element.style.opacity = "0";
-              element.style.pointerEvents = "none";
+              element.classList.add(`${classPrefix}-item--drag-source`);
               draggedElement = element;
             } else {
-              element.style.opacity = "";
-              element.style.pointerEvents = "";
+              element.classList.remove(`${classPrefix}-item--drag-source`);
               let shift = 0;
               if (dropIndex > dragIndex) {
                 if (index > dragIndex && index <= dropIndex) shift = -draggedItemSize;

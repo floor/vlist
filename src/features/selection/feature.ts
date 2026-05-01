@@ -302,6 +302,14 @@ export const withSelection = <T extends VListItem = VListItem>(
         return selectionState.focusVisible ? selectionState.focusedIndex : -1;
       });
 
+      // Seed selection state before the first render (used by snapshots).
+      // Adds IDs to the Set without emitting events or triggering re-render.
+      ctx.methods.set("_seedSelection", (ids: Array<string | number>): void => {
+        for (const id of ids) {
+          selectionState.selected.add(id);
+        }
+      });
+
       // ── Capture force render for triggering re-renders on selection change ──
       // We do NOT wrap renderIfNeeded — the renderers now read our state
       // directly via the getters above. We only need forceRender to trigger
