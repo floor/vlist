@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.5 KB.
 
-**v1.7.2** — [Changelog](./changelog.txt)
+**v1.7.3** — [Changelog](./changelog.txt)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -100,13 +100,13 @@ const list = vlist({
 | `withScale()` | +3.7 KB | 1M+ items via scroll compression |
 | `withGroups()` | +2.7 KB | Sticky/inline headers |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
-| `withScrollbar()` | +1.7 KB | Custom scrollbar UI |
+| `withScrollbar()` | +1.8 KB | Custom scrollbar UI |
 | `withGrid()` | +3.9 KB | 2D grid layout |
 | `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `withTable()` | +5.5 KB | Data table with columns, resize, sort |
 | `withPage()` | +0.8 KB | Window-level scrolling |
-| `withSortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
-| `withSnapshots()` | +0.8 KB | Scroll position save/restore |
+| `withSortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
+| `withSnapshots()` | +0.9 KB | Scroll position save/restore |
 
 ## Examples
 
