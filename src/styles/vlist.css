@@ -546,6 +546,12 @@
     cursor: grabbing;
 }
 
+/* Hide the original item while its ghost is being dragged */
+.vlist-item--drag-source {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
 /* Sorting state on root */
 .vlist--sorting {
     cursor: grabbing;
