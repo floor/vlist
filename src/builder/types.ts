@@ -334,6 +334,7 @@ export interface BuilderContext<T extends VListItem = VListItem> {
    * These are attached as DOM event listeners during .build().
    */
   clickHandlers: Array<(event: MouseEvent) => void>;
+  contextMenuHandlers: Array<(event: MouseEvent) => void>;
   keydownHandlers: Array<(event: KeyboardEvent) => void>;
   resizeHandlers: Array<(width: number, height: number) => void>;
   contentSizeHandlers: Array<() => void>;

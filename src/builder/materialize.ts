@@ -184,6 +184,7 @@ export interface MDeps<T extends VListItem = VListItem> {
     (scrollPosition: number, direction: string) => void
   >;
   readonly clickHandlers: Array<(event: MouseEvent) => void>;
+  readonly contextMenuHandlers: Array<(event: MouseEvent) => void>;
   readonly keydownHandlers: Array<(event: KeyboardEvent) => void>;
   readonly resizeHandlers: Array<(width: number, height: number) => void>;
   readonly destroyHandlers: Array<() => void>;
@@ -222,6 +223,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
     idleHandlers,
     afterScroll,
     clickHandlers,
+    contextMenuHandlers,
     keydownHandlers,
     resizeHandlers,
     destroyHandlers,
@@ -325,6 +327,7 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
       (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
     >,
     clickHandlers,
+    contextMenuHandlers,
     keydownHandlers,
     resizeHandlers,
     contentSizeHandlers,

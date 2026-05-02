@@ -268,6 +268,7 @@ describe("createBuilderContext", () => {
       expect(ctx.afterScroll).toEqual([]);
       expect(ctx.idleHandlers).toEqual([]);
       expect(ctx.clickHandlers).toEqual([]);
+      expect(ctx.contextMenuHandlers).toEqual([]);
       expect(ctx.keydownHandlers).toEqual([]);
       expect(ctx.resizeHandlers).toEqual([]);
       expect(ctx.contentSizeHandlers).toEqual([]);

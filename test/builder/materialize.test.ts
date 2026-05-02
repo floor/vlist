@@ -177,6 +177,7 @@ function createTestDeps(): MDeps<TestItem> {
     afterScroll: [],
     afterRenderBatch: [],
     clickHandlers: [],
+    contextMenuHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],
     destroyHandlers: [],

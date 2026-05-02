@@ -185,6 +185,30 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         offsetInItem = Math.max(0, offsetInItem);
 
         const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
+
+        // Store offset as a fraction of item size for cross-mode restore
+        const itemSize = ctx.sizeCache.getSize(index);
+        if (itemSize > 0) {
+          snapshot.offsetRatio = offsetInItem / itemSize;
+        }
+
+        // If grid or groups are active, store the data-level index and total
+        // so the snapshot can survive layout/group structure changes.
+        const layoutToData = ctx.methods.get("_layoutToDataIndex") as
+          | ((layoutIndex: number) => number)
+          | undefined;
+        if (layoutToData) {
+          const di = layoutToData(index);
+          if (di >= 0) snapshot.dataIndex = di;
+        }
+
+        const getDataTotal = ctx.methods.get("_getTotal") as
+          | (() => number)
+          | undefined;
+        if (getDataTotal) {
+          snapshot.dataTotal = getDataTotal();
+        }
+
         if (selectedIds) snapshot.selectedIds = selectedIds;
 
         // Capture focused item ID — use _getFocusedId which bypasses the
@@ -210,10 +234,15 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // data manager so sizeCache/compression/content-height are correct
         // before we set the scroll position. This happens when reload()
         // was called with skipInitialLoad (no data fetched yet).
-        if (totalItems === 0 && snapshot.total && snapshot.total > 0) {
-          ctx.dataManager.setTotal(snapshot.total);
-          // Rebuild sizeCache and compression with the new total
-          ctx.sizeCache.rebuild(snapshot.total);
+        // Use dataTotal (actual item count) when available — snapshot.total
+        // may be a virtual total (e.g., grid row count) from a different mode.
+        const bootstrapTotal = snapshot.dataTotal ?? snapshot.total;
+        if (totalItems === 0 && bootstrapTotal && bootstrapTotal > 0) {
+          ctx.dataManager.setTotal(bootstrapTotal);
+          // Rebuild sizeCache and compression with the new total.
+          // Use getVirtualTotal() which accounts for grid rows / group headers.
+          const virtualTotal = ctx.getVirtualTotal();
+          ctx.sizeCache.rebuild(virtualTotal);
           ctx.updateCompressionMode();
           // withScale's enhancedUpdateCompressionMode already set the correct
           // content size (virtualSize + slack) when compressed. Only update it
@@ -252,21 +281,44 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         }
 
         const compression = ctx.getCachedCompression();
-        const safeIndex = Math.max(0, Math.min(index, effectiveTotal - 1));
+
+        // Resolve the correct layout index when group structure may have
+        // changed between save and restore. Four cases:
+        //   1. both have groups  → dataIndex present, dataToLayout exists → convert
+        //   2. groups removed    → dataIndex present, no dataToLayout    → use dataIndex directly
+        //   3. groups added      → no dataIndex, dataToLayout exists     → treat index as data index, convert
+        //   4. neither has groups → no dataIndex, no dataToLayout        → use index as-is
+        const dataToLayout = ctx.methods.get("_dataToLayoutIndex") as
+          | ((dataIndex: number) => number)
+          | undefined;
+        let resolvedIndex = index;
+        if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
+          resolvedIndex = dataToLayout
+            ? dataToLayout(snapshot.dataIndex)
+            : snapshot.dataIndex;
+        } else if (dataToLayout) {
+          resolvedIndex = dataToLayout(index);
+        }
+
+        const safeIndex = Math.max(0, Math.min(resolvedIndex, effectiveTotal - 1));
+
+        // Resolve the pixel offset within the target item.
+        // Use offsetRatio (fraction 0–1) when available — it adapts to
+        // different item sizes across layout modes (e.g., 200px grid row → 56px list item).
+        const currentItemSize = ctx.sizeCache.getSize(safeIndex);
+        const resolvedOffset = snapshot.offsetRatio !== undefined
+          ? snapshot.offsetRatio * currentItemSize
+          : Math.min(offsetInItem, currentItemSize);
 
         let scrollPosition: number;
 
         if (compression.isCompressed) {
-          // Compressed: reverse the linear mapping.
-          // Must use compression.virtualSize (same as save) for lossless roundtrip.
-          const itemSize = ctx.sizeCache.getSize(safeIndex);
-          const fraction = itemSize > 0 ? offsetInItem / itemSize : 0;
+          const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
           scrollPosition =
             ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
         } else {
-          // Normal: direct offset
           const offset = ctx.sizeCache.getOffset(safeIndex);
-          scrollPosition = offset + offsetInItem;
+          scrollPosition = offset + resolvedOffset;
         }
 
         // Clamp to valid range.

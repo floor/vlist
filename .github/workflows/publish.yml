@@ -5,9 +5,6 @@ on:
     tags:
       - 'v*.*.*'
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 concurrency:
   group: publish
   cancel-in-progress: false
@@ -23,11 +20,11 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
