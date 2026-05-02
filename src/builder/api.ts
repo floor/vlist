@@ -52,6 +52,7 @@ export const createApi = <T extends VListItem = VListItem>(
   wrapEnabled: boolean,
   handleClick: (event: MouseEvent) => void,
   handleDblClick: (event: MouseEvent) => void,
+  handleContextMenu: (event: MouseEvent) => void,
   handleKeydown: (event: KeyboardEvent) => void,
   onScrollFrame: () => void,
   resizeObserver: ResizeObserver,
@@ -326,6 +327,7 @@ export const createApi = <T extends VListItem = VListItem>(
 
     dom.items.removeEventListener("click", handleClick);
     dom.items.removeEventListener("dblclick", handleDblClick);
+    dom.items.removeEventListener("contextmenu", handleContextMenu);
     dom.root.removeEventListener("keydown", handleKeydown);
     $.st.removeEventListener("scroll", onScrollFrame);
     resizeObserver.disconnect();

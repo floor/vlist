@@ -8,7 +8,7 @@
  *   1. Verifies you're on staging with a clean working tree
  *   2. Bumps the version in package.json (patch by default)
  *   3. Updates the version badge in README.md
- *   4. Updates the changelog.txt header stats (commit count, days, date range)
+ *   4. Updates the CHANGELOG.md header stats (commit count, days, date range)
  *   5. Commits `chore(release): vX.Y.Z` and pushes to staging
  *   6. Creates a PR staging → main and waits for it to be merged
  *   7. Pulls main and pushes the version tag — triggering npm publish
@@ -95,8 +95,8 @@ const main = async () => {
   await Bun.write("README.md", readme);
   console.log(`  ✓ README.md version badge updated`);
 
-  // ── Update changelog.txt header stats ─────────────────────────────────────
-  step(4, "Updating changelog.txt stats...");
+  // ── Update CHANGELOG.md header stats ─────────────────────────────────────
+  step(4, "Updating CHANGELOG.md stats...");
 
   const commitCount = parseInt(run("git rev-list --count HEAD", { silent: true }));
   const firstDate = new Date(run("git log --format=%aI --reverse | head -1", { silent: true }));
@@ -111,15 +111,15 @@ const main = async () => {
   const todayFull = today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const statsLine = `${commitCount} commits · ${days} days · ${firstShort} – ${todayFull}`;
 
-  let changelog = await Bun.file("changelog.txt").text();
+  let changelog = await Bun.file("CHANGELOG.md").text();
   changelog = changelog.replace(/^\d+ commits · \d+ days · .+$/m, statsLine);
-  await Bun.write("changelog.txt", changelog);
-  console.log(`  ✓ changelog.txt: ${statsLine}`);
+  await Bun.write("CHANGELOG.md", changelog);
+  console.log(`  ✓ CHANGELOG.md: ${statsLine}`);
 
   // ── Commit and push to staging ─────────────────────────────────────────────
   step(5, `Committing chore(release): v${newVersion}...`);
 
-  run(`git add package.json README.md changelog.txt`);
+  run(`git add package.json README.md CHANGELOG.md`);
   run(`git commit -m "chore(release): v${newVersion}"`);
   run(`git push origin staging`);
   console.log(`  ✓ Pushed to staging`);

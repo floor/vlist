@@ -187,6 +187,7 @@ function createMockContext(overrides?: {
     afterRenderBatch: [],
     idleHandlers: [],
     clickHandlers: [],
+    contextMenuHandlers: [],
     keydownHandlers: [],
     resizeHandlers: [],
     contentSizeHandlers: [],

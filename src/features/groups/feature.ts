@@ -484,6 +484,12 @@ export const withGroups = <T extends VListItem = VListItem>(
         const item = layoutItems[index];
         return !!(item && isGroupHeader(item));
       });
+      ctx.methods.set("_layoutToDataIndex", (layoutIndex: number): number =>
+        groupLayout!.layoutToDataIndex(layoutIndex),
+      );
+      ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
+        groupLayout!.dataToLayoutIndex(dataIndex),
+      );
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {

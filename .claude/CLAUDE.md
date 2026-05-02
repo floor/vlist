@@ -212,7 +212,7 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:
 1. Bump the version in `package.json`
-2. Update `changelog.txt` with the new version entries
+2. Update `CHANGELOG.md` with the new version entries
 3. Run `bun run size` to get current bundle sizes
 4. Update `README.md` — version reference AND bundle size numbers
 5. Update `npm-readme.md` — bundle size numbers
