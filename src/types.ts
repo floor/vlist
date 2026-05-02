@@ -271,6 +271,22 @@ export interface ScrollSnapshot {
   /** Total item count at snapshot time (used by restore to set sizeCache) */
   total?: number;
 
+  /** Data-level index (excludes group headers). When withGroups or withGrid
+   *  is active, `index` is a layout index that shifts when the layout changes.
+   *  `dataIndex` is stable across layout/group structure changes. */
+  dataIndex?: number;
+
+  /** Data-level total (actual item count, not virtual row/layout count).
+   *  Used to bootstrap the data manager correctly when restoring in a
+   *  different layout mode (e.g., grid rows → list items). */
+  dataTotal?: number;
+
+  /** Offset within the first visible item as a fraction (0–1) of its size.
+   *  Used for cross-mode restore where item sizes differ (e.g., 200px grid
+   *  row → 56px list item). Falls back to raw `offsetInItem` pixels when
+   *  not present (backward compat). */
+  offsetRatio?: number;
+
   /** Selected item IDs (optional, included for convenience) */
   selectedIds?: Array<string | number>;
 

@@ -637,8 +637,14 @@ export const withGrid = <T extends VListItem = VListItem>(
         ctx.methods.set("_getTotal", () => ctx.dataManager.getTotal());
       }
 
-      // ── Override snapshot methods for grid if snapshots feature is present ──
-      // This is handled by the snapshots feature which checks for grid
+      // ── Register index conversion for snapshots ──
+      // Row index ↔ data index so snapshots survive layout mode changes.
+      ctx.methods.set("_layoutToDataIndex", (rowIndex: number): number =>
+        rowIndex * config.columns,
+      );
+      ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
+        Math.floor(dataIndex / config.columns),
+      );
 
       // ── Accessibility: reorder DOM on scroll idle ──
       ctx.idleHandlers.push(() => {
