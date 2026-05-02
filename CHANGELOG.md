@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-05-02
+
+### Added
+
+- **snapshots**: Cross-mode scroll restore across layout changes (list ↔ grid ↔ table). Snapshots now include `dataIndex`, `dataTotal`, and `offsetRatio` fields that survive layout mode switches and group structure changes.
+- **selection**: Configurable right-click behavior via `contextMenu` option (`'select'` | `'keep'` | `false`). Default `'select'` gives file-explorer semantics.
+- **core**: Add `contextMenuHandlers` extension point for features to hook right-click events.
+
+### Fixed
+
+- **build**: Store raw byte counts in size.json for precise delta calculations.
+
 ## [1.7.3] - 2026-05-01
 
 ### Fixed

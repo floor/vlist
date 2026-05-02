@@ -1860,3 +1860,459 @@ describe("withSnapshots - Focus Save/Restore", () => {
     expect(parsed.focusedId).toBe(99);
   });
 });
+
+// =============================================================================
+// withSnapshots - Cross-Mode Snapshot (dataIndex, dataTotal, offsetRatio)
+// =============================================================================
+
+describe("withSnapshots - Cross-Mode Snapshot Fields", () => {
+  // ── getScrollSnapshot — field population ────────────────────────────────
+
+  it("should include dataIndex when _layoutToDataIndex is registered", () => {
+    const COLUMNS = 4;
+    const ctx = createMockContext({
+      totalItems: 25, // 25 rows (grid virtual total)
+      scrollTop: 240, // index 5 at 48px/row
+      itemHeight: 48,
+      extraMethods: {
+        _layoutToDataIndex: (rowIndex: number) => rowIndex * COLUMNS,
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.dataIndex).toBe(5 * COLUMNS); // row 5 → data index 20
+  });
+
+  it("should include dataTotal when _getTotal is registered", () => {
+    const DATA_TOTAL = 100;
+    const ctx = createMockContext({
+      totalItems: 25, // grid rows
+      scrollTop: 0,
+      extraMethods: {
+        _getTotal: () => DATA_TOTAL,
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.dataTotal).toBe(DATA_TOTAL);
+  });
+
+  it("should include offsetRatio as fraction of item size", () => {
+    const ctx = createMockContext({
+      totalItems: 100,
+      scrollTop: 260, // index 5 (5*48=240), offset 20 within item
+      itemHeight: 48,
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.index).toBe(5);
+    expect(snapshot.offsetInItem).toBe(20);
+    expect(snapshot.offsetRatio).toBeCloseTo(20 / 48);
+  });
+
+  it("should not include dataIndex when no _layoutToDataIndex", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.dataIndex).toBeUndefined();
+  });
+
+  it("should not include dataTotal when no _getTotal", () => {
+    const ctx = createMockContext({ totalItems: 100, scrollTop: 0 });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.dataTotal).toBeUndefined();
+  });
+
+  it("should include all cross-mode fields together (grid scenario)", () => {
+    const COLUMNS = 4;
+    const DATA_TOTAL = 100;
+    const ROW_HEIGHT = 200;
+    const ctx = createMockContext({
+      totalItems: 25, // 100 items / 4 cols = 25 rows
+      scrollTop: 450, // row 2 (2*200=400), offset 50
+      itemHeight: ROW_HEIGHT,
+      extraMethods: {
+        _layoutToDataIndex: (rowIndex: number) => rowIndex * COLUMNS,
+        _getTotal: () => DATA_TOTAL,
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.index).toBe(2);
+    expect(snapshot.offsetInItem).toBe(50);
+    expect(snapshot.dataIndex).toBe(8); // row 2 * 4 cols
+    expect(snapshot.dataTotal).toBe(100);
+    expect(snapshot.offsetRatio).toBeCloseTo(50 / 200);
+  });
+});
+
+// =============================================================================
+// withSnapshots - Cross-Mode restoreScroll
+// =============================================================================
+
+describe("withSnapshots - Cross-Mode restoreScroll", () => {
+  // ── Case 1: dataIndex present + _dataToLayoutIndex present ────────────
+
+  it("should convert dataIndex via _dataToLayoutIndex (grid→grid)", () => {
+    const COLUMNS = 4;
+    const ctx = createMockContext({
+      totalItems: 25,
+      itemHeight: 200,
+      extraMethods: {
+        _dataToLayoutIndex: (dataIndex: number) => Math.floor(dataIndex / COLUMNS),
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 2,
+      offsetInItem: 50,
+      total: 25,
+      dataIndex: 8, // data item 8 → row 2
+      dataTotal: 100,
+      offsetRatio: 0.25,
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    // row 2, offset = 0.25 * 200 = 50
+    expect(scrollTo[0]).toBe(2 * 200 + 50);
+  });
+
+  it("should convert dataIndex via _dataToLayoutIndex (grid→list)", () => {
+    // Restoring a grid snapshot into a list view.
+    // Grid snapshot: row 2, dataIndex 8 (4 cols), offsetRatio 0.25
+    // List view: 100 items at 56px each, no conversion methods except _dataToLayoutIndex
+    // dataIndex 8 → list index 8 (1:1 in list), offset = 0.25 * 56 = 14
+    const ctx = createMockContext({
+      totalItems: 100,
+      itemHeight: 56,
+      // No _dataToLayoutIndex → list mode (no conversion)
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 2, // original grid row
+      offsetInItem: 50, // original grid offset
+      total: 25, // grid row count
+      dataIndex: 8,
+      dataTotal: 100,
+      offsetRatio: 0.25,
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    // Case 2: dataIndex present, no _dataToLayoutIndex → use dataIndex directly
+    // index 8, offset = 0.25 * 56 = 14
+    expect(scrollTo[0]).toBe(8 * 56 + 14);
+  });
+
+  it("should convert dataIndex via _dataToLayoutIndex (list→grid)", () => {
+    // Restoring a list snapshot into a grid view.
+    // List snapshot: index 8, dataIndex undefined (no conversion in list)
+    // Grid view: 25 rows (100/4), _dataToLayoutIndex present
+    // Case 3: no dataIndex, _dataToLayoutIndex exists → treat index as data index
+    // index 8 → row 2, offset = 0.5 * 200 = 100
+    const COLUMNS = 4;
+    const ctx = createMockContext({
+      totalItems: 25,
+      itemHeight: 200,
+      extraMethods: {
+        _dataToLayoutIndex: (dataIndex: number) => Math.floor(dataIndex / COLUMNS),
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 8, // original list index (no dataIndex)
+      offsetInItem: 28, // 0.5 * 56
+      total: 100,
+      offsetRatio: 0.5,
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    // index 8 → row 2 via _dataToLayoutIndex, offset = 0.5 * 200 = 100
+    expect(scrollTo[0]).toBe(2 * 200 + 100);
+  });
+
+  // ── Case 4: no dataIndex, no _dataToLayoutIndex ───────────────────────
+
+  it("should use raw index when neither dataIndex nor _dataToLayoutIndex (list→list)", () => {
+    const ctx = createMockContext({
+      totalItems: 100,
+      itemHeight: 56,
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 10,
+      offsetInItem: 20,
+      total: 100,
+      offsetRatio: 20 / 56,
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    expect(scrollTo[0]).toBeCloseTo(10 * 56 + 20);
+  });
+
+  // ── offsetRatio vs raw offsetInItem ───────────────────────────────────
+
+  it("should use offsetRatio * currentItemSize for cross-mode offset", () => {
+    // Snapshot from grid (200px rows), restoring to list (56px items)
+    const ctx = createMockContext({
+      totalItems: 100,
+      itemHeight: 56,
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 5,
+      offsetInItem: 100, // from 200px grid row
+      total: 100,
+      dataIndex: 5,
+      offsetRatio: 0.5, // halfway through the item
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    // offset = 0.5 * 56 = 28, not the raw 100
+    expect(scrollTo[0]).toBe(5 * 56 + 28);
+  });
+
+  it("should fall back to clamped offsetInItem when offsetRatio is absent", () => {
+    const ctx = createMockContext({
+      totalItems: 100,
+      itemHeight: 56,
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 5,
+      offsetInItem: 100, // larger than item size (56)
+      total: 100,
+    });
+
+    const scrollTo = (ctx as any)._scrollToHistory;
+    // clamped to min(100, 56) = 56
+    expect(scrollTo[0]).toBe(5 * 56 + 56);
+  });
+
+  // ── dataTotal for bootstrap ───────────────────────────────────────────
+
+  it("should use dataTotal for bootstrap when total is 0", () => {
+    const ctx = createMockContext({
+      totalItems: 0,
+      itemHeight: 56,
+      sizeCacheTotal: 0,
+    });
+    // Override getVirtualTotal to return the bootstrapped value after setTotal
+    let virtualTotal = 0;
+    (ctx.getVirtualTotal as any) = mock(() => virtualTotal);
+    (ctx.dataManager.setTotal as any) = mock((t: number) => { virtualTotal = t; });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 2,
+      offsetInItem: 50,
+      total: 25, // grid row count — wrong for bootstrap
+      dataTotal: 100, // actual item count — correct for bootstrap
+      dataIndex: 8,
+      offsetRatio: 0.25,
+    });
+
+    // Should have called setTotal with dataTotal (100), not total (25)
+    expect(ctx.dataManager.setTotal).toHaveBeenCalledWith(100);
+  });
+
+  it("should fall back to snapshot.total for bootstrap when dataTotal absent", () => {
+    const ctx = createMockContext({
+      totalItems: 0,
+      itemHeight: 56,
+      sizeCacheTotal: 0,
+    });
+    let virtualTotal = 0;
+    (ctx.getVirtualTotal as any) = mock(() => virtualTotal);
+    (ctx.dataManager.setTotal as any) = mock((t: number) => { virtualTotal = t; });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const restore = ctx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({
+      index: 10,
+      offsetInItem: 20,
+      total: 100,
+    });
+
+    expect(ctx.dataManager.setTotal).toHaveBeenCalledWith(100);
+  });
+
+  // ── JSON roundtrip ────────────────────────────────────────────────────
+
+  it("should preserve cross-mode fields through JSON serialization", () => {
+    const COLUMNS = 4;
+    const ctx = createMockContext({
+      totalItems: 25,
+      scrollTop: 450,
+      itemHeight: 200,
+      extraMethods: {
+        _layoutToDataIndex: (rowIndex: number) => rowIndex * COLUMNS,
+        _getTotal: () => 100,
+      },
+    });
+
+    const feature = withSnapshots<TestItem>();
+    feature.setup(ctx);
+
+    const getSnapshot = ctx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+    const parsed: ScrollSnapshot = JSON.parse(JSON.stringify(snapshot));
+
+    expect(parsed.dataIndex).toBe(snapshot.dataIndex);
+    expect(parsed.dataTotal).toBe(snapshot.dataTotal);
+    expect(parsed.offsetRatio).toBeCloseTo(snapshot.offsetRatio!);
+  });
+
+  // ── Full roundtrip: grid save → list restore ──────────────────────────
+
+  it("should roundtrip correctly from grid save to list restore", () => {
+    const COLUMNS = 4;
+    const GRID_ROW_HEIGHT = 200;
+    const LIST_ITEM_HEIGHT = 56;
+
+    // 1. Save snapshot in grid mode (25 rows of 200px, scrolled to row 3)
+    const gridCtx = createMockContext({
+      totalItems: 25,
+      scrollTop: 3 * GRID_ROW_HEIGHT + 60, // row 3, 60px into it
+      itemHeight: GRID_ROW_HEIGHT,
+      extraMethods: {
+        _layoutToDataIndex: (rowIndex: number) => rowIndex * COLUMNS,
+        _getTotal: () => 100,
+      },
+    });
+
+    const gridFeature = withSnapshots<TestItem>();
+    gridFeature.setup(gridCtx);
+
+    const getSnapshot = gridCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    // Verify snapshot captured correctly
+    expect(snapshot.index).toBe(3);
+    expect(snapshot.dataIndex).toBe(12); // row 3 * 4 cols
+    expect(snapshot.dataTotal).toBe(100);
+    expect(snapshot.offsetRatio).toBeCloseTo(60 / GRID_ROW_HEIGHT);
+
+    // 2. Restore in list mode (100 items of 56px, no grid conversion)
+    const listCtx = createMockContext({
+      totalItems: 100,
+      itemHeight: LIST_ITEM_HEIGHT,
+    });
+
+    const listFeature = withSnapshots<TestItem>();
+    listFeature.setup(listCtx);
+
+    const restore = listCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore(JSON.parse(JSON.stringify(snapshot)));
+
+    const scrollTo = (listCtx as any)._scrollToHistory;
+    // Case 2: dataIndex=12 present, no _dataToLayoutIndex → use dataIndex directly
+    // offset = offsetRatio * 56 = (60/200) * 56 = 16.8
+    const expectedOffset = (60 / GRID_ROW_HEIGHT) * LIST_ITEM_HEIGHT;
+    expect(scrollTo[0]).toBeCloseTo(12 * LIST_ITEM_HEIGHT + expectedOffset);
+  });
+
+  it("should roundtrip correctly from list save to grid restore", () => {
+    const COLUMNS = 4;
+    const GRID_ROW_HEIGHT = 200;
+    const LIST_ITEM_HEIGHT = 56;
+
+    // 1. Save snapshot in list mode (100 items, scrolled to item 12)
+    const listCtx = createMockContext({
+      totalItems: 100,
+      scrollTop: 12 * LIST_ITEM_HEIGHT + 28, // item 12, 28px offset (half)
+      itemHeight: LIST_ITEM_HEIGHT,
+    });
+
+    const listFeature = withSnapshots<TestItem>();
+    listFeature.setup(listCtx);
+
+    const getSnapshot = listCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = getSnapshot();
+
+    expect(snapshot.index).toBe(12);
+    expect(snapshot.offsetRatio).toBeCloseTo(28 / LIST_ITEM_HEIGHT);
+    expect(snapshot.dataIndex).toBeUndefined(); // no grid in list mode
+
+    // 2. Restore in grid mode (25 rows, _dataToLayoutIndex converts)
+    const gridCtx = createMockContext({
+      totalItems: 25,
+      itemHeight: GRID_ROW_HEIGHT,
+      extraMethods: {
+        _dataToLayoutIndex: (dataIndex: number) => Math.floor(dataIndex / COLUMNS),
+      },
+    });
+
+    const gridFeature = withSnapshots<TestItem>();
+    gridFeature.setup(gridCtx);
+
+    const restore = gridCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore(JSON.parse(JSON.stringify(snapshot)));
+
+    const scrollTo = (gridCtx as any)._scrollToHistory;
+    // Case 3: no dataIndex, _dataToLayoutIndex exists → treat index (12) as data index
+    // 12 / 4 = row 3, offset = (28/56) * 200 = 100
+    const expectedRow = Math.floor(12 / COLUMNS);
+    const expectedOffset = (28 / LIST_ITEM_HEIGHT) * GRID_ROW_HEIGHT;
+    expect(scrollTo[0]).toBeCloseTo(expectedRow * GRID_ROW_HEIGHT + expectedOffset);
+  });
+});
