@@ -153,7 +153,7 @@ async function build() {
     ...ALL_FEATURES.map((f) => ({ name: f, imports: ["vlist", f] })),
   ];
 
-  const sizes: Record<string, { minified: string; gzipped: string }> = {};
+  const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
 
   for (const { name, imports } of scenarios) {
     const code = `import { ${imports.join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`;
@@ -175,6 +175,8 @@ async function build() {
       sizes[name] = {
         minified: (bytes.byteLength / 1024).toFixed(1),
         gzipped: (compressed.byteLength / 1024).toFixed(1),
+        minBytes: bytes.byteLength,
+        gzBytes: compressed.byteLength,
       };
     }
   }
