@@ -87,4 +87,4 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 
 ## Acknowledgments
 
-Thanks to [Alexander Klaiber](https://github.com/aklaiber) for graciously transferring the `vlist` package name on npm.
+Thanks to Alexander Klaiber for graciously transferring the `vlist` package name on npm.
