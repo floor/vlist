@@ -410,10 +410,6 @@ function setupStaticPath<T extends VListItem>(
         headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
       ) => void)
     | undefined;
-  const getTableHeaderHeight = ctx.methods.get("_getTableHeaderHeight") as
-    | (() => number)
-    | undefined;
-
   if (getGridLayout && replaceGridRenderer && gridRendererFactory) {
     if (updateGridLayoutForGroups) {
       updateGridLayoutForGroups((index: number) => {
@@ -443,9 +439,6 @@ function setupStaticPath<T extends VListItem>(
     ctx.replaceTemplate(unifiedTemplate);
   }
 
-  // ── Store table header height for sticky offset ──
-  const tableHeaderHeight = getTableHeaderHeight ? getTableHeaderHeight() : 0;
-
   // ── Create sticky header (when sticky is enabled) ──
   if (stickyEnabled) {
     const ht = config.header.template;
@@ -464,7 +457,6 @@ function setupStaticPath<T extends VListItem>(
       renderInto,
       classPrefix,
       resolvedConfig.horizontal,
-      tableHeaderHeight,
     );
     localStickyHeader = sticky;
     setStickyHeader(sticky);
@@ -669,6 +661,22 @@ function setupAsyncPath<T extends VListItem>(
 
   // ── Template: dispatch headers vs data items ──
   const userTemplate = rawConfig.item.template;
+
+  // Table integration: tell the table renderer about group headers so it
+  // renders them as full-width separator rows instead of regular cell rows.
+  const updateTableForGroups = ctx.methods.get("_updateTableForGroups") as
+    | ((
+        isHeaderFn: (item: any) => boolean,
+        headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+      ) => void)
+    | undefined;
+
+  if (updateTableForGroups) {
+    updateTableForGroups(
+      (item: any) => isGroupHeader(item),
+      config.header.template,
+    );
+  }
 
   ctx.replaceTemplate(((
     item: T | GroupHeaderItem,
