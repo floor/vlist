@@ -439,8 +439,14 @@ function setupStaticPath<T extends VListItem>(
     ctx.replaceTemplate(unifiedTemplate);
   }
 
-  // ── Create sticky header (when sticky is enabled) ──
-  if (stickyEnabled) {
+  // ── Lazy sticky header creation ──
+  // Deferred until groups actually exist. Avoids creating DOM elements
+  // that would be immediately hidden (0 groups) or replaced by the async
+  // path's own sticky header one microtask later.
+  const ensureStickyHeader = (): void => {
+    if (!stickyEnabled || localStickyHeader) return;
+    if (groupLayout.groupCount === 0) return;
+
     const ht = config.header.template;
     const renderInto = (slot: HTMLElement, groupIndex: number): void => {
       const group = groupLayout.groups[groupIndex];
@@ -461,14 +467,14 @@ function setupStaticPath<T extends VListItem>(
     localStickyHeader = sticky;
     setStickyHeader(sticky);
 
-    const stickyRef = sticky;
     ctx.afterScroll.push(
       (scrollPosition: number, _direction: string): void => {
-        stickyRef.update(scrollPosition);
+        sticky.update(scrollPosition);
       },
     );
     sticky.update(ctx.scrollController.getScrollTop());
-  }
+  };
+  ensureStickyHeader();
 
   // ── Helper: rebuild stripe index map ──
   const stripedMode = rawConfig.item?.striped;
@@ -501,15 +507,13 @@ function setupStaticPath<T extends VListItem>(
     layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
     setLayoutItems(layoutItems);
 
-    const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
-    ctx.setSizeConfig(newGroupedSizeFn);
     ctx.rebuildSizeCache(layoutItems.length);
 
     ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
 
     rebuildStripeMap();
 
-    // Refresh sticky header content
+    ensureStickyHeader();
     if (localStickyHeader) {
       localStickyHeader.refresh();
     }
@@ -765,8 +769,11 @@ function setupAsyncPath<T extends VListItem>(
 
     bridge.onItemsLoaded(items as VListItem[], offset, total);
 
-    // Rebuild size cache with updated total (data items + discovered headers)
-    ctx.setSizeConfig(asyncGroupedSizeFn);
+    // Rebuild size cache in place — do NOT call setSizeConfig() here.
+    // setSizeConfig() replaces $.hc with a new SizeCache object, which
+    // invalidates the sticky header's captured reference (bound at
+    // creation time). rebuildSizeCache() mutates the existing cache,
+    // keeping all references valid.
     ctx.rebuildSizeCache(bridge.totalEntries);
 
     // Update content size
