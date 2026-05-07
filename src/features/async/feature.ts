@@ -129,8 +129,41 @@ export const withAsync = <T extends VListItem = VListItem>(
       /**
        * Convert the current viewportState.renderRange to flat item indices.
        * No-op when grid is not active — returns the range as-is.
+       *
+       * When withGroups is active with async, the render range is in layout
+       * space (includes header positions). The groups bridge converts layout
+       * indices to data indices. Resolved lazily because withGroups registers
+       * its bridge via microtask (after async setup completes).
        */
       const getItemRangeFromRenderRange = (renderRange: Range): Range => {
+        // Groups layout → data conversion (registered after setup via microtask)
+        const getGroupBridgeFn = ctx.methods.get("_getGroupBridge") as
+          | (() => { layoutToDataIndex: (i: number) => number; groupCount: number } | null)
+          | undefined;
+        if (getGroupBridgeFn) {
+          const bridge = getGroupBridgeFn();
+          if (bridge && bridge.groupCount > 0) {
+            let dataStart = bridge.layoutToDataIndex(renderRange.start);
+            let dataEnd = bridge.layoutToDataIndex(renderRange.end);
+            // If start/end lands on a header (-1), scan to find nearest data index
+            if (dataStart < 0) {
+              for (let i = renderRange.start + 1; i <= renderRange.end; i++) {
+                dataStart = bridge.layoutToDataIndex(i);
+                if (dataStart >= 0) break;
+              }
+            }
+            if (dataEnd < 0) {
+              for (let i = renderRange.end - 1; i >= renderRange.start; i--) {
+                dataEnd = bridge.layoutToDataIndex(i);
+                if (dataEnd >= 0) break;
+              }
+            }
+            if (dataStart >= 0 && dataEnd >= 0) {
+              return { start: dataStart, end: dataEnd };
+            }
+          }
+        }
+
         if (getGridLayout) {
           const layout = getGridLayout();
           if (layout) {
@@ -140,6 +173,14 @@ export const withAsync = <T extends VListItem = VListItem>(
         }
         return renderRange;
       };
+
+      // ── Expose async marker and hooks for other features (e.g. withGroups) ──
+      ctx.methods.set("_isAsync", () => true);
+
+      const itemsLoadedCallbacks: Array<(items: T[], offset: number, total: number) => void> = [];
+      ctx.methods.set("_onItemsLoaded", (callback: (items: T[], offset: number, total: number) => void) => {
+        itemsLoadedCallbacks.push(callback);
+      });
 
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
@@ -178,6 +219,10 @@ export const withAsync = <T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
+            // Notify subscribers (e.g. withGroups async bridge) before rendering
+            for (const cb of itemsLoadedCallbacks) {
+              cb(loadedItems, _offset, total);
+            }
             // Force render to replace placeholders with actual data immediately
             // This is necessary so the DOM shows loaded items instead of placeholders
             ctx.forceRender();

@@ -185,15 +185,16 @@ export const withSelection = <T extends VListItem = VListItem>(
       dom.root.classList.add(`${classPrefix}--selectable`);
 
       // ── Group header awareness ──
-      // When withGroups is active (priority 10, runs before us at 50),
-      // it registers _isGroupHeader. Resolve once at setup time.
-      const isGroupHeaderFn = ctx.methods.get("_isGroupHeader") as
-        | ((index: number) => boolean)
-        | undefined;
+      // When withGroups is active, it registers _isGroupHeader. Resolve
+      // lazily so the async path's deferred override is picked up.
+      const isGroupHeaderFn = (): ((index: number) => boolean) | undefined =>
+        ctx.methods.get("_isGroupHeader") as ((index: number) => boolean) | undefined;
 
       /** Check whether a layout index is a group header */
-      const isHeader = (index: number): boolean =>
-        isGroupHeaderFn ? isGroupHeaderFn(index) : false;
+      const isHeader = (index: number): boolean => {
+        const fn = isGroupHeaderFn();
+        return fn ? fn(index) : false;
+      };
 
       /**
        * Starting from `from`, scan in `dir` (+1 or -1) to find the first
@@ -201,7 +202,7 @@ export const withSelection = <T extends VListItem = VListItem>(
        * Falls back to the opposite direction if all items in `dir` are headers.
        */
       const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
-        if (!isGroupHeaderFn) return from;
+        if (!isGroupHeaderFn()) return from;
         let i = from;
         while (i >= 0 && i < total) {
           if (!isHeader(i)) return i;
@@ -752,7 +753,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
 
         // Skip group headers after directional movement
-        if (focusOnly && isGroupHeaderFn) {
+        if (focusOnly && isGroupHeaderFn()) {
           const dir: 1 | -1 = newState.focusedIndex > previousFocusIndex ? 1 : -1;
           newState.focusedIndex = skipHeaders(newState.focusedIndex, dir, totalItems);
         }

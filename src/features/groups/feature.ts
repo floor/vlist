@@ -17,6 +17,7 @@
  *
  * Can be combined with:
  * - withGrid for grouped 2D layouts
+ * - withAsync for grouped lists with async pagination
  * - reverse: true (sticky header shows current section as you scroll up through history)
  * - orientation: 'horizontal' (sticky headers stick to left edge, push left when next header approaches)
  */
@@ -39,6 +40,8 @@ import {
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
 
+import { createAsyncGroupBridge, type AsyncGroupBridge } from "./async-bridge";
+
 import { calculateScrollToIndex } from "../../rendering";
 import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 
@@ -49,7 +52,7 @@ import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 /** Groups feature configuration */
 export interface GroupsFeatureConfig {
   /** Returns group key for item at index (required) */
-  getGroupForIndex: (index: number) => string;
+  getGroupForIndex: (index: number, item?: any) => string;
 
   /** Group header configuration — mirrors the `item` config shape */
   header?: {
@@ -150,8 +153,6 @@ export const withGroups = <T extends VListItem = VListItem>(
 
   let groupLayout: GroupLayout | null = null;
   let stickyHeader: StickyHeaderInstance | null = null;
-  let originalItems: T[] = [];
-  let layoutItems: Array<T | GroupHeaderItem> = [];
 
   return {
     name: "withGroups",
@@ -174,136 +175,14 @@ export const withGroups = <T extends VListItem = VListItem>(
         | number
         | ((index: number) => number);
 
-      // ── Store original items ──
-      originalItems = rawConfig.items ? [...rawConfig.items] : [];
-      const total = originalItems.length;
-
-      // ── Create group layout ──
-      const groupsConfig = {
-        getGroupForIndex: config.getGroupForIndex,
-        header: {
-          height: config.header.height,
-          template: config.header.template,
-        },
-        sticky: config.sticky ?? false,
-      };
-
-      groupLayout = createGroupLayout(total, groupsConfig);
-
-      // ── Build layout items (items + headers) ──
-      layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
-
-      // ── Create grouped size function ──
       const stickyEnabled = config.sticky !== false;
-      const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
-
-      // ── Update size config and rebuild size cache ──
-      ctx.setSizeConfig(groupedSizeFn);
-
-      ctx.rebuildSizeCache(layoutItems.length);
-
-      // ── Replace data manager items with layout items ──
-      ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
-
-      // ── Create unified template ──
-      const userTemplate = rawConfig.item.template;
       const { template: headerTemplate } = config.header;
-
-      // Create unified template that handles both headers and items
-      const unifiedTemplate = ((
-        item: T | GroupHeaderItem,
-        index: number,
-        state: any,
-      ) => {
-        if (isGroupHeader(item)) {
-          return headerTemplate(
-            (item as GroupHeaderItem).groupKey,
-            (item as GroupHeaderItem).groupIndex,
-          );
-        }
-        return userTemplate(item as T, index, state);
-      }) as typeof userTemplate;
-
-      // ── Check if grid or table feature has exposed its layout ──
-      const getGridLayout = ctx.methods.get("_getGridLayout") as
-        | (() => any)
-        | undefined;
-      const replaceGridRenderer = ctx.methods.get("_replaceGridRenderer") as
-        | ((renderer: any) => void)
-        | undefined;
-      const updateGridLayoutForGroups = ctx.methods.get(
-        "_updateGridLayoutForGroups",
-      ) as ((isHeaderFn: (index: number) => boolean) => void) | undefined;
-      const gridRendererFactory = ctx.methods.get("_createGridRenderer") as
-        | ((...args: any[]) => any)
-        | undefined;
-
-      // Table integration hooks
-      const getTableLayout = ctx.methods.get("_getTableLayout") as
-        | (() => any)
-        | undefined;
-      const updateTableForGroups = ctx.methods.get("_updateTableForGroups") as
-        | ((
-            isHeaderFn: (item: any) => boolean,
-            headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
-          ) => void)
-        | undefined;
-      const getTableHeaderHeight = ctx.methods.get("_getTableHeaderHeight") as
-        | (() => number)
-        | undefined;
-
-      if (getGridLayout && replaceGridRenderer && gridRendererFactory) {
-        // Grid renderer is active - make grid layout groups-aware
-        if (updateGridLayoutForGroups) {
-          // Update grid layout to handle full-width headers
-          updateGridLayoutForGroups((index: number) => {
-            const item = layoutItems[index];
-            return !!(item && isGroupHeader(item));
-          });
-        }
-
-        // Recreate grid renderer with unified template
-        const gridLayout = getGridLayout();
-
-        const newGridRenderer = gridRendererFactory(
-          dom.items,
-          unifiedTemplate,
-          ctx.sizeCache,
-          gridLayout,
-          classPrefix,
-          ctx.getContainerWidth(),
-          () => ctx.dataManager.getTotal(),
-          resolvedConfig.ariaIdPrefix,
-        );
-
-        // Use grid feature's method to replace its renderer instance
-        replaceGridRenderer(newGridRenderer);
-      } else if (getTableLayout && updateTableForGroups) {
-        // Table renderer is active — tell it about group headers.
-        // The table renderer handles the rendering internally via
-        // renderGroupHeaderRow(), so we just pass the check function
-        // and the header template. No need to replace the renderer.
-        updateTableForGroups(
-          (item: any) => isGroupHeader(item),
-          config.header.template,
-        );
-      } else {
-        // Replace the template with the unified version
-        // This works with the materialize inlined renderer
-        ctx.replaceTemplate(unifiedTemplate);
-      }
-
-      // ── Store table header height for sticky offset ──
-      const tableHeaderHeight = getTableHeaderHeight ? getTableHeaderHeight() : 0;
 
       // ── Add grouped CSS class ──
       dom.root.classList.add(`${classPrefix}--grouped`);
 
       // ── Expose sticky header height so scrollToFocus can offset ──
-      // When sticky headers are active, items scrolled to the top edge
-      // are obscured by the header. Selection and core baseline add this
-      // value to startPadding so the scroll target lands below the header.
-      if (config.sticky !== false) {
+      if (stickyEnabled) {
         ctx.methods.set(
           "_getStickyHeaderHeight",
           (): number => config.header.height,
@@ -318,118 +197,14 @@ export const withGroups = <T extends VListItem = VListItem>(
         }
       }
 
-      // ── Create sticky header (when sticky is enabled) ──
-      if (config.sticky !== false) {
-        // Template-driven: the sticky header receives a renderInto callback
-        // that works exactly like item rendering — it doesn't know about
-        // string vs HTMLElement, headerTemplate, or any template details.
-        const ht = config.header.template;
-        const renderInto = (slot: HTMLElement, groupIndex: number): void => {
-          const group = groupLayout!.groups[groupIndex];
-          if (!group) return;
-          const result = ht(group.key, group.groupIndex);
-          if (typeof result === "string") slot.innerHTML = result;
-          else slot.replaceChildren(result);
-        };
-
-        stickyHeader = createStickyHeader(
-          dom.root,
-          groupLayout,
-          ctx.sizeCache,
-          renderInto,
-          classPrefix,
-          resolvedConfig.horizontal,
-          tableHeaderHeight,
-        );
-
-        // Wire sticky header into afterScroll
-        const stickyRef = stickyHeader;
-        ctx.afterScroll.push(
-          (scrollPosition: number, _direction: string): void => {
-            stickyRef.update(scrollPosition);
-          },
-        );
-
-        // Initialize sticky header
-        stickyHeader.update(ctx.scrollController.getScrollTop());
-      }
-
-      // ── Helper: rebuild stripe index map ──
-      const stripedMode = rawConfig.item?.striped;
-      const rebuildStripeMap = (): void => {
-        if (stripedMode !== "data" && stripedMode !== "even" && stripedMode !== "odd") return;
-        const stripeMap = new Int32Array(layoutItems.length);
-        const offset = stripedMode === "odd" ? 1 : 0;
-        let dataIndex = 0;
-        for (let i = 0; i < layoutItems.length; i++) {
-          if (isGroupHeader(layoutItems[i])) {
-            stripeMap[i] = -1;
-            // "even" and "odd" reset the counter after each header
-            if (stripedMode === "even" || stripedMode === "odd") {
-              dataIndex = 0;
-            }
-          } else {
-            stripeMap[i] = dataIndex++ + offset;
-          }
-        }
-        ctx.setStripeIndexFn((index: number): number => {
-          if (index < 0 || index >= stripeMap.length) return index;
-          return stripeMap[index] as number;
-        });
-      };
-
-      // Initial stripe map build
-      rebuildStripeMap();
-
-      // ── Helper: rebuild groups after data changes ──
-      const rebuildGroups = (): void => {
-        if (!groupLayout) return;
-
-        groupLayout.rebuild(originalItems.length);
-        layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
-
-        const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
-        ctx.setSizeConfig(newGroupedSizeFn);
-        ctx.rebuildSizeCache(layoutItems.length);
-
-        // Update data manager with new layout items
-        ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
-
-        // Rebuild stripe map after layout changes
-        rebuildStripeMap();
-
-        // Refresh sticky header content
-        if (stickyHeader) {
-          stickyHeader.refresh();
-        }
-      };
-
-      // ── Override data methods to maintain group layout ──
-      ctx.methods.set("setItems", (items: T[]): void => {
-        originalItems = items.slice();
-        rebuildGroups();
-      });
-
-      ctx.methods.set("appendItems", (items: T[]): void => {
-        originalItems.push(...items);
-        rebuildGroups();
-      });
-
-      ctx.methods.set("prependItems", (items: T[]): void => {
-        originalItems.unshift(...items);
-        rebuildGroups();
-      });
-
-      ctx.methods.set("removeItem", (id: string | number): void => {
-        originalItems = originalItems.filter((item) => item.id !== id);
-        rebuildGroups();
-      });
-
-      // ── Override scrollToIndex: convert data index → layout index ──
+      // ── scrollToIndex: shared by both paths ──
       const { animateScroll, cancelScroll } = createSmoothScroll(
         ctx.scrollController,
         ctx.renderIfNeeded,
       );
+
+      // Mutable reference — updated by async path when bridge is ready
+      let indexMapper: { dataToLayoutIndex: (i: number) => number } | null = null;
 
       ctx.methods.set(
         "scrollToIndex",
@@ -445,8 +220,10 @@ export const withGroups = <T extends VListItem = VListItem>(
                 duration?: number;
               },
         ): void => {
-          // Convert data index to layout index
-          const layoutIndex = groupLayout!.dataToLayoutIndex(index);
+          const mapper = indexMapper ?? groupLayout;
+          if (!mapper) return;
+
+          const layoutIndex = mapper.dataToLayoutIndex(index);
 
           const { align, behavior, duration } =
             resolveScrollArgs(alignOrOptions);
@@ -476,22 +253,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         },
       );
 
-      // ── Override items getter to return original items (without headers) ──
-      // We register special methods that the builder core will check
-      ctx.methods.set("_getItems", () => originalItems as readonly T[]);
-      ctx.methods.set("_getTotal", () => originalItems.length);
-      ctx.methods.set("_isGroupHeader", (index: number): boolean => {
-        const item = layoutItems[index];
-        return !!(item && isGroupHeader(item));
-      });
-      ctx.methods.set("_layoutToDataIndex", (layoutIndex: number): number =>
-        groupLayout!.layoutToDataIndex(layoutIndex),
-      );
-      ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
-        groupLayout!.dataToLayoutIndex(dataIndex),
-      );
-
-      // ── Cleanup ──
+      // ── Cleanup (shared) ──
       ctx.destroyHandlers.push(() => {
         cancelScroll();
         if (stickyHeader) {
@@ -500,6 +262,48 @@ export const withGroups = <T extends VListItem = VListItem>(
         }
         dom.root.classList.remove(`${classPrefix}--grouped`);
       });
+
+      // ── Register bridge placeholder for async detection ──
+      // withAsync (priority 20) resolves this lazily during scroll to convert
+      // layout-space renderRange to data-space indices for ensureRange.
+      let bridge: AsyncGroupBridge | null = null;
+      ctx.methods.set("_getGroupBridge", () => bridge);
+
+      // ── Deferred: detect async and wire bridge ──────────────────
+      // withGroups runs at priority 10, withAsync at priority 20. By the time
+      // this microtask fires, all feature setups have completed synchronously
+      // and _isAsync + _onItemsLoaded are registered.
+      // The autoload microtask in withAsync fires AFTER this one (FIFO order),
+      // so the bridge is wired before any data arrives.
+      queueMicrotask(() => {
+        const registerOnItemsLoaded = ctx.methods.get("_onItemsLoaded") as
+          | ((cb: (items: T[], offset: number, total: number) => void) => void)
+          | undefined;
+
+        if (registerOnItemsLoaded) {
+          setupAsyncPath(
+            ctx, config, resolvedConfig, rawConfig, baseSize, stickyEnabled,
+            headerTemplate, classPrefix, registerOnItemsLoaded,
+            (b) => { bridge = b; indexMapper = b; },
+            (s) => { stickyHeader = s; },
+          );
+        } else {
+          // Static path was already set up below — nothing to do
+        }
+      });
+
+      // ── Static path ────────────────────────────────────────────
+      // When items exist, set up the traditional item-array transformation.
+      // If async will be detected later, the static path produces an empty
+      // layout (0 items) which is harmless — the async microtask overwrites it.
+      setupStaticPath(
+        ctx, config, resolvedConfig, rawConfig, baseSize, stickyEnabled,
+        headerTemplate, classPrefix,
+        () => {},
+        () => {},
+        (layout) => { groupLayout = layout; indexMapper = layout; },
+        (s) => { stickyHeader = s; },
+      );
     },
 
     destroy(): void {
@@ -510,3 +314,465 @@ export const withGroups = <T extends VListItem = VListItem>(
     },
   };
 };
+
+// =============================================================================
+// Static Path — transforms item array with header pseudo-items
+// =============================================================================
+
+function setupStaticPath<T extends VListItem>(
+  ctx: BuilderContext<T>,
+  config: GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } },
+  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string },
+  rawConfig: { item: { height?: any; template: any; striped?: any }; items?: T[] },
+  baseSize: number | ((index: number) => number),
+  stickyEnabled: boolean,
+  headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+  classPrefix: string,
+  setOriginalItems: (items: T[]) => void,
+  setLayoutItems: (items: Array<T | GroupHeaderItem>) => void,
+  setGroupLayout: (layout: GroupLayout) => void,
+  setStickyHeader: (s: StickyHeaderInstance) => void,
+): void {
+  const { dom } = ctx;
+  let localStickyHeader: StickyHeaderInstance | null = null;
+
+  // ── Store original items ──
+  let originalItems = rawConfig.items ? [...rawConfig.items] : [];
+  setOriginalItems(originalItems);
+  const total = originalItems.length;
+
+  // ── Create group layout ──
+  const groupsConfig = {
+    getGroupForIndex: config.getGroupForIndex,
+    header: {
+      height: config.header.height,
+      template: config.header.template,
+    },
+    sticky: config.sticky ?? false,
+  };
+
+  const getOriginalItem = (index: number): T | undefined => originalItems[index];
+  const groupLayout = createGroupLayout(total, groupsConfig, getOriginalItem);
+  setGroupLayout(groupLayout);
+
+  // ── Build layout items (items + headers) ──
+  let layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+  setLayoutItems(layoutItems);
+
+  // ── Create grouped size function ──
+  const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
+
+  // ── Update size config and rebuild size cache ──
+  ctx.setSizeConfig(groupedSizeFn);
+  ctx.rebuildSizeCache(layoutItems.length);
+
+  // ── Replace data manager items with layout items ──
+  ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
+
+  // ── Create unified template ──
+  const userTemplate = rawConfig.item.template;
+
+  const unifiedTemplate = ((
+    item: T | GroupHeaderItem,
+    index: number,
+    state: any,
+  ) => {
+    if (isGroupHeader(item)) {
+      return headerTemplate(
+        (item as GroupHeaderItem).groupKey,
+        (item as GroupHeaderItem).groupIndex,
+      );
+    }
+    return userTemplate(item as T, index, state);
+  }) as typeof userTemplate;
+
+  // ── Check if grid or table feature has exposed its layout ──
+  const getGridLayout = ctx.methods.get("_getGridLayout") as
+    | (() => any)
+    | undefined;
+  const replaceGridRenderer = ctx.methods.get("_replaceGridRenderer") as
+    | ((renderer: any) => void)
+    | undefined;
+  const updateGridLayoutForGroups = ctx.methods.get(
+    "_updateGridLayoutForGroups",
+  ) as ((isHeaderFn: (index: number) => boolean) => void) | undefined;
+  const gridRendererFactory = ctx.methods.get("_createGridRenderer") as
+    | ((...args: any[]) => any)
+    | undefined;
+
+  // Table integration hooks
+  const getTableLayout = ctx.methods.get("_getTableLayout") as
+    | (() => any)
+    | undefined;
+  const updateTableForGroups = ctx.methods.get("_updateTableForGroups") as
+    | ((
+        isHeaderFn: (item: any) => boolean,
+        headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+      ) => void)
+    | undefined;
+  const getTableHeaderHeight = ctx.methods.get("_getTableHeaderHeight") as
+    | (() => number)
+    | undefined;
+
+  if (getGridLayout && replaceGridRenderer && gridRendererFactory) {
+    if (updateGridLayoutForGroups) {
+      updateGridLayoutForGroups((index: number) => {
+        const item = layoutItems[index];
+        return !!(item && isGroupHeader(item));
+      });
+    }
+
+    const gridLayout = getGridLayout();
+    const newGridRenderer = gridRendererFactory(
+      dom.items,
+      unifiedTemplate,
+      ctx.sizeCache,
+      gridLayout,
+      classPrefix,
+      ctx.getContainerWidth(),
+      () => ctx.dataManager.getTotal(),
+      resolvedConfig.ariaIdPrefix,
+    );
+    replaceGridRenderer(newGridRenderer);
+  } else if (getTableLayout && updateTableForGroups) {
+    updateTableForGroups(
+      (item: any) => isGroupHeader(item),
+      config.header.template,
+    );
+  } else {
+    ctx.replaceTemplate(unifiedTemplate);
+  }
+
+  // ── Store table header height for sticky offset ──
+  const tableHeaderHeight = getTableHeaderHeight ? getTableHeaderHeight() : 0;
+
+  // ── Create sticky header (when sticky is enabled) ──
+  if (stickyEnabled) {
+    const ht = config.header.template;
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = groupLayout.groups[groupIndex];
+      if (!group) return;
+      const result = ht(group.key, group.groupIndex);
+      if (typeof result === "string") slot.innerHTML = result;
+      else slot.replaceChildren(result);
+    };
+
+    const sticky = createStickyHeader(
+      dom.root,
+      groupLayout,
+      ctx.sizeCache,
+      renderInto,
+      classPrefix,
+      resolvedConfig.horizontal,
+      tableHeaderHeight,
+    );
+    localStickyHeader = sticky;
+    setStickyHeader(sticky);
+
+    const stickyRef = sticky;
+    ctx.afterScroll.push(
+      (scrollPosition: number, _direction: string): void => {
+        stickyRef.update(scrollPosition);
+      },
+    );
+    sticky.update(ctx.scrollController.getScrollTop());
+  }
+
+  // ── Helper: rebuild stripe index map ──
+  const stripedMode = rawConfig.item?.striped;
+  const rebuildStripeMap = (): void => {
+    if (stripedMode !== "data" && stripedMode !== "even" && stripedMode !== "odd") return;
+    const stripeMap = new Int32Array(layoutItems.length);
+    const offset = stripedMode === "odd" ? 1 : 0;
+    let dataIndex = 0;
+    for (let i = 0; i < layoutItems.length; i++) {
+      if (isGroupHeader(layoutItems[i])) {
+        stripeMap[i] = -1;
+        if (stripedMode === "even" || stripedMode === "odd") {
+          dataIndex = 0;
+        }
+      } else {
+        stripeMap[i] = dataIndex++ + offset;
+      }
+    }
+    ctx.setStripeIndexFn((index: number): number => {
+      if (index < 0 || index >= stripeMap.length) return index;
+      return stripeMap[index] as number;
+    });
+  };
+
+  rebuildStripeMap();
+
+  // ── Helper: rebuild groups after data changes ──
+  const rebuildGroups = (): void => {
+    groupLayout.rebuild(originalItems.length, getOriginalItem);
+    layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
+    setLayoutItems(layoutItems);
+
+    const newGroupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
+    ctx.setSizeConfig(newGroupedSizeFn);
+    ctx.rebuildSizeCache(layoutItems.length);
+
+    ctx.dataManager.setItems(layoutItems as T[], 0, layoutItems.length);
+
+    rebuildStripeMap();
+
+    // Refresh sticky header content
+    if (localStickyHeader) {
+      localStickyHeader.refresh();
+    }
+  };
+
+  // ── Override data methods to maintain group layout ──
+  ctx.methods.set("setItems", (items: T[]): void => {
+    originalItems = items.slice();
+    setOriginalItems(originalItems);
+    rebuildGroups();
+  });
+
+  ctx.methods.set("appendItems", (items: T[]): void => {
+    originalItems.push(...items);
+    setOriginalItems(originalItems);
+    rebuildGroups();
+  });
+
+  ctx.methods.set("prependItems", (items: T[]): void => {
+    originalItems.unshift(...items);
+    setOriginalItems(originalItems);
+    rebuildGroups();
+  });
+
+  ctx.methods.set("removeItem", (id: string | number): void => {
+    originalItems = originalItems.filter((item) => item.id !== id);
+    setOriginalItems(originalItems);
+    rebuildGroups();
+  });
+
+  // ── Override items getter to return original items (without headers) ──
+  ctx.methods.set("_getItems", () => originalItems as readonly T[]);
+  ctx.methods.set("_getTotal", () => originalItems.length);
+  ctx.methods.set("_isGroupHeader", (index: number): boolean => {
+    const item = layoutItems[index];
+    return !!(item && isGroupHeader(item));
+  });
+  ctx.methods.set("_layoutToDataIndex", (layoutIndex: number): number =>
+    groupLayout.layoutToDataIndex(layoutIndex),
+  );
+  ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
+    groupLayout.dataToLayoutIndex(dataIndex),
+  );
+}
+
+// =============================================================================
+// Async Path — virtual group layer bridging async data + group headers
+// =============================================================================
+
+function setupAsyncPath<T extends VListItem>(
+  ctx: BuilderContext<T>,
+  config: GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } },
+  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string },
+  rawConfig: { item: { height?: any; template: any; striped?: any }; items?: T[] },
+  baseSize: number | ((index: number) => number),
+  stickyEnabled: boolean,
+  headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
+  classPrefix: string,
+  registerOnItemsLoaded: (cb: (items: T[], offset: number, total: number) => void) => void,
+  setBridge: (bridge: AsyncGroupBridge) => void,
+  setStickyHeader: (s: StickyHeaderInstance) => void,
+): void {
+  const { dom } = ctx;
+
+  // Save reference to the async data manager before we wrap it
+  const asyncDataManager = ctx.dataManager;
+
+  // ── Create the bridge ──
+  const bridge = createAsyncGroupBridge(
+    {
+      getGroupForIndex: config.getGroupForIndex,
+      headerHeight: config.header.height,
+    },
+    (index: number) => asyncDataManager.getItem(index),
+    (index: number) => asyncDataManager.isItemLoaded(index),
+  );
+  setBridge(bridge);
+
+  // ── Size function for layout space ──
+  const getItemSize =
+    typeof baseSize === "number"
+      ? (_dataIndex: number): number => baseSize
+      : baseSize;
+
+  const asyncGroupedSizeFn = (layoutIndex: number): number => {
+    if (bridge.isHeader(layoutIndex)) {
+      // Collapse first group's inline header when sticky (same as static path)
+      if (stickyEnabled && bridge.getGroupAtLayoutIndex(layoutIndex).groupIndex === 0) return 0;
+      return config.header.height;
+    }
+    const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+    return dataIndex >= 0 ? getItemSize(dataIndex) : getItemSize(layoutIndex);
+  };
+
+  ctx.setSizeConfig(asyncGroupedSizeFn);
+
+  // ── Virtual total includes headers ──
+  ctx.setVirtualTotalFn(() => bridge.totalEntries);
+
+  // ── Wrap data manager for layout-space access ──
+  // The renderer iterates layout indices and calls getItem(layoutIndex).
+  // We intercept to return header pseudo-items or real data items.
+  const wrappedDataManager: typeof ctx.dataManager = {
+    ...asyncDataManager,
+    getTotal: () => bridge.totalEntries,
+    getItem: (layoutIndex: number) => {
+      const headerItem = bridge.getHeaderItem(layoutIndex);
+      if (headerItem) return headerItem as unknown as T;
+      const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+      if (dataIndex >= 0) return asyncDataManager.getItem(dataIndex);
+      return asyncDataManager.getItem(layoutIndex);
+    },
+    getItemsInRange: (start: number, end: number) => {
+      const items: T[] = [];
+      for (let i = start; i <= end; i++) {
+        const item = wrappedDataManager.getItem(i);
+        if (item !== undefined) items.push(item);
+      }
+      return items;
+    },
+    isItemLoaded: (layoutIndex: number) => {
+      if (bridge.isHeader(layoutIndex)) return true;
+      const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+      if (dataIndex >= 0) return asyncDataManager.isItemLoaded(dataIndex);
+      return asyncDataManager.isItemLoaded(layoutIndex);
+    },
+    // Loading methods pass through — ensureRange receives data indices
+    // (converted by getItemRangeFromRenderRange in withAsync)
+    ensureRange: (start: number, end: number) => asyncDataManager.ensureRange(start, end),
+    loadRange: (start: number, end: number) => asyncDataManager.loadRange(start, end),
+    loadInitial: () => asyncDataManager.loadInitial(),
+    loadMore: () => asyncDataManager.loadMore(),
+    reload: () => {
+      bridge.reset();
+      return asyncDataManager.reload();
+    },
+    setTotal: (total: number) => asyncDataManager.setTotal(total),
+    setItems: (items: T[], offset?: number, total?: number) => asyncDataManager.setItems(items, offset, total),
+    removeItem: (id: string | number) => asyncDataManager.removeItem(id),
+    clear: () => { bridge.reset(); asyncDataManager.clear(); },
+    reset: () => { bridge.reset(); asyncDataManager.reset(); },
+  };
+
+  ctx.replaceDataManager(wrappedDataManager);
+
+  // ── Template: dispatch headers vs data items ──
+  const userTemplate = rawConfig.item.template;
+
+  ctx.replaceTemplate(((
+    item: T | GroupHeaderItem,
+    layoutIndex: number,
+    state: any,
+  ) => {
+    if (isGroupHeader(item)) {
+      return headerTemplate(
+        (item as GroupHeaderItem).groupKey,
+        (item as GroupHeaderItem).groupIndex,
+      );
+    }
+    return userTemplate(item as T, layoutIndex, state);
+  }) as typeof userTemplate);
+
+  // ── Sticky header for async path ──
+  // Uses the bridge as a GroupLayout-compatible source. Created once,
+  // refreshes when groups change (onItemsLoaded).
+  let asyncStickyHeader: StickyHeaderInstance | null = null;
+
+  if (stickyEnabled) {
+    const ht = config.header.template;
+    const renderInto = (slot: HTMLElement, groupIndex: number): void => {
+      const group = bridge.groups[groupIndex];
+      if (!group) return;
+      const result = ht(group.key, group.groupIndex);
+      if (typeof result === "string") slot.innerHTML = result;
+      else slot.replaceChildren(result);
+    };
+
+    // Create a GroupLayout-compatible adapter for the bridge
+    const bridgeAsLayout: GroupLayout = {
+      get totalEntries() { return bridge.totalEntries; },
+      get groupCount() { return bridge.groupCount; },
+      get groups() { return bridge.groups; },
+      getEntry: (layoutIndex: number) => {
+        if (bridge.isHeader(layoutIndex)) {
+          return { type: "header" as const, group: bridge.getGroupAtLayoutIndex(layoutIndex) };
+        }
+        const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+        return { type: "item" as const, dataIndex, group: bridge.getGroupAtLayoutIndex(layoutIndex) };
+      },
+      layoutToDataIndex: (i: number) => bridge.layoutToDataIndex(i),
+      dataToLayoutIndex: (i: number) => bridge.dataToLayoutIndex(i),
+      getGroupAtLayoutIndex: (i: number) => bridge.getGroupAtLayoutIndex(i),
+      getGroupAtDataIndex: (i: number) => bridge.getGroupAtDataIndex(i),
+      getHeaderHeight: (i: number) => bridge.getHeaderHeight(i),
+      rebuild: () => {}, // No-op — bridge rebuilds via onItemsLoaded
+    };
+
+    asyncStickyHeader = createStickyHeader(
+      dom.root,
+      bridgeAsLayout,
+      ctx.sizeCache,
+      renderInto,
+      classPrefix,
+      resolvedConfig.horizontal,
+      0,
+    );
+    setStickyHeader(asyncStickyHeader);
+
+    const stickyRef = asyncStickyHeader;
+    ctx.afterScroll.push(
+      (scrollPosition: number, _direction: string): void => {
+        stickyRef.update(scrollPosition);
+      },
+    );
+  }
+
+  // ── Subscribe to items loaded — rebuild groups incrementally ──
+  registerOnItemsLoaded((items: T[], offset: number, total: number) => {
+    bridge.onItemsLoaded(items as VListItem[], offset, total);
+
+    // Rebuild size cache with updated total (data items + discovered headers)
+    ctx.setSizeConfig(asyncGroupedSizeFn);
+    ctx.rebuildSizeCache(bridge.totalEntries);
+
+    // Update content size
+    const compression = ctx.getCachedCompression();
+    ctx.updateContentSize(compression.virtualSize);
+
+    // Refresh sticky header
+    if (asyncStickyHeader) {
+      asyncStickyHeader.refresh();
+    }
+  });
+
+  // ── Override index mapping methods for async path ──
+  ctx.methods.set("_isGroupHeader", (layoutIndex: number): boolean =>
+    bridge.isHeader(layoutIndex),
+  );
+  ctx.methods.set("_layoutToDataIndex", (layoutIndex: number): number =>
+    bridge.layoutToDataIndex(layoutIndex),
+  );
+  ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
+    bridge.dataToLayoutIndex(dataIndex),
+  );
+  // In async mode, _getTotal returns the data total (not layout total)
+  ctx.methods.set("_getTotal", () => asyncDataManager.getTotal());
+
+  // ── Stripe map for async path ──
+  const stripedMode = rawConfig.item?.striped;
+  if (stripedMode === "data" || stripedMode === "even" || stripedMode === "odd") {
+    const stripeOffset = stripedMode === "odd" ? 1 : 0;
+    ctx.setStripeIndexFn((layoutIndex: number): number => {
+      if (bridge.isHeader(layoutIndex)) return -1;
+      const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+      return dataIndex >= 0 ? dataIndex + stripeOffset : layoutIndex;
+    });
+  }
+}

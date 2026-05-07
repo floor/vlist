@@ -61,8 +61,15 @@ export interface GroupsConfig {
    *
    * Items MUST be pre-sorted by group — the function is called in order
    * and a new header is inserted whenever the return value changes.
+   *
+   * When used with `withAsync`, the item is passed as the second argument
+   * since there is no external array to index into. For static items,
+   * the item argument is also provided for convenience but can be ignored.
+   *
+   * @param index - Data index of the item
+   * @param item - The item at this index (always provided; undefined only for unloaded async items)
    */
-  getGroupForIndex: (index: number) => string;
+  getGroupForIndex: (index: number, item?: any) => string;
 
   /**
    * Group header configuration — mirrors the `item` config shape.
