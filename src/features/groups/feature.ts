@@ -615,7 +615,11 @@ function setupAsyncPath<T extends VListItem>(
   ctx.setSizeConfig(asyncGroupedSizeFn);
 
   // ── Virtual total includes headers ──
-  ctx.setVirtualTotalFn(() => bridge.totalEntries);
+  // Fall back to the async data manager's total when the bridge hasn't
+  // processed items yet (e.g. between onStateChange and onItemsLoaded
+  // during reload). This prevents a transient totalEntries=0 that causes
+  // sizeCache.rebuild(0) → NaN in stats and an empty render.
+  ctx.setVirtualTotalFn(() => bridge.totalEntries || asyncDataManager.getTotal());
 
   // ── Wrap data manager for layout-space access ──
   // The renderer iterates layout indices and calls getItem(layoutIndex).
@@ -736,6 +740,21 @@ function setupAsyncPath<T extends VListItem>(
 
   // ── Subscribe to items loaded — rebuild groups incrementally ──
   registerOnItemsLoaded((items: T[], offset: number, total: number) => {
+    const scrollBefore = ctx.scrollController.getScrollTop();
+    const headerCountBefore = bridge.groupCount;
+
+    // Capture the data item + fractional offset at the current scroll
+    // position BEFORE rebuilding, so we can restore it after.
+    let dataIndexAtScroll = 0;
+    let fractionInItem = 0;
+    if (scrollBefore > 0) {
+      const layoutIndex = ctx.sizeCache.indexAtOffset(scrollBefore);
+      const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
+      const itemSize = ctx.sizeCache.getSize(layoutIndex);
+      fractionInItem = itemSize > 0 ? (scrollBefore - baseOffset) / itemSize : 0;
+      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+    }
+
     bridge.onItemsLoaded(items as VListItem[], offset, total);
 
     // Rebuild size cache with updated total (data items + discovered headers)
@@ -745,6 +764,20 @@ function setupAsyncPath<T extends VListItem>(
     // Update content size
     const compression = ctx.getCachedCompression();
     ctx.updateContentSize(compression.virtualSize);
+
+    // Adjust scroll position for newly discovered headers.
+    // New headers shift items down — without correction the viewport
+    // drifts to the wrong data items (especially with compression).
+    const newHeaders = bridge.groupCount - headerCountBefore;
+    if (newHeaders > 0 && scrollBefore > 0) {
+      const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
+      const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
+      const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
+      const newScroll = newBaseOffset + fractionInItem * newItemSize;
+      if (Math.abs(newScroll - scrollBefore) > 1) {
+        ctx.scrollController.scrollTo(newScroll);
+      }
+    }
 
     // Refresh sticky header and update for current scroll position.
     // After a big scroll jump, items load at idle — refresh() rebuilds

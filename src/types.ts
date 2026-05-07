@@ -299,6 +299,13 @@ export interface ScrollSnapshot {
 
   /** Focused item ID (optional, restores keyboard navigation position) */
   focusedId?: string | number;
+
+  /** Raw scroll position at snapshot time. */
+  scrollTop?: number;
+
+  /** Scroll position as a fraction of virtual content size (0–1).
+   *  Used for accurate restore when groups change the layout total. */
+  scrollRatio?: number;
 }
 
 /** Options for scrollToIndex / scrollToItem */

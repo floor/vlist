@@ -201,12 +201,6 @@ export const withAsync = <T extends VListItem = VListItem>(
             ctx.sizeCache.rebuild(newTotal);
             ctx.updateCompressionMode();
 
-            // Update compression metadata on viewport state, but do NOT
-            // recalculate renderRange here. updateViewportItems uses the
-            // default simpleVisibleRange which gives wrong indices when
-            // withScale's compressed range function is active. The core
-            // renderer always recalculates renderRange with the correct
-            // installed visibleRangeFn, so we leave that to renderIfNeeded.
             const compression = ctx.getCachedCompression();
             ctx.state.viewportState.totalSize = compression.virtualSize;
             ctx.state.viewportState.actualSize = compression.actualSize;
