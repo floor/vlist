@@ -85,17 +85,18 @@ const findGroupByDataIndex = (
  */
 const buildGroups = (
   itemCount: number,
-  getGroupForIndex: (index: number) => string,
+  getGroupForIndex: (index: number, item?: any) => string,
+  getItem?: (index: number) => any,
 ): GroupBoundary[] => {
   if (itemCount === 0) return [];
 
   const groups: GroupBoundary[] = [];
-  let currentKey = getGroupForIndex(0);
+  let currentKey = getGroupForIndex(0, getItem?.(0));
   let groupStart = 0;
   let headerLayoutIndex = 0; // first group's header is at layout index 0
 
   for (let i = 1; i < itemCount; i++) {
-    const key = getGroupForIndex(i);
+    const key = getGroupForIndex(i, getItem?.(i));
 
     if (key !== currentKey) {
       // Close the current group
@@ -225,8 +226,9 @@ export const createGroupedSizeFn = (
 export const createGroupLayout = (
   itemCount: number,
   config: GroupsConfig,
+  getItem?: (index: number) => any,
 ): GroupLayout => {
-  let groups: GroupBoundary[] = buildGroups(itemCount, config.getGroupForIndex);
+  let groups: GroupBoundary[] = buildGroups(itemCount, config.getGroupForIndex, getItem);
   let totalEntries = itemCount + groups.length;
 
   // Pre-compute header sizes — resolve from height, width, or legacy headerHeight
@@ -329,8 +331,8 @@ export const createGroupLayout = (
     return groups[gi]!;
   };
 
-  const rebuild = (newItemCount: number): void => {
-    groups = buildGroups(newItemCount, config.getGroupForIndex);
+  const rebuild = (newItemCount: number, newGetItem?: (index: number) => any): void => {
+    groups = buildGroups(newItemCount, config.getGroupForIndex, newGetItem ?? getItem);
     totalEntries = newItemCount + groups.length;
   };
 
