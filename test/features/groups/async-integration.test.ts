@@ -413,6 +413,58 @@ describe("withAsync + withGroups integration", () => {
       list.destroy();
       container.remove();
     });
+
+    it("should update sticky header content after async data loads", async () => {
+      const container = createContainer();
+      const allTracks = createTracks(3, 5); // 15 tracks, 3 days
+
+      const list = vlist<TrackItem>({
+        container,
+        item: {
+          height: 50,
+          template: (item) => `<div>${item.title}</div>`,
+        },
+      })
+      .use(withAsync<TrackItem>({
+        adapter: createAdapter(allTracks, 5),
+        total: 0,
+        autoLoad: false,
+      }))
+      .use(withGroups<TrackItem>({
+        getGroupForIndex: (_i, item) => item?.day ?? "Unknown",
+        header: {
+          height: 32,
+          template: (key) => {
+            const el = document.createElement("div");
+            el.className = "day-header";
+            el.textContent = key;
+            return el;
+          },
+        },
+        sticky: true,
+      }))
+      .build();
+
+      // Wait for async bridge wiring
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Load data
+      await list.reload();
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // The sticky header should have rendered content for the first group
+      // after data loads (update() called with current scroll position)
+      const stickyEl = list.element.querySelector(".vlist-sticky-header");
+      expect(stickyEl).not.toBeNull();
+
+      const activeSlot = stickyEl!.querySelector(".sticky-group");
+      expect(activeSlot).not.toBeNull();
+      // After loading, with scroll at 0, the sticky header should show Day 1
+      expect(activeSlot!.textContent).toBe("Day 1");
+
+      list.destroy();
+      container.remove();
+    });
   });
 
   // ===========================================================================

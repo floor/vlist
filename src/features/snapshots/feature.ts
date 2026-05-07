@@ -164,7 +164,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         let index: number;
         let offsetInItem: number;
 
-        if (compression.isCompressed) {
+        if (compression.isCompressed && compression.ratio !== 1) {
           // Compressed: scroll position maps linearly to item index.
           // Use compression.virtualSize (not viewportState.totalSize) so
           // that save and restore use the exact same divisor — totalSize
@@ -184,7 +184,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // Clamp offsetInItem to non-negative (floating point edge cases)
         offsetInItem = Math.max(0, offsetInItem);
 
-        const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems };
+        const snapshot: ScrollSnapshot = { index, offsetInItem, total: totalItems, scrollTop };
 
         // Store offset as a fraction of item size for cross-mode restore
         const itemSize = ctx.sizeCache.getSize(index);
@@ -312,7 +312,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         let scrollPosition: number;
 
-        if (compression.isCompressed) {
+        if (compression.isCompressed && compression.ratio !== 1) {
           const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
           scrollPosition =
             ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
@@ -433,10 +433,17 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           }
         };
 
-        const saveFn = saveToStorage;
-        ctx.idleHandlers.push(saveFn);
-        ctx.emitter.on("selection:change", saveFn);
-        ctx.emitter.on("focus:change", saveFn);
+        let saveTimer = 0;
+        const debouncedSave = (): void => {
+          if (saveTimer) return;
+          saveTimer = requestAnimationFrame(() => {
+            saveTimer = 0;
+            saveToStorage!();
+          }) as unknown as number;
+        };
+        ctx.idleHandlers.push(debouncedSave);
+        ctx.emitter.on("selection:change", debouncedSave);
+        ctx.emitter.on("focus:change", debouncedSave);
 
         // ── Coordinate with withAsync ──
         if (restoreSnapshot && restoreSnapshot.total && restoreSnapshot.total > 0) {
