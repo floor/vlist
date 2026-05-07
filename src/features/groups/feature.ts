@@ -746,9 +746,13 @@ function setupAsyncPath<T extends VListItem>(
     const compression = ctx.getCachedCompression();
     ctx.updateContentSize(compression.virtualSize);
 
-    // Refresh sticky header
+    // Refresh sticky header and update for current scroll position.
+    // After a big scroll jump, items load at idle — refresh() rebuilds
+    // caches from the new group boundaries, then update() re-renders
+    // the header for the current viewport position.
     if (asyncStickyHeader) {
       asyncStickyHeader.refresh();
+      asyncStickyHeader.update(ctx.scrollController.getScrollTop());
     }
   });
 
