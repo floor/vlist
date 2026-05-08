@@ -11,6 +11,22 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-05-08
+
+### Added
+
+- **groups**: `withAsync` + `withGroups` compatibility — async group bridge discovers group boundaries incrementally as pages load, with virtual header insertion, layout/data index mapping, and sticky header support.
+- **groups**: Lazy sticky header creation — defers DOM element creation until groups actually exist, avoiding empty elements in async mode.
+- **groups**: `removeItem` support in async groups mode — shifts group keys and rebuilds boundaries after item removal.
+- **selection**: `select()` now syncs `focusedIndex` so keyboard navigation (ArrowDown/Up) starts from the selected item.
+
+### Fixed
+
+- **groups**: Prevent stale `SizeCache` reference in sticky header after async data loads. Uses `rebuildSizeCache()` (mutates in place) instead of `setSizeConfig()` (creates new instance).
+- **groups**: Fix sticky header position update after async data loads.
+- **snapshots**: Fix scroll drift on restore with group headers — use offset-based save/restore when compression ratio=1.
+- **snapshots**: Debounce auto-save with `requestAnimationFrame` to prevent rapid writes during scroll.
+
 ## [1.7.4] - 2026-05-02
 
 ### Added

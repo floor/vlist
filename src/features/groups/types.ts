@@ -104,8 +104,11 @@ export interface GroupLayout {
   /**
    * Rebuild the layout from scratch.
    * Call when items change (setItems, append, prepend, remove, etc.)
+   *
+   * @param itemCount - Number of data items
+   * @param getItem - Optional item accessor for passing items to getGroupForIndex
    */
-  rebuild: (itemCount: number) => void;
+  rebuild: (itemCount: number, getItem?: (index: number) => any) => void;
 }
 
 // =============================================================================
