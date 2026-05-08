@@ -623,6 +623,11 @@ function setupAsyncPath<T extends VListItem>(
   const wrappedDataManager: typeof ctx.dataManager = {
     ...asyncDataManager,
     getTotal: () => bridge.totalEntries,
+    getIndexById: (id: string | number): number => {
+      const dataIndex = asyncDataManager.getIndexById(id);
+      if (dataIndex < 0) return -1;
+      return bridge.dataToLayoutIndex(dataIndex);
+    },
     getItem: (layoutIndex: number) => {
       const headerItem = bridge.getHeaderItem(layoutIndex);
       if (headerItem) return headerItem as unknown as T;
@@ -656,7 +661,13 @@ function setupAsyncPath<T extends VListItem>(
     },
     setTotal: (total: number) => asyncDataManager.setTotal(total),
     setItems: (items: T[], offset?: number, total?: number) => asyncDataManager.setItems(items, offset, total),
-    removeItem: (id: string | number) => asyncDataManager.removeItem(id),
+    removeItem: (id: string | number) => {
+      const dataIndex = asyncDataManager.getIndexById(id);
+      if (dataIndex >= 0) {
+        bridge.removeAt(dataIndex);
+      }
+      return asyncDataManager.removeItem(id);
+    },
     clear: () => { bridge.reset(); asyncDataManager.clear(); },
     reset: () => { bridge.reset(); asyncDataManager.reset(); },
   };
@@ -816,6 +827,12 @@ function setupAsyncPath<T extends VListItem>(
   );
   // In async mode, _getTotal returns the data total (not layout total)
   ctx.methods.set("_getTotal", () => asyncDataManager.getTotal());
+
+  // Clear the static removeItem override — in async mode, the base api.ts
+  // removeItem delegates to ctx.dataManager (= wrappedDataManager) which
+  // handles the bridge correctly. The static override filters empty
+  // originalItems and zeros out the list.
+  ctx.methods.delete("removeItem");
 
   // ── Stripe map for async path ──
   const stripedMode = rawConfig.item?.striped;

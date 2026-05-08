@@ -396,7 +396,10 @@ export const createApi = <T extends VListItem = VListItem>(
     appendItems: m("appendItems", appendItems),
     prependItems: m("prependItems", prependItems),
     updateItem: m("updateItem", updateItem),
-    removeItem: m("removeItem", removeItem),
+    removeItem(id: string | number) {
+      const fn = methods.get("removeItem") as ((id: string | number) => boolean) | undefined;
+      return fn ? fn(id) : removeItem(id);
+    },
     reload: m("reload", reload),
     getItemAt,
     getIndexById,

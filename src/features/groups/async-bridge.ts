@@ -67,6 +67,9 @@ export interface AsyncGroupBridge {
   /** Get the group boundary at a data index */
   getGroupAtDataIndex(dataIndex: number): GroupBoundary;
 
+  /** Remove item at data index — shifts group keys and rebuilds */
+  removeAt(dataIndex: number): void;
+
   /** Reset all state (e.g. on reload) */
   reset(): void;
 }
@@ -312,6 +315,21 @@ export const createAsyncGroupBridge = (
     return groups[gi]!;
   };
 
+  const removeAt = (dataIndex: number): void => {
+    // Remove the key at dataIndex and shift all subsequent keys down by 1
+    const newMap = new Map<number, string>();
+    for (const [idx, key] of groupKeyByIndex) {
+      if (idx < dataIndex) newMap.set(idx, key);
+      else if (idx > dataIndex) newMap.set(idx - 1, key);
+      // idx === dataIndex is dropped
+    }
+    groupKeyByIndex.clear();
+    for (const [idx, key] of newMap) groupKeyByIndex.set(idx, key);
+
+    dataTotal--;
+    rebuildGroups();
+  };
+
   const reset = (): void => {
     groups = [];
     dataTotal = 0;
@@ -339,6 +357,7 @@ export const createAsyncGroupBridge = (
     getHeaderHeight,
     getGroupAtLayoutIndex,
     getGroupAtDataIndex,
+    removeAt,
     reset,
   };
 };
