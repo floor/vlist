@@ -1321,6 +1321,19 @@ describe("withSnapshots - Edge Cases", () => {
 
 describe("withSnapshots - autoSave", () => {
   const AUTO_SAVE_KEY = "test-autosave";
+  let savedRAF: typeof globalThis.requestAnimationFrame;
+
+  beforeAll(() => {
+    savedRAF = global.requestAnimationFrame;
+    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 0;
+    }) as typeof requestAnimationFrame;
+  });
+
+  afterAll(() => {
+    global.requestAnimationFrame = savedRAF;
+  });
 
   function clearAutoSave() {
     try {
