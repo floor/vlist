@@ -800,7 +800,6 @@ describe("withAsync + withGroups integration", () => {
         adapter: createAdapter(allTracks, 5),
         total: 0,
         autoLoad: false,
-        pageSize: 10,
       }))
       .use(withGroups<TrackItem>({
         getGroupForIndex: (_i, item) => item?.day ?? "Unknown",
