@@ -43,6 +43,7 @@ export interface SimpleDataManager<T extends VListItem = VListItem> {
   getStorage: () => unknown;
   getPlaceholders: () => unknown;
   getItem: (index: number) => T | undefined;
+  getIndexById: (id: string | number) => number;
   isItemLoaded: (index: number) => boolean;
   getItemsInRange: (start: number, end: number) => T[];
   setTotal: (total: number) => void;
@@ -125,8 +126,12 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
 
   const getItem = (index: number): T | undefined => items[index];
 
-  // getItemById and getIndexById removed for memory efficiency
-  // Users can maintain their own id→index Map if needed
+  const getIndexById = (id: string | number): number => {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i]?.id === id) return i;
+    }
+    return -1;
+  };
 
   const isItemLoaded = (index: number): boolean => {
     return index >= 0 && index < items.length && items[index] !== undefined;
@@ -213,6 +218,7 @@ export const createSimpleDataManager = <T extends VListItem = VListItem>(
     getStorage: () => null,
     getPlaceholders: () => null,
     getItem,
+    getIndexById,
     isItemLoaded,
     getItemsInRange,
     setTotal,

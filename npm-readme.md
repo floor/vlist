@@ -55,10 +55,10 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 | Feature | Size | Description |
 |---------|------|-------------|
 | **Base** | 10.6 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
+| `withAsync()` | +4.7 KB | Lazy loading with velocity-aware fetching |
 | `withSelection()` | +3.0 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.7 KB | 1M+ items via scroll compression |
-| `withGroups()` | +2.7 KB | Sticky/inline headers |
+| `withGroups()` | +4.2 KB | Sticky/inline headers with async group discovery |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `withScrollbar()` | +1.7 KB | Custom scrollbar UI |
 | `withGrid()` | +3.9 KB | 2D grid layout |
@@ -87,4 +87,4 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 
 ## Acknowledgments
 
-Thanks to [Alexander Klaiber](https://github.com/aklaiber) for graciously transferring the `vlist` package name on npm.
+Thanks to Alexander Klaiber for graciously transferring the `vlist` package name on npm.

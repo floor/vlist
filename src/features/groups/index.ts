@@ -27,3 +27,6 @@ export {
 
 // Sticky Header
 export { createStickyHeader } from "./sticky";
+
+// Async Bridge
+export { createAsyncGroupBridge, type AsyncBridgeConfig, type AsyncGroupBridge } from "./async-bridge";
