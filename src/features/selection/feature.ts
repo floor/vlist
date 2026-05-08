@@ -268,6 +268,15 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           // Rebuild index — all indices after the removed item shifted
           rebuildIdIndex();
+
+          // After removal, focusedIndex may now point to a group header
+          // (the item that was below the removed one shifted into its slot).
+          // Adjust so keyboard nav and auto-selection land on a real item.
+          const total = ctx.dataManager.getTotal();
+          if (total > 0 && selectionState.focusedIndex >= 0) {
+            const fi = Math.min(selectionState.focusedIndex, total - 1);
+            selectionState.focusedIndex = skipHeaders(fi, 1, total);
+          }
         }
       });
 
