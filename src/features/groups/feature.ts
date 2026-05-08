@@ -463,6 +463,8 @@ function setupStaticPath<T extends VListItem>(
       renderInto,
       classPrefix,
       resolvedConfig.horizontal,
+      0,
+      () => ctx.getCachedCompression().ratio,
     );
     localStickyHeader = sticky;
     setStickyHeader(sticky);
@@ -750,6 +752,7 @@ function setupAsyncPath<T extends VListItem>(
       classPrefix,
       resolvedConfig.horizontal,
       0,
+      () => ctx.getCachedCompression().ratio,
     );
     setStickyHeader(asyncStickyHeader);
 
