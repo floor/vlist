@@ -192,6 +192,7 @@
 
 /* Viewport (scrollable area) */
 .vlist-viewport {
+    position: relative;
     width: 100%;
     height: 100%;
     overflow: auto;
