@@ -325,6 +325,96 @@ describe("createAsyncGroupBridge", () => {
   });
 
   // ===========================================================================
+  // removeAt
+  // ===========================================================================
+
+  describe("removeAt", () => {
+    it("removes a middle item — group count stays, group item count decrements", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      // Remove Track B (dataIndex 1), which is in the middle of May 7
+      bridge.removeAt(1);
+
+      expect(bridge.groupCount).toBe(3);
+      expect(bridge.groups[0]!.key).toBe("May 7");
+      expect(bridge.groups[0]!.count).toBe(2);
+      expect(bridge.totalEntries).toBe(11); // 8 items + 3 headers
+    });
+
+    it("removes the last item in a group — group disappears entirely", () => {
+      const { bridge, loadItems } = createBridge();
+      // 3 in May 7, then 1 solo in May 6, then 3 in May 5
+      const tracks = makeTracks([
+        ["A", "May 7"], ["B", "May 7"], ["C", "May 7"],
+        ["D", "May 6"],
+        ["E", "May 5"], ["F", "May 5"], ["G", "May 5"],
+      ]);
+      loadItems(tracks, 0, 7);
+      // 7 items + 3 headers = 10
+      expect(bridge.groupCount).toBe(3);
+
+      // Remove the single May 6 item (dataIndex 3)
+      bridge.removeAt(3);
+
+      expect(bridge.groupCount).toBe(2);
+      expect(bridge.groups[0]!.key).toBe("May 7");
+      expect(bridge.groups[1]!.key).toBe("May 5");
+      expect(bridge.totalEntries).toBe(8); // 6 items + 2 headers
+    });
+
+    it("removes first item — groups shift correctly and layout mapping is valid", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      // Remove Track A (dataIndex 0) — first item in May 7
+      bridge.removeAt(0);
+
+      expect(bridge.groupCount).toBe(3);
+      expect(bridge.groups[0]!.count).toBe(2);
+      // New layout: [H(May7)=0, T1=1, T2=2, H(May6)=3, T3=4, ...]
+      expect(bridge.groups[0]!.headerLayoutIndex).toBe(0);
+      expect(bridge.groups[1]!.headerLayoutIndex).toBe(3);
+      expect(bridge.groups[2]!.headerLayoutIndex).toBe(7);
+      expect(bridge.totalEntries).toBe(11); // 8 items + 3 headers
+    });
+
+    it("subsequent data keys shift down by 1 after removal", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      // Before: dataIndex 3 (Track D / May 6) → layout 5
+      expect(bridge.dataToLayoutIndex(3)).toBe(5);
+
+      // Remove dataIndex 0 (Track A): everything after shifts down by 1
+      bridge.removeAt(0);
+
+      // Old dataIndex 3 (Track D) is now dataIndex 2 → layout 4 (May 6 header at 3)
+      expect(bridge.dataToLayoutIndex(2)).toBe(4);
+      // Old dataIndex 6 (Track G / May 5) is now dataIndex 5 → layout 8
+      expect(bridge.dataToLayoutIndex(5)).toBe(8);
+    });
+
+    it("totalEntries decrements correctly after each removal", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+      expect(bridge.totalEntries).toBe(12); // 9 items + 3 headers
+
+      bridge.removeAt(0);
+      expect(bridge.totalEntries).toBe(11); // 8 items + 3 headers
+
+      bridge.removeAt(0);
+      expect(bridge.totalEntries).toBe(10); // 7 items + 3 headers
+
+      // Remove all remaining May 7 items (now at dataIndex 0, only 1 left)
+      bridge.removeAt(0);
+      // May 7 group gone: 6 items + 2 headers = 8
+      expect(bridge.totalEntries).toBe(8);
+      expect(bridge.groupCount).toBe(2);
+    });
+  });
+
+  // ===========================================================================
   // Reset
   // ===========================================================================
 
