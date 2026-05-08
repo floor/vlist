@@ -868,6 +868,16 @@ export const withSelection = <T extends VListItem = VListItem>(
       // ── Register public methods ──
       ctx.methods.set("select", (...ids: Array<string | number>): void => {
         selectionState = selectItems(selectionState, ids, mode);
+        if (ids.length > 0) {
+          let index = idToIndexMap.get(ids[0]!);
+          if (index === undefined) {
+            rebuildIdIndex();
+            index = idToIndexMap.get(ids[0]!);
+          }
+          if (index !== undefined) {
+            selectionState = setFocusedIndex(selectionState, index);
+          }
+        }
         forceRenderAndEmit();
       });
 
