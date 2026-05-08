@@ -60,6 +60,12 @@ const OVERSCAN = 3;
 const CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 const MAX_CONTENT_SIZE = 16_000_000; // Cap content element to avoid browser overhead for extremely tall elements
+const SCREEN_FALLBACK = 4096;
+
+const getScreenMax = (horizontal: boolean): number =>
+  (typeof screen !== "undefined"
+    ? (horizontal ? screen.width : screen.height)
+    : 0) || SCREEN_FALLBACK;
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
@@ -219,6 +225,8 @@ function materialize<T extends VListItem = VListItem>(
     interactive: interactiveMode,
   };
 
+  const screenMax = getScreenMax(isHorizontal);
+
   // ── Sort and validate features ───────────────────────────────────
   const sortedFeatures = Array.from(features.values()).sort(
     (a, b) => (a.priority ?? 50) - (b.priority ?? 50),
@@ -373,8 +381,8 @@ function materialize<T extends VListItem = VListItem>(
   const $: MRefs<T> = {
     it: initialItemsArray,
     hc: initialSizeCache,
-    ch: dom.viewport.clientHeight,
-    cw: dom.viewport.clientWidth,
+    ch: Math.min(dom.viewport.clientHeight, screenMax),
+    cw: Math.min(dom.viewport.clientWidth, screenMax),
     id: false,
     ii: false,
     ls: 0,
@@ -554,6 +562,7 @@ function materialize<T extends VListItem = VListItem>(
   let selectionIdsGetter: (() => Set<string | number>) | null = null;
   let selectionFocusGetter: (() => number) | null = null;
   let selectionGettersResolved = false;
+  let warnedOverflow = false;
 
   const resolveSelectionGetters = (): void => {
     if (selectionGettersResolved) return;
@@ -680,6 +689,24 @@ function materialize<T extends VListItem = VListItem>(
     const total = $.vtf();
     $.gvr($.ls, containerSize, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
+
+    // Redundant safety net — containerSize is already clamped to screen
+    // size at the observer level, but guard here in case a code path
+    // writes $.ch / $.cw directly.
+    const renderCount = renderRange.end - renderRange.start + 1;
+    const itemSize = $.hc.getSize(0) || 1;
+    const safeMaxRender = Math.ceil(screenMax / itemSize) + overscan * 2;
+    if (renderCount > safeMaxRender) {
+      if (!warnedOverflow) {
+        warnedOverflow = true;
+        console.warn(
+          `[vlist] Render range capped: ${renderCount} items → ${safeMaxRender}. ` +
+          `Container is ${containerSize}px tall (item: ${itemSize}px). ` +
+          `This usually means the container has no CSS height constraint.`,
+        );
+      }
+      renderRange.end = renderRange.start + safeMaxRender - 1;
+    }
 
     if (
       renderRange.start === lastRenderRange.start &&
@@ -1069,7 +1096,25 @@ function materialize<T extends VListItem = VListItem>(
       const newMainAxis = isHorizontal ? newWidth : newHeight;
       const prevMainAxis = isHorizontal ? $.cw : $.ch;
 
-      // Always update dimensions (even before initialization)
+      // Self-heal: if the viewport grew beyond screen size, the container
+      // has lost its CSS height constraint. Re-apply height/width: 100%
+      // on both root and viewport so the chain re-inherits from the
+      // user's container instead of expanding to content size.
+      if (newMainAxis > screenMax) {
+        if (!warnedOverflow) {
+          warnedOverflow = true;
+          console.warn(
+            `[vlist] Viewport grew to ${Math.round(newMainAxis)}px ` +
+            `(screen: ${screenMax}px). Re-applying size constraint. ` +
+            `Check that the vlist container has a CSS height/width constraint.`,
+          );
+        }
+        const prop = isHorizontal ? "width" : "height";
+        dom.root.style[prop] = "100%";
+        dom.viewport.style[prop] = "100%";
+        return;
+      }
+
       $.cw = newWidth;
       $.ch = newHeight;
 
