@@ -229,6 +229,7 @@ function createMockContext(): BuilderContext<TestItem> {
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: () => {},
+    triggerScrollFrame: () => {},
     setScrollTarget: () => {},
     getScrollTarget: () => window as any,
     setContainerDimensions: () => {},

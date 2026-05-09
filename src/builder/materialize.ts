@@ -501,14 +501,14 @@ export const createMaterializeCtx = <T extends VListItem = VListItem>(
 
     setScrollFns(getTop: () => number, setTop: (pos: number) => void): void {
       $.sgt = getTop;
-      // Wrap the provided setTop so that after storing the position
-      // the builder's scroll pipeline (render + events) fires immediately.
-      // In compressed mode the native scroll event may not fire (or may
-      // fire with a clamped value), so we must trigger explicitly.
       $.sst = (pos: number): void => {
         setTop(pos);
         onScrollFrame();
       };
+    },
+
+    triggerScrollFrame(): void {
+      onScrollFrame();
     },
 
     setScrollTarget(target: HTMLElement | Window): void {
@@ -684,22 +684,20 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
 
 export const createDefaultScrollProxy = <T extends VListItem = VListItem>(
   $: MRefs<T>,
-  deps: Pick<MDeps<T>, "dom" | "classPrefix">,
+  deps: Pick<MDeps<T>, "dom" | "classPrefix" | "onScrollFrame">,
 ): any => {
-  const { dom, classPrefix } = deps;
+  const { dom, classPrefix, onScrollFrame } = deps;
 
   return {
     getScrollTop: () => $.sgt(),
     scrollTo: (pos: number) => {
       $.sst(pos);
-      $.ls = pos;
-      $.rfn();
+      onScrollFrame();
     },
     scrollBy: (delta: number) => {
       const newPos = $.sgt() + delta;
       $.sst(newPos);
-      $.ls = newPos;
-      $.rfn();
+      onScrollFrame();
     },
     isAtTop: () => $.ls <= 2,
     isAtBottom: (threshold = 2) => $.sab(threshold),

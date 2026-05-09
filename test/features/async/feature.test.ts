@@ -232,6 +232,7 @@ function createMockContext(config?: {
     setPositionElementFn: mock(() => {}),
     setUpdateItemClassesFn: mock(() => {}),
     setScrollFns: mock(() => {}),
+    triggerScrollFrame: () => {},
     setScrollTarget: mock(() => {}),
     getScrollTarget: mock(() => window as any),
     setContainerDimensions: mock(() => {}),
