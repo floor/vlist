@@ -755,6 +755,7 @@ function materialize<T extends VListItem = VListItem>(
       sharedState.viewportState.visibleRange.end = visibleRange.end;
       sharedState.viewportState.renderRange.start = renderRange.start;
       sharedState.viewportState.renderRange.end = renderRange.end;
+
       return;
     }
 
@@ -965,6 +966,7 @@ function materialize<T extends VListItem = VListItem>(
     isScrolling = true;
 
     $.ls = scrollTop;
+
     $.rfn();
 
     _scrollEvt.scrollPosition = scrollTop;

@@ -840,7 +840,7 @@ function setupAsyncPath<T extends VListItem>(
         // for the original header layout. Keep anchor+suppression for
         // subsequent onItemsLoaded calls; don't save (sessionStorage
         // already has the correct snapshot).
-        console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
+        // console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
       } else {
         const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
         const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
@@ -850,7 +850,7 @@ function setupAsyncPath<T extends VListItem>(
           ? newActualOffset * compression.ratio
           : newActualOffset;
 
-        console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
+        // console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
 
         if (Math.abs(newScroll - scrollBefore) > 1) {
           ctx.scrollController.scrollTo(newScroll);

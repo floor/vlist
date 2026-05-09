@@ -232,7 +232,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           if (focusedId !== undefined) snapshot.focusedId = focusedId;
         }
 
-        console.log(`[SNAP SAVE] scroll=${scrollTop} idx=${index} dataIdx=${snapshot.dataIndex} total=${totalItems} dataTotal=${snapshot.dataTotal} ratio=${snapshot.offsetRatio}`);
+        // console.log(`[SNAP SAVE] scroll=${scrollTop} idx=${index} dataIdx=${snapshot.dataIndex} total=${totalItems} dataTotal=${snapshot.dataTotal} ratio=${snapshot.offsetRatio}`);
 
         return snapshot;
       });
@@ -379,7 +379,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           ctx.methods.set("_suppressSave", true);
         }
 
-        console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut} anchor=${snapshot.dataIndex !== undefined}`);
+        // console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut} anchor=${snapshot.dataIndex !== undefined}`);
 
         ctx.scrollController.scrollTo(scrollPosition);
 
