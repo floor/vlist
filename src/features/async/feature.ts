@@ -197,6 +197,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         }),
         onStateChange: () => {
           if (ctx.state.isInitialized) {
+            const scrollBefore = ctx.scrollController.getScrollTop();
             const newTotal = ctx.getVirtualTotal();
             ctx.sizeCache.rebuild(newTotal);
             ctx.updateCompressionMode();
@@ -209,6 +210,10 @@ export const withAsync = <T extends VListItem = VListItem>(
 
             ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
+            const scrollAfter = ctx.scrollController.getScrollTop();
+            if (Math.abs(scrollAfter - scrollBefore) > 1) {
+              console.log(`[ASYNC onStateChange] scroll ${scrollBefore} -> ${scrollAfter} (delta=${scrollAfter - scrollBefore}) total=${newTotal} contentSize=${compression.virtualSize}`);
+            }
           }
         },
         onItemsLoaded: (loadedItems, _offset, total) => {

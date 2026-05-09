@@ -790,10 +790,19 @@ function setupAsyncPath<T extends VListItem>(
 
     // Capture the data item + fractional offset at the current scroll
     // position BEFORE rebuilding, so we can restore it after.
+    // If a snapshot restore anchor exists, use it directly — scrollTop
+    // may have been clamped by onStateChange shrinking the content
+    // before groups were discovered.
     let dataIndexAtScroll = 0;
     let fractionInItem = 0;
-    const compressionBefore = ctx.getCachedCompression();
-    if (scrollBefore > 0) {
+    const restoreAnchor = ctx.methods.get("_restoreAnchor") as
+      | { dataIndex: number; fraction: number }
+      | undefined;
+    if (restoreAnchor) {
+      dataIndexAtScroll = restoreAnchor.dataIndex;
+      fractionInItem = restoreAnchor.fraction;
+    } else if (scrollBefore > 0) {
+      const compressionBefore = ctx.getCachedCompression();
       if (compressionBefore.isCompressed && compressionBefore.ratio !== 1) {
         const scrollRatio = scrollBefore / compressionBefore.virtualSize;
         const exactIndex = scrollRatio * totalEntriesBefore;
@@ -826,7 +835,7 @@ function setupAsyncPath<T extends VListItem>(
     // New headers shift items down — without correction the viewport
     // drifts to the wrong data items (especially with compression).
     const newHeaders = bridge.groupCount - headerCountBefore;
-    if (newHeaders > 0 && scrollBefore > 0) {
+    if (newHeaders > 0 && (scrollBefore > 0 || restoreAnchor)) {
       const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
       let newScroll: number;
 
@@ -838,7 +847,9 @@ function setupAsyncPath<T extends VListItem>(
         newScroll = newBaseOffset + fractionInItem * newItemSize;
       }
 
-      console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries}`);
+      console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
+
+      if (restoreAnchor) ctx.methods.delete("_restoreAnchor");
 
       if (Math.abs(newScroll - scrollBefore) > 1) {
         ctx.scrollController.scrollTo(newScroll);
