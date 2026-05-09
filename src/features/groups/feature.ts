@@ -802,20 +802,19 @@ function setupAsyncPath<T extends VListItem>(
       dataIndexAtScroll = restoreAnchor.dataIndex;
       fractionInItem = restoreAnchor.fraction;
     } else if (scrollBefore > 0) {
+      // Convert scrollTop to actual (uncompressed) position, then use
+      // sizeCache prefix sums to find the layout index. This works for
+      // both compressed and non-compressed lists — ratio is 1 when
+      // uncompressed, so the division is a no-op.
       const compressionBefore = ctx.getCachedCompression();
-      if (compressionBefore.isCompressed && compressionBefore.ratio !== 1) {
-        const scrollRatio = scrollBefore / compressionBefore.virtualSize;
-        const exactIndex = scrollRatio * totalEntriesBefore;
-        const layoutIndex = Math.max(0, Math.min(Math.floor(exactIndex), totalEntriesBefore - 1));
-        fractionInItem = exactIndex - layoutIndex;
-        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
-      } else {
-        const layoutIndex = ctx.sizeCache.indexAtOffset(scrollBefore);
-        const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
-        const itemSize = ctx.sizeCache.getSize(layoutIndex);
-        fractionInItem = itemSize > 0 ? (scrollBefore - baseOffset) / itemSize : 0;
-        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
-      }
+      const actualPosition = compressionBefore.ratio !== 1
+        ? scrollBefore / compressionBefore.ratio
+        : scrollBefore;
+      const layoutIndex = ctx.sizeCache.indexAtOffset(actualPosition);
+      const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
+      const itemSize = ctx.sizeCache.getSize(layoutIndex);
+      fractionInItem = itemSize > 0 ? (actualPosition - baseOffset) / itemSize : 0;
+      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
     }
 
     bridge.onItemsLoaded(items as VListItem[], offset, total);
@@ -844,15 +843,12 @@ function setupAsyncPath<T extends VListItem>(
         console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
       } else {
         const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
-        let newScroll: number;
-
-        if (compression.isCompressed && compression.ratio !== 1) {
-          newScroll = ((newLayoutIndex + fractionInItem) / bridge.totalEntries) * compression.virtualSize;
-        } else {
-          const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
-          const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
-          newScroll = newBaseOffset + fractionInItem * newItemSize;
-        }
+        const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
+        const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
+        const newActualOffset = newBaseOffset + fractionInItem * newItemSize;
+        const newScroll = compression.ratio !== 1
+          ? newActualOffset * compression.ratio
+          : newActualOffset;
 
         console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
 
