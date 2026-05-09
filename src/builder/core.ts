@@ -53,6 +53,7 @@ import {
 } from "./materialize";
 import type { MRefs } from "./materialize";
 import { setupBaselineA11y } from "./a11y";
+import { createAriaResolvers } from "../rendering/aria";
 import { claimPlaceholderSelection } from "../features/selection/state";
 import { createApi } from "./api";
 // Inlined from constants.ts to avoid pulling in the full constants module
@@ -572,6 +573,9 @@ function materialize<T extends VListItem = VListItem>(
     selectionFocusGetter = (methods.get("_getFocusedIndex") as (() => number)) ?? null;
   };
 
+  // ── ARIA resolvers (groups feature registers _getTotal / _layoutToDataIndex) ──
+  const aria = createAriaResolvers(methods, $.vtf);
+
   // ── Rendering ───────────────────────────────────────────────────
 
   const applyTemplate = (
@@ -642,9 +646,9 @@ function materialize<T extends VListItem = VListItem>(
       element.setAttribute("role", "option");
       element.ariaSelected = "false";
       element.id = `${ariaIdPrefix}-item-${index}`;
-      $.la = String($.vtf());
+      $.la = String(aria.getSetSize());
       element.setAttribute("aria-setsize", $.la);
-      element.setAttribute("aria-posinset", String(index + 1));
+      element.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
     }
 
     // Add placeholder class if this is a placeholder item
@@ -749,7 +753,7 @@ function materialize<T extends VListItem = VListItem>(
       return;
     }
 
-    const currentSetSize = String(total);
+    const currentSetSize = String(aria.getSetSize());
     const setSizeChanged = currentSetSize !== $.la;
     $.la = currentSetSize;
 
@@ -794,6 +798,7 @@ function materialize<T extends VListItem = VListItem>(
           } else {
             existing.setAttribute("role", "option");
             existing.id = `${ariaIdPrefix}-item-${i}`;
+            existing.setAttribute("aria-posinset", String(aria.getPosInSet(i)));
           }
 
           try {

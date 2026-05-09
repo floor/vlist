@@ -23,6 +23,7 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
 import { resolvePadding, crossAxisPaddingFrom } from "../../utils/padding";
 import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
 import { calculateScrollToIndex } from "../../rendering";
+import { createAriaResolvers } from "../../rendering/aria";
 
 import { createGridLayout } from "./layout";
 import { createGridRenderer, type GridRenderer } from "./renderer";
@@ -250,6 +251,8 @@ export const withGrid = <T extends VListItem = VListItem>(
       // ── Create grid renderer ──
       const template = rawConfig.item.template;
 
+      const aria = createAriaResolvers(ctx.methods, () => ctx.dataManager.getTotal());
+
       const createAndSetGridRenderer = () => {
         gridRenderer = createGridRenderer<T>(
           dom.items,
@@ -258,9 +261,10 @@ export const withGrid = <T extends VListItem = VListItem>(
           gridLayout!,
           classPrefix,
           containerWidth,
-          () => ctx.dataManager.getTotal(),
+          aria.getSetSize,
           resolvedConfig.ariaIdPrefix,
           resolvedConfig.horizontal,
+          aria.getPosInSet,
         );
 
         // ── Replace the list renderer with the grid renderer ──

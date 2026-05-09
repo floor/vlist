@@ -237,6 +237,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   },
   striped?: boolean | "data" | "even" | "odd",
   stripeIndexFn?: () => (index: number) => number,
+  ariaPosInSetGetter?: (layoutIndex: number) => number,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, TrackedItem>();
@@ -365,13 +366,6 @@ export const createRenderer = <T extends VListItem = VListItem>(
   const oddClass = `${classPrefix}-item--odd`;
 
   /**
-   * Apply base class to element (called once when element is created)
-   */
-  const applyBaseClass = (element: HTMLElement): void => {
-    element.className = baseClass;
-  };
-
-  /**
    * Apply classes to element based on state
    * Uses classList.toggle() for efficient incremental updates
    */
@@ -427,7 +421,8 @@ export const createRenderer = <T extends VListItem = VListItem>(
           lastAriaSetSize = String(total);
         }
         element.setAttribute("aria-setsize", lastAriaSetSize);
-        element.setAttribute("aria-posinset", String(index + 1));
+        const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(index) : index + 1;
+        element.setAttribute("aria-posinset", String(posInSet));
       }
     }
 
@@ -566,6 +561,13 @@ export const createRenderer = <T extends VListItem = VListItem>(
           }
 
           existing.lastItemId = item.id;
+
+          // Refresh aria-posinset when element is reused for a different item
+          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          if (!isGH) {
+            const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(i) : i + 1;
+            existing.element.setAttribute("aria-posinset", String(posInSet));
+          }
         }
 
         // Class + aria updates only when selection/focus changed
@@ -586,7 +588,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
         }
 
         // Update aria-setsize on existing items only when total changed (rare)
-        if (setSizeChanged) {
+        if (setSizeChanged && !(item as Record<string, unknown>).__groupHeader) {
           existing.element.setAttribute("aria-setsize", lastAriaSetSize);
         }
       } else {
