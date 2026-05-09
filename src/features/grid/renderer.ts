@@ -348,7 +348,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
    */
   const applySizeStyles = (element: HTMLElement, itemIndex: number): void => {
     // Check if this is a group header - use full width
-    const isHeader = element.dataset.id?.startsWith("__group_header");
+    const isHeader = element.classList.contains(groupHeaderClass);
 
     const colWidth = isHeader
       ? containerWidth

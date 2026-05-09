@@ -213,6 +213,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
+            const scrollBefore = ctx.scrollController.getScrollTop();
             // Notify subscribers (e.g. withGroups async bridge) before rendering
             for (const cb of itemsLoadedCallbacks) {
               cb(loadedItems, _offset, total);
@@ -220,6 +221,12 @@ export const withAsync = <T extends VListItem = VListItem>(
             // Force render to replace placeholders with actual data immediately
             // This is necessary so the DOM shows loaded items instead of placeholders
             ctx.forceRender();
+            const scrollAfter = ctx.scrollController.getScrollTop();
+
+            if (Math.abs(scrollAfter - scrollBefore) > 1) {
+              console.log(`[ASYNC onItemsLoaded] scroll ${scrollBefore} -> ${scrollAfter} (delta=${scrollAfter - scrollBefore}) offset=${_offset} count=${loadedItems.length}`);
+            }
+
             emitter.emit("load:end", { items: loadedItems, total, offset: _offset });
           }
         },
