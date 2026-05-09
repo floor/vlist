@@ -426,8 +426,10 @@ function setupStaticPath<T extends VListItem>(
       gridLayout,
       classPrefix,
       ctx.getContainerWidth(),
-      () => ctx.dataManager.getTotal(),
+      () => originalItems.length,
       resolvedConfig.ariaIdPrefix,
+      resolvedConfig.horizontal,
+      (layoutIndex: number): number => groupLayout.layoutToDataIndex(layoutIndex) + 1,
     );
     replaceGridRenderer(newGridRenderer);
   } else if (getTableLayout && updateTableForGroups) {

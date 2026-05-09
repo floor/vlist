@@ -174,6 +174,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   isHorizontal: boolean = false,
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
+  ariaPosInSetGetter?: (layoutIndex: number) => number,
 ): MasonryRenderer<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedItem>();
@@ -301,7 +302,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           lastAriaSetSize = String(total);
         }
         element.setAttribute("aria-setsize", lastAriaSetSize);
-        element.setAttribute("aria-posinset", String(itemIndex + 1));
+        const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
+        element.setAttribute("aria-posinset", String(posInSet));
       }
     }
 
@@ -406,6 +408,13 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           existing.element.dataset.id = String(item.id);
 
           existing.lastItemId = item.id;
+
+          // Refresh aria-posinset when element is reused for a different item
+          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          if (!isGH) {
+            const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
+            existing.element.setAttribute("aria-posinset", String(posInSet));
+          }
         }
 
         // Class + aria updates only when selection/focus changed

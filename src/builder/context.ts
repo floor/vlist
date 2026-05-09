@@ -16,6 +16,7 @@ import type {
   CompressionContext,
 } from "../rendering/renderer";
 import { createRenderer } from "../rendering/renderer";
+import { createAriaResolvers } from "../rendering/aria";
 import {
   type CompressionState,
   getSimpleCompressionState,
@@ -246,6 +247,8 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     renderer = newRenderer;
   };
 
+  const aria = createAriaResolvers(methods, () => dataManager.getTotal());
+
   const replaceTemplate = (newTemplate: ItemTemplate<T>): void => {
     // For context-based builds, create a new renderer with the new template
     // This is less efficient than the materialize path (which can swap templates directly)
@@ -255,13 +258,14 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       newTemplate,
       sizeCache,
       resolvedConfig.classPrefix,
-      () => dataManager.getTotal(),
+      aria.getSetSize,
       resolvedConfig.ariaIdPrefix,
       resolvedConfig.horizontal,
       undefined,
       undefined,
       rawConfig.item?.striped,
       () => stripeIndexFn,
+      aria.getPosInSet,
     );
     renderer = newRenderer;
   };
