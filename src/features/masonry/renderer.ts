@@ -199,6 +199,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
   // Pre-computed class names
   const baseClass = `${classPrefix}-item ${classPrefix}-masonry-item`;
+  const groupHeaderClass = `${classPrefix}-group-header`;
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
 
@@ -270,30 +271,38 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): TrackedItem => {
     const element = pool.acquire();
+    const isGH = !!(item as Record<string, unknown>).__groupHeader;
     const state = getItemState(isSelected, isFocused);
 
-    // Apply base class
-    element.className = baseClass;
+    // Group headers get a distinct class and role
+    element.className = isGH ? groupHeaderClass : baseClass;
 
     // Set data attributes
     element.dataset.index = String(itemIndex);
     element.dataset.id = String(item.id);
     element.dataset.lane = String(placement.lane);
-    element.ariaSelected = String(isSelected);
 
-    // ARIA: positional context for screen readers
-    if (ariaIdPrefix) {
-      element.id = `${ariaIdPrefix}-item-${itemIndex}`;
-    }
-    if (totalItemsGetter) {
-      const total = totalItemsGetter();
-      // Cache stringified total — only recompute when count changes
-      if (total !== lastAriaTotal) {
-        lastAriaTotal = total;
-        lastAriaSetSize = String(total);
+    if (isGH) {
+      element.setAttribute("role", "presentation");
+      element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-setsize");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("id");
+    } else {
+      element.setAttribute("role", "option");
+      element.ariaSelected = String(isSelected);
+      if (ariaIdPrefix) {
+        element.id = `${ariaIdPrefix}-item-${itemIndex}`;
       }
-      element.setAttribute("aria-setsize", lastAriaSetSize);
-      element.setAttribute("aria-posinset", String(itemIndex + 1));
+      if (totalItemsGetter) {
+        const total = totalItemsGetter();
+        if (total !== lastAriaTotal) {
+          lastAriaTotal = total;
+          lastAriaSetSize = String(total);
+        }
+        element.setAttribute("aria-setsize", lastAriaSetSize);
+        element.setAttribute("aria-posinset", String(itemIndex + 1));
+      }
     }
 
     // Apply sizing

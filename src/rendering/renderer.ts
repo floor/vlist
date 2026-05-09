@@ -357,6 +357,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
 
   // Pre-computed class names for toggle operations
   const baseClass = `${classPrefix}-item`;
+  const groupHeaderClass = `${classPrefix}-group-header`;
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
   const placeholderClass = `${classPrefix}-item--placeholder`;
@@ -394,32 +395,40 @@ export const createRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): TrackedItem => {
     const element = pool.acquire();
+    const isGH = !!(item as Record<string, unknown>).__groupHeader;
     const state = getItemState(isSelected, isFocused);
 
     // Apply static styles once (position, dimensions)
     applyStaticStyles(element, index);
 
-    // Apply base class once
-    applyBaseClass(element);
+    // Group headers get a distinct class and role
+    element.className = isGH ? groupHeaderClass : baseClass;
 
     // Set data attributes using dataset (faster than setAttribute)
-    // Note: role="option" is set once in pool.acquire()
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
-    element.ariaSelected = String(isSelected);
 
-    // ARIA: positional context for screen readers ("item 5 of 10,000")
-    if (ariaIdPrefix) {
-      element.id = `${ariaIdPrefix}-item-${index}`;
-    }
-    if (totalItemsGetter) {
-      const total = totalItemsGetter();
-      if (total !== lastAriaTotal) {
-        lastAriaTotal = total;
-        lastAriaSetSize = String(total);
+    if (isGH) {
+      element.setAttribute("role", "presentation");
+      element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-setsize");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("id");
+    } else {
+      element.setAttribute("role", "option");
+      element.ariaSelected = String(isSelected);
+      if (ariaIdPrefix) {
+        element.id = `${ariaIdPrefix}-item-${index}`;
       }
-      element.setAttribute("aria-setsize", lastAriaSetSize);
-      element.setAttribute("aria-posinset", String(index + 1));
+      if (totalItemsGetter) {
+        const total = totalItemsGetter();
+        if (total !== lastAriaTotal) {
+          lastAriaTotal = total;
+          lastAriaSetSize = String(total);
+        }
+        element.setAttribute("aria-setsize", lastAriaSetSize);
+        element.setAttribute("aria-posinset", String(index + 1));
+      }
     }
 
     // Apply template
