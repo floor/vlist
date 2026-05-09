@@ -783,18 +783,30 @@ function setupAsyncPath<T extends VListItem>(
   registerOnItemsLoaded((items: T[], offset: number, total: number) => {
     const scrollBefore = ctx.scrollController.getScrollTop();
     const headerCountBefore = bridge.groupCount;
-    const totalEntriesBefore = bridge.totalEntries;
+    // bridge.totalEntries is 0 before the first onItemsLoaded — fall back
+    // to the async data total so compressed-space math uses the same total
+    // that compression was computed from (via virtualTotalFn's fallback).
+    const totalEntriesBefore = bridge.totalEntries || total;
 
     // Capture the data item + fractional offset at the current scroll
     // position BEFORE rebuilding, so we can restore it after.
     let dataIndexAtScroll = 0;
     let fractionInItem = 0;
+    const compressionBefore = ctx.getCachedCompression();
     if (scrollBefore > 0) {
-      const layoutIndex = ctx.sizeCache.indexAtOffset(scrollBefore);
-      const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
-      const itemSize = ctx.sizeCache.getSize(layoutIndex);
-      fractionInItem = itemSize > 0 ? (scrollBefore - baseOffset) / itemSize : 0;
-      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      if (compressionBefore.isCompressed && compressionBefore.ratio !== 1) {
+        const scrollRatio = scrollBefore / compressionBefore.virtualSize;
+        const exactIndex = scrollRatio * totalEntriesBefore;
+        const layoutIndex = Math.max(0, Math.min(Math.floor(exactIndex), totalEntriesBefore - 1));
+        fractionInItem = exactIndex - layoutIndex;
+        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      } else {
+        const layoutIndex = ctx.sizeCache.indexAtOffset(scrollBefore);
+        const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
+        const itemSize = ctx.sizeCache.getSize(layoutIndex);
+        fractionInItem = itemSize > 0 ? (scrollBefore - baseOffset) / itemSize : 0;
+        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      }
     }
 
     bridge.onItemsLoaded(items as VListItem[], offset, total);
@@ -816,9 +828,18 @@ function setupAsyncPath<T extends VListItem>(
     const newHeaders = bridge.groupCount - headerCountBefore;
     if (newHeaders > 0 && scrollBefore > 0) {
       const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
-      const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
-      const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
-      const newScroll = newBaseOffset + fractionInItem * newItemSize;
+      let newScroll: number;
+
+      if (compression.isCompressed && compression.ratio !== 1) {
+        newScroll = ((newLayoutIndex + fractionInItem) / bridge.totalEntries) * compression.virtualSize;
+      } else {
+        const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
+        const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
+        newScroll = newBaseOffset + fractionInItem * newItemSize;
+      }
+
+      console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries}`);
+
       if (Math.abs(newScroll - scrollBefore) > 1) {
         ctx.scrollController.scrollTo(newScroll);
       }

@@ -194,11 +194,21 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         // If grid or groups are active, store the data-level index and total
         // so the snapshot can survive layout/group structure changes.
+        // When the scroll position lands on a group header (dataIndex = -1),
+        // scan forward to find the first data item of that group — a valid
+        // dataIndex is required for correct restore when groups aren't
+        // discovered yet.
         const layoutToData = ctx.methods.get("_layoutToDataIndex") as
           | ((layoutIndex: number) => number)
           | undefined;
         if (layoutToData) {
-          const di = layoutToData(index);
+          let di = layoutToData(index);
+          if (di < 0) {
+            for (let i = index + 1; i < totalItems; i++) {
+              di = layoutToData(i);
+              if (di >= 0) break;
+            }
+          }
           if (di >= 0) snapshot.dataIndex = di;
         }
 
@@ -221,6 +231,8 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           const focusedId = getFocusedId();
           if (focusedId !== undefined) snapshot.focusedId = focusedId;
         }
+
+        console.log(`[SNAP SAVE] scroll=${scrollTop} idx=${index} dataIdx=${snapshot.dataIndex} total=${totalItems} dataTotal=${snapshot.dataTotal} ratio=${snapshot.offsetRatio}`);
 
         return snapshot;
       });
@@ -313,9 +325,23 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         let scrollPosition: number;
 
         if (compression.isCompressed && compression.ratio !== 1) {
-          const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
-          scrollPosition =
-            ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
+          // When genuinely compressed (ratio < 1), virtualSize is capped
+          // at MAX_VIRTUAL_SIZE and stays the same regardless of group
+          // header count. Use scrollTop directly when the data total
+          // matches — snapshot.total includes headers and will differ at
+          // restore time before groups are discovered, but dataTotal is
+          // stable.
+          const currentDataTotal = (ctx.methods.get("_getTotal") as (() => number) | undefined)?.();
+          const dataTotalMatch = snapshot.dataTotal !== undefined
+            && currentDataTotal !== undefined
+            && snapshot.dataTotal === currentDataTotal;
+          if (snapshot.scrollTop !== undefined && (snapshot.total === effectiveTotal || dataTotalMatch)) {
+            scrollPosition = snapshot.scrollTop;
+          } else {
+            const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
+            scrollPosition =
+              ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
+          }
         } else {
           const offset = ctx.sizeCache.getOffset(safeIndex);
           scrollPosition = offset + resolvedOffset;
@@ -332,6 +358,9 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           : compression.virtualSize;
         const maxScroll = Math.max(0, effectiveTotalSize - containerSize);
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
+
+        const usedShortcut = scrollPosition === snapshot.scrollTop;
+        console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut}`);
 
         ctx.scrollController.scrollTo(scrollPosition);
 
