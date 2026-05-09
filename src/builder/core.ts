@@ -511,6 +511,7 @@ function materialize<T extends VListItem = VListItem>(
 
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
+  const groupHeaderClass = `${classPrefix}-group-header`;
   const selClass = `${classPrefix}-item--selected`;
   const focClass = `${classPrefix}-item--focused`;
 
@@ -603,7 +604,9 @@ function materialize<T extends VListItem = VListItem>(
 
   const renderItem = (index: number, item: T): HTMLElement => {
     const element = pool.acquire();
-    element.className = baseClass;
+    const isGH = !!(item as Record<string, unknown>).__groupHeader;
+
+    element.className = isGH ? groupHeaderClass : baseClass;
 
     // When autosize is active, unmeasured items get no explicit size so
     // ResizeObserver can measure the real content height.
@@ -628,11 +631,21 @@ function materialize<T extends VListItem = VListItem>(
 
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
-    element.ariaSelected = "false";
-    element.id = `${ariaIdPrefix}-item-${index}`;
-    $.la = String($.vtf());
-    element.setAttribute("aria-setsize", $.la);
-    element.setAttribute("aria-posinset", String(index + 1));
+
+    if (isGH) {
+      element.setAttribute("role", "presentation");
+      element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-setsize");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("id");
+    } else {
+      element.setAttribute("role", "option");
+      element.ariaSelected = "false";
+      element.id = `${ariaIdPrefix}-item-${index}`;
+      $.la = String($.vtf());
+      element.setAttribute("aria-setsize", $.la);
+      element.setAttribute("aria-posinset", String(index + 1));
+    }
 
     // Add placeholder class if this is a placeholder item
     const isPlaceholder = String(item.id).startsWith(PH);
@@ -770,6 +783,19 @@ function materialize<T extends VListItem = VListItem>(
           const wasPlaceholder = existingId?.startsWith(PH);
           const isPlaceholder = newId.startsWith(PH);
 
+          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          existing.className = isGH ? groupHeaderClass : baseClass;
+          if (isGH) {
+            existing.setAttribute("role", "presentation");
+            existing.removeAttribute("aria-selected");
+            existing.removeAttribute("aria-setsize");
+            existing.removeAttribute("aria-posinset");
+            existing.removeAttribute("id");
+          } else {
+            existing.setAttribute("role", "option");
+            existing.id = `${ariaIdPrefix}-item-${i}`;
+          }
+
           try {
             applyTemplate(existing, $.at(item, i, itemState), i);
           } catch (err) {
@@ -820,7 +846,7 @@ function materialize<T extends VListItem = VListItem>(
         const isFocused = i === focusedIndex;
         applySelState(existing, isSelected, isFocused);
 
-        if (setSizeChanged) {
+        if (setSizeChanged && !(item as Record<string, unknown>).__groupHeader) {
           existing.setAttribute("aria-setsize", $.la);
         }
       } else {
