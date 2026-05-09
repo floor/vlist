@@ -692,6 +692,8 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case "End": {
             newState = moveFocusToLast(selectionState, totalItems);
+            const ensureTail = ctx.methods.get("_ensureTailLoaded") as (() => void) | undefined;
+            if (ensureTail) ensureTail();
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -994,6 +996,15 @@ export const withSelection = <T extends VListItem = VListItem>(
         const idx = selectionState.focusedIndex;
         if (idx < 0) return undefined;
         return ctx.dataManager.getItem(idx)?.id;
+      });
+
+      // ── Internal: set focused index from outside (used by withGroups async) ──
+      ctx.methods.set("_setFocusedIndex", (index: number): void => {
+        selectionState = setFocusedIndex(selectionState, index);
+        selectionState.focusVisible = true;
+        scrollToFocus(index);
+        dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+        ctx.renderIfNeeded();
       });
 
       // ── Cleanup handler ──

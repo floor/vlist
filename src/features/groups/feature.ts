@@ -764,10 +764,24 @@ function setupAsyncPath<T extends VListItem>(
     );
   }
 
+  // ── End key: ensure tail data is loaded so totalEntries is accurate ──
+  // Tracks the data index we're waiting for (-1 = not waiting).
+  let pendingTailDataIndex = -1;
+
+  ctx.methods.set("_ensureTailLoaded", (): void => {
+    const dataTotal = asyncDataManager.getTotal();
+    if (dataTotal <= 0) return;
+    const lastIndex = dataTotal - 1;
+    if (asyncDataManager.isItemLoaded(lastIndex)) return;
+    pendingTailDataIndex = lastIndex;
+    asyncDataManager.ensureRange(lastIndex, lastIndex);
+  });
+
   // ── Subscribe to items loaded — rebuild groups incrementally ──
   registerOnItemsLoaded((items: T[], offset: number, total: number) => {
     const scrollBefore = ctx.scrollController.getScrollTop();
     const headerCountBefore = bridge.groupCount;
+    const totalEntriesBefore = bridge.totalEntries;
 
     // Capture the data item + fractional offset at the current scroll
     // position BEFORE rebuilding, so we can restore it after.
@@ -815,6 +829,25 @@ function setupAsyncPath<T extends VListItem>(
     if (asyncStickyHeader) {
       asyncStickyHeader.refresh();
       asyncStickyHeader.update(ctx.scrollController.getScrollTop());
+    }
+
+    // After groups rebuild, if End key triggered tail loading and the
+    // specific tail item is now loaded, correct the focused index.
+    // Only fires when: (1) we requested a specific tail item,
+    // (2) that item is now loaded, (3) focus is still at the old end.
+    if (pendingTailDataIndex >= 0 && asyncDataManager.isItemLoaded(pendingTailDataIndex)) {
+      const targetLayout = bridge.dataToLayoutIndex(pendingTailDataIndex);
+      pendingTailDataIndex = -1;
+
+      const getFi = ctx.methods.get("_getFocusedIndex") as (() => number) | undefined;
+      const fi = getFi ? getFi() : -1;
+
+      if (fi >= 0 && fi >= totalEntriesBefore - 1 && targetLayout !== fi) {
+        let dest = targetLayout;
+        while (dest > 0 && bridge.isHeader(dest)) dest--;
+        const setFi = ctx.methods.get("_setFocusedIndex") as ((idx: number) => void) | undefined;
+        if (setFi) setFi(dest);
+      }
     }
   });
 
