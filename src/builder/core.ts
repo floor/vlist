@@ -687,6 +687,8 @@ function materialize<T extends VListItem = VListItem>(
   // ── Main render function ────────────────────────────────────────
   // This is the hot path — called on every scroll-triggered range change.
 
+  let lastRepositionedScroll = NaN;
+
   const coreRenderIfNeeded = (): void => {
     if ($.id) return;
 
@@ -730,9 +732,12 @@ function materialize<T extends VListItem = VListItem>(
       renderRange.end === lastRenderRange.end
     ) {
       // In compressed mode, items must be repositioned even when range is unchanged
-      // because their positions are relative to the viewport, not absolute
-      if ($.sic) {
-        // Reposition all currently rendered items
+      // because their positions are relative to the viewport, not absolute.
+      // Skip if we already repositioned at this exact scroll position (prevents
+      // the double-render caused by scrollTo calling both $.sst→onScrollFrame→$.rfn
+      // and then $.rfn again).
+      if ($.sic && $.ls !== lastRepositionedScroll) {
+        lastRepositionedScroll = $.ls;
         for (const [index, element] of rendered) {
           $.pef(element, index);
         }
@@ -887,6 +892,7 @@ function materialize<T extends VListItem = VListItem>(
 
     lastRenderRange.start = renderRange.start;
     lastRenderRange.end = renderRange.end;
+    lastRepositionedScroll = $.ls;
 
     // Sync shared state for features that use it
     sharedState.lastRenderRange.start = renderRange.start;
@@ -909,6 +915,7 @@ function materialize<T extends VListItem = VListItem>(
   const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
+    lastRepositionedScroll = NaN;
     $.rfn();
   };
 
@@ -950,7 +957,6 @@ function materialize<T extends VListItem = VListItem>(
 
     const direction: "up" | "down" = scrollTop >= $.ls ? "down" : "up";
 
-    // Update velocity tracker
     $.vt = updateVelocityTracker($.vt as any, scrollTop);
 
     if (!dom.root.classList.contains(scClass)) {
@@ -965,12 +971,10 @@ function materialize<T extends VListItem = VListItem>(
     _scrollEvt.direction = direction;
     emitter.emit("scroll", _scrollEvt);
 
-    // Emit velocity change
     _velEvt.velocity = $.vt.velocity;
     _velEvt.reliable = $.vt.sampleCount >= MIN_RELIABLE_SAMPLES;
     emitter.emit("velocity:change", _velEvt);
 
-    // Feature post-scroll actions
     for (let i = 0; i < afterScroll.length; i++) {
       afterScroll[i]!(scrollTop, direction);
     }

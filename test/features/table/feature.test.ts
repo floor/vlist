@@ -253,6 +253,7 @@ function createMockContext(overrides?: {
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: () => {},
+    triggerScrollFrame: () => {},
     setScrollTarget: () => {},
     getScrollTarget: () => window as any,
     setContainerDimensions: () => {},

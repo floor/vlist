@@ -414,6 +414,9 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
     setScrollFns: () => {
       // Stub - not used in simplified context
     },
+    triggerScrollFrame: () => {
+      // Stub - not used in simplified context
+    },
 
     // Window mode feature hooks (stubs for this simplified context)
     setScrollTarget: () => {

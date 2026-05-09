@@ -489,6 +489,16 @@ export interface BuilderContext<T extends VListItem = VListItem> {
   setScrollFns(getTop: () => number, setTop: (pos: number) => void): void;
 
   /**
+   * Trigger the full scroll pipeline (render, events, afterScroll, velocity
+   * tracking, idle scheduling) using the current scroll position from $.sgt().
+   *
+   * Use this from animation loops (e.g. scale feature's smooth scroll) instead
+   * of scrollController.scrollTo() — it avoids the double-render caused by the
+   * scrollTo proxy calling $.rfn() after $.sst already triggered onScrollFrame.
+   */
+  triggerScrollFrame(): void;
+
+  /**
    * Set the scroll target element (default: viewport).
    * Used by window mode feature to use window instead of viewport for scroll events.
    */
