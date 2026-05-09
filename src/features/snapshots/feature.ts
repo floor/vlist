@@ -362,17 +362,23 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
         // Store the intended data index + fraction for the groups callback.
-        // Between restore and groups discovery, onStateChange may shrink
-        // the content (API returns data-only total), clamping scrollTop.
-        // The groups callback would then compute the wrong data index from
-        // the clamped scrollTop. The anchor bypasses this — groups reads
-        // the intended position directly.
+        // Two modes:
+        //   shortcut=true  → scrollTop is already correct (accounts for all
+        //                    original headers). Groups must NOT adjust.
+        //   shortcut=false → scrollTop may be clamped (content too short
+        //                    without headers). Groups uses the anchor to
+        //                    compute the correct position.
+        const usedShortcut = scrollPosition === snapshot.scrollTop;
         if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
           const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
-          ctx.methods.set("_restoreAnchor", { dataIndex: snapshot.dataIndex, fraction });
+          ctx.methods.set("_restoreAnchor", {
+            dataIndex: snapshot.dataIndex,
+            fraction,
+            skipAdjust: usedShortcut,
+          });
+          ctx.methods.set("_suppressSave", true);
         }
 
-        const usedShortcut = scrollPosition === snapshot.scrollTop;
         console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut} anchor=${snapshot.dataIndex !== undefined}`);
 
         ctx.scrollController.scrollTo(scrollPosition);
@@ -463,6 +469,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
       if (autoSaveKey) {
         saveToStorage = (): void => {
           if (restoreGuard) return;
+          if (ctx.methods.has("_suppressSave")) return;
           const getSnapshotFn = ctx.methods.get("getScrollSnapshot") as
             | (() => ScrollSnapshot)
             | undefined;
@@ -474,6 +481,8 @@ export const withSnapshots = <T extends VListItem = VListItem>(
             // sessionStorage full or unavailable — silently skip
           }
         };
+
+        ctx.methods.set("_saveSnapshot", saveToStorage);
 
         let saveTimer = 0;
         const debouncedSave = (): void => {

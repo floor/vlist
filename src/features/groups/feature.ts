@@ -796,7 +796,7 @@ function setupAsyncPath<T extends VListItem>(
     let dataIndexAtScroll = 0;
     let fractionInItem = 0;
     const restoreAnchor = ctx.methods.get("_restoreAnchor") as
-      | { dataIndex: number; fraction: number }
+      | { dataIndex: number; fraction: number; skipAdjust?: boolean }
       | undefined;
     if (restoreAnchor) {
       dataIndexAtScroll = restoreAnchor.dataIndex;
@@ -836,23 +836,47 @@ function setupAsyncPath<T extends VListItem>(
     // drifts to the wrong data items (especially with compression).
     const newHeaders = bridge.groupCount - headerCountBefore;
     if (newHeaders > 0 && (scrollBefore > 0 || restoreAnchor)) {
-      const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
-      let newScroll: number;
-
-      if (compression.isCompressed && compression.ratio !== 1) {
-        newScroll = ((newLayoutIndex + fractionInItem) / bridge.totalEntries) * compression.virtualSize;
+      if (restoreAnchor?.skipAdjust) {
+        // scrollTop was restored via the shortcut — it already accounts
+        // for the original header layout. Keep anchor+suppression for
+        // subsequent onItemsLoaded calls; don't save (sessionStorage
+        // already has the correct snapshot).
+        console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
       } else {
-        const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
-        const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
-        newScroll = newBaseOffset + fractionInItem * newItemSize;
+        const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
+        let newScroll: number;
+
+        if (compression.isCompressed && compression.ratio !== 1) {
+          newScroll = ((newLayoutIndex + fractionInItem) / bridge.totalEntries) * compression.virtualSize;
+        } else {
+          const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
+          const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
+          newScroll = newBaseOffset + fractionInItem * newItemSize;
+        }
+
+        console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
+
+        if (Math.abs(newScroll - scrollBefore) > 1) {
+          ctx.scrollController.scrollTo(newScroll);
+        }
+
+        if (restoreAnchor) {
+          // Lift save suppression and capture the correct post-adjustment
+          // state. Keep anchor for subsequent onItemsLoaded calls.
+          ctx.methods.delete("_suppressSave");
+          const forceSave = ctx.methods.get("_saveSnapshot") as (() => void) | undefined;
+          if (forceSave) forceSave();
+        }
       }
-
-      console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
-
-      if (restoreAnchor) ctx.methods.delete("_restoreAnchor");
-
-      if (Math.abs(newScroll - scrollBefore) > 1) {
-        ctx.scrollController.scrollTo(newScroll);
+    } else if (restoreAnchor) {
+      // No new headers — groups discovery settled for this viewport.
+      // Clean up anchor. For non-shortcut restores, save the final state.
+      const wasSkipAdjust = restoreAnchor.skipAdjust;
+      ctx.methods.delete("_restoreAnchor");
+      ctx.methods.delete("_suppressSave");
+      if (!wasSkipAdjust) {
+        const forceSave = ctx.methods.get("_saveSnapshot") as (() => void) | undefined;
+        if (forceSave) forceSave();
       }
     }
 
