@@ -246,11 +246,10 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // data manager so sizeCache/compression/content-height are correct
         // before we set the scroll position. This happens when reload()
         // was called with skipInitialLoad (no data fetched yet).
-        // Use layout total (snapshot.total) which includes group headers —
-        // the content must be large enough to hold the saved scroll position
-        // without browser clamping. Using dataTotal gives a shorter content
-        // that clamps positions near the bottom of grouped lists.
-        const bootstrapTotal = snapshot.total ?? snapshot.dataTotal;
+        // Use dataTotal (actual item count without group headers) — using
+        // snapshot.total (includes headers) would poison _getTotal() and
+        // cause dataTotal to increment on each reload cycle.
+        const bootstrapTotal = snapshot.dataTotal ?? snapshot.total;
         if (totalItems === 0 && bootstrapTotal && bootstrapTotal > 0) {
           ctx.dataManager.setTotal(bootstrapTotal);
           // Rebuild sizeCache and compression with the new total.
