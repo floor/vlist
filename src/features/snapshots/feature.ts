@@ -246,9 +246,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         // data manager so sizeCache/compression/content-height are correct
         // before we set the scroll position. This happens when reload()
         // was called with skipInitialLoad (no data fetched yet).
-        // Use dataTotal (actual item count) when available — snapshot.total
-        // may be a virtual total (e.g., grid row count) from a different mode.
-        const bootstrapTotal = snapshot.dataTotal ?? snapshot.total;
+        // Use layout total (snapshot.total) which includes group headers —
+        // the content must be large enough to hold the saved scroll position
+        // without browser clamping. Using dataTotal gives a shorter content
+        // that clamps positions near the bottom of grouped lists.
+        const bootstrapTotal = snapshot.total ?? snapshot.dataTotal;
         if (totalItems === 0 && bootstrapTotal && bootstrapTotal > 0) {
           ctx.dataManager.setTotal(bootstrapTotal);
           // Rebuild sizeCache and compression with the new total.
@@ -357,10 +359,22 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           ? ctx.state.viewportState.totalSize
           : compression.virtualSize;
         const maxScroll = Math.max(0, effectiveTotalSize - containerSize);
+
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
+        // Store the intended data index + fraction for the groups callback.
+        // Between restore and groups discovery, onStateChange may shrink
+        // the content (API returns data-only total), clamping scrollTop.
+        // The groups callback would then compute the wrong data index from
+        // the clamped scrollTop. The anchor bypasses this — groups reads
+        // the intended position directly.
+        if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
+          const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
+          ctx.methods.set("_restoreAnchor", { dataIndex: snapshot.dataIndex, fraction });
+        }
+
         const usedShortcut = scrollPosition === snapshot.scrollTop;
-        console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut}`);
+        console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut} anchor=${snapshot.dataIndex !== undefined}`);
 
         ctx.scrollController.scrollTo(scrollPosition);
 
