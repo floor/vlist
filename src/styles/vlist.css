@@ -414,7 +414,6 @@
 .vlist-group-header {
     cursor: default;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
-    border-bottom: 1px solid var(--vlist-border);
     z-index: 1;
     overflow: hidden;
 }
@@ -431,7 +430,6 @@
     left: 0;
     right: 0;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
-    border-bottom: 1px solid var(--vlist-border);
 }
 
 /* =============================================================================
