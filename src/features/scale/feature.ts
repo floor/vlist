@@ -520,7 +520,7 @@ export const withScale = <
           // (native scrollbar can't represent compressed space)
           // Check if withScrollbar feature already created one by looking for
           // the scrollbar track element
-          const hasScrollbarTrack = dom.viewport.querySelector(
+          const hasScrollbarTrack = dom.root.querySelector(
             `.${classPrefix}-scrollbar`,
           );
 
@@ -563,6 +563,7 @@ export const withScale = <
               {},
               classPrefix,
               horizontal,
+              dom.root,
             );
 
             // Ensure native scrollbar is hidden

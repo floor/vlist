@@ -105,19 +105,21 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
   return {
     name: "withScrollbar",
-    priority: 15,
+    priority: 30,
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;
       const { classPrefix, horizontal } = resolvedConfig;
 
-      // Create custom scrollbar
+      // Create custom scrollbar — DOM attaches to root (non-scrolling,
+      // position:relative) so the absolute-positioned track stays fixed.
       scrollbar = createScrollbar(
         dom.viewport,
         (position) => ctx.scrollController.scrollTo(position),
         config ?? {},
         classPrefix,
         horizontal,
+        dom.root,
       );
 
       // Ensure native scrollbar is hidden
