@@ -311,38 +311,33 @@ export const withScale = <
           // Called on each animation frame while the scroll is converging
           // toward targetScrollPosition. Produces intermediate positions that
           // prevent exact item-height-aligned jumps (the Firefox bug).
+          //
+          // Uses ctx.triggerScrollFrame() instead of scrollController.scrollTo()
+          // to avoid two problems:
+          //   1. The scrollTo setter resets targetScrollPosition and cancels
+          //      the rAF, killing multi-frame convergence (self-cancellation).
+          //   2. scrollTo called $.rfn() redundantly after onScrollFrame
+          //      already rendered (double render per frame).
           const smoothScrollTick = (): void => {
             const diff = targetScrollPosition - virtualScrollPosition;
 
-            // Safety: if data was cleared (total=0) while an animation
-            // was in flight, snap to 0 and stop.  The clamp in
-            // updateCompressionMode already resets via scrollTo(), but
-            // a rAF callback queued before the clamp could still fire.
             if (ctx.getVirtualTotal() === 0) {
               virtualScrollPosition = 0;
               targetScrollPosition = 0;
               smoothScrollId = null;
-              ctx.scrollController.scrollTo(0);
+              ctx.triggerScrollFrame();
               return;
             }
 
             if (Math.abs(diff) < SNAP_THRESHOLD) {
-              // Close enough — snap to target and stop animating
-              // Clamp targetScrollPosition to valid range before snapping —
-              // targetScrollPosition may have been set from a stale maxScroll
-              // (e.g. wheel handler fired before compression updated bounds).
               const comp = ctx.getCachedCompression();
               const maxScroll = Math.max(0, comp.virtualSize + slack - ctx.state.viewportState.containerSize);
               virtualScrollPosition = Math.max(0, Math.min(targetScrollPosition, maxScroll));
               targetScrollPosition = virtualScrollPosition;
               smoothScrollId = null;
             } else {
-              // Move a fraction of the remaining distance
               virtualScrollPosition += diff * LERP_FACTOR;
 
-              // Clamp virtualScrollPosition to valid range to prevent scrolling beyond maxScroll
-              // This is critical when user keeps scrolling at the bottom - targetScrollPosition
-              // gets clamped to maxScroll, but virtualScrollPosition can drift beyond it during lerp
               const comp = ctx.getCachedCompression();
               const maxScroll = comp.virtualSize + slack - ctx.state.viewportState.containerSize;
               virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
@@ -350,7 +345,7 @@ export const withScale = <
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
             }
 
-            ctx.scrollController.scrollTo(virtualScrollPosition);
+            ctx.triggerScrollFrame();
           };
 
           // ── Wheel handler ───────────────────────────────────────────────
@@ -439,34 +434,29 @@ export const withScale = <
 
             virtualScrollPosition = newPos;
             targetScrollPosition = newPos;
-            ctx.scrollController.scrollTo(newPos);
+            ctx.triggerScrollFrame();
           };
 
           const touchEndHandler = (_e: TouchEvent): void => {
-            // Calculate flick velocity from recent samples
             const now = performance.now();
 
-            // Filter samples within the velocity window
             const recent = touchSamples.filter(
               (s) => now - s.time < TOUCH_VELOCITY_WINDOW,
             );
 
-            let velocity = 0; // px/ms, positive = scrolling down
+            let velocity = 0;
             if (recent.length >= 2) {
               const first = recent[0]!;
               const last = recent[recent.length - 1]!;
               const dt = last.time - first.time;
               if (dt > 0) {
-                // finger up (negative dy) → positive velocity (scroll down)
                 velocity = (first.y - last.y) / dt;
               }
             }
             touchSamples = [];
 
-            // Apply momentum if flick was fast enough
             if (Math.abs(velocity) < TOUCH_MIN_VELOCITY) return;
 
-            // Convert velocity from px/ms to px/frame (~16ms at 60fps)
             let frameVelocity = velocity * 16;
 
             const momentumTick = (): void => {
@@ -484,21 +474,20 @@ export const withScale = <
               let newPos = virtualScrollPosition + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
 
-              // Stop at edges
               if (
                 (newPos <= 0 && frameVelocity < 0) ||
                 (newPos >= maxScroll && frameVelocity > 0)
               ) {
                 virtualScrollPosition = newPos;
                 targetScrollPosition = newPos;
-                ctx.scrollController.scrollTo(newPos);
+                ctx.triggerScrollFrame();
                 momentumId = null;
                 return;
               }
 
               virtualScrollPosition = newPos;
               targetScrollPosition = newPos;
-              ctx.scrollController.scrollTo(newPos);
+              ctx.triggerScrollFrame();
 
               momentumId = requestAnimationFrame(momentumTick);
             };
@@ -811,13 +800,12 @@ export const withScale = <
           firstItemPosition = null;
           firstItemIndex = null;
 
-          const compression = getCompressionState(totalItems, hc, force);
           calculateCompressedVisibleRange(
             scrollTop,
             containerHeight,
             hc,
             totalItems,
-            compression,
+            ctx.getCachedCompression(),
             out,
           );
         },
@@ -831,13 +819,12 @@ export const withScale = <
           totalItems: number,
           align: "start" | "center" | "end",
         ): number => {
-          const compression = getCompressionState(totalItems, hc, force);
           return calculateCompressedScrollToIndex(
             index,
             hc,
             containerHeight,
             totalItems,
-            compression,
+            ctx.getCachedCompression(),
             align,
           );
         },
@@ -851,17 +838,25 @@ export const withScale = <
       // compression formula, then position all other items using FIXED
       // OFFSETS relative to the first item. This ensures consistent spacing
       // between items regardless of floating-point edge cases.
+      //
+      // Per-frame cache: the anchor item position is recomputed once when
+      // scrollTop changes, then all other items use relative offsets.
+      let cachedScrollTop = NaN;
       let firstItemPosition: number | null = null;
       let firstItemIndex: number | null = null;
+      const isHoriz = horizontal;
 
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
-        const total = ctx.getVirtualTotal();
-        const compression = getCompressionState(total, ctx.sizeCache, force);
+        const scrollTop = ctx.scrollController.getScrollTop();
+        const comp = ctx.getCachedCompression();
 
-        if (compression.isCompressed) {
-          const scrollTop = ctx.scrollController.getScrollTop();
+        if (scrollTop !== cachedScrollTop) {
+          cachedScrollTop = scrollTop;
+          firstItemPosition = null;
+          firstItemIndex = null;
+        }
 
-          // Calculate first item position (anchor point)
+        if (comp.isCompressed) {
           if (firstItemPosition === null || index < firstItemIndex!) {
             firstItemIndex = index;
             firstItemPosition = Math.round(
@@ -869,27 +864,24 @@ export const withScale = <
                 index,
                 scrollTop,
                 ctx.sizeCache as any,
-                total,
+                ctx.getVirtualTotal(),
                 ctx.state.viewportState.containerSize,
-                compression,
+                comp,
               ),
             );
           }
 
-          // Position this item relative to the first item using fixed offsets
           const offset =
             firstItemPosition! +
             ctx.sizeCache.getOffset(index) -
             ctx.sizeCache.getOffset(firstItemIndex!);
 
-          const horizontal = ctx.config.horizontal;
-          el.style.transform = horizontal
+          el.style.transform = isHoriz
             ? `translateX(${offset}px)`
             : `translateY(${offset}px)`;
         } else {
           const offset = Math.round(ctx.sizeCache.getOffset(index));
-          const horizontal = ctx.config.horizontal;
-          el.style.transform = horizontal
+          el.style.transform = isHoriz
             ? `translateX(${offset}px)`
             : `translateY(${offset}px)`;
         }

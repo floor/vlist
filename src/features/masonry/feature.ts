@@ -37,6 +37,7 @@ import type { VListItem } from "../../types";
 import type { VListFeature, BuilderContext } from "../../builder/types";
 import { resolvePadding, crossAxisPaddingFrom, mainAxisPaddingFrom } from "../../utils/padding";
 import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
+import { createAriaResolvers } from "../../rendering/aria";
 
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
@@ -213,13 +214,16 @@ export const withMasonry = <T extends VListItem = VListItem>(
       // ── Create masonry renderer ──
       const template = rawConfig.item.template;
 
+      const aria = createAriaResolvers(ctx.methods, () => ctx.dataManager.getTotal());
+
       masonryRenderer = createMasonryRenderer<T>(
         dom.items,
         template,
         classPrefix,
         isHorizontal,
-        () => ctx.dataManager.getTotal(),
+        aria.getSetSize,
         resolvedConfig.ariaIdPrefix,
+        aria.getPosInSet,
       );
 
       // ── Wire updateItemClasses to the masonry renderer ──

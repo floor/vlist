@@ -1313,11 +1313,18 @@ describe("createDefaultScrollProxy", () => {
     refs.sst = (pos: number) => {
       scrolledTo = pos;
     };
+    refs.sgt = () => scrolledTo;
     let renderCalled = false;
     refs.rfn = () => {
       renderCalled = true;
     };
-    const deps = createTestDeps();
+    const deps = {
+      ...createTestDeps(),
+      onScrollFrame: () => {
+        refs.ls = refs.sgt();
+        refs.rfn();
+      },
+    };
     const proxy = createDefaultScrollProxy(refs, deps);
 
     proxy.scrollTo(1000);
@@ -1333,12 +1340,19 @@ describe("createDefaultScrollProxy", () => {
     let scrolledTo = -1;
     refs.sst = (pos: number) => {
       scrolledTo = pos;
+      refs.sgt = () => pos;
     };
     let renderCalled = false;
     refs.rfn = () => {
       renderCalled = true;
     };
-    const deps = createTestDeps();
+    const deps = {
+      ...createTestDeps(),
+      onScrollFrame: () => {
+        refs.ls = refs.sgt();
+        refs.rfn();
+      },
+    };
     const proxy = createDefaultScrollProxy(refs, deps);
 
     proxy.scrollBy(200);

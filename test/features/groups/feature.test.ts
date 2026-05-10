@@ -229,6 +229,7 @@ function createMockContext(): BuilderContext<TestItem> {
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: () => {},
+    triggerScrollFrame: () => {},
     setScrollTarget: () => {},
     getScrollTarget: () => testDom.viewport as any,
     setContainerDimensions: () => {},
@@ -847,6 +848,7 @@ describe("withGroups — Async Path", () => {
       setPositionElementFn: () => {},
       setUpdateItemClassesFn: () => {},
       setScrollFns: () => {},
+      triggerScrollFrame: () => {},
       setScrollTarget: () => {},
       getScrollTarget: () => testDom.viewport as any,
       setContainerDimensions: () => {},
@@ -1132,6 +1134,31 @@ describe("withGroups — Async Path", () => {
     // scrollTo should have been called to correct for header insertion
     const history = getScrollToHistory();
     expect(history.length).toBeGreaterThan(0);
+  });
+
+  it("scroll drift correction does not jump to 0 when position lands on a group header", async () => {
+    // With 50px items: scrollTop=300 → indexAtOffset(300) = 6.
+    // After groups discovery, layout index 6 is group B's header.
+    // layoutToDataIndex(6) returns -1. Without the fix,
+    // dataToLayoutIndex(-1) maps to layout 0, jumping to position 0.
+    const items = makeItems([["A", 5], ["B", 5]]);
+    const { ctx, getScrollToHistory, fireOnItemsLoaded } = createAsyncMockContext(items, {
+      scrollTop: 300,
+    });
+
+    const feature = withGroups<AsyncTestItem>({
+      getGroupForIndex: (_i, item) => item?.group ?? "?",
+      header: { height: 32, template: (key) => `<div>${key}</div>` },
+      sticky: false,
+    });
+    feature.setup!(ctx);
+    await flushMicrotasks();
+    fireOnItemsLoaded(items, 0, items.length);
+
+    const history = getScrollToHistory();
+    for (const pos of history) {
+      expect(pos).toBeGreaterThan(100);
+    }
   });
 
   it("bridgeAsLayout.getEntry returns correct entry types", async () => {

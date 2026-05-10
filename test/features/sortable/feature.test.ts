@@ -223,6 +223,7 @@ function createMockContext(): BuilderContext<TestItem> {
     setUpdateItemClassesFn: mock(() => {}),
     setRenderFns: mock(() => {}),
     setScrollFns: mock(() => {}),
+    triggerScrollFrame: () => {},
     setScrollTarget: mock(() => {}),
     getScrollTarget: () => testDom.viewport,
     setContainerDimensions: mock(() => {}),

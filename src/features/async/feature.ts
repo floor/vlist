@@ -198,7 +198,9 @@ export const withAsync = <T extends VListItem = VListItem>(
         onStateChange: () => {
           if (ctx.state.isInitialized) {
             const newTotal = ctx.getVirtualTotal();
-            ctx.sizeCache.rebuild(newTotal);
+            if (newTotal !== ctx.sizeCache.getTotal()) {
+              ctx.sizeCache.rebuild(newTotal);
+            }
             ctx.updateCompressionMode();
 
             const compression = ctx.getCachedCompression();
@@ -209,6 +211,10 @@ export const withAsync = <T extends VListItem = VListItem>(
 
             ctx.updateContentSize(compression.virtualSize);
             ctx.renderIfNeeded();
+            // const scrollAfter = ctx.scrollController.getScrollTop();
+            // if (Math.abs(scrollAfter - scrollBefore) > 1) {
+            //   console.log(`[ASYNC onStateChange] scroll ${scrollBefore} -> ${scrollAfter} (delta=${scrollAfter - scrollBefore}) total=${newTotal} contentSize=${compression.virtualSize}`);
+            // }
           }
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
@@ -220,6 +226,12 @@ export const withAsync = <T extends VListItem = VListItem>(
             // Force render to replace placeholders with actual data immediately
             // This is necessary so the DOM shows loaded items instead of placeholders
             ctx.forceRender();
+            // const scrollAfter = ctx.scrollController.getScrollTop();
+
+            // if (Math.abs(scrollAfter - scrollBefore) > 1) {
+            //   console.log(`[ASYNC onItemsLoaded] scroll ${scrollBefore} -> ${scrollAfter} (delta=${scrollAfter - scrollBefore}) offset=${_offset} count=${loadedItems.length}`);
+            // }
+
             emitter.emit("load:end", { items: loadedItems, total, offset: _offset });
           }
         },

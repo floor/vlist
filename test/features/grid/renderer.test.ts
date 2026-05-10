@@ -1562,3 +1562,196 @@ describe("grid renderer compressed positioning", () => {
     gridRenderer.destroy();
   });
 });
+
+// =============================================================================
+// Group Header ARIA Handling
+// =============================================================================
+
+describe("grid renderer — group header ARIA", () => {
+  let container: HTMLElement;
+  let gridLayout: GridLayout;
+  let sizeCache: SizeCache;
+
+  interface GroupedItem extends VListItem {
+    id: string | number;
+    name: string;
+    __groupHeader?: true;
+    groupKey?: string;
+    groupIndex?: number;
+  }
+
+  const makeHeader = (groupIndex: number, key: string): GroupedItem => ({
+    id: `__group_header_${groupIndex}`,
+    name: key,
+    __groupHeader: true,
+    groupKey: key,
+    groupIndex,
+  });
+
+  const makeItem = (id: number, name: string): GroupedItem => ({
+    id,
+    name,
+  });
+
+  beforeEach(() => {
+    container = createItemsContainer();
+    gridLayout = createGridLayout({ columns: 4, gap: 8 });
+    sizeCache = createMockSizeCache(100);
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  it("should set role=presentation on group headers and role=option on data items", () => {
+    const renderer = createGridRenderer<GroupedItem>(
+      container,
+      (item) => `<span>${item.name}</span>`,
+      sizeCache,
+      gridLayout,
+      "vlist",
+      800,
+      () => 10,
+      "test",
+    );
+
+    const items: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+      makeItem(2, "Bob"),
+    ];
+    renderer.render(items, { start: 0, end: 2 }, new Set(), -1);
+
+    const header = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(header.getAttribute("role")).toBe("presentation");
+    expect(header.hasAttribute("aria-setsize")).toBe(false);
+    expect(header.hasAttribute("aria-posinset")).toBe(false);
+    expect(header.hasAttribute("aria-selected")).toBe(false);
+
+    const item1 = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(item1.getAttribute("role")).toBe("option");
+    expect(item1.getAttribute("aria-setsize")).toBe("10");
+
+    renderer.destroy();
+  });
+
+  it("should use ariaPosInSetGetter for aria-posinset on data items", () => {
+    // Simulate groups: layout 0=header, 1=data0, 2=data1, 3=header, 4=data2
+    const posInSet = (layoutIndex: number): number => {
+      const map: Record<number, number> = { 1: 1, 2: 2, 4: 3 };
+      return map[layoutIndex] ?? layoutIndex + 1;
+    };
+
+    const renderer = createGridRenderer<GroupedItem>(
+      container,
+      (item) => `<span>${item.name}</span>`,
+      sizeCache,
+      gridLayout,
+      "vlist",
+      800,
+      () => 3, // data total (not layout total of 5)
+      "test",
+      false,
+      posInSet,
+    );
+
+    const items: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+      makeItem(2, "Bob"),
+      makeHeader(1, "B"),
+      makeItem(3, "Charlie"),
+    ];
+    renderer.render(items, { start: 0, end: 4 }, new Set(), -1);
+
+    // Data items should have data-space positions
+    const el1 = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(el1.getAttribute("aria-setsize")).toBe("3");
+    expect(el1.getAttribute("aria-posinset")).toBe("1");
+
+    const el2 = container.querySelector("[data-index='2']") as HTMLElement;
+    expect(el2.getAttribute("aria-posinset")).toBe("2");
+
+    const el4 = container.querySelector("[data-index='4']") as HTMLElement;
+    expect(el4.getAttribute("aria-posinset")).toBe("3");
+
+    // Headers should have no ARIA position attrs
+    const h0 = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(h0.hasAttribute("aria-posinset")).toBe(false);
+    const h3 = container.querySelector("[data-index='3']") as HTMLElement;
+    expect(h3.hasAttribute("aria-posinset")).toBe(false);
+
+    renderer.destroy();
+  });
+
+  it("should not write aria-setsize on group headers when total changes", () => {
+    let total = 10;
+    const renderer = createGridRenderer<GroupedItem>(
+      container,
+      (item) => `<span>${item.name}</span>`,
+      sizeCache,
+      gridLayout,
+      "vlist",
+      800,
+      () => total,
+    );
+
+    const items: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+    ];
+    renderer.render(items, { start: 0, end: 1 }, new Set(), -1);
+
+    const header = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(header.hasAttribute("aria-setsize")).toBe(false);
+
+    // Change total and re-render
+    total = 20;
+    renderer.render(items, { start: 0, end: 1 }, new Set(), -1);
+
+    // Header should still not have aria-setsize
+    expect(header.hasAttribute("aria-setsize")).toBe(false);
+
+    renderer.destroy();
+  });
+
+  it("should refresh aria-posinset when element is reused for a different item", () => {
+    const posInSet = (layoutIndex: number): number => layoutIndex; // 0-based for simplicity
+
+    const renderer = createGridRenderer<GroupedItem>(
+      container,
+      (item) => `<span>${item.name}</span>`,
+      sizeCache,
+      gridLayout,
+      "vlist",
+      800,
+      () => 5,
+      "test",
+      false,
+      posInSet,
+    );
+
+    // First render: item at index 1
+    const items1: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+    ];
+    renderer.render(items1, { start: 0, end: 1 }, new Set(), -1);
+
+    const el1 = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(el1.getAttribute("aria-posinset")).toBe("1");
+
+    // Re-render with different item at same index (simulates placeholder → real data)
+    const items2: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(99, "Zara"),
+    ];
+    renderer.render(items2, { start: 0, end: 1 }, new Set(), -1);
+
+    // aria-posinset should be refreshed
+    const el1After = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(el1After.getAttribute("aria-posinset")).toBe("1");
+
+    renderer.destroy();
+  });
+});

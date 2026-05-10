@@ -222,6 +222,7 @@ function createMockContext(): BuilderContext<TestItem> {
     setPositionElementFn: () => {},
     setUpdateItemClassesFn: () => {},
     setScrollFns: () => {},
+    triggerScrollFrame: () => {},
     setScrollTarget: () => {},
     getScrollTarget: () => testDom.viewport as any,
     setContainerDimensions: () => {},
@@ -247,7 +248,7 @@ describe("withScrollbar — Factory", () => {
     const feature = withScrollbar<TestItem>();
 
     expect(feature.name).toBe("withScrollbar");
-    expect(feature.priority).toBe(30);
+    expect(feature.priority).toBe(15);
     expect(typeof feature.setup).toBe("function");
   });
 

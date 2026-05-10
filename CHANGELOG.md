@@ -11,6 +11,31 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-05-10
+
+### Added
+
+- **builder**: Prevent DOM flooding when container lacks height constraint.
+- **groups**: Compressed scroll space support in sticky headers.
+
+### Performance
+
+- **async**: Eliminate O(n) hot-path bottlenecks in scroll pipeline — `loadRange()` uses direct chunk scan (O(range/chunkSize)) instead of scanning all cached chunks. Reduces per-frame cost from 28-35ms to <1ms on 892K-item lists.
+- **async**: Skip redundant `sizeCache.rebuild()` when total hasn't changed — avoids O(n) prefix-sum recomputation on every `isLoading` toggle.
+- **scale**: Eliminate double renders and per-frame object allocations — new `triggerScrollFrame()` API bypasses `scrollTo()` in animation loops, cached compression state removes 3+ allocations per frame.
+
+### Fixed
+
+- **groups**: Prevent scroll jump to top when scroll position lands on a group header during header-discovery adjustment.
+- **groups**: `aria-setsize` and `aria-posinset` now use data-space values (exclude headers from count).
+- **groups**: Use distinct CSS class (`-group-header`) and ARIA role for group header elements.
+- **groups**: End key navigates to last item on async grouped lists.
+- **groups**: Use sizeCache prefix sums for compressed visible range with mixed item sizes.
+- **selection**: Skip group headers after `removeItem`.
+- **snapshots**: Fix scroll drift on reload with compressed groups — restore anchor for grouped scroll position.
+- **snapshots**: Suppress auto-save during restore and persist anchor across subsequent `onItemsLoaded` calls.
+- **snapshots**: Bootstrap with `dataTotal` to prevent total inflation on restore.
+
 ## [1.7.5] - 2026-05-08
 
 ### Added
@@ -207,7 +232,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v1.7.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v1.7.6...HEAD
+[1.7.6]: https://github.com/floor/vlist/compare/v1.7.5...v1.7.6
+[1.7.5]: https://github.com/floor/vlist/compare/v1.7.4...v1.7.5
+[1.7.4]: https://github.com/floor/vlist/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/floor/vlist/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/floor/vlist/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/floor/vlist/compare/v1.7.0...v1.7.1
