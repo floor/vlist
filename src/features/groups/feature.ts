@@ -426,8 +426,10 @@ function setupStaticPath<T extends VListItem>(
       gridLayout,
       classPrefix,
       ctx.getContainerWidth(),
-      () => ctx.dataManager.getTotal(),
+      () => originalItems.length,
       resolvedConfig.ariaIdPrefix,
+      resolvedConfig.horizontal,
+      (layoutIndex: number): number => groupLayout.layoutToDataIndex(layoutIndex) + 1,
     );
     replaceGridRenderer(newGridRenderer);
   } else if (getTableLayout && updateTableForGroups) {
@@ -463,6 +465,8 @@ function setupStaticPath<T extends VListItem>(
       renderInto,
       classPrefix,
       resolvedConfig.horizontal,
+      0,
+      () => ctx.getCachedCompression().ratio,
     );
     localStickyHeader = sticky;
     setStickyHeader(sticky);
@@ -750,6 +754,7 @@ function setupAsyncPath<T extends VListItem>(
       classPrefix,
       resolvedConfig.horizontal,
       0,
+      () => ctx.getCachedCompression().ratio,
     );
     setStickyHeader(asyncStickyHeader);
 
@@ -761,21 +766,59 @@ function setupAsyncPath<T extends VListItem>(
     );
   }
 
+  // ── End key: ensure tail data is loaded so totalEntries is accurate ──
+  // Tracks the data index we're waiting for (-1 = not waiting).
+  let pendingTailDataIndex = -1;
+
+  ctx.methods.set("_ensureTailLoaded", (): void => {
+    const dataTotal = asyncDataManager.getTotal();
+    if (dataTotal <= 0) return;
+    const lastIndex = dataTotal - 1;
+    if (asyncDataManager.isItemLoaded(lastIndex)) return;
+    pendingTailDataIndex = lastIndex;
+    asyncDataManager.ensureRange(lastIndex, lastIndex);
+  });
+
   // ── Subscribe to items loaded — rebuild groups incrementally ──
   registerOnItemsLoaded((items: T[], offset: number, total: number) => {
     const scrollBefore = ctx.scrollController.getScrollTop();
     const headerCountBefore = bridge.groupCount;
+    // bridge.totalEntries is 0 before the first onItemsLoaded — fall back
+    // to the async data total so compressed-space math uses the same total
+    // that compression was computed from (via virtualTotalFn's fallback).
+    const totalEntriesBefore = bridge.totalEntries || total;
 
     // Capture the data item + fractional offset at the current scroll
     // position BEFORE rebuilding, so we can restore it after.
+    // If a snapshot restore anchor exists, use it directly — scrollTop
+    // may have been clamped by onStateChange shrinking the content
+    // before groups were discovered.
     let dataIndexAtScroll = 0;
     let fractionInItem = 0;
-    if (scrollBefore > 0) {
-      const layoutIndex = ctx.sizeCache.indexAtOffset(scrollBefore);
+    const restoreAnchor = ctx.methods.get("_restoreAnchor") as unknown as
+      | { dataIndex: number; fraction: number; skipAdjust?: boolean }
+      | undefined;
+    if (restoreAnchor) {
+      dataIndexAtScroll = restoreAnchor.dataIndex;
+      fractionInItem = restoreAnchor.fraction;
+    } else if (scrollBefore > 0) {
+      // Convert scrollTop to actual (uncompressed) position, then use
+      // sizeCache prefix sums to find the layout index. This works for
+      // both compressed and non-compressed lists — ratio is 1 when
+      // uncompressed, so the division is a no-op.
+      const compressionBefore = ctx.getCachedCompression();
+      const actualPosition = compressionBefore.ratio !== 1
+        ? scrollBefore / compressionBefore.ratio
+        : scrollBefore;
+      let layoutIndex = ctx.sizeCache.indexAtOffset(actualPosition);
+      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      if (dataIndexAtScroll < 0 && layoutIndex + 1 < bridge.totalEntries) {
+        layoutIndex = layoutIndex + 1;
+        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      }
       const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
       const itemSize = ctx.sizeCache.getSize(layoutIndex);
-      fractionInItem = itemSize > 0 ? (scrollBefore - baseOffset) / itemSize : 0;
-      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      fractionInItem = itemSize > 0 ? (actualPosition - baseOffset) / itemSize : 0;
     }
 
     bridge.onItemsLoaded(items as VListItem[], offset, total);
@@ -795,13 +838,43 @@ function setupAsyncPath<T extends VListItem>(
     // New headers shift items down — without correction the viewport
     // drifts to the wrong data items (especially with compression).
     const newHeaders = bridge.groupCount - headerCountBefore;
-    if (newHeaders > 0 && scrollBefore > 0) {
-      const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
-      const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
-      const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
-      const newScroll = newBaseOffset + fractionInItem * newItemSize;
-      if (Math.abs(newScroll - scrollBefore) > 1) {
-        ctx.scrollController.scrollTo(newScroll);
+    if (newHeaders > 0 && (scrollBefore > 0 || restoreAnchor)) {
+      if (restoreAnchor?.skipAdjust) {
+        // scrollTop was restored via the shortcut — it already accounts
+        // for the original header layout. Keep anchor+suppression for
+        // subsequent onItemsLoaded calls; don't save (sessionStorage
+        // already has the correct snapshot).
+        // console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
+      } else if (dataIndexAtScroll >= 0) {
+        const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
+        const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
+        const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
+        const newActualOffset = newBaseOffset + fractionInItem * newItemSize;
+        const newScroll = compression.ratio !== 1
+          ? newActualOffset * compression.ratio
+          : newActualOffset;
+
+        if (Math.abs(newScroll - scrollBefore) > 1) {
+          ctx.scrollController.scrollTo(newScroll);
+        }
+
+        if (restoreAnchor) {
+          // Lift save suppression and capture the correct post-adjustment
+          // state. Keep anchor for subsequent onItemsLoaded calls.
+          ctx.methods.delete("_suppressSave");
+          const forceSave = ctx.methods.get("_saveSnapshot") as (() => void) | undefined;
+          if (forceSave) forceSave();
+        }
+      }
+    } else if (restoreAnchor) {
+      // No new headers — groups discovery settled for this viewport.
+      // Clean up anchor. For non-shortcut restores, save the final state.
+      const wasSkipAdjust = restoreAnchor.skipAdjust;
+      ctx.methods.delete("_restoreAnchor");
+      ctx.methods.delete("_suppressSave");
+      if (!wasSkipAdjust) {
+        const forceSave = ctx.methods.get("_saveSnapshot") as (() => void) | undefined;
+        if (forceSave) forceSave();
       }
     }
 
@@ -812,6 +885,25 @@ function setupAsyncPath<T extends VListItem>(
     if (asyncStickyHeader) {
       asyncStickyHeader.refresh();
       asyncStickyHeader.update(ctx.scrollController.getScrollTop());
+    }
+
+    // After groups rebuild, if End key triggered tail loading and the
+    // specific tail item is now loaded, correct the focused index.
+    // Only fires when: (1) we requested a specific tail item,
+    // (2) that item is now loaded, (3) focus is still at the old end.
+    if (pendingTailDataIndex >= 0 && asyncDataManager.isItemLoaded(pendingTailDataIndex)) {
+      const targetLayout = bridge.dataToLayoutIndex(pendingTailDataIndex);
+      pendingTailDataIndex = -1;
+
+      const getFi = ctx.methods.get("_getFocusedIndex") as (() => number) | undefined;
+      const fi = getFi ? getFi() : -1;
+
+      if (fi >= 0 && fi >= totalEntriesBefore - 1 && targetLayout !== fi) {
+        let dest = targetLayout;
+        while (dest > 0 && bridge.isHeader(dest)) dest--;
+        const setFi = ctx.methods.get("_setFocusedIndex") as ((idx: number) => void) | undefined;
+        if (setFi) setFi(dest);
+      }
     }
   });
 

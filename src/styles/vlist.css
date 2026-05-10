@@ -192,6 +192,7 @@
 
 /* Viewport (scrollable area) */
 .vlist-viewport {
+    position: relative;
     width: 100%;
     height: 100%;
     overflow: auto;
@@ -243,7 +244,8 @@
 }
 
 /* Individual item */
-.vlist-item {
+.vlist-item,
+.vlist-group-header {
     position: absolute;
     top: 0;
     left: 0;
@@ -265,7 +267,9 @@
 
 /* Suppress transitions during active scroll for better performance */
 .vlist--scrolling .vlist-item,
-.vlist--settling .vlist-item {
+.vlist--settling .vlist-item,
+.vlist--scrolling .vlist-group-header,
+.vlist--settling .vlist-group-header {
     transition: none;
 }
 
@@ -407,7 +411,7 @@
    ============================================================================= */
 
 /* Grouped list modifier */
-.vlist--grouped .vlist-item[data-id^="__group_header_"] {
+.vlist-group-header {
     cursor: default;
     background-color: var(--vlist-group-header-bg, #f3f4f6);
     border-bottom: 1px solid var(--vlist-border);
@@ -415,7 +419,7 @@
     overflow: hidden;
 }
 
-.vlist--grouped .vlist-item[data-id^="__group_header_"]:hover {
+.vlist-group-header:hover {
     background-color: var(--vlist-group-header-bg, #f3f4f6);
 }
 
@@ -458,7 +462,8 @@
 }
 
 /* Individual item — positioned absolutely on the X axis */
-.vlist--horizontal .vlist-item {
+.vlist--horizontal .vlist-item,
+.vlist--horizontal .vlist-group-header {
     position: absolute;
     top: 0;
     bottom: 0;

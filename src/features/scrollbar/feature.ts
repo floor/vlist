@@ -105,7 +105,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
   return {
     name: "withScrollbar",
-    priority: 30,
+    priority: 15,
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;

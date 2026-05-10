@@ -15,6 +15,7 @@ dist/
 
 #AI
 .cursor/
+.claude/
 .claude/settings.local.json
 .claude/worktrees
 scratchpad

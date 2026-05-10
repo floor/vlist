@@ -1573,3 +1573,162 @@ describe("masonry renderer — sortDOM", () => {
     expect(afterSort).toEqual(["0", "1", "2"]);
   });
 });
+
+// =============================================================================
+// Group Header ARIA Handling
+// =============================================================================
+
+describe("masonry renderer — group header ARIA", () => {
+  let container: HTMLElement;
+
+  interface GroupedItem extends VListItem {
+    id: string | number;
+    name: string;
+    __groupHeader?: true;
+    groupKey?: string;
+    groupIndex?: number;
+  }
+
+  const makeHeader = (groupIndex: number, key: string): GroupedItem => ({
+    id: `__group_header_${groupIndex}`,
+    name: key,
+    __groupHeader: true,
+    groupKey: key,
+    groupIndex,
+  });
+
+  const makeItem = (id: number, name: string): GroupedItem => ({
+    id,
+    name,
+  });
+
+  const groupedTemplate: ItemTemplate<GroupedItem> = (
+    item: GroupedItem,
+  ): string => `<span>${item.name}</span>`;
+
+  beforeEach(() => {
+    container = createItemsContainer();
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  it("should set role=presentation on group headers and role=option on data items", () => {
+    const renderer = createMasonryRenderer<GroupedItem>(
+      container,
+      groupedTemplate,
+      "vlist",
+      false,
+      () => 10,
+      "test",
+    );
+
+    const items: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+      makeItem(2, "Bob"),
+    ];
+    const getItem: GetItemFn<GroupedItem> = (i) => items[i];
+    const placements: ItemPlacement[] = [
+      createPlacement(0),
+      createPlacement(1),
+      createPlacement(2),
+    ];
+
+    renderer.render(getItem, placements, new Set(), -1);
+
+    const header = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(header.getAttribute("role")).toBe("presentation");
+    expect(header.hasAttribute("aria-setsize")).toBe(false);
+    expect(header.hasAttribute("aria-posinset")).toBe(false);
+    expect(header.hasAttribute("aria-selected")).toBe(false);
+
+    const item1 = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(item1.getAttribute("role")).toBe("option");
+    expect(item1.getAttribute("aria-setsize")).toBe("10");
+
+    renderer.destroy();
+  });
+
+  it("should use ariaPosInSetGetter for aria-posinset on data items", () => {
+    // layout 0=header, 1=data0, 2=data1, 3=header, 4=data2
+    const posInSet = (layoutIndex: number): number => {
+      const map: Record<number, number> = { 1: 1, 2: 2, 4: 3 };
+      return map[layoutIndex] ?? layoutIndex + 1;
+    };
+
+    const renderer = createMasonryRenderer<GroupedItem>(
+      container,
+      groupedTemplate,
+      "vlist",
+      false,
+      () => 3,
+      "test",
+      posInSet,
+    );
+
+    const items: GroupedItem[] = [
+      makeHeader(0, "A"),
+      makeItem(1, "Alice"),
+      makeItem(2, "Bob"),
+      makeHeader(1, "B"),
+      makeItem(3, "Charlie"),
+    ];
+    const getItem: GetItemFn<GroupedItem> = (i) => items[i];
+    const placements: ItemPlacement[] = items.map((_, i) => createPlacement(i));
+
+    renderer.render(getItem, placements, new Set(), -1);
+
+    const el1 = container.querySelector("[data-index='1']") as HTMLElement;
+    expect(el1.getAttribute("aria-setsize")).toBe("3");
+    expect(el1.getAttribute("aria-posinset")).toBe("1");
+
+    const el2 = container.querySelector("[data-index='2']") as HTMLElement;
+    expect(el2.getAttribute("aria-posinset")).toBe("2");
+
+    const el4 = container.querySelector("[data-index='4']") as HTMLElement;
+    expect(el4.getAttribute("aria-posinset")).toBe("3");
+
+    // Headers have no ARIA position attrs
+    const h0 = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(h0.hasAttribute("aria-posinset")).toBe(false);
+
+    renderer.destroy();
+  });
+
+  it("should refresh aria-posinset when element is reused for a different item", () => {
+    const posInSet = (layoutIndex: number): number => layoutIndex + 1;
+
+    const renderer = createMasonryRenderer<GroupedItem>(
+      container,
+      groupedTemplate,
+      "vlist",
+      false,
+      () => 5,
+      "test",
+      posInSet,
+    );
+
+    // First render
+    const items1: GroupedItem[] = [makeItem(1, "Alice"), makeItem(2, "Bob")];
+    const getItem1: GetItemFn<GroupedItem> = (i) => items1[i];
+    const placements = [createPlacement(0), createPlacement(1)];
+
+    renderer.render(getItem1, placements, new Set(), -1);
+
+    const el0 = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(el0.getAttribute("aria-posinset")).toBe("1");
+
+    // Re-render with different item at same index
+    const items2: GroupedItem[] = [makeItem(99, "Zara"), makeItem(2, "Bob")];
+    const getItem2: GetItemFn<GroupedItem> = (i) => items2[i];
+
+    renderer.render(getItem2, placements, new Set(), -1);
+
+    const el0After = container.querySelector("[data-index='0']") as HTMLElement;
+    expect(el0After.getAttribute("aria-posinset")).toBe("1");
+
+    renderer.destroy();
+  });
+});

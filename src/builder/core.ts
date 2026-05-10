@@ -53,6 +53,7 @@ import {
 } from "./materialize";
 import type { MRefs } from "./materialize";
 import { setupBaselineA11y } from "./a11y";
+import { createAriaResolvers } from "../rendering/aria";
 import { claimPlaceholderSelection } from "../features/selection/state";
 import { createApi } from "./api";
 // Inlined from constants.ts to avoid pulling in the full constants module
@@ -60,6 +61,12 @@ const OVERSCAN = 3;
 const CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 const MAX_CONTENT_SIZE = 16_000_000; // Cap content element to avoid browser overhead for extremely tall elements
+const SCREEN_FALLBACK = 4096;
+
+const getScreenMax = (horizontal: boolean): number =>
+  (typeof screen !== "undefined"
+    ? (horizontal ? screen.width : screen.height)
+    : 0) || SCREEN_FALLBACK;
 
 // =============================================================================
 // Module-level instance counter for unique ARIA element IDs
@@ -219,6 +226,8 @@ function materialize<T extends VListItem = VListItem>(
     interactive: interactiveMode,
   };
 
+  const screenMax = getScreenMax(isHorizontal);
+
   // ── Sort and validate features ───────────────────────────────────
   const sortedFeatures = Array.from(features.values()).sort(
     (a, b) => (a.priority ?? 50) - (b.priority ?? 50),
@@ -373,8 +382,8 @@ function materialize<T extends VListItem = VListItem>(
   const $: MRefs<T> = {
     it: initialItemsArray,
     hc: initialSizeCache,
-    ch: dom.viewport.clientHeight,
-    cw: dom.viewport.clientWidth,
+    ch: Math.min(dom.viewport.clientHeight, screenMax),
+    cw: Math.min(dom.viewport.clientWidth, screenMax),
     id: false,
     ii: false,
     ls: 0,
@@ -503,6 +512,7 @@ function materialize<T extends VListItem = VListItem>(
 
   const itemState: ItemState = { selected: false, focused: false };
   const baseClass = `${classPrefix}-item`;
+  const groupHeaderClass = `${classPrefix}-group-header`;
   const selClass = `${classPrefix}-item--selected`;
   const focClass = `${classPrefix}-item--focused`;
 
@@ -554,6 +564,7 @@ function materialize<T extends VListItem = VListItem>(
   let selectionIdsGetter: (() => Set<string | number>) | null = null;
   let selectionFocusGetter: (() => number) | null = null;
   let selectionGettersResolved = false;
+  let warnedOverflow = false;
 
   const resolveSelectionGetters = (): void => {
     if (selectionGettersResolved) return;
@@ -561,6 +572,9 @@ function materialize<T extends VListItem = VListItem>(
     selectionIdsGetter = (methods.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
     selectionFocusGetter = (methods.get("_getFocusedIndex") as (() => number)) ?? null;
   };
+
+  // ── ARIA resolvers (groups feature registers _getTotal / _layoutToDataIndex) ──
+  const aria = createAriaResolvers(methods, $.vtf);
 
   // ── Rendering ───────────────────────────────────────────────────
 
@@ -594,7 +608,9 @@ function materialize<T extends VListItem = VListItem>(
 
   const renderItem = (index: number, item: T): HTMLElement => {
     const element = pool.acquire();
-    element.className = baseClass;
+    const isGH = !!(item as Record<string, unknown>).__groupHeader;
+
+    element.className = isGH ? groupHeaderClass : baseClass;
 
     // When autosize is active, unmeasured items get no explicit size so
     // ResizeObserver can measure the real content height.
@@ -619,11 +635,21 @@ function materialize<T extends VListItem = VListItem>(
 
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
-    element.ariaSelected = "false";
-    element.id = `${ariaIdPrefix}-item-${index}`;
-    $.la = String($.vtf());
-    element.setAttribute("aria-setsize", $.la);
-    element.setAttribute("aria-posinset", String(index + 1));
+
+    if (isGH) {
+      element.setAttribute("role", "presentation");
+      element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-setsize");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("id");
+    } else {
+      element.setAttribute("role", "option");
+      element.ariaSelected = "false";
+      element.id = `${ariaIdPrefix}-item-${index}`;
+      $.la = String(aria.getSetSize());
+      element.setAttribute("aria-setsize", $.la);
+      element.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
+    }
 
     // Add placeholder class if this is a placeholder item
     const isPlaceholder = String(item.id).startsWith(PH);
@@ -661,6 +687,8 @@ function materialize<T extends VListItem = VListItem>(
   // ── Main render function ────────────────────────────────────────
   // This is the hot path — called on every scroll-triggered range change.
 
+  let lastRepositionedScroll = NaN;
+
   const coreRenderIfNeeded = (): void => {
     if ($.id) return;
 
@@ -681,14 +709,35 @@ function materialize<T extends VListItem = VListItem>(
     $.gvr($.ls, containerSize, $.hc, total, visibleRange);
     applyOverscan(visibleRange, overscan, total, renderRange);
 
+    // Redundant safety net — containerSize is already clamped to screen
+    // size at the observer level, but guard here in case a code path
+    // writes $.ch / $.cw directly.
+    const renderCount = renderRange.end - renderRange.start + 1;
+    const itemSize = $.hc.getSize(0) || 1;
+    const safeMaxRender = Math.ceil(screenMax / itemSize) + overscan * 2;
+    if (renderCount > safeMaxRender) {
+      if (!warnedOverflow) {
+        warnedOverflow = true;
+        console.warn(
+          `[vlist] Render range capped: ${renderCount} items → ${safeMaxRender}. ` +
+          `Container is ${containerSize}px tall (item: ${itemSize}px). ` +
+          `This usually means the container has no CSS height constraint.`,
+        );
+      }
+      renderRange.end = renderRange.start + safeMaxRender - 1;
+    }
+
     if (
       renderRange.start === lastRenderRange.start &&
       renderRange.end === lastRenderRange.end
     ) {
       // In compressed mode, items must be repositioned even when range is unchanged
-      // because their positions are relative to the viewport, not absolute
-      if ($.sic) {
-        // Reposition all currently rendered items
+      // because their positions are relative to the viewport, not absolute.
+      // Skip if we already repositioned at this exact scroll position (prevents
+      // the double-render caused by scrollTo calling both $.sst→onScrollFrame→$.rfn
+      // and then $.rfn again).
+      if ($.sic && $.ls !== lastRepositionedScroll) {
+        lastRepositionedScroll = $.ls;
         for (const [index, element] of rendered) {
           $.pef(element, index);
         }
@@ -706,10 +755,11 @@ function materialize<T extends VListItem = VListItem>(
       sharedState.viewportState.visibleRange.end = visibleRange.end;
       sharedState.viewportState.renderRange.start = renderRange.start;
       sharedState.viewportState.renderRange.end = renderRange.end;
+
       return;
     }
 
-    const currentSetSize = String(total);
+    const currentSetSize = String(aria.getSetSize());
     const setSizeChanged = currentSetSize !== $.la;
     $.la = currentSetSize;
 
@@ -742,6 +792,20 @@ function materialize<T extends VListItem = VListItem>(
           // Check if we're replacing a placeholder (ID starts with __placeholder_)
           const wasPlaceholder = existingId?.startsWith(PH);
           const isPlaceholder = newId.startsWith(PH);
+
+          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          existing.className = isGH ? groupHeaderClass : baseClass;
+          if (isGH) {
+            existing.setAttribute("role", "presentation");
+            existing.removeAttribute("aria-selected");
+            existing.removeAttribute("aria-setsize");
+            existing.removeAttribute("aria-posinset");
+            existing.removeAttribute("id");
+          } else {
+            existing.setAttribute("role", "option");
+            existing.id = `${ariaIdPrefix}-item-${i}`;
+            existing.setAttribute("aria-posinset", String(aria.getPosInSet(i)));
+          }
 
           try {
             applyTemplate(existing, $.at(item, i, itemState), i);
@@ -793,7 +857,7 @@ function materialize<T extends VListItem = VListItem>(
         const isFocused = i === focusedIndex;
         applySelState(existing, isSelected, isFocused);
 
-        if (setSizeChanged) {
+        if (setSizeChanged && !(item as Record<string, unknown>).__groupHeader) {
           existing.setAttribute("aria-setsize", $.la);
         }
       } else {
@@ -829,6 +893,7 @@ function materialize<T extends VListItem = VListItem>(
 
     lastRenderRange.start = renderRange.start;
     lastRenderRange.end = renderRange.end;
+    lastRepositionedScroll = $.ls;
 
     // Sync shared state for features that use it
     sharedState.lastRenderRange.start = renderRange.start;
@@ -851,6 +916,7 @@ function materialize<T extends VListItem = VListItem>(
   const coreForceRender = (): void => {
     lastRenderRange.start = -1;
     lastRenderRange.end = -1;
+    lastRepositionedScroll = NaN;
     $.rfn();
   };
 
@@ -892,7 +958,6 @@ function materialize<T extends VListItem = VListItem>(
 
     const direction: "up" | "down" = scrollTop >= $.ls ? "down" : "up";
 
-    // Update velocity tracker
     $.vt = updateVelocityTracker($.vt as any, scrollTop);
 
     if (!dom.root.classList.contains(scClass)) {
@@ -901,18 +966,17 @@ function materialize<T extends VListItem = VListItem>(
     isScrolling = true;
 
     $.ls = scrollTop;
+
     $.rfn();
 
     _scrollEvt.scrollPosition = scrollTop;
     _scrollEvt.direction = direction;
     emitter.emit("scroll", _scrollEvt);
 
-    // Emit velocity change
     _velEvt.velocity = $.vt.velocity;
     _velEvt.reliable = $.vt.sampleCount >= MIN_RELIABLE_SAMPLES;
     emitter.emit("velocity:change", _velEvt);
 
-    // Feature post-scroll actions
     for (let i = 0; i < afterScroll.length; i++) {
       afterScroll[i]!(scrollTop, direction);
     }
@@ -1069,7 +1133,25 @@ function materialize<T extends VListItem = VListItem>(
       const newMainAxis = isHorizontal ? newWidth : newHeight;
       const prevMainAxis = isHorizontal ? $.cw : $.ch;
 
-      // Always update dimensions (even before initialization)
+      // Self-heal: if the viewport grew beyond screen size, the container
+      // has lost its CSS height constraint. Re-apply height/width: 100%
+      // on both root and viewport so the chain re-inherits from the
+      // user's container instead of expanding to content size.
+      if (newMainAxis > screenMax) {
+        if (!warnedOverflow) {
+          warnedOverflow = true;
+          console.warn(
+            `[vlist] Viewport grew to ${Math.round(newMainAxis)}px ` +
+            `(screen: ${screenMax}px). Re-applying size constraint. ` +
+            `Check that the vlist container has a CSS height/width constraint.`,
+          );
+        }
+        const prop = isHorizontal ? "width" : "height";
+        dom.root.style[prop] = "100%";
+        dom.viewport.style[prop] = "100%";
+        return;
+      }
+
       $.cw = newWidth;
       $.ch = newHeight;
 

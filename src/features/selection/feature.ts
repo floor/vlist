@@ -268,6 +268,15 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           // Rebuild index — all indices after the removed item shifted
           rebuildIdIndex();
+
+          // After removal, focusedIndex may now point to a group header
+          // (the item that was below the removed one shifted into its slot).
+          // Adjust so keyboard nav and auto-selection land on a real item.
+          const total = ctx.dataManager.getTotal();
+          if (total > 0 && selectionState.focusedIndex >= 0) {
+            const fi = Math.min(selectionState.focusedIndex, total - 1);
+            selectionState.focusedIndex = skipHeaders(fi, 1, total);
+          }
         }
       });
 
@@ -683,6 +692,8 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case "End": {
             newState = moveFocusToLast(selectionState, totalItems);
+            const ensureTail = ctx.methods.get("_ensureTailLoaded") as (() => void) | undefined;
+            if (ensureTail) ensureTail();
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -985,6 +996,15 @@ export const withSelection = <T extends VListItem = VListItem>(
         const idx = selectionState.focusedIndex;
         if (idx < 0) return undefined;
         return ctx.dataManager.getItem(idx)?.id;
+      });
+
+      // ── Internal: set focused index from outside (used by withGroups async) ──
+      ctx.methods.set("_setFocusedIndex", (index: number): void => {
+        selectionState = setFocusedIndex(selectionState, index);
+        selectionState.focusVisible = true;
+        scrollToFocus(index);
+        dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+        ctx.renderIfNeeded();
       });
 
       // ── Cleanup handler ──

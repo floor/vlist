@@ -117,21 +117,24 @@ export const calculateCompressedVisibleRange = (
     return out;
   }
 
-  // Compressed calculation
+  // Compressed calculation — map scrollTop to actual space, then use
+  // sizeCache prefix sums to find the correct index. This handles mixed
+  // item sizes (e.g. group headers shorter than data items) correctly,
+  // matching how calculateCompressedItemPosition maps positions.
   const { virtualSize } = compression;
   const scrollRatio = scrollPosition / virtualSize;
-  const exactIndex = scrollRatio * totalItems;
+  const actualSize = sizeCache.getTotalSize();
+  const actualScrollOffset = scrollRatio * actualSize;
 
-  let start = Math.floor(exactIndex);
+  const start = sizeCache.indexAtOffset(actualScrollOffset);
 
-  // Count visible items from start using actual heights
   const visibleCount = countVisibleItems(
     sizeCache,
     Math.max(0, start),
     containerHeight,
     totalItems,
   );
-  let end = Math.ceil(exactIndex) + visibleCount;
+  const end = start + visibleCount;
 
   out.start = Math.max(0, start);
   out.end = Math.min(totalItems - 1, Math.max(0, end));

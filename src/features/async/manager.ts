@@ -12,7 +12,6 @@ import type {
 
 import {
   createSparseStorage,
-  calculateMissingRanges,
   type SparseStorage,
   type SparseStorageConfig,
 } from "./sparse";
@@ -504,20 +503,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
       return;
     }
 
-    // Find what's actually missing
-    const loadedRanges = storage.getLoadedRanges();
-    const missingRanges = calculateMissingRanges(
-      { start, end },
-      loadedRanges,
-      storage.chunkSize,
-    );
-
-    if (missingRanges.length === 0) {
-      return;
-    }
-
-    // Split missing ranges into individual chunks to properly deduplicate
+    // Find missing chunks — O(range/chunkSize) scan, not O(all-cached-items)
     const chunkSize = storage.chunkSize;
+    const firstChunk = Math.floor(start / chunkSize);
+    const lastChunk = Math.floor(end / chunkSize);
 
     // Abort in-flight loads that belong to a previous scroll position.
     // Keep a buffer of 2 chunks around the new range — anything further is
@@ -538,44 +527,33 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
     const chunksToLoad: Array<{ start: number; end: number }> = [];
 
-    for (const range of missingRanges) {
-      // Split this range into individual chunks
-      const firstChunk = Math.floor(range.start / chunkSize);
-      const lastChunk = Math.floor(range.end / chunkSize);
+    for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
+      const chunkStart = chunkIdx * chunkSize;
+      const chunkEnd = chunkStart + chunkSize - 1;
+      const key = getRangeKey(chunkStart, chunkEnd);
 
-      for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
-        const chunkStart = chunkIdx * chunkSize;
-        const chunkEnd = chunkStart + chunkSize - 1;
-        const key = getRangeKey(chunkStart, chunkEnd);
-
-        // Only add if not already in our list and not already loading
-        if (
-          !chunksToLoad.some((c) => c.start === chunkStart) &&
-          !activeLoads.has(key)
-        ) {
-          chunksToLoad.push({ start: chunkStart, end: chunkEnd });
-        }
+      if (!storage.isChunkLoaded(chunkIdx) && !activeLoads.has(key)) {
+        chunksToLoad.push({ start: chunkStart, end: chunkEnd });
       }
+    }
+
+    if (chunksToLoad.length === 0) {
+      return;
     }
 
     // Load each chunk
     const loadPromises: Promise<void>[] = [];
 
     // First, collect promises for chunks already being loaded
-    for (const range of missingRanges) {
-      const firstChunk = Math.floor(range.start / chunkSize);
-      const lastChunk = Math.floor(range.end / chunkSize);
+    for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
+      const chunkStart = chunkIdx * chunkSize;
+      const chunkEnd = chunkStart + chunkSize - 1;
+      const key = getRangeKey(chunkStart, chunkEnd);
 
-      for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
-        const chunkStart = chunkIdx * chunkSize;
-        const chunkEnd = chunkStart + chunkSize - 1;
-        const key = getRangeKey(chunkStart, chunkEnd);
-
-        if (activeLoads.has(key)) {
-          const existingPromise = activeLoads.get(key)!;
-          if (!loadPromises.includes(existingPromise)) {
-            loadPromises.push(existingPromise);
-          }
+      if (activeLoads.has(key)) {
+        const existingPromise = activeLoads.get(key)!;
+        if (!loadPromises.includes(existingPromise)) {
+          loadPromises.push(existingPromise);
         }
       }
     }
