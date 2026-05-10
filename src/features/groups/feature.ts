@@ -810,11 +810,15 @@ function setupAsyncPath<T extends VListItem>(
       const actualPosition = compressionBefore.ratio !== 1
         ? scrollBefore / compressionBefore.ratio
         : scrollBefore;
-      const layoutIndex = ctx.sizeCache.indexAtOffset(actualPosition);
+      let layoutIndex = ctx.sizeCache.indexAtOffset(actualPosition);
+      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      if (dataIndexAtScroll < 0 && layoutIndex + 1 < bridge.totalEntries) {
+        layoutIndex = layoutIndex + 1;
+        dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
+      }
       const baseOffset = ctx.sizeCache.getOffset(layoutIndex);
       const itemSize = ctx.sizeCache.getSize(layoutIndex);
       fractionInItem = itemSize > 0 ? (actualPosition - baseOffset) / itemSize : 0;
-      dataIndexAtScroll = bridge.layoutToDataIndex(layoutIndex);
     }
 
     bridge.onItemsLoaded(items as VListItem[], offset, total);
@@ -841,7 +845,7 @@ function setupAsyncPath<T extends VListItem>(
         // subsequent onItemsLoaded calls; don't save (sessionStorage
         // already has the correct snapshot).
         // console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
-      } else {
+      } else if (dataIndexAtScroll >= 0) {
         const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
         const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
         const newItemSize = ctx.sizeCache.getSize(newLayoutIndex);
@@ -849,8 +853,6 @@ function setupAsyncPath<T extends VListItem>(
         const newScroll = compression.ratio !== 1
           ? newActualOffset * compression.ratio
           : newActualOffset;
-
-        // console.log(`[GROUPS scroll adjust] ${scrollBefore} -> ${newScroll} (delta=${newScroll - scrollBefore}) dataIdx=${dataIndexAtScroll} layoutIdx=${newLayoutIndex} +${newHeaders}hdr total=${totalEntriesBefore}->${bridge.totalEntries} anchor=${!!restoreAnchor}`);
 
         if (Math.abs(newScroll - scrollBefore) > 1) {
           ctx.scrollController.scrollTo(newScroll);
