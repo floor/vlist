@@ -795,7 +795,7 @@ function setupAsyncPath<T extends VListItem>(
     // before groups were discovered.
     let dataIndexAtScroll = 0;
     let fractionInItem = 0;
-    const restoreAnchor = ctx.methods.get("_restoreAnchor") as
+    const restoreAnchor = ctx.methods.get("_restoreAnchor") as unknown as
       | { dataIndex: number; fraction: number; skipAdjust?: boolean }
       | undefined;
     if (restoreAnchor) {
