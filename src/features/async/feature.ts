@@ -197,7 +197,6 @@ export const withAsync = <T extends VListItem = VListItem>(
         }),
         onStateChange: () => {
           if (ctx.state.isInitialized) {
-            const scrollBefore = ctx.scrollController.getScrollTop();
             const newTotal = ctx.getVirtualTotal();
             if (newTotal !== ctx.sizeCache.getTotal()) {
               ctx.sizeCache.rebuild(newTotal);
@@ -220,7 +219,6 @@ export const withAsync = <T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
-            const scrollBefore = ctx.scrollController.getScrollTop();
             // Notify subscribers (e.g. withGroups async bridge) before rendering
             for (const cb of itemsLoadedCallbacks) {
               cb(loadedItems, _offset, total);

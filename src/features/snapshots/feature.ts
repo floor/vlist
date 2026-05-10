@@ -375,8 +375,8 @@ export const withSnapshots = <T extends VListItem = VListItem>(
             dataIndex: snapshot.dataIndex,
             fraction,
             skipAdjust: usedShortcut,
-          });
-          ctx.methods.set("_suppressSave", true);
+          } as unknown as Function);
+          ctx.methods.set("_suppressSave", true as unknown as Function);
         }
 
         // console.log(`[SNAP RESTORE] scroll=${scrollPosition} dataIdx=${snapshot.dataIndex} safeIdx=${safeIndex} total=${effectiveTotal}/${snapshot.total} shortcut=${usedShortcut} anchor=${snapshot.dataIndex !== undefined}`);
