@@ -190,6 +190,12 @@ export const withSelection = <T extends VListItem = VListItem>(
       const isGroupHeaderFn = (): ((index: number) => boolean) | undefined =>
         ctx.methods.get("_isGroupHeader") as ((index: number) => boolean) | undefined;
 
+      const layoutToDataFn = (): ((index: number) => number) | undefined =>
+        ctx.methods.get("_layoutToDataIndex") as ((index: number) => number) | undefined;
+
+      const dataToLayoutFn = (): ((index: number) => number) | undefined =>
+        ctx.methods.get("_dataToLayoutIndex") as ((index: number) => number) | undefined;
+
       /** Check whether a layout index is a group header */
       const isHeader = (index: number): boolean => {
         const fn = isGroupHeaderFn();
@@ -669,18 +675,24 @@ export const withSelection = <T extends VListItem = VListItem>(
           }
 
           case "PageUp":
-            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "up");
+          case "PageDown": {
+            const ps = getPageSize();
+            const l2d = layoutToDataFn();
+            const d2l = dataToLayoutFn();
+            if (l2d && d2l) {
+              const curData = l2d(selectionState.focusedIndex);
+              const delta = event.key === "PageUp" ? -ps : ps;
+              const lastData = l2d(totalItems - 1);
+              const targetData = Math.max(0, Math.min(lastData, curData + delta));
+              newState = setFocusedIndex(selectionState, d2l(targetData));
+            } else {
+              newState = moveFocusByPage(selectionState, totalItems, ps, event.key === "PageUp" ? "up" : "down");
+            }
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
-
-          case "PageDown":
-            newState = moveFocusByPage(selectionState, totalItems, getPageSize(), "down");
-            newState.focusVisible = true;
-            handled = true;
-            focusOnly = true;
-            break;
+          }
 
           case "Home": {
             newState = moveFocusToFirst(selectionState, totalItems);
