@@ -844,7 +844,6 @@ function setupAsyncPath<T extends VListItem>(
         // for the original header layout. Keep anchor+suppression for
         // subsequent onItemsLoaded calls; don't save (sessionStorage
         // already has the correct snapshot).
-        // console.log(`[GROUPS scroll adjust] skipped (shortcut restore) scroll=${scrollBefore} +${newHeaders}hdr`);
       } else if (dataIndexAtScroll >= 0) {
         const newLayoutIndex = bridge.dataToLayoutIndex(dataIndexAtScroll);
         const newBaseOffset = ctx.sizeCache.getOffset(newLayoutIndex);
