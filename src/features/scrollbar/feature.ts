@@ -105,11 +105,21 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
   return {
     name: "withScrollbar",
-    priority: 30,
+    priority: 15,
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;
       const { classPrefix, horizontal } = resolvedConfig;
+
+      // If another feature (e.g. withScale) already created a fallback
+      // scrollbar, remove it — we replace it with one that has the user's config.
+      if (ctx.methods.has("_hasScrollbar")) {
+        const existing = dom.root.querySelector(`.${classPrefix}-scrollbar`);
+        if (existing) existing.remove();
+        const existingHover = dom.root.querySelector(`.${classPrefix}-scrollbar-hover`);
+        if (existingHover) existingHover.remove();
+      }
+      ctx.methods.set("_hasScrollbar", () => true);
 
       // Create custom scrollbar — DOM attaches to root (non-scrolling,
       // position:relative) so the absolute-positioned track stays fixed.

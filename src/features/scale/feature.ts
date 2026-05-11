@@ -516,14 +516,6 @@ export const withScale = <
             viewport.removeEventListener("touchcancel", touchEndHandler);
           });
 
-          // Force custom scrollbar if not already present
-          // (native scrollbar can't represent compressed space)
-          // Check if withScrollbar feature already created one by looking for
-          // the scrollbar track element
-          const hasScrollbarTrack = dom.root.querySelector(
-            `.${classPrefix}-scrollbar`,
-          );
-
           // ── Native scroll drift guard ───────────────────────────────
           // In compressed mode the viewport has overflow:hidden and
           // native scrollTop should stay at 0. But browser focus
@@ -553,9 +545,8 @@ export const withScale = <
 
           // Force custom scrollbar if not already present
           // (native scrollbar can't represent compressed space)
-          // Check if withScrollbar feature already created one by looking for
-          // the scrollbar track element
-          if (!hasScrollbarTrack) {
+          if (!ctx.methods.has("_hasScrollbar")) {
+            ctx.methods.set("_hasScrollbar", () => true);
             // Create a fallback scrollbar for compressed mode
             scrollbar = createScrollbar(
               dom.viewport,
