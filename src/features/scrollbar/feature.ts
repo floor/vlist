@@ -111,13 +111,25 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       const { dom, config: resolvedConfig } = ctx;
       const { classPrefix, horizontal } = resolvedConfig;
 
-      // Create custom scrollbar
+      // If another feature (e.g. withScale) already created a fallback
+      // scrollbar, remove it — we replace it with one that has the user's config.
+      if (ctx.methods.has("_hasScrollbar")) {
+        const existing = dom.root.querySelector(`.${classPrefix}-scrollbar`);
+        if (existing) existing.remove();
+        const existingHover = dom.root.querySelector(`.${classPrefix}-scrollbar-hover`);
+        if (existingHover) existingHover.remove();
+      }
+      ctx.methods.set("_hasScrollbar", () => true);
+
+      // Create custom scrollbar — DOM attaches to root (non-scrolling,
+      // position:relative) so the absolute-positioned track stays fixed.
       scrollbar = createScrollbar(
         dom.viewport,
         (position) => ctx.scrollController.scrollTo(position),
         config ?? {},
         classPrefix,
         horizontal,
+        dom.root,
       );
 
       // Ensure native scrollbar is hidden

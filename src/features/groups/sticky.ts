@@ -19,6 +19,32 @@
 import type { GroupLayout, StickyHeader } from "./types";
 import type { SizeCache } from "../../rendering/sizes";
 
+/**
+ * Create the sticky header container element upfront (before data arrives)
+ * so the DOM structure is stable and doesn't cause a visual shift.
+ */
+export const createStickyContainer = (
+  root: HTMLElement,
+  classPrefix: string,
+  horizontal: boolean,
+  headerHeight: number,
+  stickyOffset: number = 0,
+): HTMLElement => {
+  const mainProp = horizontal ? "width" : "height";
+  const container = document.createElement("div");
+  container.className = `${classPrefix}-sticky-header`;
+  container.setAttribute("role", "presentation");
+  container.setAttribute("aria-hidden", "true");
+  container.style.cssText =
+    `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
+    (horizontal
+      ? `top:0;bottom:0;left:${stickyOffset || 0}px`
+      : `top:${stickyOffset || 0}px`);
+  container.style[mainProp] = `${headerHeight}px`;
+  root.insertBefore(container, root.firstChild);
+  return container;
+};
+
 export const createStickyHeader = (
   root: HTMLElement,
   layout: GroupLayout,
@@ -28,6 +54,7 @@ export const createStickyHeader = (
   horizontal: boolean = false,
   stickyOffset: number = 0,
   getCompressionRatio?: () => number,
+  existingContainer?: HTMLElement,
 ): StickyHeader => {
   // Orientation helpers — resolved once
   const mainProp = horizontal ? "width" : "height";
@@ -38,16 +65,20 @@ export const createStickyHeader = (
     el.style[mainProp] = `${px}px`;
   };
 
-  // DOM setup
-  const container = document.createElement("div");
-  container.className = `${classPrefix}-sticky-header`;
-  container.setAttribute("role", "presentation");
-  container.setAttribute("aria-hidden", "true");
-  container.style.cssText =
-    `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
-    (horizontal
-      ? `top:0;bottom:0;left:${stickyOffset || 0}px`
-      : `top:${stickyOffset || 0}px`);
+  // DOM setup — reuse pre-created container if provided
+  const container = existingContainer ?? (() => {
+    const el = document.createElement("div");
+    el.className = `${classPrefix}-sticky-header`;
+    el.setAttribute("role", "presentation");
+    el.setAttribute("aria-hidden", "true");
+    el.style.cssText =
+      `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
+      (horizontal
+        ? `top:0;bottom:0;left:${stickyOffset || 0}px`
+        : `top:${stickyOffset || 0}px`);
+    root.insertBefore(el, root.firstChild);
+    return el;
+  })();
 
   const mkSlot = (): HTMLElement => {
     const s = document.createElement("div");
@@ -61,7 +92,7 @@ export const createStickyHeader = (
   const slotA = mkSlot();
   const slotB = mkSlot();
   container.append(slotA, slotB);
-  root.insertBefore(container, root.firstChild);
+  if (!existingContainer) root.insertBefore(container, root.firstChild);
 
   // Slot references — swap roles after each completed transition
   let active = slotA;
@@ -164,17 +195,22 @@ export const createStickyHeader = (
     resetTransforms();
   };
 
-  // Visibility
+  // Visibility — when a pre-created container is reused, use visibility
+  // instead of display to preserve layout (the viewport is sized with
+  // calc(100% - headerHeight) and relies on the container occupying space).
+  const preserveLayout = !!existingContainer;
   const show = (): void => {
     if (visible) return;
     visible = true;
-    container.style.display = "";
+    if (preserveLayout) container.style.visibility = "";
+    else container.style.display = "";
   };
 
   const hide = (): void => {
     if (!visible) return;
     visible = false;
-    container.style.display = "none";
+    if (preserveLayout) container.style.visibility = "hidden";
+    else container.style.display = "none";
     clear(active);
     curGroup = -1;
     curSize = 0;
@@ -241,7 +277,9 @@ export const createStickyHeader = (
     transitioning = false;
   };
 
-  container.style.display = "none";
+  if (!existingContainer) {
+    container.style.display = "none";
+  }
 
   return { update, refresh, show, hide, destroy };
 };

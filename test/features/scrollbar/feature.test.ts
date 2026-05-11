@@ -349,8 +349,9 @@ describe("withScrollbar — Setup", () => {
 
     feature.setup!(ctx);
 
-    // Scrollbar is automatic — no public API methods
-    expect(ctx.methods.size).toBe(0);
+    // Only internal flag, no public API methods
+    expect(ctx.methods.has("_hasScrollbar")).toBe(true);
+    expect(ctx.methods.size).toBe(1);
   });
 
   it("should run destroy handler without error", () => {

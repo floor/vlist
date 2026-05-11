@@ -178,7 +178,16 @@ export const setupBaselineA11y = <T extends VListItem>(
         case "PageDown": {
           const rh = $.hc.getSize($.i2s(Math.max(0, p)));
           const delta = Math.max(ud, Math.floor((hz ? $.cw : $.ch) / rh) * ud);
-          n = event.key === "PageUp" ? p - delta : p + delta;
+          const l2d = methods.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
+          const d2l = methods.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
+          if (l2d && d2l) {
+            const curData = l2d(p);
+            const step = event.key === "PageUp" ? -delta : delta;
+            const lastData = l2d(total - 1);
+            n = d2l(Math.max(0, Math.min(lastData, curData + step)));
+          } else {
+            n = event.key === "PageUp" ? p - delta : p + delta;
+          }
           break;
         }
         case "Home":  n = 0; break;
