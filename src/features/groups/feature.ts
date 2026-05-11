@@ -31,7 +31,7 @@ import {
   createGroupedSizeFn,
 } from "./layout";
 
-import { createStickyHeader } from "./sticky";
+import { createStickyHeader, createStickyContainer } from "./sticky";
 
 import {
   isGroupHeader,
@@ -182,10 +182,20 @@ export const withGroups = <T extends VListItem = VListItem>(
       dom.root.classList.add(`${classPrefix}--grouped`);
 
       // ── Expose sticky header height so scrollToFocus can offset ──
+      let stickyContainer: HTMLElement | null = null;
       if (stickyEnabled) {
         ctx.methods.set(
           "_getStickyHeaderHeight",
           (): number => config.header.height,
+        );
+
+        // Create the sticky header container immediately so the DOM
+        // structure is stable before data arrives (prevents visual shift).
+        stickyContainer = createStickyContainer(
+          dom.root,
+          classPrefix,
+          resolvedConfig.horizontal,
+          config.header.height,
         );
 
         // Shrink the viewport by the sticky header height so the
@@ -259,6 +269,8 @@ export const withGroups = <T extends VListItem = VListItem>(
         if (stickyHeader) {
           stickyHeader.destroy();
           stickyHeader = null;
+        } else if (stickyContainer) {
+          stickyContainer.remove();
         }
         dom.root.classList.remove(`${classPrefix}--grouped`);
       });
@@ -286,6 +298,7 @@ export const withGroups = <T extends VListItem = VListItem>(
             headerTemplate, classPrefix, registerOnItemsLoaded,
             (b) => { bridge = b; indexMapper = b; },
             (s) => { stickyHeader = s; },
+            stickyContainer,
           );
         } else {
           // Static path was already set up below — nothing to do
@@ -303,6 +316,7 @@ export const withGroups = <T extends VListItem = VListItem>(
         () => {},
         (layout) => { groupLayout = layout; indexMapper = layout; },
         (s) => { stickyHeader = s; },
+        stickyContainer,
       );
     },
 
@@ -332,6 +346,7 @@ function setupStaticPath<T extends VListItem>(
   setLayoutItems: (items: Array<T | GroupHeaderItem>) => void,
   setGroupLayout: (layout: GroupLayout) => void,
   setStickyHeader: (s: StickyHeaderInstance) => void,
+  stickyContainer?: HTMLElement | null,
 ): void {
   const { dom } = ctx;
   let localStickyHeader: StickyHeaderInstance | null = null;
@@ -467,6 +482,7 @@ function setupStaticPath<T extends VListItem>(
       resolvedConfig.horizontal,
       0,
       () => ctx.getCachedCompression().ratio,
+      stickyContainer ?? undefined,
     );
     localStickyHeader = sticky;
     setStickyHeader(sticky);
@@ -579,6 +595,7 @@ function setupAsyncPath<T extends VListItem>(
   registerOnItemsLoaded: (cb: (items: T[], offset: number, total: number) => void) => void,
   setBridge: (bridge: AsyncGroupBridge) => void,
   setStickyHeader: (s: StickyHeaderInstance) => void,
+  stickyContainer?: HTMLElement | null,
 ): void {
   const { dom } = ctx;
 
@@ -755,6 +772,7 @@ function setupAsyncPath<T extends VListItem>(
       resolvedConfig.horizontal,
       0,
       () => ctx.getCachedCompression().ratio,
+      stickyContainer ?? undefined,
     );
     setStickyHeader(asyncStickyHeader);
 
