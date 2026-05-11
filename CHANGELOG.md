@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.7] - 2026-05-11
+
+### Fixed
+
+- **scrollbar**: Fix `position:relative` on viewport that broke custom scrollbar positioning.
+- **scrollbar**: Attach scrollbar DOM to root element instead of viewport to prevent clipping.
+- **scrollbar**: Prevent duplicate scrollbar when used with `withScale`.
+- **groups**: Skip group headers in PageUp/PageDown keyboard navigation.
+- **groups**: Clear restore anchor after first scroll adjustment to prevent position reset on re-render.
+- **groups**: Create sticky header container eagerly to prevent visual shift on data load.
+- **selection**: Use prefix-sum offsets for compressed scroll-to-focus — fixes keyboard navigation off-by-one with mixed item sizes (group headers + data items).
+
 ## [1.7.6] - 2026-05-10
 
 ### Added

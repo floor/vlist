@@ -58,16 +58,16 @@ src/
 │   ├── measurement.ts       #   Size measurement
 │   └── velocity.ts          #   Scroll velocity tracking
 ├── features/               # Opt-in features via .use()
+│   ├── page/               #   Document/window scroll mode (priority 5)
 │   ├── grid/               #   2D grid layout (priority 10)
 │   ├── masonry/            #   Shortest-lane masonry (priority 10)
 │   ├── table/              #   Virtualized data table (priority 10)
 │   ├── groups/             #   Sticky group headers (priority 10)
+│   ├── scrollbar/          #   Custom scrollbar (priority 15)
 │   ├── async/              #   Async data adapter (priority 20)
+│   ├── scale/              #   Large-list compression, 1M+ items (priority 20)
 │   ├── selection/          #   Selection state (priority 50)
-│   ├── scrollbar/          #   Custom scrollbar (priority 60)
-│   ├── scale/              #   Large-list compression, 1M+ items (priority 70)
-│   ├── page/               #   Document/window scroll mode (priority 80)
-│   └── snapshots/          #   Scroll save/restore (priority 90)
+│   └── snapshots/          #   Scroll save/restore (priority 50)
 ├── rendering/              # Core rendering (not features)
 │   ├── sizes.ts            #   Size cache (prefix sums)
 │   ├── renderer.ts         #   DOM rendering with pooling

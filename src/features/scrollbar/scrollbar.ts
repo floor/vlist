@@ -156,11 +156,12 @@ const resolvePadding = (raw: ScrollbarPadding | undefined): ResolvedPadding => {
 /**
  * Create a scrollbar instance
  *
- * @param viewport - The viewport element to attach scrollbar to
+ * @param viewport - The viewport element (used for events and CSS variables)
  * @param onScroll - Callback when scrollbar interaction causes scroll
  * @param config - Scrollbar configuration
  * @param classPrefix - CSS class prefix (default: 'vlist')
  * @param horizontal - Whether the scrollbar is horizontal (default: false)
+ * @param parent - Element to append scrollbar DOM to (default: viewport)
  */
 export const createScrollbar = (
   viewport: HTMLElement,
@@ -168,6 +169,7 @@ export const createScrollbar = (
   config: ScrollbarConfig = {},
   classPrefix = "vlist",
   horizontal = false,
+  parent?: HTMLElement,
 ): Scrollbar => {
   const {
     autoHide = AUTO_HIDE,
@@ -179,6 +181,7 @@ export const createScrollbar = (
   } = config;
 
   const clickBehavior = rawClickBehavior === 'page' ? 'scroll' : rawClickBehavior;
+  const attachTo = parent ?? viewport;
 
   const pad = resolvePadding(config.padding);
 
@@ -224,6 +227,15 @@ export const createScrollbar = (
   // Always created: extends click target into the padding margin + handles hover when showOnHover
   const hoverZone = document.createElement("div");
 
+  // When the scrollbar lives on root, offset its top to align with the viewport
+  const syncTrackOffset = (): void => {
+    if (attachTo === viewport) return;
+    const offset = viewport.offsetTop;
+    const startPad = horizontal ? pad.left : pad.top;
+    track.style[horizontal ? "left" : "top"] = `${offset + startPad}px`;
+    hoverZone.style[horizontal ? "left" : "top"] = `${offset}px`;
+  };
+
   // =============================================================================
   // DOM Setup
   // =============================================================================
@@ -248,7 +260,7 @@ export const createScrollbar = (
     }
 
     track.appendChild(thumb);
-    viewport.appendChild(track);
+    attachTo.appendChild(track);
 
     // Edge zone — covers the padding margin + track area along the scrollbar edge.
     // Always present so clicks in the padding margin are captured regardless of showOnHover.
@@ -260,7 +272,13 @@ export const createScrollbar = (
     } else {
       hoverZone.style.width = `${hoverZoneWidth}px`;
     }
-    viewport.appendChild(hoverZone);
+    attachTo.appendChild(hoverZone);
+
+    // When attached to root instead of viewport, offset track/hover to match
+    // the viewport's position (e.g. below a sticky header).
+    if (attachTo !== viewport) {
+      syncTrackOffset();
+    }
   };
 
   // =============================================================================
@@ -322,6 +340,7 @@ export const createScrollbar = (
   ): void => {
     totalSize = newTotalSize;
     containerSize = newContainerSize;
+    syncTrackOffset();
 
     // Check if scrollbar is needed
     const needsScrollbar = totalSize > containerSize;

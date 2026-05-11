@@ -762,3 +762,147 @@ describe("compressed scroll with different configurations", () => {
     });
   }
 });
+
+// =============================================================================
+// Mixed item sizes (group headers) — the groups + compression bug
+// =============================================================================
+
+describe("scrollToFocus — mixed sizes (group headers)", () => {
+  // Simulate a grouped list: every 11th entry is a 36px header, rest are 100px data items.
+  // This mirrors the real-world case where group headers are shorter than data items.
+  const HEADER_HEIGHT = 36;
+  const DATA_HEIGHT = 100;
+  const MIXED_TOTAL = 110_000; // ~10k groups of 10 items each
+  const MIXED_CONTAINER = 873;
+
+  const sizeFn = (index: number): number =>
+    index % 11 === 0 ? HEADER_HEIGHT : DATA_HEIGHT;
+
+  const mixedCache = createSizeCache(sizeFn, MIXED_TOTAL);
+  const mixedComp = getCompressionState(MIXED_TOTAL, mixedCache);
+  const mixedFullyVisible = Math.max(1, Math.floor(MIXED_CONTAINER / DATA_HEIGHT));
+
+  describe("ArrowDown — focused item at viewport bottom", () => {
+    it("should place focused item's bottom at viewport bottom with mixed sizes", () => {
+      // Use an index well past the visible area so scrolling is guaranteed
+      const focusIndex = 15;
+      const vr = visibleRangeAt(0, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+
+      const newScroll = scrollToFocus(
+        focusIndex, mixedCache, 0, MIXED_CONTAINER, 0, 0,
+        mixedComp, MIXED_TOTAL, vr,
+      );
+
+      expect(newScroll).toBeGreaterThan(0);
+
+      const scrollRatio = newScroll / mixedComp.virtualSize;
+      const actualScroll = scrollRatio * mixedCache.getTotalSize();
+      const itemBottom = mixedCache.getOffset(focusIndex) + mixedCache.getSize(focusIndex);
+      const viewportBottom = actualScroll + MIXED_CONTAINER;
+
+      expect(itemBottom).toBeCloseTo(viewportBottom, 0);
+    });
+
+    it("should keep focused item at bottom during continuous ArrowDown", () => {
+      let scrollPos = 0;
+
+      for (let focus = 0; focus < 30; focus++) {
+        const vr = visibleRangeAt(scrollPos, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+        const newScroll = scrollToFocus(
+          focus, mixedCache, scrollPos, MIXED_CONTAINER, 0, 0,
+          mixedComp, MIXED_TOTAL, vr,
+        );
+
+        if (newScroll !== scrollPos) {
+          const scrollRatio = newScroll / mixedComp.virtualSize;
+          const actualScroll = scrollRatio * mixedCache.getTotalSize();
+          const itemBottom = mixedCache.getOffset(focus) + mixedCache.getSize(focus);
+          const viewportBottom = actualScroll + MIXED_CONTAINER;
+
+          expect(itemBottom).toBeCloseTo(viewportBottom, 0);
+        }
+
+        scrollPos = newScroll;
+      }
+    });
+
+    it("should not undershoot by header height (the original bug)", () => {
+      // The old linear formula undershoots by (DATA_HEIGHT - HEADER_HEIGHT) when
+      // a header is in the viewport. Verify the focused item is always within
+      // the visible range and its bottom reaches the viewport bottom.
+      let scrollPos = 0;
+
+      for (let focus = 0; focus <= 20; focus++) {
+        const vr = visibleRangeAt(scrollPos, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+        const newScroll = scrollToFocus(
+          focus, mixedCache, scrollPos, MIXED_CONTAINER, 0, 0,
+          mixedComp, MIXED_TOTAL, vr,
+        );
+
+        const newVr = visibleRangeAt(newScroll, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+        expect(focus).toBeGreaterThanOrEqual(newVr.start);
+        expect(focus).toBeLessThanOrEqual(newVr.end);
+
+        scrollPos = newScroll;
+      }
+    });
+  });
+
+  describe("ArrowUp — focused item at viewport top", () => {
+    it("should place focused item's top at viewport top with mixed sizes", () => {
+      // Start scrolled down, then move focus up past the visible range
+      const startIndex = 50;
+      const startScroll = (mixedCache.getOffset(startIndex) / mixedCache.getTotalSize()) * mixedComp.virtualSize;
+      const vr = visibleRangeAt(startScroll, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+
+      const focusIndex = vr.start - 1;
+      const newScroll = scrollToFocus(
+        focusIndex, mixedCache, startScroll, MIXED_CONTAINER, 0, 0,
+        mixedComp, MIXED_TOTAL, vr,
+      );
+
+      const scrollRatio = newScroll / mixedComp.virtualSize;
+      const actualScroll = scrollRatio * mixedCache.getTotalSize();
+      const itemOffset = mixedCache.getOffset(focusIndex);
+
+      expect(itemOffset).toBeCloseTo(actualScroll, 0);
+    });
+
+    it("should keep focused item visible during continuous ArrowUp", () => {
+      // Start from a scrolled position
+      const startIndex = 100;
+      let scrollPos = (mixedCache.getOffset(startIndex) / mixedCache.getTotalSize()) * mixedComp.virtualSize;
+
+      for (let focus = startIndex; focus >= startIndex - 30; focus--) {
+        const vr = visibleRangeAt(scrollPos, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+        const newScroll = scrollToFocus(
+          focus, mixedCache, scrollPos, MIXED_CONTAINER, 0, 0,
+          mixedComp, MIXED_TOTAL, vr,
+        );
+
+        // The focused item should be within the visible range after scroll
+        const newVr = visibleRangeAt(newScroll, MIXED_CONTAINER, mixedCache, MIXED_TOTAL, mixedComp);
+        expect(focus).toBeGreaterThanOrEqual(newVr.start);
+        expect(focus).toBeLessThanOrEqual(newVr.end);
+
+        scrollPos = newScroll;
+      }
+    });
+  });
+
+  describe("uniform sizes still work (regression check)", () => {
+    it("should produce same results as before for uniform fixed-size cache", () => {
+      // With uniform sizes, prefix-sum and linear math should agree
+      const vr: Range = { start: 0, end: 9 };
+      const result = scrollToFocus(8, cache, 0, CONTAINER, 0, 0, comp, TOTAL, vr);
+
+      // Verify item 8's bottom is at viewport bottom
+      const scrollRatio = result / comp.virtualSize;
+      const actualScroll = scrollRatio * cache.getTotalSize();
+      const itemBottom = cache.getOffset(8) + ITEM_HEIGHT;
+      const viewportBottom = actualScroll + CONTAINER;
+
+      expect(itemBottom).toBeCloseTo(viewportBottom, 0);
+    });
+  });
+});
