@@ -858,8 +858,10 @@ function setupAsyncPath<T extends VListItem>(
         }
 
         if (restoreAnchor) {
-          // Lift save suppression and capture the correct post-adjustment
-          // state. Keep anchor for subsequent onItemsLoaded calls.
+          // Anchor served its purpose — clear it so subsequent loads
+          // compute the scroll anchor from the current scroll position
+          // instead of the stale restore point.
+          ctx.methods.delete("_restoreAnchor");
           ctx.methods.delete("_suppressSave");
           const forceSave = ctx.methods.get("_saveSnapshot") as (() => void) | undefined;
           if (forceSave) forceSave();
