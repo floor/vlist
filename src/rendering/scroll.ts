@@ -59,40 +59,45 @@ export const scrollToFocus = (
     return scrollToFocusSimple(index, sizeCache, scrollPosition, containerSize, startPadding, endPadding);
   }
 
-  // ── Compressed: linear index math ──
-  const total = totalItems!;
+  // ── Compressed: prefix-sum positioning ──
+  // Use actual offsets from the size cache instead of linear index math.
+  // Linear math assumes uniform item sizes, but group headers are shorter
+  // than data items, causing the focused item to land short of the edge.
   const { virtualSize } = compression!;
   const itemSize = sizeCache.getSize(Math.max(0, index));
   const effectiveSize = containerSize - startPadding - endPadding;
   const fullyVisible = Math.max(1, Math.floor(effectiveSize / itemSize));
-  const compressedItemSize = virtualSize / total;
+  const totalActualSize = sizeCache.getTotalSize();
 
   if (visibleRange) {
     if (index >= visibleRange.start + fullyVisible) {
-      const exactVisible = effectiveSize / itemSize;
-      const wantStart = index + 1 - exactVisible;
-      return Math.max(0, wantStart * compressedItemSize);
+      const itemBottom = sizeCache.getOffset(index) + itemSize;
+      const targetActualTop = itemBottom + endPadding - containerSize;
+      return Math.max(0, (targetActualTop / totalActualSize) * virtualSize);
     }
 
     if (index <= visibleRange.start) {
-      return Math.max(0, index * compressedItemSize);
+      const targetActualTop = sizeCache.getOffset(index) - startPadding;
+      return Math.max(0, (targetActualTop / totalActualSize) * virtualSize);
     }
 
     return scrollPosition;
   }
 
   // No visible range — fallback
-  const currentIndex = (scrollPosition / virtualSize) * total;
+  const compressedItemSize = virtualSize / totalItems!;
+  const currentIndex = (scrollPosition / virtualSize) * totalItems!;
   const currentEnd = currentIndex + fullyVisible;
 
   if (index >= currentEnd) {
-    const exactVisible = effectiveSize / itemSize;
-    const wantStart = index + 1 - exactVisible;
-    return Math.max(0, wantStart * compressedItemSize);
+    const itemBottom = sizeCache.getOffset(index) + itemSize;
+    const targetActualTop = itemBottom + endPadding - containerSize;
+    return Math.max(0, (targetActualTop / totalActualSize) * virtualSize);
   }
 
   if (index < currentIndex) {
-    return Math.max(0, index * compressedItemSize);
+    const targetActualTop = sizeCache.getOffset(index) - startPadding;
+    return Math.max(0, (targetActualTop / totalActualSize) * virtualSize);
   }
 
   return scrollPosition;
