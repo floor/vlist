@@ -249,10 +249,10 @@ export const createScrollbar = (
     }
 
     if (config.padding !== undefined) {
-      viewport.style.setProperty("--vlist-custom-scrollbar-padding-top",    `${pad.top}px`);
-      viewport.style.setProperty("--vlist-custom-scrollbar-padding-right",  `${pad.right}px`);
-      viewport.style.setProperty("--vlist-custom-scrollbar-padding-bottom", `${pad.bottom}px`);
-      viewport.style.setProperty("--vlist-custom-scrollbar-padding-left",   `${pad.left}px`);
+      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-top",    `${pad.top}px`);
+      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-right",  `${pad.right}px`);
+      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-bottom", `${pad.bottom}px`);
+      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-left",   `${pad.left}px`);
     }
 
     if (config.minThumbSize !== undefined) {
@@ -655,11 +655,11 @@ export const createScrollbar = (
       hoverZone.parentNode.removeChild(hoverZone);
     }
 
-    // Remove inline CSS variable overrides from viewport
-    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-top");
-    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-right");
-    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-bottom");
-    viewport.style.removeProperty("--vlist-custom-scrollbar-padding-left");
+    // Remove inline CSS variable overrides
+    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-top");
+    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-right");
+    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-bottom");
+    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-left");
 
     // Remove DOM elements
     if (track.parentNode) {
