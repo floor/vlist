@@ -242,7 +242,6 @@ export const withScale = <
         const compression = getCompressionState(total, ctx.sizeCache, force);
 
         if (compression.isCompressed && !compressedModeActive) {
-          // Entering compressed mode
           compressedModeActive = true;
           ctx.scrollController.enableCompression(compression);
 
@@ -597,7 +596,6 @@ export const withScale = <
             });
           }
         } else if (!compression.isCompressed && compressedModeActive) {
-          // Leaving compressed mode
           compressedModeActive = false;
 
           // ── Cancel in-flight animations ─────────────────────────────
