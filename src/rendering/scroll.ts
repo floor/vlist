@@ -85,7 +85,6 @@ export const scrollToFocus = (
   }
 
   // No visible range — fallback
-  const compressedItemSize = virtualSize / totalItems!;
   const currentIndex = (scrollPosition / virtualSize) * totalItems!;
   const currentEnd = currentIndex + fullyVisible;
 
