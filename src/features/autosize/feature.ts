@@ -74,6 +74,8 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
 
       setSizeCache(measuredCache);
       setConstrainSize((index: number): boolean => measuredCache.isMeasured(index));
+      const scrollController = ctx.scrollController;
+      const viewportState = ctx.state.viewportState;
 
       // Measurement state
       const elementToIndex = new WeakMap<Element, number>();
@@ -90,11 +92,10 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
        * the state the user sees right now, not the post-measurement state.
        */
       const isAtBottom = (oldTotalSize: number): boolean => {
-        const scrollTop = ctx.scrollController.getScrollTop();
-        const containerSize = ctx.state.viewportState.containerSize;
+        const scrollTop = scrollController.getScrollTop();
+        const containerSize = viewportState.containerSize;
         if (containerSize <= 0) return false;
-        const maxScroll = Math.max(0, oldTotalSize + mainAxisPadding - containerSize);
-        return scrollTop >= maxScroll - BOTTOM_THRESHOLD;
+        return scrollTop >= Math.max(0, oldTotalSize + mainAxisPadding - containerSize) - BOTTOM_THRESHOLD;
       };
 
       /**
@@ -104,19 +105,17 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
        */
       const snapToBottom = (): void => {
         const newTotalSize = measuredCache.getTotalSize();
-        const containerSize = ctx.state.viewportState.containerSize;
+        const containerSize = viewportState.containerSize;
         if (containerSize <= 0) return;
         const newMaxScroll = Math.max(0, newTotalSize + mainAxisPadding - containerSize);
-        const scrollTop = ctx.scrollController.getScrollTop();
-        if (newMaxScroll > scrollTop) {
-          ctx.scrollController.scrollTo(newMaxScroll);
+        if (newMaxScroll > scrollController.getScrollTop()) {
+          scrollController.scrollTo(newMaxScroll);
         }
       };
 
       // Content size updater
       const updateContentSize = (): void => {
-        const totalSize = measuredCache.getTotalSize();
-        ctx.updateContentSize(totalSize);
+        ctx.updateContentSize(measuredCache.getTotalSize());
       };
 
       // Flush deferred content size updates (called on scroll idle)
@@ -139,19 +138,15 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
           const viewport = ctx.dom.viewport as HTMLElement;
           const oldScrollHeight = viewport.scrollHeight;
           const currentMaxScroll = oldScrollHeight - viewport.clientHeight;
-          const scrollTop = ctx.scrollController.getScrollTop();
+          const scrollTop = scrollController.getScrollTop();
 
           const atDomBottom = currentMaxScroll > 0 && scrollTop >= currentMaxScroll - BOTTOM_THRESHOLD;
 
           const totalItems = ctx.getVirtualTotal();
-          const renderEnd = ctx.state.viewportState.renderRange.end;
-          const nearEnd = totalItems > 0 && renderEnd >= totalItems - 1;
-          const newContentHeight = measuredCache.getTotalSize() + mainAxisPadding;
-          const sizeDrift = Math.abs(newContentHeight - oldScrollHeight);
-          const atBottomWithDrift = nearEnd && currentMaxScroll > 0 &&
-            scrollTop >= currentMaxScroll - sizeDrift - BOTTOM_THRESHOLD;
-
-          const atBottom = atDomBottom || atBottomWithDrift;
+          const nearEnd = totalItems && viewportState.renderRange.end >= totalItems - 1;
+          const sizeDrift = Math.abs(measuredCache.getTotalSize() + mainAxisPadding - oldScrollHeight);
+          const atBottom = atDomBottom || (nearEnd && currentMaxScroll > 0 &&
+            scrollTop >= currentMaxScroll - sizeDrift - BOTTOM_THRESHOLD);
 
           updateContentSize();
           pendingContentSizeUpdate = false;
@@ -174,7 +169,7 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
         if (ctx.state.isDestroyed) return;
 
         let hasNewMeasurements = false;
-        const firstVisible = ctx.state.viewportState.visibleRange.start;
+        const firstVisible = viewportState.visibleRange.start;
 
         for (const entry of entries) {
           const index = elementToIndex.get(entry.target);
@@ -215,9 +210,8 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
         measuredCache.rebuild(ctx.getVirtualTotal());
 
         // Apply scroll correction immediately
-        if (pendingScrollDelta !== 0) {
-          const current = ctx.scrollController.getScrollTop();
-          ctx.scrollController.scrollTo(current + pendingScrollDelta);
+        if (pendingScrollDelta) {
+          scrollController.scrollTo(scrollController.getScrollTop() + pendingScrollDelta);
           pendingScrollDelta = 0;
         }
 
@@ -233,17 +227,16 @@ export const withAutoSize = <T extends VListItem = VListItem>(): VListFeature<T>
         // deferred the animation can never reach the true bottom, causing
         // a visible snap when the flush finally applies the update.
         const totalItems = ctx.getVirtualTotal();
-        const renderEnd = ctx.state.viewportState.renderRange.end;
-        const nearEnd = totalItems > 0 && renderEnd >= totalItems - 1;
+        const nearEnd = totalItems && viewportState.renderRange.end >= totalItems - 1;
 
         // Capture DOM maxScroll BEFORE updating content size so we can
         // detect if the scroll position was clamped at the old bottom.
         const viewport = ctx.dom.viewport as HTMLElement;
         const preUpdateMaxScroll = viewport.scrollHeight - viewport.clientHeight;
-        const currentScroll = ctx.scrollController.getScrollTop();
-        const atDomBottom = preUpdateMaxScroll > 0 && currentScroll >= preUpdateMaxScroll - BOTTOM_THRESHOLD;
+        const atDomBottom = preUpdateMaxScroll > 0 &&
+          scrollController.getScrollTop() >= preUpdateMaxScroll - BOTTOM_THRESHOLD;
 
-        if (atBottom || nearEnd || !ctx.scrollController.isScrolling()) {
+        if (atBottom || nearEnd || !scrollController.isScrolling()) {
           // Update content size immediately
           updateContentSize();
           pendingContentSizeUpdate = false;
