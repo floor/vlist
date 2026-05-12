@@ -28,7 +28,6 @@ import type { VListFeature, BuilderContext } from "../../builder/types";
 import {
   createGroupLayout,
   buildLayoutItems,
-  createGroupedSizeFn,
 } from "./layout";
 
 import { createStickyHeader, createStickyContainer } from "./sticky";
@@ -86,10 +85,18 @@ const normalizeConfig = (
   if (raw.header) {
     // Resolve main-axis size: width for horizontal, height for vertical
     const size = horizontal ? (raw.header.width ?? raw.header.height) : (raw.header.height ?? raw.header.width);
-    return { ...raw, header: { ...raw.header, height: size as number } } as any;
+    return {
+      getGroupForIndex: raw.getGroupForIndex,
+      header: { height: size as number, template: raw.header.template },
+      sticky: raw.sticky,
+    } as any;
   }
   if (raw.headerHeight != null && raw.headerTemplate) {
-    return { ...raw, header: { height: raw.headerHeight, template: raw.headerTemplate } };
+    return {
+      getGroupForIndex: raw.getGroupForIndex,
+      header: { height: raw.headerHeight, template: raw.headerTemplate },
+      sticky: raw.sticky,
+    } as any;
   }
   return raw as any; // let validation catch missing fields
 };
@@ -140,15 +147,15 @@ export const withGroups = <T extends VListItem = VListItem>(
 
   // Validate
   if (!groupsRawConfig.getGroupForIndex) {
-    throw new Error("[vlist/builder] withGroups: getGroupForIndex is required");
+    throw new Error(process.env.NODE_ENV === "production" ? "[vlist] group" : "[vlist/builder] withGroups: getGroupForIndex is required");
   }
   if (earlySize == null || earlySize <= 0) {
     throw new Error(
-      "[vlist/builder] withGroups: header.height must be a positive number",
+      process.env.NODE_ENV === "production" ? "[vlist] header.size" : "[vlist/builder] withGroups: header.height must be a positive number",
     );
   }
   if (!earlyTemplate) {
-    throw new Error("[vlist/builder] withGroups: header.template is required");
+    throw new Error(process.env.NODE_ENV === "production" ? "[vlist] header.tpl" : "[vlist/builder] withGroups: header.template is required");
   }
 
   let groupLayout: GroupLayout | null = null;
@@ -312,8 +319,6 @@ export const withGroups = <T extends VListItem = VListItem>(
       setupStaticPath(
         ctx, config, resolvedConfig, rawConfig, baseSize, stickyEnabled,
         headerTemplate, classPrefix,
-        () => {},
-        () => {},
         (layout) => { groupLayout = layout; indexMapper = layout; },
         (s) => { stickyHeader = s; },
         stickyContainer,
@@ -342,8 +347,6 @@ function setupStaticPath<T extends VListItem>(
   stickyEnabled: boolean,
   headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
   classPrefix: string,
-  setOriginalItems: (items: T[]) => void,
-  setLayoutItems: (items: Array<T | GroupHeaderItem>) => void,
   setGroupLayout: (layout: GroupLayout) => void,
   setStickyHeader: (s: StickyHeaderInstance) => void,
   stickyContainer?: HTMLElement | null,
@@ -353,7 +356,6 @@ function setupStaticPath<T extends VListItem>(
 
   // ── Store original items ──
   let originalItems = rawConfig.items ? [...rawConfig.items] : [];
-  setOriginalItems(originalItems);
   const total = originalItems.length;
 
   // ── Create group layout ──
@@ -361,10 +363,8 @@ function setupStaticPath<T extends VListItem>(
     getGroupForIndex: config.getGroupForIndex,
     header: {
       height: config.header.height,
-      template: config.header.template,
     },
-    sticky: config.sticky ?? false,
-  };
+  } as any;
 
   const getOriginalItem = (index: number): T | undefined => originalItems[index];
   const groupLayout = createGroupLayout(total, groupsConfig, getOriginalItem);
@@ -372,10 +372,21 @@ function setupStaticPath<T extends VListItem>(
 
   // ── Build layout items (items + headers) ──
   let layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
-  setLayoutItems(layoutItems);
 
   // ── Create grouped size function ──
-  const groupedSizeFn = createGroupedSizeFn(groupLayout, baseSize, stickyEnabled);
+  const getItemSize =
+    typeof baseSize === "number"
+      ? (_dataIndex: number): number => baseSize
+      : baseSize;
+  const groupedSizeFn = (layoutIndex: number): number => {
+    const dataIndex = groupLayout.layoutToDataIndex(layoutIndex);
+    if (dataIndex < 0) {
+      const group = groupLayout.getGroupAtLayoutIndex(layoutIndex);
+      if (stickyEnabled && group.groupIndex === 0) return 0;
+      return groupLayout.getHeaderHeight(group.groupIndex);
+    }
+    return getItemSize(dataIndex);
+  };
 
   // ── Update size config and rebuild size cache ──
   ctx.setSizeConfig(groupedSizeFn);
@@ -525,7 +536,6 @@ function setupStaticPath<T extends VListItem>(
   const rebuildGroups = (): void => {
     groupLayout.rebuild(originalItems.length, getOriginalItem);
     layoutItems = buildLayoutItems(originalItems, groupLayout.groups);
-    setLayoutItems(layoutItems);
 
     ctx.rebuildSizeCache(layoutItems.length);
 
@@ -542,25 +552,21 @@ function setupStaticPath<T extends VListItem>(
   // ── Override data methods to maintain group layout ──
   ctx.methods.set("setItems", (items: T[]): void => {
     originalItems = items.slice();
-    setOriginalItems(originalItems);
     rebuildGroups();
   });
 
   ctx.methods.set("appendItems", (items: T[]): void => {
     originalItems.push(...items);
-    setOriginalItems(originalItems);
     rebuildGroups();
   });
 
   ctx.methods.set("prependItems", (items: T[]): void => {
     originalItems.unshift(...items);
-    setOriginalItems(originalItems);
     rebuildGroups();
   });
 
   ctx.methods.set("removeItem", (id: string | number): void => {
     originalItems = originalItems.filter((item) => item.id !== id);
-    setOriginalItems(originalItems);
     rebuildGroups();
   });
 
@@ -608,8 +614,6 @@ function setupAsyncPath<T extends VListItem>(
       getGroupForIndex: config.getGroupForIndex,
       headerHeight: config.header.height,
     },
-    (index: number) => asyncDataManager.getItem(index),
-    (index: number) => asyncDataManager.isItemLoaded(index),
   );
   setBridge(bridge);
 
@@ -670,18 +674,10 @@ function setupAsyncPath<T extends VListItem>(
       if (dataIndex >= 0) return asyncDataManager.isItemLoaded(dataIndex);
       return asyncDataManager.isItemLoaded(layoutIndex);
     },
-    // Loading methods pass through — ensureRange receives data indices
-    // (converted by getItemRangeFromRenderRange in withAsync)
-    ensureRange: (start: number, end: number) => asyncDataManager.ensureRange(start, end),
-    loadRange: (start: number, end: number) => asyncDataManager.loadRange(start, end),
-    loadInitial: () => asyncDataManager.loadInitial(),
-    loadMore: () => asyncDataManager.loadMore(),
     reload: () => {
       bridge.reset();
       return asyncDataManager.reload();
     },
-    setTotal: (total: number) => asyncDataManager.setTotal(total),
-    setItems: (items: T[], offset?: number, total?: number) => asyncDataManager.setItems(items, offset, total),
     removeItem: (id: string | number) => {
       const dataIndex = asyncDataManager.getIndexById(id);
       if (dataIndex >= 0) {
@@ -743,25 +739,12 @@ function setupAsyncPath<T extends VListItem>(
       else slot.replaceChildren(result);
     };
 
-    // Create a GroupLayout-compatible adapter for the bridge
+    // Create a GroupLayout-compatible adapter for the bridge. The sticky
+    // header only reads groups and header sizes.
     const bridgeAsLayout: GroupLayout = {
-      get totalEntries() { return bridge.totalEntries; },
-      get groupCount() { return bridge.groupCount; },
       get groups() { return bridge.groups; },
-      getEntry: (layoutIndex: number) => {
-        if (bridge.isHeader(layoutIndex)) {
-          return { type: "header" as const, group: bridge.getGroupAtLayoutIndex(layoutIndex) };
-        }
-        const dataIndex = bridge.layoutToDataIndex(layoutIndex);
-        return { type: "item" as const, dataIndex, group: bridge.getGroupAtLayoutIndex(layoutIndex) };
-      },
-      layoutToDataIndex: (i: number) => bridge.layoutToDataIndex(i),
-      dataToLayoutIndex: (i: number) => bridge.dataToLayoutIndex(i),
-      getGroupAtLayoutIndex: (i: number) => bridge.getGroupAtLayoutIndex(i),
-      getGroupAtDataIndex: (i: number) => bridge.getGroupAtDataIndex(i),
       getHeaderHeight: (i: number) => bridge.getHeaderHeight(i),
-      rebuild: () => {}, // No-op — bridge rebuilds via onItemsLoaded
-    };
+    } as GroupLayout;
 
     asyncStickyHeader = createStickyHeader(
       dom.root,
