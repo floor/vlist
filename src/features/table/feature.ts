@@ -96,7 +96,7 @@ export const withTable = <T extends VListItem = VListItem>(
   config: TableFeatureConfig<T>,
 ): VListFeature<T> => {
   // ── Validate ──
-  if (!config.columns || config.columns.length === 0) {
+  if (!config.columns?.length) {
     throw new Error(
       "[vlist] withTable: columns must be a non-empty array",
     );
@@ -141,7 +141,6 @@ export const withTable = <T extends VListItem = VListItem>(
       const resizable = config.resizable ?? true;
       const minColumnWidth = config.minColumnWidth ?? 50;
       const maxColumnWidth = config.maxColumnWidth ?? Infinity;
-      const columnBorders = config.columnBorders ?? false;
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 
@@ -172,9 +171,7 @@ export const withTable = <T extends VListItem = VListItem>(
       // The table uses its own rowHeight config, overriding whatever the
       // builder was given in item.height. This keeps the API clean:
       // the user specifies height in the table config, not in item config.
-      if (typeof rowHeight === "function") {
-        ctx.setSizeConfig(rowHeight);
-      } else if (typeof rowHeight === "number") {
+      if (typeof rowHeight === "function" || typeof rowHeight === "number") {
         ctx.setSizeConfig(rowHeight);
       }
 
@@ -183,16 +180,12 @@ export const withTable = <T extends VListItem = VListItem>(
 
       // ── Add table CSS classes ──
       dom.root.classList.add(`${classPrefix}--table`);
-      if (rowBorders) {
-        dom.root.classList.add(`${classPrefix}--table-row-borders`);
-      }
-      if (columnBorders) {
-        dom.root.classList.add(`${classPrefix}--table-col-borders`);
-      }
+      rowBorders && dom.root.classList.add(`${classPrefix}--table-row-borders`);
+      config.columnBorders && dom.root.classList.add(`${classPrefix}--table-col-borders`);
       // ARIA: promote root to grid so both the header and body rowgroups
       // are contained within the required parent role.
       dom.root.setAttribute("role", "grid");
-      dom.root.setAttribute("aria-colcount", String(config.columns.length));
+      dom.root.setAttribute("aria-colcount", `${config.columns.length}`);
       // aria-rowcount includes the header row (+1); updated in render loop
       // when item count changes. Initial value uses current total.
       let lastAriaRowCount = -1;
@@ -233,14 +226,10 @@ export const withTable = <T extends VListItem = VListItem>(
         const actualWidth = tableLayout.resizeColumn(columnIndex, newWidth);
 
         // Update header cell widths
-        if (tableHeader) {
-          tableHeader.update(tableLayout);
-        }
+        tableHeader?.update(tableLayout);
 
         // Update all rendered row cell widths
-        if (tableRenderer) {
-          tableRenderer.updateColumnLayout(tableLayout);
-        }
+        tableRenderer?.updateColumnLayout(tableLayout);
 
         // Update content width for horizontal scrolling
         updateContentWidth();
@@ -255,18 +244,11 @@ export const withTable = <T extends VListItem = VListItem>(
       };
 
       const onColumnSort = (event: ColumnSortEvent): void => {
-        if (event.direction === null) {
-          sortKey = null;
-          sortDirection = "asc";
-        } else {
-          sortKey = event.key;
-          sortDirection = event.direction;
-        }
+        sortKey = event.direction === null ? null : event.key;
+        sortDirection = event.direction ?? "asc";
 
         // Update header sort indicator
-        if (tableHeader) {
-          tableHeader.updateSort(sortKey, sortDirection);
-        }
+        tableHeader?.updateSort(sortKey, sortDirection);
 
         // Emit sort event — consumer handles actual sorting via setItems()
         emitter.emit("column:sort" as any, event);
@@ -296,9 +278,9 @@ export const withTable = <T extends VListItem = VListItem>(
       // ── Update content width ──
       const updateContentWidth = (): void => {
         if (!tableLayout) return;
-        const totalColWidth = tableLayout.totalWidth;
-        dom.content.style.minWidth = `${totalColWidth}px`;
-        dom.items.style.minWidth = `${totalColWidth}px`;
+        const width = `${tableLayout.totalWidth}px`;
+        dom.content.style.minWidth = width;
+        dom.items.style.minWidth = width;
       };
 
       updateContentWidth();
@@ -385,7 +367,7 @@ export const withTable = <T extends VListItem = VListItem>(
         const ariaRowCount = totalItems + 1;
         if (ariaRowCount !== lastAriaRowCount) {
           lastAriaRowCount = ariaRowCount;
-          dom.root.setAttribute("aria-rowcount", String(ariaRowCount));
+          dom.root.setAttribute("aria-rowcount", `${ariaRowCount}`);
         }
 
         // Use the context's visible range function — this delegates to the
@@ -514,14 +496,10 @@ export const withTable = <T extends VListItem = VListItem>(
         tableLayout.resolve(width - crossAxisPadding);
 
         // Update header
-        if (tableHeader) {
-          tableHeader.update(tableLayout);
-        }
+        tableHeader?.update(tableLayout);
 
         // Update all rendered rows
-        if (tableRenderer) {
-          tableRenderer.updateColumnLayout(tableLayout);
-        }
+        tableRenderer?.updateColumnLayout(tableLayout);
 
         updateContentWidth();
       });
@@ -551,10 +529,8 @@ export const withTable = <T extends VListItem = VListItem>(
         updateContentWidth();
 
         // Update rendered rows
-        if (tableRenderer) {
-          tableRenderer.updateColumnLayout(tableLayout);
-          tableRenderer.clear();
-        }
+        tableRenderer?.updateColumnLayout(tableLayout);
+        tableRenderer?.clear();
 
         ctx.forceRender();
       });
@@ -603,9 +579,7 @@ export const withTable = <T extends VListItem = VListItem>(
       ctx.methods.set("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
         sortKey = key;
         sortDirection = direction ?? "asc";
-        if (tableHeader) {
-          tableHeader.updateSort(sortKey, sortDirection);
-        }
+        tableHeader?.updateSort(sortKey, sortDirection);
       });
 
       /**
@@ -650,9 +624,7 @@ export const withTable = <T extends VListItem = VListItem>(
         isHeaderFn: (item: T) => boolean,
         headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
       ) => {
-        if (tableRenderer) {
-          tableRenderer.setGroupHeaderFn(isHeaderFn, headerTemplate);
-        }
+        tableRenderer?.setGroupHeaderFn(isHeaderFn, headerTemplate);
       });
 
       /**
@@ -717,15 +689,11 @@ export const withTable = <T extends VListItem = VListItem>(
       ctx.destroyHandlers.push((): void => {
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
 
-        if (tableHeader) {
-          tableHeader.destroy();
-          tableHeader = null;
-        }
+        tableHeader?.destroy();
+        tableHeader = null;
 
-        if (tableRenderer) {
-          tableRenderer.destroy();
-          tableRenderer = null;
-        }
+        tableRenderer?.destroy();
+        tableRenderer = null;
 
         // Reset styles
         dom.content.style.minWidth = "";
@@ -749,14 +717,10 @@ export const withTable = <T extends VListItem = VListItem>(
     },
 
     destroy(): void {
-      if (tableHeader) {
-        tableHeader.destroy();
-        tableHeader = null;
-      }
-      if (tableRenderer) {
-        tableRenderer.destroy();
-        tableRenderer = null;
-      }
+      tableHeader?.destroy();
+      tableHeader = null;
+      tableRenderer?.destroy();
+      tableRenderer = null;
     },
   };
 };
