@@ -66,19 +66,7 @@ export const createStickyHeader = (
   };
 
   // DOM setup — reuse pre-created container if provided
-  const container = existingContainer ?? (() => {
-    const el = document.createElement("div");
-    el.className = `${classPrefix}-sticky-header`;
-    el.setAttribute("role", "presentation");
-    el.setAttribute("aria-hidden", "true");
-    el.style.cssText =
-      `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
-      (horizontal
-        ? `top:0;bottom:0;left:${stickyOffset || 0}px`
-        : `top:${stickyOffset || 0}px`);
-    root.insertBefore(el, root.firstChild);
-    return el;
-  })();
+  const container = existingContainer ?? createStickyContainer(root, classPrefix, horizontal, 0, stickyOffset);
 
   const mkSlot = (): HTMLElement => {
     const s = document.createElement("div");
@@ -92,7 +80,6 @@ export const createStickyHeader = (
   const slotA = mkSlot();
   const slotB = mkSlot();
   container.append(slotA, slotB);
-  if (!existingContainer) root.insertBefore(container, root.firstChild);
 
   // Slot references — swap roles after each completed transition
   let active = slotA;

@@ -230,10 +230,6 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element.classList.toggle(focusedClass, isFocused);
   };
 
-  /**
-   * Position an element using its placement coordinates.
-   * Uses translate(x, y) for efficient GPU-accelerated positioning.
-   */
   const positionElement = (
     element: HTMLElement,
     placement: ItemPlacement,
@@ -272,7 +268,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): TrackedItem => {
     const element = pool.acquire();
-    const isGH = !!(item as Record<string, unknown>).__groupHeader;
+    const isGH = (item as any).__groupHeader;
     const state = getItemState(isSelected, isFocused);
 
     // Group headers get a distinct class and role
@@ -410,7 +406,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           existing.lastItemId = item.id;
 
           // Refresh aria-posinset when element is reused for a different item
-          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          const isGH = (item as any).__groupHeader;
           if (!isGH) {
             const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
             existing.element.setAttribute("aria-posinset", String(posInSet));
@@ -454,17 +450,15 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     }
 
     // Single DOM insertion for all new elements — minimizes reflows
-    if (fragment) {
-      itemsContainer.appendChild(fragment);
-    }
+    if (fragment) itemsContainer.appendChild(fragment);
   };
 
   /**
    * Clear all rendered items.
    */
   const clear = (): void => {
-    for (const { element } of rendered.values()) {
-      pool.release(element);
+    for (const tracked of rendered.values()) {
+      pool.release(tracked.element);
     }
     rendered.clear();
     itemsContainer.innerHTML = "";

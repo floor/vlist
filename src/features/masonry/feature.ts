@@ -143,27 +143,23 @@ export const withMasonry = <T extends VListItem = VListItem>(
       const mainAxisPadding = mainAxisPaddingFrom(resolvedPad, isHorizontal);
 
       // ── Get container size (cross-axis dimension minus padding) ──
-      const getCrossAxisSize = (): number => {
-        const raw = isHorizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
-        return raw - crossAxisPadding;
-      };
+      const getCrossAxisSize = (): number =>
+        (isHorizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth) - crossAxisPadding;
 
       // ── Create masonry layout ──
-      const masonryConfig = {
+      masonryLayout = createMasonryLayout({
         columns: config.columns,
         gap: config.gap ?? 0,
         containerSize: getCrossAxisSize(),
-      };
-
-      masonryLayout = createMasonryLayout(masonryConfig);
+      });
 
       // ── Item size configuration ──
       // When the user provides a function, inject masonry context (columnWidth,
       // columns, gap, containerSize) so heights can be expressed relative to
       // the current column width — identical pattern to the grid feature.
       const item = rawConfig.item;
-      const rawSizeFn = isHorizontal && rawConfig.item.width
-        ? rawConfig.item.width
+      const rawSizeFn = isHorizontal && item.width
+        ? item.width
         : item.height;
 
       // Reusable context object — mutated in place once per layout pass.
@@ -189,22 +185,21 @@ export const withMasonry = <T extends VListItem = VListItem>(
         // Refresh context once before the O(n) layout loop.
         // Arithmetic is cheaper than a dirty-check branch per item.
         const ml = masonryLayout!;
+        const cols = ml.columns;
+        const gap = ml.gap;
         masonryContext.containerWidth = ml.containerSize;
-        masonryContext.columns = ml.columns;
-        masonryContext.gap = ml.gap;
-        const totalGap = (ml.columns - 1) * ml.gap;
-        masonryContext.columnWidth = Math.max(0, (masonryContext.containerWidth - totalGap) / ml.columns);
+        masonryContext.columns = cols;
+        masonryContext.gap = gap;
+        const totalGap = (cols - 1) * gap;
+        masonryContext.columnWidth = Math.max(0, (masonryContext.containerWidth - totalGap) / cols);
 
-        cachedPlacements = ml.calculateLayout(
-          totalItems,
-          sizeFn,
-        );
+        cachedPlacements = ml.calculateLayout(totalItems, sizeFn);
 
         // Rebuild per-lane navigation index after layout
         rebuildLaneIndex();
 
         // Update total size
-        const totalSize = masonryLayout!.getTotalSize(cachedPlacements);
+        const totalSize = ml.getTotalSize(cachedPlacements);
         ctx.sizeCache.getTotalSize = () => totalSize;
 
         // Update DOM content size (padding compensation handled by updateContentSize)
@@ -248,11 +243,12 @@ export const withMasonry = <T extends VListItem = VListItem>(
       let laneYCenters: Float64Array[] = [];
 
       const rebuildLaneIndex = (): void => {
-        const cols = masonryConfig.columns;
+        const cols = masonryLayout!.columns;
         const total = cachedPlacements.length;
 
         // Reset lane buckets
-        laneItems = Array.from({ length: cols }, () => []);
+        laneItems = new Array(cols);
+        for (let lane = 0; lane < cols; lane++) laneItems[lane] = [];
 
         if (itemLanePos.length < total) {
           itemLanePos = new Int32Array(total);
@@ -288,8 +284,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
       /** Binary search on a sorted Float64Array: find index of closest value. O(log k). */
       const bsNearest = (arr: Float64Array, target: number): number => {
         const len = arr.length;
-        if (len === 0) return -1;
-        if (len === 1) return 0;
+        if (!len) return -1;
         let lo = 0;
         let hi = len - 1;
         while (lo < hi) {
@@ -308,7 +303,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
         const placement = cachedPlacements[currentIndex];
         if (!placement) return currentIndex;
         const lane = placement.lane;
-        const cols = masonryConfig.columns;
+        const cols = masonryLayout!.columns;
         const posInLane = itemLanePos[currentIndex]!;
         const myLane = laneItems[lane]!;
 
@@ -341,7 +336,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
             const targetLane = lane + 1;
             const yCenter = placement.y + placement.size * 0.5;
             const targetItems = laneItems[targetLane]!;
-            if (targetItems.length === 0) return currentIndex;
+            if (!targetItems.length) return currentIndex;
             const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
             return pos >= 0 ? targetItems[pos]! : currentIndex;
           }
@@ -351,7 +346,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
             const targetLane = lane - 1;
             const yCenter = placement.y + placement.size * 0.5;
             const targetItems = laneItems[targetLane]!;
-            if (targetItems.length === 0) return currentIndex;
+            if (!targetItems.length) return currentIndex;
             const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
             return pos >= 0 ? targetItems[pos]! : currentIndex;
           }
@@ -393,11 +388,10 @@ export const withMasonry = <T extends VListItem = VListItem>(
         const containerSize = ctx.state.viewportState.containerSize;
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
-        const viewportBottom = scrollPos + containerSize;
 
         if (itemTop < scrollPos) {
           ctx.scrollController.scrollTo(ctx.adjustScrollPosition(Math.max(0, itemTop)));
-        } else if (itemBottom > viewportBottom) {
+        } else if (itemBottom > scrollPos + containerSize) {
           ctx.scrollController.scrollTo(ctx.adjustScrollPosition(itemBottom - containerSize));
         }
       });
@@ -465,11 +459,11 @@ export const withMasonry = <T extends VListItem = VListItem>(
         );
 
         // Get selection state — use cached empty set to avoid allocation
-        const selectedIds = selectedIdsGetter ? selectedIdsGetter() : EMPTY_ID_SET;
-        const focusedIndex = focusedIndexGetter ? focusedIndexGetter() : -1;
+        const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
+        const focusedIndex = focusedIndexGetter?.() ?? -1;
 
         // Render visible items — pass cached getItem closure (no allocation)
-        if (masonryRenderer && visiblePlacements.length > 0) {
+        if (masonryRenderer && visiblePlacements.length) {
           masonryRenderer.render(
             getItem,
             visiblePlacements,
@@ -483,8 +477,8 @@ export const withMasonry = <T extends VListItem = VListItem>(
         viewportState.scrollPosition = scrollPosition;
 
         const vLen = visiblePlacements.length;
-        const firstIndex = vLen > 0 ? visiblePlacements[0]!.index : 0;
-        const lastIndex = vLen > 0 ? visiblePlacements[vLen - 1]!.index : 0;
+        const firstIndex = vLen ? visiblePlacements[0]!.index : 0;
+        const lastIndex = vLen ? visiblePlacements[vLen - 1]!.index : 0;
 
         viewportState.visibleRange.start = firstIndex;
         viewportState.visibleRange.end = lastIndex;
@@ -517,7 +511,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
         if (masonryLayout && masonryLayout.containerSize !== newContainerSize) {
           masonryLayout.update({ containerSize: newContainerSize });
           calculateLayout();
-          if (masonryRenderer) masonryRenderer.clear();
+          masonryRenderer?.clear();
           masonryForceRender();
         }
       };
@@ -589,8 +583,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
             }
           }
 
-          scrollTarget = Math.max(0, scrollTarget);
-          scrollTarget = ctx.adjustScrollPosition(scrollTarget);
+          scrollTarget = ctx.adjustScrollPosition(Math.max(0, scrollTarget));
 
           if (behavior === "smooth") {
             animateScroll(ctx.scrollController.getScrollTop(), scrollTarget, duration);
@@ -606,15 +599,13 @@ export const withMasonry = <T extends VListItem = VListItem>(
 
       // ── Accessibility: reorder DOM on scroll idle ──
       ctx.idleHandlers.push(() => {
-        if (masonryRenderer) masonryRenderer.sortDOM();
+        masonryRenderer?.sortDOM();
       });
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
         cancelScroll();
-        if (masonryRenderer) {
-          masonryRenderer.destroy();
-        }
+        masonryRenderer?.destroy();
         dom.root.classList.remove(`${classPrefix}--masonry`);
       });
     },

@@ -237,7 +237,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         const origGetTotalSize = ctx.sizeCache.getTotalSize;
         ctx.sizeCache.getTotalSize = (): number => {
           const total = origGetTotalSize();
-          return total > 0 ? total - gridState.gap : 0;
+          return total ? total - gridState.gap : 0;
         };
       }
 
@@ -272,6 +272,12 @@ export const withGrid = <T extends VListItem = VListItem>(
       };
 
       createAndSetGridRenderer();
+
+      const runContentSizeHandlers = (): void => {
+        for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
+          ctx.contentSizeHandlers[i]!();
+        }
+      };
 
       // ── Wire updateItemClasses to the grid renderer ──
       // The core's $.uic uses the core rendered Map which is empty in grid
@@ -318,7 +324,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           const totalItems = ctx.dataManager.getTotal();
           let correctTotalHeight = 0;
           for (let i = 0; i < totalItems; i++) {
-            if (gridLayout!.getCol(i) === 0) {
+            if (!gridLayout!.getCol(i)) {
               const height = ctx.sizeCache.getSize(i);
               correctTotalHeight += height;
             }
@@ -357,9 +363,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         }
 
         // Update grid layout
-        if (gridLayout) {
-          gridLayout.update(gridConfig);
-        }
+        gridLayout?.update(gridConfig);
 
         // Update grid state for size function (cross-axis dimension)
         const containerWidth = getCrossAxisSize();
@@ -368,9 +372,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         gridState.gap = gridConfig.gap ?? 0;
 
         // Update grid renderer
-        if (gridRenderer) {
-          gridRenderer.updateContainerWidth(containerWidth);
-        }
+        gridRenderer?.updateContainerWidth(containerWidth);
 
         // Rebuild size cache with new row count
         ctx.rebuildSizeCache();
@@ -382,14 +384,10 @@ export const withGrid = <T extends VListItem = VListItem>(
         ctx.updateCompressionMode();
 
         // Trigger content size handlers (e.g., snapshots feature)
-        for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
-          ctx.contentSizeHandlers[i]!();
-        }
+        runContentSizeHandlers();
 
         // Clear and re-render
-        if (gridRenderer) {
-          gridRenderer.clear();
-        }
+        gridRenderer?.clear();
         ctx.forceRender();
       });
 
@@ -484,11 +482,10 @@ export const withGrid = <T extends VListItem = VListItem>(
         }
 
         // Convert row range to flat item range
-        const totalItems = ctx.dataManager.getTotal();
         const itemRange = gridLayout!.getItemRange(
           renderRange.start,
           renderRange.end,
-          totalItems,
+          ctx.dataManager.getTotal(),
         );
 
         const items = ctx.dataManager.getItemsInRange(
@@ -557,9 +554,7 @@ export const withGrid = <T extends VListItem = VListItem>(
         // Update grid state (used by dynamic height functions)
         gridState.containerWidth = crossAxisSize;
 
-        if (gridRenderer) {
-          gridRenderer.updateContainerWidth(crossAxisSize);
-        }
+        gridRenderer?.updateContainerWidth(crossAxisSize);
 
         // Dynamic heights depend on containerWidth via the grid context,
         // so the size cache must be rebuilt when the cross-axis changes.
@@ -568,13 +563,9 @@ export const withGrid = <T extends VListItem = VListItem>(
           ctx.updateContentSize(ctx.sizeCache.getTotalSize());
           ctx.updateCompressionMode();
 
-          for (let i = 0; i < ctx.contentSizeHandlers.length; i++) {
-            ctx.contentSizeHandlers[i]!();
-          }
+          runContentSizeHandlers();
 
-          if (gridRenderer) {
-            gridRenderer.clear();
-          }
+          gridRenderer?.clear();
           ctx.forceRender();
         }
       });
@@ -652,26 +643,21 @@ export const withGrid = <T extends VListItem = VListItem>(
 
       // ── Accessibility: reorder DOM on scroll idle ──
       ctx.idleHandlers.push(() => {
-        if (gridRenderer) gridRenderer.sortDOM();
+        gridRenderer?.sortDOM();
       });
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
         cancelScroll();
-        if (gridRenderer) {
-          gridRenderer.destroy();
-          gridRenderer = null;
-        }
+        gridRenderer?.destroy();
+        gridRenderer = null;
         dom.root.classList.remove(`${classPrefix}--grid`);
       });
     },
 
     destroy(): void {
-      if (gridRenderer) {
-        gridRenderer.destroy();
-        gridRenderer = null;
-      }
+      gridRenderer?.destroy();
+      gridRenderer = null;
     },
   };
 };
-

@@ -97,7 +97,7 @@ export const createTableLayout = <T extends VListItem = VListItem>(
     }
 
     // Second pass: distribute remaining space to flex columns
-    if (flexCount > 0) {
+    if (flexCount) {
       const remaining = Math.max(0, containerWidth - usedWidth);
       const flexWidth = remaining / flexCount;
 

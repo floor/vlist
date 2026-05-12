@@ -11,6 +11,24 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.8] - 2026-05-12
+
+### Performance
+
+- **builder**: Optimize base bundle from 11.2 KB to 10.7 KB — NODE_ENV ternaries for error messages, extract `applyItemAria()` to deduplicate ARIA code, inline `claimPlaceholderSelection`, remove lazy-resolve caching in a11y (direct Map.get is O(1)).
+- **async**: Reduce async feature bundle by 0.5 KB — merge dual Maps into single tuple Map, extract shared closures, lazy `itemsLoadedCallbacks`, replace `Object.keys()` allocation with boolean flag.
+- **groups**: Reduce groups feature bundle by 0.4 KB — share binary search from layout.ts, inline single-use `groupedSizeFn`, trim `bridgeAsLayout` adapter, remove passthrough methods.
+- **selection**: Reduce selection feature bundle by 0.2 KB — mutate selected Set in place instead of cloning, unify focus movement into single `moveFocus(delta)`, inline 14 state functions as local closures.
+- **scale**: Reduce scale feature bundle by 0.1 KB — cache DOM/state references, inline `calculateCompressedVisibleRange`/`ScrollToIndex`/`ItemPosition`, precompute translate direction string.
+- **grid**: Reduce grid feature bundle by 0.1 KB — replace per-call `Set<number>` with integer in row-offset loop, inline `positionElement` wrapper, cache `getCol()` result.
+- **masonry**: Reduce masonry feature bundle by 0.1 KB — inline `findShortestLane` into layout loop, fix `getVisibleItemsLinear` to reuse pool instead of allocating.
+- **table**: Reduce table feature bundle by 0.1 KB — remove unused `resizeHandles` array, optional chaining, inline sort direction cycling.
+- **scrollbar**: Reduce scrollbar feature bundle by 0.1 KB — extract `updateScrollbarBounds` helper, remove redundant null checks and classList guard.
+- **sortable**: Reduce sortable feature bundle by 0.1 KB — cache DOM references, precompute class names, extract `setChildTransitions` helper.
+- **page**: Reduce page feature bundle by 0.1 KB — cache `window` as local for minification, deduplicate scrollTo target calculation.
+- **autosize**: Micro-optimize autosize — cache scrollController/viewportState references, inline temp variables.
+- **snapshots**: Micro-optimize snapshots — add `restoreSelection` parameter to avoid object spread, simplify poll loop.
+
 ## [1.7.7] - 2026-05-11
 
 ### Fixed
