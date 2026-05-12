@@ -31,7 +31,7 @@ import type { VListItem } from "../../types";
  * Find the last group whose headerLayoutIndex <= layoutIndex.
  * Returns the group's index in the groups array.
  */
-const findGroupByLayoutIndex = (
+export const findGroupByLayoutIndex = (
   groups: readonly GroupBoundary[],
   layoutIndex: number,
 ): number => {
@@ -54,7 +54,7 @@ const findGroupByLayoutIndex = (
  * Find the last group whose firstDataIndex <= dataIndex.
  * Returns the group's index in the groups array.
  */
-const findGroupByDataIndex = (
+export const findGroupByDataIndex = (
   groups: readonly GroupBoundary[],
   dataIndex: number,
 ): number => {
