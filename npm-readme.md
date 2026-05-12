@@ -2,6 +2,8 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.7 KB.
 
+**v1.7.8** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
+
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
