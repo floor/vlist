@@ -25,7 +25,7 @@ export const resolveContainer = (container: HTMLElement | string): HTMLElement =
   if (typeof container === "string") {
     const el = document.querySelector<HTMLElement>(container);
     if (!el)
-      throw new Error(`[vlist] Container not found: ${container}`);
+      throw new Error(process.env.NODE_ENV === "production" ? "[vlist] container" : `[vlist] Container not found: ${container}`);
     return el;
   }
   return container;

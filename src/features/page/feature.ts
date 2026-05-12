@@ -115,7 +115,7 @@ const resolvePad = (v: number | (() => number) | undefined): number =>
 export const withPage = <
   T extends VListItem = VListItem,
 >(options?: WithPageOptions): VListFeature<T> => {
-  let cleanupResize: (() => void) | null = null;
+  let cleanupResize: (() => void) | undefined;
   const scrollPadding = options?.scrollPadding;
 
   return {
@@ -124,6 +124,8 @@ export const withPage = <
 
     setup(ctx: BuilderContext<T>): void {
       const { dom, state, config, emitter } = ctx;
+      const hz = config.horizontal;
+      const win = window;
 
       // ── 1. Modify DOM for window scroll ────────────────────────
 
@@ -133,7 +135,7 @@ export const withPage = <
       // Remove viewport overflow to prevent double scrolling.
       // The viewport was set to "overflow: auto" during DOM creation,
       // which causes both window AND viewport to handle scroll events.
-      if (config.horizontal) {
+      if (hz) {
         dom.viewport.style.overflowX = "visible";
         dom.viewport.style.overflowY = "visible";
       } else {
@@ -151,7 +153,7 @@ export const withPage = <
 
       // ── 3. Set window as scroll target ─────────────────────────
 
-      ctx.setScrollTarget(window);
+      ctx.setScrollTarget(win);
 
       // ── 4. Override scroll position functions ──────────────────
       //
@@ -165,18 +167,17 @@ export const withPage = <
         // getTop — list-relative scroll position from DOM
         (): number => {
           const rect = dom.viewport.getBoundingClientRect();
-          return Math.max(0, config.horizontal ? -rect.left : -rect.top);
+          return Math.max(0, hz ? -rect.left : -rect.top);
         },
 
         // setTop — scroll window to position the list correctly
         (pos: number): void => {
           const rect = dom.viewport.getBoundingClientRect();
-          if (config.horizontal) {
-            const docLeft = rect.left + window.scrollX;
-            window.scrollTo({ left: docLeft + pos, top: window.scrollY, behavior: "instant" });
+          const target = (hz ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;
+          if (hz) {
+            win.scrollTo({ left: target, top: win.scrollY, behavior: "instant" });
           } else {
-            const docTop = rect.top + window.scrollY;
-            window.scrollTo({ left: window.scrollX, top: docTop + pos, behavior: "instant" });
+            win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
         },
       );
@@ -184,11 +185,11 @@ export const withPage = <
       // ── 5. Override container dimensions ───────────────────────
 
       ctx.setContainerDimensions({
-        width: (): number => window.innerWidth,
-        height: (): number => window.innerHeight,
+        width: (): number => win.innerWidth,
+        height: (): number => win.innerHeight,
       });
 
-      state.viewportState.containerSize = window.innerHeight;
+      state.viewportState.containerSize = win.innerHeight;
 
       // ── 6. Scroll padding ─────────────────────────────────────
       //
@@ -199,7 +200,6 @@ export const withPage = <
       //        navigation keeps items clear of sticky chrome.
 
       if (scrollPadding) {
-        const hz = config.horizontal;
         const itemToScrollIndex = ctx.getItemToScrollIndexFn();
 
         // ── 6a. scrollToIndex position calculator ────────────────
@@ -216,20 +216,11 @@ export const withPage = <
             const totalSize = sc.getTotalSize();
             const maxScroll = Math.max(0, totalSize - containerHeight + endPad);
 
-            let pos: number;
-            switch (align) {
-              case "start":
-                pos = offset - startPad;
-                break;
-              case "center": {
-                const effectiveH = containerHeight - startPad - endPad;
-                pos = offset - startPad - (effectiveH - itemH) / 2;
-                break;
-              }
-              case "end":
-                pos = offset - containerHeight + itemH + endPad;
-                break;
-            }
+            const pos = align === "start"
+              ? offset - startPad
+              : align === "center"
+                ? offset - startPad - (containerHeight - startPad - endPad - itemH) / 2
+                : offset - containerHeight + itemH + endPad;
             return Math.max(-startPad, Math.min(pos, maxScroll));
           },
         );
@@ -244,37 +235,35 @@ export const withPage = <
 
         ctx.methods.set("_scrollItemIntoView", (index: number): void => {
           const si = itemToScrollIndex(index);
-          const containerSize = hz ? window.innerWidth : window.innerHeight;
+          const containerSize = hz ? win.innerWidth : win.innerHeight;
 
           const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
           const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
 
           const rect = dom.viewport.getBoundingClientRect();
-          const domScroll = hz ? window.scrollX : window.scrollY;
-          const listDocPos = (hz ? rect.left : rect.top) + domScroll;
-          const listScreenPos = listDocPos - domScroll;
+          const domScroll = hz ? win.scrollX : win.scrollY;
+          const listScreenPos = hz ? rect.left : rect.top;
+          const listDocPos = listScreenPos + domScroll;
 
           const itemOffset = ctx.sizeCache.getOffset(si);
           const itemSize = ctx.sizeCache.getSize(si);
           const itemScreenStart = listScreenPos + itemOffset;
-          const itemScreenEnd = itemScreenStart + itemSize;
 
-          const safeStart = startPad;
           const safeEnd = containerSize - endPad;
 
           let newTarget = domScroll;
 
-          if (itemScreenStart < safeStart) {
-            newTarget = listDocPos + itemOffset - safeStart;
-          } else if (itemScreenEnd > safeEnd) {
+          if (itemScreenStart < startPad) {
+            newTarget = listDocPos + itemOffset - startPad;
+          } else if (itemScreenStart + itemSize > safeEnd) {
             newTarget = listDocPos + itemOffset + itemSize - safeEnd;
           }
 
           if (newTarget !== domScroll) {
             if (hz) {
-              window.scrollTo({ left: newTarget, top: window.scrollY, behavior: "instant" });
+              win.scrollTo({ left: newTarget, top: win.scrollY, behavior: "instant" });
             } else {
-              window.scrollTo({ left: window.scrollX, top: newTarget, behavior: "instant" });
+              win.scrollTo({ left: win.scrollX, top: newTarget, behavior: "instant" });
             }
           }
         });
@@ -282,45 +271,38 @@ export const withPage = <
 
       // ── 7. Window resize handler ───────────────────────────────
 
-      let previousHeight = window.innerHeight;
-      let previousWidth = window.innerWidth;
+      let previousHeight = win.innerHeight;
+      let previousWidth = win.innerWidth;
 
       const handleResize = (): void => {
-        const newWidth = window.innerWidth;
-        const newHeight = window.innerHeight;
+        const newWidth = win.innerWidth;
+        const newHeight = win.innerHeight;
 
-        const mainAxis = config.horizontal ? newWidth : newHeight;
-        const prevMainAxis = config.horizontal ? previousWidth : previousHeight;
+        if (Math.abs(hz ? newWidth - previousWidth : newHeight - previousHeight) > 1) {
+          previousHeight = newHeight;
+          previousWidth = newWidth;
+          state.viewportState.containerSize = newHeight;
 
-        if (Math.abs(mainAxis - prevMainAxis) <= 1) return;
+          emitter.emit("resize", { width: newWidth, height: newHeight });
 
-        previousHeight = newHeight;
-        previousWidth = newWidth;
-        state.viewportState.containerSize = newHeight;
+          for (let i = 0; i < ctx.resizeHandlers.length; i++) {
+            ctx.resizeHandlers[i]!(newWidth, newHeight);
+          }
 
-        emitter.emit("resize", { width: newWidth, height: newHeight });
-
-        for (let i = 0; i < ctx.resizeHandlers.length; i++) {
-          ctx.resizeHandlers[i]!(newWidth, newHeight);
+          ctx.renderIfNeeded();
         }
-
-        ctx.renderIfNeeded();
       };
 
-      window.addEventListener("resize", handleResize, { passive: true });
+      win.addEventListener("resize", handleResize);
 
-      cleanupResize = (): void => {
-        window.removeEventListener("resize", handleResize);
-      };
+      cleanupResize = () => win.removeEventListener("resize", handleResize);
 
       ctx.destroyHandlers.push(cleanupResize);
     },
 
     destroy(): void {
-      if (cleanupResize) {
-        cleanupResize();
-        cleanupResize = null;
-      }
+      cleanupResize?.();
+      cleanupResize = undefined;
     },
   };
 };
