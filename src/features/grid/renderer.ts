@@ -298,10 +298,10 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     compressionCtx?: CompressionContext,
   ): string => {
     // Check if this is a group header - position at full width
-    const isHeader = groupsActive && gridLayout.getCol(itemIndex) === 0;
+    const itemCol = gridLayout.getCol(itemIndex);
+    const isHeader = groupsActive && itemCol === 0;
 
-    const col = isHeader ? 0 : gridLayout.getCol(itemIndex);
-    const x = isHeader ? 0 : gridLayout.getColumnOffset(col, containerWidth);
+    const x = isHeader ? 0 : gridLayout.getColumnOffset(itemCol, containerWidth);
 
     // Y position: when groups are active, calculate by summing each row's height once
     let y: number;
@@ -309,14 +309,14 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       // Grouped grid: sum the height of each row before this item's row
       const itemRow = gridLayout.getRow(itemIndex);
       let offset = 0;
-      const rowsSeen = new Set<number>();
+      let lastRow = -1;
 
       for (let i = 0; i < itemIndex; i++) {
         const prevItemRow = gridLayout.getRow(i);
-        if (prevItemRow < itemRow && !rowsSeen.has(prevItemRow)) {
+        if (prevItemRow < itemRow && prevItemRow !== lastRow) {
           const height = sizeCache.getSize(i);
           offset += height;
-          rowsSeen.add(prevItemRow);
+          lastRow = prevItemRow;
         }
       }
 
@@ -330,16 +330,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
     return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-  };
-
-  /**
-   * Position an element using a pre-built transform string.
-   */
-  const positionElement = (
-    element: HTMLElement,
-    transform: string,
-  ): void => {
-    element.style.transform = transform;
   };
 
   /**
@@ -390,7 +380,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     transform: string,
   ): TrackedItem => {
     const element = pool.acquire();
-    const isGH = !!(item as Record<string, unknown>).__groupHeader;
+    const isGH = !!(item as any).__groupHeader;
     const state = getItemState(isSelected, isFocused);
 
     // Group headers get a distinct class and role
@@ -435,13 +425,11 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     // Placeholder class — detected via ID prefix
     const isPlaceholder = String(item.id).startsWith(PLACEHOLDER_ID_PREFIX);
-    if (isPlaceholder) {
-      element.classList.add(placeholderClass);
-    }
+    if (isPlaceholder) element.classList.add(placeholderClass);
 
     // Apply state classes and position
     applyClasses(element, isSelected, isFocused);
-    positionElement(element, transform);
+    element.style.transform = transform;
 
     return {
       element,
@@ -478,7 +466,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     // Detect if groups are active by checking if ANY item in the dataset is a header
     // Don't check items[0] because it's relative to the render range, not the full dataset
     // Instead, check if the first item in the full range is a header
-    if (range.start === 0 && items.length > 0) {
+    if (range.start === 0 && items.length) {
       groupsActive = isGroupHeader(items[0]);
     }
     // Once groupsActive is true, it stays true (groups don't disappear mid-scroll)
@@ -565,7 +553,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
           existing.lastItemId = item.id;
 
           // Refresh aria-posinset when element is reused for a different item
-          const isGH = !!(item as Record<string, unknown>).__groupHeader;
+          const isGH = !!(item as any).__groupHeader;
           if (!isGH) {
             const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(i) : i + 1;
             existing.element.setAttribute("aria-posinset", String(posInSet));
@@ -583,12 +571,12 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         // Position update only when transform changed
         const transform = buildTransform(i, compressionCtx);
         if (existing.lastTransform !== transform) {
-          positionElement(existing.element, transform);
+          existing.element.style.transform = transform;
           existing.lastTransform = transform;
         }
 
         // Update aria-setsize on existing items only when total changed (rare)
-        if (setSizeChanged && !(item as Record<string, unknown>).__groupHeader) {
+        if (setSizeChanged && !(item as any).__groupHeader) {
           existing.element.setAttribute("aria-setsize", lastAriaSetSize);
         }
       } else {
@@ -613,9 +601,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     }
 
     // Single DOM insertion for all new elements — minimizes reflows
-    if (fragment) {
-      itemsContainer.appendChild(fragment);
-    }
+    if (fragment) itemsContainer.appendChild(fragment);
 
   };
 
@@ -626,7 +612,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     for (const [index, tracked] of rendered) {
       const transform = buildTransform(index, compressionCtx);
       if (tracked.lastTransform !== transform) {
-        positionElement(tracked.element, transform);
+        tracked.element.style.transform = transform;
         tracked.lastTransform = transform;
       }
     }
@@ -701,7 +687,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     for (const [index, tracked] of rendered) {
       applySizeStyles(tracked.element, index);
       const transform = buildTransform(index);
-      positionElement(tracked.element, transform);
+      tracked.element.style.transform = transform;
       tracked.lastTransform = transform;
     }
   };
