@@ -113,7 +113,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   // =========================================================================
 
   let cells: HTMLElement[] = [];
-  let resizeHandles: HTMLElement[] = [];
   let sortIndicators: (HTMLElement | null)[] = [];
   let isVisible = true;
   let currentSortKey: string | null = null;
@@ -184,7 +183,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       handle.dataset.resizeIndex = String(colIndex);
 
       cell.appendChild(handle);
-      resizeHandles.push(handle);
     }
 
     return cell;
@@ -203,7 +201,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     // Clear existing cells
     scrollContainer.textContent = "";
     cells = [];
-    resizeHandles = [];
     sortIndicators = [];
 
     const columns = layout.columns;
@@ -270,7 +267,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
       const col = columns[i]!;
 
-      if (col.def.key === key && key !== null) {
+      if (col.def.key === key) {
         indicator.textContent = direction === "asc" ? SORT_ASC : SORT_DESC;
         indicator.style.opacity = "0.7";
         cells[i]!.setAttribute("aria-sort", direction === "asc" ? "ascending" : "descending");
@@ -305,11 +302,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     e.preventDefault();
     e.stopPropagation();
 
-    dragColumnIndex = parseInt(target.dataset.resizeIndex!, 10);
+    dragColumnIndex = +target.dataset.resizeIndex!;
     if (!currentLayout) return;
 
     const col = currentLayout.getColumn(dragColumnIndex);
-    if (!col || !col.resizable) return;
+    if (!col?.resizable) return;
 
     isDragging = true;
     dragStartX = e.clientX;
@@ -376,7 +373,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   const onCellClick = (e: MouseEvent): void => {
     // Ignore clicks on resize handles
     const target = e.target as HTMLElement;
-    if (target.dataset.resizeIndex !== undefined) return;
+    if (target.dataset.resizeIndex) return;
     if (isDragging) return;
 
     // Walk up to find the header cell
@@ -386,9 +383,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       // Don't walk outside the header
       if (cell === element || cell === null) return;
     }
-    if (!cell || !cell.dataset.columnKey) return;
 
-    const key = cell.dataset.columnKey;
+    const key = cell.dataset.columnKey!;
     if (!currentLayout) return;
 
     // Find the column
@@ -415,11 +411,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
       if (currentSortKey === key) {
         // Cycle: asc → desc → null
-        if (currentSortDirection === "asc") {
-          direction = "desc";
-        } else {
-          direction = null;
-        }
+        direction = currentSortDirection === "asc" ? "desc" : null;
       } else {
         direction = "asc";
       }
@@ -465,7 +457,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     rowgroup.remove();
 
     cells = [];
-    resizeHandles = [];
     sortIndicators = [];
     currentLayout = null;
     isVisible = false;
