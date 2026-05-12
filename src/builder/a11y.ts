@@ -35,38 +35,25 @@ export const setupBaselineA11y = <T extends VListItem>(
   const focusedClass = `${cp}-item--focused`;
   let fv = false; // focusVisible
 
-  // 2D navigation hints (lazy-resolved from methods map)
-  let ntFn: (() => number) | null = null;
-  let ndFn: (() => { ud: number; lr: number; cols: number }) | null = null;
-  let navFn: ((cur: number, key: string, total: number) => number) | null = null;
-  let sivFn: ((index: number) => void) | null = null;
-  let resolved = false;
-
-  const resolve = (): void => {
-    if (resolved) return;
-    resolved = true;
-    ntFn = (methods.get("_getNavTotal") as (() => number)) ?? null;
-    ndFn = (methods.get("_getNavDelta") as (() => { ud: number; lr: number; cols: number })) ?? null;
-    navFn = (methods.get("_navigate") as ((cur: number, key: string, total: number) => number)) ?? null;
-    sivFn = (methods.get("_scrollItemIntoView") as ((index: number) => void)) ?? null;
+  const nTotal = (): number => {
+    const fn = methods.get("_getNavTotal") as (() => number) | undefined;
+    return fn ? fn() : $.vtf();
   };
 
-  const nTotal = (): number => { resolve(); return ntFn ? ntFn() : $.vtf(); };
-
   const nDelta = (): { ud: number; lr: number; cols: number } => {
-    resolve();
-    return ndFn ? ndFn() : { ud: 1, lr: 0, cols: 0 };
+    const fn = methods.get("_getNavDelta") as (() => { ud: number; lr: number; cols: number }) | undefined;
+    return fn ? fn() : { ud: 1, lr: 0, cols: 0 };
   };
 
   methods.set("_getFocusedIndex", (): number => fv ? $.fi : -1);
 
   const commit = (idx: number, scroll = true): void => {
     dom.root.setAttribute("aria-activedescendant", `${ap}-item-${idx}`);
-    resolve();
 
     if (scroll) {
-      if (sivFn) {
-        sivFn(idx);
+      const siv = methods.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
+      if (siv) {
+        siv(idx);
       } else {
         const cs = hz ? $.cw : $.ch;
         const si = $.i2s(idx);
@@ -156,8 +143,7 @@ export const setupBaselineA11y = <T extends VListItem>(
       return;
     }
 
-    resolve();
-
+    const navFn = methods.get("_navigate") as ((cur: number, key: string, total: number) => number) | undefined;
     if (navFn) {
       switch (event.key) {
         case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":

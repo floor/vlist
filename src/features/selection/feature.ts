@@ -38,20 +38,6 @@ import { resolvePadding } from "../../utils/padding";
 
 import {
   createSelectionState,
-  selectItems,
-  deselectItems,
-  toggleSelection,
-  selectAll,
-  clearSelection,
-  selectRange,
-  setFocusedIndex,
-  moveFocusUp,
-  moveFocusDown,
-  moveFocusToFirst,
-  moveFocusToLast,
-  moveFocusByPage,
-  getSelectedIds,
-  getSelectedItems,
 } from "./state";
 
 import { scrollToFocus as sharedScrollToFocus } from "../../rendering/scroll";
@@ -136,6 +122,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
   // Selection state — lives for the lifetime of the list
   let selectionState = createSelectionState(initial);
+  const selected = selectionState.selected;
   let liveRegion: HTMLDivElement | null = null;
 
   // Last-selected index — tracks the index of the most recently selected item.
@@ -223,6 +210,58 @@ export const withSelection = <T extends VListItem = VListItem>(
         return from; // all headers (shouldn't happen)
       };
 
+      const setFocus = (index: number): void => {
+        selectionState.focusedIndex = index;
+      };
+
+      const moveFocus = (delta: number, total: number, wrap = false): void => {
+        if (total === 0) return;
+        let index = selectionState.focusedIndex + delta;
+        if (index < 0) index = wrap ? total - 1 : 0;
+        else if (index >= total) index = wrap ? 0 : total - 1;
+        setFocus(index);
+      };
+
+      const selectIds = (ids: Array<string | number>): void => {
+        if (mode === "single") {
+          selected.clear();
+          if (ids.length > 0) selected.add(ids[0]!);
+        } else {
+          for (const id of ids) selected.add(id);
+        }
+      };
+
+      const selectOne = (id: string | number): void => {
+        if (mode === "single") selected.clear();
+        selected.add(id);
+      };
+
+      const toggleId = (id: string | number): void => {
+        if (selected.has(id)) selected.delete(id);
+        else selectOne(id);
+      };
+
+      const selectItemRange = (items: T[], fromIndex: number, toIndex: number): void => {
+        if (mode !== "multiple") return;
+        const start = Math.min(fromIndex, toIndex);
+        const end = Math.max(fromIndex, toIndex);
+        for (let i = start; i <= end; i++) {
+          const item = items[i];
+          if (item) selected.add(item.id);
+        }
+      };
+
+      const selectedArray = (): Array<string | number> => Array.from(selected);
+
+      const selectedItems = (getItemById: (id: string | number) => T | undefined): T[] => {
+        const items: T[] = [];
+        for (const id of selected) {
+          const item = getItemById(id);
+          if (item) items.push(item);
+        }
+        return items;
+      };
+
       // ── ID → index map for O(1) lookups (selection feature only) ──
       // Incrementally indexed: items are added as they load via the load:end
       // event, avoiding a full 0..total scan that would generate millions of
@@ -270,7 +309,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       emitter.on("data:change", ({ type, id }) => {
         if (type === "remove") {
           // Remove the deleted id from selection state
-          selectionState.selected.delete(id);
+          selected.delete(id);
 
           // Rebuild index — all indices after the removed item shifted
           rebuildIdIndex();
@@ -321,7 +360,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       // Renderers resolve these once (lazily, on first render) and cache
       // the function reference.
       ctx.methods.set("_getSelectedIds", (): Set<string | number> => {
-        return selectionState.selected;
+        return selected;
       });
 
       ctx.methods.set("_getFocusedIndex", (): number => {
@@ -332,7 +371,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       // Adds IDs to the Set without emitting events or triggering re-render.
       ctx.methods.set("_seedSelection", (ids: Array<string | number>): void => {
         for (const id of ids) {
-          selectionState.selected.add(id);
+          selected.add(id);
         }
       });
 
@@ -356,8 +395,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         };
 
         emitter.emit("selection:change", {
-          selected: getSelectedIds(selectionState),
-          items: getSelectedItems(selectionState, getItemByIdFn),
+          selected: selectedArray(),
+          items: selectedItems(getItemByIdFn),
         });
       };
 
@@ -490,7 +529,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         // Skip group headers
         idx = skipHeaders(idx, 1, totalItems);
 
-        selectionState = setFocusedIndex(selectionState, idx);
+        setFocus(idx);
         selectionState.focusVisible = true;
 
         dom.root.setAttribute(
@@ -504,7 +543,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (item) {
           ctx.renderer.updateItemClasses(
             idx,
-            selectionState.selected.has(item.id),
+            selected.has(item.id),
             true,
           );
         }
@@ -532,7 +571,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           if (prevItem) {
             ctx.renderer.updateItemClasses(
               prevIdx,
-              selectionState.selected.has(prevItem.id),
+              selected.has(prevItem.id),
               false,
             );
           }
@@ -552,7 +591,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       };
 
       const focusItem = (index: number): void => {
-        selectionState = setFocusedIndex(selectionState, index);
+        setFocus(index);
         selectionState.focusVisible = focusOnClick;
         lastSelectedIndex = index;
         dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
@@ -569,14 +608,14 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
           const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : selectionState.focusedIndex;
-          selectionState = selectRange(selectionState, ctx.getAllLoadedItems(), anchor, index, mode);
+          selectItemRange(ctx.getAllLoadedItems(), anchor, index);
           focusItem(index);
           forceRenderAndEmit();
           return;
         }
 
         focusItem(index);
-        selectionState = toggleSelection(selectionState, item.id, mode);
+        toggleId(item.id);
         forceRenderAndEmit();
       });
 
@@ -587,8 +626,9 @@ export const withSelection = <T extends VListItem = VListItem>(
           const hit = findItemTarget(event);
           if (!hit) return;
 
-          if (!selectionState.selected.has(hit.item.id)) {
-            selectionState = { ...selectionState, selected: new Set([hit.item.id]) };
+          if (!selected.has(hit.item.id)) {
+            selected.clear();
+            selected.add(hit.item.id);
             focusItem(hit.index);
             forceRenderAndEmit();
           }
@@ -622,7 +662,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             case "End": {
               const newIndex = navigateFn(selectionState.focusedIndex, event.key, totalItems);
               if (newIndex !== selectionState.focusedIndex) {
-                newState = setFocusedIndex(selectionState, newIndex);
+                setFocus(newIndex);
+                newState = selectionState;
                 newState.focusVisible = true;
                 handled = true;
                 focusOnly = true;
@@ -639,14 +680,16 @@ export const withSelection = <T extends VListItem = VListItem>(
         // ── Delta-based navigation (grid / flat list) — skip if _navigate handled it ──
         if (!handled) switch (event.key) {
           case "ArrowUp":
-            newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, navDelta().ud);
+            moveFocus(-navDelta().ud, totalItems, resolvedConfig.wrap);
+            newState = selectionState;
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
             break;
 
           case "ArrowDown":
-            newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, navDelta().ud);
+            moveFocus(navDelta().ud, totalItems, resolvedConfig.wrap);
+            newState = selectionState;
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -655,7 +698,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           case "ArrowLeft": {
             const { lr } = navDelta();
             if (lr) {
-              newState = moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, lr);
+              moveFocus(-lr, totalItems, resolvedConfig.wrap);
+              newState = selectionState;
               newState.focusVisible = true;
               handled = true;
               focusOnly = true;
@@ -666,7 +710,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           case "ArrowRight": {
             const { lr } = navDelta();
             if (lr) {
-              newState = moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, lr);
+              moveFocus(lr, totalItems, resolvedConfig.wrap);
+              newState = selectionState;
               newState.focusVisible = true;
               handled = true;
               focusOnly = true;
@@ -684,10 +729,11 @@ export const withSelection = <T extends VListItem = VListItem>(
               const delta = event.key === "PageUp" ? -ps : ps;
               const lastData = l2d(totalItems - 1);
               const targetData = Math.max(0, Math.min(lastData, curData + delta));
-              newState = setFocusedIndex(selectionState, d2l(targetData));
+              setFocus(d2l(targetData));
             } else {
-              newState = moveFocusByPage(selectionState, totalItems, ps, event.key === "PageUp" ? "up" : "down");
+              moveFocus(event.key === "PageUp" ? -ps : ps, totalItems);
             }
+            newState = selectionState;
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -695,7 +741,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           }
 
           case "Home": {
-            newState = moveFocusToFirst(selectionState, totalItems);
+            if (totalItems > 0) setFocus(0);
+            newState = selectionState;
             newState.focusVisible = true;
             handled = true;
             focusOnly = true;
@@ -703,7 +750,8 @@ export const withSelection = <T extends VListItem = VListItem>(
           }
 
           case "End": {
-            newState = moveFocusToLast(selectionState, totalItems);
+            if (totalItems > 0) setFocus(totalItems - 1);
+            newState = selectionState;
             const ensureTail = ctx.methods.get("_ensureTailLoaded") as (() => void) | undefined;
             if (ensureTail) ensureTail();
             newState.focusVisible = true;
@@ -720,7 +768,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             if (event.key === " " && event.shiftKey && mode === "multiple" && selectionState.focusedIndex >= 0) {
               if (lastSelectedIndex >= 0) {
                 const items = ctx.getAllLoadedItems();
-                newState = selectRange(newState, items, lastSelectedIndex, selectionState.focusedIndex, mode);
+                selectItemRange(items, lastSelectedIndex, selectionState.focusedIndex);
+                newState = selectionState;
               }
               newState.focusVisible = true;
               handled = true;
@@ -732,11 +781,8 @@ export const withSelection = <T extends VListItem = VListItem>(
                 selectionState.focusedIndex,
               );
               if (focusedItem) {
-                newState = toggleSelection(
-                  selectionState,
-                  focusedItem.id,
-                  mode,
-                );
+                toggleId(focusedItem.id);
+                newState = selectionState;
                 newState.focusVisible = true;
               }
               lastSelectedIndex = selectionState.focusedIndex;
@@ -748,11 +794,12 @@ export const withSelection = <T extends VListItem = VListItem>(
             if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
               const allItems = ctx.getAllLoadedItems();
               // If all selected, deselect all; otherwise select all
-              if (selectionState.selected.size === allItems.length) {
-                newState = clearSelection(newState);
+              if (selected.size === allItems.length) {
+                selected.clear();
               } else {
-                newState = selectAll(newState, allItems, mode);
+                for (const item of allItems) selected.add(item.id);
               }
+              newState = selectionState;
               newState.focusVisible = true;
               handled = true;
               focusOnly = false;
@@ -761,14 +808,14 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case "Delete":
           case "Backspace":
-            if (selectionState.selected.size > 0) {
+            if (selected.size > 0) {
               const getItemByIdFn = (id: string | number): T | undefined => {
                 const index = idToIndexMap.get(id);
                 return index === undefined ? undefined : ctx.dataManager.getItem(index);
               };
               emitter.emit("delete", {
-                selected: getSelectedIds(selectionState),
-                items: getSelectedItems(selectionState, getItemByIdFn),
+                selected: selectedArray(),
+                items: selectedItems(getItemByIdFn),
               });
               handled = true;
             }
@@ -795,14 +842,16 @@ export const withSelection = <T extends VListItem = VListItem>(
               if (previousFocusIndex >= 0) {
                 const originItem = ctx.dataManager.getItem(previousFocusIndex);
                 if (originItem) {
-                  newState = toggleSelection(newState, originItem.id, mode);
+                  toggleId(originItem.id);
+                  newState = selectionState;
                 }
               }
             } else {
               // Toggle the item being moved to (ARIA recommended model)
               const destItem = ctx.dataManager.getItem(newState.focusedIndex);
               if (destItem) {
-                newState = toggleSelection(newState, destItem.id, mode);
+                toggleId(destItem.id);
+                newState = selectionState;
               }
             }
             lastSelectedIndex = newState.focusedIndex;
@@ -811,7 +860,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Ctrl+Shift+Home/End: select from previous focus to first/last item
             const items = ctx.getAllLoadedItems();
             const anchor = previousFocusIndex >= 0 ? previousFocusIndex : newState.focusedIndex;
-            newState = selectRange(newState, items, anchor, newState.focusedIndex, mode);
+            selectItemRange(items, anchor, newState.focusedIndex);
+            newState = selectionState;
             lastSelectedIndex = newState.focusedIndex;
             focusOnly = false; // trigger full re-render + selection:change event
           }
@@ -822,7 +872,8 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (followFocus && mode === "single" && focusOnly && newState.focusedIndex >= 0) {
           const focusedItem = ctx.dataManager.getItem(newState.focusedIndex);
           if (focusedItem) {
-            newState = selectItems(newState, [focusedItem.id], mode);
+            selectOne(focusedItem.id);
+            newState = selectionState;
           }
           focusOnly = false; // trigger full re-render with selection change event
         }
@@ -890,7 +941,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Register public methods ──
       ctx.methods.set("select", (...ids: Array<string | number>): void => {
-        selectionState = selectItems(selectionState, ids, mode);
+        selectIds(ids);
         if (ids.length > 0) {
           let index = idToIndexMap.get(ids[0]!);
           if (index === undefined) {
@@ -898,37 +949,38 @@ export const withSelection = <T extends VListItem = VListItem>(
             index = idToIndexMap.get(ids[0]!);
           }
           if (index !== undefined) {
-            selectionState = setFocusedIndex(selectionState, index);
+            setFocus(index);
           }
         }
         forceRenderAndEmit();
       });
 
       ctx.methods.set("deselect", (...ids: Array<string | number>): void => {
-        selectionState = deselectItems(selectionState, ids);
+        for (const id of ids) selected.delete(id);
         forceRenderAndEmit();
       });
 
       ctx.methods.set("toggleSelect", (id: string | number): void => {
-        selectionState = toggleSelection(selectionState, id, mode);
+        toggleId(id);
         forceRenderAndEmit();
       });
 
       ctx.methods.set("selectAll", (): void => {
         if (mode !== "multiple") return;
         const allItems = ctx.getAllLoadedItems();
-        selectionState = selectAll(selectionState, allItems, mode);
+        selected.clear();
+        for (const item of allItems) selected.add(item.id);
         rebuildIdIndex(); // Ensure index is current
         forceRenderAndEmit();
       });
 
       ctx.methods.set("clearSelection", (): void => {
-        selectionState = clearSelection(selectionState);
+        selected.clear();
         forceRenderAndEmit();
       });
 
       ctx.methods.set("getSelected", (): Array<string | number> => {
-        return getSelectedIds(selectionState);
+        return selectedArray();
       });
 
       ctx.methods.set("getSelectedItems", (): T[] => {
@@ -937,7 +989,7 @@ export const withSelection = <T extends VListItem = VListItem>(
           const index = idToIndexMap.get(id);
           return index === undefined ? undefined : ctx.dataManager.getItem(index);
         };
-        return getSelectedItems(selectionState, getItemByIdFn);
+        return selectedItems(getItemByIdFn);
       });
 
       // ── Shared helper: move focus + select + scroll-if-needed + emit ──
@@ -949,12 +1001,10 @@ export const withSelection = <T extends VListItem = VListItem>(
         if (navigateFn) {
           const key = direction === "next" ? "ArrowDown" : "ArrowUp";
           const newIndex = navigateFn(selectionState.focusedIndex, key, totalItems);
-          selectionState = setFocusedIndex(selectionState, newIndex);
+          setFocus(newIndex);
         } else {
           const { ud } = navDelta();
-          selectionState = direction === "next"
-            ? moveFocusDown(selectionState, totalItems, resolvedConfig.wrap, ud)
-            : moveFocusUp(selectionState, totalItems, resolvedConfig.wrap, ud);
+          moveFocus(direction === "next" ? ud : -ud, totalItems, resolvedConfig.wrap);
         }
 
         // Skip group headers
@@ -965,7 +1015,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         const item = ctx.dataManager.getItem(idx);
         if (!item) return;
 
-        selectionState = selectItems(selectionState, [item.id], mode);
+        selectOne(item.id);
 
         scrollToFocus(idx);
 
@@ -995,7 +1045,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         }
         // Set the index without focusVisible — the ring will appear when
         // the user tabs into the list and focusin fires.
-        selectionState = setFocusedIndex(selectionState, index);
+        setFocus(index);
         // Emit so live snapshot previews and external listeners update.
         // focusVisible is false so no ring is shown prematurely.
         const item = ctx.dataManager.getItem(index);
@@ -1012,7 +1062,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Internal: set focused index from outside (used by withGroups async) ──
       ctx.methods.set("_setFocusedIndex", (index: number): void => {
-        selectionState = setFocusedIndex(selectionState, index);
+        setFocus(index);
         selectionState.focusVisible = true;
         scrollToFocus(index);
         dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);

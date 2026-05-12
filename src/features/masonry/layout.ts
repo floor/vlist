@@ -72,25 +72,6 @@ export const createMasonryLayout = (
   let visiblePool: ItemPlacement[] = [];
 
   /**
-   * Find the index of the shortest lane.
-   * Returns the lane with minimum accumulated size.
-   */
-  const findShortestLane = (laneSizes: number[]): number => {
-    let shortestIndex = 0;
-    let shortestSize = laneSizes[0]!;
-
-    for (let i = 1; i < laneSizes.length; i++) {
-      const currentSize = laneSizes[i]!;
-      if (currentSize < shortestSize) {
-        shortestSize = currentSize;
-        shortestIndex = i;
-      }
-    }
-
-    return shortestIndex;
-  };
-
-  /**
    * Calculate layout for all items using shortest-lane algorithm.
    * Returns array of item placements with cached positions.
    *
@@ -123,7 +104,15 @@ export const createMasonryLayout = (
     // Place each item in the shortest lane
     for (let i = 0; i < totalItems; i++) {
       // Find shortest lane
-      const lane = findShortestLane(laneSizes);
+      let lane = 0;
+      let shortestSize = laneSizes[0]!;
+      for (let c = 1; c < columns; c++) {
+        const currentSize = laneSizes[c]!;
+        if (currentSize < shortestSize) {
+          shortestSize = currentSize;
+          lane = c;
+        }
+      }
 
       // Get item size in main axis
       const itemSize = getSizeForItem(i);
@@ -176,11 +165,11 @@ export const createMasonryLayout = (
   const getTotalSize = (placements: ItemPlacement[]): number => {
     // Fast path: return cached value when called with the layout result
     // (the common case — feature.ts always passes cachedPlacements)
-    if (placements.length === 0) return cachedTotalSize > 0 ? cachedTotalSize : 0;
+    if (placements.length === 0) return cachedTotalSize;
 
     // If the first placement matches our cached data, use cached total
     // This avoids the O(n) scan in the normal flow
-    if (cachedTotalSize > 0) return cachedTotalSize;
+    if (cachedTotalSize) return cachedTotalSize;
 
     // Fallback: recompute (only for externally-constructed placements)
     const laneSizes: number[] = new Array(columns).fill(0);
@@ -215,7 +204,10 @@ export const createMasonryLayout = (
     mainAxisStart: number,
     mainAxisEnd: number,
   ): ItemPlacement[] => {
-    if (placements.length === 0 || mainAxisEnd <= mainAxisStart) return visiblePool.length = 0, visiblePool;
+    if (placements.length === 0 || mainAxisEnd <= mainAxisStart) {
+      visiblePool.length = 0;
+      return visiblePool;
+    }
 
     // If per-lane data isn't available (external placements), fall back to linear scan
     if (lanePlacements.length === 0 || lanePlacements.length !== columns) {
@@ -228,7 +220,7 @@ export const createMasonryLayout = (
     for (let c = 0; c < columns; c++) {
       const laneIndices = lanePlacements[c]!;
       const laneLen = laneIndices.length;
-      if (laneLen === 0) continue;
+      if (!laneLen) continue;
 
       // Binary search: find first item in this lane where itemEnd > mainAxisStart
       // i.e., the item's bottom edge is past the viewport top
@@ -265,17 +257,17 @@ export const createMasonryLayout = (
     mainAxisStart: number,
     mainAxisEnd: number,
   ): ItemPlacement[] => {
-    const visible: ItemPlacement[] = [];
+    visiblePool.length = 0;
 
     for (const placement of placements) {
       const itemEnd = placement.y + placement.size;
 
       if (itemEnd > mainAxisStart && placement.y < mainAxisEnd) {
-        visible.push(placement);
+        visiblePool.push(placement);
       }
     }
 
-    return visible;
+    return visiblePool;
   };
 
   /**

@@ -55,10 +55,12 @@ export const createEmitter = <T extends EventMap>() => {
       try {
         handler(payload);
       } catch (error) {
-        console.error(
-          `[vlist] Error in event handler for "${String(event)}":`,
-          error,
-        );
+        if (process.env.NODE_ENV !== "production") {
+          console.error(
+            `[vlist] Error in event handler for "${String(event)}":`,
+            error,
+          );
+        }
       }
     });
   };

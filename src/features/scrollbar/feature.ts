@@ -114,10 +114,8 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       // If another feature (e.g. withScale) already created a fallback
       // scrollbar, remove it — we replace it with one that has the user's config.
       if (ctx.methods.has("_hasScrollbar")) {
-        const existing = dom.root.querySelector(`.${classPrefix}-scrollbar`);
-        if (existing) existing.remove();
-        const existingHover = dom.root.querySelector(`.${classPrefix}-scrollbar-hover`);
-        if (existingHover) existingHover.remove();
+        dom.root.querySelector(`.${classPrefix}-scrollbar`)?.remove();
+        dom.root.querySelector(`.${classPrefix}-scrollbar-hover`)?.remove();
       }
       ctx.methods.set("_hasScrollbar", () => true);
 
@@ -126,20 +124,21 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       scrollbar = createScrollbar(
         dom.viewport,
         (position) => ctx.scrollController.scrollTo(position),
-        config ?? {},
+        config,
         classPrefix,
         horizontal,
         dom.root,
       );
+      const scrollbarRef = scrollbar;
+      const updateScrollbarBounds = () => {
+        scrollbarRef.updateBounds(
+          ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
+          ctx.state.viewportState.containerSize,
+        );
+      };
 
       // Ensure native scrollbar is hidden
-      if (
-        !dom.viewport.classList.contains(
-          `${classPrefix}-viewport--custom-scrollbar`,
-        )
-      ) {
-        dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
-      }
+      dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
 
       // Reserve layout space for the scrollbar track when gutter: true.
       // Class goes on the viewport (consistent with --custom-scrollbar, --no-scrollbar)
@@ -150,13 +149,9 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
       // Set initial bounds — use viewportState.totalSize which includes
       // compression slack from withScale (so scrollbar reaches the last item)
-      scrollbar.updateBounds(
-        ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
-        ctx.state.viewportState.containerSize,
-      );
+      updateScrollbarBounds();
 
       // ── Post-scroll: update thumb position ──
-      const scrollbarRef = scrollbar;
       ctx.afterScroll.push(
         (scrollPosition: number, _direction: string): void => {
           scrollbarRef.updatePosition(scrollPosition);
@@ -166,29 +161,17 @@ export const withScrollbar = <T extends VListItem = VListItem>(
 
       // ── Resize: update thumb size ──
       ctx.resizeHandlers.push((_width: number, _height: number): void => {
-        if (scrollbarRef) {
-          scrollbarRef.updateBounds(
-            ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
-            ctx.state.viewportState.containerSize,
-          );
-        }
+        updateScrollbarBounds();
       });
 
       // ── Content size change: update scrollbar bounds when items change ──
       ctx.contentSizeHandlers.push((): void => {
-        if (scrollbarRef) {
-          scrollbarRef.updateBounds(
-            ctx.state.viewportState.totalSize || ctx.getCachedCompression().virtualSize,
-            ctx.state.viewportState.containerSize,
-          );
-        }
+        updateScrollbarBounds();
       });
 
       // ── Cleanup ──
       ctx.destroyHandlers.push(() => {
-        if (scrollbarRef) {
-          scrollbarRef.destroy();
-        }
+        scrollbarRef.destroy();
       });
     },
 

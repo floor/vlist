@@ -60,7 +60,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       if (isHeaderFn(i)) {
         headerCount++;
         // Header: start new row if not at beginning
-        if (colInRow > 0) {
+        if (colInRow) {
           row++;
           colInRow = 0;
         }
@@ -78,7 +78,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     }
 
     // Add final row if there are items in it
-    if (colInRow > 0) {
+    if (colInRow) {
       row++;
     }
 
@@ -113,7 +113,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
 
       if (isHeader) {
         // Header: start new row if not at beginning
-        if (colInRow > 0) {
+        if (colInRow) {
           row++;
           colInRow = 0;
         }
@@ -209,13 +209,13 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
 
       if (isHeader) {
         // Header: start new row if not at beginning
-        if (colInRow > 0) {
+        if (colInRow) {
           currentRow++;
           colInRow = 0;
         }
         // Check if this header's row is in range
         if (currentRow >= rowStart && currentRow <= rowEnd) {
-          if (start === -1) start = i;
+          if (start < 0) start = i;
           end = i;
         }
         currentRow++;
@@ -223,7 +223,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       } else {
         // Regular item
         if (currentRow >= rowStart && currentRow <= rowEnd) {
-          if (start === -1) start = i;
+          if (start < 0) start = i;
           end = i;
         }
         colInRow++;
@@ -234,13 +234,13 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       }
 
       // Early exit if we're past the end row
-      if (currentRow > rowEnd && colInRow === 0) {
+      if (currentRow > rowEnd && !colInRow) {
         break;
       }
     }
 
     // If no items found in range, return empty range
-    if (start === -1) {
+    if (start < 0) {
       return { start: 0, end: -1 };
     }
 

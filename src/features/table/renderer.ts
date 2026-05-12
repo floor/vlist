@@ -212,8 +212,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
   /** Toggle aria-selected attribute */
   const setAriaSelected = (el: HTMLElement, selected: boolean): void => {
-    if (selected) el.setAttribute("aria-selected", "true");
-    else el.removeAttribute("aria-selected");
+    selected ? el.setAttribute("aria-selected", "true") : el.removeAttribute("aria-selected");
   };
 
   /** Set common row data attributes */

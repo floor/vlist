@@ -143,7 +143,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
     setup(ctx: BuilderContext<T>): void {
       // ── getScrollSnapshot ──
-      ctx.methods.set("getScrollSnapshot", (): ScrollSnapshot => {
+      const getScrollSnapshot = (): ScrollSnapshot => {
         const scrollTop = ctx.scrollController.getScrollTop();
         const compression = ctx.getCachedCompression();
         const totalItems = ctx.getVirtualTotal();
@@ -152,12 +152,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         const getSelected = ctx.methods.get("getSelected") as
           | (() => Array<string | number>)
           | undefined;
-        const selectedIds =
-          getSelected && getSelected().length > 0 ? getSelected() : undefined;
+        const selectedIds = getSelected?.();
 
         if (totalItems === 0) {
           const snapshot: ScrollSnapshot = { index: 0, offsetInItem: 0, total: 0 };
-          if (selectedIds) snapshot.selectedIds = selectedIds;
+          if (selectedIds?.length) snapshot.selectedIds = selectedIds;
           return snapshot;
         }
 
@@ -188,7 +187,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         // Store offset as a fraction of item size for cross-mode restore
         const itemSize = ctx.sizeCache.getSize(index);
-        if (itemSize > 0) {
+        if (itemSize) {
           snapshot.offsetRatio = offsetInItem / itemSize;
         }
 
@@ -219,7 +218,7 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           snapshot.dataTotal = getDataTotal();
         }
 
-        if (selectedIds) snapshot.selectedIds = selectedIds;
+        if (selectedIds?.length) snapshot.selectedIds = selectedIds;
 
         // Capture focused item ID — use _getFocusedId which bypasses the
         // focusVisible gate, so clicking away from the list before calling
@@ -233,10 +232,11 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         }
 
         return snapshot;
-      });
+      };
+      ctx.methods.set("getScrollSnapshot", getScrollSnapshot);
 
       // ── restoreScroll ──
-      const restoreScroll = (snapshot: ScrollSnapshot): void => {
+      const restoreScroll = (snapshot: ScrollSnapshot, restoreSelection = true): void => {
         const { index, offsetInItem, selectedIds, focusedId } = snapshot;
         const totalItems = ctx.getVirtualTotal();
 
@@ -331,13 +331,12 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           // restore time before groups are discovered, but dataTotal is
           // stable.
           const currentDataTotal = (ctx.methods.get("_getTotal") as (() => number) | undefined)?.();
-          const dataTotalMatch = snapshot.dataTotal !== undefined
-            && currentDataTotal !== undefined
+          const dataTotalMatch = currentDataTotal !== undefined
             && snapshot.dataTotal === currentDataTotal;
           if (snapshot.scrollTop !== undefined && (snapshot.total === effectiveTotal || dataTotalMatch)) {
             scrollPosition = snapshot.scrollTop;
           } else {
-            const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
+            const fraction = currentItemSize ? resolvedOffset / currentItemSize : 0;
             scrollPosition =
               ((safeIndex + fraction) / effectiveTotal) * compression.virtualSize;
           }
@@ -368,19 +367,19 @@ export const withSnapshots = <T extends VListItem = VListItem>(
         //                    compute the correct position.
         const usedShortcut = scrollPosition === snapshot.scrollTop;
         if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
-          const fraction = currentItemSize > 0 ? resolvedOffset / currentItemSize : 0;
+          const fraction = currentItemSize ? resolvedOffset / currentItemSize : 0;
           ctx.methods.set("_restoreAnchor", {
             dataIndex: snapshot.dataIndex,
             fraction,
             skipAdjust: usedShortcut,
           } as unknown as Function);
-          ctx.methods.set("_suppressSave", true as unknown as Function);
+          ctx.methods.set("_suppressSave", 1 as unknown as Function);
         }
 
         ctx.scrollController.scrollTo(scrollPosition);
 
         // Restore selection if provided and selection feature is present
-        if (selectedIds && selectedIds.length > 0) {
+        if (restoreSelection && selectedIds?.length) {
           const selectFn = ctx.methods.get("select") as
             | ((...ids: Array<string | number>) => void)
             | undefined;
@@ -413,21 +412,16 @@ export const withSnapshots = <T extends VListItem = VListItem>(
           // On page reload, the ResizeObserver hasn't fired yet when restoreScroll
           // runs, so containerSize is 0 and forceRender produces renderRange {0,0}.
           // Poll with rAF until containerSize > 0 (typically 1-2 frames).
-          const MAX_POLLS = 10;
           let polls = 0;
-          const savedScrollPosition = scrollPosition;
           const pollUntilReady = (): void => {
-            polls++;
-            const cs = ctx.state.viewportState.containerSize;
-            const currentScrollTop = ctx.scrollController.getScrollTop();
-            if (cs > 0) {
+            if (ctx.state.viewportState.containerSize) {
               // Re-apply scroll position if it was lost (e.g. ResizeObserver
               // reset scrollTop when content size changed from 0 to real size)
-              if (Math.abs(currentScrollTop - savedScrollPosition) > 1) {
-                ctx.scrollController.scrollTo(savedScrollPosition);
+              if (Math.abs(ctx.scrollController.getScrollTop() - scrollPosition) > 1) {
+                ctx.scrollController.scrollTo(scrollPosition);
               }
               loadVisibleFn().then(restoreFocus);
-            } else if (polls < MAX_POLLS) {
+            } else if (++polls < 10) {
               requestAnimationFrame(pollUntilReady);
             }
           };
@@ -459,13 +453,12 @@ export const withSnapshots = <T extends VListItem = VListItem>(
       // During restore, saves are guarded until restoreScroll completes.
       // The guard is lifted in the same microtask as restoreScroll, then
       // an immediate save captures the fully settled state.
-      let restoreGuard = !!restoreSnapshot && !!autoSaveKey;
+      let restoreGuard = !!(restoreSnapshot && autoSaveKey);
       let saveToStorage: (() => void) | null = null;
 
       if (autoSaveKey) {
         saveToStorage = (): void => {
-          if (restoreGuard) return;
-          if (ctx.methods.has("_suppressSave")) return;
+          if (restoreGuard || ctx.methods.has("_suppressSave")) return;
           const getSnapshotFn = ctx.methods.get("getScrollSnapshot") as
             | (() => ScrollSnapshot)
             | undefined;
@@ -507,23 +500,19 @@ export const withSnapshots = <T extends VListItem = VListItem>(
       // the correct selection state (no blink). Scroll position still
       // needs queueMicrotask because DOM layout isn't ready yet.
       if (restoreSnapshot) {
-        let selectionSeeded = false;
-        if (restoreSnapshot.selectedIds && restoreSnapshot.selectedIds.length > 0) {
+        let restoreSelection = true;
+        if (restoreSnapshot.selectedIds?.length) {
           const seedFn = ctx.methods.get("_seedSelection") as
             | ((ids: Array<string | number>) => void)
             | undefined;
           if (seedFn) {
             seedFn(restoreSnapshot.selectedIds);
-            selectionSeeded = true;
+            restoreSelection = false;
           }
         }
 
-        const snapshotForScroll = selectionSeeded
-          ? (({ selectedIds: _, ...rest }) => rest as ScrollSnapshot)(restoreSnapshot)
-          : restoreSnapshot;
-
         queueMicrotask(() => {
-          restoreScroll(snapshotForScroll);
+          restoreScroll(restoreSnapshot, restoreSelection);
           restoreGuard = false;
           if (saveToStorage) saveToStorage();
         });

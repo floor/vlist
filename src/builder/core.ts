@@ -54,7 +54,6 @@ import {
 import type { MRefs } from "./materialize";
 import { setupBaselineA11y } from "./a11y";
 import { createAriaResolvers } from "../rendering/aria";
-import { claimPlaceholderSelection } from "../features/selection/state";
 import { createApi } from "./api";
 // Inlined from constants.ts to avoid pulling in the full constants module
 const OVERSCAN = 3;
@@ -62,6 +61,7 @@ const CLASS_PREFIX = "vlist";
 const SCROLL_IDLE_TIMEOUT = 150;
 const MAX_CONTENT_SIZE = 16_000_000; // Cap content element to avoid browser overhead for extremely tall elements
 const SCREEN_FALLBACK = 4096;
+const PH = "__placeholder_";
 
 const getScreenMax = (horizontal: boolean): number =>
   (typeof screen !== "undefined"
@@ -83,10 +83,10 @@ export const vlist = <T extends VListItem = VListItem>(
 ): VListBuilder<T> => {
   // ── Validate ────────────────────────────────────────────────────
   if (!config.container) {
-    throw new Error("[vlist] Container is required");
+    throw new Error(process.env.NODE_ENV === "production" ? "[vlist] container" : "[vlist] Container is required");
   }
   if (!config.item) {
-    throw new Error("[vlist] item configuration is required");
+    throw new Error(process.env.NODE_ENV === "production" ? "[vlist] item" : "[vlist] item configuration is required");
   }
 
   const isHorizontal = config.orientation === "horizontal";
@@ -100,14 +100,18 @@ export const vlist = <T extends VListItem = VListItem>(
   // Mode priority: explicit size (Mode A) > estimated size (Mode B)
   if (mainAxisValue == null && estimatedSize == null) {
     throw new Error(
-      `[vlist] item.${mainAxisProp} or item.${estimatedProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
+      process.env.NODE_ENV === "production"
+        ? `[vlist] item.${mainAxisProp}`
+        : `[vlist] item.${mainAxisProp} or item.${estimatedProp} is required${isHorizontal ? " when orientation is 'horizontal'" : ""}`,
     );
   }
   if (mainAxisValue != null) {
     // Mode A validation
     if (typeof mainAxisValue === "number" && mainAxisValue <= 0) {
       throw new Error(
-        `[vlist] item.${mainAxisProp} must be a positive number`,
+        process.env.NODE_ENV === "production"
+          ? `[vlist] item.${mainAxisProp}>0`
+          : `[vlist] item.${mainAxisProp} must be a positive number`,
       );
     }
     if (
@@ -115,23 +119,29 @@ export const vlist = <T extends VListItem = VListItem>(
       typeof mainAxisValue !== "function"
     ) {
       throw new Error(
-        `[vlist] item.${mainAxisProp} must be a number or a function (index) => number`,
+        process.env.NODE_ENV === "production"
+          ? `[vlist] item.${mainAxisProp} type`
+          : `[vlist] item.${mainAxisProp} must be a number or a function (index) => number`,
       );
     }
   } else if (estimatedSize != null) {
     // Mode B validation
     if (typeof estimatedSize !== "number" || estimatedSize <= 0) {
       throw new Error(
-        `[vlist] item.${estimatedProp} must be a positive number`,
+        process.env.NODE_ENV === "production"
+          ? `[vlist] item.${estimatedProp}>0`
+          : `[vlist] item.${estimatedProp} must be a positive number`,
       );
     }
   }
   if (!config.item.template) {
-    throw new Error("[vlist] item.template is required");
+    throw new Error(process.env.NODE_ENV === "production" ? "[vlist] template" : "[vlist] item.template is required");
   }
   if (isHorizontal && config.reverse) {
     throw new Error(
-      "[vlist] horizontal direction cannot be combined with reverse mode",
+      process.env.NODE_ENV === "production"
+        ? "[vlist] horizontal+reverse"
+        : "[vlist] horizontal direction cannot be combined with reverse mode",
     );
   }
 
@@ -142,7 +152,7 @@ export const vlist = <T extends VListItem = VListItem>(
   const builder: VListBuilder<T> = {
     use(feature: VListFeature<T>): VListBuilder<T> {
       if (built) {
-        throw new Error("[vlist] Cannot call .use() after .build()");
+        throw new Error(process.env.NODE_ENV === "production" ? "[vlist] built" : "[vlist] Cannot call .use() after .build()");
       }
       features.set(feature.name, feature);
       return builder;
@@ -150,7 +160,7 @@ export const vlist = <T extends VListItem = VListItem>(
 
     build(): VList<T> {
       if (built) {
-        throw new Error("[vlist] .build() can only be called once");
+        throw new Error(process.env.NODE_ENV === "production" ? "[vlist] built" : "[vlist] .build() can only be called once");
       }
       built = true;
       return materialize(
@@ -239,7 +249,9 @@ function materialize<T extends VListItem = VListItem>(
       for (const conflict of feature.conflicts) {
         if (featureNames.has(conflict)) {
           throw new Error(
-            `[vlist] ${feature.name} and ${conflict} cannot be combined`,
+            process.env.NODE_ENV === "production"
+              ? "[vlist] conflict"
+              : `[vlist] ${feature.name} and ${conflict} cannot be combined`,
           );
         }
       }
@@ -254,7 +266,9 @@ function materialize<T extends VListItem = VListItem>(
   if (isReverse) {
     if (featureNames.has("withGrid")) {
       throw new Error(
-        "[vlist] withGrid cannot be used with reverse: true",
+        process.env.NODE_ENV === "production"
+          ? "[vlist] reverse+grid"
+          : "[vlist] withGrid cannot be used with reverse: true",
       );
     }
     // Note: withGroups validation moved to feature itself
@@ -523,6 +537,30 @@ function materialize<T extends VListItem = VListItem>(
     el.ariaSelected = sel ? "true" : "false";
   };
 
+  const applyItemAria = (
+    el: HTMLElement,
+    index: number,
+    isGH: boolean,
+    fresh: boolean,
+  ): void => {
+    if (isGH) {
+      el.setAttribute("role", "presentation");
+      el.removeAttribute("aria-selected");
+      el.removeAttribute("aria-setsize");
+      el.removeAttribute("aria-posinset");
+      el.removeAttribute("id");
+    } else {
+      el.setAttribute("role", "option");
+      if (fresh) {
+        el.ariaSelected = "false";
+        $.la = String(aria.getSetSize());
+        el.setAttribute("aria-setsize", $.la);
+      }
+      el.id = `${ariaIdPrefix}-item-${index}`;
+      el.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
+    }
+  };
+
   const stripedMode = itemConfig.striped;
   const striped = !!stripedMode;
   const stripedFn = stripedMode === "data" || stripedMode === "even" || stripedMode === "odd";
@@ -547,7 +585,14 @@ function materialize<T extends VListItem = VListItem>(
   const afterRenderBatch: Array<(items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void> = [];
   const destroyHandlers: Array<() => void> = [];
   const methods: Map<string, Function> = new Map();
-  const PH = "__placeholder_";
+  const claimPhSelection = (set: Set<string | number>, index: number, id: string | number): void => {
+    if (String(id).startsWith(PH)) return;
+    const ph = PH + index;
+    if (set.has(ph)) {
+      set.delete(ph);
+      set.add(id);
+    }
+  };
 
   // ── Reusable event payloads (avoid per-frame object allocation) ──
   // Mutated in-place before each emit. Subscribers must read values
@@ -636,20 +681,7 @@ function materialize<T extends VListItem = VListItem>(
     element.dataset.index = String(index);
     element.dataset.id = String(item.id);
 
-    if (isGH) {
-      element.setAttribute("role", "presentation");
-      element.removeAttribute("aria-selected");
-      element.removeAttribute("aria-setsize");
-      element.removeAttribute("aria-posinset");
-      element.removeAttribute("id");
-    } else {
-      element.setAttribute("role", "option");
-      element.ariaSelected = "false";
-      element.id = `${ariaIdPrefix}-item-${index}`;
-      $.la = String(aria.getSetSize());
-      element.setAttribute("aria-setsize", $.la);
-      element.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
-    }
+    applyItemAria(element, index, isGH, true);
 
     // Add placeholder class if this is a placeholder item
     const isPlaceholder = String(item.id).startsWith(PH);
@@ -675,7 +707,7 @@ function materialize<T extends VListItem = VListItem>(
       const error = err instanceof Error ? err : new Error(String(err));
       emitter.emit("error", {
         error,
-        context: `tpl(${index},${item.id})`,
+        context: process.env.NODE_ENV === "production" ? "tpl" : `tpl(${index},${item.id})`,
         viewport: snapshotViewport(),
       });
       element.textContent = "";
@@ -716,7 +748,7 @@ function materialize<T extends VListItem = VListItem>(
     const itemSize = $.hc.getSize(0) || 1;
     const safeMaxRender = Math.ceil(screenMax / itemSize) + overscan * 2;
     if (renderCount > safeMaxRender) {
-      if (!warnedOverflow) {
+      if (process.env.NODE_ENV !== "production" && !warnedOverflow) {
         warnedOverflow = true;
         console.warn(
           `[vlist] Render range capped: ${renderCount} items → ${safeMaxRender}. ` +
@@ -795,17 +827,7 @@ function materialize<T extends VListItem = VListItem>(
 
           const isGH = !!(item as Record<string, unknown>).__groupHeader;
           existing.className = isGH ? groupHeaderClass : baseClass;
-          if (isGH) {
-            existing.setAttribute("role", "presentation");
-            existing.removeAttribute("aria-selected");
-            existing.removeAttribute("aria-setsize");
-            existing.removeAttribute("aria-posinset");
-            existing.removeAttribute("id");
-          } else {
-            existing.setAttribute("role", "option");
-            existing.id = `${ariaIdPrefix}-item-${i}`;
-            existing.setAttribute("aria-posinset", String(aria.getPosInSet(i)));
-          }
+          applyItemAria(existing, i, isGH, false);
 
           try {
             applyTemplate(existing, $.at(item, i, itemState), i);
@@ -813,7 +835,7 @@ function materialize<T extends VListItem = VListItem>(
             const error = err instanceof Error ? err : new Error(String(err));
             emitter.emit("error", {
               error,
-              context: `tpl(${i},${item.id})`,
+              context: process.env.NODE_ENV === "production" ? "tpl" : `tpl(${i},${item.id})`,
               viewport: snapshotViewport(),
             });
             existing.textContent = "";
@@ -847,7 +869,7 @@ function materialize<T extends VListItem = VListItem>(
 
           // Transfer selection from placeholder → real item ID (async loading)
           if ($.dm && !isPlaceholder) {
-            claimPlaceholderSelection(selectedIds, i, item.id);
+            claimPhSelection(selectedIds, i, item.id);
           }
         }
         $.pef(existing, i);
@@ -865,7 +887,7 @@ function materialize<T extends VListItem = VListItem>(
         if (newlyRendered) newlyRendered.push({ index: i, element });
 
         // Transfer selection from placeholder → real item ID (async loading)
-        if ($.dm) claimPlaceholderSelection(selectedIds, i, item.id);
+        if ($.dm) claimPhSelection(selectedIds, i, item.id);
 
         // Selection state for new elements
         const isSelected = selectedIds.has(item.id);
@@ -1138,7 +1160,7 @@ function materialize<T extends VListItem = VListItem>(
       // on both root and viewport so the chain re-inherits from the
       // user's container instead of expanding to content size.
       if (newMainAxis > screenMax) {
-        if (!warnedOverflow) {
+        if (process.env.NODE_ENV !== "production" && !warnedOverflow) {
           warnedOverflow = true;
           console.warn(
             `[vlist] Viewport grew to ${Math.round(newMainAxis)}px ` +
@@ -1250,7 +1272,7 @@ function materialize<T extends VListItem = VListItem>(
         const error = err instanceof Error ? err : new Error(String(err));
         emitter.emit("error", {
           error,
-          context: `tpl(${index},${item.id})`,
+          context: process.env.NODE_ENV === "production" ? "tpl" : `tpl(${index},${item.id})`,
           viewport: snapshotViewport(),
         });
       }
@@ -1282,7 +1304,9 @@ function materialize<T extends VListItem = VListItem>(
         const existing = allMethodNames.get(method);
         if (existing) {
           throw new Error(
-            `[vlist] Method "${method}" is registered by both "${existing}" and "${feature.name}"`,
+            process.env.NODE_ENV === "production"
+              ? "[vlist] method"
+              : `[vlist] Method "${method}" is registered by both "${existing}" and "${feature.name}"`,
           );
         }
         allMethodNames.set(method, feature.name);
