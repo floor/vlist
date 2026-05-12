@@ -25,9 +25,6 @@ import { resolvePadding } from "../../utils/padding";
 
 import {
   getCompressionState,
-  calculateCompressedVisibleRange,
-  calculateCompressedScrollToIndex,
-  calculateCompressedItemPosition,
 } from "../../rendering/scale";
 import { scrollToFocus } from "../../rendering/scroll";
 import type { Range } from "../../types";
@@ -180,9 +177,7 @@ const compressionSlack = (
   mainAxisPadding: number = 0,
 ): number => {
   if (virtualSize <= 0) return 0;
-  // effectiveSize = viewport area available for items (excludes CSS padding)
-  const effectiveSize = containerSize - mainAxisPadding;
-  return Math.max(0, effectiveSize * (1 - ratio) + mainAxisPadding);
+  return Math.max(0, (containerSize - mainAxisPadding) * (1 - ratio) + mainAxisPadding);
 };
 
 export const withScale = <
@@ -215,6 +210,10 @@ export const withScale = <
     setup(ctx: BuilderContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;
       const { classPrefix, horizontal } = resolvedConfig;
+      const { root, viewport } = dom;
+      const viewportState = ctx.state.viewportState;
+      const scrollProp = horizontal ? "scrollLeft" : "scrollTop";
+      const overflowProp = horizontal ? "overflowX" : "overflow";
 
       // Resolve CSS padding along the main scroll axis so that
       // compression slack and maxScroll calculations account for it.
@@ -248,26 +247,16 @@ export const withScale = <
           // Capture the current native scroll position before we reset it.
           // This becomes the initial virtualScrollPosition so the user
           // doesn't see a visual jump when switching to compressed mode.
-          const nativePos = horizontal
-            ? dom.viewport.scrollLeft
-            : dom.viewport.scrollTop;
+          const nativePos = viewport[scrollProp];
 
           // Hide native scroll — the proxy's enableCompression only sets a
           // flag; it does NOT change overflow like the real scroll controller.
           // We must set overflow: hidden ourselves so native scrollTop can't
           // drift and desync from virtualScrollPosition.
-          if (horizontal) {
-            dom.viewport.style.overflowX = "hidden";
-          } else {
-            dom.viewport.style.overflow = "hidden";
-          }
+          viewport.style[overflowProp] = "hidden";
           // Reset native scroll position to 0 — all scrolling is now
           // virtual, so native offset must be zero to avoid double-offset.
-          if (horizontal) {
-            dom.viewport.scrollLeft = 0;
-          } else {
-            dom.viewport.scrollTop = 0;
-          }
+          viewport[scrollProp] = 0;
 
           // Transfer the captured native position to virtual scroll state
           if (nativePos > 0) {
@@ -278,7 +267,7 @@ export const withScale = <
           // Compute compression slack so linear formula reaches every item
           slack = compressionSlack(
             compression.virtualSize,
-            ctx.state.viewportState.containerSize,
+            viewportState.containerSize,
             compression.ratio,
             mainAxisPad,
           );
@@ -330,7 +319,7 @@ export const withScale = <
 
             if (Math.abs(diff) < SNAP_THRESHOLD) {
               const comp = ctx.getCachedCompression();
-              const maxScroll = Math.max(0, comp.virtualSize + slack - ctx.state.viewportState.containerSize);
+              const maxScroll = Math.max(0, comp.virtualSize + slack - viewportState.containerSize);
               virtualScrollPosition = Math.max(0, Math.min(targetScrollPosition, maxScroll));
               targetScrollPosition = virtualScrollPosition;
               smoothScrollId = null;
@@ -338,7 +327,7 @@ export const withScale = <
               virtualScrollPosition += diff * LERP_FACTOR;
 
               const comp = ctx.getCachedCompression();
-              const maxScroll = comp.virtualSize + slack - ctx.state.viewportState.containerSize;
+              const maxScroll = comp.virtualSize + slack - viewportState.containerSize;
               virtualScrollPosition = Math.max(0, Math.min(virtualScrollPosition, maxScroll));
 
               smoothScrollId = requestAnimationFrame(smoothScrollTick);
@@ -354,14 +343,13 @@ export const withScale = <
           //   1. Breaks exact item-height alignment (fixes Firefox bug)
           //   2. Coalesces multiple wheel events per frame (better perf)
           //   3. Produces smoother visual scrolling in all browsers
-          const viewport = dom.viewport;
           const wheelHandler = (e: WheelEvent): void => {
             e.preventDefault();
 
             // Use latest compression state for accurate maxScroll
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize + slack - ctx.state.viewportState.containerSize;
+              comp.virtualSize + slack - viewportState.containerSize;
 
             targetScrollPosition = Math.max(
               0,
@@ -424,7 +412,7 @@ export const withScale = <
             const delta = touchStartPos - y;
             const comp = ctx.getCachedCompression();
             const maxScroll =
-              comp.virtualSize + slack - ctx.state.viewportState.containerSize;
+              comp.virtualSize + slack - viewportState.containerSize;
 
             const newPos = Math.max(
               0,
@@ -468,7 +456,7 @@ export const withScale = <
 
               const comp = ctx.getCachedCompression();
               const maxScroll =
-                comp.virtualSize + slack - ctx.state.viewportState.containerSize;
+                comp.virtualSize + slack - viewportState.containerSize;
 
               let newPos = virtualScrollPosition + frameVelocity;
               newPos = Math.max(0, Math.min(newPos, maxScroll));
@@ -524,15 +512,9 @@ export const withScale = <
           // to scrollTop=0.  We listen for the native scroll event and
           // immediately reset it.
           const resetNativeScroll = (): void => {
-            const nativeST = horizontal
-              ? dom.viewport.scrollLeft
-              : dom.viewport.scrollTop;
+            const nativeST = viewport[scrollProp];
             if (nativeST !== 0) {
-              if (horizontal) {
-                dom.viewport.scrollLeft = 0;
-              } else {
-                dom.viewport.scrollTop = 0;
-              }
+              viewport[scrollProp] = 0;
             }
           };
           viewport.addEventListener("scroll", resetNativeScroll, {
@@ -548,21 +530,21 @@ export const withScale = <
             ctx.methods.set("_hasScrollbar", () => true);
             // Create a fallback scrollbar for compressed mode
             scrollbar = createScrollbar(
-              dom.viewport,
+              viewport,
               (position) => ctx.scrollController.scrollTo(position),
               {},
               classPrefix,
               horizontal,
-              dom.root,
+              root,
             );
 
             // Ensure native scrollbar is hidden
             if (
-              !dom.viewport.classList.contains(
+              !viewport.classList.contains(
                 `${classPrefix}-viewport--custom-scrollbar`,
               )
             ) {
-              dom.viewport.classList.add(
+              viewport.classList.add(
                 `${classPrefix}-viewport--custom-scrollbar`,
               );
             }
@@ -570,7 +552,7 @@ export const withScale = <
             // Update scrollbar bounds
             scrollbar.updateBounds(
               compression.virtualSize,
-              ctx.state.viewportState.containerSize,
+              viewportState.containerSize,
             );
 
             // Wire scrollbar into afterScroll
@@ -590,7 +572,7 @@ export const withScale = <
                 const comp = ctx.getCachedCompression();
                 scrollbarRef.updateBounds(
                   comp.virtualSize,
-                  ctx.state.viewportState.containerSize,
+                  viewportState.containerSize,
                 );
               }
             });
@@ -622,33 +604,21 @@ export const withScale = <
           // original native-DOM readers so that the rendering pipeline
           // reads from viewport.scrollTop again.
           ctx.setScrollFns(
-            horizontal
-              ? () => dom.viewport.scrollLeft
-              : () => dom.viewport.scrollTop,
-            horizontal
-              ? (pos: number) => { dom.viewport.scrollLeft = pos; }
-              : (pos: number) => { dom.viewport.scrollTop = pos; },
+            () => viewport[scrollProp],
+            (pos: number) => { viewport[scrollProp] = pos; },
           );
 
           // ── Reset native scroll position ────────────────────────────
           // In compressed mode scrollTop was pinned to 0 (overflow:hidden).
           // Ensure it stays at 0 when we re-enable native scroll so the
           // renderer and the DOM agree on the starting position.
-          if (horizontal) {
-            dom.viewport.scrollLeft = 0;
-          } else {
-            dom.viewport.scrollTop = 0;
-          }
+          viewport[scrollProp] = 0;
 
           ctx.scrollController.disableCompression();
 
           // Restore native scroll — re-enable overflow so the native
           // scrollbar / scroll behaviour works again.
-          if (horizontal) {
-            dom.viewport.style.overflowX = "auto";
-          } else {
-            dom.viewport.style.overflow = "auto";
-          }
+          viewport.style[overflowProp] = "auto";
 
           // ── Clean up custom scrollbar ───────────────────────────────
           // If we created a fallback scrollbar when entering compressed
@@ -668,7 +638,7 @@ export const withScale = <
           // Recompute compression slack for new compression state
           slack = compressionSlack(
             compression.virtualSize,
-            ctx.state.viewportState.containerSize,
+            viewportState.containerSize,
             compression.ratio,
             mainAxisPad,
           );
@@ -681,14 +651,14 @@ export const withScale = <
         if (scrollbar) {
           scrollbar.updateBounds(
             compression.virtualSize + slack,
-            ctx.state.viewportState.containerSize,
+            viewportState.containerSize,
           );
         }
 
         // Sync viewport state so other features (grid, async, etc.) see
         // the correct compression flag — especially important when force
         // is true and the natural compression check would return false.
-        const vs = ctx.state.viewportState;
+        const vs = viewportState;
         vs.isCompressed = compression.isCompressed;
         vs.compressionRatio = compression.ratio;
         vs.totalSize = compression.virtualSize + slack;
@@ -718,7 +688,7 @@ export const withScale = <
         if (compressedModeActive) {
           const maxScroll = Math.max(
             0,
-            compression.virtualSize + slack - ctx.state.viewportState.containerSize,
+            compression.virtualSize + slack - viewportState.containerSize,
           );
           let clamped = virtualScrollPosition;
           if (clamped > maxScroll) {
@@ -790,14 +760,39 @@ export const withScale = <
           firstItemPosition = null;
           firstItemIndex = null;
 
-          calculateCompressedVisibleRange(
-            scrollTop,
-            containerHeight,
-            hc,
-            totalItems,
-            ctx.getCachedCompression(),
-            out,
-          );
+          if (totalItems === 0 || containerHeight === 0) {
+            out.start = 0;
+            out.end = -1;
+            return;
+          }
+
+          const comp = ctx.getCachedCompression();
+          if (!comp.isCompressed || comp.ratio === 1) {
+            const start = hc.indexAtOffset(scrollTop);
+            let end = hc.indexAtOffset(scrollTop + containerHeight);
+            if (end < totalItems - 1) end++;
+            out.start = Math.max(0, start);
+            out.end = Math.min(totalItems - 1, Math.max(0, end));
+            return;
+          }
+
+          const start = hc.indexAtOffset((scrollTop / comp.virtualSize) * comp.actualSize);
+          let visibleCount: number;
+          if (!hc.isVariable()) {
+            visibleCount = Math.ceil(containerHeight / hc.getSize(0));
+          } else {
+            visibleCount = 0;
+            let accumulated = 0;
+            let i = start;
+            while (i < totalItems && accumulated < containerHeight) {
+              accumulated += hc.getSize(i);
+              visibleCount++;
+              i++;
+            }
+            if (visibleCount < 1) visibleCount = 1;
+          }
+          out.start = Math.max(0, start);
+          out.end = Math.min(totalItems - 1, Math.max(0, start + visibleCount));
         },
       );
 
@@ -809,14 +804,23 @@ export const withScale = <
           totalItems: number,
           align: "start" | "center" | "end",
         ): number => {
-          return calculateCompressedScrollToIndex(
-            index,
-            hc,
-            containerHeight,
-            totalItems,
-            ctx.getCachedCompression(),
-            align,
-          );
+          if (totalItems === 0) return 0;
+          const comp = ctx.getCachedCompression();
+          const itemSize = hc.getSize(index);
+          let targetPosition: number;
+
+          if (comp.isCompressed && comp.ratio !== 1) {
+            targetPosition = (index / totalItems) * comp.virtualSize;
+            if (align === "center") targetPosition -= ((containerHeight - itemSize) / 2) * comp.ratio;
+            else if (align === "end") targetPosition -= (containerHeight - itemSize) * comp.ratio;
+            return Math.max(0, targetPosition);
+          }
+
+          targetPosition = hc.getOffset(index);
+          if (align === "center") targetPosition -= (containerHeight - itemSize) / 2;
+          else if (align === "end") targetPosition -= containerHeight - itemSize;
+
+          return Math.max(0, Math.min(targetPosition, comp.virtualSize - containerHeight));
         },
       );
 
@@ -834,7 +838,7 @@ export const withScale = <
       let cachedScrollTop = NaN;
       let firstItemPosition: number | null = null;
       let firstItemIndex: number | null = null;
-      const isHoriz = horizontal;
+      const translate = horizontal ? "translateX" : "translateY";
 
       ctx.setPositionElementFn((el: HTMLElement, index: number): void => {
         const scrollTop = ctx.scrollController.getScrollTop();
@@ -849,15 +853,11 @@ export const withScale = <
         if (comp.isCompressed) {
           if (firstItemPosition === null || index < firstItemIndex!) {
             firstItemIndex = index;
+            const itemOffset = ctx.sizeCache.getOffset(index);
             firstItemPosition = Math.round(
-              calculateCompressedItemPosition(
-                index,
-                scrollTop,
-                ctx.sizeCache as any,
-                ctx.getVirtualTotal(),
-                ctx.state.viewportState.containerSize,
-                comp,
-              ),
+              comp.ratio === 1
+                ? itemOffset - scrollTop
+                : itemOffset - (scrollTop / comp.virtualSize) * comp.actualSize,
             );
           }
 
@@ -866,14 +866,10 @@ export const withScale = <
             ctx.sizeCache.getOffset(index) -
             ctx.sizeCache.getOffset(firstItemIndex!);
 
-          el.style.transform = isHoriz
-            ? `translateX(${offset}px)`
-            : `translateY(${offset}px)`;
+          el.style.transform = `${translate}(${offset}px)`;
         } else {
           const offset = Math.round(ctx.sizeCache.getOffset(index));
-          el.style.transform = isHoriz
-            ? `translateX(${offset}px)`
-            : `translateY(${offset}px)`;
+          el.style.transform = `${translate}(${offset}px)`;
         }
       });
 
@@ -888,10 +884,10 @@ export const withScale = <
 
       ctx.methods.set("_scrollItemIntoView", (index: number): void => {
         const compression = ctx.getCachedCompression();
-        const containerSize = ctx.state.viewportState.containerSize;
-        const scrollPos = ctx.state.viewportState.scrollPosition;
+        const containerSize = viewportState.containerSize;
+        const scrollPos = viewportState.scrollPosition;
         const totalItems = ctx.getVirtualTotal();
-        const { visibleRange } = ctx.state.viewportState;
+        const { visibleRange } = viewportState;
 
         // Convert flat item index → size-cache index (row index for grids)
         const scrollIdx = itemToScrollIndex(index);

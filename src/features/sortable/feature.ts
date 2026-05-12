@@ -137,6 +137,8 @@ export const withSortable = <T extends VListItem = VListItem>(
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig } = ctx;
       const { classPrefix } = resolvedConfig;
+      const { root, viewport, items } = dom;
+      const { sizeCache } = ctx;
       const horizontal = resolvedConfig.horizontal;
 
       // Pre-compute reusable values
@@ -144,6 +146,9 @@ export const withSortable = <T extends VListItem = VListItem>(
       const shiftTransition = shiftDuration > 0
         ? `transform ${shiftDuration}ms ease`
         : "none";
+      const sortingClass = `${classPrefix}--sorting`;
+      const settlingClass = `${classPrefix}--settling`;
+      const dragSourceClass = `${classPrefix}-item--drag-source`;
 
       // ── Drag state ──
       let sorting = false;
@@ -186,17 +191,10 @@ export const withSortable = <T extends VListItem = VListItem>(
         const clone = sourceEl.cloneNode(true) as HTMLElement;
         clone.className = `${classPrefix}-item ${ghostClass}`;
         clone.removeAttribute("data-index");
-        clone.style.cssText = [
-          "position:fixed",
-          "pointer-events:none",
-          "z-index:10000",
-          `width:${rect.width}px`,
-          `height:${rect.height}px`,
-          `left:${rect.left}px`,
-          `top:${rect.top}px`,
-          "transition:none",
-          "will-change:transform",
-        ].join(";");
+        clone.style.cssText =
+          `position:fixed;pointer-events:none;z-index:10000;width:${rect.width}px;` +
+          `height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;` +
+          "transition:none;will-change:transform";
         (ghostContainer || document.body).appendChild(clone);
         return clone;
       };
@@ -221,28 +219,28 @@ export const withSortable = <T extends VListItem = VListItem>(
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return 0;
 
-        const viewportRect = dom.viewport.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
         const scrollPos = ctx.scrollController.getScrollTop();
         const ghostTop = horizontal
-          ? pointerCurrentX - ghostOffsetX - viewportRect.left + dom.viewport.scrollLeft + scrollPos
+          ? pointerCurrentX - ghostOffsetX - viewportRect.left + viewport.scrollLeft + scrollPos
           : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
         const ghostBottom = ghostTop + draggedItemSize;
 
-        const dragEnd = ctx.sizeCache.getOffset(dragIndex) + ctx.sizeCache.getSize(dragIndex);
+        const dragEnd = sizeCache.getOffset(dragIndex) + sizeCache.getSize(dragIndex);
 
         // Downward: ghost bottom past the drag slot
         if (ghostBottom > dragEnd) {
-          const rawIndex = ctx.sizeCache.indexAtOffset(ghostBottom);
-          const mid = ctx.sizeCache.getOffset(rawIndex) + ctx.sizeCache.getSize(rawIndex) / 2;
+          const rawIndex = sizeCache.indexAtOffset(ghostBottom);
+          const mid = sizeCache.getOffset(rawIndex) + sizeCache.getSize(rawIndex) / 2;
           const result = ghostBottom > mid ? rawIndex : rawIndex - 1;
           return Math.min(Math.max(result, dragIndex), totalItems - 1);
         }
 
         // Upward: ghost top above the drag slot
-        const dragStart = ctx.sizeCache.getOffset(dragIndex);
+        const dragStart = sizeCache.getOffset(dragIndex);
         if (ghostTop < dragStart) {
-          const rawIndex = ctx.sizeCache.indexAtOffset(ghostTop);
-          const mid = ctx.sizeCache.getOffset(rawIndex) + ctx.sizeCache.getSize(rawIndex) / 2;
+          const rawIndex = sizeCache.indexAtOffset(ghostTop);
+          const mid = sizeCache.getOffset(rawIndex) + sizeCache.getSize(rawIndex) / 2;
           const result = ghostTop < mid ? rawIndex : rawIndex + 1;
           return Math.max(Math.min(result, dragIndex), 0);
         }
@@ -256,7 +254,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       // We must READ the base offset from sizeCache and ADD the shift,
       // not overwrite the transform with just the shift value.
       const applyShifts = (): void => {
-        const children = dom.items.children;
+        const children = items.children;
         const shiftPx = draggedItemSize;
 
         for (let i = 0; i < children.length; i++) {
@@ -271,7 +269,7 @@ export const withSortable = <T extends VListItem = VListItem>(
             if (idx >= dropIndex && idx < dragIndex) shift = shiftPx;
           }
 
-          const baseOffset = ctx.sizeCache.getOffset(idx);
+          const baseOffset = sizeCache.getOffset(idx);
           const finalOffset = Math.round(baseOffset + shift);
           itemEl.style.transition = shiftTransition;
           itemEl.style.transform = `${prop}(${finalOffset}px)`;
@@ -280,12 +278,12 @@ export const withSortable = <T extends VListItem = VListItem>(
 
       // ── Restore items to their sizeCache base offsets ──
       const clearShifts = (): void => {
-        const children = dom.items.children;
+        const children = items.children;
         for (let i = 0; i < children.length; i++) {
           const itemEl = children[i] as HTMLElement;
           const idx = getIndex(itemEl);
           if (idx >= 0) {
-            itemEl.style.transform = `${prop}(${Math.round(ctx.sizeCache.getOffset(idx))}px)`;
+            itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
           }
           itemEl.style.transition = "";
         }
@@ -308,7 +306,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       let inEdgeZone = false;
 
       const isPointerOutsideViewport = (): boolean => {
-        const viewportRect = dom.viewport.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
         if (horizontal) {
           return pointerCurrentX < viewportRect.left || pointerCurrentX > viewportRect.right;
         }
@@ -319,7 +317,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         const tick = (): void => {
           if (!sorting) return;
 
-          const viewportRect = dom.viewport.getBoundingClientRect();
+          const viewportRect = viewport.getBoundingClientRect();
           let delta = 0;
 
           // Quadratic ramp: gentle at zone boundary, aggressive at the edge.
@@ -351,9 +349,9 @@ export const withSortable = <T extends VListItem = VListItem>(
 
           if (delta !== 0) {
             const currentScroll = ctx.scrollController.getScrollTop();
-            const maxScroll = ctx.sizeCache.getTotalSize() - (horizontal
-              ? dom.viewport.clientWidth
-              : dom.viewport.clientHeight);
+            const maxScroll = sizeCache.getTotalSize() - (horizontal
+              ? viewport.clientWidth
+              : viewport.clientHeight);
             const atLimit = (delta < 0 && currentScroll <= 0)
               || (delta > 0 && currentScroll >= maxScroll);
 
@@ -399,21 +397,20 @@ export const withSortable = <T extends VListItem = VListItem>(
         // During drag, the afterRenderBatch handler may have added the
         // drag-source class to multiple elements (as they were recycled
         // through dragIndex). Also clear inline shift transitions/transforms.
-        const dragSourceClass = `${classPrefix}-item--drag-source`;
-        const children = dom.items.children;
+        const children = items.children;
         for (let i = 0; i < children.length; i++) {
           const el = children[i] as HTMLElement;
           el.classList.remove(dragSourceClass);
           const idx = getIndex(el);
           if (idx >= 0) {
-            el.style.transform = `${prop}(${Math.round(ctx.sizeCache.getOffset(idx))}px)`;
+            el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
           }
           el.style.transition = "";
         }
 
         stopEdgeScroll();
 
-        dom.root.classList.remove(`${classPrefix}--sorting`);
+        root.classList.remove(sortingClass);
         document.body.style.cursor = "";
 
         // Clear text selection that Safari may apply after pointer release
@@ -487,18 +484,18 @@ export const withSortable = <T extends VListItem = VListItem>(
           dragInitiated = true;
           sorting = true;
           dropIndex = dragIndex;
-          dom.root.classList.add(`${classPrefix}--sorting`);
+          root.classList.add(sortingClass);
           document.body.style.cursor = "grabbing";
 
           // Cache the dragged item's size for shift calculations
-          draggedItemSize = ctx.sizeCache.getSize(dragIndex);
+          draggedItemSize = sizeCache.getSize(dragIndex);
 
           // Create ghost
           if (draggedElement) {
             ghost = createGhost(draggedElement);
 
             // Hide the original element
-            draggedElement.classList.add(`${classPrefix}-item--drag-source`);
+            draggedElement.classList.add(dragSourceClass);
           }
 
           // Capture focused item ID so we can restore focus after reorder
@@ -544,7 +541,7 @@ export const withSortable = <T extends VListItem = VListItem>(
             // Suppress CSS transitions (background-color/opacity) during settle.
             // setItems() causes the renderer to toggle selection/focus classes on
             // reordered items — without this, the CSS transition blinks neighbors.
-            dom.root.classList.add(`${classPrefix}--settling`);
+            root.classList.add(settlingClass);
 
             emitter.emit("sort:end", { fromIndex, toIndex });
             if (dragFocusedItemId !== null) {
@@ -553,14 +550,14 @@ export const withSortable = <T extends VListItem = VListItem>(
             cleanupDrag(true);
 
             requestAnimationFrame(() => {
-              dom.root.classList.remove(`${classPrefix}--settling`);
+              root.classList.remove(settlingClass);
             });
           } else {
-            dom.root.classList.add(`${classPrefix}--settling`);
+            root.classList.add(settlingClass);
             emitter.emit("sort:cancel", { originalItems: ctx.getAllLoadedItems() });
             cleanupDrag(false);
             requestAnimationFrame(() => {
-              dom.root.classList.remove(`${classPrefix}--settling`);
+              root.classList.remove(settlingClass);
             });
           }
         };
@@ -574,15 +571,15 @@ export const withSortable = <T extends VListItem = VListItem>(
         // The target position is the sizeCache offset for `toIndex`,
         // converted to viewport-relative coordinates.
         // Animate both axes so the ghost slides to the exact target position.
-        const viewportRect = dom.viewport.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
         const scrollPos = ctx.scrollController.getScrollTop();
-        const targetOffset = ctx.sizeCache.getOffset(toIndex);
+        const targetOffset = sizeCache.getOffset(toIndex);
 
         const duration = shiftDuration > 0 ? shiftDuration : 150;
         ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
 
         if (horizontal) {
-          ghost.style.left = `${viewportRect.left - dom.viewport.scrollLeft + targetOffset - scrollPos}px`;
+          ghost.style.left = `${viewportRect.left - viewport.scrollLeft + targetOffset - scrollPos}px`;
           ghost.style.top = `${viewportRect.top}px`;
         } else {
           ghost.style.left = `${viewportRect.left}px`;
@@ -639,7 +636,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       };
 
       // ── Attach pointerdown to items container ──
-      dom.items.addEventListener("pointerdown", onPointerDown);
+      items.addEventListener("pointerdown", onPointerDown);
 
       // ================================================================
       // Keyboard reordering
@@ -666,11 +663,11 @@ export const withSortable = <T extends VListItem = VListItem>(
       // ── Helper: scroll index into view ──
       const scrollIntoView = (index: number): void => {
         const containerSize = horizontal
-          ? dom.viewport.clientWidth
-          : dom.viewport.clientHeight;
+          ? viewport.clientWidth
+          : viewport.clientHeight;
         const scrollPos = ctx.scrollController.getScrollTop();
         const newScroll = scrollToFocusSimple(
-          index, ctx.sizeCache, scrollPos, containerSize,
+          index, sizeCache, scrollPos, containerSize,
         );
         if (newScroll !== scrollPos) {
           ctx.scrollController.scrollTo(ctx.adjustScrollPosition(newScroll));
@@ -690,12 +687,19 @@ export const withSortable = <T extends VListItem = VListItem>(
         const item = ctx.dataManager.getItem(index);
         if (!item) return "";
         // Use the item's text content or fall back to id
-        const el = dom.items.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
+        const el = items.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
         const text = el?.textContent?.trim();
         return text || String(item.id);
       };
 
       const totalLabel = (): string => String(ctx.dataManager.getTotal());
+
+      const setChildTransitions = (value: string): void => {
+        const children = items.children;
+        for (let i = 0; i < children.length; i++) {
+          (children[i] as HTMLElement).style.transition = value;
+        }
+      };
 
       // ── Keyboard grab/drop/move ──
       const kbGrab = (index: number): void => {
@@ -714,7 +718,7 @@ export const withSortable = <T extends VListItem = VListItem>(
           kbOriginalItems.push(ctx.dataManager.getItem(i) as T);
         }
 
-        dom.root.classList.add(`${classPrefix}--sorting`);
+        root.classList.add(sortingClass);
         emitter.emit("sort:start", { index });
 
         // Apply grabbed visual to the item
@@ -734,12 +738,9 @@ export const withSortable = <T extends VListItem = VListItem>(
         const label = getItemLabel(toIndex);
 
         // Suppress transitions before removing sorting class (same as pointer drop)
-        const children = dom.items.children;
-        for (let i = 0; i < children.length; i++) {
-          (children[i] as HTMLElement).style.transition = "none";
-        }
+        setChildTransitions("none");
 
-        dom.root.classList.remove(`${classPrefix}--sorting`);
+        root.classList.remove(sortingClass);
         clearKbGrabbedClass();
 
         // No sort:end here — each arrow move already emitted one and the
@@ -758,10 +759,7 @@ export const withSortable = <T extends VListItem = VListItem>(
 
         // Re-enable transitions next frame
         requestAnimationFrame(() => {
-          const ch = dom.items.children;
-          for (let i = 0; i < ch.length; i++) {
-            (ch[i] as HTMLElement).style.transition = "";
-          }
+          setChildTransitions("");
         });
       };
 
@@ -772,12 +770,9 @@ export const withSortable = <T extends VListItem = VListItem>(
         const originalIndex = kbFromIndex;
 
         // Suppress transitions
-        const children = dom.items.children;
-        for (let i = 0; i < children.length; i++) {
-          (children[i] as HTMLElement).style.transition = "none";
-        }
+        setChildTransitions("none");
 
-        dom.root.classList.remove(`${classPrefix}--sorting`);
+        root.classList.remove(sortingClass);
         clearKbGrabbedClass();
 
         // Restore original order by emitting sort:cancel with the snapshot.
@@ -803,10 +798,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         kbOriginalItems = [];
 
         requestAnimationFrame(() => {
-          const ch = dom.items.children;
-          for (let i = 0; i < ch.length; i++) {
-            (ch[i] as HTMLElement).style.transition = "";
-          }
+          setChildTransitions("");
         });
       };
 
@@ -820,10 +812,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         const toIndex = newIndex;
 
         // Suppress transitions for instant snap
-        const children = dom.items.children;
-        for (let i = 0; i < children.length; i++) {
-          (children[i] as HTMLElement).style.transition = "none";
-        }
+        setChildTransitions("none");
 
         // Emit sort:end — consumer reorders data and calls setItems()
         emitter.emit("sort:end", { fromIndex, toIndex });
@@ -846,10 +835,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         );
 
         requestAnimationFrame(() => {
-          const ch = dom.items.children;
-          for (let i = 0; i < ch.length; i++) {
-            (ch[i] as HTMLElement).style.transition = "";
-          }
+          setChildTransitions("");
         });
       };
 
@@ -857,7 +843,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       const kbGrabbedClassName = `${classPrefix}-item--kb-sorting`;
 
       const clearKbGrabbedClass = (): void => {
-        const els = dom.items.querySelectorAll(`.${kbGrabbedClassName}`);
+        const els = items.querySelectorAll(`.${kbGrabbedClassName}`);
         for (let i = 0; i < els.length; i++) {
           els[i]!.classList.remove(kbGrabbedClassName);
         }
@@ -865,7 +851,7 @@ export const withSortable = <T extends VListItem = VListItem>(
 
       const applyKbGrabbedClass = (): void => {
         clearKbGrabbedClass();
-        const el = dom.items.querySelector(
+        const el = items.querySelector(
           `[data-id="${kbGrabbedItemId}"]`,
         ) as HTMLElement | null;
         if (el) el.classList.add(kbGrabbedClassName);
@@ -877,7 +863,7 @@ export const withSortable = <T extends VListItem = VListItem>(
       });
 
       // ── Keyboard event listener ──
-      // Registered directly on dom.root (not via ctx.keydownHandlers) so it
+      // Registered directly on root (not via ctx.keydownHandlers) so it
       // fires BEFORE the builder's dispatcher. In grab mode, we call
       // stopImmediatePropagation to prevent selection from processing keys.
       const onKeydown = (event: KeyboardEvent): void => {
@@ -938,7 +924,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         }
       };
 
-      dom.root.addEventListener("keydown", onKeydown);
+      root.addEventListener("keydown", onKeydown);
 
       // ================================================================
       // ARIA: sortable item attributes + instructions
@@ -953,7 +939,7 @@ export const withSortable = <T extends VListItem = VListItem>(
         "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
       instructionsEl.textContent =
         "Press Space to reorder. Use arrow keys to move, Space to drop, Escape to cancel.";
-      dom.root.appendChild(instructionsEl);
+      root.appendChild(instructionsEl);
 
       // Apply ARIA attributes to newly rendered items
       ctx.afterRenderBatch.push(
@@ -976,17 +962,17 @@ export const withSortable = <T extends VListItem = VListItem>(
           for (let i = 0; i < items.length; i++) {
             const { index, element } = items[i]!;
             if (index === dragIndex) {
-              element.classList.add(`${classPrefix}-item--drag-source`);
+              element.classList.add(dragSourceClass);
               draggedElement = element;
             } else {
-              element.classList.remove(`${classPrefix}-item--drag-source`);
+              element.classList.remove(dragSourceClass);
               let shift = 0;
               if (dropIndex > dragIndex) {
                 if (index > dragIndex && index <= dropIndex) shift = -draggedItemSize;
               } else if (dropIndex < dragIndex) {
                 if (index >= dropIndex && index < dragIndex) shift = draggedItemSize;
               }
-              const finalOffset = Math.round(ctx.sizeCache.getOffset(index) + shift);
+              const finalOffset = Math.round(sizeCache.getOffset(index) + shift);
               element.style.transform = `${prop}(${finalOffset}px)`;
             }
           }
@@ -997,8 +983,8 @@ export const withSortable = <T extends VListItem = VListItem>(
       ctx.destroyHandlers.push(() => {
         if (kbGrabbed) kbCancel();
         cleanupDrag();
-        dom.items.removeEventListener("pointerdown", onPointerDown);
-        dom.root.removeEventListener("keydown", onKeydown);
+        items.removeEventListener("pointerdown", onPointerDown);
+        root.removeEventListener("keydown", onKeydown);
         instructionsEl.remove();
       });
     },

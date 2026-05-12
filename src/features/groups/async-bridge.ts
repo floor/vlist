@@ -18,6 +18,7 @@
 
 import type { VListItem } from "../../types";
 import type { GroupBoundary, GroupHeaderItem } from "./types";
+import { findGroupByDataIndex, findGroupByLayoutIndex } from "./layout";
 
 // =============================================================================
 // Types
@@ -75,54 +76,6 @@ export interface AsyncGroupBridge {
 }
 
 // =============================================================================
-// Binary Search Helpers
-// =============================================================================
-
-/**
- * Find the last group whose headerLayoutIndex <= layoutIndex.
- */
-const findGroupByLayoutIndex = (
-  groups: readonly GroupBoundary[],
-  layoutIndex: number,
-): number => {
-  let lo = 0;
-  let hi = groups.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (groups[mid]!.headerLayoutIndex <= layoutIndex) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return lo;
-};
-
-/**
- * Find the last group whose firstDataIndex <= dataIndex.
- */
-const findGroupByDataIndex = (
-  groups: readonly GroupBoundary[],
-  dataIndex: number,
-): number => {
-  let lo = 0;
-  let hi = groups.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (groups[mid]!.firstDataIndex <= dataIndex) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return lo;
-};
-
-// =============================================================================
 // Factory
 // =============================================================================
 
@@ -147,8 +100,8 @@ const EMPTY_GROUP: GroupBoundary = {
  */
 export const createAsyncGroupBridge = (
   config: AsyncBridgeConfig,
-  _getItem: (index: number) => VListItem | undefined,
-  _isItemLoaded: (index: number) => boolean,
+  _getItem?: (index: number) => VListItem | undefined,
+  _isItemLoaded?: (index: number) => boolean,
 ): AsyncGroupBridge => {
   let groups: GroupBoundary[] = [];
   let dataTotal = 0;

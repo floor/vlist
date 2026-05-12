@@ -231,17 +231,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
   // chunk's hasMore:false.
   let hasMoreHighWater = 0;
 
-  // Track active load requests to prevent duplicates
-  const activeLoads = new Map<string, Promise<void>>();
-
-  // AbortController for each in-flight chunk request — aborted when the chunk
-  // is no longer needed (reload, reset, item removal).
-  const activeControllers = new Map<string, AbortController>();
+  // Track active chunk requests to dedupe and abort stale work.
+  const activeLoads = new Map<string, [Promise<void>, AbortController]>();
 
   /** Abort all in-flight requests and clear both tracking maps. */
   const abortAndClearLoads = (): void => {
-    for (const controller of activeControllers.values()) controller.abort();
-    activeControllers.clear();
+    for (const load of activeLoads.values()) load[1].abort();
     activeLoads.clear();
   };
 
@@ -361,8 +356,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
   const getItemsInRange = (start: number, end: number): T[] => {
     const items: T[] = [];
     const total = storage.getTotal();
-    let loadedCount = 0;
-    let placeholderCount = 0;
 
     // S2: Batch LRU timestamp update — single Date.now() for all chunks
     // instead of per-item in storage.get()
@@ -372,11 +365,9 @@ export const createDataManager = <T extends VListItem = VListItem>(
       const item = storage.get(i);
       if (item !== undefined) {
         items.push(item);
-        loadedCount++;
       } else {
         // Generate placeholder for unloaded
         items.push(getOrCreatePlaceholders().generate(i));
-        placeholderCount++;
       }
     }
 
@@ -495,14 +486,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
       return;
     }
 
-    const rangeKey = getRangeKey(start, end);
-
-    // If already loading this exact range, wait for it
-    // Skip if already loading this range
-    if (activeLoads.has(rangeKey)) {
-      return;
-    }
-
     // Find missing chunks — O(range/chunkSize) scan, not O(all-cached-items)
     const chunkSize = storage.chunkSize;
     const firstChunk = Math.floor(start / chunkSize);
@@ -515,24 +498,28 @@ export const createDataManager = <T extends VListItem = VListItem>(
     // 2 chunks keeps at most 3 concurrent requests (current + 1 on each side),
     // well under the browser's 6-connection HTTP/1.1 limit.
     const keepBuffer = chunkSize * 2;
-    for (const [loadKey, controller] of activeControllers) {
+    for (const [loadKey, load] of activeLoads) {
       const dash = loadKey.indexOf("-");
       const loadStart = parseInt(loadKey.slice(0, dash), 10);
       if (Math.abs(loadStart - start) > keepBuffer) {
-        controller.abort();
-        activeControllers.delete(loadKey);
+        load[1].abort();
         activeLoads.delete(loadKey);
       }
     }
 
     const chunksToLoad: Array<{ start: number; end: number }> = [];
+    const loadPromises: Promise<void>[] = [];
 
     for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
       const chunkStart = chunkIdx * chunkSize;
       const chunkEnd = chunkStart + chunkSize - 1;
       const key = getRangeKey(chunkStart, chunkEnd);
 
-      if (!storage.isChunkLoaded(chunkIdx) && !activeLoads.has(key)) {
+      if (storage.isChunkLoaded(chunkIdx)) continue;
+      const active = activeLoads.get(key);
+      if (active) {
+        loadPromises.push(active[0]);
+      } else {
         chunksToLoad.push({ start: chunkStart, end: chunkEnd });
       }
     }
@@ -541,30 +528,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
       return;
     }
 
-    // Load each chunk
-    const loadPromises: Promise<void>[] = [];
-
-    // First, collect promises for chunks already being loaded
-    for (let chunkIdx = firstChunk; chunkIdx <= lastChunk; chunkIdx++) {
-      const chunkStart = chunkIdx * chunkSize;
-      const chunkEnd = chunkStart + chunkSize - 1;
-      const key = getRangeKey(chunkStart, chunkEnd);
-
-      if (activeLoads.has(key)) {
-        const existingPromise = activeLoads.get(key)!;
-        if (!loadPromises.includes(existingPromise)) {
-          loadPromises.push(existingPromise);
-        }
-      }
-    }
-
-    // Now load chunks that aren't already loading
+    // Load chunks that aren't already loading
     for (const chunk of chunksToLoad) {
       const key = getRangeKey(chunk.start, chunk.end);
 
       // Create the load promise for this chunk
       const controller = new AbortController();
-      activeControllers.set(key, controller);
 
       const loadPromise = (async () => {
         pendingRanges.push(chunk);
@@ -611,7 +580,6 @@ export const createDataManager = <T extends VListItem = VListItem>(
           error = err instanceof Error ? err : new Error(String(err));
         } finally {
           activeLoads.delete(key);
-          activeControllers.delete(key);
           pendingRanges = pendingRanges.filter(
             (r) => r.start !== chunk.start || r.end !== chunk.end,
           );
@@ -620,7 +588,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
         }
       })();
 
-      activeLoads.set(key, loadPromise);
+      activeLoads.set(key, [loadPromise, controller]);
       loadPromises.push(loadPromise);
     }
 

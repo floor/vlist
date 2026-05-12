@@ -177,10 +177,21 @@ export const withAsync = <T extends VListItem = VListItem>(
       // ── Expose async marker and hooks for other features (e.g. withGroups) ──
       ctx.methods.set("_isAsync", () => true);
 
-      const itemsLoadedCallbacks: Array<(items: T[], offset: number, total: number) => void> = [];
+      let itemsLoadedCallbacks: Array<(items: T[], offset: number, total: number) => void> | null = null;
       ctx.methods.set("_onItemsLoaded", (callback: (items: T[], offset: number, total: number) => void) => {
-        itemsLoadedCallbacks.push(callback);
+        (itemsLoadedCallbacks ??= []).push(callback);
       });
+      const onEnsureError = (error: Error): void => {
+        emitter.emit("error", { error, context: "ensureRange" });
+      };
+      const onLoadMoreError = (error: Error): void => {
+        emitter.emit("error", { error, context: "loadMore" });
+      };
+      const ensure = (start: number, end: number): Promise<void> =>
+        ctx.dataManager.ensureRange(start, end);
+      const emitLoadStart = (offset: number, limit = INITIAL_LOAD_SIZE): void => {
+        emitter.emit("load:start", { offset, limit });
+      };
 
       // ── Create adapter-backed data manager ──
       const newDataManager = createDataManager<T>({
@@ -216,8 +227,10 @@ export const withAsync = <T extends VListItem = VListItem>(
         onItemsLoaded: (loadedItems, _offset, total) => {
           if (ctx.state.isInitialized) {
             // Notify subscribers (e.g. withGroups async bridge) before rendering
-            for (const cb of itemsLoadedCallbacks) {
-              cb(loadedItems, _offset, total);
+            if (itemsLoadedCallbacks) {
+              for (const cb of itemsLoadedCallbacks) {
+                cb(loadedItems, _offset, total);
+              }
             }
             // Force render to replace placeholders with actual data immediately
             // This is necessary so the DOM shows loaded items instead of placeholders
@@ -283,11 +296,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         lastEnsuredRange = null;
 
         const itemRange = getItemRangeFromRenderRange(renderRange);
-        ctx.dataManager
-          .ensureRange(itemRange.start, itemRange.end)
-          .catch((error) => {
-            emitter.emit("error", { error, context: "ensureRange" });
-          });
+        ensure(itemRange.start, itemRange.end).catch(onEnsureError);
       };
 
       // ── Post-scroll: velocity-aware loading + load-more ──
@@ -347,35 +356,17 @@ export const withAsync = <T extends VListItem = VListItem>(
             !ctx.dataManager.getIsLoading() &&
             ctx.dataManager.getHasMore()
           ) {
-            if (isReverse) {
-              // Reverse mode: trigger "load more" near the TOP
-              if (scrollPosition < LOAD_THRESHOLD) {
-                emitter.emit("load:start", {
-                  offset: ctx.dataManager.getCached(),
-                  limit: INITIAL_LOAD_SIZE,
-                });
+            const nearLoadMoreEdge = isReverse
+              ? scrollPosition < LOAD_THRESHOLD
+              : ctx.state.viewportState.totalSize -
+                  scrollPosition -
+                  ctx.state.viewportState.containerSize <
+                LOAD_THRESHOLD;
 
-                ctx.dataManager.loadMore().catch((error) => {
-                  emitter.emit("error", { error, context: "loadMore" });
-                });
-              }
-            } else {
-              // Normal mode: trigger "load more" near the BOTTOM
-              const distanceFromBottom =
-                ctx.state.viewportState.totalSize -
-                scrollPosition -
-                ctx.state.viewportState.containerSize;
+            if (nearLoadMoreEdge) {
+              emitLoadStart(ctx.dataManager.getCached());
 
-              if (distanceFromBottom < LOAD_THRESHOLD) {
-                emitter.emit("load:start", {
-                  offset: ctx.dataManager.getCached(),
-                  limit: INITIAL_LOAD_SIZE,
-                });
-
-                ctx.dataManager.loadMore().catch((error) => {
-                  emitter.emit("error", { error, context: "loadMore" });
-                });
-              }
+              ctx.dataManager.loadMore().catch(onLoadMoreError);
             }
           }
 
@@ -420,9 +411,7 @@ export const withAsync = <T extends VListItem = VListItem>(
                 }
               }
 
-              ctx.dataManager.ensureRange(loadStart, loadEnd).catch((error) => {
-                emitter.emit("error", { error, context: "ensureRange" });
-              });
+              ensure(loadStart, loadEnd).catch(onEnsureError);
             } else {
               // Either scrolling too fast OR decelerating from a fast scroll.
               // Save the range and defer loading until scroll settles.
@@ -500,11 +489,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         const { renderRange } = ctx.state.viewportState;
         if (renderRange.end > 0) {
           const itemRange = getItemRangeFromRenderRange(renderRange);
-          ctx.dataManager
-            .ensureRange(itemRange.start, itemRange.end)
-            .catch((error) => {
-              emitter.emit("error", { error, context: "ensureRange" });
-            });
+          ensure(itemRange.start, itemRange.end).catch(onEnsureError);
         }
 
         // Also flush any range that was pending when the network dropped
@@ -540,11 +525,8 @@ export const withAsync = <T extends VListItem = VListItem>(
         const { renderRange } = ctx.state.viewportState;
         if (renderRange.end > 0) {
           const itemRange = getItemRangeFromRenderRange(renderRange);
-          emitter.emit("load:start", {
-            offset: itemRange.start,
-            limit: itemRange.end - itemRange.start + 1,
-          });
-          await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
+          emitLoadStart(itemRange.start, itemRange.end - itemRange.start + 1);
+          await ensure(itemRange.start, itemRange.end);
         }
       });
 
@@ -582,7 +564,7 @@ export const withAsync = <T extends VListItem = VListItem>(
         if (!shouldSkipInitial) {
           // Load initial data first (this will update total and trigger onStateChange)
           // The onStateChange callback will call forceRender automatically when data arrives
-          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+          emitLoadStart(0);
           await ctx.dataManager.loadInitial();
 
           // Force a render to immediately show placeholders (good UX while
@@ -596,7 +578,7 @@ export const withAsync = <T extends VListItem = VListItem>(
           const { renderRange } = ctx.state.viewportState;
           if (renderRange.end > 0) {
             const itemRange = getItemRangeFromRenderRange(renderRange);
-            await ctx.dataManager.ensureRange(itemRange.start, itemRange.end);
+            await ensure(itemRange.start, itemRange.end);
           }
         }
 
@@ -629,7 +611,7 @@ export const withAsync = <T extends VListItem = VListItem>(
       if (autoLoad) {
         queueMicrotask(() => {
           if (autoLoadCancelled) return;
-          emitter.emit("load:start", { offset: 0, limit: INITIAL_LOAD_SIZE });
+          emitLoadStart(0);
           ctx.dataManager.loadInitial().catch((error) => {
             emitter.emit("error", { error, context: "loadInitial" });
           });
