@@ -71,10 +71,7 @@ export const createMeasuredSizeCache = (
   const measuredSizes = new Map<number, number>();
 
   // Size function: return measured size if available, else estimated
-  const sizeFn = (index: number): number => {
-    const measured = measuredSizes.get(index);
-    return measured !== undefined ? measured : estimatedSize;
-  };
+  const sizeFn = (index: number): number => measuredSizes.get(index) ?? estimatedSize;
 
   // Create the underlying variable SizeCache with our size function
   let inner = createSizeCache(sizeFn, initialTotal);
@@ -106,9 +103,7 @@ export const createMeasuredSizeCache = (
       // Discard measured sizes for indices that no longer exist
       if (totalItems < inner.getTotal()) {
         for (const index of measuredSizes.keys()) {
-          if (index >= totalItems) {
-            measuredSizes.delete(index);
-          }
+          if (index >= totalItems) measuredSizes.delete(index);
         }
       }
 
