@@ -343,13 +343,12 @@ export const createScrollbar = (
     syncTrackOffset();
 
     // Check if scrollbar is needed
-    const needsScrollbar = totalSize > containerSize;
-    track.style.display = needsScrollbar ? "" : "none";
-
-    if (!needsScrollbar) {
+    if (totalSize <= containerSize) {
+      track.style.display = "none";
       hide();
       return;
     }
+    track.style.display = "";
 
     // Effective track length shrinks by the margin on both ends (start + end along scroll axis)
     const trackLength = Math.max(0, containerSize - scrollAxisStartPad - scrollAxisEndPad);
@@ -380,8 +379,7 @@ export const createScrollbar = (
     const scrollRatio = Math.min(1, Math.max(0, scrollTop / maxScroll));
 
     // Position thumb
-    const thumbPosition = scrollRatio * maxThumbTravel;
-    thumb.style.transform = `${translateFn}(${thumbPosition}px)`;
+    thumb.style.transform = `${translateFn}(${scrollRatio * maxThumbTravel}px)`;
   };
 
   // =============================================================================
@@ -536,9 +534,7 @@ export const createScrollbar = (
       Math.min(dragStartScrollPosition + deltaScroll, maxScroll),
     );
     // Update thumb immediately for responsive feel
-    const thumbRatio = newPosition / maxScroll;
-    const thumbPosition = thumbRatio * maxThumbTravel;
-    thumb.style.transform = `${translateFn}(${thumbPosition}px)`;
+    thumb.style.transform = `${translateFn}(${(newPosition / maxScroll) * maxThumbTravel}px)`;
 
     // Throttle scroll callback with RAF
     lastRequestedPosition = newPosition;
@@ -647,13 +643,9 @@ export const createScrollbar = (
 
     hoverZone.removeEventListener("click", handleTrackClick);
     hoverZone.removeEventListener("mousedown", handleTrackMouseDown);
-    if (showOnHover) {
-      hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
-      hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
-    }
-    if (hoverZone.parentNode) {
-      hoverZone.parentNode.removeChild(hoverZone);
-    }
+    hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
+    hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
+    hoverZone.remove();
 
     // Remove inline CSS variable overrides
     attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-top");
@@ -662,9 +654,7 @@ export const createScrollbar = (
     attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-left");
 
     // Remove DOM elements
-    if (track.parentNode) {
-      track.parentNode.removeChild(track);
-    }
+    track.remove();
   };
 
   // =============================================================================
