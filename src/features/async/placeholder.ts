@@ -104,17 +104,19 @@ export const createPlaceholderManager = <T extends VListItem = VListItem>(
       if (!item || typeof item !== "object") continue;
 
       const profile: LengthProfile = {};
+      let hasFields = false;
 
       for (const [field, value] of Object.entries(item)) {
         // Skip internal fields and id
         if (field.startsWith("_") || field === "id") continue;
 
         profile[field] = String(value ?? "").length;
+        hasFields = true;
       }
 
       // Only store profiles that have at least one field —
       // id-only items produce empty profiles which aren't useful
-      if (Object.keys(profile).length > 0) {
+      if (hasFields) {
         lengthProfiles.push(profile);
       }
     }
