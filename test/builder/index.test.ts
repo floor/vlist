@@ -515,6 +515,42 @@ describe("builder core", () => {
     expect(liveRegion!.getAttribute("role")).toBe("status");
   });
 
+  it("should not announce visible range changes by default", async () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(100),
+    }).build();
+
+    const liveRegion = list.element.querySelector(".vlist-live");
+    expect(liveRegion).not.toBeNull();
+
+    simulateScroll(list, 800);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(liveRegion!.textContent).toBe("");
+  });
+
+  it("should announce visible range changes when opted in", async () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(100),
+      accessibility: {
+        announceVisibleRange: true,
+        rangeAnnouncementDebounce: 5,
+      },
+    }).build();
+
+    const liveRegion = list.element.querySelector(".vlist-live");
+    expect(liveRegion).not.toBeNull();
+
+    simulateScroll(list, 800);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(liveRegion!.textContent).toMatch(/^Showing items \d+ to \d+ of 100$/);
+  });
+
   it("should re-render when scrolling through the list", () => {
     const items = createTestItems(500);
     list = vlist<TestItem>({
