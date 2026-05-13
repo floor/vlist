@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-05-13
+
+### Performance
+
+- **builder**: Lazy-initialize the `idIndex` Map — only allocated on first `getIndexById` or string-based `removeItem` call. Lists that never use id-based lookups have zero Map overhead, fixing the memory regression introduced in 1.8.1 (0.55 MB → 0.06 MB after render).
+
 ## [1.8.1] - 2026-05-13
 
 ### Fixed
