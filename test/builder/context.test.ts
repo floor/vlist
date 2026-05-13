@@ -538,7 +538,7 @@ describe("createBuilderContext", () => {
           wrap: false,
           horizontal: true,
           ariaIdPrefix: "vlist",
-      interactive: true,
+          interactive: true,
         },
       });
 
