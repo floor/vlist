@@ -823,6 +823,257 @@ describe("createTableHeader - resize interaction", () => {
 });
 
 // =============================================================================
+// Keyboard Navigation
+// =============================================================================
+
+describe("createTableHeader - keyboard navigation", () => {
+  it("should set tabindex on header cells (first=0, rest=-1)", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    expect((scrollContainer.children[0] as HTMLElement).getAttribute("tabindex")).toBe("0");
+    expect((scrollContainer.children[1] as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    expect((scrollContainer.children[2] as HTMLElement).getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("should move focus right with ArrowRight", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+
+    cell0.focus();
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    expect(cell0.getAttribute("tabindex")).toBe("-1");
+    expect(cell1.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should move focus left with ArrowLeft", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+
+    // Move right first, then left
+    cell0.focus();
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+
+    expect(cell0.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should not move past first cell on ArrowLeft", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+
+    cell0.focus();
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+
+    expect(cell0.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should not move past last cell on ArrowRight", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+
+    // Move to last cell
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    expect(cell1.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should jump to first cell on Home", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+
+    // Move to last cell first
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+
+    expect(cell0.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should jump to last cell on End", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell2 = scrollContainer.children[2] as HTMLElement;
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+
+    expect(cell2.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("should trigger sort on Enter for sortable columns", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { sortable: true }), col("value")]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(onSort).toHaveBeenCalledWith({
+      key: "name",
+      index: 0,
+      direction: "asc",
+    });
+  });
+
+  it("should trigger sort on Space for sortable columns", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { sortable: true })]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+
+    expect(onSort).toHaveBeenCalledWith({
+      key: "name",
+      index: 0,
+      direction: "asc",
+    });
+  });
+
+  it("should cycle sort direction via keyboard: asc → desc → null", () => {
+    const { root } = createTestDOM();
+    const sortCalls: any[] = [];
+    const onSort = mock((e: any) => sortCalls.push(e));
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { sortable: true })]);
+    header.rebuild(layout);
+
+    // First Enter: asc
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(sortCalls[0].direction).toBe("asc");
+
+    header.updateSort("name", "asc");
+
+    // Second Enter: desc
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(sortCalls[1].direction).toBe("desc");
+
+    header.updateSort("name", "desc");
+
+    // Third Enter: null (clear)
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(sortCalls[2].direction).toBeNull();
+  });
+
+  it("should not trigger sort on non-sortable columns", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { sortable: false })]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(onSort).not.toHaveBeenCalled();
+  });
+
+  it("should resize column wider with Ctrl+ArrowRight", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: true }),
+      col("value", { width: 200 }),
+    ]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+
+    expect(onResize).toHaveBeenCalledWith(0, 210);
+  });
+
+  it("should resize column narrower with Ctrl+ArrowLeft", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: true }),
+      col("value", { width: 200 }),
+    ]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+
+    expect(onResize).toHaveBeenCalledWith(0, 190);
+  });
+
+  it("should not resize non-resizable columns", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: false }),
+    ]);
+    header.rebuild(layout);
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("should return focus to grid body on ArrowDown", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a")]);
+    header.rebuild(layout);
+
+    root.focus = mock(() => {});
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+
+    expect(root.focus).toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
 // Visibility
 // =============================================================================
 
