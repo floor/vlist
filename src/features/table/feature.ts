@@ -717,7 +717,7 @@ export const withTable = <T extends VListItem = VListItem>(
           dom.root.removeAttribute("aria-label");
         }
         dom.root.removeAttribute("aria-rowcount");
-        dom.items.setAttribute("role", "listbox");
+        dom.items.setAttribute("role", resolvedConfig.interactive ? "listbox" : "list");
         if (resolvedConfig.interactive) dom.items.setAttribute("tabindex", "0");
       });
     },

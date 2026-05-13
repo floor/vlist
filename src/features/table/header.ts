@@ -48,6 +48,9 @@ import type {
 /** Minimum drag distance (px) before resize is committed */
 const MIN_DRAG_DELTA = 1;
 
+/** Keyboard resize step in pixels */
+const RESIZE_STEP = 10;
+
 /** Sort indicator characters */
 const SORT_ASC = "\u25B2"; // ▲
 const SORT_DESC = "\u25BC"; // ▼
@@ -125,6 +128,9 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   let dragStartX = 0;
   let dragStartWidth = 0;
 
+  // Keyboard focus state (roving tabindex)
+  let focusedCellIndex = 0;
+
   // =========================================================================
   // Cell Creation
   // =========================================================================
@@ -137,6 +143,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cell.className = `${classPrefix}-table-header-cell`;
     cell.setAttribute("role", "columnheader");
     cell.setAttribute("aria-colindex", String(colIndex + 1));
+    cell.setAttribute("tabindex", colIndex === 0 ? "0" : "-1");
     cell.dataset.columnKey = col.def.key;
 
     // Alignment modifier class (left is the default — no class needed)
@@ -421,11 +428,109 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   };
 
   // =========================================================================
+  // Keyboard Navigation (roving tabindex on header cells)
+  // =========================================================================
+
+  const moveFocusToCell = (index: number): void => {
+    if (index < 0 || index >= cells.length) return;
+    cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
+    focusedCellIndex = index;
+    const cell = cells[focusedCellIndex]!;
+    cell.setAttribute("tabindex", "0");
+    cell.focus();
+  };
+
+  const onKeyDown = (e: KeyboardEvent): void => {
+    const key = e.key;
+
+    if (key === "ArrowRight") {
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Right: resize column wider
+        if (!currentLayout) return;
+        const col = currentLayout.getColumn(focusedCellIndex);
+        if (col?.resizable) {
+          onResize(focusedCellIndex, col.width + RESIZE_STEP);
+          e.preventDefault();
+        }
+      } else {
+        // Move focus to next header cell
+        if (focusedCellIndex < cells.length - 1) {
+          moveFocusToCell(focusedCellIndex + 1);
+          e.preventDefault();
+        }
+      }
+      e.stopPropagation();
+      return;
+    }
+
+    if (key === "ArrowLeft") {
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Left: resize column narrower
+        if (!currentLayout) return;
+        const col = currentLayout.getColumn(focusedCellIndex);
+        if (col?.resizable) {
+          onResize(focusedCellIndex, col.width - RESIZE_STEP);
+          e.preventDefault();
+        }
+      } else {
+        // Move focus to previous header cell
+        if (focusedCellIndex > 0) {
+          moveFocusToCell(focusedCellIndex - 1);
+          e.preventDefault();
+        }
+      }
+      e.stopPropagation();
+      return;
+    }
+
+    if (key === "Home") {
+      moveFocusToCell(0);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (key === "End") {
+      moveFocusToCell(cells.length - 1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (key === "Enter" || key === " ") {
+      // Trigger sort on sortable columns
+      if (!currentLayout) return;
+      const col = currentLayout.getColumn(focusedCellIndex);
+      if (col?.def.sortable && onSort) {
+        let direction: "asc" | "desc" | null;
+        if (currentSortKey === col.def.key) {
+          direction = currentSortDirection === "asc" ? "desc" : null;
+        } else {
+          direction = "asc";
+        }
+        onSort({ key: col.def.key, index: focusedCellIndex, direction });
+        e.preventDefault();
+      }
+      e.stopPropagation();
+      return;
+    }
+
+    if (key === "ArrowDown") {
+      // Return focus to the grid body
+      root.focus();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  };
+
+  // =========================================================================
   // Event Binding
   // =========================================================================
 
   element.addEventListener("pointerdown", onPointerDown);
   element.addEventListener("click", onCellClick);
+  element.addEventListener("keydown", onKeyDown);
 
   // =========================================================================
   // Visibility
@@ -450,6 +555,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   const destroy = (): void => {
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("click", onCellClick);
+    element.removeEventListener("keydown", onKeyDown);
 
     // Clear the CSS variable set during setup
     root.style.removeProperty('--vlist-table-header-height');

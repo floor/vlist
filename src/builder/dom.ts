@@ -71,7 +71,7 @@ export const createDOMStructure = (
     `${classPrefix}-items`,
     hz ? "position:relative;height:100%" : "position:relative;width:100%",
   );
-  items.setAttribute("role", "listbox");
+  items.setAttribute("role", interactive !== false ? "listbox" : "list");
   if (interactive !== false) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
   if (hz) items.setAttribute("aria-orientation", "horizontal");
