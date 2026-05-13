@@ -227,12 +227,18 @@ export const createScrollbar = (
   // Always created: extends click target into the padding margin + handles hover when showOnHover
   const hoverZone = document.createElement("div");
 
-  // When the scrollbar lives on root, offset its top to align with the viewport
+  // When the scrollbar lives on root, offset its top to align with the viewport.
+  // Uses the CSS variable for padding so runtime updates via CSS take effect
+  // without rebuilding the scrollbar.
+  const startPadVar = horizontal
+    ? "--vlist-custom-scrollbar-padding-left"
+    : "--vlist-custom-scrollbar-padding-top";
   const syncTrackOffset = (): void => {
     if (attachTo === viewport) return;
     const offset = viewport.offsetTop;
-    const startPad = horizontal ? pad.left : pad.top;
-    track.style[horizontal ? "left" : "top"] = `${offset + startPad}px`;
+    track.style[horizontal ? "left" : "top"] = offset
+      ? `calc(var(${startPadVar}) + ${offset}px)`
+      : `var(${startPadVar})`;
     hoverZone.style[horizontal ? "left" : "top"] = `${offset}px`;
   };
 
