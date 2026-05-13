@@ -219,6 +219,7 @@ export const withMasonry = <T extends VListItem = VListItem>(
         aria.getSetSize,
         resolvedConfig.ariaIdPrefix,
         aria.getPosInSet,
+        resolvedConfig.interactive,
       );
 
       // ── Wire updateItemClasses to the masonry renderer ──

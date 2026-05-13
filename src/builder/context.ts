@@ -266,6 +266,7 @@ export const createBuilderContext = <T extends VListItem = VListItem>(
       rawConfig.item?.striped,
       () => stripeIndexFn,
       aria.getPosInSet,
+      resolvedConfig.interactive,
     );
     renderer = newRenderer;
   };

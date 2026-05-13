@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.8 KB.
 
-**v1.7.9** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
+**v1.8.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
@@ -60,12 +60,12 @@ const list = vlist({ container: '#app', items, item: { height: 200, template: re
 | `withAsync()` | +4.4 KB | Lazy loading with velocity-aware fetching |
 | `withSelection()` | +3.0 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.6 KB | 1M+ items via scroll compression |
-| `withGroups()` | +4.4 KB | Sticky/inline headers with async group discovery |
+| `withGroups()` | +4.5 KB | Sticky/inline headers with async group discovery |
 | `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `withScrollbar()` | +1.8 KB | Custom scrollbar UI |
-| `withGrid()` | +4.0 KB | 2D grid layout |
-| `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `withTable()` | +5.5 KB | Data table with columns, resize, sort |
+| `withGrid()` | +4.1 KB | 2D grid layout |
+| `withMasonry()` | +3.5 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `withTable()` | +5.8 KB | Data table with columns, resize, sort |
 | `withPage()` | +0.7 KB | Window-level scrolling |
 | `withSortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
 | `withSnapshots()` | +1.2 KB | Scroll position save/restore |
