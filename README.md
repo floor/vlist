@@ -1,17 +1,17 @@
 # vlist
 
-The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.7 KB.
+The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 10.8 KB.
 
-**v1.7.8** — [Changelog](./CHANGELOG.md)
+**v1.7.9** — [Changelog](./CHANGELOG.md)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
-- **New: 10.7 KB base** — optimized from 11.2 KB, every feature bundle reduced
+- **New: 10.8 KB base** — optimized from 11.2 KB, every feature bundle reduced
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering, ARIA live region
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **10.7 KB gzipped** — composable features with perfect tree-shaking
+- **10.8 KB gzipped** — composable features with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Grid, masonry, table, groups, async, selection, sortable, scale** — all opt-in
 - **Vertical & horizontal** — single axis-neutral code path, every feature works in both orientations
@@ -94,7 +94,7 @@ const list = vlist({
 
 | Feature | Size | Description |
 |---------|------|-------------|
-| **Base** | 10.7 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| **Base** | 10.8 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `withAsync()` | +4.4 KB | Lazy loading with velocity-aware fetching |
 | `withSelection()` | +3.0 KB | Single/multiple selection with 2D keyboard nav |
 | `withScale()` | +3.6 KB | 1M+ items via scroll compression |
