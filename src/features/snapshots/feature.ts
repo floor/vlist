@@ -455,10 +455,13 @@ export const withSnapshots = <T extends VListItem = VListItem>(
       // an immediate save captures the fully settled state.
       let restoreGuard = !!(restoreSnapshot && autoSaveKey);
       let saveToStorage: (() => void) | null = null;
+      let disposed = false;
+
+      ctx.destroyHandlers.push(() => { disposed = true; });
 
       if (autoSaveKey) {
         saveToStorage = (): void => {
-          if (restoreGuard || ctx.methods.has("_suppressSave")) return;
+          if (disposed || restoreGuard || ctx.methods.has("_suppressSave")) return;
           const getSnapshotFn = ctx.methods.get("getScrollSnapshot") as
             | (() => ScrollSnapshot)
             | undefined;
@@ -513,8 +516,13 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         queueMicrotask(() => {
           restoreScroll(restoreSnapshot, restoreSelection);
-          restoreGuard = false;
-          if (saveToStorage) saveToStorage();
+          // Delay guard lift until DOM has settled — ResizeObserver
+          // callbacks fire before the next paint and can temporarily
+          // reset scrollTop to 0.
+          requestAnimationFrame(() => {
+            restoreGuard = false;
+            if (saveToStorage) saveToStorage();
+          });
         });
       }
     },
