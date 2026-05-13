@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.7.9] - 2026-05-13
+
+### Fixed
+
+- **a11y**: Align `aria-activedescendant` with ARIA role owner — move `tabindex="0"` from `.vlist` root to `.vlist-items` (the `role="listbox"` element) so the focused element and composite widget role are on the same DOM node. `withTable` reverses this when it promotes root to `role="grid"`.
+- **a11y**: Unify table row ID format to `${ariaIdPrefix}-item-${index}`, matching selection's `aria-activedescendant` references — fixes broken ARIA in table + selection mode.
+- **a11y**: Make visible range announcements opt-in via `accessibility.announceVisibleRange` (default: `false`). Range announcements were noisy during keyboard navigation and touchpad scrolling. Add configurable `accessibility.rangeAnnouncementDebounce` (default: 750ms).
+
 ## [1.7.8] - 2026-05-12
 
 ### Performance
@@ -262,7 +270,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v1.7.6...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v1.7.9...HEAD
+[1.7.9]: https://github.com/floor/vlist/compare/v1.7.8...v1.7.9
+[1.7.8]: https://github.com/floor/vlist/compare/v1.7.7...v1.7.8
+[1.7.7]: https://github.com/floor/vlist/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/floor/vlist/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/floor/vlist/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/floor/vlist/compare/v1.7.3...v1.7.4

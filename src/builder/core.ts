@@ -194,6 +194,7 @@ function materialize<T extends VListItem = VListItem>(
     overscan = OVERSCAN,
     classPrefix = CLASS_PREFIX,
     ariaLabel,
+    accessibility,
     padding: paddingConfig,
     reverse: reverseMode = false,
     scroll: scrollConfig,
@@ -207,6 +208,8 @@ function materialize<T extends VListItem = VListItem>(
 
   const wheelEnabled = scrollCfg?.wheel ?? true;
   const wrapEnabled = scrollCfg?.wrap ?? false;
+  const announceVisibleRange = accessibility?.announceVisibleRange ?? false;
+  const rangeAnnouncementDebounce = accessibility?.rangeAnnouncementDebounce ?? 750;
   const isReverse = reverseMode;
   const ariaIdPrefix = `${classPrefix}-${builderInstanceId++}`;
   // Grid and masonry features manage their own gap — ignore item.gap when active
@@ -1129,7 +1132,7 @@ function materialize<T extends VListItem = VListItem>(
   dom.root.addEventListener("keydown", handleKeydown);
 
   // ── ARIA live region: announce visible range changes (#13b) ─────
-  if (interactiveMode) {
+  if (interactiveMode && announceVisibleRange) {
     let lrt: ReturnType<typeof setTimeout> | null = null;
     const ulr = (data: { range: { start: number; end: number } }): void => {
       if (lrt) clearTimeout(lrt);
@@ -1138,7 +1141,7 @@ function materialize<T extends VListItem = VListItem>(
         if ($.id) return;
         const t = $.vtf();
         dom.liveRegion.textContent = `Showing items ${data.range.start + 1} to ${Math.min(data.range.end + 1, t)} of ${t}`;
-      }, 300);
+      }, rangeAnnouncementDebounce);
     };
     emitter.on("range:change", ulr);
     destroyHandlers.push(() => { if (lrt) clearTimeout(lrt); emitter.off("range:change", ulr); });
