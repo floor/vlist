@@ -97,6 +97,24 @@ export interface BuilderConfig<T extends VListItem = VListItem> {
   /** Accessible label for the listbox */
   ariaLabel?: string;
 
+  /** Accessibility behavior configuration. */
+  accessibility?: {
+    /**
+     * Announce visible range changes through the built-in live region.
+     *
+     * Defaults to false because frequent range updates can be noisy during
+     * keyboard navigation, touchpad scrolling, and repeated scroll pauses.
+     */
+    announceVisibleRange?: boolean;
+
+    /**
+     * Debounce delay in ms for visible range announcements.
+     *
+     * Only used when `announceVisibleRange` is true. Default: 750.
+     */
+    rangeAnnouncementDebounce?: number;
+  };
+
   /**
    * Layout orientation (default: 'vertical')
    * - 'vertical' — Standard top-to-bottom scrolling
