@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-05-13
+
+### Fixed
+
+- **selection**: Use data manager `getIndexById` instead of internal `idToIndexMap` — the selection feature maintained its own index map with data-space indices, but `ctx.dataManager.getItem()` expects layout-space indices when `withGroups` wraps the data manager. This caused `selection:change` to emit group headers instead of real items, breaking forms, players, and detail panels.
+- **selection**: Skip group headers in range selection and `selectAll` — `selectItemRange`, `selectAll()`, and Ctrl+A used `getAllLoadedItems()` which includes group header pseudo-items, leaking header IDs (e.g. `__group_header_0`) into the selected set and breaking the Ctrl+A select/deselect toggle.
+
 ## [1.8.2] - 2026-05-13
 
 ### Performance
