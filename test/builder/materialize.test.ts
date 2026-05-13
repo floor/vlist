@@ -1278,6 +1278,193 @@ describe("createDefaultDataProxy", () => {
     expect(refs.it.length).toBe(0);
     expect(forceRenderCalled).toBe(true);
   });
+
+  // ===========================================================================
+  // getIndexById — O(1) id→index lookup
+  // ===========================================================================
+
+  it("should return index by id for initial items", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 10, name: "A" },
+      { id: 20, name: "B" },
+      { id: 30, name: "C" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    expect(proxy.getIndexById(10)).toBe(0);
+    expect(proxy.getIndexById(20)).toBe(1);
+    expect(proxy.getIndexById(30)).toBe(2);
+  });
+
+  it("should return -1 for unknown id", () => {
+    const refs = createTestRefs();
+    refs.it = [{ id: 1, name: "A" }];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    expect(proxy.getIndexById(999)).toBe(-1);
+    expect(proxy.getIndexById("missing")).toBe(-1);
+  });
+
+  it("should update index after full setItems replace", () => {
+    const refs = createTestRefs();
+    refs.it = [{ id: 1, name: "Old" }];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    proxy.setItems([{ id: 50, name: "New A" }, { id: 60, name: "New B" }], 0, 2);
+
+    expect(proxy.getIndexById(1)).toBe(-1);
+    expect(proxy.getIndexById(50)).toBe(0);
+    expect(proxy.getIndexById(60)).toBe(1);
+  });
+
+  it("should update index after partial setItems with offset", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 1, name: "A" },
+      { id: 2, name: "B" },
+      { id: 3, name: "C" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    proxy.setItems([{ id: 99, name: "Replaced" }], 1);
+
+    expect(proxy.getIndexById(1)).toBe(0);
+    expect(proxy.getIndexById(2)).toBe(-1);
+    expect(proxy.getIndexById(99)).toBe(1);
+    expect(proxy.getIndexById(3)).toBe(2);
+  });
+
+  it("should update index after updateItem changes id", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 1, name: "A" },
+      { id: 2, name: "B" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    proxy.updateItem(0, { id: 100, name: "New A" } as any);
+
+    expect(proxy.getIndexById(1)).toBe(-1);
+    expect(proxy.getIndexById(100)).toBe(0);
+    expect(proxy.getIndexById(2)).toBe(1);
+  });
+
+  it("should update index after removeItem", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 10, name: "A" },
+      { id: 20, name: "B" },
+      { id: 30, name: "C" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    proxy.removeItem(20);
+
+    expect(proxy.getIndexById(10)).toBe(0);
+    expect(proxy.getIndexById(20)).toBe(-1);
+    expect(proxy.getIndexById(30)).toBe(1);
+  });
+
+  it("should clear index on clear()", () => {
+    const refs = createTestRefs();
+    refs.it = [{ id: 1, name: "A" }];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    expect(proxy.getIndexById(1)).toBe(0);
+    proxy.clear();
+    expect(proxy.getIndexById(1)).toBe(-1);
+  });
+
+  it("should clear index on reset()", () => {
+    const refs = createTestRefs();
+    refs.it = [{ id: 1, name: "A" }];
+    refs.ii = true;
+    refs.hc = createSizeCache(50, 1);
+    refs.ffn = () => {};
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    expect(proxy.getIndexById(1)).toBe(0);
+    proxy.reset();
+    expect(proxy.getIndexById(1)).toBe(-1);
+  });
+
+  // ===========================================================================
+  // removeItem — numeric id via Map vs legacy index fallback
+  // ===========================================================================
+
+  it("should remove item by string id using the Map", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: "a", name: "A" } as any,
+      { id: "b", name: "B" } as any,
+      { id: "c", name: "C" } as any,
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    const result = proxy.removeItem("b");
+
+    expect(result).toBe(true);
+    expect(refs.it.length).toBe(2);
+    expect(refs.it[0]?.name).toBe("A");
+    expect(refs.it[1]?.name).toBe("C");
+  });
+
+  it("should remove item by numeric id using the Map (not as index)", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 100, name: "A" },
+      { id: 200, name: "B" },
+      { id: 300, name: "C" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    const result = proxy.removeItem(200);
+
+    expect(result).toBe(true);
+    expect(refs.it.length).toBe(2);
+    expect(refs.it[0]?.name).toBe("A");
+    expect(refs.it[1]?.name).toBe("C");
+  });
+
+  it("should fall back to numeric index when no item has that id", () => {
+    const refs = createTestRefs();
+    refs.it = [
+      { id: 100, name: "A" },
+      { id: 200, name: "B" },
+      { id: 300, name: "C" },
+    ];
+    const deps = createTestDeps();
+    const ctx = createMaterializeCtx(refs, deps);
+    const proxy = createDefaultDataProxy(refs, deps, ctx);
+
+    const result = proxy.removeItem(1);
+
+    expect(result).toBe(true);
+    expect(refs.it.length).toBe(2);
+    expect(refs.it[0]?.name).toBe("A");
+    expect(refs.it[1]?.name).toBe("C");
+  });
 });
 
 // =============================================================================

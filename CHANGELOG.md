@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-05-13
+
+### Fixed
+
+- **builder**: Default data proxy now implements `getIndexById` backed by an O(1) `Map<id, index>` — previously always returned `-1` in non-async mode because the call fell through to an unpopulated `SimpleDataManager`.
+- **builder**: `removeItem` with a numeric id now resolves via the id index Map first, falling back to treating the number as a direct array index only if no matching id exists — prevents silent wrong-item deletion when items have numeric ids.
+
 ## [1.8.0] - 2026-05-13
 
 ### Added
