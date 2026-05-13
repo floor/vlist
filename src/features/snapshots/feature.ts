@@ -516,13 +516,8 @@ export const withSnapshots = <T extends VListItem = VListItem>(
 
         queueMicrotask(() => {
           restoreScroll(restoreSnapshot, restoreSelection);
-          // Delay guard lift until DOM has settled — ResizeObserver
-          // callbacks fire before the next paint and can temporarily
-          // reset scrollTop to 0.
-          requestAnimationFrame(() => {
-            restoreGuard = false;
-            if (saveToStorage) saveToStorage();
-          });
+          restoreGuard = false;
+          if (saveToStorage) saveToStorage();
         });
       }
     },
