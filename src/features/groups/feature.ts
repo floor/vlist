@@ -341,7 +341,7 @@ export const withGroups = <T extends VListItem = VListItem>(
 function setupStaticPath<T extends VListItem>(
   ctx: BuilderContext<T>,
   config: GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } },
-  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string },
+  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string; interactive: boolean },
   rawConfig: { item: { height?: any; template: any; striped?: any }; items?: T[] },
   baseSize: number | ((index: number) => number),
   stickyEnabled: boolean,
@@ -456,6 +456,7 @@ function setupStaticPath<T extends VListItem>(
       resolvedConfig.ariaIdPrefix,
       resolvedConfig.horizontal,
       (layoutIndex: number): number => groupLayout.layoutToDataIndex(layoutIndex) + 1,
+      resolvedConfig.interactive,
     );
     replaceGridRenderer(newGridRenderer);
   } else if (getTableLayout && updateTableForGroups) {
@@ -592,7 +593,7 @@ function setupStaticPath<T extends VListItem>(
 function setupAsyncPath<T extends VListItem>(
   ctx: BuilderContext<T>,
   config: GroupsFeatureConfig & { header: { height: number; template: (key: string, groupIndex: number) => HTMLElement | string } },
-  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string },
+  resolvedConfig: { horizontal: boolean; classPrefix: string; ariaIdPrefix: string; interactive: boolean },
   rawConfig: { item: { height?: any; template: any; striped?: any }; items?: T[] },
   baseSize: number | ((index: number) => number),
   stickyEnabled: boolean,

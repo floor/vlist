@@ -238,6 +238,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   striped?: boolean | "data" | "even" | "odd",
   stripeIndexFn?: () => (index: number) => number,
   ariaPosInSetGetter?: (layoutIndex: number) => number,
+  interactive?: boolean,
 ): Renderer<T> => {
   const pool = createElementPool("div");
   const rendered = new Map<number, TrackedItem>();
@@ -408,12 +409,25 @@ export const createRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else {
+    } else if (interactive !== false) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {
         element.id = `${ariaIdPrefix}-item-${index}`;
       }
+      if (totalItemsGetter) {
+        const total = totalItemsGetter();
+        if (total !== lastAriaTotal) {
+          lastAriaTotal = total;
+          lastAriaSetSize = String(total);
+        }
+        element.setAttribute("aria-setsize", lastAriaSetSize);
+        const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(index) : index + 1;
+        element.setAttribute("aria-posinset", String(posInSet));
+      }
+    } else {
+      element.setAttribute("role", "listitem");
+      element.removeAttribute("aria-selected");
       if (totalItemsGetter) {
         const total = totalItemsGetter();
         if (total !== lastAriaTotal) {
@@ -782,7 +796,7 @@ export const createDOMStructure = (
   // Items container (holds rendered items)
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
-  items.setAttribute("role", "listbox");
+  items.setAttribute("role", interactive !== false ? "listbox" : "list");
   if (interactive !== false) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
   if (horizontal) items.setAttribute("aria-orientation", "horizontal");

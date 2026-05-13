@@ -204,6 +204,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
   ariaIdPrefix?: string,
   isHorizontal: boolean = false,
   ariaPosInSetGetter?: (layoutIndex: number) => number,
+  interactive?: boolean,
 ): GridRenderer<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedItem>();
@@ -398,12 +399,25 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else {
+    } else if (interactive !== false) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {
         element.id = `${ariaIdPrefix}-item-${itemIndex}`;
       }
+      if (totalItemsGetter) {
+        const total = totalItemsGetter();
+        if (total !== lastAriaTotal) {
+          lastAriaTotal = total;
+          lastAriaSetSize = String(total);
+        }
+        element.setAttribute("aria-setsize", lastAriaSetSize);
+        const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
+        element.setAttribute("aria-posinset", String(posInSet));
+      }
+    } else {
+      element.setAttribute("role", "listitem");
+      element.removeAttribute("aria-selected");
       if (totalItemsGetter) {
         const total = totalItemsGetter();
         if (total !== lastAriaTotal) {

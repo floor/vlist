@@ -552,7 +552,7 @@ function materialize<T extends VListItem = VListItem>(
       el.removeAttribute("aria-setsize");
       el.removeAttribute("aria-posinset");
       el.removeAttribute("id");
-    } else {
+    } else if (interactiveMode) {
       el.setAttribute("role", "option");
       if (fresh) {
         el.ariaSelected = "false";
@@ -560,6 +560,14 @@ function materialize<T extends VListItem = VListItem>(
         el.setAttribute("aria-setsize", $.la);
       }
       el.id = `${ariaIdPrefix}-item-${index}`;
+      el.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
+    } else {
+      el.setAttribute("role", "listitem");
+      el.removeAttribute("aria-selected");
+      if (fresh) {
+        $.la = String(aria.getSetSize());
+        el.setAttribute("aria-setsize", $.la);
+      }
       el.setAttribute("aria-posinset", String(aria.getPosInSet(index)));
     }
   };

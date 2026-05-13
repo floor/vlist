@@ -265,6 +265,7 @@ export const withGrid = <T extends VListItem = VListItem>(
           resolvedConfig.ariaIdPrefix,
           resolvedConfig.horizontal,
           aria.getPosInSet,
+          resolvedConfig.interactive,
         );
 
         // ── Replace the list renderer with the grid renderer ──

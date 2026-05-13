@@ -108,6 +108,22 @@ describe("createDOMStructure", () => {
     expect(items.getAttribute("tabindex")).toBe("0");
   });
 
+  it("should downgrade to list role when interactive is false", () => {
+    const container = document.createElement("div");
+    const { items } = createDOMStructure(container, "vlist", undefined, false, false);
+
+    expect(items.getAttribute("role")).toBe("list");
+    expect(items.hasAttribute("tabindex")).toBe(false);
+  });
+
+  it("should use listbox role when interactive is true", () => {
+    const container = document.createElement("div");
+    const { items } = createDOMStructure(container, "vlist", undefined, false, true);
+
+    expect(items.getAttribute("role")).toBe("listbox");
+    expect(items.getAttribute("tabindex")).toBe("0");
+  });
+
   it("should add aria-label when provided", () => {
     const container = document.createElement("div");
     const { items } = createDOMStructure(container, "vlist", "My List");
