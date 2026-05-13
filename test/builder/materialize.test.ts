@@ -1371,6 +1371,8 @@ describe("createDefaultDataProxy", () => {
     const ctx = createMaterializeCtx(refs, deps);
     const proxy = createDefaultDataProxy(refs, deps, ctx);
 
+    // Prime the index so removeItem resolves numeric id via Map
+    expect(proxy.getIndexById(20)).toBe(1);
     proxy.removeItem(20);
 
     expect(proxy.getIndexById(10)).toBe(0);
@@ -1439,6 +1441,8 @@ describe("createDefaultDataProxy", () => {
     const ctx = createMaterializeCtx(refs, deps);
     const proxy = createDefaultDataProxy(refs, deps, ctx);
 
+    // Prime the index so removeItem resolves numeric id via Map
+    expect(proxy.getIndexById(200)).toBe(1);
     const result = proxy.removeItem(200);
 
     expect(result).toBe(true);

@@ -609,17 +609,17 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
 
   const n = () => $.it.length;
 
-  const idIndex = new Map<string | number, number>();
+  let idIndex: Map<string | number, number> | null = null;
 
-  const rebuildIndex = () => {
+  const ensureIndex = (): Map<string | number, number> => {
+    if (!idIndex) idIndex = new Map();
     idIndex.clear();
     for (let i = 0; i < $.it.length; i++) {
       const id = ($.it[i] as any)?.id;
       if (id !== undefined) idIndex.set(id, i);
     }
+    return idIndex;
   };
-
-  rebuildIndex();
 
   return {
     getState: () => ({ total: n(), cached: n(), isLoading: false, pendingRanges: [], error: undefined as unknown, hasMore: false, cursor: undefined as unknown }),
@@ -637,22 +637,27 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       return result;
     },
     getIndexById: (id: string | number): number => {
-      return idIndex.get(id) ?? -1;
+      const idx = idIndex ?? ensureIndex();
+      return idx.get(id) ?? -1;
     },
     setTotal: () => {},
     setItems: (newItems: T[], offset = 0, newTotal?: number) => {
       if (offset === 0 && (newTotal !== undefined || n() === 0)) {
         $.it = newItems;
-        rebuildIndex();
+        if (idIndex) ensureIndex();
       } else {
         const req = offset + newItems.length;
         if (n() < req) $.it.length = req;
         for (let i = 0; i < newItems.length; i++) {
-          const oldId = ($.it[offset + i] as any)?.id;
-          if (oldId !== undefined) idIndex.delete(oldId);
+          if (idIndex) {
+            const oldId = ($.it[offset + i] as any)?.id;
+            if (oldId !== undefined) idIndex.delete(oldId);
+          }
           $.it[offset + i] = newItems[i]!;
-          const newId = (newItems[i] as any)?.id;
-          if (newId !== undefined) idIndex.set(newId, offset + i);
+          if (idIndex) {
+            const newId = (newItems[i] as any)?.id;
+            if (newId !== undefined) idIndex.set(newId, offset + i);
+          }
         }
       }
       if ($.ii) syncAfterChange();
@@ -664,14 +669,13 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       if (!item) return false;
       const oldId = (item as any).id;
       items[index] = { ...item, ...updates } as T;
-      const newId = (items[index] as any).id;
-      if (oldId !== newId) {
-        if (oldId !== undefined) idIndex.delete(oldId);
-        if (newId !== undefined) idIndex.set(newId, index);
+      if (idIndex) {
+        const newId = (items[index] as any).id;
+        if (oldId !== newId) {
+          if (oldId !== undefined) idIndex.delete(oldId);
+          if (newId !== undefined) idIndex.set(newId, index);
+        }
       }
-      // Re-render if visible — updateItem is an explicit API call signaling
-      // data changed, so always re-apply template even when id is unchanged
-      // (e.g. a name update on the same record).
       const element = rendered.get(index);
       if (element) {
         applyTemplate(element, $.at(items[index]!, index, itemState));
@@ -680,10 +684,16 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       return true;
     },
     removeItem: (id: string | number) => {
-      const index = typeof id === "number" ? (idIndex.get(id) ?? id) : (idIndex.get(id) ?? -1);
+      let index: number;
+      if (typeof id === "number") {
+        index = idIndex ? (idIndex.get(id) ?? id) : id;
+      } else {
+        const idx = idIndex ?? ensureIndex();
+        index = idx.get(id) ?? -1;
+      }
       if (index < 0 || index >= $.it.length) return false;
       $.it.splice(index, 1);
-      rebuildIndex();
+      if (idIndex) ensureIndex();
       if ($.ii) syncAfterChange();
       return true;
     },
@@ -695,11 +705,11 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
     evictDistant: () => {},
     clear: () => {
       $.it = [] as unknown as T[];
-      idIndex.clear();
+      if (idIndex) idIndex.clear();
     },
     reset: () => {
       $.it = [] as unknown as T[];
-      idIndex.clear();
+      if (idIndex) idIndex.clear();
       if ($.ii) {
         $.hc.rebuild(0);
         updateContentSize();
