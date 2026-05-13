@@ -243,12 +243,13 @@ export const withSelection = <T extends VListItem = VListItem>(
         else selectOne(id);
       };
 
-      const selectItemRange = (items: T[], fromIndex: number, toIndex: number): void => {
+      const selectItemRange = (fromIndex: number, toIndex: number): void => {
         if (mode !== "multiple") return;
         const start = Math.min(fromIndex, toIndex);
         const end = Math.max(fromIndex, toIndex);
         for (let i = start; i <= end; i++) {
-          const item = items[i];
+          if (isHeader(i)) continue;
+          const item = ctx.dataManager.getItem(i);
           if (item) selected.add(item.id);
         }
       };
@@ -264,57 +265,10 @@ export const withSelection = <T extends VListItem = VListItem>(
         return items;
       };
 
-      // ── ID → index map for O(1) lookups (selection feature only) ──
-      // Incrementally indexed: items are added as they load via the load:end
-      // event, avoiding a full 0..total scan that would generate millions of
-      // placeholders when using sparse/async data.
-      const idToIndexMap = new Map<string | number, number>();
-
-      const rebuildIdIndex = (): void => {
-        idToIndexMap.clear();
-        const total = ctx.dataManager.getTotal();
-        const cached = ctx.dataManager.getCached();
-
-        // Nothing cached — skip entirely (common for async data at setup)
-        if (cached === 0) return;
-
-        // Fast path: all items are in memory (SimpleDataManager or fully cached).
-        // Safe to iterate 0..total without placeholder overhead.
-        if (cached >= total) {
-          for (let i = 0; i < total; i++) {
-            const item = ctx.dataManager.getItem(i);
-            if (item) idToIndexMap.set(item.id, i);
-          }
-          return;
-        }
-
-        // Sparse path: only a fraction of items are loaded. Iterate via
-        // storage loaded ranges to avoid an O(total) scan that would touch
-        // millions of unloaded indices and generate placeholder objects.
-        const storage = ctx.dataManager.getStorage();
-        if (storage && typeof (storage as any).getLoadedRanges === "function") {
-          const ranges = (storage as any).getLoadedRanges() as Array<{ start: number; end: number }>;
-          for (const range of ranges) {
-            for (let i = range.start; i <= range.end; i++) {
-              const item = ctx.dataManager.getItem(i);
-              if (item && !(item as any)._isPlaceholder) {
-                idToIndexMap.set(item.id, i);
-              }
-            }
-          }
-        }
-      };
-
-      // Rebuild index and clean selection after data mutations (removeItem).
-      // Without this, idToIndexMap holds stale indices after items shift,
-      // causing getSelectedItems() to return wrong items.
+      // Clean selection after data mutations (removeItem).
       emitter.on("data:change", ({ type, id }) => {
         if (type === "remove") {
-          // Remove the deleted id from selection state
           selected.delete(id);
-
-          // Rebuild index — all indices after the removed item shifted
-          rebuildIdIndex();
 
           // After removal, focusedIndex may now point to a group header
           // (the item that was below the removed one shifted into its slot).
@@ -326,32 +280,6 @@ export const withSelection = <T extends VListItem = VListItem>(
           }
         }
       });
-
-      // Incrementally index newly loaded items via load:end event.
-      // Items arrive in small batches (25-50) with a known offset, so
-      // indexing is O(batch_size) — no scanning required.
-      emitter.on(
-        "load:end",
-        ({ items: loadedItems, offset }: { items: T[]; offset?: number }) => {
-          if (!loadedItems || loadedItems.length === 0) return;
-
-          if (offset !== undefined) {
-            // Fast path: offset known — direct index assignment
-            for (let i = 0; i < loadedItems.length; i++) {
-              const item = loadedItems[i];
-              if (item && item.id !== undefined) {
-                idToIndexMap.set(item.id, offset + i);
-              }
-            }
-          } else {
-            // Fallback: no offset (e.g. SimpleDataManager) — full rebuild
-            rebuildIdIndex();
-          }
-        },
-      );
-
-      // Build initial index (no-op when nothing is cached yet, e.g. async)
-      rebuildIdIndex();
 
       // ── Register internal getters for renderer integration ──
       // These allow the core/grid/masonry renderers to read real selection
@@ -383,22 +311,25 @@ export const withSelection = <T extends VListItem = VListItem>(
       // a full re-render when selection state changes (click, API call).
       const { forceRender: capturedForceRender } = ctx.getRenderFns();
 
+      const getIndexById = (id: string | number): number => {
+        return ctx.dataManager.getIndexById(id);
+      };
+
+      const getItemById = (id: string | number): T | undefined => {
+        const index = getIndexById(id);
+        if (index < 0) return undefined;
+        return ctx.dataManager.getItem(index);
+      };
+
       // ── Helper: force render + emit selection change ──
       const forceRenderAndEmit = (): void => {
         // Force render — renderers will pick up the new selection state
         // via _getSelectedIds / _getFocusedIndex getters
         capturedForceRender();
 
-        // O(1) lookup using ID → index map
-        const getItemByIdFn = (id: string | number): T | undefined => {
-          const index = idToIndexMap.get(id);
-          if (index === undefined) return undefined;
-          return ctx.dataManager.getItem(index);
-        };
-
         emitter.emit("selection:change", {
           selected: selectedArray(),
-          items: selectedItems(getItemByIdFn),
+          items: selectedItems(getItemById),
         });
       };
 
@@ -611,7 +542,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
           const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : selectionState.focusedIndex;
-          selectItemRange(ctx.getAllLoadedItems(), anchor, index);
+          selectItemRange(anchor, index);
           focusItem(index);
           forceRenderAndEmit();
           return;
@@ -770,8 +701,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Shift+Space: range select from lastSelectedIndex to focused (ARIA model)
             if (event.key === " " && event.shiftKey && mode === "multiple" && selectionState.focusedIndex >= 0) {
               if (lastSelectedIndex >= 0) {
-                const items = ctx.getAllLoadedItems();
-                selectItemRange(items, lastSelectedIndex, selectionState.focusedIndex);
+                selectItemRange(lastSelectedIndex, selectionState.focusedIndex);
                 newState = selectionState;
               }
               newState.focusVisible = true;
@@ -795,12 +725,17 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case "a":
             if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
-              const allItems = ctx.getAllLoadedItems();
-              // If all selected, deselect all; otherwise select all
-              if (selected.size === allItems.length) {
+              const total = ctx.dataManager.getTotal();
+              const dataIds: Array<string | number> = [];
+              for (let i = 0; i < total; i++) {
+                if (isHeader(i)) continue;
+                const item = ctx.dataManager.getItem(i);
+                if (item) dataIds.push(item.id);
+              }
+              if (selected.size === dataIds.length) {
                 selected.clear();
               } else {
-                for (const item of allItems) selected.add(item.id);
+                for (const id of dataIds) selected.add(id);
               }
               newState = selectionState;
               newState.focusVisible = true;
@@ -812,13 +747,9 @@ export const withSelection = <T extends VListItem = VListItem>(
           case "Delete":
           case "Backspace":
             if (selected.size > 0) {
-              const getItemByIdFn = (id: string | number): T | undefined => {
-                const index = idToIndexMap.get(id);
-                return index === undefined ? undefined : ctx.dataManager.getItem(index);
-              };
               emitter.emit("delete", {
                 selected: selectedArray(),
-                items: selectedItems(getItemByIdFn),
+                items: selectedItems(getItemById),
               });
               handled = true;
             }
@@ -860,10 +791,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             lastSelectedIndex = newState.focusedIndex;
             focusOnly = false; // trigger full re-render + selection:change event
           } else if (isCtrlHomeEnd) {
-            // Ctrl+Shift+Home/End: select from previous focus to first/last item
-            const items = ctx.getAllLoadedItems();
             const anchor = previousFocusIndex >= 0 ? previousFocusIndex : newState.focusedIndex;
-            selectItemRange(items, anchor, newState.focusedIndex);
+            selectItemRange(anchor, newState.focusedIndex);
             newState = selectionState;
             lastSelectedIndex = newState.focusedIndex;
             focusOnly = false; // trigger full re-render + selection:change event
@@ -946,12 +875,8 @@ export const withSelection = <T extends VListItem = VListItem>(
       ctx.methods.set("select", (...ids: Array<string | number>): void => {
         selectIds(ids);
         if (ids.length > 0) {
-          let index = idToIndexMap.get(ids[0]!);
-          if (index === undefined) {
-            rebuildIdIndex();
-            index = idToIndexMap.get(ids[0]!);
-          }
-          if (index !== undefined) {
+          const index = getIndexById(ids[0]!);
+          if (index >= 0) {
             setFocus(index);
           }
         }
@@ -970,10 +895,13 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       ctx.methods.set("selectAll", (): void => {
         if (mode !== "multiple") return;
-        const allItems = ctx.getAllLoadedItems();
         selected.clear();
-        for (const item of allItems) selected.add(item.id);
-        rebuildIdIndex(); // Ensure index is current
+        const total = ctx.dataManager.getTotal();
+        for (let i = 0; i < total; i++) {
+          if (isHeader(i)) continue;
+          const item = ctx.dataManager.getItem(i);
+          if (item) selected.add(item.id);
+        }
         forceRenderAndEmit();
       });
 
@@ -987,12 +915,7 @@ export const withSelection = <T extends VListItem = VListItem>(
       });
 
       ctx.methods.set("getSelectedItems", (): T[] => {
-        // O(1) lookup using ID → index map
-        const getItemByIdFn = (id: string | number): T | undefined => {
-          const index = idToIndexMap.get(id);
-          return index === undefined ? undefined : ctx.dataManager.getItem(index);
-        };
-        return selectedItems(getItemByIdFn);
+        return selectedItems(getItemById);
       });
 
       // ── Shared helper: move focus + select + scroll-if-needed + emit ──
@@ -1035,17 +958,8 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       // ── Internal: restore focus by item ID (used by withSnapshots, withSortable) ──
       ctx.methods.set("_focusById", (id: string | number): void => {
-        let index = idToIndexMap.get(id);
-        // Validate — map may be stale after setItems() reorders data
-        if (index !== undefined) {
-          const check = ctx.dataManager.getItem(index);
-          if (!check || check.id !== id) index = undefined;
-        }
-        if (index === undefined) {
-          rebuildIdIndex();
-          index = idToIndexMap.get(id);
-          if (index === undefined) return;
-        }
+        const index = getIndexById(id);
+        if (index < 0) return;
         // Set the index without focusVisible — the ring will appear when
         // the user tabs into the list and focusin fires.
         setFocus(index);

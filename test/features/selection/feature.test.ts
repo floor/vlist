@@ -140,6 +140,12 @@ function createMockContext(): BuilderContext<TestItem> {
       getTotal: () => testItems.length,
       getCached: () => testItems.length,
       getItem: (index: number) => testItems[index],
+      getIndexById: (id: string | number) => {
+        for (let i = 0; i < testItems.length; i++) {
+          if (testItems[i]?.id === id) return i;
+        }
+        return -1;
+      },
       getItemsInRange: (start: number, end: number) =>
         testItems.slice(start, end + 1),
       isItemLoaded: () => true,
@@ -841,30 +847,29 @@ function createMockContextWithEmitter(): BuilderContext<TestItem> {
 }
 
 // =============================================================================
-// withSelection — load:end Incremental Indexing
+// withSelection — ID Resolution
 // =============================================================================
 
-describe("withSelection — load:end indexing", () => {
-  it("should index items incrementally via load:end with offset", () => {
+describe("withSelection — ID resolution", () => {
+  it("should resolve items after async batch load via data manager", () => {
     const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContextWithEmitter();
 
-    // Start with 0 cached (async scenario)
-    (ctx.dataManager as any).getCached = () => 0;
-
-    feature.setup!(ctx);
-
-    // Simulate a batch load at offset 0
     const batch: TestItem[] = [
       { id: 100, name: "A" },
       { id: 101, name: "B" },
     ];
-    (ctx.dataManager as any).getItem = (i: number) =>
-      i === 0 ? batch[0] : i === 1 ? batch[1] : undefined;
+    (ctx.dataManager as any).getTotal = () => batch.length;
+    (ctx.dataManager as any).getItem = (i: number) => batch[i];
+    (ctx.dataManager as any).getIndexById = (id: string | number) => {
+      for (let i = 0; i < batch.length; i++) {
+        if (batch[i]?.id === id) return i;
+      }
+      return -1;
+    };
 
-    ctx.emitter.emit("load:end", { items: batch, offset: 0 });
+    feature.setup!(ctx);
 
-    // Now select by ID — getSelectedItems should resolve via the index
     const select = ctx.methods.get("select") as (...ids: any[]) => void;
     const getSelectedItems = ctx.methods.get("getSelectedItems") as () => TestItem[];
 
@@ -874,14 +879,11 @@ describe("withSelection — load:end indexing", () => {
     expect(items[0].id).toBe(100);
   });
 
-  it("should fallback to rebuildIdIndex when load:end has no offset", () => {
+  it("should resolve items by ID via linear scan fallback", () => {
     const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContextWithEmitter();
 
     feature.setup!(ctx);
-
-    // Emit load:end without offset — triggers rebuildIdIndex fallback
-    ctx.emitter.emit("load:end", { items: [{ id: 0, name: "Item 0" }] });
 
     const select = ctx.methods.get("select") as (...ids: any[]) => void;
     const getSelectedItems = ctx.methods.get("getSelectedItems") as () => TestItem[];
@@ -904,11 +906,11 @@ describe("withSelection — load:end indexing", () => {
 });
 
 // =============================================================================
-// withSelection — Sparse rebuildIdIndex
+// withSelection — Sparse Data ID Resolution
 // =============================================================================
 
 describe("withSelection — sparse ID indexing", () => {
-  it("should use getLoadedRanges for sparse data", () => {
+  it("should resolve items in sparse data via data manager", () => {
     const feature = withSelection<TestItem>({ mode: "multiple" });
     const ctx = createMockContextWithEmitter();
 
@@ -918,21 +920,17 @@ describe("withSelection — sparse ID indexing", () => {
       50: { id: 150, name: "C" },
     };
 
-    // Simulate sparse data: total=100, cached=3
     (ctx.dataManager as any).getTotal = () => 100;
     (ctx.dataManager as any).getCached = () => 3;
     (ctx.dataManager as any).getItem = (i: number) => sparseItems[i];
-    (ctx.dataManager as any).getStorage = () => ({
-      getLoadedRanges: () => [
-        { start: 0, end: 1 },
-        { start: 50, end: 50 },
-      ],
-    });
+    (ctx.dataManager as any).getIndexById = (id: string | number) => {
+      for (const [idx, item] of Object.entries(sparseItems)) {
+        if (item.id === id) return Number(idx);
+      }
+      return -1;
+    };
 
     feature.setup!(ctx);
-
-    // Trigger rebuildIdIndex via load:end without offset
-    ctx.emitter.emit("load:end", { items: [sparseItems[0]!] });
 
     const select = ctx.methods.get("select") as (...ids: any[]) => void;
     const getSelectedItems = ctx.methods.get("getSelectedItems") as () => TestItem[];
