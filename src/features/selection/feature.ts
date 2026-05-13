@@ -243,12 +243,13 @@ export const withSelection = <T extends VListItem = VListItem>(
         else selectOne(id);
       };
 
-      const selectItemRange = (items: T[], fromIndex: number, toIndex: number): void => {
+      const selectItemRange = (fromIndex: number, toIndex: number): void => {
         if (mode !== "multiple") return;
         const start = Math.min(fromIndex, toIndex);
         const end = Math.max(fromIndex, toIndex);
         for (let i = start; i <= end; i++) {
-          const item = items[i];
+          if (isHeader(i)) continue;
+          const item = ctx.dataManager.getItem(i);
           if (item) selected.add(item.id);
         }
       };
@@ -264,7 +265,6 @@ export const withSelection = <T extends VListItem = VListItem>(
         return items;
       };
 
-      // ── ID → index map for O(1) lookups (selection feature only) ──
       // Clean selection after data mutations (removeItem).
       emitter.on("data:change", ({ type, id }) => {
         if (type === "remove") {
@@ -311,20 +311,8 @@ export const withSelection = <T extends VListItem = VListItem>(
       // a full re-render when selection state changes (click, API call).
       const { forceRender: capturedForceRender } = ctx.getRenderFns();
 
-      // ── Shared index/item-by-ID resolvers ──
-      // Uses ctx.dataManager.getIndexById when available (returns layout-space
-      // indices, correct when withGroups wraps the data manager).
-      // Falls back to linear scan for simple data managers without getIndexById.
       const getIndexById = (id: string | number): number => {
-        if (ctx.dataManager.getIndexById) {
-          return ctx.dataManager.getIndexById(id);
-        }
-        const total = ctx.dataManager.getTotal();
-        for (let i = 0; i < total; i++) {
-          const item = ctx.dataManager.getItem(i);
-          if (item && item.id === id) return i;
-        }
-        return -1;
+        return ctx.dataManager.getIndexById(id);
       };
 
       const getItemById = (id: string | number): T | undefined => {
@@ -554,7 +542,7 @@ export const withSelection = <T extends VListItem = VListItem>(
 
         if (mode === "multiple" && event.shiftKey && selectionState.focusedIndex >= 0) {
           const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : selectionState.focusedIndex;
-          selectItemRange(ctx.getAllLoadedItems(), anchor, index);
+          selectItemRange(anchor, index);
           focusItem(index);
           forceRenderAndEmit();
           return;
@@ -713,8 +701,7 @@ export const withSelection = <T extends VListItem = VListItem>(
             // Shift+Space: range select from lastSelectedIndex to focused (ARIA model)
             if (event.key === " " && event.shiftKey && mode === "multiple" && selectionState.focusedIndex >= 0) {
               if (lastSelectedIndex >= 0) {
-                const items = ctx.getAllLoadedItems();
-                selectItemRange(items, lastSelectedIndex, selectionState.focusedIndex);
+                selectItemRange(lastSelectedIndex, selectionState.focusedIndex);
                 newState = selectionState;
               }
               newState.focusVisible = true;
@@ -738,12 +725,17 @@ export const withSelection = <T extends VListItem = VListItem>(
 
           case "a":
             if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
-              const allItems = ctx.getAllLoadedItems();
-              // If all selected, deselect all; otherwise select all
-              if (selected.size === allItems.length) {
+              const total = ctx.dataManager.getTotal();
+              const dataIds: Array<string | number> = [];
+              for (let i = 0; i < total; i++) {
+                if (isHeader(i)) continue;
+                const item = ctx.dataManager.getItem(i);
+                if (item) dataIds.push(item.id);
+              }
+              if (selected.size === dataIds.length) {
                 selected.clear();
               } else {
-                for (const item of allItems) selected.add(item.id);
+                for (const id of dataIds) selected.add(id);
               }
               newState = selectionState;
               newState.focusVisible = true;
@@ -799,10 +791,8 @@ export const withSelection = <T extends VListItem = VListItem>(
             lastSelectedIndex = newState.focusedIndex;
             focusOnly = false; // trigger full re-render + selection:change event
           } else if (isCtrlHomeEnd) {
-            // Ctrl+Shift+Home/End: select from previous focus to first/last item
-            const items = ctx.getAllLoadedItems();
             const anchor = previousFocusIndex >= 0 ? previousFocusIndex : newState.focusedIndex;
-            selectItemRange(items, anchor, newState.focusedIndex);
+            selectItemRange(anchor, newState.focusedIndex);
             newState = selectionState;
             lastSelectedIndex = newState.focusedIndex;
             focusOnly = false; // trigger full re-render + selection:change event
@@ -905,9 +895,13 @@ export const withSelection = <T extends VListItem = VListItem>(
 
       ctx.methods.set("selectAll", (): void => {
         if (mode !== "multiple") return;
-        const allItems = ctx.getAllLoadedItems();
         selected.clear();
-        for (const item of allItems) selected.add(item.id);
+        const total = ctx.dataManager.getTotal();
+        for (let i = 0; i < total; i++) {
+          if (isHeader(i)) continue;
+          const item = ctx.dataManager.getItem(i);
+          if (item) selected.add(item.id);
+        }
         forceRenderAndEmit();
       });
 
