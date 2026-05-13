@@ -2688,6 +2688,41 @@ describe("integration — async + table", () => {
     const selected = (list as any).getSelected();
     expect(selected.length).toBe(1);
   });
+
+  it("should point aria-activedescendant at an existing table row", async () => {
+    const adapter = createMockAdapter(200);
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+    })
+      .use(withAsync({ adapter }))
+      .use(withTable({ columns: tableColumns, rowHeight: 40, headerHeight: 40 }))
+      .use(withSelection({ mode: "single" }))
+      .build();
+
+    await flush();
+
+    const root = list.element;
+    const origMatches = root.matches;
+    root.matches = (selector: string) =>
+      selector === ":focus-visible" ? true : origMatches.call(root, selector);
+
+    root.dispatchEvent(new dom.window.Event("focusin", { bubbles: true }));
+
+    let activeDescendant = root.getAttribute("aria-activedescendant");
+    expect(activeDescendant).toBeTruthy();
+    expect(root.querySelector(`#${activeDescendant}`)).not.toBeNull();
+
+    root.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+
+    activeDescendant = root.getAttribute("aria-activedescendant");
+    expect(activeDescendant).toBeTruthy();
+    expect(root.querySelector(`#${activeDescendant}`)).not.toBeNull();
+
+    root.matches = origMatches;
+  });
 });
 
 // =============================================================================
@@ -2722,7 +2757,10 @@ describe("integration — baseline a11y click vs keyboard scroll", () => {
   };
 
   const getFocusedIndex = (root: HTMLElement): number => {
-    const attr = root.getAttribute("aria-activedescendant");
+    const owner = root.getAttribute("role") === "grid"
+      ? root
+      : root.querySelector(".vlist-items") as HTMLElement | null;
+    const attr = owner?.getAttribute("aria-activedescendant");
     if (!attr) return -1;
     const match = attr.match(/item-(\d+)$/);
     return match ? parseInt(match[1], 10) : -1;

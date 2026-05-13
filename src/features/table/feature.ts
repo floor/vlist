@@ -184,14 +184,18 @@ export const withTable = <T extends VListItem = VListItem>(
       config.columnBorders && dom.root.classList.add(`${classPrefix}--table-col-borders`);
       // ARIA: promote root to grid so both the header and body rowgroups
       // are contained within the required parent role.
+      if (resolvedConfig.interactive) {
+        dom.root.setAttribute("tabindex", "0");
+        dom.items.removeAttribute("tabindex");
+      }
       dom.root.setAttribute("role", "grid");
       dom.root.setAttribute("aria-colcount", `${config.columns.length}`);
       // aria-rowcount includes the header row (+1); updated in render loop
       // when item count changes. Initial value uses current total.
       let lastAriaRowCount = -1;
 
-      // Move aria-label from items (where dom.ts sets it on listbox) to root
-      const ariaLabel = dom.items.getAttribute("aria-label");
+      // Move aria-label from the listbox owner to the grid root.
+      const ariaLabel = dom.root.getAttribute("aria-label") ?? dom.items.getAttribute("aria-label");
       if (ariaLabel) {
         dom.root.setAttribute("aria-label", ariaLabel);
         dom.items.removeAttribute("aria-label");
@@ -703,6 +707,7 @@ export const withTable = <T extends VListItem = VListItem>(
         // Restore ARIA roles to pre-table state
         dom.root.removeAttribute("role");
         dom.root.removeAttribute("aria-colcount");
+        dom.root.removeAttribute("tabindex");
         dom.viewport.removeAttribute("role");
         dom.viewport.setAttribute("tabindex", "-1");
         dom.content.removeAttribute("role");
@@ -713,6 +718,7 @@ export const withTable = <T extends VListItem = VListItem>(
         }
         dom.root.removeAttribute("aria-rowcount");
         dom.items.setAttribute("role", "listbox");
+        if (resolvedConfig.interactive) dom.items.setAttribute("tabindex", "0");
       });
     },
 

@@ -464,7 +464,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
     // ARIA attributes
     setRowAttrs(element, "row", item.id, index);
-    element.id = `${ariaIdPrefix}-${index}`;
+    element.id = `${ariaIdPrefix}-item-${index}`;
     element.setAttribute("aria-rowindex", String(index + 2)); // +2: header is row 1
 
     setAriaSelected(element, isSelected);

@@ -747,7 +747,6 @@ export const createDOMStructure = (
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
-  if (interactive !== false) root.setAttribute("tabindex", "0");
 
   if (horizontal) {
     root.classList.add(`${classPrefix}--horizontal`);
@@ -784,6 +783,7 @@ export const createDOMStructure = (
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
   items.setAttribute("role", "listbox");
+  if (interactive !== false) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
   if (horizontal) items.setAttribute("aria-orientation", "horizontal");
   items.style.position = "relative";

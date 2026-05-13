@@ -150,6 +150,8 @@ export const withSelection = <T extends VListItem = VListItem>(
     setup(ctx: BuilderContext<T>): void {
       const { dom, emitter, config: resolvedConfig } = ctx;
       const { classPrefix, ariaIdPrefix } = resolvedConfig;
+      const activeOwner = (): HTMLElement =>
+        dom.root.getAttribute("role") === "grid" ? dom.root : dom.items;
 
       // If mode is 'none', register stub methods for backwards compatibility
       if (mode === "none") {
@@ -515,7 +517,8 @@ export const withSelection = <T extends VListItem = VListItem>(
       // Uses :focus-visible to detect keyboard focus — no extra listeners needed.
       const onFocusIn = (): void => {
         if (ctx.state.isDestroyed) return;
-        if (!dom.root.matches(":focus-visible")) return;
+        const owner = activeOwner();
+        if (!owner.matches(":focus-visible") && !dom.root.matches(":focus-visible")) return;
 
         const totalItems = ctx.dataManager.getTotal();
         if (totalItems === 0) return;
@@ -532,7 +535,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         setFocus(idx);
         selectionState.focusVisible = true;
 
-        dom.root.setAttribute(
+        owner.setAttribute(
           "aria-activedescendant",
           `${ariaIdPrefix}-item-${idx}`,
         );
@@ -563,7 +566,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         const prevIdx = selectionState.focusedIndex;
         selectionState.focusVisible = false;
 
-        dom.root.removeAttribute("aria-activedescendant");
+        activeOwner().removeAttribute("aria-activedescendant");
 
         // Remove the focused class from the previously focused item
         if (prevIdx >= 0) {
@@ -594,7 +597,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         setFocus(index);
         selectionState.focusVisible = focusOnClick;
         lastSelectedIndex = index;
-        dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+        activeOwner().setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
       };
 
       // ── Click handler ──
@@ -888,12 +891,12 @@ export const withSelection = <T extends VListItem = VListItem>(
           if (newFocusIndex >= 0) {
             scrollToFocus(newFocusIndex);
 
-            dom.root.setAttribute(
+            activeOwner().setAttribute(
               "aria-activedescendant",
               `${ariaIdPrefix}-item-${newFocusIndex}`,
             );
           } else {
-            dom.root.removeAttribute("aria-activedescendant");
+            activeOwner().removeAttribute("aria-activedescendant");
           }
 
           if (focusOnly) {
@@ -1065,7 +1068,7 @@ export const withSelection = <T extends VListItem = VListItem>(
         setFocus(index);
         selectionState.focusVisible = true;
         scrollToFocus(index);
-        dom.root.setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
+        activeOwner().setAttribute("aria-activedescendant", `${ariaIdPrefix}-item-${index}`);
         ctx.renderIfNeeded();
       });
 

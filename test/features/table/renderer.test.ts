@@ -275,10 +275,10 @@ describe("render", () => {
     expect((rows[0] as HTMLElement).getAttribute("data-id")).toBe("0");
     expect((rows[0] as HTMLElement).getAttribute("data-index")).toBe("0");
     expect((rows[0] as HTMLElement).getAttribute("aria-rowindex")).toBe("2"); // +2 for header
-    expect((rows[0] as HTMLElement).id).toBe("vlist-0");
+    expect((rows[0] as HTMLElement).id).toBe("vlist-item-0");
 
     expect((rows[1] as HTMLElement).getAttribute("aria-rowindex")).toBe("3");
-    expect((rows[1] as HTMLElement).id).toBe("vlist-1");
+    expect((rows[1] as HTMLElement).id).toBe("vlist-item-1");
 
     container.remove();
   });

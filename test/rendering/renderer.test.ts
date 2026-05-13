@@ -495,8 +495,9 @@ describe("createDOMStructure", () => {
     );
 
     expect(root.className).toBe("vlist");
-    expect(root.getAttribute("tabindex")).toBe("0");
+    expect(root.getAttribute("tabindex")).toBeNull();
     expect(items.getAttribute("role")).toBe("listbox");
+    expect(items.getAttribute("tabindex")).toBe("0");
     expect(viewport.className).toBe("vlist-viewport");
     expect(content.className).toBe("vlist-content");
     expect(items.className).toBe("vlist-items");
