@@ -169,7 +169,10 @@ const pressKey = (
 
 /** Extract the focused item index from aria-activedescendant */
 const getFocusedIndex = (root: HTMLElement): number => {
-  const attr = root.getAttribute("aria-activedescendant");
+  const owner = root.getAttribute("role") === "grid"
+    ? root
+    : root.querySelector<HTMLElement>(".vlist-items") ?? root;
+  const attr = owner.getAttribute("aria-activedescendant");
   if (!attr) return -1;
   const match = attr.match(/item-(\d+)$/);
   return match ? parseInt(match[1], 10) : -1;

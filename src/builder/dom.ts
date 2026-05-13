@@ -53,7 +53,6 @@ export const createDOMStructure = (
   const hz = horizontal;
   const root = el(classPrefix);
   if (hz) root.classList.add(`${classPrefix}--horizontal`);
-  if (interactive !== false) root.setAttribute("tabindex", "0");
 
   const viewport = el(
     `${classPrefix}-viewport`,
@@ -73,6 +72,7 @@ export const createDOMStructure = (
     hz ? "position:relative;height:100%" : "position:relative;width:100%",
   );
   items.setAttribute("role", "listbox");
+  if (interactive !== false) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
   if (hz) items.setAttribute("aria-orientation", "horizontal");
 

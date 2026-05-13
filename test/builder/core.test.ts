@@ -1064,6 +1064,7 @@ describe("builder/core — core baseline single-select", () => {
 
     const root = list.element;
     const items = () => root.querySelector("[role='listbox']")!;
+    const activeOwner = () => items();
 
     // Controllable :focus-visible stub (JSDOM doesn't support it)
     let focusVisibleOverride = true;
@@ -1105,7 +1106,7 @@ describe("builder/core — core baseline single-select", () => {
     const ariaSelected = (index: number) =>
       itemEl(index)?.getAttribute("aria-selected");
 
-    return { list, root, focusIn, focusOut, fireKey, clickItem, itemEl, hasClass, ariaSelected, setFocusVisible };
+    return { list, root, activeOwner, focusIn, focusOut, fireKey, clickItem, itemEl, hasClass, ariaSelected, setFocusVisible };
   };
 
   // ── Smoke / no-throw ─────────────────────────────────────────────
@@ -1128,25 +1129,25 @@ describe("builder/core — core baseline single-select", () => {
   // ── ARIA activedescendant ────────────────────────────────────────
 
   it("should set aria-activedescendant on focusin with focus-visible", () => {
-    const { list, root, focusIn } = setup();
+    const { list, activeOwner, focusIn } = setup();
 
     focusIn();
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     list.destroy();
   });
 
   it("should clear aria-activedescendant on focusout to external target", () => {
-    const { list, root, focusIn, focusOut } = setup();
+    const { list, activeOwner, focusIn, focusOut } = setup();
 
     focusIn();
-    expect(root.getAttribute("aria-activedescendant")).toBeTruthy();
+    expect(activeOwner().getAttribute("aria-activedescendant")).toBeTruthy();
 
     const external = document.createElement("button");
     document.body.appendChild(external);
     focusOut(external);
 
-    expect(root.getAttribute("aria-activedescendant")).toBeNull();
+    expect(activeOwner().getAttribute("aria-activedescendant")).toBeNull();
 
     list.destroy();
   });
@@ -1154,22 +1155,22 @@ describe("builder/core — core baseline single-select", () => {
   // ── Arrow keys move focus only (no selection) ────────────────────
 
   it("should navigate with ArrowDown/ArrowUp/Home/End after focus", () => {
-    const { list, root, focusIn, fireKey } = setup();
+    const { list, activeOwner, focusIn, fireKey } = setup();
 
     focusIn();
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     fireKey("ArrowDown");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-1$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-1$/);
 
     fireKey("ArrowUp");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     fireKey("Home");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     fireKey("End");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-19$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-19$/);
 
     list.destroy();
   });
@@ -1195,25 +1196,25 @@ describe("builder/core — core baseline single-select", () => {
   // ── No wrapping ──────────────────────────────────────────────────
 
   it("should not wrap ArrowUp past first item", () => {
-    const { list, root, focusIn, fireKey } = setup();
+    const { list, activeOwner, focusIn, fireKey } = setup();
 
     focusIn(); // focus item 0
     fireKey("ArrowUp"); // should stay at 0
 
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     list.destroy();
   });
 
   it("should not wrap ArrowDown past last item", () => {
-    const { list, root, focusIn, fireKey } = setup(5);
+    const { list, activeOwner, focusIn, fireKey } = setup(5);
 
     focusIn();
     fireKey("End"); // focus item 4
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-4$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-4$/);
 
     fireKey("ArrowDown"); // should stay at 4
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-4$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-4$/);
 
     list.destroy();
   });
@@ -1395,16 +1396,16 @@ describe("builder/core — core baseline single-select", () => {
   // ── PageUp / PageDown ────────────────────────────────────────────
 
   it("should move focus by page on PageDown/PageUp", () => {
-    const { list, root, focusIn, fireKey } = setup(100);
+    const { list, activeOwner, focusIn, fireKey } = setup(100);
 
     focusIn(); // focus item 0
 
     // Container 600px / item 40px = 15 items per page
     fireKey("PageDown");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-15$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-15$/);
 
     fireKey("PageUp");
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-0$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-0$/);
 
     list.destroy();
   });
@@ -1412,7 +1413,7 @@ describe("builder/core — core baseline single-select", () => {
   // ── Focusout preserves state for re-focus ────────────────────────
 
   it("should restore focus position on re-focus after blur", () => {
-    const { list, root, focusIn, focusOut, fireKey } = setup();
+    const { list, activeOwner, focusIn, focusOut, fireKey } = setup();
 
     focusIn();
     fireKey("ArrowDown");
@@ -1421,11 +1422,11 @@ describe("builder/core — core baseline single-select", () => {
     const external = document.createElement("button");
     document.body.appendChild(external);
     focusOut(external);
-    expect(root.getAttribute("aria-activedescendant")).toBeNull();
+    expect(activeOwner().getAttribute("aria-activedescendant")).toBeNull();
 
     // Re-focus — should resume at item 2
     focusIn();
-    expect(root.getAttribute("aria-activedescendant")).toMatch(/item-2$/);
+    expect(activeOwner().getAttribute("aria-activedescendant")).toMatch(/item-2$/);
 
     list.destroy();
   });

@@ -47,8 +47,11 @@ export const setupBaselineA11y = <T extends VListItem>(
 
   methods.set("_getFocusedIndex", (): number => fv ? $.fi : -1);
 
+  const activeOwner = (): HTMLElement =>
+    dom.root.getAttribute("role") === "grid" ? dom.root : dom.items;
+
   const commit = (idx: number, scroll = true): void => {
-    dom.root.setAttribute("aria-activedescendant", `${ap}-item-${idx}`);
+    activeOwner().setAttribute("aria-activedescendant", `${ap}-item-${idx}`);
 
     if (scroll) {
       const siv = methods.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
@@ -104,7 +107,8 @@ export const setupBaselineA11y = <T extends VListItem>(
 
   const onFocusIn = (): void => {
     if ($.id) return;
-    if (!dom.root.matches(":focus-visible")) return;
+    const owner = activeOwner();
+    if (!owner.matches(":focus-visible") && !dom.root.matches(":focus-visible")) return;
     const t = nTotal();
     if (t === 0) return;
     let tgt = $.fi >= 0 ? Math.min($.fi, t - 1) : 0;
@@ -121,7 +125,7 @@ export const setupBaselineA11y = <T extends VListItem>(
     if ($.fi >= 0) {
       rendered.get($.fi)?.classList.remove(focusedClass);
     }
-    dom.root.removeAttribute("aria-activedescendant");
+    activeOwner().removeAttribute("aria-activedescendant");
   };
   dom.root.addEventListener("focusout", onFocusOut);
 
@@ -198,7 +202,7 @@ export const setupBaselineA11y = <T extends VListItem>(
     const item = ($.dm?.getItem(idx) ?? $.it[idx]) as T | undefined;
     if (!item || (item as Record<string, unknown>).__groupHeader) return;
     fv = false;
-    dom.root.focus({ preventScroll: true });
+    activeOwner().focus({ preventScroll: true });
     select(idx, false);
   });
 
