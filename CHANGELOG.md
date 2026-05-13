@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-05-13
+
+### Added
+
+- **table**: Keyboard support for header sort and resize — header cells are navigable with roving tabindex, Enter/Space triggers sort, Ctrl+Arrow resizes columns, Home/End jumps to first/last header, ArrowDown returns focus to grid body.
+
+### Fixed
+
+- **a11y**: Downgrade ARIA roles when `interactive: false` — use `role="list"` / `role="listitem"` instead of `role="listbox"` / `role="option"` so screen readers don't announce items as selectable options in display-only lists. `aria-setsize` and `aria-posinset` are preserved for positional context.
+
 ## [1.7.9] - 2026-05-13
 
 ### Fixed
@@ -270,7 +280,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v1.7.9...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/floor/vlist/compare/v1.7.9...v1.8.0
 [1.7.9]: https://github.com/floor/vlist/compare/v1.7.8...v1.7.9
 [1.7.8]: https://github.com/floor/vlist/compare/v1.7.7...v1.7.8
 [1.7.7]: https://github.com/floor/vlist/compare/v1.7.6...v1.7.7
