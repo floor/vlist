@@ -470,7 +470,7 @@ describe("builder core", () => {
     list = null;
   });
 
-  it("should set ARIA attributes on items container and tabindex on root", () => {
+  it("should set ARIA attributes and tabindex on items container", () => {
     list = vlist<TestItem>({
       container,
       item: { height: 40, template },
@@ -482,7 +482,8 @@ describe("builder core", () => {
     expect(items).not.toBeNull();
     expect(items!.getAttribute("role")).toBe("listbox");
     expect(items!.getAttribute("aria-label")).toBe("Test list");
-    expect(list.element.getAttribute("tabindex")).toBe("0");
+    expect(items!.getAttribute("tabindex")).toBe("0");
+    expect(list.element.getAttribute("tabindex")).toBeNull();
   });
 
   it("should set ARIA attributes on rendered items", () => {
@@ -5760,7 +5761,9 @@ describe("withSelection plugin keyboard navigation", () => {
 
     // aria-activedescendant should point to last item (index 19)
     // Note: The last item may not be rendered due to virtual scrolling
-    const activeDescendant = list.element.getAttribute("aria-activedescendant");
+    const activeDescendant = list.element
+      .querySelector(".vlist-items")!
+      .getAttribute("aria-activedescendant");
     expect(activeDescendant).toContain("item-19");
   });
 
@@ -5885,7 +5888,9 @@ describe("withSelection plugin keyboard navigation", () => {
     }
 
     // aria-activedescendant should be set
-    const activeDescendant = list.element.getAttribute("aria-activedescendant");
+    const activeDescendant = list.element
+      .querySelector(".vlist-items")!
+      .getAttribute("aria-activedescendant");
     expect(activeDescendant).toContain("item-3");
   });
 

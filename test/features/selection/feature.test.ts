@@ -971,7 +971,7 @@ describe("withSelection — focusin handler", () => {
     const focusEvent = new (dom.window as any).FocusEvent("focusin", { bubbles: true });
     ctx.dom.root.dispatchEvent(focusEvent);
 
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
     // scrollToFocus uses scroll-if-needed: item 0 at scroll position 0 is
     // already visible, so no scroll is performed. We only assert that the
     // focus class update happened.
@@ -1022,7 +1022,7 @@ describe("withSelection — focusin handler", () => {
     const focusEvent = new (dom.window as any).FocusEvent("focusin", { bubbles: true });
     ctx.dom.root.dispatchEvent(focusEvent);
 
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBeNull();
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBeNull();
   });
 });
 
@@ -1045,7 +1045,7 @@ describe("withSelection — focusout handler", () => {
       new (dom.window as any).FocusEvent("focusin", { bubbles: true }),
     );
 
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
 
     // Now blur — relatedTarget outside the root
     const outsideElement = document.createElement("button");
@@ -1059,7 +1059,7 @@ describe("withSelection — focusout handler", () => {
       }),
     );
 
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBeNull();
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBeNull();
     expect(updateClassesSpy).toHaveBeenCalled();
 
     outsideElement.remove();
@@ -1093,7 +1093,7 @@ describe("withSelection — focusout handler", () => {
     );
 
     // Should still have aria-activedescendant since focus stayed inside
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
   });
 
   it("should not throw when destroyed", () => {
@@ -1130,7 +1130,7 @@ describe("withSelection — keyboard edge cases", () => {
     arrowDown.preventDefault = mock(() => {});
     ctx.keydownHandlers[0]!(arrowDown);
 
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
 
     // ArrowUp at index 0 with wrap=false — focus stays at 0
     const arrowUp = new (dom.window as any).KeyboardEvent("keydown", {
@@ -1141,7 +1141,7 @@ describe("withSelection — keyboard edge cases", () => {
     ctx.keydownHandlers[0]!(arrowUp);
 
     // Focus clamped at 0, aria-activedescendant unchanged
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
   });
 
   it("should not scroll when totalItems is 0", () => {
@@ -1677,7 +1677,7 @@ describe("withSelection — group header skipping", () => {
   it("focusin should skip header at index 0 and land on index 1", () => {
     const { ctx, focusIn } = setupGrouped();
     focusIn();
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
   });
 
   // ── ArrowDown ────────────────────────────────────────────────
@@ -1686,10 +1686,10 @@ describe("withSelection — group header skipping", () => {
     const { ctx, focusIn, fireKey } = setupGrouped();
     focusIn(); // → index 1
     fireKey("ArrowDown"); // → index 2
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
 
     fireKey("ArrowDown"); // would land on 3 (header) → skip to 4
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
   });
 
   // ── ArrowUp ──────────────────────────────────────────────────
@@ -1700,7 +1700,7 @@ describe("withSelection — group header skipping", () => {
     fireKey("ArrowDown"); // → 2
     fireKey("ArrowDown"); // → 4 (skipped 3)
     fireKey("ArrowUp"); // would land on 3 (header) → skip to 2
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
   });
 
   // ── Home / End ───────────────────────────────────────────────
@@ -1710,14 +1710,14 @@ describe("withSelection — group header skipping", () => {
     focusIn(); // → 1
     fireKey("ArrowDown"); // → 2
     fireKey("Home"); // would land on 0 (header) → skip to 1
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
   });
 
   it("End should land on last non-header item", () => {
     const { ctx, focusIn, fireKey } = setupGrouped();
     focusIn(); // → 1
     fireKey("End"); // index 7 (not a header)
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-7");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-7");
   });
 
   // ── PageDown / PageUp ────────────────────────────────────────
@@ -1730,7 +1730,7 @@ describe("withSelection — group header skipping", () => {
     ctx.state.viewportState.containerSize = 150; // pageSize = 3
     focusIn(); // → 1
     fireKey("PageDown"); // 1+3=4 → not a header → lands on 4
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-4");
   });
 
   // ── Click ────────────────────────────────────────────────────
@@ -1854,7 +1854,7 @@ describe("withSelection — group header skipping", () => {
     ctx.dom.root.matches = orig;
 
     // Should land on index 0 (no skipping)
-    expect(ctx.dom.root.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    expect(ctx.dom.items.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
   });
 
   // ── followFocus with headers ─────────────────────────────────

@@ -98,13 +98,14 @@ describe("createDOMStructure", () => {
     expect(items.className).toBe("my-list-items");
   });
 
-  it("should set listbox role on items and tabindex on root", () => {
+  it("should set listbox role and tabindex on items", () => {
     const container = document.createElement("div");
     const { root, items } = createDOMStructure(container, "vlist");
 
     expect(root.getAttribute("role")).toBeNull();
-    expect(root.getAttribute("tabindex")).toBe("0");
+    expect(root.getAttribute("tabindex")).toBeNull();
     expect(items.getAttribute("role")).toBe("listbox");
+    expect(items.getAttribute("tabindex")).toBe("0");
   });
 
   it("should add aria-label when provided", () => {
