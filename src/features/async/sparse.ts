@@ -103,8 +103,11 @@ export interface SparseStorage<T extends VListItem = VListItem> {
   /** Get chunk index for item index */
   getChunkIndex: (itemIndex: number) => number;
 
-  /** Check if chunk is loaded */
+  /** Check if chunk is loaded (has any items) */
   isChunkLoaded: (chunkIndex: number) => boolean;
+
+  /** Check if chunk has all expected items (count matches expected for total) */
+  isChunkFullyLoaded: (chunkIndex: number) => boolean;
 
   /** Mark chunk as accessed (for LRU) */
   touchChunk: (chunkIndex: number) => void;
@@ -448,6 +451,14 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     return chunks.has(chunkIndex);
   };
 
+  const isChunkFullyLoaded = (chunkIndex: number): boolean => {
+    const chunk = chunks.get(chunkIndex);
+    if (!chunk) return false;
+    const chunkStart = chunkIndex * chunkSize;
+    const expectedCount = Math.min(chunkSize, totalItems - chunkStart);
+    return chunk.count >= expectedCount;
+  };
+
   const touchChunk = (chunkIndex: number): void => {
     const chunk = chunks.get(chunkIndex);
     if (chunk) {
@@ -606,6 +617,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
 
     getChunkIndex,
     isChunkLoaded,
+    isChunkFullyLoaded,
     touchChunk,
     touchChunksForRange,
 

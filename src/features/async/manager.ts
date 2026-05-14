@@ -461,6 +461,9 @@ export const createDataManager = <T extends VListItem = VListItem>(
     const index = idToIndex.get(id);
     if (index === undefined) return false;
 
+    const totalBefore = storage.getTotal();
+    const cachedBefore = storage.getCachedCount();
+
     // storage.delete now shifts all items after `index` down by 1
     // and decrements totalItems — no manual setTotal needed.
     const deleted = storage.delete(index);
@@ -471,7 +474,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
     rebuildIdIndex();
 
     // Stale range keys in activeLoads may now refer to wrong offsets.
+    const abortedCount = activeLoads.size;
     abortAndClearLoads();
+
+    console.log(`[DM.removeItem] id=${id}, index=${index}, total: ${totalBefore}→${storage.getTotal()}, cached: ${cachedBefore}→${storage.getCachedCount()}, aborted ${abortedCount} loads`);
 
     notifyStateChange();
     return true;
@@ -515,11 +521,17 @@ export const createDataManager = <T extends VListItem = VListItem>(
       const chunkEnd = chunkStart + chunkSize - 1;
       const key = getRangeKey(chunkStart, chunkEnd);
 
-      if (storage.isChunkLoaded(chunkIdx)) continue;
+      const chunkFull = storage.isChunkFullyLoaded(chunkIdx);
+      if (chunkFull) {
+        console.log(`[DM.loadRange] chunk ${chunkIdx} (${chunkStart}-${chunkEnd}) SKIPPED (fully loaded)`);
+        continue;
+      }
       const active = activeLoads.get(key);
       if (active) {
+        console.log(`[DM.loadRange] chunk ${chunkIdx} (${chunkStart}-${chunkEnd}) already loading`);
         loadPromises.push(active[0]);
       } else {
+        console.log(`[DM.loadRange] chunk ${chunkIdx} (${chunkStart}-${chunkEnd}) WILL LOAD`);
         chunksToLoad.push({ start: chunkStart, end: chunkEnd });
       }
     }
@@ -598,7 +610,9 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const ensureRange = async (start: number, end: number): Promise<void> => {
     // Check if range is already fully loaded
-    if (storage.isRangeLoaded(start, end)) {
+    const rangeLoaded = storage.isRangeLoaded(start, end);
+    console.log(`[DM.ensureRange] range=${start}-${end}, isRangeLoaded=${rangeLoaded}`);
+    if (rangeLoaded) {
       return;
     }
 

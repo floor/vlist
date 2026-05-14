@@ -169,13 +169,82 @@ export const createApi = <T extends VListItem = VListItem>(
   // deletion loop completes.
   let ensureRangePending = false;
 
+  // Pending removal animation — fast-forwarded when a new removal starts
+  let removePending: (() => void) | null = null;
+
   const removeItem = (id: string | number): boolean => {
+    // Fast-forward any in-progress removal animation
+    if (removePending) {
+      removePending();
+    }
+
     // Capture focused item index before removal for focus recovery (#13d)
     const active = typeof document !== "undefined" ? document.activeElement : null;
     const focIdx = active && dom.items.contains(active)
       ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
       : -1;
 
+    // Resolve index and element BEFORE removal (sizeCache is still intact)
+    const index = ctx.dataManager.getIndexById(id);
+    const removedEl = index >= 0 ? rendered.get(index) : undefined;
+    const itemSize = index >= 0 ? $.hc.getSize(index) : 0;
+
+    // Fast path: item not rendered (off-screen) — immediate removal
+    // ctx.dataManager.removeItem triggers syncAfterChange (sizeCache rebuild + forceRender)
+    if (!removedEl || index < 0) {
+      const result = ctx.dataManager.removeItem(id);
+      if (!result) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`[vlist] removeItem() could not find item with id "${id}".`);
+        }
+        return false;
+      }
+
+      emitter.emit("data:change", { type: "remove", id });
+
+      if (!ensureRangePending) {
+        const dm = ctx.dataManager as any;
+        if (typeof dm.ensureRange === "function") {
+          ensureRangePending = true;
+          queueMicrotask(() => {
+            ensureRangePending = false;
+            const t = ctx.dataManager.getTotal();
+            const { start, end } = ctx.state.viewportState.renderRange;
+            if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
+          });
+        }
+      }
+
+      if (focIdx >= 0) {
+        const t = $.vtf();
+        if (t > 0) rendered.get(Math.min(focIdx, t - 1))?.focus();
+      }
+
+      return true;
+    }
+
+    // ── Animated removal (FLIP technique) ──
+    // The data proxy's removeItem triggers syncAfterChange which rebuilds
+    // the sizeCache and calls forceRender. We capture old state, let the
+    // removal reconcile the DOM, then animate from old to new positions.
+    const horizontal = ctx.config.horizontal;
+    const prop = horizontal ? "translateX" : "translateY";
+    const duration = 200;
+    const easing = "cubic-bezier(0.2, 0, 0, 1)";
+
+    // FIRST: clone the element for the exit animation before removal destroys it
+    const exitClone = removedEl.cloneNode(true) as HTMLElement;
+    exitClone.style.pointerEvents = "none";
+    exitClone.style.overflow = "hidden";
+    exitClone.removeAttribute("data-index");
+    exitClone.removeAttribute("data-id");
+    exitClone.removeAttribute("id");
+
+    // LAST: remove item + reconcile DOM
+    // The default data proxy's removeItem calls syncAfterChange (sizeCache
+    // rebuild + forceRender). The async data manager only calls renderIfNeeded
+    // which is a no-op when the scroll position hasn't changed. Explicitly
+    // call forceRender to guarantee the DOM is reconciled before the FLIP.
     const result = ctx.dataManager.removeItem(id);
     if (!result) {
       if (process.env.NODE_ENV !== "production") {
@@ -184,10 +253,10 @@ export const createApi = <T extends VListItem = VListItem>(
       return false;
     }
 
-    emitter.emit("data:change", { type: "remove", id });
     ctx.forceRender();
+    emitter.emit("data:change", { type: "remove", id });
 
-    // Refill gaps via debounced ensureRange (coalesces consecutive deletes)
+    // Schedule async data refill immediately — don't wait for animation
     if (!ensureRangePending) {
       const dm = ctx.dataManager as any;
       if (typeof dm.ensureRange === "function") {
@@ -196,16 +265,72 @@ export const createApi = <T extends VListItem = VListItem>(
           ensureRangePending = false;
           const t = ctx.dataManager.getTotal();
           const { start, end } = ctx.state.viewportState.renderRange;
-          if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
+          console.log(`[removeItem] ensureRange microtask: total=${t}, renderRange=${start}-${end}`);
+          if (t > 0 && end >= start) dm.ensureRange(start, end).catch((e: unknown) => console.error('[removeItem] ensureRange failed:', e));
         });
       }
     }
 
-    // Focus recovery (#13d)
-    if (focIdx >= 0) {
-      const t = $.vtf();
-      if (t > 0) rendered.get(Math.min(focIdx, t - 1))?.focus();
+    // Insert exit clone at the removed item's position
+    dom.items.appendChild(exitClone);
+
+    // INVERT: push shifted items back to their old positions (no transition)
+    // Items at new data-index >= removedIndex were one slot lower before removal.
+    // Their old offset = new offset + removedItemSize.
+    const children = dom.items.children;
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i] as HTMLElement;
+      if (el === exitClone) continue;
+      const idx = parseInt(el.dataset?.index ?? "-1", 10);
+      if (idx < index || idx < 0) continue;
+      const newOffset = $.hc.getOffset(idx);
+      el.style.transition = "none";
+      el.style.transform = `${prop}(${Math.round(newOffset + itemSize)}px)`;
     }
+
+    // Force reflow so the browser registers the inverted positions
+    void dom.items.offsetHeight;
+
+    // PLAY: animate exit clone out + slide items to their final positions
+    exitClone.style.transition = `height ${duration}ms ${easing}, opacity ${duration}ms ${easing}`;
+    exitClone.style.opacity = "0";
+    exitClone.style.height = "0";
+
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i] as HTMLElement;
+      if (el === exitClone) continue;
+      const idx = parseInt(el.dataset?.index ?? "-1", 10);
+      if (idx < index || idx < 0) continue;
+      const finalOffset = $.hc.getOffset(idx);
+      el.style.transition = `transform ${duration}ms ${easing}`;
+      el.style.transform = `${prop}(${Math.round(finalOffset)}px)`;
+    }
+
+    // Finalize after animation completes
+    let settled = false;
+    const finalize = (): void => {
+      if (settled) return;
+      settled = true;
+      removePending = null;
+
+      exitClone.remove();
+
+      // Clean up inline transition overrides
+      const allChildren = dom.items.children;
+      for (let i = 0; i < allChildren.length; i++) {
+        (allChildren[i] as HTMLElement).style.transition = "";
+      }
+
+      // Focus recovery (#13d)
+      if (focIdx >= 0) {
+        const t = $.vtf();
+        if (t > 0) rendered.get(Math.min(focIdx, t - 1))?.focus();
+      }
+    };
+
+    removePending = finalize;
+    exitClone.addEventListener("transitionend", finalize, { once: true });
+    setTimeout(finalize, duration + 50);
 
     return true;
   };
