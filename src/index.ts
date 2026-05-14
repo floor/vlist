@@ -28,6 +28,8 @@ export { withTable } from "./features/table";
 export { withSortable } from "./features/sortable";
 export type { SortableConfig } from "./features/sortable";
 export { withAutoSize } from "./features/autosize";
+export { withTransition } from "./features/transition";
+export type { TransitionConfig } from "./features/transition";
 
 // Utils
 export { createStats } from "./utils/stats";

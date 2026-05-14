@@ -28,10 +28,10 @@ async function build() {
   const wrapperCode = [
     `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
     `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, createStats } from "${entryAbs}";`,
+    `  withAutoSize, withTransition, createStats } from "${entryAbs}";`,
     `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
     `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, createStats };`,
+    `  withAutoSize, withTransition, createStats };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
@@ -145,7 +145,7 @@ async function build() {
   const ALL_FEATURES = [
     "withGrid", "withMasonry", "withGroups", "withAsync", "withSelection",
     "withScale", "withScrollbar", "withPage", "withSnapshots", "withTable",
-    "withSortable", "withAutoSize",
+    "withSortable", "withAutoSize", "withTransition",
   ] as const;
 
   const scenarios = [

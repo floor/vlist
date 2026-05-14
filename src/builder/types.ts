@@ -660,6 +660,7 @@ export interface VList<T extends VListItem = VListItem> {
   appendItems: (items: T[]) => void;
   prependItems: (items: T[]) => void;
   updateItem: (id: string | number, updates: Partial<T>) => void;
+  addItem: (item: T, index?: number) => void;
   removeItem: (id: string | number) => void;
   getItemAt: (index: number) => T | undefined;
   getIndexById: (id: string | number) => number;
