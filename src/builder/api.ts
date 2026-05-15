@@ -205,11 +205,11 @@ export const createApi = <T extends VListItem = VListItem>(
     return true;
   };
 
-  const addItem = (item: T, index?: number): void => {
+  const insertItem = (item: T, index?: number): void => {
     const insertIndex = index ?? 0;
-    ctx.dataManager.addItem(item, insertIndex);
+    ctx.dataManager.insertItem(item, insertIndex);
     ctx.forceRender();
-    emitter.emit("data:change", { type: "add", id: item.id });
+    emitter.emit("data:change", { type: "insert", id: item.id });
   };
 
   const getItemAt = (index: number): T | undefined => {
@@ -398,9 +398,13 @@ export const createApi = <T extends VListItem = VListItem>(
     appendItems: m("appendItems", appendItems),
     prependItems: m("prependItems", prependItems),
     updateItem: m("updateItem", updateItem),
+    insertItem(item: T, index?: number) {
+      const fn = methods.get("insertItem") as ((item: T, index?: number) => void) | undefined;
+      return fn ? fn(item, index) : insertItem(item, index);
+    },
+    /** @deprecated Use `insertItem` instead. */
     addItem(item: T, index?: number) {
-      const fn = methods.get("addItem") as ((item: T, index?: number) => void) | undefined;
-      return fn ? fn(item, index) : addItem(item, index);
+      return api.insertItem(item, index);
     },
     removeItem(id: string | number) {
       const fn = methods.get("removeItem") as ((id: string | number) => boolean) | undefined;
@@ -427,6 +431,7 @@ export const createApi = <T extends VListItem = VListItem>(
       name === "appendItems" ||
       name === "prependItems" ||
       name === "updateItem" ||
+      name === "insertItem" ||
       name === "addItem" ||
       name === "removeItem" ||
       name === "reload" ||

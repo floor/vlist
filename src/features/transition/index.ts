@@ -6,4 +6,4 @@
  */
 
 export { withTransition } from "./feature";
-export type { TransitionConfig } from "./feature";
+export type { TransitionConfig, TransitionTiming } from "./feature";

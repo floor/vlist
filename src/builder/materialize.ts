@@ -683,7 +683,7 @@ export const createDefaultDataProxy = <T extends VListItem = VListItem>(
       }
       return true;
     },
-    addItem: (item: T, index: number) => {
+    insertItem: (item: T, index: number) => {
       $.it.splice(index, 0, item);
       if (idIndex) ensureIndex();
       if ($.ii) syncAfterChange();
