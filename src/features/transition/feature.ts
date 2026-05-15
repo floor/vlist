@@ -216,7 +216,7 @@ export function withTransition<T extends VListItem = VListItem>(
     // PLAY — clone collapses via scaleY, items slide to final positions
     const rt = removeTiming!;
     exitClone.style.transition = rt.tTransformOpacity;
-    exitClone.style.transform = `${prop}(${Math.round(originalOffset - scrollDelta)}px) scaleY(0)`;
+    exitClone.style.transform = `${prop}(${Math.round(originalOffset)}px) scaleY(0)`;
     exitClone.style.opacity = "0";
 
     for (let i = 0; i < affected.length; i++) {
