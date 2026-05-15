@@ -133,7 +133,7 @@ export interface DataManager<T extends VListItem = VListItem> {
   updateItem: (index: number, updates: Partial<T>) => boolean;
 
   /** Insert item at index */
-  addItem: (item: T, index: number) => void;
+  insertItem: (item: T, index: number) => void;
 
   /** Remove item by ID */
   removeItem: (id: string | number) => boolean;
@@ -460,7 +460,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     return true;
   };
 
-  const addItem = (item: T, index: number): void => {
+  const insertItem = (item: T, index: number): void => {
     storage.insert(index, item);
     rebuildIdIndex();
     abortAndClearLoads();
@@ -745,7 +745,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     setTotal,
     setItems,
     updateItem,
-    addItem,
+    insertItem,
     removeItem,
 
     loadRange,
