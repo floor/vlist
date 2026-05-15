@@ -167,6 +167,8 @@ export function withTransition<T extends VListItem = VListItem>(
     exitClone.removeAttribute("data-index");
     exitClone.removeAttribute("data-id");
     exitClone.removeAttribute("id");
+    exitClone.removeAttribute("aria-selected");
+    exitClone.classList.remove(`${cfg.classPrefix}-item--selected`);
 
     // Capture scroll position before removal (for bottom-of-list compensation)
     const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
@@ -274,19 +276,21 @@ export function withTransition<T extends VListItem = VListItem>(
     emitter.emit("data:change", { type: "insert", id: item.id });
 
     const newEl = getElement(insertIndex);
-    if (!newEl) return;
-
-    const newOffset = sc.getOffset(insertIndex);
-
-    // INVERT — collapse new element via scaleY(0), push shifted items to old positions
-    newEl.style.transition = "none";
-    newEl.style.transformOrigin = "top center";
-    newEl.style.transform = `${prop}(${Math.round(newOffset)}px) scaleY(0)`;
-    newEl.style.opacity = "0";
 
     // Collect shifted items after DOM reconciliation
     const postAffected = collectAffected(dom.items, newEl, (i) => i > insertIndex);
 
+    if (newEl) {
+      const newOffset = sc.getOffset(insertIndex);
+
+      // INVERT — collapse new element via scaleY(0)
+      newEl.style.transition = "none";
+      newEl.style.transformOrigin = "top center";
+      newEl.style.transform = `${prop}(${Math.round(newOffset)}px) scaleY(0)`;
+      newEl.style.opacity = "0";
+    }
+
+    // INVERT — push shifted items to old positions
     for (let i = 0; i < postAffected.length; i++) {
       const { el, idx } = postAffected[i]!;
       const oldOffset = oldOffsets.get(idx - 1);
@@ -296,13 +300,19 @@ export function withTransition<T extends VListItem = VListItem>(
       }
     }
 
+    if (postAffected.length === 0 && !newEl) return;
+
     void dom.items.offsetHeight;
 
     // PLAY — expand new element via scaleY(1), slide shifted items to final positions
     const at = insertTiming!;
-    newEl.style.transition = at.tTransformOpacity;
-    newEl.style.transform = `${prop}(${Math.round(newOffset)}px) scaleY(1)`;
-    newEl.style.opacity = "1";
+
+    if (newEl) {
+      const newOffset = sc.getOffset(insertIndex);
+      newEl.style.transition = at.tTransformOpacity;
+      newEl.style.transform = `${prop}(${Math.round(newOffset)}px) scaleY(1)`;
+      newEl.style.opacity = "1";
+    }
 
     for (let i = 0; i < postAffected.length; i++) {
       const { el, idx } = postAffected[i]!;
@@ -315,19 +325,24 @@ export function withTransition<T extends VListItem = VListItem>(
       if (settled) return;
       settled = true;
       addPending = null;
-      newEl.style.transition = "";
-      newEl.style.transformOrigin = "";
-      newEl.style.transform = `${prop}(${Math.round(newOffset)}px)`;
-      newEl.style.opacity = "";
+      if (newEl) {
+        newEl.style.transition = "";
+        newEl.style.transformOrigin = "";
+        newEl.style.transform = `${prop}(${Math.round(sc.getOffset(insertIndex))}px)`;
+        newEl.style.opacity = "";
+      }
       cleanTransitions(dom.items);
     };
 
+    const animEl = newEl ?? postAffected[0]?.el;
     addPending = finalize;
-    newEl.addEventListener(
-      "transitionend",
-      (e: TransitionEvent) => { if (e.target === newEl) finalize(); },
-      { once: true },
-    );
+    if (animEl) {
+      animEl.addEventListener(
+        "transitionend",
+        (e: TransitionEvent) => { if (e.target === animEl) finalize(); },
+        { once: true },
+      );
+    }
     setTimeout(finalize, at.duration + 50);
   };
 
