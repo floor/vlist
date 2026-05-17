@@ -79,6 +79,7 @@ export function withTransition<T extends VListItem = VListItem>(
   let toLayout: ((dataIndex: number) => number) | null = null;
   let baseInsertItem: ((item: T, index?: number) => void) | null = null;
   let baseRemoveItem: ((id: string | number) => boolean) | null = null;
+  let setupDataManager: unknown = null;
 
   const scheduleEnsureRange = (): void => {
     if (ensureRangePending) return;
@@ -99,6 +100,8 @@ export function withTransition<T extends VListItem = VListItem>(
   /** Convert data index to layout index (accounts for group headers). */
   const dataToLayout = (dataIndex: number): number =>
     toLayout ? toLayout(dataIndex) : dataIndex;
+
+  const isBaseStale = (): boolean => ctx.dataManager !== setupDataManager;
 
   // ── Animated removeItem ──────────────────────────────────────────
 
@@ -123,7 +126,8 @@ export function withTransition<T extends VListItem = VListItem>(
 
     // Off-screen — immediate removal, no animation
     if (!removedEl || layoutIndex < 0) {
-      const result = baseRemoveItem ? baseRemoveItem(id) : ctx.dataManager.removeItem(id);
+      const stale = isBaseStale();
+      const result = (!stale && baseRemoveItem) ? baseRemoveItem(id) : ctx.dataManager.removeItem(id);
       if (!result) {
         if (process.env.NODE_ENV !== "production") {
           console.warn(
@@ -158,7 +162,8 @@ export function withTransition<T extends VListItem = VListItem>(
     const oldScroll = dom.viewport[scrollProp];
 
     // LAST — remove data + reconcile DOM
-    const result = baseRemoveItem ? baseRemoveItem(id) : ctx.dataManager.removeItem(id);
+    const stale = isBaseStale();
+    const result = (!stale && baseRemoveItem) ? baseRemoveItem(id) : ctx.dataManager.removeItem(id);
     if (!result) {
       if (process.env.NODE_ENV !== "production") {
         console.warn(
@@ -259,7 +264,7 @@ export function withTransition<T extends VListItem = VListItem>(
     const wasAtEnd = oldScroll >= oldMaxScroll - 1;
 
     // INSERT — mutate data + reconcile DOM
-    if (baseInsertItem) {
+    if (!isBaseStale() && baseInsertItem) {
       baseInsertItem(item, insertDataIndex);
     } else {
       ctx.dataManager.insertItem(item, insertDataIndex);
@@ -338,6 +343,7 @@ export function withTransition<T extends VListItem = VListItem>(
     setup(context: BuilderContext<T>): void {
       ctx = context;
       origin = ctx.config.reverse ? "bottom center" : "top center";
+      setupDataManager = ctx.dataManager;
       toLayout = (ctx.methods.get("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       baseInsertItem = (ctx.methods.get("insertItem") as ((item: T, index?: number) => void)) ?? null;
       baseRemoveItem = (ctx.methods.get("removeItem") as ((id: string | number) => boolean)) ?? null;

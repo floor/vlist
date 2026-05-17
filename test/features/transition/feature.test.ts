@@ -1161,6 +1161,77 @@ describe("withTransition — Groups integration", () => {
     allAnimations.length = 0;
   });
 
+  it("bypasses stale base methods when data manager is replaced (async groups)", async () => {
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 5);
+
+    const staleRemove = mock((_id: string | number): boolean => false);
+    ctx.methods.set("removeItem", staleRemove);
+
+    const feature = withTransition();
+    feature.setup!(ctx);
+
+    // Simulate async groups replacing the data manager after setup
+    const newDataManager = {
+      ...ctx.dataManager,
+      removeItem: (id: string | number): boolean => {
+        const index = testItems.findIndex((item) => item.id === id);
+        if (index < 0) return false;
+        testItems.splice(index, 1);
+        return true;
+      },
+      getIndexById: ctx.dataManager.getIndexById,
+      getTotal: () => testItems.length,
+    };
+    (ctx as any).dataManager = newDataManager;
+
+    allAnimations.length = 0;
+    const removeFn = ctx.methods.get("removeItem") as (
+      id: string | number,
+    ) => boolean;
+    const result = removeFn(2);
+
+    expect(result).toBe(true);
+    expect(staleRemove).not.toHaveBeenCalled();
+    expect(allAnimations.length).toBeGreaterThan(0);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("bypasses stale base insertItem when data manager is replaced", async () => {
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 5);
+
+    const staleInsert = mock((_item: TestItem, _index?: number): void => {});
+    ctx.methods.set("insertItem", staleInsert);
+
+    const feature = withTransition();
+    feature.setup!(ctx);
+
+    // Simulate async groups replacing the data manager
+    const newDataManager = {
+      ...ctx.dataManager,
+      insertItem: (item: TestItem, index: number): void => {
+        testItems.splice(index, 0, item);
+      },
+    };
+    (ctx as any).dataManager = newDataManager;
+
+    allAnimations.length = 0;
+    const insertFn = ctx.methods.get("insertItem") as (
+      item: TestItem,
+      index?: number,
+    ) => void;
+    insertFn({ id: 950, name: "Async Insert" }, 0);
+
+    expect(staleInsert).not.toHaveBeenCalled();
+    expect(testItems[0]!.id).toBe(950);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
   it("chains through baseRemoveItem from groups feature", async () => {
     const { ctx, testDom, testItems } = createMockContext();
     populateDOM(testDom, testItems, 50, 0, 5);
