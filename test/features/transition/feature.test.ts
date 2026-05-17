@@ -238,8 +238,14 @@ function createMockContext(
         testItems.splice(index, 0, item);
       },
       removeItem: (id: string | number) => {
-        const index = testItems.findIndex((item) => item.id === id);
-        if (index < 0) return false;
+        let index: number;
+        if (typeof id === "number") {
+          const byId = testItems.findIndex((item) => item.id === id);
+          index = byId >= 0 ? byId : id;
+        } else {
+          index = testItems.findIndex((item) => String(item.id) === id);
+        }
+        if (index < 0 || index >= testItems.length) return false;
         testItems.splice(index, 1);
         return true;
       },
@@ -1125,6 +1131,36 @@ describe("withTransition — Groups integration", () => {
     allAnimations.length = 0;
   });
 
+  it("preserves transition wrappers when async groups deletes static overrides", async () => {
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 5);
+
+    const staticInsert = (item: TestItem, index?: number): void => {
+      testItems.splice(index ?? 0, 0, item);
+    };
+    const staticRemove = (_id: string | number): boolean => true;
+    ctx.methods.set("insertItem", staticInsert);
+    ctx.methods.set("removeItem", staticRemove);
+
+    const feature = withTransition();
+    feature.setup!(ctx);
+
+    const transitionInsert = ctx.methods.get("insertItem");
+    const transitionRemove = ctx.methods.get("removeItem");
+    expect(transitionInsert).not.toBe(staticInsert);
+    expect(transitionRemove).not.toBe(staticRemove);
+
+    // Simulate what async groups does: only delete if still the static override
+    if (ctx.methods.get("removeItem") === staticRemove) ctx.methods.delete("removeItem");
+    if (ctx.methods.get("insertItem") === staticInsert) ctx.methods.delete("insertItem");
+
+    expect(ctx.methods.get("insertItem")).toBe(transitionInsert);
+    expect(ctx.methods.get("removeItem")).toBe(transitionRemove);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
   it("chains through baseRemoveItem from groups feature", async () => {
     const { ctx, testDom, testItems } = createMockContext();
     populateDOM(testDom, testItems, 50, 0, 5);
@@ -1274,6 +1310,31 @@ describe("withTransition — Edge cases", () => {
     expect(() =>
       insertFn({ id: 1001, name: "Into Empty" }, 0),
     ).not.toThrow();
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("animates removal by numeric index when id doesn't match", async () => {
+    const items: TestItem[] = [
+      { id: 10, name: "Item 10" },
+      { id: 11, name: "Item 11" },
+      { id: 12, name: "Item 12" },
+    ];
+    const { ctx, testDom } = createMockContext({ items });
+    populateDOM(testDom, items, 50, 0, 3);
+
+    const feature = withTransition();
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeFn = ctx.methods.get("removeItem") as (
+      id: string | number,
+    ) => boolean;
+    const result = removeFn(1);
+
+    expect(result).toBe(true);
+    expect(allAnimations.length).toBeGreaterThan(0);
 
     await flushMicrotasks();
     allAnimations.length = 0;
