@@ -251,11 +251,7 @@ function materialize<T extends VListItem = VListItem>(
     if (feature.conflicts) {
       for (const conflict of feature.conflicts) {
         if (featureNames.has(conflict)) {
-          throw new Error(
-            process.env.NODE_ENV === "production"
-              ? "[vlist] conflict"
-              : `[vlist] ${feature.name} and ${conflict} cannot be combined`,
-          );
+          throw new Error(`${feature.name} and ${conflict} cannot be combined`);
         }
       }
     }

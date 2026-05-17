@@ -11,6 +11,23 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-05-17
+
+### Added
+
+- **transition**: New `withTransition()` feature — FLIP-based enter/exit animations for `insertItem`, `removeItem`, and `removeItems`. Removed items collapse via `scaleY(0)` with fade-out while siblings slide up; inserted items expand in while siblings slide down. Supports per-animation timing config, off-screen awareness, scroll clamp compensation, and CSS transition interference suppression.
+- **transition**: Batch `removeItems(ids)` animates all deleted items simultaneously with overlapping FLIP animations — each clone shifts to account for removed siblings above it, and off-screen items below the viewport are pre-captured so they slide into view smoothly.
+- **builder**: `removeItems(ids)` base API — falls back to per-item `removeItem` when transition feature is not active.
+
+### Fixed
+
+- **transition**: Suppress CSS `background-color` transition flash when DOM elements are recycled during `forceRender()` — uses `commitStyles()` pattern (transition:none, reflow, restore) to commit styles instantly.
+- **transition**: Resolve data manager lazily in `scheduleEnsureRange` to avoid stale reference when `withAsync` replaces the data manager after setup.
+- **transition**: Bypass stale base `removeItem`/`insertItem` references when data manager is replaced by `withAsync` or `withGroups`.
+- **groups**: Add `insertAt` to async group bridge, wire `wrappedDataManager.insertItem` — fixes animated insert in grouped async mode.
+- **groups**: Update bridge before async manager in `insertItem` to prevent data/layout index mismatch.
+- **styles**: Suppress focus ring on `.vlist-items` container — focus indication belongs on individual items (`.vlist-item--focused`), not the listbox container.
+
 ## [1.8.3] - 2026-05-13
 
 ### Fixed

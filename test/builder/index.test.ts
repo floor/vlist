@@ -6306,4 +6306,23 @@ describe("API dev warnings and edge cases", () => {
     // Total should be 7
     expect(list.total).toBe(7);
   });
+
+  // ── insertItem debounced ensureRange ───────────────────────────────
+
+  it("should coalesce multiple synchronous insertItem calls via microtask", async () => {
+    list = vlist<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(5),
+    }).build();
+
+    list.insertItem({ id: 100, name: "Item 100" }, 0);
+    list.insertItem({ id: 101, name: "Item 101" }, 0);
+    list.insertItem({ id: 102, name: "Item 102" }, 0);
+
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    expect(list.total).toBe(8);
+  });
+
 });

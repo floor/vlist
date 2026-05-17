@@ -68,6 +68,9 @@ export interface AsyncGroupBridge {
   /** Get the group boundary at a data index */
   getGroupAtDataIndex(dataIndex: number): GroupBoundary;
 
+  /** Insert item at data index — shifts group keys up and rebuilds */
+  insertAt(dataIndex: number, item: VListItem): void;
+
   /** Remove item at data index — shifts group keys and rebuilds */
   removeAt(dataIndex: number): void;
 
@@ -268,6 +271,22 @@ export const createAsyncGroupBridge = (
     return groups[gi]!;
   };
 
+  const insertAt = (dataIndex: number, item: VListItem): void => {
+    const newMap = new Map<number, string>();
+    for (const [idx, key] of groupKeyByIndex) {
+      if (idx < dataIndex) newMap.set(idx, key);
+      else newMap.set(idx + 1, key);
+    }
+    groupKeyByIndex.clear();
+    for (const [idx, key] of newMap) groupKeyByIndex.set(idx, key);
+
+    const key = config.getGroupForIndex(dataIndex, item);
+    groupKeyByIndex.set(dataIndex, key);
+
+    dataTotal++;
+    rebuildGroups();
+  };
+
   const removeAt = (dataIndex: number): void => {
     // Remove the key at dataIndex and shift all subsequent keys down by 1
     const newMap = new Map<number, string>();
@@ -310,6 +329,7 @@ export const createAsyncGroupBridge = (
     getHeaderHeight,
     getGroupAtLayoutIndex,
     getGroupAtDataIndex,
+    insertAt,
     removeAt,
     reset,
   };
