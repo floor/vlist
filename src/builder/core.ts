@@ -247,13 +247,24 @@ function materialize<T extends VListItem = VListItem>(
   );
 
   const featureNames = new Set(sortedFeatures.map((p) => p.name));
+  const skipped = new Set<string>();
   for (const feature of sortedFeatures) {
     if (feature.conflicts) {
       for (const conflict of feature.conflicts) {
         if (featureNames.has(conflict)) {
-          throw new Error(`${feature.name} and ${conflict} cannot be combined`);
+          if (process.env.NODE_ENV !== "production") {
+            throw new Error(`${feature.name} and ${conflict} cannot be combined`);
+          }
+          console.warn(`[vlist] ${feature.name} skipped: conflicts with ${conflict}`);
+          skipped.add(feature.name);
+          break;
         }
       }
+    }
+  }
+  if (skipped.size > 0) {
+    for (let i = sortedFeatures.length - 1; i >= 0; i--) {
+      if (skipped.has(sortedFeatures[i]!.name)) sortedFeatures.splice(i, 1);
     }
   }
 
