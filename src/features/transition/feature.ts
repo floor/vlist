@@ -102,6 +102,26 @@ export function withTransition<T extends VListItem = VListItem>(
   const dataToLayout = (dataIndex: number): number =>
     toLayout ? toLayout(dataIndex) : dataIndex;
 
+  /**
+   * Suppress CSS transitions on item elements after forceRender.
+   * When elements are recycled (data-id changes), CSS transitions on
+   * properties like background-color cause the old styling (e.g. selection
+   * highlight) to fade out on the recycled element — a visual flash.
+   * This commits the post-render styles instantly, then restores transitions.
+   */
+  const commitStyles = (): void => {
+    const { items } = ctx.dom;
+    const children = items.children;
+    for (let i = 0; i < children.length; i++) {
+      (children[i] as HTMLElement).style.transition = "none";
+    }
+    // Force reflow — browser commits all pending style changes with no transition
+    items.offsetHeight;
+    for (let i = 0; i < children.length; i++) {
+      (children[i] as HTMLElement).style.transition = "";
+    }
+  };
+
   const isBaseStale = (): boolean => ctx.dataManager !== setupDataManager;
 
   // ── Animated removeItem ──────────────────────────────────────────
@@ -138,6 +158,7 @@ export function withTransition<T extends VListItem = VListItem>(
         return false;
       }
       ctx.forceRender();
+      commitStyles();
       emitter.emit("data:change", { type: "remove", id });
       scheduleEnsureRange();
       if (focIdx >= 0) {
@@ -174,6 +195,7 @@ export function withTransition<T extends VListItem = VListItem>(
       return false;
     }
     ctx.forceRender();
+    commitStyles();
     emitter.emit("data:change", { type: "remove", id });
     scheduleEnsureRange();
 
@@ -271,6 +293,7 @@ export function withTransition<T extends VListItem = VListItem>(
       ctx.dataManager.insertItem(item, insertDataIndex);
     }
     ctx.forceRender();
+    commitStyles();
     emitter.emit("data:change", { type: "insert", id: item.id });
     scheduleEnsureRange();
 
@@ -282,7 +305,10 @@ export function withTransition<T extends VListItem = VListItem>(
       const maxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
       dom.viewport[scrollProp] = maxScroll;
       scrollDelta = dom.viewport[scrollProp] - oldScroll;
-      if (scrollDelta > 0) ctx.forceRender();
+      if (scrollDelta > 0) {
+        ctx.forceRender();
+        commitStyles();
+      }
     }
 
     const newEl = getElement(postInsertLayoutIndex);
