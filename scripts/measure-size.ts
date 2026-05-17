@@ -29,6 +29,7 @@ const ALL_FEATURES = [
   "withTable",
   "withAutoSize",
   "withSortable",
+  "withTransition",
 ] as const;
 
 type FeatureName = (typeof ALL_FEATURES)[number];
@@ -78,6 +79,7 @@ const FEATURE_MARKERS: Record<FeatureName, readonly string[]> = {
   withTable:     ["aria-colcount", "gridcell"],
   withAutoSize:  ["setMeasuredSize", "isMeasured"],
   withSortable:  ["sort-ghost", "isSorting"],
+  withTransition: ["scaleY"],
 };
 
 // ── Feature scenarios ─────────────────────────────────────────────
@@ -119,6 +121,7 @@ const scenarios: Scenario[] = [
   { name: "withTable",     imports: ["vlist", "withTable"] },
   { name: "withAutoSize",  imports: ["vlist", "withAutoSize"] },
   { name: "withSortable",  imports: ["vlist", "withSortable"] },
+  { name: "withTransition", imports: ["vlist", "withTransition"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────

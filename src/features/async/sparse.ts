@@ -83,6 +83,9 @@ export interface SparseStorage<T extends VListItem = VListItem> {
   /** Set multiple items starting at offset */
   setRange: (offset: number, items: T[]) => void;
 
+  /** Insert item at index, shifting subsequent items up by 1 */
+  insert: (index: number, item: T) => void;
+
   /** Delete item at index */
   delete: (index: number) => boolean;
 
@@ -103,8 +106,11 @@ export interface SparseStorage<T extends VListItem = VListItem> {
   /** Get chunk index for item index */
   getChunkIndex: (itemIndex: number) => number;
 
-  /** Check if chunk is loaded */
+  /** Check if chunk is loaded (has any items) */
   isChunkLoaded: (chunkIndex: number) => boolean;
+
+  /** Check if chunk has all expected items (count matches expected for total) */
+  isChunkFullyLoaded: (chunkIndex: number) => boolean;
 
   /** Mark chunk as accessed (for LRU) */
   touchChunk: (chunkIndex: number) => void;
@@ -280,6 +286,65 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     }
   };
 
+  const insertItem = (index: number, item: T): void => {
+    if (index < 0 || index > totalItems) return;
+
+    // Collect all loaded items at indices >= insertIndex, in order.
+    const insertChunkIdx = getChunkIndex(index);
+    const sortedChunkKeys = Array.from(chunks.keys())
+      .filter(k => k >= insertChunkIdx)
+      .sort((a, b) => a - b);
+
+    const shifted: Array<{ oldIndex: number; item: T }> = [];
+
+    for (const ci of sortedChunkKeys) {
+      const c = chunks.get(ci)!;
+      const base = ci * chunkSize;
+      for (let s = 0; s < chunkSize; s++) {
+        if (c.items[s] === undefined) continue;
+        const itemIndex = base + s;
+        if (itemIndex < index) continue;
+        shifted.push({ oldIndex: itemIndex, item: c.items[s]! });
+      }
+    }
+
+    // 1. Clear items that will shift up
+    for (const { oldIndex } of shifted) {
+      const ci = getChunkIndex(oldIndex);
+      const c = chunks.get(ci);
+      if (!c) continue;
+      const slot = getIndexInChunk(oldIndex);
+      if (c.items[slot] !== undefined) {
+        c.items[slot] = undefined;
+        c.count--;
+        cachedItemCount--;
+        if (c.count === 0) chunks.delete(ci);
+      }
+    }
+
+    // 2. Increase total first (so getChunkIndex works for new positions)
+    totalItems++;
+
+    // 3. Re-insert each shifted item at (oldIndex + 1)
+    for (const { oldIndex, item: shiftedItem } of shifted) {
+      const newIndex = oldIndex + 1;
+      const ci = getChunkIndex(newIndex);
+      const dst = getOrCreateChunk(ci);
+      const slot = getIndexInChunk(newIndex);
+      dst.items[slot] = shiftedItem;
+      dst.count++;
+      cachedItemCount++;
+    }
+
+    // 4. Insert the new item
+    const ci = getChunkIndex(index);
+    const dst = getOrCreateChunk(ci);
+    const slot = getIndexInChunk(index);
+    dst.items[slot] = item;
+    dst.count++;
+    cachedItemCount++;
+  };
+
   const deleteItem = (index: number): boolean => {
     if (index < 0 || index >= totalItems) return false;
 
@@ -448,6 +513,14 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     return chunks.has(chunkIndex);
   };
 
+  const isChunkFullyLoaded = (chunkIndex: number): boolean => {
+    const chunk = chunks.get(chunkIndex);
+    if (!chunk) return false;
+    const chunkStart = chunkIndex * chunkSize;
+    const expectedCount = Math.min(chunkSize, totalItems - chunkStart);
+    return chunk.count >= expectedCount;
+  };
+
   const touchChunk = (chunkIndex: number): void => {
     const chunk = chunks.get(chunkIndex);
     if (chunk) {
@@ -597,6 +670,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
     has,
     set,
     setRange,
+    insert: insertItem,
     delete: deleteItem,
 
     getRange,
@@ -606,6 +680,7 @@ export const createSparseStorage = <T extends VListItem = VListItem>(
 
     getChunkIndex,
     isChunkLoaded,
+    isChunkFullyLoaded,
     touchChunk,
     touchChunksForRange,
 
