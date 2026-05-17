@@ -1411,6 +1411,20 @@ describe("withTransition — Edge cases", () => {
     allAnimations.length = 0;
   });
 
+  it("clamps duration to MAX_DURATION (1000ms)", () => {
+    const feature = withTransition({ duration: 5000 });
+    const { ctx, testDom } = createMockContext();
+    populateDOM(testDom, createTestItems(5), 50, 0, 5);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeFn = ctx.methods.get("removeItem") as (id: string | number) => boolean;
+    removeFn(2);
+
+    expect(allAnimations.length).toBeGreaterThan(0);
+    expect(allAnimations[0]!.options.duration).toBeLessThanOrEqual(1000);
+  });
+
   it("uses safety timeout to finalize animations", async () => {
     const { ctx, testDom, testItems } = createMockContext();
     populateDOM(testDom, testItems, 50, 0, 5);
@@ -1432,6 +1446,305 @@ describe("withTransition — Edge cases", () => {
       "[style*='pointer-events: none']",
     );
     expect(clone).toBeNull();
+    allAnimations.length = 0;
+  });
+});
+
+// =============================================================================
+// Batch removeItems
+// =============================================================================
+
+describe("withTransition — removeItems", () => {
+  it("registers removeItems method during setup", () => {
+    const feature = withTransition();
+    const { ctx } = createMockContext();
+    feature.setup!(ctx);
+    expect(ctx.methods.has("removeItems")).toBe(true);
+  });
+
+  it("does not register removeItems when remove: false", () => {
+    const feature = withTransition({ remove: false });
+    const { ctx } = createMockContext();
+    feature.setup!(ctx);
+    expect(ctx.methods.has("removeItems")).toBe(false);
+  });
+
+  it("returns 0 for empty array", () => {
+    const feature = withTransition();
+    const { ctx, testDom } = createMockContext();
+    populateDOM(testDom, createTestItems(5), 50, 0, 5);
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    expect(removeItemsFn([])).toBe(0);
+  });
+
+  it("delegates to single removeItem for array of length 1", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    const result = removeItemsFn([3]);
+
+    expect(result).toBe(1);
+    expect(allAnimations.length).toBeGreaterThan(0);
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("removes multiple visible items with animations", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems, emitCalls } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    const result = removeItemsFn([2, 5, 8]);
+
+    expect(result).toBe(3);
+    expect(allAnimations.length).toBeGreaterThan(0);
+
+    const dataChangeEvents = emitCalls.filter(e => e.event === "data:change");
+    expect(dataChangeEvents.length).toBe(3);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("creates clone elements for each visible target", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([1, 3, 5]);
+
+    const clones = testDom.items.querySelectorAll("[style*='pointer-events: none']");
+    expect(clones.length).toBe(3);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("strips selection attributes from clones", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+
+    const el = testDom.items.children[2] as HTMLElement;
+    el.setAttribute("aria-selected", "true");
+    el.classList.add("vlist-item--selected");
+
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([2, 4]);
+
+    const clones = testDom.items.querySelectorAll("[style*='pointer-events: none']");
+    for (const clone of clones) {
+      expect(clone.getAttribute("aria-selected")).toBeNull();
+      expect(clone.classList.contains("vlist-item--selected")).toBe(false);
+      expect(clone.getAttribute("data-index")).toBeNull();
+      expect(clone.getAttribute("data-id")).toBeNull();
+    }
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("cleans up clones after animations finish", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([1, 3]);
+
+    expect(testDom.items.querySelectorAll("[style*='pointer-events: none']").length).toBe(2);
+
+    await flushMicrotasks();
+
+    expect(testDom.items.querySelectorAll("[style*='pointer-events: none']").length).toBe(0);
+    allAnimations.length = 0;
+  });
+
+  it("emits remove:end for each removed item after finalize", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems, emitCalls } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([0, 4, 7]);
+
+    await flushMicrotasks();
+
+    const removeEndEvents = emitCalls.filter(e => e.event === "remove:end");
+    expect(removeEndEvents.length).toBe(3);
+    const endIds = removeEndEvents.map(e => (e.payload as any).id);
+    expect(endIds).toContain(0);
+    expect(endIds).toContain(4);
+    expect(endIds).toContain(7);
+    allAnimations.length = 0;
+  });
+
+  it("returns 0 when no items could be removed", () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    const result = removeItemsFn([9999, 8888]);
+
+    expect(result).toBe(0);
+    allAnimations.length = 0;
+  });
+
+  it("handles off-screen-only batch removal without animation", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems, emitCalls } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 5);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    const result = removeItemsFn([10, 15]);
+
+    expect(result).toBe(2);
+    expect(testDom.items.querySelectorAll("[style*='pointer-events: none']").length).toBe(0);
+
+    const removeEndEvents = emitCalls.filter(e => e.event === "remove:end");
+    expect(removeEndEvents.length).toBe(2);
+    allAnimations.length = 0;
+  });
+
+  it("cancels pending remove animation when batch starts", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeFn = ctx.methods.get("removeItem") as (id: string | number) => boolean;
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+
+    removeFn(1);
+    const clonesBefore = testDom.items.querySelectorAll("[style*='pointer-events: none']").length;
+    expect(clonesBefore).toBe(1);
+
+    removeItemsFn([3, 5]);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("captures offsets for items below viewport", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 8);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([0, 1, 2]);
+
+    expect(allAnimations.length).toBeGreaterThan(0);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+
+  it("uses baseRemoveItem when available and not stale", async () => {
+    const baseRemove = mock((_id: string | number): boolean => true);
+    const { ctx, testDom, testItems } = createMockContext();
+    ctx.methods.set("removeItem", baseRemove);
+
+    populateDOM(testDom, testItems, 50, 0, 12);
+
+    const feature = withTransition();
+    feature.setup!(ctx);
+
+    const removeItemsFn = ctx.methods.get("removeItems") as (ids: ReadonlyArray<string | number>) => number;
+    removeItemsFn([2, 4]);
+
+    expect(baseRemove).toHaveBeenCalled();
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+});
+
+// =============================================================================
+// removeItem — focus recovery & scroll clamp
+// =============================================================================
+
+describe("withTransition — removeItem focus & scroll clamp", () => {
+  it("recovers focus after animated removal finishes", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const el = testDom.items.children[5] as HTMLElement;
+    el.setAttribute("tabindex", "0");
+    el.focus();
+
+    allAnimations.length = 0;
+    const removeFn = ctx.methods.get("removeItem") as (id: string | number) => boolean;
+    removeFn(3);
+
+    await flushMicrotasks();
+    allAnimations.length = 0;
+  });
+});
+
+// =============================================================================
+// scheduleEnsureRange
+// =============================================================================
+
+describe("withTransition — ensureRange scheduling", () => {
+  it("schedules ensureRange when data manager supports it", async () => {
+    const ensureRangeMock = mock(() => Promise.resolve());
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    (ctx.dataManager as any).ensureRange = ensureRangeMock;
+    populateDOM(testDom, testItems, 50, 0, 12);
+    feature.setup!(ctx);
+
+    const removeFn = ctx.methods.get("removeItem") as (id: string | number) => boolean;
+    removeFn(3);
+
+    await flushMicrotasks();
+
+    expect(ensureRangeMock).toHaveBeenCalled();
+    allAnimations.length = 0;
+  });
+});
+
+// =============================================================================
+// insertItem — sibling animation
+// =============================================================================
+
+describe("withTransition — insertItem sibling slide", () => {
+  it("animates existing siblings when they shift after insert", async () => {
+    const feature = withTransition();
+    const { ctx, testDom, testItems } = createMockContext();
+    populateDOM(testDom, testItems, 50, 0, 10);
+    feature.setup!(ctx);
+
+    allAnimations.length = 0;
+    const insertFn = ctx.methods.get("insertItem") as (item: TestItem, index?: number) => void;
+    insertFn({ id: 999, name: "New Item" }, 0);
+
+    expect(allAnimations.length).toBeGreaterThan(0);
+
+    await flushMicrotasks();
     allAnimations.length = 0;
   });
 });
