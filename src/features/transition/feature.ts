@@ -44,6 +44,7 @@ interface ResolvedTiming {
 }
 
 const DEFAULT_DURATION = 200;
+const MAX_DURATION = 1000;
 const DEFAULT_EASING = "cubic-bezier(0.2, 0, 0, 1)";
 
 function resolveTiming(
@@ -52,7 +53,7 @@ function resolveTiming(
 ): ResolvedTiming | null {
   if (override === false) return null;
   return {
-    duration: override?.duration ?? base.duration,
+    duration: Math.min(override?.duration ?? base.duration, MAX_DURATION),
     easing: override?.easing ?? base.easing,
   };
 }
