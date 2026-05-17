@@ -132,6 +132,9 @@ export interface DataManager<T extends VListItem = VListItem> {
   /** Update item at index */
   updateItem: (index: number, updates: Partial<T>) => boolean;
 
+  /** Insert item at index */
+  insertItem: (item: T, index: number) => void;
+
   /** Remove item by ID */
   removeItem: (id: string | number) => boolean;
 
@@ -457,6 +460,13 @@ export const createDataManager = <T extends VListItem = VListItem>(
     return true;
   };
 
+  const insertItem = (item: T, index: number): void => {
+    storage.insert(index, item);
+    rebuildIdIndex();
+    abortAndClearLoads();
+    notifyStateChange();
+  };
+
   const removeItem = (id: string | number): boolean => {
     const index = idToIndex.get(id);
     if (index === undefined) return false;
@@ -466,11 +476,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     const deleted = storage.delete(index);
     if (!deleted) return false;
 
-    // Indices changed for every item after the deleted one —
-    // rebuild the full id→index map from storage.
     rebuildIdIndex();
-
-    // Stale range keys in activeLoads may now refer to wrong offsets.
     abortAndClearLoads();
 
     notifyStateChange();
@@ -515,7 +521,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
       const chunkEnd = chunkStart + chunkSize - 1;
       const key = getRangeKey(chunkStart, chunkEnd);
 
-      if (storage.isChunkLoaded(chunkIdx)) continue;
+      const chunkFull = storage.isChunkFullyLoaded(chunkIdx);
+      if (chunkFull) {
+        continue;
+      }
       const active = activeLoads.get(key);
       if (active) {
         loadPromises.push(active[0]);
@@ -598,7 +607,8 @@ export const createDataManager = <T extends VListItem = VListItem>(
 
   const ensureRange = async (start: number, end: number): Promise<void> => {
     // Check if range is already fully loaded
-    if (storage.isRangeLoaded(start, end)) {
+    const rangeLoaded = storage.isRangeLoaded(start, end);
+    if (rangeLoaded) {
       return;
     }
 
@@ -735,6 +745,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     setTotal,
     setItems,
     updateItem,
+    insertItem,
     removeItem,
 
     loadRange,

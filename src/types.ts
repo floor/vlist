@@ -623,7 +623,10 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   "scroll:idle": { scrollPosition: number };
 
   /** Data changed — fired after item removal or other data mutations */
-  "data:change": { type: "remove"; id: string | number } | { type: "update"; id: string | number };
+  "data:change": { type: "insert"; id: string | number } | { type: "add"; id: string | number } | { type: "remove"; id: string | number } | { type: "update"; id: string | number };
+
+  /** Remove animation ended — fired after the exit transition completes */
+  "remove:end": { id: string | number };
 
   /** Sort started — fired when a drag begins */
   "sort:start": { index: number };

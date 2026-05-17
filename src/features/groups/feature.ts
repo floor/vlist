@@ -306,6 +306,8 @@ export const withGroups = <T extends VListItem = VListItem>(
             (b) => { bridge = b; indexMapper = b; },
             (s) => { stickyHeader = s; },
             stickyContainer,
+            staticOverrides.staticInsertItem,
+            staticOverrides.staticRemoveItem,
           );
         } else {
           // Static path was already set up below — nothing to do
@@ -316,7 +318,7 @@ export const withGroups = <T extends VListItem = VListItem>(
       // When items exist, set up the traditional item-array transformation.
       // If async will be detected later, the static path produces an empty
       // layout (0 items) which is harmless — the async microtask overwrites it.
-      setupStaticPath(
+      const staticOverrides = setupStaticPath(
         ctx, config, resolvedConfig, rawConfig, baseSize, stickyEnabled,
         headerTemplate, classPrefix,
         (layout) => { groupLayout = layout; indexMapper = layout; },
@@ -350,7 +352,7 @@ function setupStaticPath<T extends VListItem>(
   setGroupLayout: (layout: GroupLayout) => void,
   setStickyHeader: (s: StickyHeaderInstance) => void,
   stickyContainer?: HTMLElement | null,
-): void {
+): { staticInsertItem: Function; staticRemoveItem: Function } {
   const { dom } = ctx;
   let localStickyHeader: StickyHeaderInstance | null = null;
 
@@ -566,10 +568,21 @@ function setupStaticPath<T extends VListItem>(
     rebuildGroups();
   });
 
-  ctx.methods.set("removeItem", (id: string | number): void => {
-    originalItems = originalItems.filter((item) => item.id !== id);
+  const staticInsertItem = (item: T, index?: number): void => {
+    const idx = index ?? 0;
+    originalItems.splice(idx, 0, item as T);
     rebuildGroups();
-  });
+  };
+  ctx.methods.set("insertItem", staticInsertItem);
+
+  const staticRemoveItem = (id: string | number): boolean => {
+    const before = originalItems.length;
+    originalItems = originalItems.filter((item) => item.id !== id);
+    if (originalItems.length === before) return false;
+    rebuildGroups();
+    return true;
+  };
+  ctx.methods.set("removeItem", staticRemoveItem);
 
   // ── Override items getter to return original items (without headers) ──
   ctx.methods.set("_getItems", () => originalItems as readonly T[]);
@@ -584,6 +597,8 @@ function setupStaticPath<T extends VListItem>(
   ctx.methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
     groupLayout.dataToLayoutIndex(dataIndex),
   );
+
+  return { staticInsertItem, staticRemoveItem };
 }
 
 // =============================================================================
@@ -602,7 +617,9 @@ function setupAsyncPath<T extends VListItem>(
   registerOnItemsLoaded: (cb: (items: T[], offset: number, total: number) => void) => void,
   setBridge: (bridge: AsyncGroupBridge) => void,
   setStickyHeader: (s: StickyHeaderInstance) => void,
-  stickyContainer?: HTMLElement | null,
+  stickyContainer: HTMLElement | null | undefined,
+  staticInsertItem: Function,
+  staticRemoveItem: Function,
 ): void {
   const { dom } = ctx;
 
@@ -678,6 +695,10 @@ function setupAsyncPath<T extends VListItem>(
     reload: () => {
       bridge.reset();
       return asyncDataManager.reload();
+    },
+    insertItem: (item: T, index: number) => {
+      bridge.insertAt(index, item);
+      asyncDataManager.insertItem(item, index);
     },
     removeItem: (id: string | number) => {
       const dataIndex = asyncDataManager.getIndexById(id);
@@ -923,11 +944,14 @@ function setupAsyncPath<T extends VListItem>(
   // In async mode, _getTotal returns the data total (not layout total)
   ctx.methods.set("_getTotal", () => asyncDataManager.getTotal());
 
-  // Clear the static removeItem override — in async mode, the base api.ts
-  // removeItem delegates to ctx.dataManager (= wrappedDataManager) which
-  // handles the bridge correctly. The static override filters empty
-  // originalItems and zeros out the list.
-  ctx.methods.delete("removeItem");
+  // Clear the static insert/remove overrides — in async mode, the base
+  // api.ts delegates to ctx.dataManager (= wrappedDataManager) which
+  // handles the bridge correctly. The static overrides operate on the
+  // empty originalItems array and would corrupt the async data.
+  // Only delete if still the static override — a later feature (e.g.
+  // withTransition) may have wrapped them.
+  if (ctx.methods.get("removeItem") === staticRemoveItem) ctx.methods.delete("removeItem");
+  if (ctx.methods.get("insertItem") === staticInsertItem) ctx.methods.delete("insertItem");
 
   // ── Stripe map for async path ──
   const stripedMode = rawConfig.item?.striped;

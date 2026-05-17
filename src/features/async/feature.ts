@@ -209,7 +209,8 @@ export const withAsync = <T extends VListItem = VListItem>(
         onStateChange: () => {
           if (ctx.state.isInitialized) {
             const newTotal = ctx.getVirtualTotal();
-            if (newTotal !== ctx.sizeCache.getTotal()) {
+            const oldTotal = ctx.sizeCache.getTotal();
+            if (newTotal !== oldTotal) {
               ctx.sizeCache.rebuild(newTotal);
             }
             ctx.updateCompressionMode();

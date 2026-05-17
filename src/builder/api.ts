@@ -163,14 +163,10 @@ export const createApi = <T extends VListItem = VListItem>(
   };
 
   // Debounced ensureRange — coalesces multiple synchronous removeItem calls
-  // into a single async fetch. Without this, deleting 5 items in a loop
-  // fires 5 overlapping ensureRange requests (each clearing the previous
-  // via activeLoads.clear). The microtask fires once after the synchronous
-  // deletion loop completes.
+  // into a single async fetch.
   let ensureRangePending = false;
 
   const removeItem = (id: string | number): boolean => {
-    // Capture focused item index before removal for focus recovery (#13d)
     const active = typeof document !== "undefined" ? document.activeElement : null;
     const focIdx = active && dom.items.contains(active)
       ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
@@ -184,10 +180,9 @@ export const createApi = <T extends VListItem = VListItem>(
       return false;
     }
 
-    emitter.emit("data:change", { type: "remove", id });
     ctx.forceRender();
+    emitter.emit("data:change", { type: "remove", id });
 
-    // Refill gaps via debounced ensureRange (coalesces consecutive deletes)
     if (!ensureRangePending) {
       const dm = ctx.dataManager as any;
       if (typeof dm.ensureRange === "function") {
@@ -201,13 +196,33 @@ export const createApi = <T extends VListItem = VListItem>(
       }
     }
 
-    // Focus recovery (#13d)
     if (focIdx >= 0) {
       const t = $.vtf();
       if (t > 0) rendered.get(Math.min(focIdx, t - 1))?.focus();
     }
 
+    emitter.emit("remove:end", { id });
     return true;
+  };
+
+  const insertItem = (item: T, index?: number): void => {
+    const insertIndex = index ?? 0;
+    ctx.dataManager.insertItem(item, insertIndex);
+    ctx.forceRender();
+    emitter.emit("data:change", { type: "insert", id: item.id });
+
+    if (!ensureRangePending) {
+      const dm = ctx.dataManager as any;
+      if (typeof dm.ensureRange === "function") {
+        ensureRangePending = true;
+        queueMicrotask(() => {
+          ensureRangePending = false;
+          const t = ctx.dataManager.getTotal();
+          const { start, end } = ctx.state.viewportState.renderRange;
+          if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
+        });
+      }
+    }
   };
 
   const getItemAt = (index: number): T | undefined => {
@@ -396,6 +411,14 @@ export const createApi = <T extends VListItem = VListItem>(
     appendItems: m("appendItems", appendItems),
     prependItems: m("prependItems", prependItems),
     updateItem: m("updateItem", updateItem),
+    insertItem(item: T, index?: number) {
+      const fn = methods.get("insertItem") as ((item: T, index?: number) => void) | undefined;
+      return fn ? fn(item, index) : insertItem(item, index);
+    },
+    /** @deprecated Use `insertItem` instead. */
+    addItem(item: T, index?: number) {
+      return api.insertItem(item, index);
+    },
     removeItem(id: string | number) {
       const fn = methods.get("removeItem") as ((id: string | number) => boolean) | undefined;
       return fn ? fn(id) : removeItem(id);
@@ -421,6 +444,8 @@ export const createApi = <T extends VListItem = VListItem>(
       name === "appendItems" ||
       name === "prependItems" ||
       name === "updateItem" ||
+      name === "insertItem" ||
+      name === "addItem" ||
       name === "removeItem" ||
       name === "reload" ||
       name === "scrollToIndex" ||
