@@ -572,9 +572,12 @@ function setupStaticPath<T extends VListItem>(
     rebuildGroups();
   });
 
-  ctx.methods.set("removeItem", (id: string | number): void => {
+  ctx.methods.set("removeItem", (id: string | number): boolean => {
+    const before = originalItems.length;
     originalItems = originalItems.filter((item) => item.id !== id);
+    if (originalItems.length === before) return false;
     rebuildGroups();
+    return true;
   });
 
   // ── Override items getter to return original items (without headers) ──
@@ -929,11 +932,12 @@ function setupAsyncPath<T extends VListItem>(
   // In async mode, _getTotal returns the data total (not layout total)
   ctx.methods.set("_getTotal", () => asyncDataManager.getTotal());
 
-  // Clear the static removeItem override — in async mode, the base api.ts
-  // removeItem delegates to ctx.dataManager (= wrappedDataManager) which
-  // handles the bridge correctly. The static override filters empty
-  // originalItems and zeros out the list.
+  // Clear the static insert/remove overrides — in async mode, the base
+  // api.ts delegates to ctx.dataManager (= wrappedDataManager) which
+  // handles the bridge correctly. The static overrides operate on the
+  // empty originalItems array and would corrupt the async data.
   ctx.methods.delete("removeItem");
+  ctx.methods.delete("insertItem");
 
   // ── Stripe map for async path ──
   const stripedMode = rawConfig.item?.striped;
