@@ -115,8 +115,7 @@ export function withTransition<T extends VListItem = VListItem>(
         ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
         : -1;
 
-    const dataIndex = ctx.dataManager.getIndexById(id);
-    const layoutIndex = dataIndex >= 0 ? dataToLayout(dataIndex) : -1;
+    const layoutIndex = ctx.dataManager.getIndexById(id);
     const removedEl = layoutIndex >= 0 ? getElement(layoutIndex) : null;
     const itemSize = layoutIndex >= 0 ? sc.getSize(layoutIndex) : 0;
     const originalOffset = layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0;
@@ -333,7 +332,7 @@ export function withTransition<T extends VListItem = VListItem>(
 
   return {
     name: "transition",
-    conflicts: ["withGrid", "withTable"] as const,
+    conflicts: ["withGrid", "withTable", "withMasonry"] as const,
     priority: 45,
     setup(context: BuilderContext<T>): void {
       ctx = context;
