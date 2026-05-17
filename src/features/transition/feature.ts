@@ -259,6 +259,192 @@ export function withTransition<T extends VListItem = VListItem>(
     return true;
   };
 
+  // ── Batch animated removeItems ───────────────────────────────────
+
+  const removeItems = (ids: ReadonlyArray<string | number>): number => {
+    if (ids.length === 0) return 0;
+    if (ids.length === 1) return removeItem(ids[0]!) ? 1 : 0;
+
+    if (removePending) removePending();
+    if (addPending) addPending();
+
+    const { dom, sizeCache: sc, config: cfg, emitter } = ctx;
+    const prop = cfg.horizontal ? "translateX" : "translateY";
+
+    const active =
+      typeof document !== "undefined" ? document.activeElement : null;
+    const focIdx =
+      active && dom.items.contains(active)
+        ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
+        : -1;
+
+    // Resolve layout indices and capture elements for each ID.
+    // Sort descending so removals don't shift subsequent indices.
+    const targets: Array<{
+      id: string | number;
+      layoutIndex: number;
+      el: HTMLElement | null;
+      size: number;
+      offset: number;
+    }> = [];
+
+    for (const id of ids) {
+      let layoutIndex = ctx.dataManager.getIndexById(id);
+      if (layoutIndex < 0 && typeof id === "number") layoutIndex = id;
+      targets.push({
+        id,
+        layoutIndex,
+        el: layoutIndex >= 0 ? getElement(layoutIndex) : null,
+        size: layoutIndex >= 0 ? sc.getSize(layoutIndex) : 0,
+        offset: layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0,
+      });
+    }
+
+    targets.sort((a, b) => b.layoutIndex - a.layoutIndex);
+
+    // FIRST — clone visible elements + capture sibling offsets by ID
+    const clones: Array<{
+      clone: HTMLElement;
+      offset: number;
+      size: number;
+      layoutIndex: number;
+    }> = [];
+
+    for (const t of targets) {
+      if (!t.el || t.layoutIndex < 0) continue;
+      const clone = t.el.cloneNode(true) as HTMLElement;
+      clone.style.pointerEvents = "none";
+      clone.style.overflow = "hidden";
+      clone.removeAttribute("data-index");
+      clone.removeAttribute("data-id");
+      clone.removeAttribute("id");
+      clone.removeAttribute("aria-selected");
+      clone.classList.remove(`${cfg.classPrefix}-item--selected`);
+      clones.push({ clone, offset: t.offset, size: t.size, layoutIndex: t.layoutIndex });
+    }
+
+    const oldOffsetById = new Map<string, number>();
+    const children = dom.items.children;
+    let maxRenderedIdx = -1;
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i] as HTMLElement;
+      const elId = el.dataset?.id;
+      const idx = parseInt(el.dataset?.index ?? "-1", 10);
+      if (elId && idx >= 0) {
+        oldOffsetById.set(elId, sc.getOffset(idx));
+        if (idx > maxRenderedIdx) maxRenderedIdx = idx;
+      }
+    }
+    // Capture offsets for items just below the viewport that will slide
+    // into view after removal — they aren't in the DOM yet.
+    const totalBeforeRemove = ctx.dataManager.getTotal();
+    const extraEnd = Math.min(maxRenderedIdx + 1 + targets.length, totalBeforeRemove);
+    for (let idx = maxRenderedIdx + 1; idx < extraEnd; idx++) {
+      const item = ctx.dataManager.getItem(idx);
+      if (item) oldOffsetById.set(String(item.id), sc.getOffset(idx));
+    }
+
+    const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
+    const oldScroll = dom.viewport[scrollProp];
+
+    // LAST — remove all items, one forceRender
+    const stale = isBaseStale();
+    const removedIds: (string | number)[] = [];
+
+    for (const t of targets) {
+      const result = (!stale && baseRemoveItem)
+        ? baseRemoveItem(t.id)
+        : ctx.dataManager.removeItem(t.id);
+      if (result) removedIds.push(t.id);
+    }
+
+    if (removedIds.length === 0) return 0;
+
+    ctx.forceRender();
+    commitStyles();
+
+    for (const rid of removedIds) {
+      emitter.emit("data:change", { type: "remove", id: rid });
+    }
+    scheduleEnsureRange();
+
+    // Off-screen only — no animation needed
+    if (clones.length === 0) {
+      if (focIdx >= 0) {
+        const t = ctx.getVirtualTotal();
+        if (t > 0) getElement(Math.min(focIdx, t - 1))?.focus();
+      }
+      for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
+      return removedIds.length;
+    }
+
+    // INVERT + PLAY — animate clones + siblings
+    const scrollDelta = oldScroll - dom.viewport[scrollProp];
+    const rt = removeTiming!;
+    const animOptions: KeyframeAnimationOptions = { duration: rt.duration, easing: rt.easing };
+    const animations: Animation[] = [];
+
+    // Sort clones ascending by layoutIndex so we can compute prefix sums
+    // of removed sizes above each clone.
+    clones.sort((a, b) => a.layoutIndex - b.layoutIndex);
+    let removedSizeAbove = 0;
+    for (const c of clones) {
+      c.clone.style.zIndex = "1";
+      dom.items.appendChild(c.clone);
+      const cloneStart = Math.round(c.offset - scrollDelta);
+      // The clone must shift up by the total size of removed items above it,
+      // so it doesn't overlap with siblings that already slid into position.
+      const shiftedEnd = Math.round(c.offset - removedSizeAbove);
+      animations.push(c.clone.animate([
+        { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
+        { transform: `${prop}(${shiftedEnd}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
+      ], animOptions));
+      removedSizeAbove += c.size;
+    }
+
+    const cloneSet = new Set(clones.map(c => c.clone));
+    const itemChildren = dom.items.children;
+    for (let i = 0; i < itemChildren.length; i++) {
+      const el = itemChildren[i] as HTMLElement;
+      if (cloneSet.has(el)) continue;
+      const elId = el.dataset?.id;
+      const idx = parseInt(el.dataset?.index ?? "-1", 10);
+      if (!elId || idx < 0) continue;
+      const oldOffset = oldOffsetById.get(elId);
+      if (oldOffset === undefined) continue;
+      const newOffset = sc.getOffset(idx);
+      const oldVisual = Math.round(oldOffset - scrollDelta);
+      const newVisual = Math.round(newOffset);
+      if (oldVisual === newVisual) continue;
+      animations.push(el.animate([
+        { transform: `${prop}(${oldVisual}px)` },
+        { transform: `${prop}(${newVisual}px)` },
+      ], animOptions));
+    }
+
+    let settled = false;
+    const finalize = (): void => {
+      if (settled) return;
+      settled = true;
+      removePending = null;
+      for (const { clone } of clones) clone.remove();
+      for (const a of animations) {
+        if (a.playState !== "finished") a.cancel();
+      }
+      if (focIdx >= 0) {
+        const t = ctx.getVirtualTotal();
+        if (t > 0) getElement(Math.min(focIdx, t - 1))?.focus();
+      }
+      for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
+    };
+
+    removePending = finalize;
+    Promise.all(animations.map(a => a.finished)).then(finalize, finalize);
+    setTimeout(finalize, rt.duration + 50);
+
+    return removedIds.length;
+  };
+
   // ── Animated insertItem (Web Animations API) ─────────────────────
 
   const insertItem = (item: T, index?: number): void => {
@@ -374,7 +560,10 @@ export function withTransition<T extends VListItem = VListItem>(
       toLayout = (ctx.methods.get("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       baseInsertItem = (ctx.methods.get("insertItem") as ((item: T, index?: number) => void)) ?? null;
       baseRemoveItem = (ctx.methods.get("removeItem") as ((id: string | number) => boolean)) ?? null;
-      if (removeTiming) ctx.methods.set("removeItem", removeItem);
+      if (removeTiming) {
+        ctx.methods.set("removeItem", removeItem);
+        ctx.methods.set("removeItems", removeItems);
+      }
       if (insertTiming) ctx.methods.set("insertItem", insertItem);
     },
     destroy(): void {

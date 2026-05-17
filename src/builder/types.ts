@@ -664,6 +664,7 @@ export interface VList<T extends VListItem = VListItem> {
   /** @deprecated Use `insertItem` instead. */
   addItem: (item: T, index?: number) => void;
   removeItem: (id: string | number) => void;
+  removeItems: (ids: ReadonlyArray<string | number>) => number;
   getItemAt: (index: number) => T | undefined;
   getIndexById: (id: string | number) => number;
   reload: (options?: ReloadOptions) => Promise<void>;
