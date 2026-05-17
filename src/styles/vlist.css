@@ -186,7 +186,9 @@
    container.  The onFocusIn handler ensures an item is always focused
    when the user tabs in, so the container outline is never needed. */
 .vlist:focus,
-.vlist:focus-visible {
+.vlist:focus-visible,
+.vlist-items:focus,
+.vlist-items:focus-visible {
     outline: none;
 }
 
