@@ -210,6 +210,19 @@ export const createApi = <T extends VListItem = VListItem>(
     ctx.dataManager.insertItem(item, insertIndex);
     ctx.forceRender();
     emitter.emit("data:change", { type: "insert", id: item.id });
+
+    if (!ensureRangePending) {
+      const dm = ctx.dataManager as any;
+      if (typeof dm.ensureRange === "function") {
+        ensureRangePending = true;
+        queueMicrotask(() => {
+          ensureRangePending = false;
+          const t = ctx.dataManager.getTotal();
+          const { start, end } = ctx.state.viewportState.renderRange;
+          if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
+        });
+      }
+    }
   };
 
   const getItemAt = (index: number): T | undefined => {
