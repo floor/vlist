@@ -83,12 +83,13 @@ export function withTransition<T extends VListItem = VListItem>(
 
   const scheduleEnsureRange = (): void => {
     if (ensureRangePending) return;
-    const dm = ctx.dataManager as any;
-    if (typeof dm.ensureRange !== "function") return;
+    if (typeof (ctx.dataManager as any).ensureRange !== "function") return;
     ensureRangePending = true;
     queueMicrotask(() => {
       ensureRangePending = false;
-      const t = ctx.dataManager.getTotal();
+      const dm = ctx.dataManager as any;
+      if (typeof dm.ensureRange !== "function") return;
+      const t = dm.getTotal();
       const { start, end } = ctx.state.viewportState.renderRange;
       if (t > 0 && end >= start) dm.ensureRange(start, end).catch(() => {});
     });
