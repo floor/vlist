@@ -566,6 +566,12 @@ function setupStaticPath<T extends VListItem>(
     rebuildGroups();
   });
 
+  ctx.methods.set("insertItem", (item: T, index?: number): void => {
+    const idx = index ?? 0;
+    originalItems.splice(idx, 0, item as T);
+    rebuildGroups();
+  });
+
   ctx.methods.set("removeItem", (id: string | number): void => {
     originalItems = originalItems.filter((item) => item.id !== id);
     rebuildGroups();

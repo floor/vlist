@@ -565,6 +565,81 @@ describe("createSparseStorage", () => {
   });
 
   // ===========================================================================
+  // insert
+  // ===========================================================================
+
+  describe("insert", () => {
+    it("should insert item at index and shift subsequent items", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+      const items = createItems(5);
+      for (let i = 0; i < items.length; i++) storage.set(i, items[i]!);
+      storage.setTotal(5);
+
+      storage.insert(0, createItem(99));
+
+      expect(storage.getTotal()).toBe(6);
+      expect(storage.get(0)!.id).toBe(99);
+      expect(storage.get(1)!.id).toBe(1);
+      expect(storage.get(5)!.id).toBe(5);
+    });
+
+    it("should shift items across chunk boundaries", () => {
+      const storage = createSparseStorage({ chunkSize: 5 });
+      const items = createItems(10);
+      for (let i = 0; i < items.length; i++) storage.set(i, items[i]!);
+      storage.setTotal(10);
+
+      storage.insert(0, createItem(99));
+
+      expect(storage.getTotal()).toBe(11);
+      expect(storage.get(0)!.id).toBe(99);
+      expect(storage.get(5)!.id).toBe(5);
+      expect(storage.get(6)!.id).toBe(6);
+      expect(storage.get(10)!.id).toBe(10);
+    });
+
+    it("should make sparse chunks partial after cross-boundary shift", () => {
+      const storage = createSparseStorage({ chunkSize: 5 });
+      storage.setTotal(15);
+      // Load chunks 0 and 2, leave chunk 1 empty (simulates eviction)
+      for (let i = 0; i < 5; i++) storage.set(i, createItem(i));
+      for (let i = 10; i < 15; i++) storage.set(i, createItem(i));
+
+      expect(storage.isChunkFullyLoaded(0)).toBe(true);
+      expect(storage.isChunkFullyLoaded(2)).toBe(true);
+
+      storage.insert(0, createItem(99));
+
+      // Chunk 2 items shifted from 10-14 to 11-15, crossing into chunk 3
+      expect(storage.isChunkFullyLoaded(2)).toBe(false);
+    });
+
+    it("should ignore out-of-bounds index", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+      storage.setTotal(5);
+
+      storage.insert(-1, createItem(99));
+      expect(storage.getTotal()).toBe(5);
+
+      storage.insert(6, createItem(99));
+      expect(storage.getTotal()).toBe(5);
+    });
+
+    it("should handle insert at the end", () => {
+      const storage = createSparseStorage({ chunkSize: 10 });
+      const items = createItems(3);
+      for (let i = 0; i < items.length; i++) storage.set(i, items[i]!);
+      storage.setTotal(3);
+
+      storage.insert(3, createItem(99));
+
+      expect(storage.getTotal()).toBe(4);
+      expect(storage.get(3)!.id).toBe(99);
+      expect(storage.getCachedCount()).toBe(4);
+    });
+  });
+
+  // ===========================================================================
   // getRange
   // ===========================================================================
 
@@ -965,6 +1040,73 @@ describe("createSparseStorage", () => {
 
         storage.delete(0);
         expect(storage.isChunkLoaded(0)).toBe(false);
+      });
+    });
+
+    describe("isChunkFullyLoaded", () => {
+      it("should return false for empty chunk", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(10);
+
+        expect(storage.isChunkFullyLoaded(0)).toBe(false);
+      });
+
+      it("should return true when chunk has all expected items", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(10);
+        for (let i = 0; i < 5; i++) storage.set(i, createItem(i));
+
+        expect(storage.isChunkFullyLoaded(0)).toBe(true);
+        expect(storage.isChunkFullyLoaded(1)).toBe(false);
+      });
+
+      it("should return false when chunk is partial", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(10);
+        for (let i = 0; i < 3; i++) storage.set(i, createItem(i));
+
+        expect(storage.isChunkFullyLoaded(0)).toBe(false);
+      });
+
+      it("should handle last chunk with fewer items than chunkSize", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(7);
+        for (let i = 5; i < 7; i++) storage.set(i, createItem(i));
+
+        expect(storage.isChunkFullyLoaded(1)).toBe(true);
+      });
+
+      it("should detect partial chunks after insert with sparse loading", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(15);
+        // Load chunks 0 and 2, leave chunk 1 empty (evicted)
+        for (let i = 0; i < 5; i++) storage.set(i, createItem(i));
+        for (let i = 10; i < 15; i++) storage.set(i, createItem(i));
+
+        expect(storage.isChunkFullyLoaded(0)).toBe(true);
+        expect(storage.isChunkFullyLoaded(2)).toBe(true);
+
+        storage.insert(0, createItem(99));
+
+        // Chunk 2 items shifted 10-14 → 11-15, last item crossed to chunk 3
+        expect(storage.isChunkFullyLoaded(0)).toBe(true);
+        expect(storage.isChunkFullyLoaded(2)).toBe(false);
+      });
+
+      it("should detect partial chunks after delete with sparse loading", () => {
+        const storage = createSparseStorage({ chunkSize: 5 });
+        storage.setTotal(15);
+        // Load chunks 0 and 2, leave chunk 1 empty
+        for (let i = 0; i < 5; i++) storage.set(i, createItem(i));
+        for (let i = 10; i < 15; i++) storage.set(i, createItem(i));
+
+        expect(storage.isChunkFullyLoaded(0)).toBe(true);
+        expect(storage.isChunkFullyLoaded(2)).toBe(true);
+
+        storage.delete(0);
+
+        // Chunk 0 lost one item (4 left, expected 5)
+        expect(storage.isChunkFullyLoaded(0)).toBe(false);
       });
     });
 
