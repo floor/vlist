@@ -423,6 +423,15 @@ export const createApi = <T extends VListItem = VListItem>(
       const fn = methods.get("removeItem") as ((id: string | number) => boolean) | undefined;
       return fn ? fn(id) : removeItem(id);
     },
+    removeItems(ids: ReadonlyArray<string | number>) {
+      const fn = methods.get("removeItems") as ((ids: ReadonlyArray<string | number>) => number) | undefined;
+      if (fn) return fn(ids);
+      let count = 0;
+      for (const id of ids) {
+        if (removeItem(id)) count++;
+      }
+      return count;
+    },
     reload: m("reload", reload),
     getItemAt,
     getIndexById,
@@ -447,6 +456,7 @@ export const createApi = <T extends VListItem = VListItem>(
       name === "insertItem" ||
       name === "addItem" ||
       name === "removeItem" ||
+      name === "removeItems" ||
       name === "reload" ||
       name === "scrollToIndex" ||
       name === "scrollToItem" ||
