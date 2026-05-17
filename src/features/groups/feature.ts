@@ -697,8 +697,8 @@ function setupAsyncPath<T extends VListItem>(
       return asyncDataManager.reload();
     },
     insertItem: (item: T, index: number) => {
-      asyncDataManager.insertItem(item, index);
       bridge.insertAt(index, item);
+      asyncDataManager.insertItem(item, index);
     },
     removeItem: (id: string | number) => {
       const dataIndex = asyncDataManager.getIndexById(id);
