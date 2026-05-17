@@ -24,7 +24,7 @@ export interface TransitionTiming {
 }
 
 export interface TransitionConfig {
-  /** Shared duration in ms (default: 150). Overridden by add/remove sub-configs. */
+  /** Shared duration in ms (default: 200). Overridden by add/remove sub-configs. */
   duration?: number;
   /** Shared CSS easing (default: MD3 emphasized). Overridden by add/remove sub-configs. */
   easing?: string;
@@ -41,8 +41,6 @@ export interface TransitionConfig {
 interface ResolvedTiming {
   duration: number;
   easing: string;
-  tTransform: string;
-  tTransformOpacity: string;
 }
 
 const DEFAULT_DURATION = 200;
@@ -53,10 +51,10 @@ function resolveTiming(
   override?: TransitionTiming | false,
 ): ResolvedTiming | null {
   if (override === false) return null;
-  const d = override?.duration ?? base.duration;
-  const e = override?.easing ?? base.easing;
-  const t = `transform ${d}ms ${e}`;
-  return { duration: d, easing: e, tTransform: t, tTransformOpacity: `${t}, opacity ${d}ms ${e}` };
+  return {
+    duration: override?.duration ?? base.duration,
+    easing: override?.easing ?? base.easing,
+  };
 }
 
 // =============================================================================
@@ -101,23 +99,6 @@ export function withTransition<T extends VListItem = VListItem>(
   /** Convert data index to layout index (accounts for group headers). */
   const dataToLayout = (dataIndex: number): number =>
     toLayout ? toLayout(dataIndex) : dataIndex;
-
-  /** Collect DOM children matching a data-index predicate in a single pass. */
-  const collectAffected = (
-    container: HTMLElement,
-    skip: HTMLElement | null,
-    predicate: (idx: number) => boolean,
-  ): Array<{ el: HTMLElement; idx: number }> => {
-    const result: Array<{ el: HTMLElement; idx: number }> = [];
-    const children = container.children;
-    for (let i = 0; i < children.length; i++) {
-      const el = children[i] as HTMLElement;
-      if (el === skip) continue;
-      const idx = parseInt(el.dataset?.index ?? "-1", 10);
-      if (idx >= 0 && predicate(idx)) result.push({ el, idx });
-    }
-    return result;
-  };
 
   // ── Animated removeItem ──────────────────────────────────────────
 
@@ -193,10 +174,6 @@ export function withTransition<T extends VListItem = VListItem>(
     // Detect scroll clamp (content shrank, browser clamped scroll position)
     const scrollDelta = oldScroll - dom.viewport[scrollProp];
 
-    // Pin clone at original position (adjusted for scroll shift)
-    exitClone.style.transition = "none";
-    exitClone.style.transformOrigin = origin;
-    exitClone.style.transform = `${prop}(${Math.round(originalOffset - scrollDelta)}px) scaleY(1)`;
     exitClone.style.zIndex = "1";
     dom.items.appendChild(exitClone);
 
@@ -205,17 +182,20 @@ export function withTransition<T extends VListItem = VListItem>(
     const animations: Animation[] = [];
 
     // Animate clone: scaleY(1→0), opacity(1→0)
+    const cloneStart = Math.round(originalOffset - scrollDelta);
     animations.push(exitClone.animate([
-      { transform: `${prop}(${Math.round(originalOffset - scrollDelta)}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
+      { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
       { transform: `${prop}(${Math.round(originalOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
     ], animOptions));
 
     // Animate siblings from old visual positions to new positions
-    const affected = collectAffected(dom.items, exitClone,
-      scrollDelta > 0 ? () => true : (i) => i >= layoutIndex);
-
-    for (let i = 0; i < affected.length; i++) {
-      const { el, idx } = affected[i]!;
+    const allOnClamp = scrollDelta > 0;
+    const itemChildren = dom.items.children;
+    for (let i = 0; i < itemChildren.length; i++) {
+      const el = itemChildren[i] as HTMLElement;
+      if (el === exitClone) continue;
+      const idx = parseInt(el.dataset?.index ?? "-1", 10);
+      if (idx < 0 || (!allOnClamp && idx < layoutIndex)) continue;
       const newOffset = sc.getOffset(idx);
       const oldVisual = idx >= layoutIndex
         ? Math.round(newOffset + itemSize - scrollDelta)
@@ -272,7 +252,11 @@ export function withTransition<T extends VListItem = VListItem>(
     }
 
     const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
+    const sizeProp = cfg.horizontal ? "scrollWidth" : "scrollHeight";
+    const clientProp = cfg.horizontal ? "clientWidth" : "clientHeight";
     const oldScroll = dom.viewport[scrollProp];
+    const oldMaxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
+    const wasAtEnd = oldScroll >= oldMaxScroll - 1;
 
     // INSERT — mutate data + reconcile DOM
     if (baseInsertItem) {
@@ -287,10 +271,9 @@ export function withTransition<T extends VListItem = VListItem>(
     let scrollDelta = dom.viewport[scrollProp] - oldScroll;
     const postInsertLayoutIndex = dataToLayout(insertDataIndex);
 
-    // Reverse mode: scroll to reveal new item
-    if (cfg.reverse && scrollDelta === 0) {
-      const maxScroll = dom.viewport[cfg.horizontal ? "scrollWidth" : "scrollHeight"]
-        - dom.viewport[cfg.horizontal ? "clientWidth" : "clientHeight"];
+    // Reverse mode: scroll to reveal new item only if already at bottom
+    if (cfg.reverse && scrollDelta === 0 && wasAtEnd) {
+      const maxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
       dom.viewport[scrollProp] = maxScroll;
       scrollDelta = dom.viewport[scrollProp] - oldScroll;
       if (scrollDelta > 0) ctx.forceRender();
