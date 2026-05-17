@@ -115,7 +115,8 @@ export function withTransition<T extends VListItem = VListItem>(
         ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
         : -1;
 
-    const layoutIndex = ctx.dataManager.getIndexById(id);
+    let layoutIndex = ctx.dataManager.getIndexById(id);
+    if (layoutIndex < 0 && typeof id === "number") layoutIndex = id;
     const removedEl = layoutIndex >= 0 ? getElement(layoutIndex) : null;
     const itemSize = layoutIndex >= 0 ? sc.getSize(layoutIndex) : 0;
     const originalOffset = layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0;
