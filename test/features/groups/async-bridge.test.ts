@@ -415,6 +415,82 @@ describe("createAsyncGroupBridge", () => {
   });
 
   // ===========================================================================
+  // insertAt
+  // ===========================================================================
+
+  describe("insertAt", () => {
+    it("inserts into existing group — group count stays, item count increments", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      expect(bridge.groupCount).toBe(3);
+      expect(bridge.groups[0]!.count).toBe(3);
+
+      const newTrack: TestTrack = { id: "new-1", title: "Track X", day: "May 7" };
+      bridge.insertAt(1, newTrack);
+
+      expect(bridge.groupCount).toBe(3);
+      expect(bridge.groups[0]!.count).toBe(4);
+      expect(bridge.totalEntries).toBe(13); // 10 items + 3 headers
+    });
+
+    it("inserts item that creates a new group", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      expect(bridge.groupCount).toBe(3);
+
+      const newTrack: TestTrack = { id: "new-2", title: "Track Y", day: "May 4" };
+      bridge.insertAt(9, newTrack);
+
+      expect(bridge.groupCount).toBe(4);
+      expect(bridge.groups[3]!.key).toBe("May 4");
+      expect(bridge.groups[3]!.count).toBe(1);
+      expect(bridge.totalEntries).toBe(14); // 10 items + 4 headers
+    });
+
+    it("shifts subsequent data indices up by 1", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      // Track D (May 6) is at data index 3, layout index 5
+      expect(bridge.dataToLayoutIndex(3)).toBe(5);
+
+      const newTrack: TestTrack = { id: "new-3", title: "Track Z", day: "May 7" };
+      bridge.insertAt(0, newTrack);
+
+      // Track D shifted from data index 3 to 4, May 6 header shifts too
+      expect(bridge.dataToLayoutIndex(4)).toBe(6);
+    });
+
+    it("totalEntries increments correctly", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+      expect(bridge.totalEntries).toBe(12);
+
+      const newTrack: TestTrack = { id: "new-4", title: "Track W", day: "May 6" };
+      bridge.insertAt(4, newTrack);
+      expect(bridge.totalEntries).toBe(13);
+    });
+
+    it("roundtrips with removeAt", () => {
+      const { bridge, loadItems } = createBridge();
+      loadItems(ALL_TRACKS, 0, 9);
+
+      const beforeGroups = bridge.groupCount;
+      const beforeTotal = bridge.totalEntries;
+
+      const newTrack: TestTrack = { id: "new-5", title: "Track V", day: "May 7" };
+      bridge.insertAt(0, newTrack);
+      expect(bridge.totalEntries).toBe(beforeTotal + 1);
+
+      bridge.removeAt(0);
+      expect(bridge.groupCount).toBe(beforeGroups);
+      expect(bridge.totalEntries).toBe(beforeTotal);
+    });
+  });
+
+  // ===========================================================================
   // Reset
   // ===========================================================================
 
