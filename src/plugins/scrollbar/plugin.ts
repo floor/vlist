@@ -69,7 +69,12 @@ export function scrollbar<T extends VListItem = VListItem>(
         dom.viewport.classList.add(`${classPrefix}-viewport--gutter`);
       }
 
-      sb.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+      // Defer initial bounds update — containerSize may be 0 during setup
+      // since the viewport hasn't been laid out yet. The resize observer
+      // will fire with the correct size after first paint.
+      queueMicrotask(() => {
+        sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+      });
 
       // Expose scrollbar instance for cross-plugin coordination (scale plugin)
       ctx.registerMethod("_scrollbar:getInstance", () => sb);

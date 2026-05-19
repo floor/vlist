@@ -132,10 +132,9 @@ export function table<T extends VListItem = VListItem>(
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
-    const allItems = storedCtx.getItems();
     const rangeItems: T[] = [];
     for (let i = renderStart; i <= renderEnd; i++) {
-      const item = allItems[i];
+      const item = storedCtx.getItem(i);
       if (item) rangeItems.push(item);
     }
 

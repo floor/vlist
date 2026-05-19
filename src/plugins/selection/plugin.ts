@@ -92,6 +92,16 @@ export function selection<T extends VListItem = VListItem>(
         return;
       }
 
+      ctx.setItemStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
+        const allItems = items();
+        const id = allItems[index]?.id;
+        is.selected = id !== undefined && state.selected.has(id);
+        is.focused = state.focusVisible && state.focusedIndex === index;
+      });
+
+      ctx.registerMethod("_getSelectedIds", (): Set<string | number> => state.selected);
+      ctx.registerMethod("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
+
       dom.root.classList.add(`${resolvedConfig.classPrefix}--selectable`);
 
       // ── Click handler ──────────────────────────────────────────

@@ -5,7 +5,7 @@
  * on the EngineState singleton — no intermediate object allocation.
  */
 
-import type { VListItem, ItemTemplate } from "../types";
+import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { SizeCache } from "./sizes";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
@@ -111,6 +111,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setVirtualTotalFn(fn: () => number): void;
 
   getItems(): readonly T[];
+  getItem(index: number): T | undefined;
   getState(): EngineState;
   rebuildSizeCache(): void;
   updateContentSize(size: number): void;
@@ -118,7 +119,13 @@ export interface PluginContext<T extends VListItem = VListItem> {
   renderIfNeeded(): void;
   forceRender(): void;
 
+  setGetItemFn(fn: (index: number) => T | undefined): void;
+  setItemStateFn(fn: (index: number, state: ItemState) => void): void;
+  getItemStateFn(): ((index: number, state: ItemState) => void) | null;
+  readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
+
   scrollTo(position: number): void;
+  smoothScrollTo(position: number, duration: number): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;

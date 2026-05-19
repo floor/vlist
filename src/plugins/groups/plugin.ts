@@ -17,6 +17,7 @@
 
 import type { VListItem, GroupsConfig, ItemTemplate, ItemState } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
+type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
@@ -67,6 +68,7 @@ export function groups<T extends VListItem = VListItem>(
   let horizontal: boolean;
   let classPrefix: string;
   let overscan: number;
+  let resolveItemState: (() => ItemStateFn | null) | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   let lastScrollPosition = -1;
@@ -135,15 +137,19 @@ export function groups<T extends VListItem = VListItem>(
 
     const groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
 
+    const isf = resolveItemState?.();
+    const selClass = isf ? `${classPrefix}-item--selected` : "";
+    const focClass = isf ? `${classPrefix}-item--focused` : "";
+
     for (let i = renderStart; i <= renderEnd; i++) {
       let element = rendered.get(i);
+      const entry = layout.getEntry(i);
 
       if (element === undefined) {
         element = pool.acquire();
         element.className = groupItemClass;
         element.setAttribute("data-index", String(i));
 
-        const entry = layout.getEntry(i);
         let content: string | HTMLElement;
 
         if (entry.type === "header") {
@@ -162,6 +168,8 @@ export function groups<T extends VListItem = VListItem>(
           if (!item) continue;
 
           element.setAttribute("data-id", String(item.id));
+          if (isf) isf(dataIndex, itemState);
+          else { itemState.selected = false; itemState.focused = false; }
           content = userTemplate(item, dataIndex, itemState);
         }
 
@@ -174,6 +182,14 @@ export function groups<T extends VListItem = VListItem>(
 
         rendered.set(i, element);
         contentElement.appendChild(element);
+      }
+
+      if (entry.type !== "header" && isf) {
+        isf(entry.dataIndex, itemState);
+        element.classList.toggle(selClass, itemState.selected);
+        element.classList.toggle(focClass, itemState.focused);
+        if (itemState.selected) element.setAttribute("aria-selected", "true");
+        else element.removeAttribute("aria-selected");
       }
 
       applySizeStyles(element, i);
@@ -222,6 +238,7 @@ export function groups<T extends VListItem = VListItem>(
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       getItems = ctx.getItems.bind(ctx);
+      resolveItemState = () => ctx.getItemStateFn();
 
       const originalItems = getItems();
       layout = createGroupLayout(originalItems.length, config, (i) => originalItems[i]);
@@ -289,6 +306,55 @@ export function groups<T extends VListItem = VListItem>(
       ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
 
       ctx.registerMethod("getGroupLayout", () => layout);
+
+      ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number =>
+        layout.dataToLayoutIndex(dataIndex),
+      );
+      ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number =>
+        layout.layoutToDataIndex(layoutIndex),
+      );
+      ctx.registerMethod("_isGroupHeader", (layoutIndex: number): boolean => {
+        const entry = layout.getEntry(layoutIndex);
+        return entry.type === "header";
+      });
+
+      ctx.registerMethod("scrollToIndex", (
+        index: number,
+        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
+      ) => {
+        const layoutIndex = layout.dataToLayoutIndex(index);
+        const totalLayout = layout.totalEntries;
+        if (totalLayout === 0) return;
+        const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
+        const offset = sizeCache.getOffset(clamped);
+        const itemSize = sizeCache.getSize(clamped);
+        const cs = engineState.containerSize;
+        const totalSize = sizeCache.getTotalSize();
+        const maxScroll = Math.max(0, totalSize - cs);
+
+        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
+        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
+        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
+
+        let pos: number;
+        switch (align) {
+          case "center":
+            pos = offset - (cs - itemSize) / 2;
+            break;
+          case "end":
+            pos = offset - cs + itemSize;
+            break;
+          default:
+            pos = offset;
+        }
+        pos = Math.max(0, Math.min(pos, maxScroll));
+
+        if (behavior === "smooth" && duration && duration > 0) {
+          ctx.smoothScrollTo(pos, duration);
+        } else {
+          ctx.scrollTo(pos);
+        }
+      });
 
       ctx.registerDestroyHandler(() => {
         for (const [, element] of rendered) {

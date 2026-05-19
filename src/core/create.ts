@@ -148,9 +148,12 @@ export function createVList<T extends VListItem = VListItem>(
   let scrollSetFn: ((pos: number) => void) | null = null;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
+  let getItemFn: ((index: number) => T | undefined) | null = null;
+  let itemStateFn: ((index: number, state: import("../types").ItemState) => void) | null = null;
   let skipDefaultScroll = false;
   let skipDefaultResize = false;
   let scrollTarget: EventTarget | null = null;
+  let smoothScrollFn: ((target: number, duration: number) => void) | null = null;
 
   const ctx: PluginContext<T> = {
     dom,
@@ -175,6 +178,9 @@ export function createVList<T extends VListItem = VListItem>(
     },
     setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
     getItems,
+    getItem(index: number): T | undefined {
+      return getItemFn ? getItemFn(index) : items[index];
+    },
     getState(): EngineState { return state; },
     rebuildSizeCache(): void {
       sizeCache.rebuild(state.totalItems);
@@ -190,10 +196,18 @@ export function createVList<T extends VListItem = VListItem>(
     forceRender(): void {
       doForceRender();
     },
+    setGetItemFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
+    setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
+    getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
+    get rawSizeSpec() { return sizeSpec; },
     scrollTo(position: number): void {
       if (scrollSetFn) scrollSetFn(position);
       else if (config.horizontal) dom.viewport.scrollLeft = position;
       else dom.viewport.scrollTop = position;
+    },
+    smoothScrollTo(position: number, duration: number): void {
+      if (smoothScrollFn) smoothScrollFn(position, duration);
+      else ctx.scrollTo(position);
     },
     disableDefaultScroll(): void { skipDefaultScroll = true; },
     disableDefaultResize(): void { skipDefaultResize = true; },
@@ -237,7 +251,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix);
     }
   }
 
@@ -246,7 +260,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
   }
@@ -286,6 +300,8 @@ export function createVList<T extends VListItem = VListItem>(
       emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
     },
   });
+
+  smoothScrollFn = scrollHandler.smoothScrollTo;
 
   // ── Event listeners ─────────────────────────────────────────────
 
@@ -340,8 +356,10 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Initialize ──────────────────────────────────────────────────
 
   if (!skipDefaultScroll) scrollHandler.attach();
-  state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
-  state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+  if (!skipDefaultResize) {
+    state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
+    state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+  }
   state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
 
   // Set content height for scrollbar

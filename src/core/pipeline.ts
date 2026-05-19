@@ -102,8 +102,13 @@ export function phase2Commit<T extends VListItem>(
   rendered: Map<number, HTMLElement>,
   horizontal: boolean,
   hooks: CompiledHooks,
+  getItemFn?: ((index: number) => T | undefined) | null,
+  itemStateFn?: ((index: number, state: ItemState) => void) | null,
+  classPrefix?: string,
 ): void {
-  const items = getItems();
+  const selectedClass = itemStateFn ? `${classPrefix ?? "vlist"}-item--selected` : "";
+  const focusedClass = itemStateFn ? `${classPrefix ?? "vlist"}-item--focused` : "";
+  const items = getItemFn ? null : getItems();
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
@@ -129,7 +134,14 @@ export function phase2Commit<T extends VListItem>(
     const dataIndex = newIndices[i]!;
     const offset = state.visibleOffsets[i]!;
     const size = state.visibleSizes[i]!;
-    const item = items[dataIndex];
+    const item = getItemFn ? getItemFn(dataIndex) : items![dataIndex];
+
+    if (itemStateFn) {
+      itemStateFn(dataIndex, itemState);
+    } else {
+      itemState.selected = false;
+      itemState.focused = false;
+    }
 
     let element = rendered.get(dataIndex);
 
@@ -153,6 +165,13 @@ export function phase2Commit<T extends VListItem>(
 
       rendered.set(dataIndex, element);
       contentElement.appendChild(element);
+    }
+
+    if (itemStateFn) {
+      element.classList.toggle(selectedClass, itemState.selected);
+      element.classList.toggle(focusedClass, itemState.focused);
+      if (itemState.selected) element.setAttribute("aria-selected", "true");
+      else element.removeAttribute("aria-selected");
     }
 
     element.style.transform = translateProp + offset + "px)";
@@ -181,7 +200,10 @@ export function render<T extends VListItem>(
   rendered: Map<number, HTMLElement>,
   horizontal: boolean,
   hooks: CompiledHooks,
+  getItemFn?: ((index: number) => T | undefined) | null,
+  itemStateFn?: ((index: number, state: ItemState) => void) | null,
+  classPrefix?: string,
 ): void {
   phase1Calculate(state, sizeCache, overscan, hooks);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks);
+  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix);
 }

@@ -157,6 +157,7 @@ export function async<T extends VListItem = VListItem>(
         onStateChange: () => {
           if (engineState.initialized) {
             const newTotal = dataManager.getTotal();
+            engineState.totalItems = newTotal;
             const oldTotal = sizeCache.getTotal();
             if (newTotal !== oldTotal) {
               sizeCache.rebuild(newTotal);
@@ -172,6 +173,9 @@ export function async<T extends VListItem = VListItem>(
           }
         },
       });
+
+      // Bridge async data manager to the render pipeline
+      ctx.setGetItemFn((index: number) => dataManager.getItem(index) as T | undefined);
 
       // Register public methods
       ctx.registerMethod("reload", async (): Promise<void> => {

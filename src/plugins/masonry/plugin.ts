@@ -93,9 +93,14 @@ export function masonry<T extends VListItem = VListItem>(
     focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
   }
 
+  let rawSizeSpec: number | ((index: number, ...args: unknown[]) => number) | null = null;
+
   function getSizeFn(): (index: number) => number {
     if (config.size) {
       return (index: number): number => config.size!(index, masonryCtx);
+    }
+    if (rawSizeSpec !== null && typeof rawSizeSpec === "function") {
+      return (index: number): number => (rawSizeSpec as Function)(index, masonryCtx);
     }
     return (index: number): number => storedCtx!.sizeCache.getSize(index);
   }
@@ -194,6 +199,7 @@ export function masonry<T extends VListItem = VListItem>(
     setup(ctx: PluginContext<T>): void {
       storedCtx = ctx;
       engineState = ctx.getState();
+      rawSizeSpec = ctx.rawSizeSpec;
       hz = ctx.config.horizontal;
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;

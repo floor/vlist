@@ -20,6 +20,7 @@ import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
 import { createGridLayout } from "./layout";
 import type { GridLayout } from "./types";
+type ItemStateFn = (index: number, state: ItemState) => void;
 
 // =============================================================================
 // Config
@@ -57,6 +58,7 @@ export function grid<T extends VListItem = VListItem>(
   let horizontal: boolean;
   let classPrefix: string;
   let overscan: number;
+  let resolveItemState: (() => ItemStateFn | null) | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   let containerWidth = 0;
@@ -141,6 +143,9 @@ export function grid<T extends VListItem = VListItem>(
 
     // Render items in range
     const gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
+    const isf = resolveItemState?.();
+    const selClass = isf ? `${classPrefix}-item--selected` : "";
+    const focClass = isf ? `${classPrefix}-item--focused` : "";
 
     for (let i = itemRange.start; i <= itemRange.end; i++) {
       const item = items[i];
@@ -154,6 +159,8 @@ export function grid<T extends VListItem = VListItem>(
         element.setAttribute("data-index", String(i));
         element.setAttribute("data-id", String(item.id));
 
+        if (isf) isf(i, itemState);
+        else { itemState.selected = false; itemState.focused = false; }
         const result = template(item, i, itemState);
         if (typeof result === "string") {
           element.innerHTML = result;
@@ -164,6 +171,14 @@ export function grid<T extends VListItem = VListItem>(
 
         rendered.set(i, element);
         contentElement.appendChild(element);
+      }
+
+      if (isf) {
+        isf(i, itemState);
+        element.classList.toggle(selClass, itemState.selected);
+        element.classList.toggle(focClass, itemState.focused);
+        if (itemState.selected) element.setAttribute("aria-selected", "true");
+        else element.removeAttribute("aria-selected");
       }
 
       applySizeStyles(element, i);
@@ -219,19 +234,33 @@ export function grid<T extends VListItem = VListItem>(
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       getItems = ctx.getItems.bind(ctx);
+      resolveItemState = () => ctx.getItemStateFn();
+
+      // Initialize container width
+      containerWidth = engineState.crossSize;
 
       // Size cache in ROW space: each row = itemHeight + gap
-      const baseRowSize = ctx.sizeCache.getSize(0);
-
-      if (gap > 0) {
-        ctx.setSizeConfig(baseRowSize + gap);
+      // Inject grid context into dynamic height functions
+      const rawSpec = ctx.rawSizeSpec;
+      let baseRowSize: number;
+      if (typeof rawSpec === "function") {
+        const colWidth = layout.getColumnWidth(containerWidth);
+        const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
+        baseRowSize = (rawSpec as Function)(0, gridCtx);
+        ctx.setSizeConfig((rowIndex: number): number => {
+          gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
+          const firstItem = rowIndex * config.columns;
+          return (rawSpec as Function)(firstItem, gridCtx) + gap;
+        });
+      } else {
+        baseRowSize = rawSpec;
+        if (gap > 0) {
+          ctx.setSizeConfig(baseRowSize + gap);
+        }
       }
 
       // Virtual total = row count (not item count)
       ctx.setVirtualTotalFn(() => getRowCount());
-
-      // Initialize container width
-      containerWidth = engineState.crossSize;
 
       // Add CSS class
       ctx.dom.root.classList.add(`${classPrefix}--grid`);
@@ -257,7 +286,16 @@ export function grid<T extends VListItem = VListItem>(
 
         if (newConfig.gap !== undefined || newConfig.columns !== undefined) {
           const newGap = layout.gap;
-          ctx.setSizeConfig(baseRowSize + newGap);
+          if (typeof rawSpec === "function") {
+            const gridCtx = { columnWidth: layout.getColumnWidth(containerWidth), columns: layout.columns, gap: newGap };
+            ctx.setSizeConfig((rowIndex: number): number => {
+              gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
+              const firstItem = rowIndex * layout.columns;
+              return (rawSpec as Function)(firstItem, gridCtx) + newGap;
+            });
+          } else {
+            ctx.setSizeConfig(baseRowSize + newGap);
+          }
           ctx.rebuildSizeCache();
         }
 
