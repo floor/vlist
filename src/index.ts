@@ -9,20 +9,27 @@
  * @packageDocumentation
  */
 
-// Main builder export
-export { vlist } from "./builder";
+// v2 factory + plugins
+export { createVList } from "./core/create";
+export { scale } from "./plugins/scale";
+export type { ScalePluginConfig } from "./plugins/scale";
+export { scrollbar } from "./plugins/scrollbar";
+export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
+export { grid } from "./plugins/grid";
+export { selection } from "./plugins/selection";
+export type { SelectionPluginConfig } from "./plugins/selection";
 
-// Features - tree-shakeable
-export { withScale } from "./features/scale";
-export type { ScaleConfig } from "./features/scale";
+// Features - tree-shakeable (v1 builder API, will be removed)
+export { withScale } from "./plugins/scale/feature";
+export type { ScaleConfig } from "./plugins/scale/feature";
 export { withAsync } from "./features/async";
-export { withScrollbar } from "./features/scrollbar";
+export { withScrollbar } from "./plugins/scrollbar/feature";
 export { withPage } from "./features/page";
 export type { WithPageOptions } from "./features/page";
 export { withGroups } from "./features/groups";
-export { withGrid } from "./features/grid";
+export { withGrid } from "./plugins/grid/feature";
 export { withMasonry } from "./features/masonry";
-export { withSelection } from "./features/selection";
+export { withSelection } from "./plugins/selection/feature";
 export { withSnapshots } from "./features/snapshots";
 export { withTable } from "./features/table";
 export { withSortable } from "./features/sortable";
@@ -85,13 +92,14 @@ export type {
   GridHeightContext,
 } from "./types";
 
-// Builder types
+// v2 core types
 export type {
-  VListBuilder,
   VList,
-  BuilderConfig,
-  VListConfig,
-  VListFeature,
-  BuilderContext,
-  ReloadOptions,
-} from "./builder";
+  VListPlugin,
+  PluginContext,
+  CreateVListConfig,
+  CompiledHooks,
+  ResolvedConfig,
+  DOMStructure,
+  ElementPool,
+} from "./core/types";

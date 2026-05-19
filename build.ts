@@ -28,10 +28,12 @@ async function build() {
   const wrapperCode = [
     `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
     `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats } from "${entryAbs}";`,
+    `  withAutoSize, withTransition, createStats,`,
+    `  createVList, scale, scrollbar, grid, selection } from "${entryAbs}";`,
     `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
     `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats };`,
+    `  withAutoSize, withTransition, createStats,`,
+    `  createVList, scale, scrollbar, grid, selection };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);

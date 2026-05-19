@@ -1,16 +1,14 @@
 /**
- * vlist - Grid Domain
- * 2D grid/card layout with virtualized rows
+ * vlist v2 — Grid Plugin
  */
 
-// Builder Feature
-export { withGrid, type GridFeatureConfig } from "./feature";
-
-// Layout
-export { createGridLayout } from "./layout";
-
-// Renderer
-export { createGridRenderer, type GridRenderer } from "./renderer";
-
-// Types
-export type { GridConfig, GridLayout, GridPosition, ItemRange } from "./types";
+export { grid, type GridPluginConfig } from "./plugin";
+export {
+  createGridLayout,
+  type GridConfigWithGroups,
+} from "./layout";
+export type {
+  GridLayout,
+  GridPosition,
+  ItemRange,
+} from "./types";

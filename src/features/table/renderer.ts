@@ -38,7 +38,7 @@ import type {
 import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
 import { calculateCompressedItemPosition } from "../../rendering/scale";
-import { claimPlaceholderSelection } from "../selection/state";
+import { claimPlaceholderSelection } from "../../plugins/selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
 

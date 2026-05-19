@@ -1,772 +1,483 @@
-// src/builder/materialize.ts
 /**
- * vlist/builder — Materialize Context Factory
+ * vlist v2 — createVList()
  *
- * Extracts the BuilderContext object, default data-manager proxy, and default
- * scroll-controller proxy out of materialize() in core.ts.
- *
- * All shared mutable state lives in a single `$` (MRefs) object that both
- * core.ts and this module read/write through. Property names are kept short
- * (2–3 chars) so they survive minification without bloating the bundle.
- * Each factory destructures to readable locals on entry.
- *
- * Immutable dependencies are passed via a `deps` (MDeps) object — these are
- * destructured once and never re-read, so their names don't matter at runtime.
+ * Factory function. Resolves config, creates DOM, compiles hooks from
+ * plugins, wires the 2-phase pipeline, returns the public VList API.
  */
 
+import type { VListItem } from "../types";
 import type {
-  VListItem,
-  VListEvents,
-  ItemTemplate,
-  ItemState,
-  Range,
-} from "../types";
-
-import type { SizeCache } from "../rendering/sizes";
-import { createSizeCache } from "../rendering/sizes";
-import type { Emitter } from "../events/emitter";
-
-import type { DOMStructure } from "./dom";
-import type { createElementPool } from "./pool";
-
-import type {
-  BuilderConfig,
-  BuilderContext,
-  BuilderState,
-  ResolvedBuilderConfig,
+  CreateVListConfig,
+  VListPlugin,
+  VList,
+  PluginContext,
+  ResolvedConfig,
+  VisibleRangeFn,
+  CompiledHooks,
 } from "./types";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT } from "../constants";
+import { EngineState } from "./engine-state";
+import { createSizeCache } from "./sizes";
+import type { SizeCache } from "./sizes";
+import { createPool } from "./pool";
+import { createDOMStructure, resolveContainer } from "./dom";
+import { createScrollHandler } from "./scroll";
+import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
+import { render } from "./pipeline";
+import { createEmitter, type Emitter } from "../events";
+import type { VListEvents } from "../types";
+import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } from "./velocity";
 
 // =============================================================================
-// MRefs — shared mutable state (short keys for minification)
+// Config Resolution
 // =============================================================================
 
-/**
- * Mutable refs object shared between core.ts materialize() and context factories.
- *
- * Key mapping (short → long):
- *
- * | Key  | Meaning                |
- * |------|------------------------|
- * | it   | items                  |
- * | hc   | sizeCache              |
- * | ch   | containerHeight        |
- * | cw   | containerWidth         |
- * | id   | isDestroyed            |
- * | ii   | isInitialized          |
- * | ls   | lastScrollTop          |
- * | vt   | velocityTracker        |
- * | ss   | selectionSet           |
- * | fi   | focusedIndex           |
- * | la   | lastAriaSetSize        |
- * | dm   | dataManagerProxy       |
- * | sc   | scrollControllerProxy  |
- * | vtf  | virtualTotalFn         |
- * | sgt  | scrollGetTop           |
- * | sst  | scrollSetTop           |
- * | sab  | scrollIsAtBottom       |
- * | sic  | scrollIsCompressed     |
- * | rfn  | renderIfNeededFn       |
- * | ffn  | forceRenderFn          |
- * | gvr  | getVisibleRange        |
- * | gsp  | getScrollToPos         |
- * | pef  | positionElementFn      |
- * | at   | activeTemplate         |
- * | vre  | viewportResizeEnabled  |
- * | st   | scrollTarget           |
- * | gcw  | getContainerWidth      |
- * | gch  | getContainerHeight     |
- */
-export interface MRefs<T extends VListItem = VListItem> {
-  /** items */
-  it: T[];
-  /** sizeCache */
-  hc: SizeCache;
-  /** containerHeight */
-  ch: number;
-  /** containerWidth */
-  cw: number;
-  /** isDestroyed */
-  id: boolean;
-  /** isInitialized */
-  ii: boolean;
-  /** lastScrollTop */
-  ls: number;
-  /** velocityTracker */
-  vt: { velocity: number; sampleCount: number };
-  /** selectionSet */
-  ss: Set<string | number>;
-  /** focusedIndex */
-  fi: number;
-  /** lastAriaSetSize */
-  la: string;
-  /** dataManagerProxy */
-  dm: any;
-  /** scrollControllerProxy */
-  sc: any;
-  /** virtualTotalFn */
-  vtf: () => number;
-  /** scrollGetTop */
-  sgt: () => number;
-  /** scrollSetTop */
-  sst: (pos: number) => void;
-  /** scrollIsAtBottom */
-  sab: (threshold?: number) => boolean;
-  /** scrollIsCompressed */
-  sic: boolean;
-  /** renderIfNeededFn */
-  rfn: () => void;
-  /** forceRenderFn */
-  ffn: () => void;
-  /** getVisibleRange */
-  gvr: (
-    scrollTop: number,
-    cHeight: number,
-    hc: SizeCache,
-    total: number,
-    out: Range,
-  ) => void;
-  /** getScrollToPos */
-  gsp: (
-    index: number,
-    hc: SizeCache,
-    cHeight: number,
-    total: number,
-    align: "start" | "center" | "end",
-  ) => number;
-  /** positionElementFn */
-  pef: (element: HTMLElement, index: number) => void;
-  /** activeTemplate */
-  at: ItemTemplate<T>;
-  /** viewportResizeEnabled */
-  vre: boolean;
-  /** scrollTarget */
-  st: HTMLElement | Window;
-  /** wheelHandler - for features to disable wheel handling if needed */
-  wh: ((e: WheelEvent) => void) | null;
-  /** getContainerWidth */
-  gcw: () => number;
-  /** getContainerHeight */
-  gch: () => number;
-  /** gap — item spacing along main axis (0 = none) */
-  gp: number;
-  /** mainAxisPadding — sum of CSS padding along scroll axis (0 = none) */
-  mp: number;
-  /** stripeIndexFn — maps layout index to stripe index (-1 = skip) */
-  sif: (index: number) => number;
-  /** itemToScrollIndex — maps flat item index to size-cache index (identity for list, floor(index/cols) for grid) */
-  i2s: (index: number) => number;
-  /** updateItemClassesFn */
-  uic: (index: number, isSelected: boolean, isFocused: boolean) => void;
-  /** constrainSizeForIndex — null = always constrain (Mode A default) */
-  csi: ((index: number) => boolean) | null;
-}
-
-// =============================================================================
-// MDeps — immutable dependencies passed from materialize()
-// =============================================================================
-
-/** Immutable dependencies the context factory needs from materialize(). */
-export interface MDeps<T extends VListItem = VListItem> {
-  readonly dom: DOMStructure;
-  readonly emitter: Emitter<VListEvents<T>>;
-  readonly resolvedConfig: ResolvedBuilderConfig;
-  readonly rawConfig: BuilderConfig<T>;
-  readonly rendered: Map<number, HTMLElement>;
-  readonly pool: ReturnType<typeof createElementPool>;
-  readonly itemState: ItemState;
-  readonly sharedState: BuilderState;
-  readonly renderRange: Range;
-  readonly isHorizontal: boolean;
-  readonly classPrefix: string;
-  readonly contentSizeHandlers: Array<() => void>;
-  readonly idleHandlers: Array<() => void>;
-  readonly afterScroll: Array<
-    (scrollPosition: number, direction: string) => void
-  >;
-  readonly clickHandlers: Array<(event: MouseEvent) => void>;
-  readonly contextMenuHandlers: Array<(event: MouseEvent) => void>;
-  readonly keydownHandlers: Array<(event: KeyboardEvent) => void>;
-  readonly resizeHandlers: Array<(width: number, height: number) => void>;
-  readonly destroyHandlers: Array<() => void>;
-  readonly methods: Map<string, Function>;
-  readonly onScrollFrame: () => void;
-  readonly resizeObserver: ResizeObserver;
-  readonly afterRenderBatch: ReadonlyArray<
-    (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
-  >;
-  readonly applyTemplate: (
-    element: HTMLElement,
-    result: string | HTMLElement,
-  ) => void;
-  readonly updateContentSize: () => void;
-}
-
-// =============================================================================
-// createMaterializeCtx — BuilderContext factory
-// =============================================================================
-
-export const createMaterializeCtx = <T extends VListItem = VListItem>(
-  $: MRefs<T>,
-  deps: MDeps<T>,
-): BuilderContext<T> => {
-  const {
-    dom,
-    emitter,
-    resolvedConfig,
-    rawConfig,
-    rendered,
-    pool,
-    sharedState,
-    isHorizontal,
-    classPrefix: _classPrefix,
-    contentSizeHandlers,
-    idleHandlers,
-    afterScroll,
-    clickHandlers,
-    contextMenuHandlers,
-    keydownHandlers,
-    resizeHandlers,
-    destroyHandlers,
-    methods,
-    onScrollFrame,
-    resizeObserver,
-    renderRange,
-    afterRenderBatch,
-  } = deps;
-
+function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): ResolvedConfig {
+  const horizontal = raw.orientation === "horizontal";
   return {
-    get dom() {
-      return dom as any;
-    },
-    get sizeCache() {
-      return $.hc as any;
-    },
-    get emitter() {
-      return emitter as any;
-    },
-    get config() {
-      return resolvedConfig;
-    },
-    get rawConfig() {
-      return rawConfig;
-    },
-    adjustScrollPosition(position: number): number {
-      if ($.mp === 0) return position;
-      // calculateScrollToIndex clamps to getTotalSize() - containerSize.
-      // With padding the scrollable area is getTotalSize() + padding.
-      // If the position hit the old ceiling, extend to the padded max
-      // so scrollToIndex can reach the very bottom (including padding).
-      const containerSize = isHorizontal ? $.cw : $.ch;
-      const totalSize = $.hc.getTotalSize();
-      const unpaddedMax = Math.max(0, totalSize - containerSize);
-      const paddedMax = Math.max(0, totalSize + $.mp - containerSize);
-      if (position >= unpaddedMax) return paddedMax;
-      return Math.min(position, paddedMax);
-    },
+    overscan: raw.overscan ?? OVERSCAN,
+    horizontal,
+    reverse: raw.reverse ?? false,
+    classPrefix: raw.classPrefix ?? CLASS_PREFIX,
+    interactive: raw.interactive ?? true,
+  };
+}
 
-    // Mutable component slots (features can replace)
-    // Expose a renderer proxy so features (e.g. withSelection) can call
-    // ctx.renderer.render() and ctx.renderer.updateItemClasses() without
-    // needing access to the inlined rendering internals.
-    get renderer() {
-      return {
-        render: (
-          _items: T[],
-          _range: Range,
-          selected: Set<string | number>,
-          focusedIdx: number,
-          _compressionCtx?: any,
-        ): void => {
-          // Inject selection state into the inlined renderer's closure
-          $.ss = selected;
-          $.fi = focusedIdx;
-          $.ffn();
-        },
-        updateItemClasses: (
-          index: number,
-          isSelected: boolean,
-          isFocused: boolean,
-        ): void => {
-          $.uic(index, isSelected, isFocused);
-        },
-        updatePositions: () => {},
-        updateItem: () => {},
-        getElement: (index: number) => rendered.get(index) ?? null,
-        clear: () => {},
-        destroy: () => {},
-      } as any;
-    },
-    set renderer(_r: any) {
-      // no-op — grid feature overrides via methods below
-    },
+function resolveSizeConfig<T extends VListItem>(
+  raw: CreateVListConfig<T>,
+  horizontal: boolean,
+): number | ((index: number) => number) {
+  if (horizontal) {
+    return raw.item.width ?? raw.item.estimatedWidth ?? 100;
+  }
+  return raw.item.height ?? raw.item.estimatedHeight ?? 40;
+}
 
-    get dataManager() {
-      return $.dm as any;
-    },
-    set dataManager(dm: any) {
-      $.dm = dm;
-    },
+// =============================================================================
+// Plugin Sorting
+// =============================================================================
 
-    get scrollController() {
-      return $.sc as any;
-    },
-    set scrollController(sc: any) {
-      $.sc = sc;
-    },
+function sortPlugins<T extends VListItem>(plugins: readonly VListPlugin<T>[]): VListPlugin<T>[] {
+  const sorted = [...plugins];
+  sorted.sort((a, b) => (a.priority ?? 50) - (b.priority ?? 50));
+  return sorted;
+}
 
-    state: sharedState,
-
-    /** Get current container width (for grid feature) */
-    getContainerWidth(): number {
-      return $.cw;
-    },
-
-    afterScroll,
-    idleHandlers,
-    afterRenderBatch: afterRenderBatch as Array<
-      (items: ReadonlyArray<{ index: number; element: HTMLElement }>) => void
-    >,
-    clickHandlers,
-    contextMenuHandlers,
-    keydownHandlers,
-    resizeHandlers,
-    contentSizeHandlers,
-    destroyHandlers,
-    methods,
-
-    replaceTemplate(newTemplate: ItemTemplate<T>): void {
-      $.at = newTemplate;
-    },
-    replaceRenderer(_renderer: any): void {
-      // No-op in materialize (renderer is inlined)
-    },
-    replaceDataManager(dm: any): void {
-      $.dm = dm;
-    },
-    replaceScrollController(sc: any): void {
-      $.sc = sc;
-    },
-
-    getItemsForRange(range: Range): T[] {
-      const dm = $.dm;
-      const items = $.it;
-      const result: T[] = [];
-      for (let i = range.start; i <= range.end; i++) {
-        const item = (dm ? dm.getItem(i) : items[i]) as T | undefined;
-        if (item) result.push(item);
-      }
-      return result;
-    },
-    getAllLoadedItems(): T[] {
-      const dm = $.dm;
-      if (dm) {
-        const total = dm.getTotal();
-        const result: T[] = [];
-        for (let i = 0; i < total; i++) {
-          const item = dm.getItem(i) as T | undefined;
-          if (item) result.push(item);
+function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[]): void {
+  const names = new Set<string>();
+  for (const p of plugins) {
+    if (names.has(p.name)) {
+      throw new Error(`[vlist] Duplicate plugin: ${p.name}`);
+    }
+    names.add(p.name);
+  }
+  for (const p of plugins) {
+    if (p.conflicts) {
+      for (const c of p.conflicts) {
+        if (names.has(c)) {
+          throw new Error(`[vlist] Plugin "${p.name}" conflicts with "${c}"`);
         }
-        return result;
       }
-      return [...$.it];
+    }
+  }
+}
+
+// =============================================================================
+// createVList()
+// =============================================================================
+
+export function createVList<T extends VListItem = VListItem>(
+  rawConfig: CreateVListConfig<T>,
+  plugins: VListPlugin<T>[] = [],
+): VList<T> {
+  // ── Resolve config ──────────────────────────────────────────────
+
+  const config = resolveConfig(rawConfig);
+  const sizeSpec = resolveSizeConfig(rawConfig, config.horizontal);
+  const minItemSize = typeof sizeSpec === "number" ? sizeSpec : 20;
+  const totalItems = rawConfig.items?.length ?? 0;
+
+  // ── Sort and validate plugins ───────────────────────────────────
+
+  const sorted = sortPlugins(plugins);
+  checkConflicts(sorted);
+
+  // ── Create core components ──────────────────────────────────────
+
+  const container = resolveContainer(rawConfig.container);
+  const dom = createDOMStructure(container, config.classPrefix, config.horizontal, config.interactive, rawConfig.ariaLabel);
+  const sizeCache: SizeCache = createSizeCache(sizeSpec, totalItems);
+  const pool = createPool(config.classPrefix);
+  const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
+
+  // ── Initialize engine state ─────────────────────────────────────
+
+  const initialCapacity = Math.ceil(4096 / minItemSize) + config.overscan * 2 + 8;
+  const state = new EngineState(initialCapacity);
+  state.totalItems = totalItems;
+
+  // ── Items storage ───────────────────────────────────────────────
+
+  let items: T[] = rawConfig.items ?? [];
+  const getItems = (): readonly T[] => items;
+
+  // ── Rendered elements tracking ──────────────────────────────────
+
+  const rendered = new Map<number, HTMLElement>();
+
+  // ── Velocity tracking & range:change state ─────────────────────
+
+  const velocityTracker = createVelocityTracker();
+  const _velEvt = { velocity: 0, reliable: false };
+  const _rangeEvt = { range: { start: 0, end: -1 } };
+  let prevEmittedStart = -1;
+  let prevEmittedEnd = -1;
+
+  // ── Compile hooks from plugins ──────────────────────────────────
+
+  const hooks: CompiledHooks = compileHooks(sorted);
+
+  // ── Plugin context (cold path) ──────────────────────────────────
+
+  const methods = new Map<string, Function>();
+  const clickHandlers: Array<(e: MouseEvent) => void> = [];
+  const keydownHandlers: Array<(e: KeyboardEvent) => void> = [];
+  const destroyHandlers: Array<() => void> = [];
+  let virtualTotalFn: (() => number) | null = null;
+  let scrollGetFn: (() => number) | null = null;
+  let scrollSetFn: ((pos: number) => void) | null = null;
+  let customRenderIfNeeded: (() => void) | null = null;
+  let customForceRender: (() => void) | null = null;
+
+  const ctx: PluginContext<T> = {
+    dom,
+    sizeCache,
+    pool,
+    config,
+    emitter,
+    template: rawConfig.item.template,
+    registerMethod(name: string, fn: Function): void { methods.set(name, fn); },
+    getMethod(name: string): Function | undefined { return methods.get(name); },
+    registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
+    registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
+    registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
+    setSizeConfig(sc: number | ((index: number) => number)): void {
+      const newCache = createSizeCache(sc, state.totalItems);
+      Object.assign(sizeCache, newCache);
     },
-    getVirtualTotal(): number {
-      return $.vtf();
+    setVisibleRangeFn(_fn: VisibleRangeFn): void { /* wired in Phase B when scale plugin consumes it */ },
+    setScrollFns(get: () => number, set: (pos: number) => void): void {
+      scrollGetFn = get;
+      scrollSetFn = set;
     },
-    getCachedCompression() {
-      const hc = $.hc;
-      return {
-        isCompressed: false,
-        actualSize: hc.getTotalSize(),
-        virtualSize: hc.getTotalSize(),
-        ratio: 1,
-      } as any;
+    setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
+    getItems,
+    getState(): EngineState { return state; },
+    rebuildSizeCache(): void {
+      sizeCache.rebuild(state.totalItems);
     },
-    getCompressionContext() {
-      return {
-        scrollPosition: $.ls,
-        totalItems: $.vtf(),
-        containerSize: $.ch,
-        rangeStart: renderRange.start,
-        compression: sharedState.cachedCompression?.state,
-      } as any;
+    updateContentSize(size: number): void {
+      dom.content.style[config.horizontal ? "width" : "height"] = size + "px";
     },
-    renderIfNeeded(): void {
-      $.rfn();
+    setRenderFn(renderFn: () => void, forceFn: () => void): void {
+      customRenderIfNeeded = renderFn;
+      customForceRender = forceFn;
     },
+    renderIfNeeded(): void { doRender(); },
     forceRender(): void {
-      $.ffn();
+      doForceRender();
     },
-    invalidateRendered(): void {
+  };
+
+  // ── Pre-initialize container size so plugins can read it ────────
+
+  state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
+  state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+
+  // ── Run plugin setup (cold path) ────────────────────────────────
+
+  for (const plugin of sorted) {
+    if (plugin.setup) {
+      plugin.setup(ctx);
+    }
+  }
+
+  // ── Render function ─────────────────────────────────────────────
+
+  function doRender(): void {
+    if (customRenderIfNeeded) {
+      customRenderIfNeeded();
+    } else {
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks);
+    }
+  }
+
+  function doForceRender(): void {
+    state.renderPending = true;
+    if (customForceRender) {
+      customForceRender();
+    } else {
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks);
+    }
+    runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+  }
+
+  // ── Scroll handler ──────────────────────────────────────────────
+
+  const scrollHandler = createScrollHandler({
+    state,
+    viewport: dom.viewport,
+    horizontal: config.horizontal,
+    wheelEnabled: rawConfig.scroll?.wheel !== false,
+    idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+    onFrame(): void {
+      doRender();
+      runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+      emitter.emit("scroll", { scrollPosition: state.scrollPosition, direction: state.scrollDirection > 0 ? "down" : "up" });
+
+      updateVelocityTracker(velocityTracker, state.scrollPosition);
+      _velEvt.velocity = velocityTracker.velocity;
+      _velEvt.reliable = velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES;
+      emitter.emit("velocity:change", _velEvt);
+
+      if (state.startIndex !== prevEmittedStart || state.prevRangeEnd !== prevEmittedEnd) {
+        prevEmittedStart = state.startIndex;
+        prevEmittedEnd = state.prevRangeEnd;
+        _rangeEvt.range.start = state.startIndex;
+        _rangeEvt.range.end = state.prevRangeEnd;
+        emitter.emit("range:change", _rangeEvt);
+      }
+    },
+    onIdle(): void {
+      runIdleHooks(hooks.idle);
+      _velEvt.velocity = 0;
+      _velEvt.reliable = false;
+      emitter.emit("velocity:change", _velEvt);
+      emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
+    },
+  });
+
+  // ── Event listeners ─────────────────────────────────────────────
+
+  function resolveClickedItem(e: MouseEvent): { item: T; index: number } | null {
+    const target = e.target as HTMLElement;
+    const itemEl = target.closest("[data-index]") as HTMLElement | null;
+    if (!itemEl) return null;
+    const index = parseInt(itemEl.getAttribute("data-index")!, 10);
+    if (Number.isNaN(index)) return null;
+    const item = items[index];
+    if (item === undefined) return null;
+    return { item, index };
+  }
+
+  function onContentClick(e: MouseEvent): void {
+    for (let i = 0; i < clickHandlers.length; i++) clickHandlers[i]!(e);
+
+    const hit = resolveClickedItem(e);
+    if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event: e });
+  }
+
+  function onContentKeydown(e: KeyboardEvent): void {
+    for (let i = 0; i < keydownHandlers.length; i++) keydownHandlers[i]!(e);
+  }
+
+  dom.content.addEventListener("click", onContentClick);
+  if (keydownHandlers.length > 0) dom.content.addEventListener("keydown", onContentKeydown);
+
+  // ── ResizeObserver ──────────────────────────────────────────────
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const { width, height } = entry.contentRect;
+      const size = config.horizontal ? width : height;
+      const cross = config.horizontal ? height : width;
+
+      if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
+
+      state.containerSize = size;
+      state.crossSize = cross;
+      state.resizeCapacity(size, minItemSize, config.overscan);
+      doForceRender();
+      runResizeHooks(hooks.resize, width, height);
+      emitter.emit("resize", { width, height });
+    }
+  });
+  resizeObserver.observe(dom.viewport);
+
+  // ── Initialize ──────────────────────────────────────────────────
+
+  scrollHandler.attach();
+  state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
+  state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+  state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
+
+  // Set content height for scrollbar
+  dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+
+  state.initialized = true;
+  doRender();
+
+  // ── Public API ──────────────────────────────────────────────────
+
+  const api: VList<T> = {
+    get element(): HTMLElement { return dom.root; },
+    get items(): readonly T[] { return items; },
+    get total(): number { return virtualTotalFn ? virtualTotalFn() : items.length; },
+
+    setItems(newItems: T[]): void {
+      items = [...newItems];
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      doForceRender();
+    },
+
+    appendItems(newItems: T[]): void {
+      items.push(...newItems);
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      doForceRender();
+    },
+
+    prependItems(newItems: T[]): void {
+      items.unshift(...newItems);
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      doForceRender();
+    },
+
+    updateItem(id: string | number, updates: Partial<T>): void {
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) return;
+      items[idx] = { ...items[idx]!, ...updates };
+      doForceRender();
+    },
+
+    insertItem(item: T, index?: number): void {
+      if (index === undefined) {
+        items.push(item);
+      } else {
+        items.splice(index, 0, item);
+      }
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      doForceRender();
+    },
+
+    removeItem(id: string | number): void {
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) return;
+      items.splice(idx, 1);
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      doForceRender();
+    },
+
+    removeItems(ids: ReadonlyArray<string | number>): number {
+      const idSet = new Set(ids);
+      const before = items.length;
+      items = items.filter((item) => !idSet.has(item.id));
+      const removed = before - items.length;
+      if (removed > 0) {
+        state.totalItems = items.length;
+        sizeCache.rebuild(state.totalItems);
+        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+        state.renderPending = true;
+        doRender();
+      }
+      return removed;
+    },
+
+    getItemAt(index: number): T | undefined {
+      return items[index];
+    },
+
+    getIndexById(id: string | number): number {
+      return items.findIndex((item) => item.id === id);
+    },
+
+    scrollToIndex(
+      index: number,
+      alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
+    ): void {
+      const total = virtualTotalFn ? virtualTotalFn() : items.length;
+      if (total === 0) return;
+      const clamped = Math.max(0, Math.min(index, total - 1));
+      const offset = sizeCache.getOffset(clamped);
+      const itemSize = sizeCache.getSize(clamped);
+      const cs = state.containerSize;
+      const totalSize = sizeCache.getTotalSize();
+      const maxScroll = Math.max(0, totalSize - cs);
+
+      const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
+      const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
+      const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
+
+      let pos: number;
+      switch (align) {
+        case "center":
+          pos = offset - (cs - itemSize) / 2;
+          break;
+        case "end":
+          pos = offset - cs + itemSize;
+          break;
+        default:
+          pos = offset;
+      }
+      pos = Math.max(0, Math.min(pos, maxScroll));
+
+      if (scrollSetFn) {
+        scrollSetFn(pos);
+      } else if (behavior === "smooth" && duration && duration > 0) {
+        scrollHandler.smoothScrollTo(pos, duration);
+      } else {
+        if (config.horizontal) dom.viewport.scrollLeft = pos;
+        else dom.viewport.scrollTop = pos;
+      }
+    },
+
+    getScrollPosition(): number {
+      return scrollGetFn ? scrollGetFn() : state.scrollPosition;
+    },
+
+    on: emitter.on.bind(emitter) as VList<T>["on"],
+    off: emitter.off.bind(emitter) as VList<T>["off"],
+
+    destroy(): void {
+      if (state.destroyed) return;
+      state.destroyed = true;
+
+      scrollHandler.detach();
+      resizeObserver.disconnect();
+      dom.content.removeEventListener("click", onContentClick);
+      dom.content.removeEventListener("keydown", onContentKeydown);
+
+      for (const handler of destroyHandlers) handler();
+      for (const plugin of sorted) {
+        if (plugin.destroy) plugin.destroy();
+      }
+
       for (const [, element] of rendered) {
         element.remove();
-        pool.release(element);
       }
       rendered.clear();
-    },
-    getRenderFns(): { renderIfNeeded: () => void; forceRender: () => void } {
-      return {
-        renderIfNeeded: $.rfn,
-        forceRender: $.ffn,
-      };
-    },
-    setRenderFns(renderFn: () => void, forceFn: () => void): void {
-      $.rfn = renderFn;
-      $.ffn = forceFn;
-    },
+      pool.clear();
 
-    setVirtualTotalFn(fn: () => number): void {
-      $.vtf = fn;
-    },
-    rebuildSizeCache(total?: number): void {
-      $.hc.rebuild(total ?? $.vtf());
-    },
-    setSizeConfig(newConfig: number | ((index: number) => number)): void {
-      $.hc = createSizeCache(newConfig, $.vtf());
-      // Re-apply trailing gap fix when gap > 0 (cache was replaced)
-      if ($.gp > 0) {
-        const origGetTotalSize = $.hc.getTotalSize;
-        const gap = $.gp;
-        $.hc.getTotalSize = (): number => {
-          const total = origGetTotalSize();
-          return total > 0 ? total - gap : 0;
-        };
-      }
-    },
-    updateContentSize(totalSize: number): void {
-      const size = `${totalSize + $.mp}px`;
-      if (isHorizontal) {
-        dom.content.style.width = size;
-      } else {
-        dom.content.style.height = size;
-      }
-    },
-    updateCompressionMode(): void {
-      // No-op by default — withScale feature replaces this.
-      // Fire contentSizeHandlers so features (e.g. withScrollbar) pick up
-      // any content-size change.  When withScale is active its enhanced
-      // version fires these itself; this default path covers the plain case.
-      for (let i = 0; i < contentSizeHandlers.length; i++) {
-        contentSizeHandlers[i]!();
-      }
-    },
-
-    setVisibleRangeFn(
-      fn: (
-        scrollTop: number,
-        cHeight: number,
-        hc: SizeCache,
-        total: number,
-        out: Range,
-      ) => void,
-    ): void {
-      $.gvr = fn;
-    },
-
-    getVisibleRange(
-      scrollTop: number,
-      containerHeight: number,
-      totalItems: number,
-      out: Range,
-    ): void {
-      $.gvr(scrollTop, containerHeight, $.hc, totalItems, out);
-    },
-
-    setScrollToPosFn(
-      fn: (
-        index: number,
-        hc: SizeCache,
-        cHeight: number,
-        total: number,
-        align: "start" | "center" | "end",
-      ) => number,
-    ): void {
-      $.gsp = fn;
-    },
-
-    getScrollToPos(
-      index: number,
-      containerHeight: number,
-      totalItems: number,
-      align: "start" | "center" | "end",
-    ): number {
-      return $.gsp(index, $.hc, containerHeight, totalItems, align);
-    },
-
-    setPositionElementFn(
-      fn: (element: HTMLElement, index: number) => void,
-    ): void {
-      $.pef = fn;
-    },
-
-    setScrollFns(getTop: () => number, setTop: (pos: number) => void): void {
-      $.sgt = getTop;
-      $.sst = (pos: number): void => {
-        setTop(pos);
-        onScrollFrame();
-      };
-    },
-
-    triggerScrollFrame(): void {
-      onScrollFrame();
-    },
-
-    setScrollTarget(target: HTMLElement | Window): void {
-      // Remove listener from old target
-      $.st.removeEventListener("scroll", onScrollFrame);
-      // Update target and re-attach listener
-      $.st = target;
-      $.st.addEventListener("scroll", onScrollFrame, { passive: true });
-    },
-
-    getScrollTarget(): HTMLElement | Window {
-      return $.st;
-    },
-
-    setContainerDimensions(getter: {
-      width: () => number;
-      height: () => number;
-    }): void {
-      $.gcw = getter.width;
-      $.gch = getter.height;
-      // Update current dimensions immediately
-      $.cw = getter.width();
-      $.ch = getter.height();
-      sharedState.viewportState.containerSize = isHorizontal ? $.cw : $.ch;
-    },
-
-    disableViewportResize(): void {
-      if ($.vre) {
-        $.vre = false;
-        resizeObserver.unobserve(dom.viewport);
-      }
-    },
-
-    disableWheelHandler(): void {
-      if ($.wh) {
-        dom.viewport.removeEventListener("wheel", $.wh);
-        $.wh = null;
-      }
-    },
-
-    getStripeIndexFn(): (index: number) => number {
-      return $.sif;
-    },
-
-    setStripeIndexFn(fn: (index: number) => number): void {
-      $.sif = fn;
-    },
-
-    getItemToScrollIndexFn(): (index: number) => number {
-      return $.i2s;
-    },
-
-    setItemToScrollIndexFn(fn: (index: number) => number): void {
-      $.i2s = fn;
-    },
-
-    setUpdateItemClassesFn(
-      fn: (index: number, isSelected: boolean, isFocused: boolean) => void,
-    ): void {
-      $.uic = fn;
+      dom.root.remove();
+      emitter.emit("destroy", undefined as any);
+      emitter.clear();
     },
   };
-};
 
-// =============================================================================
-// createDefaultDataProxy — default data manager (thin items-array wrapper)
-// =============================================================================
+  // ── Attach plugin-registered methods ────────────────────────────
 
-export const createDefaultDataProxy = <T extends VListItem = VListItem>(
-  $: MRefs<T>,
-  deps: Pick<
-    MDeps<T>,
-    | "rendered"
-    | "itemState"
-    | "contentSizeHandlers"
-    | "applyTemplate"
-    | "updateContentSize"
-  >,
-  ctx: BuilderContext<T>,
-): any => {
-  const {
-    rendered,
-    itemState,
-    applyTemplate,
-    updateContentSize,
-  } = deps;
+  for (const [name, fn] of methods) {
+    (api as Record<string, unknown>)[name] = fn;
+  }
 
-  /** Sync size cache, content size, compression, notify handlers, re-render. */
-  const syncAfterChange = (): void => {
-    $.hc.rebuild($.vtf());
-    updateContentSize();
-    // updateCompressionMode fires contentSizeHandlers internally
-    // (both the default implementation and withScale's enhanced version),
-    // so we don't duplicate the loop here.
-    ctx.updateCompressionMode();
-    $.ffn();
-  };
-
-  const n = () => $.it.length;
-
-  let idIndex: Map<string | number, number> | null = null;
-
-  const ensureIndex = (): Map<string | number, number> => {
-    if (!idIndex) idIndex = new Map();
-    idIndex.clear();
-    for (let i = 0; i < $.it.length; i++) {
-      const id = ($.it[i] as any)?.id;
-      if (id !== undefined) idIndex.set(id, i);
-    }
-    return idIndex;
-  };
-
-  return {
-    getState: () => ({ total: n(), cached: n(), isLoading: false, pendingRanges: [], error: undefined as unknown, hasMore: false, cursor: undefined as unknown }),
-    getTotal: n,
-    getCached: n,
-    getIsLoading: () => false,
-    getHasMore: () => false,
-    getStorage: () => null,
-    getPlaceholders: () => null,
-    getItem: (index: number) => $.it[index],
-    isItemLoaded: (index: number) => index >= 0 && index < n() && $.it[index] !== undefined,
-    getItemsInRange: (start: number, end: number) => {
-      const result: T[] = [];
-      for (let i = Math.max(0, start), e = Math.min(end, n() - 1); i <= e; i++) result.push($.it[i] as T);
-      return result;
-    },
-    getIndexById: (id: string | number): number => {
-      const idx = idIndex ?? ensureIndex();
-      return idx.get(id) ?? -1;
-    },
-    setTotal: () => {},
-    setItems: (newItems: T[], offset = 0, newTotal?: number) => {
-      if (offset === 0 && (newTotal !== undefined || n() === 0)) {
-        $.it = newItems;
-        if (idIndex) ensureIndex();
-      } else {
-        const req = offset + newItems.length;
-        if (n() < req) $.it.length = req;
-        for (let i = 0; i < newItems.length; i++) {
-          if (idIndex) {
-            const oldId = ($.it[offset + i] as any)?.id;
-            if (oldId !== undefined) idIndex.delete(oldId);
-          }
-          $.it[offset + i] = newItems[i]!;
-          if (idIndex) {
-            const newId = (newItems[i] as any)?.id;
-            if (newId !== undefined) idIndex.set(newId, offset + i);
-          }
-        }
-      }
-      if ($.ii) syncAfterChange();
-    },
-    updateItem: (index: number, updates: Partial<T>) => {
-      const items = $.it;
-      if (index < 0 || index >= items.length) return false;
-      const item = items[index];
-      if (!item) return false;
-      const oldId = (item as any).id;
-      items[index] = { ...item, ...updates } as T;
-      if (idIndex) {
-        const newId = (items[index] as any).id;
-        if (oldId !== newId) {
-          if (oldId !== undefined) idIndex.delete(oldId);
-          if (newId !== undefined) idIndex.set(newId, index);
-        }
-      }
-      const element = rendered.get(index);
-      if (element) {
-        applyTemplate(element, $.at(items[index]!, index, itemState));
-        element.dataset.id = String(items[index]!.id);
-      }
-      return true;
-    },
-    insertItem: (item: T, index: number) => {
-      $.it.splice(index, 0, item);
-      if (idIndex) ensureIndex();
-      if ($.ii) syncAfterChange();
-    },
-    removeItem: (id: string | number) => {
-      let index: number;
-      if (typeof id === "number") {
-        index = idIndex ? (idIndex.get(id) ?? id) : id;
-      } else {
-        const idx = idIndex ?? ensureIndex();
-        index = idx.get(id) ?? -1;
-      }
-      if (index < 0 || index >= $.it.length) return false;
-      $.it.splice(index, 1);
-      if (idIndex) ensureIndex();
-      if ($.ii) syncAfterChange();
-      return true;
-    },
-    loadRange: async () => {},
-    ensureRange: async () => {},
-    loadInitial: async () => {},
-    loadMore: async () => false,
-    reload: async () => {},
-    evictDistant: () => {},
-    clear: () => {
-      $.it = [] as unknown as T[];
-      if (idIndex) idIndex.clear();
-    },
-    reset: () => {
-      $.it = [] as unknown as T[];
-      if (idIndex) idIndex.clear();
-      if ($.ii) {
-        $.hc.rebuild(0);
-        updateContentSize();
-        $.ffn();
-      }
-    },
-  };
-};
-
-// =============================================================================
-// createDefaultScrollProxy — minimal scroll controller
-// =============================================================================
-
-export const createDefaultScrollProxy = <T extends VListItem = VListItem>(
-  $: MRefs<T>,
-  deps: Pick<MDeps<T>, "dom" | "classPrefix" | "onScrollFrame">,
-): any => {
-  const { dom, classPrefix, onScrollFrame } = deps;
-
-  return {
-    getScrollTop: () => $.sgt(),
-    scrollTo: (pos: number) => {
-      $.sst(pos);
-      onScrollFrame();
-    },
-    scrollBy: (delta: number) => {
-      const newPos = $.sgt() + delta;
-      $.sst(newPos);
-      onScrollFrame();
-    },
-    isAtTop: () => $.ls <= 2,
-    isAtBottom: (threshold = 2) => $.sab(threshold),
-    getScrollPercentage: () => {
-      const total = $.hc.getTotalSize();
-      const maxScroll = Math.max(0, total - $.ch);
-      return maxScroll > 0 ? $.ls / maxScroll : 0;
-    },
-    getVelocity: () => $.vt.velocity,
-    isTracking: () => $.vt.sampleCount >= 2,
-    isScrolling: () => dom.root.classList.contains(`${classPrefix}--scrolling`),
-    updateConfig: () => {},
-    enableCompression: () => {
-      $.sic = true;
-    },
-    disableCompression: () => {
-      $.sic = false;
-    },
-    isCompressed: () => $.sic,
-    isWindowMode: () => false,
-    updateContainerHeight: (h: number) => {
-      $.ch = h;
-    },
-    destroy: () => {},
-  };
-};
+  return api;
+}

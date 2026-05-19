@@ -33,13 +33,15 @@ export {
 
 export {
   createGridLayout,
-  createGridRenderer,
-  type GridConfig,
   type GridLayout,
   type GridPosition,
-  type GridRenderer,
   type ItemRange,
-} from "./features/grid";
+} from "./plugins/grid";
+export {
+  createGridRenderer,
+  type GridRenderer,
+} from "./plugins/grid/renderer";
+export type { GridConfig } from "./plugins/grid/types";
 
 // =============================================================================
 // Table domain
@@ -126,8 +128,8 @@ export {
   clearSelection,
   isSelected,
   getSelectedIds,
-  getSelectedItems,
-} from "./features/selection";
+} from "./plugins/selection";
+export { getSelectedItemsImmutable as getSelectedItems } from "./plugins/selection/state";
 
 // =============================================================================
 // Events domain
@@ -162,7 +164,8 @@ export {
   rafThrottle,
   type ScrollController,
   type Scrollbar,
-} from "./features/scrollbar";
+} from "./plugins/scrollbar";
+export type { ScrollbarConfig } from "./plugins/scrollbar/scrollbar";
 
 // =============================================================================
 // Stats utility

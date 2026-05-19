@@ -380,3 +380,84 @@ export const selectRange = <T extends VListItem>(
 
   return selectItems(state, idsToSelect, mode);
 };
+
+// =============================================================================
+// v2 Plugin Helpers — mutable, zero-allocation variants for hot path
+// =============================================================================
+
+export function selectOne(
+  selected: Set<string | number>,
+  id: string | number,
+  mode: SelectionMode,
+): void {
+  if (mode === "single") selected.clear();
+  if (mode !== "none") selected.add(id);
+}
+
+export function toggleOne(
+  selected: Set<string | number>,
+  id: string | number,
+  mode: SelectionMode,
+): void {
+  if (mode === "none") return;
+  if (selected.has(id)) {
+    selected.delete(id);
+  } else {
+    if (mode === "single") selected.clear();
+    selected.add(id);
+  }
+}
+
+export function selectAllItems<T extends VListItem>(
+  selected: Set<string | number>,
+  items: readonly T[],
+): void {
+  for (let i = 0; i < items.length; i++) selected.add(items[i]!.id);
+}
+
+export function selectRangeMut<T extends VListItem>(
+  selected: Set<string | number>,
+  items: readonly T[],
+  fromIndex: number,
+  toIndex: number,
+): void {
+  const start = Math.min(fromIndex, toIndex);
+  const end = Math.max(fromIndex, toIndex);
+  for (let i = start; i <= end; i++) {
+    const item = items[i];
+    if (item) selected.add(item.id);
+  }
+}
+
+export function moveFocus(
+  state: SelectionState,
+  delta: number,
+  totalItems: number,
+  reverse?: boolean,
+): void {
+  if (totalItems === 0) return;
+  const d = reverse ? -delta : delta;
+  let idx = state.focusedIndex + d;
+  if (idx < 0) idx = 0;
+  if (idx >= totalItems) idx = totalItems - 1;
+  state.focusedIndex = idx;
+}
+
+export function getSelectedArray(
+  selected: Set<string | number>,
+): Array<string | number> {
+  return Array.from(selected);
+}
+
+export { getSelectedItems as getSelectedItemsImmutable };
+
+export function getSelectedItemsMut<T extends VListItem>(
+  selected: Set<string | number>,
+  items: readonly T[],
+): T[] {
+  const result: T[] = [];
+  for (const item of items) {
+    if (selected.has(item.id)) result.push(item);
+  }
+  return result;
+}

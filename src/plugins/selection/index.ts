@@ -1,32 +1,24 @@
 /**
- * vlist - Selection Domain
- * Selection state management
+ * vlist v2 — Selection Plugin
  */
 
-// Builder Feature
-export { withSelection, type SelectionFeatureConfig } from "./feature";
-
-// Selection State
+export { selection, type SelectionPluginConfig } from "./plugin";
 export {
   createSelectionState,
+  selectOne,
+  toggleOne,
+  selectRangeMut as selectRange,
+  selectAllItems,
+  moveFocus,
+  getSelectedArray,
+  getSelectedItemsMut as getSelectedItems,
+  type SelectionState,
+  // v1 immutable API (re-exported for backwards compat)
   selectItems,
   deselectItems,
   toggleSelection,
   selectAll,
   clearSelection,
-  setFocusedIndex,
-  moveFocusUp,
-  moveFocusDown,
-  moveFocusToFirst,
-  moveFocusToLast,
-  moveFocusByPage,
-  selectFocused,
-  selectRange,
-  getSelectedIds,
-  getSelectedItems,
-  getSelectionCount,
   isSelected,
-  isSelectionEmpty,
-  claimPlaceholderSelection,
-  type SelectionState,
+  getSelectedIds,
 } from "./state";

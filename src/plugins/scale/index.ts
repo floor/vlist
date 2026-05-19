@@ -1,23 +1,5 @@
 /**
- * vlist - Compression Sub-module
- * Re-exports compression utilities for tree-shakeable imports
- *
- * Usage: import { getCompressionInfo } from 'vlist/compression'
- * Usage: import { withScale } from 'vlist/compression'
+ * vlist v2 — Scale Plugin
  */
 
-export {
-  MAX_VIRTUAL_SIZE,
-  getCompressionState,
-  needsCompression,
-  getMaxItemsWithoutCompression,
-  getCompressionInfo,
-  calculateCompressedVisibleRange,
-  calculateCompressedRenderRange,
-  calculateCompressedItemPosition,
-  calculateCompressedScrollToIndex,
-  calculateIndexFromScrollPosition,
-  type CompressionState,
-} from "../../rendering/scale";
-
-export { withScale, type ScaleConfig } from "./feature";
+export { scale, type ScalePluginConfig } from "./plugin";

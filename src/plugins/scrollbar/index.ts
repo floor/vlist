@@ -1,29 +1,16 @@
 /**
- * vlist - Scroll Domain
- * Scroll controller and custom scrollbar
+ * vlist v2 — Scrollbar Plugin
  */
 
-// Builder Feature
-export { withScrollbar, type ScrollbarFeatureConfig } from "./feature";
-
-// Scroll Controller
-export {
-  createScrollController,
-  rafThrottle,
-  isAtBottom,
-  isAtTop,
-  getScrollPercentage,
-  isRangeVisible,
-  type ScrollController,
-  type ScrollControllerConfig,
-  type ScrollEventData,
-  type ScrollDirection,
-} from "./controller";
-
-// Custom Scrollbar
+export { scrollbar, type ScrollbarPluginConfig } from "./plugin";
 export {
   createScrollbar,
   type Scrollbar,
   type ScrollbarConfig,
   type ScrollCallback,
 } from "./scrollbar";
+export {
+  createScrollController,
+  rafThrottle,
+  type ScrollController,
+} from "./controller";

@@ -38,7 +38,7 @@ import {
 import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
 import type { GridLayout } from "./types";
-import { isGroupHeader } from "../groups/types";
+import { isGroupHeader } from "../../features/groups/types";
 import { sortRenderedDOM } from "../../rendering/sort";
 
 // =============================================================================

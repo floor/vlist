@@ -1,0 +1,325 @@
+/**
+ * vlist v2 — Grid Plugin
+ *
+ * Switches from list layout to a 2D grid with configurable columns and gap.
+ * Priority 10 — runs before selection (50) so layout is ready for other plugins.
+ *
+ * Architecture:
+ * - Replaces the default 1D render pipeline with a grid-aware render
+ * - Size cache operates in ROW space (each row has height = itemHeight + gap)
+ * - Visible range is calculated in row space, then expanded to flat item indices
+ * - Items are positioned with translate(colOffset, rowOffset)
+ *
+ * Restrictions:
+ * - Cannot be combined with masonry or table plugins
+ */
+
+import type { VListItem, ItemTemplate, ItemState } from "../../types";
+import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
+import type { SizeCache } from "../../core/sizes";
+import type { EngineState } from "../../core/engine-state";
+import { createGridLayout } from "./layout";
+import type { GridLayout } from "./types";
+
+// =============================================================================
+// Config
+// =============================================================================
+
+export interface GridPluginConfig {
+  columns: number;
+  gap?: number;
+}
+
+// =============================================================================
+// Reusable state singleton — no allocation per frame
+// =============================================================================
+
+const itemState: ItemState = { selected: false, focused: false };
+
+// =============================================================================
+// Factory
+// =============================================================================
+
+export function grid<T extends VListItem = VListItem>(
+  config: GridPluginConfig,
+): VListPlugin<T> {
+  if (!config.columns || config.columns < 1) {
+    throw new Error("[vlist] grid: columns must be >= 1");
+  }
+
+  let layout: GridLayout;
+  let sizeCache: SizeCache;
+  let engineState: EngineState;
+  let pool: ElementPool;
+  let contentElement: HTMLElement;
+  let template: ItemTemplate<T>;
+  let getItems: () => readonly T[];
+  let horizontal: boolean;
+  let classPrefix: string;
+  let overscan: number;
+
+  const rendered = new Map<number, HTMLElement>();
+  let containerWidth = 0;
+
+  // Mutable range objects — reused across frames
+  let lastScrollPosition = -1;
+  let lastContainerSize = -1;
+  let forceNextRender = true;
+
+  function getRowCount(): number {
+    return layout.getTotalRows(engineState.totalItems);
+  }
+
+  function buildTransform(itemIndex: number): string {
+    const row = layout.getRow(itemIndex);
+    const col = layout.getCol(itemIndex);
+    const x = layout.getColumnOffset(col, containerWidth);
+    const y = sizeCache.getOffset(row);
+    if (horizontal) {
+      return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
+    }
+    return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+
+  function applySizeStyles(element: HTMLElement, itemIndex: number): void {
+    const row = layout.getRow(itemIndex);
+    const colWidth = layout.getColumnWidth(containerWidth);
+    const rowHeight = sizeCache.getSize(row) - layout.gap;
+    if (horizontal) {
+      element.style.width = `${rowHeight}px`;
+      element.style.height = `${colWidth}px`;
+    } else {
+      element.style.width = `${colWidth}px`;
+      element.style.height = `${rowHeight}px`;
+    }
+  }
+
+  function gridRenderIfNeeded(): void {
+    if (engineState.destroyed) return;
+
+    const scrollPos = engineState.scrollPosition;
+    const cs = engineState.containerSize;
+
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) {
+      return;
+    }
+    lastScrollPosition = scrollPos;
+    lastContainerSize = cs;
+    forceNextRender = false;
+
+    const totalRows = getRowCount();
+    if (cs <= 0 || totalRows === 0) return;
+
+    // Visible row range
+    let visStart = sizeCache.indexAtOffset(scrollPos);
+    let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
+    if (visEnd < totalRows - 1) visEnd++;
+    visStart = Math.max(0, visStart);
+    visEnd = Math.min(totalRows - 1, Math.max(0, visEnd));
+
+    // Overscan in row space
+    const renderStart = Math.max(0, visStart - overscan);
+    const renderEnd = Math.min(totalRows - 1, visEnd + overscan);
+
+    // Range-unchanged fast path
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) {
+      return;
+    }
+
+    // Convert row range → flat item range
+    const itemRange = layout.getItemRange(renderStart, renderEnd, engineState.totalItems);
+    const items = getItems();
+
+    // Release items outside the new range
+    for (const [idx, element] of rendered) {
+      if (idx < itemRange.start || idx > itemRange.end) {
+        element.remove();
+        pool.release(element);
+        rendered.delete(idx);
+      }
+    }
+
+    // Render items in range
+    const gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
+
+    for (let i = itemRange.start; i <= itemRange.end; i++) {
+      const item = items[i];
+      if (!item) continue;
+
+      let element = rendered.get(i);
+
+      if (element === undefined) {
+        element = pool.acquire();
+        element.className = gridItemClass;
+        element.setAttribute("data-index", String(i));
+        element.setAttribute("data-id", String(item.id));
+
+        const result = template(item, i, itemState);
+        if (typeof result === "string") {
+          element.innerHTML = result;
+        } else {
+          element.innerHTML = "";
+          element.appendChild(result);
+        }
+
+        rendered.set(i, element);
+        contentElement.appendChild(element);
+      }
+
+      applySizeStyles(element, i);
+      element.style.transform = buildTransform(i);
+    }
+
+    // Update content size for scrollbar
+    const totalSize = sizeCache.getTotalSize();
+    contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+
+    // Update engine state for other hooks/plugins
+    engineState.prevRangeStart = renderStart;
+    engineState.prevRangeEnd = renderEnd;
+    engineState.renderPending = false;
+
+    // Fill EngineState buffers for plugins that read them
+    const count = itemRange.end - itemRange.start + 1;
+    engineState.visibleCount = Math.min(count, engineState.capacity);
+    engineState.startIndex = itemRange.start;
+    for (let i = 0; i < engineState.visibleCount; i++) {
+      const idx = itemRange.start + i;
+      const row = layout.getRow(idx);
+      engineState.visibleIndices[i] = idx;
+      engineState.visibleOffsets[i] = sizeCache.getOffset(row);
+      engineState.visibleSizes[i] = sizeCache.getSize(row);
+    }
+  }
+
+  function gridForceRender(): void {
+    if (engineState.destroyed) return;
+    engineState.prevRangeStart = -1;
+    engineState.prevRangeEnd = -1;
+    engineState.renderPending = true;
+    forceNextRender = true;
+    gridRenderIfNeeded();
+  }
+
+  return {
+    name: "grid",
+    priority: 10,
+    conflicts: ["masonry", "table"],
+
+    setup(ctx: PluginContext<T>): void {
+      const gap = config.gap ?? 0;
+
+      layout = createGridLayout({ columns: config.columns, gap });
+      sizeCache = ctx.sizeCache;
+      engineState = ctx.getState();
+      pool = ctx.pool;
+      contentElement = ctx.dom.content;
+      template = ctx.template;
+      horizontal = ctx.config.horizontal;
+      classPrefix = ctx.config.classPrefix;
+      overscan = ctx.config.overscan;
+      getItems = ctx.getItems.bind(ctx);
+
+      // Size cache in ROW space: each row = itemHeight + gap
+      const baseRowSize = ctx.sizeCache.getSize(0);
+
+      if (gap > 0) {
+        ctx.setSizeConfig(baseRowSize + gap);
+      }
+
+      // Virtual total = row count (not item count)
+      ctx.setVirtualTotalFn(() => getRowCount());
+
+      // Initialize container width
+      containerWidth = engineState.crossSize;
+
+      // Add CSS class
+      ctx.dom.root.classList.add(`${classPrefix}--grid`);
+
+      // Replace render pipeline
+      ctx.setRenderFn(gridRenderIfNeeded, gridForceRender);
+
+      // ── Public methods ─────────────────────────────────────────
+
+      ctx.registerMethod("getGridLayout", () => layout);
+
+      ctx.registerMethod("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
+        if (newConfig.columns !== undefined) {
+          if (!Number.isInteger(newConfig.columns) || newConfig.columns < 1) {
+            throw new Error("[vlist] updateGrid: columns must be >= 1");
+          }
+        }
+        if (newConfig.gap !== undefined && newConfig.gap < 0) {
+          throw new Error("[vlist] updateGrid: gap must be >= 0");
+        }
+
+        layout.update(newConfig);
+
+        if (newConfig.gap !== undefined || newConfig.columns !== undefined) {
+          const newGap = layout.gap;
+          ctx.setSizeConfig(baseRowSize + newGap);
+          ctx.rebuildSizeCache();
+        }
+
+        containerWidth = engineState.crossSize;
+        gridForceRender();
+      });
+
+      // Override scrollToIndex: item index → row index
+      ctx.registerMethod("scrollToIndex", (index: number, align: "start" | "center" | "end" = "start") => {
+        const rowIndex = layout.getRow(index);
+        const totalRows = getRowCount();
+        if (totalRows === 0) return;
+        const safeRow = Math.max(0, Math.min(rowIndex, totalRows - 1));
+        const offset = sizeCache.getOffset(safeRow);
+        const rowHeight = sizeCache.getSize(safeRow);
+        const cs = engineState.containerSize;
+        const totalSize = sizeCache.getTotalSize();
+        const maxScroll = Math.max(0, totalSize - cs);
+
+        let pos: number;
+        switch (align) {
+          case "center":
+            pos = offset - (cs - rowHeight) / 2;
+            break;
+          case "end":
+            pos = offset - cs + rowHeight;
+            break;
+          default:
+            pos = offset;
+        }
+        pos = Math.max(0, Math.min(pos, maxScroll));
+
+        if (horizontal) ctx.dom.viewport.scrollLeft = pos;
+        else ctx.dom.viewport.scrollTop = pos;
+      });
+
+      // ── Cleanup ────────────────────────────────────────────────
+
+      ctx.registerDestroyHandler(() => {
+        for (const [, element] of rendered) {
+          element.remove();
+        }
+        rendered.clear();
+        ctx.dom.root.classList.remove(`${classPrefix}--grid`);
+      });
+    },
+
+    hooks: {
+      onResize(_width: number, _height: number): void {
+        const newCross = engineState.crossSize;
+        if (Math.abs(newCross - containerWidth) < 1) return;
+        containerWidth = newCross;
+
+        for (const [index, element] of rendered) {
+          applySizeStyles(element, index);
+          element.style.transform = buildTransform(index);
+        }
+      },
+    },
+
+    destroy(): void {
+      rendered.clear();
+    },
+  };
+}
