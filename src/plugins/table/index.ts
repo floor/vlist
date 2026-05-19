@@ -3,7 +3,10 @@
  * Data table layout with columns, resizable headers, and cell rendering
  */
 
-// Builder Feature
+// v2 Plugin
+export { table, type TablePluginConfig } from "./plugin";
+
+// Builder Feature (v1 — deprecated)
 export { withTable, type TableFeatureConfig } from "./feature";
 
 // Layout

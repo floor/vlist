@@ -24,6 +24,18 @@ export { snapshots } from "./plugins/snapshots";
 export type { SnapshotsPluginConfig } from "./plugins/snapshots";
 export { transition } from "./plugins/transition";
 export type { TransitionPluginConfig } from "./plugins/transition";
+export { autosize } from "./plugins/autosize";
+export type { AutosizePluginConfig } from "./plugins/autosize";
+export { masonry } from "./plugins/masonry";
+export type { MasonryPluginConfig } from "./plugins/masonry";
+export { async } from "./plugins/async";
+export type { AsyncPluginConfig } from "./plugins/async";
+export { groups } from "./plugins/groups";
+export type { GroupsPluginConfig } from "./plugins/groups";
+export { table } from "./plugins/table";
+export type { TablePluginConfig } from "./plugins/table";
+export { sortable } from "./plugins/sortable";
+export type { SortablePluginConfig } from "./plugins/sortable";
 
 // v1 builder API — disabled until features are migrated to v2 plugin interface
 // export { withScale } from "./plugins/scale/feature";

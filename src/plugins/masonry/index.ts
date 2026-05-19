@@ -1,20 +1,8 @@
 /**
- * vlist - Masonry Domain
- * Pinterest-style layout with shortest-lane placement
+ * vlist v2 — Masonry Plugin
  */
 
-// Builder Feature
-export { withMasonry, type MasonryFeatureConfig } from "./feature";
-
-// Layout
+export { masonry, type MasonryPluginConfig, type MasonryContext } from "./plugin";
 export { createMasonryLayout } from "./layout";
-
-// Renderer
 export { createMasonryRenderer, type MasonryRenderer, type GetItemFn } from "./renderer";
-
-// Types
-export type {
-  MasonryConfig,
-  MasonryLayout,
-  ItemPlacement,
-} from "./types";
+export type { MasonryConfig, MasonryLayout, ItemPlacement } from "./types";

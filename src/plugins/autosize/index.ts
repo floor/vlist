@@ -1,1 +1,5 @@
-export { withAutoSize } from "./feature";
+/**
+ * vlist v2 — Autosize Plugin
+ */
+
+export { autosize, type AutosizePluginConfig } from "./plugin";
