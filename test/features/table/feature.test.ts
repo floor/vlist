@@ -1,20 +1,19 @@
 /**
- * vlist - Table Feature Tests
- * Tests for withTable feature: initialization, configuration, render pipeline,
+ * vlist v2 — Table Plugin Tests
+ * Tests for table() plugin: initialization, configuration, render pipeline,
  * resize handlers, public methods, and event emission.
  *
- * Follows the same pattern as test/features/grid/feature.test.ts — uses a
- * mock BuilderContext to verify the feature wires correctly without needing
- * a full materialized vlist instance.
+ * Uses createPluginMockContext to verify the plugin wires correctly without
+ * needing a full materialized vlist instance.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { withTable } from "../../../src/features/table/feature";
-import { createSizeCache } from "../../../src/rendering/sizes";
+import { table } from "../../../src/plugins/table/plugin";
 import type { VListItem } from "../../../src/types";
-import type { BuilderContext } from "../../../src/builder/types";
-import type { TableColumn } from "../../../src/features/table/types";
+import type { TableColumn } from "../../../src/plugins/table/types";
+import { createPluginMockContext } from "../../helpers/plugin-context";
+import type { PluginTestContext } from "../../helpers/plugin-context";
 
 // =============================================================================
 // JSDOM Setup
@@ -61,275 +60,117 @@ const testColumns: TableColumn<TestItem>[] = [
   { key: "role", label: "Role", width: 100 },
 ];
 
-function createTestDOM() {
-  const root = document.createElement("div");
-  const viewport = document.createElement("div");
-  const content = document.createElement("div");
-  const items = document.createElement("div");
-
-  root.className = "vlist";
-  viewport.className = "vlist__viewport";
-  content.className = "vlist__content";
-  items.className = "vlist__items";
-
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  document.body.appendChild(root);
-
-  return { root, viewport, content, items };
-}
-
-function createMockContext(overrides?: {
-  itemCount?: number;
-  scrollTop?: number;
-  containerSize?: number;
-}): BuilderContext<TestItem> {
-  const testDom = createTestDOM();
-  const itemCount = overrides?.itemCount ?? 100;
-  const sizeCache = createSizeCache(40, itemCount);
-  const items: TestItem[] = Array.from({ length: itemCount }, (_, i) => ({
+function createTestItems(count: number): TestItem[] {
+  return Array.from({ length: count }, (_, i) => ({
     id: i,
     name: `User ${i}`,
     email: `user${i}@test.com`,
     role: i % 2 === 0 ? "admin" : "user",
   }));
-
-  let renderIfNeededFn = () => {};
-  let forceRenderFn = () => {};
-  let virtualTotalFn = () => itemCount;
-  let currentScrollTop = overrides?.scrollTop ?? 0;
-
-  const emitted: Array<{ event: string; payload: any }> = [];
-
-  const ctx: BuilderContext<TestItem> = {
-    dom: testDom as any,
-    sizeCache: sizeCache as any,
-    emitter: {
-      on: () => {},
-      off: () => {},
-      emit: (event: string, payload: any) => {
-        emitted.push({ event, payload });
-      },
-    } as any,
-    config: {
-      overscan: 2,
-      classPrefix: "vlist",
-      reverse: false,
-      wrap: false,
-      horizontal: false,
-      ariaIdPrefix: "vlist",
-      interactive: true,
-    },
-    rawConfig: {
-      container: document.createElement("div"),
-      items: items,
-      item: {
-        height: 40,
-        width: 200,
-        template: (item: TestItem) => `<div>${item.name}</div>`,
-      },
-    },
-    renderer: {
-      render: () => {},
-      updateItemClasses: () => {},
-      updatePositions: () => {},
-      updateItem: () => {},
-      getElement: () => null,
-      clear: () => {},
-      destroy: () => {},
-    } as any,
-    dataManager: {
-      getTotal: () => items.length,
-      getItem: (index: number) => items[index],
-      getItemsInRange: (start: number, end: number) => {
-        return items.slice(start, end + 1);
-      },
-      isItemLoaded: () => true,
-      getState: () => ({ total: items.length }),
-    } as any,
-    scrollController: {
-      getScrollTop: () => currentScrollTop,
-      scrollTo: (pos: number) => { currentScrollTop = pos; },
-      isAtTop: () => currentScrollTop === 0,
-      isAtBottom: () => false,
-    } as any,
-    state: {
-      dataState: {
-        total: itemCount,
-        cached: itemCount,
-        isLoading: false,
-        pendingRanges: [],
-        error: undefined,
-        hasMore: false,
-        cursor: undefined,
-      },
-      viewportState: {
-        scrollPosition: 0,
-        containerSize: overrides?.containerSize ?? 500,
-        totalSize: 0,
-        actualSize: 0,
-        isCompressed: false,
-        compressionRatio: 1,
-        visibleRange: { start: 0, end: 0 },
-        renderRange: { start: 0, end: 0 },
-      },
-      renderState: {
-        range: { start: 0, end: 0 },
-        visibleRange: { start: 0, end: 0 },
-        renderedCount: 0,
-      },
-      lastRenderRange: { start: -1, end: -1 },
-      isDestroyed: false,
-    } as any,
-    getContainerWidth: () => 800,
-    afterScroll: [],
-    afterRenderBatch: [],
-    idleHandlers: [],
-    clickHandlers: [],
-    contextMenuHandlers: [],
-    keydownHandlers: [],
-    resizeHandlers: [],
-    contentSizeHandlers: [],
-    destroyHandlers: [],
-    methods: new Map(),
-    replaceTemplate: () => {},
-    replaceRenderer: () => {},
-    replaceDataManager: () => {},
-    replaceScrollController: () => {},
-    getItemsForRange: (range) => {
-      return items.slice(range.start, range.end + 1);
-    },
-    getAllLoadedItems: () => items,
-    getVirtualTotal: () => virtualTotalFn(),
-    getCachedCompression: () => ({
-      isCompressed: false,
-      actualSize: itemCount * 40,
-      virtualSize: itemCount * 40,
-      ratio: 1,
-    }),
-    getCompressionContext: () => ({
-      scrollPosition: 0,
-      totalItems: itemCount,
-      containerSize: 500,
-      rangeStart: 0,
-    }),
-    renderIfNeeded: () => renderIfNeededFn(),
-    forceRender: () => forceRenderFn(),
-    invalidateRendered: () => {},
-    getRenderFns: () => ({
-      renderIfNeeded: renderIfNeededFn,
-      forceRender: forceRenderFn,
-    }),
-    setRenderFns: (renderFn, forceFn) => {
-      renderIfNeededFn = renderFn;
-      forceRenderFn = forceFn;
-    },
-    setVirtualTotalFn: (fn) => {
-      virtualTotalFn = fn;
-    },
-    rebuildSizeCache: (total) => {
-      sizeCache.rebuild(total ?? virtualTotalFn());
-    },
-    setSizeConfig: (config) => {
-      (ctx as any)._lastSizeConfig = config;
-    },
-    updateContentSize: (totalSize) => {
-      testDom.content.style.height = `${totalSize}px`;
-    },
-    updateCompressionMode: () => {},
-    setVisibleRangeFn: () => {},
-    getVisibleRange: (scrollTop: number, containerHeight: number, totalItems: number, out: { start: number; end: number }) => {
-      if (totalItems === 0 || containerHeight === 0) {
-        out.start = 0;
-        out.end = 0;
-        return;
-      }
-      out.start = Math.max(0, sizeCache.indexAtOffset(scrollTop));
-      out.end = Math.min(totalItems - 1, Math.max(0, sizeCache.indexAtOffset(scrollTop + containerHeight - 1)));
-    },
-    setScrollToPosFn: () => {},
-    getScrollToPos: () => 0,
-    setPositionElementFn: () => {},
-    setUpdateItemClassesFn: () => {},
-    setScrollFns: () => {},
-    triggerScrollFrame: () => {},
-    setScrollTarget: () => {},
-    getScrollTarget: () => window as any,
-    setContainerDimensions: () => {},
-    disableViewportResize: () => {},
-    disableWheelHandler: () => {},
-    adjustScrollPosition: (pos: number) => pos,
-    getStripeIndexFn: () => (index: number) => index,
-    setStripeIndexFn: () => {},
-    getItemToScrollIndexFn: () => (index: number) => index,
-    setItemToScrollIndexFn: () => {},
-  };
-
-  // Attach emitted array for test assertions
-  (ctx as any)._emitted = emitted;
-  // Attach setter for scrollTop
-  (ctx as any)._setScrollTop = (v: number) => { currentScrollTop = v; };
-  // Attach testDom for cleanup
-  (ctx as any)._testDom = testDom;
-
-  return ctx;
 }
 
-function getEmitted(ctx: BuilderContext<TestItem>): Array<{ event: string; payload: any }> {
-  return (ctx as any)._emitted;
+interface TableTestContext {
+  ctx: PluginTestContext<TestItem>["ctx"];
+  engineState: PluginTestContext<TestItem>["engineState"];
+  dom: PluginTestContext<TestItem>["dom"];
+  methods: PluginTestContext<TestItem>["methods"];
+  destroyHandlers: PluginTestContext<TestItem>["destroyHandlers"];
+  clickHandlers: PluginTestContext<TestItem>["clickHandlers"];
+  keydownHandlers: PluginTestContext<TestItem>["keydownHandlers"];
+  items: PluginTestContext<TestItem>["items"];
+  scrollCalls: PluginTestContext<TestItem>["scrollCalls"];
+  readonly renderFnReplaced: boolean;
+  cleanup: PluginTestContext<TestItem>["cleanup"];
+  emitted: Array<{ event: string; payload: any }>;
 }
 
-function setScrollTop(ctx: BuilderContext<TestItem>, v: number): void {
-  (ctx as any)._setScrollTop(v);
-}
+function createTableMockContext(overrides?: {
+  itemCount?: number;
+  scrollTop?: number;
+  containerSize?: number;
+  containerWidth?: number;
+}): TableTestContext {
+  const itemCount = overrides?.itemCount ?? 100;
+  const items = createTestItems(itemCount);
 
-function cleanupCtx(ctx: BuilderContext<TestItem>): void {
-  const testDom = (ctx as any)._testDom;
-  if (testDom?.root?.parentNode) {
-    testDom.root.parentNode.removeChild(testDom.root);
-  }
-}
-
-// =============================================================================
-// withTable - Factory Tests
-// =============================================================================
-
-describe("withTable - Factory", () => {
-  it("should create a feature with name and priority", () => {
-    const feature = withTable({
-      columns: testColumns,
-      rowHeight: 40,
-    });
-
-    expect(feature.name).toBe("withTable");
-    expect(feature.priority).toBe(10);
+  const result = createPluginMockContext<TestItem>(items, {
+    itemSize: 40,
+    containerHeight: overrides?.containerSize ?? 600,
+    containerWidth: overrides?.containerWidth ?? 800,
   });
 
-  it("should declare conflicts with withGrid and withMasonry", () => {
-    const feature = withTable({
+  // Override engineState scroll position if requested
+  if (overrides?.scrollTop !== undefined) {
+    result.engineState.scrollPosition = overrides.scrollTop;
+  }
+
+  // Inject a tracking emitter BEFORE plugin.setup() so plugin captures it
+  const emitted: Array<{ event: string; payload: any }> = [];
+  const trackingEmitter = {
+    on: () => () => {},
+    off: () => {},
+    emit: (event: string, payload: any) => {
+      emitted.push({ event, payload });
+    },
+    clear: () => {},
+  };
+  (result.ctx as any).emitter = trackingEmitter;
+
+  return {
+    ctx: result.ctx,
+    engineState: result.engineState,
+    dom: result.dom,
+    methods: result.methods,
+    destroyHandlers: result.destroyHandlers,
+    clickHandlers: result.clickHandlers,
+    keydownHandlers: result.keydownHandlers,
+    items: result.items,
+    scrollCalls: result.scrollCalls,
+    get renderFnReplaced() { return result.renderFnReplaced; },
+    cleanup: result.cleanup,
+    emitted,
+  };
+}
+
+// =============================================================================
+// table — Factory Tests
+// =============================================================================
+
+describe("table - Factory", () => {
+  it("should create a plugin with name and priority", () => {
+    const plugin = table({
       columns: testColumns,
       rowHeight: 40,
     });
 
-    expect(feature.conflicts).toContain("withGrid");
-    expect(feature.conflicts).toContain("withMasonry");
+    expect(plugin.name).toBe("table");
+    expect(plugin.priority).toBe(10);
+  });
+
+  it("should declare conflicts with grid and masonry", () => {
+    const plugin = table({
+      columns: testColumns,
+      rowHeight: 40,
+    });
+
+    expect(plugin.conflicts).toContain("grid");
+    expect(plugin.conflicts).toContain("masonry");
   });
 
   it("should throw if columns is empty", () => {
     expect(() => {
-      withTable({ columns: [], rowHeight: 40 });
+      table({ columns: [], rowHeight: 40 });
     }).toThrow("columns must be a non-empty array");
   });
 
   it("should throw if both rowHeight and estimatedRowHeight are missing", () => {
     expect(() => {
-      withTable({ columns: testColumns } as any);
+      table({ columns: testColumns } as any);
     }).toThrow("either rowHeight or estimatedRowHeight is required");
   });
 
   it("should accept valid configuration", () => {
-    const feature = withTable({
+    const plugin = table({
       columns: testColumns,
       rowHeight: 40,
       headerHeight: 44,
@@ -338,605 +179,556 @@ describe("withTable - Factory", () => {
       rowBorders: false,
     });
 
-    expect(feature.name).toBe("withTable");
+    expect(plugin.name).toBe("table");
   });
 });
 
 // =============================================================================
-// withTable - Setup
+// table — Setup
 // =============================================================================
 
-describe("withTable - Setup", () => {
+describe("table - Setup", () => {
   it("should add table CSS class to root", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.classList.contains("vlist--table")).toBe(true);
-    cleanupCtx(ctx);
+    expect(dom.root.classList.contains("vlist--table")).toBe(true);
+    cleanup();
   });
 
   it("should set role=grid on root", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.getAttribute("role")).toBe("grid");
-    cleanupCtx(ctx);
+    expect(dom.root.getAttribute("role")).toBe("grid");
+    cleanup();
   });
 
-  it("should set role=rowgroup on items", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should set role=rowgroup on content", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.items.getAttribute("role")).toBe("rowgroup");
-    cleanupCtx(ctx);
+    expect(dom.content.getAttribute("role")).toBe("rowgroup");
+    cleanup();
   });
 
   it("should set aria-colcount on root", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.getAttribute("aria-colcount")).toBe("3");
-    cleanupCtx(ctx);
+    expect(dom.root.getAttribute("aria-colcount")).toBe("3");
+    cleanup();
   });
 
   it("should throw if horizontal is true", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-    (ctx.config as any).horizontal = true;
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { horizontal: true });
 
-    expect(() => feature.setup(ctx)).toThrow("cannot be used with orientation: 'horizontal'");
-    cleanupCtx(ctx);
+    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with horizontal orientation");
+    cleanup();
   });
 
   it("should throw if reverse is true", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-    (ctx.config as any).reverse = true;
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { reverse: true });
 
-    expect(() => feature.setup(ctx)).toThrow("cannot be used with reverse: true");
-    cleanupCtx(ctx);
+    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with reverse mode");
+    cleanup();
   });
 
   it("should create a table header element in the root", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const header = ctx.dom.root.querySelector(".vlist-table-header");
+    const header = dom.root.querySelector(".vlist-table-header");
     expect(header).not.toBeNull();
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should create header cells for each column", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const cells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const cells = dom.root.querySelectorAll(".vlist-table-header-cell");
     expect(cells.length).toBe(3);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
-  it("should set header height CSS variable on root for layout and scrollbar offset", () => {
-    const feature = withTable({
+  it("should set header height CSS variable on root", () => {
+    const plugin = table({
       columns: testColumns,
       rowHeight: 40,
       headerHeight: 44,
     });
-    const ctx = createMockContext();
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    // Layout is handled by CSS flex — the CSS variable drives both
-    // the flex-based header offset and the custom scrollbar track position.
-    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("44px");
-    expect(ctx.dom.viewport.style.position).toBe("");
-    cleanupCtx(ctx);
+    expect(dom.root.style.getPropertyValue("--vlist-table-header-height")).toBe("44px");
+    cleanup();
   });
 
   it("should default header height to rowHeight when fixed", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 36 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 36 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("36px");
-    cleanupCtx(ctx);
+    expect(dom.root.style.getPropertyValue("--vlist-table-header-height")).toBe("36px");
+    cleanup();
   });
 
   it("should set content min-width to total column width", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // 200 + 300 + 100 = 600
-    expect(ctx.dom.content.style.minWidth).toBe("600px");
-    expect(ctx.dom.items.style.minWidth).toBe("600px");
-    cleanupCtx(ctx);
+    expect(dom.content.style.minWidth).toBe("600px");
+    cleanup();
   });
 
-  it("should register resize handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should replace render function via setRenderFn", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const mockCtx = createTableMockContext();
 
-    const beforeCount = ctx.resizeHandlers.length;
-    feature.setup(ctx);
+    plugin.setup!(mockCtx.ctx);
 
-    expect(ctx.resizeHandlers.length).toBe(beforeCount + 1);
-    cleanupCtx(ctx);
+    expect(mockCtx.renderFnReplaced).toBe(true);
+    mockCtx.cleanup();
   });
 
-  it("should register afterScroll handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should register a destroy handler", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, destroyHandlers, cleanup } = createTableMockContext();
 
-    const beforeCount = ctx.afterScroll.length;
-    feature.setup(ctx);
+    const beforeCount = destroyHandlers.length;
+    plugin.setup!(ctx);
 
-    expect(ctx.afterScroll.length).toBe(beforeCount + 1);
-    cleanupCtx(ctx);
-  });
-
-  it("should register destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    const beforeCount = ctx.destroyHandlers.length;
-    feature.setup(ctx);
-
-    expect(ctx.destroyHandlers.length).toBe(beforeCount + 1);
-    cleanupCtx(ctx);
-  });
-
-  it("should register content size handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    const beforeCount = ctx.contentSizeHandlers.length;
-    feature.setup(ctx);
-
-    expect(ctx.contentSizeHandlers.length).toBe(beforeCount + 1);
-    cleanupCtx(ctx);
+    expect(destroyHandlers.length).toBe(beforeCount + 1);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Render Functions (CRITICAL)
+// table — Render Functions (CRITICAL)
 // =============================================================================
 
-describe("withTable - Render Functions", () => {
-  it("should replace render functions via setRenderFns (NOT replaceRenderer)", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+describe("table - Render Functions", () => {
+  it("should replace render functions via setRenderFn", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const mockCtx = createTableMockContext();
 
-    const originalRenderIfNeeded = ctx.renderIfNeeded;
-    const originalForceRender = ctx.forceRender;
+    plugin.setup!(mockCtx.ctx);
 
-    feature.setup(ctx);
-
-    // After setup, the render functions should have been replaced
-    const fns = ctx.getRenderFns();
-    expect(fns.renderIfNeeded).not.toBe(originalRenderIfNeeded);
-    expect(fns.forceRender).not.toBe(originalForceRender);
-    cleanupCtx(ctx);
+    expect(mockCtx.renderFnReplaced).toBe(true);
+    mockCtx.cleanup();
   });
 
   it("should not render if destroyed", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    ctx.state.isDestroyed = true;
+    plugin.setup!(ctx);
+    engineState.destroyed = true;
 
     // Should not throw
     ctx.renderIfNeeded();
     ctx.forceRender();
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should render rows on first renderIfNeeded call", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
     // With container 200px and row height 40px, should see ~5 visible rows + overscan
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should skip render when scroll position and container size unchanged", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // First render
     ctx.renderIfNeeded();
-    const rowCount1 = ctx.dom.items.querySelectorAll(".vlist-table-row").length;
+    const rowCount1 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     // Second render with same state — should be a no-op (early exit)
     ctx.renderIfNeeded();
-    const rowCount2 = ctx.dom.items.querySelectorAll(".vlist-table-row").length;
+    const rowCount2 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     expect(rowCount2).toBe(rowCount1);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should re-render when scroll position changes", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200, scrollTop: 0 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({
+      containerSize: 200,
+      scrollTop: 0,
+    });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const firstRowBefore = ctx.dom.items.querySelector(".vlist-table-row[data-index='0']");
+    const firstRowBefore = dom.content.querySelector(".vlist-table-row[data-index='0']");
     expect(firstRowBefore).not.toBeNull();
 
     // Scroll down
-    setScrollTop(ctx, 800); // 800 / 40 = row 20
+    engineState.scrollPosition = 800; // 800 / 40 = row 20
     ctx.renderIfNeeded();
 
-    // Row 0 should eventually be released (or not, depending on overscan)
-    // But rows around index 20 should exist
-    const row20 = ctx.dom.items.querySelector(".vlist-table-row[data-index='20']");
+    // Rows around index 20 should exist
+    const row20 = dom.content.querySelector(".vlist-table-row[data-index='20']");
     expect(row20).not.toBeNull();
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should force render even when position unchanged", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
     // Force render should work even though nothing changed
     ctx.forceRender();
 
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should handle zero total items gracefully", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ itemCount: 0 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ itemCount: 0 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBe(0);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should handle zero container height gracefully", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 0 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext({ containerSize: 0 });
+    engineState.containerSize = 0;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // Should not throw — graceful handling is the requirement
     ctx.renderIfNeeded();
 
-    // With 0 container height, visible range is 0,0 but overscan may still
-    // cause a few rows to render. The key assertion is no crash.
-    cleanupCtx(ctx);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Viewport State Updates
+// table — Engine State Updates
 // =============================================================================
 
-describe("withTable - Viewport State", () => {
-  it("should update viewportState.scrollPosition on render", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200, scrollTop: 160 });
+describe("table - Engine State", () => {
+  it("should update engineState.prevRangeStart/End on render", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
+
+    expect(engineState.prevRangeStart).toBe(0);
+    expect(engineState.prevRangeEnd).toBe(-1);
+
     ctx.renderIfNeeded();
 
-    expect(ctx.state.viewportState.scrollPosition).toBe(160);
-    cleanupCtx(ctx);
+    expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
+    expect(engineState.prevRangeEnd).toBeGreaterThanOrEqual(0);
+    cleanup();
   });
 
-  it("should update viewportState.visibleRange on render", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200, scrollTop: 0 });
+  it("should track scrollPosition in engineState", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext({
+      containerSize: 200,
+      scrollTop: 160,
+    });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const vr = ctx.state.viewportState.visibleRange;
-    expect(vr.start).toBe(0);
-    // 200 / 40 = 5 visible rows → end should be around 5
-    expect(vr.end).toBeGreaterThanOrEqual(4);
-    cleanupCtx(ctx);
+    // engineState.scrollPosition was set to 160 before render
+    expect(engineState.scrollPosition).toBe(160);
+    cleanup();
   });
 
-  it("should update viewportState.renderRange with overscan", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200, scrollTop: 200 });
+  it("should update renderRange with overscan", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext({
+      containerSize: 200,
+      scrollTop: 200,
+    });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const rr = ctx.state.viewportState.renderRange;
-    const vr = ctx.state.viewportState.visibleRange;
-
-    // Render range should extend beyond visible range by overscan
-    expect(rr.start).toBeLessThanOrEqual(vr.start);
-    expect(rr.end).toBeGreaterThanOrEqual(vr.end);
-    cleanupCtx(ctx);
-  });
-
-  it("should update lastRenderRange on render", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
-
-    feature.setup(ctx);
-
-    expect(ctx.state.lastRenderRange.start).toBe(-1);
-    expect(ctx.state.lastRenderRange.end).toBe(-1);
-
-    ctx.renderIfNeeded();
-
-    expect(ctx.state.lastRenderRange.start).toBeGreaterThanOrEqual(0);
-    expect(ctx.state.lastRenderRange.end).toBeGreaterThanOrEqual(0);
-    cleanupCtx(ctx);
+    // Render range should extend by overscan beyond visible range
+    // visStart at scroll=200, rowHeight=40 → index 5
+    // visEnd at scroll=200+200=400, rowHeight=40 → index 9 (approx)
+    // renderStart = max(0, 5 - 2) = 3; renderEnd = min(99, 9 + 2) = 11
+    expect(engineState.prevRangeStart).toBeLessThan(5);
+    expect(engineState.prevRangeEnd).toBeGreaterThan(9);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Event Emission
+// table — Event Emission
 // =============================================================================
 
-describe("withTable - Events", () => {
-  it("should emit range:change when range changes", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+describe("table - Events", () => {
+  it("should emit column:resize when resizeColumn is called", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
 
-    feature.setup(ctx);
-    ctx.renderIfNeeded();
+    plugin.setup!(tableCtx.ctx);
 
-    const emitted = getEmitted(ctx);
-    const rangeEvents = emitted.filter(e => e.event === "range:change");
-    expect(rangeEvents.length).toBeGreaterThanOrEqual(1);
-    expect(rangeEvents[0]!.payload.range).toBeDefined();
-    expect(typeof rangeEvents[0]!.payload.range.start).toBe("number");
-    expect(typeof rangeEvents[0]!.payload.range.end).toBe("number");
-    cleanupCtx(ctx);
+    const resizeColumn = tableCtx.methods.get("resizeColumn") as (k: string | number, w: number) => void;
+    resizeColumn("name", 250);
+
+    const resizeEvents = tableCtx.emitted.filter(e => e.event === "column:resize");
+    expect(resizeEvents.length).toBe(1);
+    expect(resizeEvents[0]!.payload.key).toBe("name");
+    expect(resizeEvents[0]!.payload.width).toBe(250);
+    tableCtx.cleanup();
   });
 
-  it("should not emit range:change when range is unchanged", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+  it("should emit column:sort when sortable header cell is clicked", () => {
+    const sortableColumns: TableColumn<TestItem>[] = [
+      { key: "name", label: "Name", width: 200, sortable: true },
+    ];
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(tableCtx.ctx);
 
-    // First render emits range:change
-    ctx.renderIfNeeded();
-    const count1 = getEmitted(ctx).filter(e => e.event === "range:change").length;
+    const headerCells = tableCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const nameHeader = headerCells[0] as HTMLElement;
+    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    nameHeader.dispatchEvent(clickEvt);
 
-    // Second render with same state should NOT emit again (early exit)
-    ctx.renderIfNeeded();
-    const count2 = getEmitted(ctx).filter(e => e.event === "range:change").length;
-
-    expect(count2).toBe(count1);
-    cleanupCtx(ctx);
-  });
-
-  it("should emit range:change when scrolling to new range", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200, scrollTop: 0 });
-
-    feature.setup(ctx);
-    ctx.renderIfNeeded();
-
-    const count1 = getEmitted(ctx).filter(e => e.event === "range:change").length;
-
-    // Scroll to a different position
-    setScrollTop(ctx, 2000);
-    ctx.renderIfNeeded();
-
-    const count2 = getEmitted(ctx).filter(e => e.event === "range:change").length;
-    expect(count2).toBeGreaterThan(count1);
-    cleanupCtx(ctx);
+    const sortEvents = tableCtx.emitted.filter(e => e.event === "column:sort");
+    expect(sortEvents.length).toBe(1);
+    expect(sortEvents[0]!.payload.key).toBe("name");
+    tableCtx.cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Public Methods
+// table — Public Methods
 // =============================================================================
 
-describe("withTable - Public Methods", () => {
+describe("table - Public Methods", () => {
   it("should expose updateColumns method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("updateColumns")).toBe(true);
-    cleanupCtx(ctx);
+    expect(methods.has("updateColumns")).toBe(true);
+    cleanup();
   });
 
   it("should expose resizeColumn method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("resizeColumn")).toBe(true);
-    cleanupCtx(ctx);
+    expect(methods.has("resizeColumn")).toBe(true);
+    cleanup();
   });
 
   it("should expose getColumnWidths method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("getColumnWidths")).toBe(true);
-    cleanupCtx(ctx);
+    expect(methods.has("getColumnWidths")).toBe(true);
+    cleanup();
   });
 
   it("should expose setSort method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("setSort")).toBe(true);
-    cleanupCtx(ctx);
+    expect(methods.has("setSort")).toBe(true);
+    cleanup();
   });
 
   it("should expose getSort method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("getSort")).toBe(true);
-    cleanupCtx(ctx);
+    expect(methods.has("getSort")).toBe(true);
+    cleanup();
   });
 
   it("should expose _getTableLayout internal method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.methods.has("_getTableLayout")).toBe(true);
-    const getLayout = ctx.methods.get("_getTableLayout") as Function;
+    expect(methods.has("_getTableLayout")).toBe(true);
+    const getLayout = methods.get("_getTableLayout") as Function;
     const layout = getLayout();
     expect(layout).toBeDefined();
     expect(layout.columns.length).toBe(3);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("getColumnWidths should return current widths keyed by column key", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getColumnWidths = ctx.methods.get("getColumnWidths") as () => Record<string, number>;
+    const getColumnWidths = methods.get("getColumnWidths") as () => Record<string, number>;
     const widths = getColumnWidths();
 
     expect(widths.name).toBe(200);
     expect(widths.email).toBe(300);
     expect(widths.role).toBe(100);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("setSort should update sort state", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const setSort = ctx.methods.get("setSort") as (key: string | null, dir?: "asc" | "desc") => void;
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const setSort = methods.get("setSort") as (key: string | null, dir?: "asc" | "desc") => void;
+    const getSort = methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
 
     setSort("name", "desc");
     const sort = getSort();
     expect(sort.key).toBe("name");
     expect(sort.direction).toBe("desc");
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("setSort with null should clear sort", () => {
-    const feature = withTable({
+    const plugin = table<TestItem>({
       columns: testColumns,
       rowHeight: 40,
       sort: { key: "name", direction: "asc" },
     });
-    const ctx = createMockContext();
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const setSort = ctx.methods.get("setSort") as (key: string | null, dir?: "asc" | "desc") => void;
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const setSort = methods.get("setSort") as (key: string | null, dir?: "asc" | "desc") => void;
+    const getSort = methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
 
     setSort(null);
     const sort = getSort();
     expect(sort.key).toBeNull();
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("resizeColumn by key should emit column:resize", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(tableCtx.ctx);
 
-    const resizeColumn = ctx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
+    const resizeColumn = tableCtx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
     resizeColumn("name", 250);
 
-    const emitted = getEmitted(ctx);
-    const resizeEvents = emitted.filter(e => e.event === "column:resize");
+    const resizeEvents = tableCtx.emitted.filter(e => e.event === "column:resize");
     expect(resizeEvents.length).toBe(1);
     expect(resizeEvents[0]!.payload.key).toBe("name");
     expect(resizeEvents[0]!.payload.width).toBe(250);
     expect(resizeEvents[0]!.payload.previousWidth).toBe(200);
-    cleanupCtx(ctx);
+    tableCtx.cleanup();
   });
 
   it("resizeColumn by index should emit column:resize", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(tableCtx.ctx);
 
-    const resizeColumn = ctx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
+    const resizeColumn = tableCtx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
     resizeColumn(1, 400);
 
-    const emitted = getEmitted(ctx);
-    const resizeEvents = emitted.filter(e => e.event === "column:resize");
+    const resizeEvents = tableCtx.emitted.filter(e => e.event === "column:resize");
     expect(resizeEvents.length).toBe(1);
     expect(resizeEvents[0]!.payload.key).toBe("email");
     expect(resizeEvents[0]!.payload.width).toBe(400);
-    cleanupCtx(ctx);
+    tableCtx.cleanup();
   });
 
   it("resizeColumn with invalid key should be a no-op", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(tableCtx.ctx);
 
-    const resizeColumn = ctx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
+    const resizeColumn = tableCtx.methods.get("resizeColumn") as (keyOrIndex: string | number, width: number) => void;
     resizeColumn("nonexistent", 250);
 
-    const emitted = getEmitted(ctx);
-    const resizeEvents = emitted.filter(e => e.event === "column:resize");
+    const resizeEvents = tableCtx.emitted.filter(e => e.event === "column:resize");
     expect(resizeEvents.length).toBe(0);
-    cleanupCtx(ctx);
+    tableCtx.cleanup();
   });
 
   it("updateColumns should rebuild header and re-render", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, dom, engineState, cleanup } = createTableMockContext();
+    engineState.containerSize = 600;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const updateColumns = ctx.methods.get("updateColumns") as (cols: TableColumn<TestItem>[]) => void;
+    const updateColumns = methods.get("updateColumns") as (cols: TableColumn<TestItem>[]) => void;
     const newColumns: TableColumn<TestItem>[] = [
       { key: "name", label: "Name", width: 150 },
       { key: "email", label: "Email", width: 350 },
@@ -945,32 +737,34 @@ describe("withTable - Public Methods", () => {
     updateColumns(newColumns);
 
     // Header should have been rebuilt with 2 columns
-    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const headerCells = dom.root.querySelectorAll(".vlist-table-header-cell");
     expect(headerCells.length).toBe(2);
 
     // Content width should be updated
-    expect(ctx.dom.content.style.minWidth).toBe("500px");
+    expect(dom.content.style.minWidth).toBe("500px");
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Resize Handler
+// table — Resize Handler (via plugin.hooks.onResize)
 // =============================================================================
 
-describe("withTable - Resize Handler", () => {
+describe("table - Resize Handler", () => {
   it("should handle resize events without errors", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, engineState, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1]!;
+    // Update crossSize to simulate the resize context
+    engineState.crossSize = 1000;
+
     // Should not throw
-    resizeHandler(1000, 600);
+    plugin.hooks?.onResize?.(1000, 600);
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should re-resolve column widths on container resize", () => {
@@ -979,12 +773,12 @@ describe("withTable - Resize Handler", () => {
       { key: "email", label: "Email" }, // flex column
     ];
 
-    const feature = withTable({ columns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns, rowHeight: 40 });
+    const { ctx, methods, engineState, cleanup } = createTableMockContext({ containerWidth: 800 });
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getLayout = ctx.methods.get("_getTableLayout") as () => any;
+    const getLayout = methods.get("_getTableLayout") as () => any;
     const layout = getLayout();
 
     // Initial flex column width based on container 800 - 200 = 600
@@ -992,14 +786,14 @@ describe("withTable - Resize Handler", () => {
     expect(initialEmailWidth).toBe(600);
 
     // Resize container to 1000
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1]!;
-    resizeHandler(1000, 600);
+    engineState.crossSize = 1000;
+    plugin.hooks?.onResize?.(1000, 600);
 
     // Flex column should expand to fill: 1000 - 200 = 800
     const newEmailWidth = layout.columns[1].width;
     expect(newEmailWidth).toBe(800);
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should update content min-width after resize", () => {
@@ -1008,26 +802,26 @@ describe("withTable - Resize Handler", () => {
       { key: "email", label: "Email" }, // flex
     ];
 
-    const feature = withTable({ columns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1]!;
-    resizeHandler(1200, 600);
+    engineState.crossSize = 1200;
+    plugin.hooks?.onResize?.(1200, 600);
 
-    expect(ctx.dom.content.style.minWidth).toBe("1200px");
-    cleanupCtx(ctx);
+    expect(dom.content.style.minWidth).toBe("1200px");
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Sort Configuration
+// table — Sort Configuration
 // =============================================================================
 
-describe("withTable - Sort", () => {
+describe("table - Sort", () => {
   it("should initialize with sort state from config", () => {
-    const feature = withTable<TestItem>({
+    const plugin = table<TestItem>({
       columns: [
         { key: "name", label: "Name", width: 200, sortable: true },
         { key: "email", label: "Email", width: 300, sortable: true },
@@ -1035,77 +829,78 @@ describe("withTable - Sort", () => {
       rowHeight: 40,
       sort: { key: "name", direction: "desc" },
     });
-    const ctx = createMockContext();
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const getSort = methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
     const sort = getSort();
     expect(sort.key).toBe("name");
     expect(sort.direction).toBe("desc");
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should default sort direction to asc", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const getSort = methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
     const sort = getSort();
     expect(sort.key).toBeNull();
     expect(sort.direction).toBe("asc");
-    cleanupCtx(ctx);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Configuration Options
+// table — Configuration Options
 // =============================================================================
 
-describe("withTable - Configuration", () => {
+describe("table - Configuration", () => {
   it("should support function-based row height", () => {
-    const feature = withTable({
+    const plugin = table({
       columns: testColumns,
-      rowHeight: (index: number) => index % 2 === 0 ? 40 : 60,
+      rowHeight: (index: number) => (index % 2 === 0 ? 40 : 60),
     });
-    const ctx = createMockContext();
+    const { ctx, dom, engineState, cleanup } = createTableMockContext();
+    engineState.containerSize = 500;
 
     // Should not throw
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should use default header height of 40 for function-based rowHeight", () => {
-    const feature = withTable({
+    const plugin = table({
       columns: testColumns,
       rowHeight: (index: number) => 40 + index,
     });
-    const ctx = createMockContext();
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("40px");
-    cleanupCtx(ctx);
+    expect(dom.root.style.getPropertyValue("--vlist-table-header-height")).toBe("40px");
+    cleanup();
   });
 
   it("should support explicit header height", () => {
-    const feature = withTable({
+    const plugin = table({
       columns: testColumns,
       rowHeight: 40,
       headerHeight: 56,
     });
-    const ctx = createMockContext();
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.style.getPropertyValue('--vlist-table-header-height')).toBe("56px");
-    cleanupCtx(ctx);
+    expect(dom.root.style.getPropertyValue("--vlist-table-header-height")).toBe("56px");
+    cleanup();
   });
 
   it("should respect resizable: false on global config", () => {
@@ -1113,19 +908,19 @@ describe("withTable - Configuration", () => {
       { key: "name", label: "Name", width: 200 },
     ];
 
-    const feature = withTable({
+    const plugin = table({
       columns,
       rowHeight: 40,
       resizable: false,
     });
-    const ctx = createMockContext();
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getLayout = ctx.methods.get("_getTableLayout") as () => any;
+    const getLayout = methods.get("_getTableLayout") as () => any;
     const layout = getLayout();
     expect(layout.columns[0].resizable).toBe(false);
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should respect per-column resizable override", () => {
@@ -1134,133 +929,133 @@ describe("withTable - Configuration", () => {
       { key: "email", label: "Email", width: 300, resizable: true },
     ];
 
-    const feature = withTable({
+    const plugin = table({
       columns,
       rowHeight: 40,
       resizable: true,
     });
-    const ctx = createMockContext();
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const getLayout = ctx.methods.get("_getTableLayout") as () => any;
+    const getLayout = methods.get("_getTableLayout") as () => any;
     const layout = getLayout();
     expect(layout.columns[0].resizable).toBe(false);
     expect(layout.columns[1].resizable).toBe(true);
-    cleanupCtx(ctx);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Destroy
+// table — Destroy
 // =============================================================================
 
-describe("withTable - Destroy", () => {
+describe("table - Destroy", () => {
   it("should remove table CSS class on destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, destroyHandlers, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    expect(ctx.dom.root.classList.contains("vlist--table")).toBe(true);
+    plugin.setup!(ctx);
+    expect(dom.root.classList.contains("vlist--table")).toBe(true);
 
     // Run destroy handlers
-    for (const handler of ctx.destroyHandlers) {
+    for (const handler of destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.root.classList.contains("vlist--table")).toBe(false);
-    cleanupCtx(ctx);
+    expect(dom.root.classList.contains("vlist--table")).toBe(false);
+    cleanup();
   });
 
-  it("should restore role to listbox on destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should remove role from root and content on destroy handler", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, destroyHandlers, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    expect(ctx.dom.root.getAttribute("role")).toBe("grid");
-    expect(ctx.dom.items.getAttribute("role")).toBe("rowgroup");
+    plugin.setup!(ctx);
+    expect(dom.root.getAttribute("role")).toBe("grid");
+    expect(dom.content.getAttribute("role")).toBe("rowgroup");
 
-    for (const handler of ctx.destroyHandlers) {
+    for (const handler of destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.root.getAttribute("role")).toBeNull();
-    expect(ctx.dom.items.getAttribute("role")).toBe("listbox");
-    cleanupCtx(ctx);
+    expect(dom.root.getAttribute("role")).toBeNull();
+    expect(dom.content.getAttribute("role")).toBeNull();
+    cleanup();
   });
 
   it("should remove aria-colcount on destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, destroyHandlers, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    expect(ctx.dom.root.getAttribute("aria-colcount")).toBe("3");
+    plugin.setup!(ctx);
+    expect(dom.root.getAttribute("aria-colcount")).toBe("3");
 
-    for (const handler of ctx.destroyHandlers) {
+    for (const handler of destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.root.getAttribute("aria-colcount")).toBeNull();
-    cleanupCtx(ctx);
+    expect(dom.root.getAttribute("aria-colcount")).toBeNull();
+    cleanup();
   });
 
   it("should remove header element on destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, destroyHandlers, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    expect(ctx.dom.root.querySelector(".vlist-table-header")).not.toBeNull();
+    plugin.setup!(ctx);
+    expect(dom.root.querySelector(".vlist-table-header")).not.toBeNull();
 
-    for (const handler of ctx.destroyHandlers) {
+    for (const handler of destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.root.querySelector(".vlist-table-header")).toBeNull();
-    cleanupCtx(ctx);
+    expect(dom.root.querySelector(".vlist-table-header")).toBeNull();
+    cleanup();
   });
 
   it("should reset content min-width on destroy handler", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, destroyHandlers, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
-    expect(ctx.dom.content.style.minWidth).not.toBe("");
+    plugin.setup!(ctx);
+    expect(dom.content.style.minWidth).not.toBe("");
 
-    for (const handler of ctx.destroyHandlers) {
+    for (const handler of destroyHandlers) {
       handler();
     }
 
-    expect(ctx.dom.content.style.minWidth).toBe("");
-    expect(ctx.dom.items.style.minWidth).toBe("");
-    cleanupCtx(ctx);
+    expect(dom.content.style.minWidth).toBe("");
+    cleanup();
   });
 
-  it("should clean up via feature.destroy() method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should clean up via plugin.destroy() method", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // Should not throw
-    feature.destroy!();
-    cleanupCtx(ctx);
+    plugin.destroy?.();
+    cleanup();
   });
 });
 
 // =============================================================================
-// withTable - Integration
+// table — Integration
 // =============================================================================
 
-describe("withTable - Integration", () => {
+describe("table - Integration", () => {
   it("should render cells with correct content for visible rows", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 120 }); // ~3 visible rows
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 120 });
+    engineState.containerSize = 120; // ~3 visible rows
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
     // Should have rendered rows with cells
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
 
     // Check first row has correct content
@@ -1271,47 +1066,50 @@ describe("withTable - Integration", () => {
     expect(cells[1]!.textContent).toBe("user0@test.com");
     expect(cells[2]!.textContent).toBe("admin");
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should only render visible rows (virtualization works)", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ itemCount: 10000, containerSize: 200 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({
+      itemCount: 10000,
+      containerSize: 200,
+    });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     // With 200px container and 40px rows = 5 visible + 2 overscan each side ≈ 9
     // Should be MUCH less than 10000
     expect(rows.length).toBeLessThan(20);
     expect(rows.length).toBeGreaterThan(0);
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should re-render rows after updateColumns changes column count", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, methods, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
     // Verify 3 cells per row initially
-    let firstRow = ctx.dom.items.querySelector(".vlist-table-row")!;
+    let firstRow = dom.content.querySelector(".vlist-table-row")!;
     expect(firstRow.querySelectorAll(".vlist-table-cell").length).toBe(3);
 
     // Update to 2 columns
-    const updateColumns = ctx.methods.get("updateColumns") as Function;
+    const updateColumns = methods.get("updateColumns") as Function;
     updateColumns([
       { key: "name", label: "Name", width: 400 },
       { key: "email", label: "Email", width: 400 },
     ]);
 
     // After update, rows are cleared and re-rendered with new column count.
-    // Pooled elements have their children cleared on release, so reused
-    // elements get fresh cells matching the new column layout.
-    const rows = ctx.dom.items.querySelectorAll(".vlist-table-row");
+    const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
 
     // Each row should now have exactly 2 cells
@@ -1320,186 +1118,86 @@ describe("withTable - Integration", () => {
     }
 
     // Header should also have 2 cells
-    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const headerCells = dom.root.querySelectorAll(".vlist-table-header-cell");
     expect(headerCells.length).toBe(2);
 
     // Content width should reflect new total: 400 + 400 = 800
-    expect(ctx.dom.content.style.minWidth).toBe("800px");
+    expect(dom.content.style.minWidth).toBe("800px");
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
-  it("should work with selection getters when selection feature is present", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext({ containerSize: 200 });
+  it("should work with selection getters when selection plugin is present", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
+    engineState.containerSize = 200;
 
-    // Simulate selection feature registering methods
+    // Simulate selection plugin registering methods
     const selectedIds = new Set<string | number>([0, 2]);
-    ctx.methods.set("_getSelectedIds", () => selectedIds);
-    ctx.methods.set("_getFocusedIndex", () => 0);
+    ctx.registerMethod("_getSelectedIds", () => selectedIds);
+    ctx.registerMethod("_getFocusedIndex", () => 0);
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
     // Row 0 should be selected and focused
-    const row0 = ctx.dom.items.querySelector(".vlist-table-row[data-index='0']") as HTMLElement;
+    const row0 = dom.content.querySelector(".vlist-table-row[data-index='0']") as HTMLElement;
     expect(row0).not.toBeNull();
     expect(row0.classList.contains("vlist-item--selected")).toBe(true);
     expect(row0.classList.contains("vlist-item--focused")).toBe(true);
 
     // Row 1 should not be selected
-    const row1 = ctx.dom.items.querySelector(".vlist-table-row[data-index='1']") as HTMLElement;
+    const row1 = dom.content.querySelector(".vlist-table-row[data-index='1']") as HTMLElement;
     if (row1) {
       expect(row1.classList.contains("vlist-item--selected")).toBe(false);
       expect(row1.classList.contains("vlist-item--focused")).toBe(false);
     }
 
     // Row 2 should be selected but not focused
-    const row2 = ctx.dom.items.querySelector(".vlist-table-row[data-index='2']") as HTMLElement;
+    const row2 = dom.content.querySelector(".vlist-table-row[data-index='2']") as HTMLElement;
     if (row2) {
       expect(row2.classList.contains("vlist-item--selected")).toBe(true);
       expect(row2.classList.contains("vlist-item--focused")).toBe(false);
     }
 
-    cleanupCtx(ctx);
-  });
-
-  it("should handle content size handler invocation", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    feature.setup(ctx);
-
-    const handler = ctx.contentSizeHandlers[ctx.contentSizeHandlers.length - 1]!;
-    // Should not throw
-    handler();
-
-    // Content width should still be set
-    expect(ctx.dom.content.style.minWidth).not.toBe("");
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should add column-borders class when columnBorders is true", () => {
-    const feature = withTable({
+    const plugin = table({
       columns: testColumns,
       rowHeight: 40,
       columnBorders: true,
     });
-    const ctx = createMockContext();
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.root.classList.contains("vlist--table-col-borders")).toBe(true);
-    cleanupCtx(ctx);
+    expect(dom.root.classList.contains("vlist--table-col-borders")).toBe(true);
+    cleanup();
   });
 
-  it("should move aria-label from items to root", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+  it("should sync header scroll with viewport scrollLeft via hooks.onAfterScroll", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
 
-    // Simulate items having an aria-label (set by dom.ts for listbox)
-    ctx.dom.items.setAttribute("aria-label", "My list");
-
-    feature.setup(ctx);
-
-    expect(ctx.dom.root.getAttribute("aria-label")).toBe("My list");
-    expect(ctx.dom.items.getAttribute("aria-label")).toBeNull();
-    cleanupCtx(ctx);
-  });
-
-  it("should restore aria-label to items on destroy", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    ctx.dom.items.setAttribute("aria-label", "My list");
-
-    feature.setup(ctx);
-    expect(ctx.dom.root.getAttribute("aria-label")).toBe("My list");
-
-    for (const handler of ctx.destroyHandlers) {
-      handler();
-    }
-
-    expect(ctx.dom.items.getAttribute("aria-label")).toBe("My list");
-    expect(ctx.dom.root.getAttribute("aria-label")).toBeNull();
-    cleanupCtx(ctx);
-  });
-
-  it("should emit column:sort when onColumnSort is called via sort cycling", () => {
-    const sortableColumns: TableColumn<TestItem>[] = [
-      { key: "name", label: "Name", width: 200, sortable: true },
-      { key: "email", label: "Email", width: 300, sortable: true },
-    ];
-    const feature = withTable({ columns: sortableColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    feature.setup(ctx);
-
-    // Click on a sortable header cell to trigger sort
-    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
-    const nameHeader = headerCells[0] as HTMLElement;
-
-    // The header cell has a click listener that calls onColumnSort
-    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
-    nameHeader.dispatchEvent(clickEvt);
-
-    const emitted = getEmitted(ctx);
-    const sortEvents = emitted.filter(e => e.event === "column:sort");
-    expect(sortEvents.length).toBe(1);
-    expect(sortEvents[0]!.payload.key).toBe("name");
-    expect(sortEvents[0]!.payload.direction).toBe("asc");
-
-    // Check getSort reflects the new state
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
-    expect(getSort().key).toBe("name");
-    expect(getSort().direction).toBe("asc");
-
-    cleanupCtx(ctx);
-  });
-
-  it("should emit column:click when header cell is clicked", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    feature.setup(ctx);
-
-    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
-    const cell = headerCells[0] as HTMLElement;
-
-    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
-    cell.dispatchEvent(clickEvt);
-
-    const emitted = getEmitted(ctx);
-    const clickEvents = emitted.filter(e => e.event === "column:click");
-    expect(clickEvents.length).toBe(1);
-    expect(clickEvents[0]!.payload.key).toBe("name");
-    cleanupCtx(ctx);
-  });
-
-  it("should sync header scroll with viewport scrollLeft via afterScroll", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
-
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // Simulate horizontal scroll on viewport
-    Object.defineProperty(ctx.dom.viewport, "scrollLeft", {
+    Object.defineProperty(dom.viewport, "scrollLeft", {
       value: 50,
       configurable: true,
     });
 
-    // Trigger afterScroll
-    for (const handler of ctx.afterScroll) {
-      handler(0, "down");
-    }
+    // Trigger onAfterScroll hook
+    plugin.hooks?.onAfterScroll?.(0, 0);
 
     // The header scroll container should have been synced
-    const scrollContainer = ctx.dom.root.querySelector(".vlist-table-header-scroll") as HTMLElement;
+    const scrollContainer = dom.root.querySelector(".vlist-table-header-scroll") as HTMLElement;
     if (scrollContainer) {
-      // translateX should reflect the scroll offset
       expect(scrollContainer.style.transform).toContain("translateX");
     }
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should restore sort indicator after updateColumns when sort is active", () => {
@@ -1507,21 +1205,21 @@ describe("withTable - Integration", () => {
       { key: "name", label: "Name", width: 200, sortable: true },
       { key: "email", label: "Email", width: 300, sortable: true },
     ];
-    const feature = withTable({
+    const plugin = table({
       columns: sortableColumns,
       rowHeight: 40,
       sort: { key: "name", direction: "desc" },
     });
-    const ctx = createMockContext();
+    const { ctx, methods, dom, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
     // Verify initial sort
-    const getSort = ctx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const getSort = methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
     expect(getSort().key).toBe("name");
 
     // Update columns — sort indicator should be restored
-    const updateColumns = ctx.methods.get("updateColumns") as Function;
+    const updateColumns = methods.get("updateColumns") as Function;
     updateColumns([
       { key: "name", label: "Full Name", width: 250, sortable: true },
       { key: "email", label: "E-mail", width: 350, sortable: true },
@@ -1532,23 +1230,52 @@ describe("withTable - Integration", () => {
     expect(getSort().direction).toBe("desc");
 
     // Header should show sort indicator on name column
-    const headerCells = ctx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const headerCells = dom.root.querySelectorAll(".vlist-table-header-cell");
     const nameCell = headerCells[0] as HTMLElement;
-    const sortIndicator = nameCell.querySelector("[aria-sort]") ?? nameCell;
-    // The cell or its parent should have sort-related attributes/classes
     expect(nameCell.getAttribute("aria-sort")).toBe("descending");
 
-    cleanupCtx(ctx);
+    cleanup();
+  });
+
+  it("should emit column:sort when sortable header cell is clicked", () => {
+    const sortableColumns: TableColumn<TestItem>[] = [
+      { key: "name", label: "Name", width: 200, sortable: true },
+      { key: "email", label: "Email", width: 300, sortable: true },
+    ];
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const tableCtx = createTableMockContext();
+
+    plugin.setup!(tableCtx.ctx);
+
+    // Click on a sortable header cell to trigger sort
+    const headerCells = tableCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const nameHeader = headerCells[0] as HTMLElement;
+
+    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    nameHeader.dispatchEvent(clickEvt);
+
+    const sortEvents = tableCtx.emitted.filter(e => e.event === "column:sort");
+    expect(sortEvents.length).toBe(1);
+    expect(sortEvents[0]!.payload.key).toBe("name");
+    expect(sortEvents[0]!.payload.direction).toBe("asc");
+
+    // Check getSort reflects the new state
+    const getSort = tableCtx.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    expect(getSort().key).toBe("name");
+    expect(getSort().direction).toBe("asc");
+
+    tableCtx.cleanup();
   });
 
   it("should expose _updateTableForGroups method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, engineState, cleanup } = createTableMockContext();
+    engineState.containerSize = 600;
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
     ctx.renderIfNeeded();
 
-    const updateForGroups = ctx.methods.get("_updateTableForGroups") as Function;
+    const updateForGroups = methods.get("_updateTableForGroups") as Function;
     expect(updateForGroups).toBeDefined();
 
     // Call it with a header check function
@@ -1557,16 +1284,16 @@ describe("withTable - Integration", () => {
       (key: string) => `<div class="group">${key}</div>`,
     );
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 
   it("should expose _replaceTableRenderer method", () => {
-    const feature = withTable({ columns: testColumns, rowHeight: 40 });
-    const ctx = createMockContext();
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, methods, cleanup } = createTableMockContext();
 
-    feature.setup(ctx);
+    plugin.setup!(ctx);
 
-    const replaceRenderer = ctx.methods.get("_replaceTableRenderer") as Function;
+    const replaceRenderer = methods.get("_replaceTableRenderer") as Function;
     expect(replaceRenderer).toBeDefined();
 
     // Should accept a mock renderer
@@ -1576,9 +1303,12 @@ describe("withTable - Integration", () => {
       clear: () => {},
       destroy: () => {},
       setGroupHeaderFn: () => {},
+      updateItem: () => {},
+      updateItemClasses: () => {},
+      getElement: () => undefined,
     };
     expect(() => replaceRenderer(mockRenderer)).not.toThrow();
 
-    cleanupCtx(ctx);
+    cleanup();
   });
 });

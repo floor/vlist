@@ -24,6 +24,8 @@ let origHTMLElement: typeof globalThis.HTMLElement;
 let origElement: typeof globalThis.Element | undefined;
 let origMouseEvent: typeof globalThis.MouseEvent | undefined;
 let origKeyboardEvent: typeof globalThis.KeyboardEvent | undefined;
+let origEvent: typeof globalThis.Event | undefined;
+let origWheelEvent: typeof globalThis.WheelEvent | undefined;
 let origResizeObserver: typeof globalThis.ResizeObserver | undefined;
 let origRAF: typeof globalThis.requestAnimationFrame | undefined;
 let origCAF: typeof globalThis.cancelAnimationFrame | undefined;
@@ -121,6 +123,8 @@ export const setupDOM = (opts: SetupDOMOptions = {}): JSDOM => {
   origElement = (global as any).Element;
   origMouseEvent = (global as any).MouseEvent;
   origKeyboardEvent = (global as any).KeyboardEvent;
+  origEvent = (global as any).Event;
+  origWheelEvent = (global as any).WheelEvent;
   origResizeObserver = (global as any).ResizeObserver;
   origRAF = global.requestAnimationFrame;
   origCAF = global.cancelAnimationFrame;
@@ -132,6 +136,8 @@ export const setupDOM = (opts: SetupDOMOptions = {}): JSDOM => {
   (global as any).Element = dom.window.Element;
   (global as any).MouseEvent = dom.window.MouseEvent;
   (global as any).KeyboardEvent = dom.window.KeyboardEvent;
+  (global as any).Event = dom.window.Event;
+  (global as any).WheelEvent = dom.window.WheelEvent;
 
   // Install scrollTo polyfill (JSDOM doesn't have it)
   if (!dom.window.Element.prototype.scrollTo) {
@@ -172,6 +178,8 @@ export const teardownDOM = (): void => {
   if (origElement !== undefined) (global as any).Element = origElement;
   if (origMouseEvent !== undefined) (global as any).MouseEvent = origMouseEvent;
   if (origKeyboardEvent !== undefined) (global as any).KeyboardEvent = origKeyboardEvent;
+  if (origEvent !== undefined) (global as any).Event = origEvent;
+  if (origWheelEvent !== undefined) (global as any).WheelEvent = origWheelEvent;
   if (origResizeObserver !== undefined) global.ResizeObserver = origResizeObserver;
   if (origRAF !== undefined) global.requestAnimationFrame = origRAF;
   if (origCAF !== undefined) global.cancelAnimationFrame = origCAF;

@@ -1,463 +1,737 @@
 /**
- * vlist - builder/scroll.ts Tests
- * Tests for scroll utility functions: easing and argument resolution
+ * vlist v2 - ScrollHandler Tests
+ *
+ * Tests the createScrollHandler API:
+ * - Factory creates handler with attach/detach/cancelScroll/smoothScrollTo
+ * - attach() adds scroll/wheel listeners to viewport
+ * - detach() removes listeners and cleans up timers
+ * - scrollTo can be simulated by setting scrollTop/scrollLeft
+ * - onScroll callback fires on scroll events
+ * - Horizontal mode uses scrollLeft instead of scrollTop
  */
 
-import { describe, it, expect, mock, beforeAll, afterAll, beforeEach } from "bun:test";
-import {
-  easeInOutQuad,
-  resolveScrollArgs,
-  createSmoothScroll,
-} from "../../src/builder/scroll";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
+import { setupDOM, teardownDOM } from "../helpers/dom";
+import { createScrollHandler } from "../../src/core/scroll";
+import { EngineState } from "../../src/core/state";
 
-const SMOOTH_DURATION = 300;
-
-// =============================================================================
-// Easing Function Tests
-// =============================================================================
-
-describe("easeInOutQuad", () => {
-  it("should return 0 at t=0", () => {
-    expect(easeInOutQuad(0)).toBe(0);
-  });
-
-  it("should return 1 at t=1", () => {
-    expect(easeInOutQuad(1)).toBe(1);
-  });
-
-  it("should return 0.5 at t=0.5", () => {
-    expect(easeInOutQuad(0.5)).toBe(0.5);
-  });
-
-  it("should ease in for first half (t < 0.5)", () => {
-    const t1 = 0.25;
-    const t2 = 0.5;
-    const v1 = easeInOutQuad(t1);
-    const v2 = easeInOutQuad(t2);
-
-    // Should be accelerating (ease in)
-    // The change from 0->0.25 should be less than 0.25 (slow start)
-    expect(v1).toBeLessThan(t1);
-    expect(v1).toBeCloseTo(0.125, 3);
-  });
-
-  it("should ease out for second half (t >= 0.5)", () => {
-    const t1 = 0.75;
-    const t2 = 1.0;
-    const v1 = easeInOutQuad(t1);
-    const v2 = easeInOutQuad(t2);
-
-    // Should be decelerating (ease out)
-    // The change from 0.75->1.0 should be less than 0.25 (slow end)
-    expect(v2 - v1).toBeLessThan(0.25);
-    expect(v1).toBeCloseTo(0.875, 3);
-  });
-
-  it("should be symmetric around 0.5", () => {
-    const t = 0.3;
-    const v1 = easeInOutQuad(t);
-    const v2 = easeInOutQuad(1 - t);
-
-    // easeInOutQuad(t) + easeInOutQuad(1-t) should equal 1
-    expect(v1 + v2).toBeCloseTo(1, 10);
-  });
-
-  it("should handle edge case t=0.25", () => {
-    const result = easeInOutQuad(0.25);
-    // 2 * 0.25 * 0.25 = 0.125
-    expect(result).toBeCloseTo(0.125, 10);
-  });
-
-  it("should handle edge case t=0.75", () => {
-    const result = easeInOutQuad(0.75);
-    // -1 + (4 - 2*0.75) * 0.75 = -1 + 2.5 * 0.75 = -1 + 1.875 = 0.875
-    expect(result).toBeCloseTo(0.875, 10);
-  });
-
-  it("should be continuous at t=0.5", () => {
-    const before = easeInOutQuad(0.499);
-    const at = easeInOutQuad(0.5);
-    const after = easeInOutQuad(0.501);
-
-    // Should be very close (continuous function)
-    expect(Math.abs(at - before)).toBeLessThan(0.01);
-    expect(Math.abs(after - at)).toBeLessThan(0.01);
-  });
-});
+beforeAll(() => setupDOM());
+afterAll(() => teardownDOM());
 
 // =============================================================================
-// Argument Resolution Tests
+// Factory Tests
 // =============================================================================
 
-describe("resolveScrollArgs", () => {
-  it("should use defaults when called with no arguments", () => {
-    const result = resolveScrollArgs();
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should resolve string argument as align", () => {
-    const result = resolveScrollArgs("center");
-
-    expect(result.align).toBe("center");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should resolve 'start' string", () => {
-    const result = resolveScrollArgs("start");
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should resolve 'end' string", () => {
-    const result = resolveScrollArgs("end");
-
-    expect(result.align).toBe("end");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should resolve object with all properties", () => {
-    const result = resolveScrollArgs({
-      align: "center",
-      behavior: "smooth",
-      duration: 500,
-    });
-
-    expect(result.align).toBe("center");
-    expect(result.behavior).toBe("smooth");
-    expect(result.duration).toBe(500);
-  });
-
-  it("should use defaults for missing object properties", () => {
-    const result = resolveScrollArgs({});
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should use defaults for undefined object properties", () => {
-    const result = resolveScrollArgs({
-      align: undefined,
-      behavior: undefined,
-      duration: undefined,
-    });
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should override only specified properties", () => {
-    const result = resolveScrollArgs({
-      align: "end",
-    });
-
-    expect(result.align).toBe("end");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should handle custom duration only", () => {
-    const result = resolveScrollArgs({
-      duration: 1000,
-    });
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("auto");
-    expect(result.duration).toBe(1000);
-  });
-
-  it("should handle smooth behavior only", () => {
-    const result = resolveScrollArgs({
-      behavior: "smooth",
-    });
-
-    expect(result.align).toBe("start");
-    expect(result.behavior).toBe("smooth");
-    expect(result.duration).toBe(SMOOTH_DURATION);
-  });
-
-  it("should handle all custom values", () => {
-    const result = resolveScrollArgs({
-      align: "center",
-      behavior: "smooth",
-      duration: 750,
-    });
-
-    expect(result.align).toBe("center");
-    expect(result.behavior).toBe("smooth");
-    expect(result.duration).toBe(750);
-  });
-
-  it("should handle zero duration", () => {
-    const result = resolveScrollArgs({
-      duration: 0,
-    });
-
-    expect(result.duration).toBe(0);
-  });
-
-  it("should handle very short duration", () => {
-    const result = resolveScrollArgs({
-      duration: 1,
-    });
-
-    expect(result.duration).toBe(1);
-  });
-
-  it("should handle very long duration", () => {
-    const result = resolveScrollArgs({
-      duration: 5000,
-    });
-
-    expect(result.duration).toBe(5000);
-  });
-
-  it("should handle object with extra properties", () => {
-    const result = resolveScrollArgs({
-      align: "center",
-      behavior: "smooth",
-      duration: 500,
-      extra: "ignored",
-    } as any);
-
-    expect(result.align).toBe("center");
-    expect(result.behavior).toBe("smooth");
-    expect(result.duration).toBe(500);
-  });
-});
-
-// =============================================================================
-// Integration Tests
-// =============================================================================
-
-describe("Scroll utilities integration", () => {
-  it("should work together for smooth scroll animation", () => {
-    const options = resolveScrollArgs({
-      align: "center",
-      behavior: "smooth",
-      duration: 300,
-    });
-
-    expect(options.behavior).toBe("smooth");
-    expect(options.duration).toBe(300);
-
-    // Simulate animation progress
-    const progress = easeInOutQuad(0.5);
-    expect(progress).toBe(0.5);
-  });
-
-  it("should work together for instant scroll", () => {
-    const options = resolveScrollArgs("start");
-
-    expect(options.behavior).toBe("auto");
-    expect(options.align).toBe("start");
-  });
-
-  it("should provide sensible defaults for basic usage", () => {
-    const options = resolveScrollArgs();
-
-    // Should be instant scroll to start
-    expect(options.align).toBe("start");
-    expect(options.behavior).toBe("auto");
-    expect(options.duration).toBeGreaterThan(0);
-  });
-});
-
-// =============================================================================
-// Constants Tests
-// =============================================================================
-
-describe("Constants", () => {
-  it("should export SMOOTH_DURATION", () => {
-    expect(SMOOTH_DURATION).toBeDefined();
-    expect(SMOOTH_DURATION).toBeGreaterThan(0);
-    expect(SMOOTH_DURATION).toBe(300);
-  });
-});
-
-// =============================================================================
-// createSmoothScroll Tests
-// =============================================================================
-
-describe("createSmoothScroll", () => {
-  // Use synchronous rAF for deterministic tests
-  let originalRAF: typeof requestAnimationFrame;
-  let originalCAF: typeof cancelAnimationFrame;
-  let rafCallbacks: Array<{ id: number; cb: FrameRequestCallback }>;
-  let nextId: number;
-
-  beforeAll(() => {
-    originalRAF = globalThis.requestAnimationFrame;
-    originalCAF = globalThis.cancelAnimationFrame;
-    rafCallbacks = [];
-    nextId = 1;
-
-    globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-      const id = nextId++;
-      rafCallbacks.push({ id, cb });
-      return id;
+describe("createScrollHandler factory", () => {
+  it("should return handler with required methods", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
     };
 
-    globalThis.cancelAnimationFrame = (id: number): void => {
-      rafCallbacks = rafCallbacks.filter((r) => r.id !== id);
+    const handler = createScrollHandler(config);
+
+    expect(handler).toBeDefined();
+    expect(typeof handler.attach).toBe("function");
+    expect(typeof handler.detach).toBe("function");
+    expect(typeof handler.cancelScroll).toBe("function");
+    expect(typeof handler.smoothScrollTo).toBe("function");
+  });
+});
+
+// =============================================================================
+// attach() Tests
+// =============================================================================
+
+describe("ScrollHandler.attach()", () => {
+  it("should add scroll listener to viewport", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    let scrolled = false;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {
+        scrolled = true;
+      },
+      onIdle: () => {},
     };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(scrolled).toBe(true);
+    handler.detach();
   });
 
-  beforeEach(() => {
-    rafCallbacks = [];
-    nextId = 1;
+  it("should add wheel listener when wheelEnabled is true", () => {
+    const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "scrollHeight", { value: 5000, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 500, configurable: true });
+    const state = new EngineState(10);
+    let wheeled = false;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: true,
+      idleTimeout: 1500,
+      onFrame: () => {
+        wheeled = true;
+      },
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 10, bubbles: true, cancelable: true }),
+    );
+
+    expect(wheeled).toBe(true);
+    handler.detach();
   });
 
-  afterAll(() => {
-    globalThis.requestAnimationFrame = originalRAF;
-    globalThis.cancelAnimationFrame = originalCAF;
+  it("should use scrollTarget if provided instead of viewport", () => {
+    const viewport = document.createElement("div");
+    const scrollTarget = document.createElement("div");
+    const state = new EngineState(10);
+    let scrolled = false;
+    const config = {
+      state,
+      viewport,
+      scrollTarget,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {
+        scrolled = true;
+      },
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    const event = new Event("scroll", { bubbles: true });
+    scrollTarget.dispatchEvent(event);
+
+    expect(scrolled).toBe(true);
+    handler.detach();
+  });
+});
+
+// =============================================================================
+// detach() Tests
+// =============================================================================
+
+describe("ScrollHandler.detach()", () => {
+  it("should remove scroll listener from viewport", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    let scrolled = false;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {
+        scrolled = true;
+      },
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.detach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(scrolled).toBe(false);
   });
 
-  /** Flush all pending rAF callbacks with the given timestamp */
-  function flushRAF(now: number) {
-    const pending = [...rafCallbacks];
-    rafCallbacks = [];
-    for (const { cb } of pending) {
-      cb(now);
-    }
-  }
+  it("should remove wheel listener when it was attached", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    let wheeled = false;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: true,
+      idleTimeout: 1500,
+      onFrame: () => {
+        wheeled = true;
+      },
+      onIdle: () => {},
+    };
 
-  it("should jump directly when distance < 1px", () => {
-    const scrollTo = mock(() => {});
-    const renderFn = mock(() => {});
-    const controller = { scrollTo, getScrollTop: () => 0 };
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.detach();
 
-    const { animateScroll } = createSmoothScroll(controller, renderFn);
+    viewport.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 10, bubbles: true, cancelable: true }),
+    );
 
-    animateScroll(100, 100.5, 300);
-
-    // Should jump immediately without rAF
-    expect(scrollTo).toHaveBeenCalledWith(100.5);
-    expect(renderFn).not.toHaveBeenCalled();
-    expect(rafCallbacks.length).toBe(0);
+    expect(wheeled).toBe(false);
   });
 
-  it("should animate over multiple frames", () => {
-    const positions: number[] = [];
-    const scrollTo = mock((pos: number) => positions.push(pos));
-    const renderFn = mock(() => {});
-    const controller = { scrollTo, getScrollTop: () => 0 };
+  it("should cancel any pending animations", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    const { animateScroll } = createSmoothScroll(controller, renderFn);
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(1000, 300);
 
-    // Mock performance.now to return a known start time
-    const startTime = 1000;
-    const originalPerfNow = performance.now;
-    performance.now = () => startTime;
+    handler.detach();
 
-    animateScroll(0, 1000, 300);
-
-    performance.now = originalPerfNow;
-
-    // First rAF should be queued
-    expect(rafCallbacks.length).toBe(1);
-
-    // Simulate mid-animation frame (t=0.5 → 150ms elapsed)
-    flushRAF(startTime + 150);
-
-    expect(scrollTo).toHaveBeenCalled();
-    expect(renderFn).toHaveBeenCalled();
-    // Should still be animating (another rAF queued)
-    expect(rafCallbacks.length).toBe(1);
-
-    // Position at t=0.5: easeInOutQuad(0.5) = 0.5, so pos = 500
-    expect(positions[0]).toBeCloseTo(500, 0);
-
-    // Simulate final frame (t=1.0 → 300ms elapsed)
-    flushRAF(startTime + 300);
-
-    // Should have reached the target
-    expect(positions[positions.length - 1]).toBe(1000);
-    // No more rAFs queued (animation complete)
-    expect(rafCallbacks.length).toBe(0);
+    setTimeout(() => {
+      expect(state.scrollPosition).toBe(0);
+      done();
+    }, 150);
   });
 
-  it("should cancel previous animation when starting a new one", () => {
-    const scrollTo = mock(() => {});
-    const renderFn = mock(() => {});
-    const controller = { scrollTo, getScrollTop: () => 0 };
+  it("should clear idle timeout", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    let idle = false;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 100,
+      onFrame: () => {},
+      onIdle: () => {
+        idle = true;
+      },
+    };
 
-    const startTime = 2000;
-    const originalPerfNow = performance.now;
-    performance.now = () => startTime;
+    const handler = createScrollHandler(config);
+    handler.attach();
 
-    const { animateScroll } = createSmoothScroll(controller, renderFn);
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
 
-    animateScroll(0, 500, 300);
-    expect(rafCallbacks.length).toBe(1);
+    handler.detach();
 
-    // Start a new animation — should cancel the first
-    animateScroll(0, 1000, 300);
-    expect(rafCallbacks.length).toBe(1); // Old one cancelled, new one queued
+    setTimeout(() => {
+      expect(idle).toBe(false);
+      done();
+    }, 200);
+  });
+});
 
-    performance.now = originalPerfNow;
+// =============================================================================
+// Vertical (scrollTop) Tests
+// =============================================================================
+
+describe("ScrollHandler - vertical mode", () => {
+  it("should read scrollTop for vertical viewport", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 250;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(state.scrollPosition).toBe(250);
+    handler.detach();
   });
 
-  it("cancelScroll should stop the animation", () => {
-    const scrollTo = mock(() => {});
-    const renderFn = mock(() => {});
-    const controller = { scrollTo, getScrollTop: () => 0 };
+  it("should set scrollTop during smooth scroll animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    const startTime = 3000;
-    const originalPerfNow = performance.now;
-    performance.now = () => startTime;
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 200);
 
-    const { animateScroll, cancelScroll } = createSmoothScroll(controller, renderFn);
+    setTimeout(() => {
+      expect(viewport.scrollTop).toBeGreaterThan(0);
+      expect(viewport.scrollTop).toBeLessThanOrEqual(100);
+      handler.detach();
+      done();
+    }, 100);
+  });
+});
 
-    animateScroll(0, 1000, 300);
-    expect(rafCallbacks.length).toBe(1);
+// =============================================================================
+// Horizontal (scrollLeft) Tests
+// =============================================================================
 
-    cancelScroll();
-    expect(rafCallbacks.length).toBe(0);
+describe("ScrollHandler - horizontal mode", () => {
+  it("should read scrollLeft for horizontal viewport", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const config = {
+      state,
+      viewport,
+      horizontal: true,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    performance.now = originalPerfNow;
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollLeft = 300;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(state.scrollPosition).toBe(300);
+    handler.detach();
   });
 
-  it("cancelScroll should be safe to call when no animation is running", () => {
-    const controller = { scrollTo: mock(() => {}), getScrollTop: () => 0 };
-    const { cancelScroll } = createSmoothScroll(controller, () => {});
+  it("should set scrollLeft during smooth scroll animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: true,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    expect(() => cancelScroll()).not.toThrow();
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 200);
+
+    setTimeout(() => {
+      expect(viewport.scrollLeft).toBeGreaterThan(0);
+      expect(viewport.scrollLeft).toBeLessThanOrEqual(100);
+      handler.detach();
+      done();
+    }, 100);
+  });
+});
+
+// =============================================================================
+// cancelScroll() Tests
+// =============================================================================
+
+describe("ScrollHandler.cancelScroll()", () => {
+  it("should stop smooth scroll animation in progress", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(1000, 500);
+
+    setTimeout(() => {
+      const midwayPos = viewport.scrollTop;
+      handler.cancelScroll();
+
+      setTimeout(() => {
+        const finalPos = viewport.scrollTop;
+        expect(finalPos).toBe(midwayPos);
+        handler.detach();
+        done();
+      }, 200);
+    }, 100);
   });
 
-  it("should apply easing during animation", () => {
-    const positions: number[] = [];
-    const scrollTo = mock((pos: number) => positions.push(pos));
-    const controller = { scrollTo, getScrollTop: () => 0 };
+  it("should be safe to call when no animation is running", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    const startTime = 4000;
-    const originalPerfNow = performance.now;
-    performance.now = () => startTime;
+    const handler = createScrollHandler(config);
+    handler.attach();
 
-    const { animateScroll } = createSmoothScroll(controller, () => {});
+    expect(() => handler.cancelScroll()).not.toThrow();
+    handler.detach();
+  });
+});
 
-    animateScroll(0, 1000, 400);
+// =============================================================================
+// smoothScrollTo() Tests
+// =============================================================================
 
-    // Quarter way: t=0.25, easeInOutQuad(0.25) = 0.125, pos = 125
-    flushRAF(startTime + 100);
-    expect(positions[0]).toBeCloseTo(125, 0);
+describe("ScrollHandler.smoothScrollTo()", () => {
+  it("should animate to target position over duration", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
 
-    // Three-quarter way: t=0.75, easeInOutQuad(0.75) = 0.875, pos = 875
-    flushRAF(startTime + 300);
-    expect(positions[1]).toBeCloseTo(875, 0);
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(200, 300);
 
-    // Complete
-    flushRAF(startTime + 400);
-    expect(positions[2]).toBe(1000);
+    setTimeout(() => {
+      expect(viewport.scrollTop).toBeGreaterThan(0);
+      expect(viewport.scrollTop).toBeLessThan(200);
+      handler.detach();
+      done();
+    }, 150);
+  });
 
-    performance.now = originalPerfNow;
+  it("should reach exact target at end of animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 100);
+
+    setTimeout(() => {
+      expect(viewport.scrollTop).toBe(100);
+      handler.detach();
+      done();
+    }, 150);
+  });
+
+  it("should jump directly for distance < 1px", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 100;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100.5, 300);
+
+    expect(viewport.scrollTop).toBe(100.5);
+    handler.detach();
+  });
+
+  it("should call onFrame during animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const onFrame = mock(() => {});
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame,
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 100);
+
+    setTimeout(() => {
+      expect(onFrame).toHaveBeenCalled();
+      handler.detach();
+      done();
+    }, 150);
+  });
+
+  it("should cancel previous animation when starting new one", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(500, 300);
+
+    setTimeout(() => {
+      const firstPos = viewport.scrollTop;
+      handler.smoothScrollTo(100, 100);
+
+      setTimeout(() => {
+        expect(viewport.scrollTop).toBeLessThan(firstPos);
+        handler.detach();
+        done();
+      }, 150);
+    }, 100);
+  });
+});
+
+// =============================================================================
+// onScroll Callback Tests
+// =============================================================================
+
+describe("ScrollHandler.onFrame callback", () => {
+  it("should fire onFrame on scroll event", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const onFrame = mock(() => {});
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame,
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(onFrame).toHaveBeenCalled();
+    handler.detach();
+  });
+
+  it("should update state.scrollDirection on forward scroll", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 100;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 200;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(state.scrollDirection).toBe(1);
+    handler.detach();
+  });
+
+  it("should update state.scrollDirection on backward scroll", () => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 200;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(state.scrollDirection).toBe(-1);
+    handler.detach();
+  });
+});
+
+// =============================================================================
+// onIdle Callback Tests
+// =============================================================================
+
+describe("ScrollHandler.onIdle callback", () => {
+  it("should fire onIdle after idleTimeout", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    const onIdle = mock(() => {});
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 100,
+      onFrame: () => {},
+      onIdle,
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    setTimeout(() => {
+      expect(onIdle).toHaveBeenCalled();
+      handler.detach();
+      done();
+    }, 150);
+  });
+
+  it("should reset scrollDirection on idle", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 100,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    const event = new Event("scroll", { bubbles: true });
+    viewport.dispatchEvent(event);
+
+    expect(state.scrollDirection).toBe(1);
+
+    setTimeout(() => {
+      expect(state.scrollDirection).toBe(0);
+      handler.detach();
+      done();
+    }, 150);
+  });
+
+  it("should reschedule idle timeout on new scroll", (done) => {
+    const viewport = document.createElement("div");
+    const state = new EngineState(10);
+    state.scrollPosition = 0;
+    let idleCount = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 100,
+      onFrame: () => {},
+      onIdle: () => {
+        idleCount++;
+      },
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+
+    viewport.scrollTop = 100;
+    viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+    setTimeout(() => {
+      viewport.scrollTop = 200;
+      viewport.dispatchEvent(new Event("scroll", { bubbles: true }));
+    }, 50);
+
+    setTimeout(() => {
+      expect(idleCount).toBe(1);
+      handler.detach();
+      done();
+    }, 200);
   });
 });

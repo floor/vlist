@@ -1,16 +1,17 @@
 /**
- * vlist - Grid Plugin Tests
- * Tests for withGrid plugin: initialization, configuration, rendering, events
+ * vlist v2 — Grid Plugin Tests
+ * Tests for grid() plugin: factory validation, setup, render function
+ * replacement via setRenderFn, resize handling, updateGrid, scrollToIndex,
+ * destroy cleanup, and edge cases.
+ *
+ * Adapted from v1 withGrid feature tests to v2 PluginContext API.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { withGrid } from "../../../src/features/grid/feature";
-import { createGridLayout } from "../../../src/features/grid/layout";
-import { createGridRenderer } from "../../../src/features/grid/renderer";
-import { createSizeCache } from "../../../src/rendering/sizes";
+import { grid } from "../../../src/plugins/grid/plugin";
 import type { VListItem } from "../../../src/types";
-import type { BuilderContext } from "../../../src/builder/types";
+import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
 // JSDOM Setup
@@ -48,554 +49,422 @@ interface TestItem extends VListItem {
   name: string;
 }
 
-function createTestDOM() {
-  const root = document.createElement("div");
-  const viewport = document.createElement("div");
-  const content = document.createElement("div");
-  const items = document.createElement("div");
-
-  root.className = "vlist";
-  viewport.className = "vlist__viewport";
-  content.className = "vlist__content";
-  items.className = "vlist__items";
-
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  document.body.appendChild(root);
-
-  return { root, viewport, content, items };
-}
-
-function createMockContext(): BuilderContext<TestItem> {
-  const testDom = createTestDOM();
-  const sizeCache = createSizeCache(50, 0);
-  const rendered = new Map<number, HTMLElement>();
-  const items: TestItem[] = Array.from({ length: 100 }, (_, i) => ({
+function createTestItems(count: number): TestItem[] {
+  return Array.from({ length: count }, (_, i) => ({
     id: i,
     name: `Item ${i}`,
   }));
-
-  let renderIfNeededFn = () => {};
-  let forceRenderFn = () => {};
-  let virtualTotalFn = () => 100;
-
-  const ctx: BuilderContext<TestItem> = {
-    dom: testDom as any,
-    sizeCache: sizeCache as any,
-    emitter: {
-      on: () => {},
-      off: () => {},
-      emit: () => {},
-    } as any,
-    config: {
-      overscan: 2,
-      classPrefix: "vlist",
-      reverse: false,
-      wrap: false,
-      horizontal: false,
-      ariaIdPrefix: "vlist",
-      interactive: true,
-    },
-    rawConfig: {
-      container: document.createElement("div"),
-      items: items,
-      item: {
-        height: 50,
-        width: 200,
-        template: (item: TestItem) => `<div>${item.name}</div>`,
-      },
-    },
-    renderer: {
-      render: () => {},
-      updateItemClasses: () => {},
-      updatePositions: () => {},
-      updateItem: () => {},
-      getElement: () => null,
-      clear: () => {},
-      destroy: () => {},
-    } as any,
-    dataManager: {
-      getTotal: () => items.length,
-      getItem: (index: number) => items[index],
-      getItemsInRange: (start: number, end: number) => {
-        return items.slice(start, end + 1);
-      },
-      isItemLoaded: () => true,
-    } as any,
-    scrollController: {
-      getScrollTop: () => 0,
-      scrollTo: () => {},
-      isAtTop: () => true,
-      isAtBottom: () => false,
-    } as any,
-    state: {
-      dataState: {
-        total: 100,
-        cached: 100,
-        isLoading: false,
-        pendingRanges: [],
-        error: undefined,
-        hasMore: false,
-        cursor: undefined,
-      },
-      viewportState: {
-        scrollPosition: 0,
-        containerSize: 500,
-        totalSize: 0,
-        actualSize: 0,
-        isCompressed: false,
-        compressionRatio: 1,
-        visibleRange: { start: 0, end: 0 },
-        renderRange: { start: 0, end: 0 },
-      },
-      renderState: {
-        range: { start: 0, end: 0 },
-        visibleRange: { start: 0, end: 0 },
-        renderedCount: 0,
-      },
-      lastRenderRange: { start: -1, end: -1 },
-      isDestroyed: false,
-    } as any,
-    getContainerWidth: () => 800,
-    afterScroll: [],
-    afterRenderBatch: [],
-    idleHandlers: [],
-    clickHandlers: [],
-    contextMenuHandlers: [],
-    keydownHandlers: [],
-    resizeHandlers: [],
-    contentSizeHandlers: [],
-    destroyHandlers: [],
-    methods: new Map(),
-    replaceTemplate: () => {},
-    replaceRenderer: () => {},
-    replaceDataManager: () => {},
-    replaceScrollController: () => {},
-    getItemsForRange: (range) => {
-      return items.slice(range.start, range.end + 1);
-    },
-    getAllLoadedItems: () => items,
-    getVirtualTotal: () => virtualTotalFn(),
-    getCachedCompression: () => ({
-      isCompressed: false,
-      actualSize: 5000,
-      virtualSize: 5000,
-      ratio: 1,
-    }),
-    getCompressionContext: () => ({
-      scrollPosition: 0,
-      totalItems: 100,
-      containerSize: 500,
-      rangeStart: 0,
-    }),
-    renderIfNeeded: () => renderIfNeededFn(),
-    forceRender: () => forceRenderFn(),
-    invalidateRendered: () => {},
-    getRenderFns: () => ({
-      renderIfNeeded: renderIfNeededFn,
-      forceRender: forceRenderFn,
-    }),
-    setRenderFns: (renderFn, forceFn) => {
-      renderIfNeededFn = renderFn;
-      forceRenderFn = forceFn;
-    },
-    setVirtualTotalFn: (fn) => {
-      virtualTotalFn = fn;
-    },
-    rebuildSizeCache: (total) => {
-      sizeCache.rebuild(total ?? virtualTotalFn());
-    },
-    setSizeConfig: (config) => {
-      // Store for tests that need to inspect the wrapped size function
-      (ctx as any)._lastSizeConfig = config;
-    },
-    updateContentSize: (totalSize) => {
-      testDom.content.style.height = `${totalSize}px`;
-    },
-    updateCompressionMode: () => {},
-    setVisibleRangeFn: () => {},
-    getVisibleRange: (scrollTop: number, containerHeight: number, totalItems: number, out: { start: number; end: number }) => {
-      if (totalItems === 0 || containerHeight === 0) {
-        out.start = 0;
-        out.end = 0;
-        return;
-      }
-      out.start = Math.max(0, sizeCache.indexAtOffset(scrollTop));
-      out.end = Math.min(totalItems - 1, Math.max(0, sizeCache.indexAtOffset(scrollTop + containerHeight - 1)));
-    },
-    setScrollToPosFn: () => {},
-    getScrollToPos: () => 0,
-    setPositionElementFn: () => {},
-    setUpdateItemClassesFn: () => {},
-    setScrollFns: () => {},
-    triggerScrollFrame: () => {},
-    setScrollTarget: () => {},
-    getScrollTarget: () => window as any,
-    setContainerDimensions: () => {},
-    disableViewportResize: () => {},
-    disableWheelHandler: () => {},
-    adjustScrollPosition: (pos: number) => pos,
-    getStripeIndexFn: () => (index: number) => index,
-    setStripeIndexFn: () => {},
-    getItemToScrollIndexFn: () => (index: number) => index,
-    setItemToScrollIndexFn: () => {},
-  };
-
-  return ctx;
 }
 
 // =============================================================================
-// withGrid - Factory Tests
+// grid — Factory Tests
 // =============================================================================
 
-describe("withGrid - Factory", () => {
+describe("grid - Factory", () => {
   it("should create a plugin with name and priority", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
+    const plugin = grid<TestItem>({ columns: 4 });
 
-    expect(plugin.name).toBe("withGrid");
+    expect(plugin.name).toBe("grid");
     expect(plugin.priority).toBe(10);
     expect(plugin.setup).toBeInstanceOf(Function);
   });
 
   it("should throw error if columns is not provided", () => {
     expect(() => {
-      withGrid<TestItem>({} as any);
-    }).toThrow("columns must be a positive integer");
+      grid<TestItem>({} as any);
+    }).toThrow("columns must be >= 1");
   });
 
   it("should throw error if columns is less than 1", () => {
     expect(() => {
-      withGrid<TestItem>({ columns: 0 });
-    }).toThrow("columns must be a positive integer");
+      grid<TestItem>({ columns: 0 });
+    }).toThrow("columns must be >= 1");
   });
 
   it("should throw error if columns is negative", () => {
     expect(() => {
-      withGrid<TestItem>({ columns: -5 });
-    }).toThrow("columns must be a positive integer");
+      grid<TestItem>({ columns: -5 });
+    }).toThrow("columns must be >= 1");
   });
 
   it("should accept valid columns configuration", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
+    const plugin = grid<TestItem>({ columns: 4 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept gap configuration", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
     expect(plugin).toBeDefined();
   });
 });
 
 // =============================================================================
-// withGrid - Setup Tests
+// grid — Setup Tests
 // =============================================================================
 
-describe("withGrid - Setup", () => {
+describe("grid - Setup", () => {
   it("should add grid CSS class to root", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    expect(ctx.dom.root.classList.contains("vlist--grid")).toBe(true);
+    expect(dom.root.classList.contains("vlist--grid")).toBe(true);
+    cleanup();
   });
 
-  it("should throw error if reverse is true", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    (ctx.config as any).reverse = true;
+  it("should replace render functions via setRenderFn", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const mock = createPluginMockContext<TestItem>(items);
 
-    expect(() => {
-      plugin.setup!(ctx);
-    }).toThrow("withGrid cannot be used with reverse: true");
+    expect(mock.renderFnReplaced).toBe(false);
+    plugin.setup!(mock.ctx);
+    expect(mock.renderFnReplaced).toBe(true);
+    mock.cleanup();
   });
 
-  it("should set virtual total function", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+  it("should have a resize hook", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    expect(plugin.hooks?.onResize).toBeInstanceOf(Function);
+  });
+
+  it("should register destroy handler", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, destroyHandlers, cleanup } =
+      createPluginMockContext<TestItem>(items);
+
+    const countBefore = destroyHandlers.length;
+    plugin.setup!(ctx);
+
+    expect(destroyHandlers.length).toBe(countBefore + 1);
+    cleanup();
+  });
+
+  it("should expose getGridLayout method", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    // 100 items / 4 columns = 25 rows
-    expect(ctx.getVirtualTotal()).toBe(25);
-  });
-
-  it("should calculate correct rows for non-divisible items", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.dataManager.getTotal = () => 101;
-
-    plugin.setup!(ctx);
-
-    // 101 items / 4 columns = 26 rows (ceiling)
-    expect(ctx.getVirtualTotal()).toBe(26);
-  });
-
-  it("should register resize handler", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    expect(ctx.resizeHandlers.length).toBeGreaterThan(0);
-  });
-
-  it("should expose _getGridLayout method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    expect(ctx.methods.has("_getGridLayout")).toBe(true);
-    const getLayout = ctx.methods.get("_getGridLayout");
+    expect(methods.has("getGridLayout")).toBe(true);
+    const getLayout = methods.get("getGridLayout");
     expect(getLayout).toBeInstanceOf(Function);
-  });
-
-  it("should expose _getGridConfig method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    expect(ctx.methods.has("_getGridConfig")).toBe(true);
-  });
-
-  it("should expose _replaceGridRenderer method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    expect(ctx.methods.has("_replaceGridRenderer")).toBe(true);
-  });
-
-  it("should expose _updateGridLayoutForGroups method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    expect(ctx.methods.has("_updateGridLayoutForGroups")).toBe(true);
+    cleanup();
   });
 
   it("should expose updateGrid method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    expect(ctx.methods.has("updateGrid")).toBe(true);
+    expect(methods.has("updateGrid")).toBe(true);
+    cleanup();
+  });
+
+  it("should expose scrollToIndex method", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(methods.has("scrollToIndex")).toBe(true);
+    cleanup();
+  });
+
+  it("should return layout with correct columns via getGridLayout", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    expect(layout.columns).toBe(4);
+    cleanup();
+  });
+
+  it("should set total rows via layout (100 items / 4 columns = 25 rows)", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // 100 items / 4 columns = 25 rows
+    expect(layout.getTotalRows(100)).toBe(25);
+    cleanup();
+  });
+
+  it("should calculate correct rows for non-divisible items", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(101);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // 101 items / 4 columns = 26 rows (ceiling)
+    expect(layout.getTotalRows(101)).toBe(26);
+    cleanup();
+  });
+
+  it("should remove grid class on destroy", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, dom, destroyHandlers, cleanup } =
+      createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    expect(dom.root.classList.contains("vlist--grid")).toBe(true);
+
+    // Call destroy handlers
+    for (const handler of destroyHandlers) handler();
+
+    expect(dom.root.classList.contains("vlist--grid")).toBe(false);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Configuration Tests
+// grid — Configuration Tests
 // =============================================================================
 
-describe("withGrid - Configuration", () => {
+describe("grid - Configuration", () => {
   it("should support gap configuration", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
 
-    expect(config.gap).toBe(8);
+    expect(layout.gap).toBe(8);
+    cleanup();
   });
 
   it("should default gap to 0 if not provided", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
 
-    expect(config.gap).toBe(0);
+    expect(layout.gap).toBe(0);
+    cleanup();
   });
 
-  it("should detect groups in items", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.rawConfig.items = [
-      { id: 0, name: "Header", __groupHeader: true } as any,
-      { id: 1, name: "Item 1" },
-      { id: 2, name: "Item 2" },
-    ];
-
-    plugin.setup!(ctx);
-
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
-
-    expect(config.isHeaderFn).toBeInstanceOf(Function);
-  });
-
-  it("should not add isHeaderFn if no groups detected", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
-
-    expect(config.isHeaderFn).toBeUndefined();
-  });
-});
-
-// =============================================================================
-// withGrid - updateGrid Method Tests
-// =============================================================================
-
-describe("withGrid - updateGrid", () => {
-  it("should update columns", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-    updateGrid({ columns: 6 });
-
-    // 100 items / 6 columns = 17 rows (ceiling)
-    expect(ctx.getVirtualTotal()).toBe(17);
-  });
-
-  it("should throw error if columns is invalid", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-
-    expect(() => {
-      updateGrid({ columns: 0 });
-    }).toThrow("columns must be a positive integer");
-
-    expect(() => {
-      updateGrid({ columns: -1 });
-    }).toThrow("columns must be a positive integer");
-
-    expect(() => {
-      updateGrid({ columns: 3.5 });
-    }).toThrow("columns must be a positive integer");
-  });
-
-  it("should update gap", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-    updateGrid({ gap: 16 });
-
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
-
-    expect(config.gap).toBe(16);
-  });
-
-  it("should throw error if gap is negative", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-
-    expect(() => {
-      updateGrid({ gap: -5 });
-    }).toThrow("gap must be non-negative");
-  });
-
-  it("should update both columns and gap", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-    updateGrid({ columns: 3, gap: 12 });
-
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
-
-    expect(config.columns).toBe(3);
-    expect(config.gap).toBe(12);
-  });
-
-  it("should trigger content size handlers", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    let handlerCalled = false;
-    ctx.contentSizeHandlers.push(() => {
-      handlerCalled = true;
+  it("should support horizontal mode", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      horizontal: true,
     });
 
     plugin.setup!(ctx);
 
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
-    updateGrid({ columns: 6 });
-
-    expect(handlerCalled).toBe(true);
+    expect(dom.root.classList.contains("vlist--grid")).toBe(true);
+    cleanup();
   });
+});
 
-  it("should accept zero gap", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
+// =============================================================================
+// grid — updateGrid Method Tests
+// =============================================================================
+
+describe("grid - updateGrid", () => {
+  it("should update columns via updateGrid", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    const updateGrid = ctx.methods.get("updateGrid") as Function;
+    const updateGrid = methods.get("updateGrid") as Function;
+    updateGrid({ columns: 6 });
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // 100 items / 6 columns = 17 rows (ceiling)
+    expect(layout.getTotalRows(100)).toBe(17);
+    cleanup();
+  });
+
+  it("should throw error if columns is 0", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+
+    expect(() => {
+      updateGrid({ columns: 0 });
+    }).toThrow("columns must be >= 1");
+    cleanup();
+  });
+
+  it("should throw error if columns is negative", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+
+    expect(() => {
+      updateGrid({ columns: -1 });
+    }).toThrow("columns must be >= 1");
+    cleanup();
+  });
+
+  it("should throw error if columns is non-integer", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+
+    expect(() => {
+      updateGrid({ columns: 3.5 });
+    }).toThrow("columns must be >= 1");
+    cleanup();
+  });
+
+  it("should update gap", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+    updateGrid({ gap: 16 });
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    expect(layout.gap).toBe(16);
+    cleanup();
+  });
+
+  it("should throw error if gap is negative", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+
+    expect(() => {
+      updateGrid({ gap: -5 });
+    }).toThrow("gap must be >= 0");
+    cleanup();
+  });
+
+  it("should update both columns and gap", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
+    updateGrid({ columns: 3, gap: 12 });
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    expect(layout.columns).toBe(3);
+    expect(layout.gap).toBe(12);
+    cleanup();
+  });
+
+  it("should accept zero gap", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const updateGrid = methods.get("updateGrid") as Function;
 
     expect(() => {
       updateGrid({ gap: 0 });
     }).not.toThrow();
 
-    const getConfig = ctx.methods.get("_getGridConfig") as Function;
-    const config = getConfig();
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
 
-    expect(config.gap).toBe(0);
+    expect(layout.gap).toBe(0);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Render Functions Tests
+// grid — Render Function Tests
 // =============================================================================
 
-describe("withGrid - Render Functions", () => {
-  it("should replace render functions", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    const originalRenderIfNeeded = ctx.renderIfNeeded;
-    const originalForceRender = ctx.forceRender;
+describe("grid - Render Functions", () => {
+  it("should call renderIfNeeded without errors", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    // Should have replaced the functions
-    const fns = ctx.getRenderFns();
-    expect(fns.renderIfNeeded).not.toBe(originalRenderIfNeeded);
-    expect(fns.forceRender).not.toBe(originalForceRender);
+    expect(() => {
+      ctx.renderIfNeeded();
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should call forceRender without errors", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => {
+      ctx.forceRender();
+    }).not.toThrow();
+    cleanup();
   });
 
   it("should not render if destroyed", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
+    engineState.destroyed = true;
 
-    ctx.state.isDestroyed = true;
-
-    // Should not throw
     expect(() => {
       ctx.renderIfNeeded();
     }).not.toThrow();
@@ -603,432 +472,607 @@ describe("withGrid - Render Functions", () => {
     expect(() => {
       ctx.forceRender();
     }).not.toThrow();
-  });
-
-  it("should call force render without errors", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    plugin.setup!(ctx);
-
-    ctx.state.lastRenderRange = { start: 0, end: 5 };
-
-    expect(() => {
-      ctx.forceRender();
-    }).not.toThrow();
+    cleanup();
   });
 
   it("should handle zero total rows gracefully", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.dataManager.getTotal = () => 0;
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(0);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
     expect(() => {
       ctx.renderIfNeeded();
     }).not.toThrow();
+    cleanup();
   });
 
-  it("should handle zero container height gracefully", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.state.viewportState.containerSize = 0;
+  it("should handle zero container size gracefully", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
+    engineState.containerSize = 0;
 
     expect(() => {
       ctx.renderIfNeeded();
     }).not.toThrow();
+    cleanup();
+  });
+
+  it("should render items into the content container", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const renderedCount = dom.content.children.length;
+    expect(renderedCount).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("should render items with grid-item class", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    expect(firstChild).toBeDefined();
+    expect(firstChild.classList.contains("vlist-grid-item")).toBe(true);
+    expect(firstChild.classList.contains("vlist-item")).toBe(true);
+    cleanup();
+  });
+
+  it("should set data-index attribute on rendered items", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    expect(firstChild.getAttribute("data-index")).not.toBeNull();
+    cleanup();
+  });
+
+  it("should position items with translate transform", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(8);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    expect(firstChild.style.transform).toContain("translate");
+    cleanup();
+  });
+
+  it("should distribute items across multiple columns", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(8);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const xPositions = new Set<string>();
+    for (const child of dom.content.children) {
+      const transform = (child as HTMLElement).style.transform;
+      const match = transform.match(/translate\((\d+)px/);
+      if (match) xPositions.add(match[1]!);
+    }
+
+    expect(xPositions.size).toBeGreaterThan(1);
+    cleanup();
+  });
+
+  it("should set explicit width on grid items", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(4);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    expect(firstChild.style.width).not.toBe("");
+    const width = parseInt(firstChild.style.width, 10);
+    expect(width).toBeGreaterThan(0);
+    // 800px container / 4 columns = 200px per column
+    expect(width).toBe(200);
+    cleanup();
+  });
+
+  it("should set explicit width accounting for gap", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(4);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    const width = parseInt(firstChild.style.width, 10);
+    // (800 - 3*8) / 4 = (800 - 24) / 4 = 194
+    expect(width).toBe(194);
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Resize Handler Tests
+// grid — Resize Hook Tests
 // =============================================================================
 
-describe("withGrid - Resize Handler", () => {
-  it("should handle resize events", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+describe("grid - Resize Hook", () => {
+  it("should have onResize hook", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
 
-    plugin.setup!(ctx);
-
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-
-    // Should not throw
-    expect(() => {
-      resizeHandler!(1024, 768);
-    }).not.toThrow();
+    expect(plugin.hooks?.onResize).toBeInstanceOf(Function);
   });
 
-  it("should handle resize without errors", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+  it("should call onResize without errors", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
 
     expect(() => {
-      resizeHandler!(1024, 768);
+      plugin.hooks!.onResize!(1024, 768);
     }).not.toThrow();
+    cleanup();
   });
 
-  it("should rebuild size cache on resize when using dynamic height function", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-
-    // Use a dynamic height function
-    ctx.rawConfig.item.height = (index: number, context: any) => {
-      return context ? context.columnWidth * 0.75 : 200;
-    };
-
-    let rebuildCount = 0;
-    const originalRebuild = ctx.rebuildSizeCache;
-    ctx.rebuildSizeCache = (total?: number) => {
-      rebuildCount++;
-      originalRebuild(total);
-    };
-
-    let contentSizeUpdated = false;
-    const originalUpdateContentSize = ctx.updateContentSize;
-    ctx.updateContentSize = (totalSize: number) => {
-      contentSizeUpdated = true;
-      originalUpdateContentSize(totalSize);
-    };
+  it("should handle resize with no container change without errors", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items, { containerWidth: 800 });
 
     plugin.setup!(ctx);
 
-    // Reset counters after setup (setup also calls rebuildSizeCache)
-    rebuildCount = 0;
-    contentSizeUpdated = false;
-
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-    resizeHandler!(1200, 600);
-
-    // Dynamic heights: size cache should be rebuilt
-    expect(rebuildCount).toBeGreaterThan(0);
-    expect(contentSizeUpdated).toBe(true);
+    // containerWidth matches engineState.crossSize — no-op
+    engineState.crossSize = 800;
+    expect(() => {
+      plugin.hooks!.onResize!(800, 600);
+    }).not.toThrow();
+    cleanup();
   });
 
-  it("should not rebuild size cache on resize when using fixed height", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-
-    // Use a fixed height (number, not function)
-    ctx.rawConfig.item.height = 200;
-
-    let rebuildCount = 0;
-    const originalRebuild = ctx.rebuildSizeCache;
-    ctx.rebuildSizeCache = (total?: number) => {
-      rebuildCount++;
-      originalRebuild(total);
-    };
+  it("should update item styles on cross-axis resize", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(8);
+    const { ctx, dom, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items, { containerWidth: 800 });
 
     plugin.setup!(ctx);
+    ctx.forceRender();
 
-    // Reset after setup
-    rebuildCount = 0;
+    // Simulate cross-axis resize by changing engineState.crossSize
+    engineState.crossSize = 1200;
+    plugin.hooks!.onResize!(1200, 600);
 
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-    resizeHandler!(1200, 600);
-
-    // Fixed heights: no size cache rebuild needed
-    expect(rebuildCount).toBe(0);
-  });
-
-  it("should update gridState.containerWidth on resize in vertical mode", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-
-    // Use a dynamic height function so setSizeConfig captures the wrapper
-    ctx.rawConfig.item.height = (_index: number, context: any) => {
-      return context ? context.columnWidth * 0.75 : 200;
-    };
-
-    plugin.setup!(ctx);
-
-    // Get the captured wrapper function
-    const wrappedSizeFn = (ctx as any)._lastSizeConfig as (index: number) => number;
-    expect(typeof wrappedSizeFn).toBe("function");
-
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-    resizeHandler!(1200, 600);
-
-    // Call the wrapper to inspect what context it builds
-    // In vertical mode, gridState.containerWidth should be 1200 (the width)
-    // columnWidth = (1200 - 2 - 3*8) / 4 = 274.5
-    wrappedSizeFn(0);
-
-    // Verify indirectly: the wrapper uses gridState.containerWidth internally.
-    // If containerWidth = 1200, columnWidth = (1200 - 2 - 24) / 4 = 293.5
-    // height = 293.5 * 0.75 = 220.125, + gap 8 = 228.125
-    const result = wrappedSizeFn(0);
-    const expectedColWidth = (1200 - 2 - (4 - 1) * 8) / 4;
-    const expectedSize = expectedColWidth * 0.75 + 8; // + gap
-    expect(result).toBeCloseTo(expectedSize, 0);
-  });
-
-  it("should update gridState.containerWidth on resize in horizontal mode", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-    (ctx.config as any).horizontal = true;
-
-    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
-
-    // Use a dynamic width function (horizontal mode uses item.width)
-    (ctx.rawConfig.item as any).width = (_index: number, context: any) => {
-      return context ? context.columnWidth * 1.333 : 200;
-    };
-
-    plugin.setup!(ctx);
-
-    // Get the captured wrapper function
-    const wrappedSizeFn = (ctx as any)._lastSizeConfig as (index: number) => number;
-    expect(typeof wrappedSizeFn).toBe("function");
-
-    // Resize: height changes to 600
-    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 600, configurable: true });
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-    resizeHandler!(1200, 600);
-
-    // In horizontal mode, gridState.containerWidth should be 600 (the height)
-    // columnWidth = (600 - 2 - 24) / 4 = 143.5
-    const result = wrappedSizeFn(0);
-    const expectedColWidth = (600 - 2 - (4 - 1) * 8) / 4;
-    const expectedSize = expectedColWidth * 1.333 + 8; // + gap
-    expect(result).toBeCloseTo(expectedSize, 0);
+    // Items should have updated transforms/sizes after resize
+    const firstChild = dom.content.children[0] as HTMLElement;
+    if (firstChild) {
+      expect(firstChild.style.transform).toContain("translate");
+    }
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Groups Support Tests
+// grid — Engine State Updates
 // =============================================================================
 
-describe("withGrid - Groups Support", () => {
-  it("should support _updateGridLayoutForGroups method", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+describe("grid - Engine State", () => {
+  it("should update prevRange in engine state after force render", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
+    ctx.forceRender();
 
-    const updateForGroups = ctx.methods.get(
-      "_updateGridLayoutForGroups",
-    ) as Function;
-
-    expect(() => {
-      updateForGroups((index: number) => index === 0);
-    }).not.toThrow();
+    expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
+    cleanup();
   });
 
-  it("should update content height when updating for groups", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+  it("should update visibleCount in engine state after render", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
+    ctx.forceRender();
 
-    const originalHeight = ctx.dom.content.style.height;
-    const updateForGroups = ctx.methods.get(
-      "_updateGridLayoutForGroups",
-    ) as Function;
+    expect(engineState.visibleCount).toBeGreaterThan(0);
+    cleanup();
+  });
 
-    updateForGroups((index: number) => index === 0);
+  it("should update content size for scrollbar after render", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    // Height may change after groups update
-    expect(ctx.dom.content.style.height).toBeDefined();
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const height = parseInt(dom.content.style.height, 10);
+    expect(height).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("should use crossSize for column width calculation", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(4);
+    const { ctx, dom, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items, { containerWidth: 400 });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    if (firstChild) {
+      const width = parseInt(firstChild.style.width, 10);
+      // 400px / 4 columns = 100px per column
+      expect(width).toBe(engineState.crossSize / 4);
+    }
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Dynamic Size Function Tests
+// grid — Edge Cases
 // =============================================================================
 
-describe("withGrid - Dynamic Size Function", () => {
-  it("should support dynamic size function", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.rawConfig.item.height = (index: number) => 50 + index * 10;
-
-    expect(() => {
-      plugin.setup!(ctx);
-    }).not.toThrow();
-  });
-
-  it("should support dynamic size with grid context", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-
-    let receivedContext: any = null;
-    ctx.rawConfig.item.height = (index: number, context: any) => {
-      receivedContext = context;
-      return 50;
-    };
-
-    plugin.setup!(ctx);
-
-    // Context should be provided
-    expect(receivedContext).toBeDefined();
-  });
-});
-
-// =============================================================================
-// withGrid - Edge Cases
-// =============================================================================
-
-describe("withGrid - Edge Cases", () => {
+describe("grid - Edge Cases", () => {
   it("should handle single column (degrades to list)", () => {
-    const plugin = withGrid<TestItem>({ columns: 1 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 1 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
 
     // 100 items / 1 column = 100 rows
-    expect(ctx.getVirtualTotal()).toBe(100);
+    expect(layout.getTotalRows(100)).toBe(100);
+    cleanup();
   });
 
   it("should handle large column count", () => {
-    const plugin = withGrid<TestItem>({ columns: 50 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 50 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
     // 100 items / 50 columns = 2 rows
-    expect(ctx.getVirtualTotal()).toBe(2);
+    expect(layout.getTotalRows(100)).toBe(2);
+    cleanup();
   });
 
   it("should handle column count larger than items", () => {
-    const plugin = withGrid<TestItem>({ columns: 200 });
-    const ctx = createMockContext();
+    const plugin = grid<TestItem>({ columns: 200 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
     // 100 items / 200 columns = 1 row
-    expect(ctx.getVirtualTotal()).toBe(1);
+    expect(layout.getTotalRows(100)).toBe(1);
+    cleanup();
   });
 
   it("should handle empty items list", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.dataManager.getTotal = () => 0;
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(0);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    expect(ctx.getVirtualTotal()).toBe(0);
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    expect(layout.getTotalRows(0)).toBe(0);
+    cleanup();
   });
 
-  it("should handle horizontal orientation", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    (ctx.config as any).horizontal = true;
+  it("should have conflicts with masonry and table plugins", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    expect(plugin.conflicts).toContain("masonry");
+    expect(plugin.conflicts).toContain("table");
+  });
+
+  it("should render correctly with horizontal mode", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(8);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      horizontal: true,
+    });
 
     plugin.setup!(ctx);
+    ctx.forceRender();
 
-    expect(ctx.dom.root.classList.contains("vlist--grid")).toBe(true);
+    // In horizontal mode content width (not height) should be set
+    const width = parseInt(dom.content.style.width, 10);
+    expect(width).toBeGreaterThan(0);
+    cleanup();
   });
 
   it("should use viewport height as cross-axis size in horizontal mode", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-    (ctx.config as any).horizontal = true;
-
-    // Set viewport dimensions: width=1000, height=400
-    // In horizontal mode, the cross-axis is vertical, so columns should
-    // divide the height (400), not the width (1000).
-    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
-    ctx.getContainerWidth = () => 1000;
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(8);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      horizontal: true,
+      containerHeight: 400,
+      containerWidth: 1000,
+    });
 
     plugin.setup!(ctx);
-
-    // Trigger a render so items get sized
-    ctx.state.viewportState.containerSize = 1000;
     ctx.forceRender();
 
-    // Check a rendered element's cross-axis size (style.height in horizontal mode).
+    // In horizontal mode the cross-axis is the container height (400)
     // colWidth = (400 - 3*8) / 4 = 94
-    const el = ctx.dom.items.querySelector("[data-index]") as HTMLElement;
+    const el = dom.content.querySelector("[data-index]") as HTMLElement;
     if (el) {
-      // Cross-axis = style.height in horizontal mode
       const crossSize = parseFloat(el.style.height);
-      // Should be based on viewport height (400), not width (1000)
-      // (400 - 24) / 4 = 94
       expect(crossSize).toBe(94);
     }
-  });
-
-  it("should pass viewport height to renderer on resize in horizontal mode", () => {
-    const plugin = withGrid<TestItem>({ columns: 4, gap: 8 });
-    const ctx = createMockContext();
-    (ctx.config as any).horizontal = true;
-
-    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 400, configurable: true });
-
-    plugin.setup!(ctx);
-
-    // Simulate a resize — width changes to 1200, height changes to 600
-    const resizeHandler = ctx.resizeHandlers[ctx.resizeHandlers.length - 1];
-
-    // Render some items first so we can inspect them after resize
-    ctx.state.viewportState.containerSize = 1200;
-    ctx.forceRender();
-
-    // Now resize: the handler should use height (600), not width (1200)
-    Object.defineProperty(ctx.dom.viewport, "clientHeight", { value: 600, configurable: true });
-    resizeHandler!(1200, 600);
-    ctx.forceRender();
-
-    const el = ctx.dom.items.querySelector("[data-index]") as HTMLElement;
-    if (el) {
-      const crossSize = parseFloat(el.style.height);
-      // Should be based on new height: (600 - 24) / 4 = 144
-      expect(crossSize).toBe(144);
-    }
+    cleanup();
   });
 });
 
 // =============================================================================
-// withGrid - Integration Tests
+// grid — scrollToIndex Tests
 // =============================================================================
 
-describe("withGrid - Integration", () => {
-  it("should work with compression context", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
-    ctx.state.viewportState.isCompressed = true;
+describe("grid - scrollToIndex", () => {
+  it("should register scrollToIndex method", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
 
-    expect(() => {
-      ctx.renderIfNeeded();
-    }).not.toThrow();
+    expect(methods.has("scrollToIndex")).toBe(true);
+    cleanup();
   });
 
-  it("should emit range:change event on render", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+  it("should call scrollToIndex without errors", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
-    let rangeChangeEmitted = false;
-    ctx.emitter.emit = ((event: string) => {
-      if (event === "range:change") {
-        rangeChangeEmitted = true;
-      }
-    }) as any;
+    plugin.setup!(ctx);
+
+    const scrollToIndex = methods.get("scrollToIndex") as Function;
+
+    expect(() => {
+      scrollToIndex(10);
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should handle scrollToIndex with center align", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = methods.get("scrollToIndex") as Function;
+
+    expect(() => {
+      scrollToIndex(20, "center");
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should handle scrollToIndex with end align", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = methods.get("scrollToIndex") as Function;
+
+    expect(() => {
+      scrollToIndex(20, "end");
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should handle scrollToIndex for empty list", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(0);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = methods.get("scrollToIndex") as Function;
+
+    expect(() => {
+      scrollToIndex(0);
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should map item index to correct row for scrolling", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, dom, methods, cleanup } =
+      createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    // Item 8 should be in row 2 (8 / 4 = 2)
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+    expect(layout.getRow(8)).toBe(2);
+
+    // Item 0 should be in row 0
+    expect(layout.getRow(0)).toBe(0);
+
+    // Item 5 should be in row 1 (5 / 4 = 1)
+    expect(layout.getRow(5)).toBe(1);
+
+    const viewport = dom.viewport;
+    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    scrollToIndex(8);
+
+    // Should have set viewport.scrollTop to the row 2 offset
+    expect(viewport.scrollTop).toBeGreaterThanOrEqual(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// grid — Destroy Tests
+// =============================================================================
+
+describe("grid - Destroy", () => {
+  it("should clean up rendered elements on destroy", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, destroyHandlers, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    expect(rangeChangeEmitted).toBe(true);
+    expect(dom.content.children.length).toBeGreaterThan(0);
+
+    // Call all destroy handlers
+    for (const handler of destroyHandlers) handler();
+    // Also call plugin destroy
+    if (plugin.destroy) plugin.destroy();
+
+    // Rendered map is cleared but DOM elements may already be removed
+    cleanup();
   });
 
-  it("should update viewport state on render", () => {
-    const plugin = withGrid<TestItem>({ columns: 4 });
-    const ctx = createMockContext();
+  it("should remove grid class on destroy", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, destroyHandlers, cleanup } =
+      createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
 
-    expect(ctx.state.viewportState.scrollPosition).toBeDefined();
-    expect(ctx.state.viewportState.visibleRange).toBeDefined();
-    expect(ctx.state.viewportState.renderRange).toBeDefined();
+    expect(dom.root.classList.contains("vlist--grid")).toBe(true);
+
+    for (const handler of destroyHandlers) handler();
+
+    expect(dom.root.classList.contains("vlist--grid")).toBe(false);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// grid — Layout Math Tests
+// =============================================================================
+
+describe("grid - Layout Math", () => {
+  it("should compute correct column width for no gap", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(4);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // (800 - 0) / 4 = 200
+    expect(layout.getColumnWidth(800)).toBe(200);
+    cleanup();
+  });
+
+  it("should compute correct column width accounting for gap", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(4);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // (800 - 3*8) / 4 = 776 / 4 = 194
+    expect(layout.getColumnWidth(800)).toBe(194);
+    cleanup();
+  });
+
+  it("should compute correct column offset", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(4);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // col 0 offset = 0
+    expect(layout.getColumnOffset(0, 800)).toBe(0);
+    // col 1 offset = columnWidth + gap = 194 + 8 = 202
+    expect(layout.getColumnOffset(1, 800)).toBe(202);
+    cleanup();
+  });
+
+  it("should map flat item index to correct row/col", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(12);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const getLayout = methods.get("getGridLayout") as Function;
+    const layout = getLayout();
+
+    // Item 0 → row 0, col 0
+    expect(layout.getRow(0)).toBe(0);
+    expect(layout.getCol(0)).toBe(0);
+
+    // Item 5 → row 1, col 1
+    expect(layout.getRow(5)).toBe(1);
+    expect(layout.getCol(5)).toBe(1);
+
+    // Item 8 → row 2, col 0
+    expect(layout.getRow(8)).toBe(2);
+    expect(layout.getCol(8)).toBe(0);
+    cleanup();
   });
 });

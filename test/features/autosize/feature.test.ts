@@ -1,8 +1,9 @@
 /**
- * vlist - withAutoSize Feature Tests
+ * vlist v2 — Autosize Plugin Tests
  * Tests for: factory shape, validation, setup (size cache replacement,
- * constrain-size injection, afterRenderBatch observation), idle flush,
- * destroy cleanup.
+ * ResizeObserver wiring, onCommit observation), idle flush, destroy cleanup.
+ *
+ * Adapted from v1 withAutoSize feature tests to v2 PluginContext API.
  */
 
 import {
@@ -14,74 +15,69 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { JSDOM } from "jsdom";
 
-import { withAutoSize } from "../../../src/features/autosize";
-import { vlist } from "../../../src/builder/core";
-import type { VList } from "../../../src/builder/types";
+import { autosize } from "../../../src/plugins/autosize/plugin";
 import type { VListItem } from "../../../src/types";
+import { createPluginMockContext } from "../../helpers/plugin-context";
+import { setupDOM, teardownDOM, createMockResizeObserver } from "../../helpers/dom";
 
 // =============================================================================
 // JSDOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    pretendToBeVisual: true,
-  });
+  // Install a ResizeObserver that fires synchronously with configurable sizes.
+  // The default setupDOM() mock uses contentRect but the autosize plugin reads
+  // borderBoxSize[0], so we override it after setupDOM.
+  setupDOM({ immediateResize: false });
 
-  global.document = dom.window.document;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.Element = dom.window.Element;
-  global.Node = dom.window.Node;
-  global.MutationObserver = dom.window.MutationObserver;
-  global.requestAnimationFrame = (cb: FrameRequestCallback) =>
-    setTimeout(() => cb(performance.now()), 0) as unknown as number;
-  global.cancelAnimationFrame = clearTimeout;
-  global.matchMedia = () =>
-    ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) as any;
-
-  // Mock ResizeObserver — fires synchronously with configurable sizes
+  // Override ResizeObserver to fire synchronously with borderBoxSize data
+  // (matching the structure the autosize plugin reads)
   (global as any).ResizeObserver = class {
     callback: ResizeObserverCallback;
-    constructor(cb: ResizeObserverCallback) { this.callback = cb; }
-    observe(target: Element) {
-      const indexAttr = (target as HTMLElement).dataset?.index;
-      if (indexAttr != null) {
-        const size = 80; // default measured size
-        this.callback(
-          [{
-            target,
-            contentRect: { width: size, height: size, top: 0, left: 0, bottom: size, right: size, x: 0, y: 0, toJSON: () => ({}) },
-            borderBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
-            contentBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
-            devicePixelContentBoxSize: [],
-          } as ResizeObserverEntry],
-          this as any,
-        );
-      } else {
-        // Container observation
-        this.callback(
-          [{
-            target,
-            contentRect: { width: 300, height: 500, top: 0, left: 0, bottom: 500, right: 300, x: 0, y: 0, toJSON: () => ({}) },
-            borderBoxSize: [{ blockSize: 500, inlineSize: 300 } as ResizeObserverSize],
-            contentBoxSize: [{ blockSize: 500, inlineSize: 300 } as ResizeObserverSize],
-            devicePixelContentBoxSize: [],
-          } as ResizeObserverEntry],
-          this as any,
-        );
-      }
+    constructor(cb: ResizeObserverCallback) {
+      this.callback = cb;
     }
-    unobserve() {}
-    disconnect() {}
+    observe(target: Element): void {
+      const el = target as HTMLElement;
+      const hasIndex = el.dataset?.index != null;
+      // Items get size 80; container gets size 300×500
+      const blockSize = hasIndex ? 80 : 500;
+      const inlineSize = hasIndex ? 80 : 300;
+      this.callback(
+        [
+          {
+            target,
+            contentRect: {
+              width: inlineSize,
+              height: blockSize,
+              top: 0,
+              left: 0,
+              bottom: blockSize,
+              right: inlineSize,
+              x: 0,
+              y: 0,
+              toJSON: () => ({}),
+            } as DOMRectReadOnly,
+            borderBoxSize: [
+              { blockSize, inlineSize } as ResizeObserverSize,
+            ],
+            contentBoxSize: [
+              { blockSize, inlineSize } as ResizeObserverSize,
+            ],
+            devicePixelContentBoxSize: [],
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver,
+      );
+    }
+    unobserve(): void {}
+    disconnect(): void {}
   };
 });
 
 afterAll(() => {
-  dom.window.close();
+  teardownDOM();
 });
 
 // =============================================================================
@@ -93,112 +89,297 @@ interface TestItem extends VListItem {
   name: string;
 }
 
-const template = (item: TestItem): string =>
-  `<div>${item.name}</div>`;
-
 const createTestItems = (count: number): TestItem[] =>
   Array.from({ length: count }, (_, i) => ({ id: i + 100, name: `Item ${i}` }));
-
-const createContainer = (): HTMLElement => {
-  const el = document.createElement("div");
-  Object.defineProperty(el, "clientWidth", { value: 300, configurable: true });
-  Object.defineProperty(el, "clientHeight", { value: 500, configurable: true });
-  document.body.appendChild(el);
-  return el;
-};
 
 // =============================================================================
 // Factory Tests
 // =============================================================================
 
-describe("withAutoSize factory", () => {
-  it("should return a VListFeature with correct name and priority", () => {
-    const feature = withAutoSize();
-    expect(feature.name).toBe("withAutoSize");
-    expect(feature.priority).toBe(5);
-    expect(typeof feature.setup).toBe("function");
-    expect(typeof feature.destroy).toBe("function");
+describe("autosize factory", () => {
+  it("should return a VListPlugin with correct name and priority", () => {
+    const plugin = autosize();
+    expect(plugin.name).toBe("autosize");
+    expect(plugin.priority).toBe(5);
+    expect(typeof plugin.setup).toBe("function");
+    expect(typeof plugin.destroy).toBe("function");
   });
 
   it("should return independent instances", () => {
-    const a = withAutoSize();
-    const b = withAutoSize();
+    const a = autosize();
+    const b = autosize();
     expect(a).not.toBe(b);
+  });
+
+  it("should accept gap config", () => {
+    const plugin = autosize({ gap: 8 });
+    expect(plugin.name).toBe("autosize");
   });
 });
 
 // =============================================================================
-// Setup + Build Tests
+// Setup Tests
 // =============================================================================
 
-describe("withAutoSize setup", () => {
-  let container: HTMLElement;
-  let list: VList<TestItem> | null = null;
+describe("autosize setup", () => {
+  let mockCtx: ReturnType<typeof createPluginMockContext<TestItem>>;
 
   beforeEach(() => {
-    container = createContainer();
+    mockCtx = createPluginMockContext(createTestItems(20), {
+      itemSize: 50,
+      containerWidth: 300,
+      containerHeight: 500,
+    });
   });
 
   afterEach(() => {
-    if (list) { list.destroy(); list = null; }
-    container.remove();
+    mockCtx.cleanup();
   });
 
-  it("should build successfully with estimatedHeight", () => {
-    list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(20),
-    }).use(withAutoSize()).build();
+  it("should call setSizeConfig during setup", () => {
+    let sizeFnRegistered = false;
+    mockCtx.ctx.setSizeConfig = () => { sizeFnRegistered = true; };
 
-    expect(list.element).toBeDefined();
-    expect(list.total).toBe(20);
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+    plugin.destroy();
+
+    expect(sizeFnRegistered).toBe(true);
   });
 
-  it("should render items with measured sizes", () => {
-    list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(20),
-    }).use(withAutoSize()).build();
+  it("should register destroy handler during setup", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    const items = list.element.querySelectorAll("[data-index]");
-    expect(items.length).toBeGreaterThan(0);
+    expect(mockCtx.destroyHandlers.length).toBeGreaterThan(0);
 
-    // Mock ResizeObserver fires with size=80, so items should be 80px
-    const firstItem = items[0] as HTMLElement;
-    expect(firstItem.style.height).toBe("80px");
+    plugin.destroy();
   });
 
-  it("should emit error when used with Mode A config (no estimatedHeight)", () => {
-    // withAutoSize requires estimatedHeight — using it with a fixed height config
-    // triggers a feature setup error that is emitted via the error event
-    const errors: Array<{ error: Error; context: string }> = [];
-    list = vlist<TestItem>({
-      container,
-      item: { height: 40, template },
-      items: createTestItems(5),
-    }).use(withAutoSize()).build();
+  it("should register isMeasured method", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    list.on("error", (e) => errors.push(e as any));
-    // The error was emitted during build, before we subscribed.
-    // Instead verify the list still works (error was caught gracefully).
-    expect(list.element).toBeDefined();
-    list.destroy();
-    list = null;
+    const isMeasured = mockCtx.methods.get("isMeasured") as ((index: number) => boolean) | undefined;
+    expect(typeof isMeasured).toBe("function");
+    expect(isMeasured!(0)).toBe(false);
+
+    plugin.destroy();
   });
 
-  it("should emit error when estimatedHeight is zero", () => {
-    const errors: Array<{ error: Error; context: string }> = [];
-    list = vlist<TestItem>({
-      container,
-      item: { height: 1, estimatedHeight: 0, template } as any,
-      items: createTestItems(5),
-    }).use(withAutoSize()).build();
+  it("should register setMeasuredSize method", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    expect(list.element).toBeDefined();
-    list.destroy();
-    list = null;
+    const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as ((index: number, size: number) => void) | undefined;
+    expect(typeof setMeasuredSize).toBe("function");
+
+    plugin.destroy();
+  });
+
+  it("should register getMeasuredCount method", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    const getMeasuredCount = mockCtx.methods.get("getMeasuredCount") as (() => number) | undefined;
+    expect(typeof getMeasuredCount).toBe("function");
+    expect(getMeasuredCount!()).toBe(0);
+
+    plugin.destroy();
+  });
+
+  it("should have onCommit hook", () => {
+    const plugin = autosize();
+    expect(plugin.hooks).toBeDefined();
+    expect(typeof plugin.hooks?.onCommit).toBe("function");
+  });
+
+  it("should have onIdle hook", () => {
+    const plugin = autosize();
+    expect(typeof plugin.hooks?.onIdle).toBe("function");
+  });
+});
+
+// =============================================================================
+// Measured Size Tracking
+// =============================================================================
+
+describe("autosize measured size tracking", () => {
+  let mockCtx: ReturnType<typeof createPluginMockContext<TestItem>>;
+
+  beforeEach(() => {
+    mockCtx = createPluginMockContext(createTestItems(10), {
+      itemSize: 50,
+    });
+  });
+
+  afterEach(() => {
+    mockCtx.cleanup();
+  });
+
+  it("isMeasured returns false before measurement, true after setMeasuredSize", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    const isMeasured = mockCtx.methods.get("isMeasured") as (index: number) => boolean;
+    const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
+    const getMeasuredCount = mockCtx.methods.get("getMeasuredCount") as () => number;
+
+    expect(isMeasured(0)).toBe(false);
+    expect(getMeasuredCount()).toBe(0);
+
+    setMeasuredSize(0, 80);
+
+    expect(isMeasured(0)).toBe(true);
+    expect(getMeasuredCount()).toBe(1);
+
+    plugin.destroy();
+  });
+
+  it("getMeasuredCount increments for each measured item", () => {
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
+    const getMeasuredCount = mockCtx.methods.get("getMeasuredCount") as () => number;
+
+    setMeasuredSize(0, 80);
+    setMeasuredSize(1, 90);
+    setMeasuredSize(2, 70);
+
+    expect(getMeasuredCount()).toBe(3);
+
+    plugin.destroy();
+  });
+});
+
+// =============================================================================
+// onCommit Hook Tests
+// =============================================================================
+
+describe("autosize onCommit hook", () => {
+  let mockCtx: ReturnType<typeof createPluginMockContext<TestItem>>;
+
+  beforeEach(() => {
+    mockCtx = createPluginMockContext(createTestItems(10), {
+      itemSize: 50,
+    });
+  });
+
+  afterEach(() => {
+    mockCtx.cleanup();
+  });
+
+  it("onCommit observes unmeasured rendered elements", () => {
+    const observedElements: Element[] = [];
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(el: Element): void { observedElements.push(el); }
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    // Simulate a rendered element for index 0
+    const el = document.createElement("div");
+    el.setAttribute("data-index", "0");
+    mockCtx.dom.content.appendChild(el);
+    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+
+    const state = mockCtx.engineState;
+    state.visibleCount = 1;
+    state.visibleIndices[0] = 0;
+
+    plugin.hooks!.onCommit!(state);
+
+    expect(observedElements).toContain(el);
+
+    plugin.destroy();
+  });
+
+  it("onCommit skips already-measured items", () => {
+    const observedElements: Element[] = [];
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(el: Element): void { observedElements.push(el); }
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    // Pre-measure index 0
+    const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
+    setMeasuredSize(0, 80);
+
+    const el = document.createElement("div");
+    el.setAttribute("data-index", "0");
+    mockCtx.dom.content.appendChild(el);
+    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+
+    const state = mockCtx.engineState;
+    state.visibleCount = 1;
+    state.visibleIndices[0] = 0;
+
+    plugin.hooks!.onCommit!(state);
+
+    // Already measured — should not observe again
+    expect(observedElements).not.toContain(el);
+
+    plugin.destroy();
+  });
+
+  it("onCommit clears explicit size so ResizeObserver can measure natural size", () => {
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    const el = document.createElement("div");
+    el.setAttribute("data-index", "0");
+    el.style.height = "50px"; // explicit size set by commit phase
+    mockCtx.dom.content.appendChild(el);
+    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+
+    const state = mockCtx.engineState;
+    state.visibleCount = 1;
+    state.visibleIndices[0] = 0;
+
+    plugin.hooks!.onCommit!(state);
+
+    // height should be cleared so ResizeObserver can measure natural size
+    expect(el.style.height).toBe("");
+
+    plugin.destroy();
+  });
+});
+
+// =============================================================================
+// onIdle Hook Tests
+// =============================================================================
+
+describe("autosize onIdle hook", () => {
+  it("onIdle is safe to call when no pending content update", () => {
+    const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    // onIdle with no pending update should not throw
+    expect(() => plugin.hooks!.onIdle!()).not.toThrow();
+
+    plugin.destroy();
+    mockCtx.cleanup();
   });
 });
 
@@ -206,96 +387,118 @@ describe("withAutoSize setup", () => {
 // Destroy Tests
 // =============================================================================
 
-describe("withAutoSize destroy", () => {
+describe("autosize destroy", () => {
   it("should clean up on destroy without errors", () => {
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(20),
-    }).use(withAutoSize()).build();
+    const mockCtx = createPluginMockContext(createTestItems(10), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    expect(() => list.destroy()).not.toThrow();
-    container.remove();
+    expect(() => plugin.destroy()).not.toThrow();
+
+    mockCtx.cleanup();
   });
 
   it("should be safe to call destroy twice", () => {
-    const container = createContainer();
-    const list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(20),
-    }).use(withAutoSize()).build();
+    const mockCtx = createPluginMockContext(createTestItems(10), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    list.destroy();
-    expect(() => list.destroy()).not.toThrow();
-    container.remove();
+    plugin.destroy();
+    expect(() => plugin.destroy()).not.toThrow();
+
+    mockCtx.cleanup();
   });
 
-  it("should handle feature.destroy() before setup (no observer)", () => {
-    const feature = withAutoSize();
-    expect(() => feature.destroy!()).not.toThrow();
+  it("should handle destroy before setup (no observer)", () => {
+    const plugin = autosize();
+    expect(() => plugin.destroy()).not.toThrow();
   });
 
-  it("should disconnect observer via feature.destroy() after setup", () => {
-    // Build a list, then call feature.destroy() directly to cover the
-    // observer.disconnect() path in the feature's own destroy method.
-    const container = createContainer();
-    const feature = withAutoSize<TestItem>();
-    const l = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(10),
-    }).use(feature).build();
+  it("destroyHandlers registered during setup disconnect the observer", () => {
+    let disconnectCalled = false;
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void { disconnectCalled = true; }
+    };
 
-    // feature.destroy() should disconnect the observer it created
-    expect(() => feature.destroy!()).not.toThrow();
-    // Calling again should be safe (observer is now null)
-    expect(() => feature.destroy!()).not.toThrow();
+    const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-    l.destroy();
-    container.remove();
+    // Run the registered destroy handlers (simulates what createVList does on destroy)
+    for (const handler of mockCtx.destroyHandlers) handler();
+
+    expect(disconnectCalled).toBe(true);
+
+    mockCtx.cleanup();
+  });
+
+  it("plugin.destroy() disconnects observer", () => {
+    let disconnectCalled = false;
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void { disconnectCalled = true; }
+    };
+
+    const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    plugin.destroy();
+
+    expect(disconnectCalled).toBe(true);
+
+    mockCtx.cleanup();
+  });
+
+  it("plugin.destroy() is safe to call after destroyHandlers run", () => {
+    let disconnectCallCount = 0;
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void { disconnectCallCount++; }
+    };
+
+    const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    // Simulate normal lifecycle: handler runs first, then plugin.destroy() is called
+    for (const handler of mockCtx.destroyHandlers) handler();
+    expect(() => plugin.destroy()).not.toThrow();
+
+    mockCtx.cleanup();
   });
 });
 
 // =============================================================================
-// Data Operations with AutoSize
+// Gap Config Tests
 // =============================================================================
 
-describe("withAutoSize data operations", () => {
-  let container: HTMLElement;
-  let list: VList<TestItem> | null = null;
+describe("autosize gap config", () => {
+  it("should use gap=0 by default (sizeFn returns estimated size)", () => {
+    let capturedSizeFn: ((index: number) => number) | null = null;
+    const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 60 });
+    mockCtx.ctx.setSizeConfig = (fn: (index: number) => number) => {
+      capturedSizeFn = fn;
+    };
 
-  beforeEach(() => {
-    container = createContainer();
-  });
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
 
-  afterEach(() => {
-    if (list) { list.destroy(); list = null; }
-    container.remove();
-  });
+    // Before any measurements, sizeFn returns the estimated size (60)
+    expect(capturedSizeFn).not.toBeNull();
+    expect(capturedSizeFn!(0)).toBe(60);
 
-  it("should handle setItems", () => {
-    list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(10),
-    }).use(withAutoSize()).build();
-
-    expect(list.total).toBe(10);
-
-    list.setItems(createTestItems(30));
-    expect(list.total).toBe(30);
-  });
-
-  it("should handle appendItems", () => {
-    list = vlist<TestItem>({
-      container,
-      item: { estimatedHeight: 50, template },
-      items: createTestItems(10),
-    }).use(withAutoSize()).build();
-
-    list.appendItems(createTestItems(5));
-    expect(list.total).toBe(15);
+    plugin.destroy();
+    mockCtx.cleanup();
   });
 });

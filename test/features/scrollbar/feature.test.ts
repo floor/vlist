@@ -1,24 +1,23 @@
 /**
- * vlist - Scrollbar Feature Tests
- * Tests for withScrollbar: factory, setup wiring, DOM class, afterScroll, destroy.
+ * vlist v2 — Scrollbar Plugin Tests
+ * Tests for scrollbar() plugin: factory, setup wiring, DOM class, afterScroll,
+ * resize, destroy.
+ *
+ * Adapted from v1 withScrollbar feature tests to v2 PluginContext API.
  *
  * NOTE: The underlying scrollbar components are tested separately:
- * - scrollbar/controller.test.ts (119 tests) — scroll controller modes
- * - scrollbar/scrollbar.test.ts (55 tests) — custom scrollbar UI
+ * - scrollbar/controller.test.ts — scroll controller modes
+ * - scrollbar/scrollbar.test.ts — custom scrollbar UI
  *
- * This file tests the feature integration layer (withScrollbar) that wires
- * the scrollbar into the builder context.
- *
- * Coverage: 89.06% lines, 75.00% functions.
- * Uncovered lines (125-131) are edge cases in the destroy cleanup path.
+ * This file tests the plugin integration layer that wires the scrollbar into
+ * the v2 plugin context.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { withScrollbar } from "../../../src/features/scrollbar/feature";
-import { createSizeCache } from "../../../src/rendering/sizes";
+import { scrollbar } from "../../../src/plugins/scrollbar/plugin";
 import type { VListItem } from "../../../src/types";
-import type { BuilderContext } from "../../../src/builder/types";
+import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
 // JSDOM Setup
@@ -56,428 +55,310 @@ interface TestItem extends VListItem {
   name: string;
 }
 
-function createTestDOM() {
-  const root = document.createElement("div");
-  const viewport = document.createElement("div");
-  const content = document.createElement("div");
-  const items = document.createElement("div");
-
-  root.className = "vlist";
-  viewport.className = "vlist-viewport";
-  content.className = "vlist-content";
-  items.className = "vlist-items";
-
-  // Viewport needs dimensions for scrollbar calculations
-  Object.defineProperty(viewport, "clientHeight", { value: 600, configurable: true });
-  Object.defineProperty(viewport, "clientWidth", { value: 400, configurable: true });
-  Object.defineProperty(viewport, "scrollHeight", { value: 5000, configurable: true });
-
-  content.appendChild(items);
-  viewport.appendChild(content);
-  root.appendChild(viewport);
-  document.body.appendChild(root);
-
-  return { root, viewport, content, items };
-}
-
-function createMockContext(): BuilderContext<TestItem> {
-  const testDom = createTestDOM();
-  const sizeCache = createSizeCache(50, 100);
-
-  const items: TestItem[] = Array.from({ length: 100 }, (_, i) => ({
+function createTestItems(count: number): TestItem[] {
+  return Array.from({ length: count }, (_, i) => ({
     id: i,
     name: `Item ${i}`,
   }));
-
-  let virtualTotalFn = () => 100;
-  let renderIfNeededFn = () => {};
-  let forceRenderFn = () => {};
-
-  const ctx: BuilderContext<TestItem> = {
-    dom: testDom as any,
-    sizeCache: sizeCache as any,
-    emitter: {
-      on: () => {},
-      off: () => {},
-      emit: () => {},
-    } as any,
-    config: {
-      overscan: 2,
-      classPrefix: "vlist",
-      reverse: false,
-      wrap: false,
-      horizontal: false,
-      ariaIdPrefix: "vlist",
-      interactive: true,
-    },
-    rawConfig: {
-      container: document.createElement("div"),
-      items: items,
-      item: {
-        height: 50,
-        template: (item: TestItem) => `<div>${item.name}</div>`,
-      },
-    },
-    renderer: {
-      render: () => {},
-      updateItemClasses: () => {},
-      updatePositions: () => {},
-      updateItem: () => {},
-      getElement: () => null,
-      clear: () => {},
-      destroy: () => {},
-    } as any,
-    dataManager: {
-      getTotal: () => items.length,
-      getItem: (index: number) => items[index],
-      getItemsInRange: (start: number, end: number) => items.slice(start, end + 1),
-      isItemLoaded: () => true,
-    } as any,
-    scrollController: {
-      getScrollTop: () => 0,
-      scrollTo: () => {},
-      isAtTop: () => true,
-      isAtBottom: () => false,
-      isCompressed: () => false,
-    } as any,
-    state: {
-      dataState: {
-        total: 100,
-        cached: 100,
-        isLoading: false,
-        pendingRanges: [],
-        error: undefined,
-        hasMore: false,
-        cursor: undefined,
-      },
-      viewportState: {
-        scrollPosition: 0,
-        containerSize: 600,
-        totalSize: 5000,
-        actualSize: 5000,
-        isCompressed: false,
-        compressionRatio: 1,
-        visibleRange: { start: 0, end: 11 },
-        renderRange: { start: 0, end: 15 },
-      },
-      renderState: {
-        range: { start: 0, end: 15 },
-        visibleRange: { start: 0, end: 11 },
-        renderedCount: 16,
-      },
-      lastRenderRange: { start: -1, end: -1 },
-      isDestroyed: false,
-    } as any,
-    getContainerWidth: () => 400,
-    afterScroll: [],
-    afterRenderBatch: [],
-    idleHandlers: [],
-    clickHandlers: [],
-    contextMenuHandlers: [],
-    keydownHandlers: [],
-    resizeHandlers: [],
-    contentSizeHandlers: [],
-    destroyHandlers: [],
-    methods: new Map(),
-    replaceTemplate: () => {},
-    replaceRenderer: () => {},
-    replaceDataManager: () => {},
-    replaceScrollController: () => {},
-    getItemsForRange: (range) => items.slice(range.start, range.end + 1),
-    getAllLoadedItems: () => items,
-    getVirtualTotal: () => virtualTotalFn(),
-    getCachedCompression: () => ({
-      isCompressed: false,
-      actualSize: 5000,
-      virtualSize: 5000,
-      ratio: 1,
-    }),
-    getCompressionContext: () => ({
-      scrollPosition: 0,
-      totalItems: 100,
-      containerSize: 600,
-      rangeStart: 0,
-    }),
-    renderIfNeeded: () => renderIfNeededFn(),
-    forceRender: () => forceRenderFn(),
-    invalidateRendered: () => {},
-    getRenderFns: () => ({
-      renderIfNeeded: renderIfNeededFn,
-      forceRender: forceRenderFn,
-    }),
-    setRenderFns: (renderFn, forceFn) => {
-      renderIfNeededFn = renderFn;
-      forceRenderFn = forceFn;
-    },
-    setVirtualTotalFn: (fn) => {
-      virtualTotalFn = fn;
-    },
-    rebuildSizeCache: () => {},
-    setSizeConfig: () => {},
-    updateContentSize: () => {},
-    updateCompressionMode: () => {},
-    setVisibleRangeFn: () => {},
-    setScrollToPosFn: () => {},
-    getScrollToPos: () => 0,
-    setPositionElementFn: () => {},
-    setUpdateItemClassesFn: () => {},
-    setScrollFns: () => {},
-    triggerScrollFrame: () => {},
-    setScrollTarget: () => {},
-    getScrollTarget: () => testDom.viewport as any,
-    setContainerDimensions: () => {},
-    disableViewportResize: () => {},
-    disableWheelHandler: () => {},
-    adjustScrollPosition: (pos: number) => pos,
-    getStripeIndexFn: () => (index: number) => index,
-    setStripeIndexFn: () => {},
-    getItemToScrollIndexFn: () => (index: number) => index,
-    getVisibleRange: () => {},
-    setItemToScrollIndexFn: () => {},
-  };
-
-  return ctx;
 }
 
 // =============================================================================
-// withScrollbar — Factory Tests
+// scrollbar — Factory Tests
 // =============================================================================
 
-describe("withScrollbar — Factory", () => {
-  it("should create a feature with correct name and priority", () => {
-    const feature = withScrollbar<TestItem>();
+describe("scrollbar — Factory", () => {
+  it("should create a plugin with correct name and priority", () => {
+    const plugin = scrollbar<TestItem>();
 
-    expect(feature.name).toBe("withScrollbar");
-    expect(feature.priority).toBe(15);
-    expect(typeof feature.setup).toBe("function");
+    expect(plugin.name).toBe("scrollbar");
+    expect(plugin.priority).toBe(15);
+    expect(typeof plugin.setup).toBe("function");
   });
 
   it("should accept empty config", () => {
-    const feature = withScrollbar<TestItem>();
-    expect(feature).toBeDefined();
+    const plugin = scrollbar<TestItem>();
+    expect(plugin).toBeDefined();
   });
 
   it("should accept autoHide config", () => {
-    const feature = withScrollbar<TestItem>({ autoHide: false });
-    expect(feature).toBeDefined();
+    const plugin = scrollbar<TestItem>({ autoHide: false });
+    expect(plugin).toBeDefined();
   });
 
   it("should accept autoHideDelay config", () => {
-    const feature = withScrollbar<TestItem>({ autoHideDelay: 2000 });
-    expect(feature).toBeDefined();
+    const plugin = scrollbar<TestItem>({ autoHideDelay: 2000 });
+    expect(plugin).toBeDefined();
   });
 
   it("should accept minThumbSize config", () => {
-    const feature = withScrollbar<TestItem>({ minThumbSize: 50 });
-    expect(feature).toBeDefined();
+    const plugin = scrollbar<TestItem>({ minThumbSize: 50 });
+    expect(plugin).toBeDefined();
   });
 
   it("should accept showOnHover config", () => {
-    const feature = withScrollbar<TestItem>({ showOnHover: false });
-    expect(feature).toBeDefined();
+    const plugin = scrollbar<TestItem>({ showOnHover: false });
+    expect(plugin).toBeDefined();
   });
 
   it("should accept combined config", () => {
-    const feature = withScrollbar<TestItem>({
+    const plugin = scrollbar<TestItem>({
       autoHide: true,
       autoHideDelay: 1500,
       minThumbSize: 40,
       showOnHover: true,
       hoverZoneWidth: 20,
     });
-    expect(feature).toBeDefined();
+    expect(plugin).toBeDefined();
   });
 
   it("should accept gutter config", () => {
-    expect(withScrollbar<TestItem>({ gutter: true })).toBeDefined();
-    expect(withScrollbar<TestItem>({ gutter: false })).toBeDefined();
+    expect(scrollbar<TestItem>({ gutter: true })).toBeDefined();
+    expect(scrollbar<TestItem>({ gutter: false })).toBeDefined();
   });
 });
 
 // =============================================================================
-// withScrollbar — Setup Tests
+// scrollbar — Setup Tests
 // =============================================================================
 
-describe("withScrollbar — Setup", () => {
+describe("scrollbar — Setup", () => {
   it("should add custom-scrollbar CSS class to viewport", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
     expect(
-      ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar"),
+      dom.viewport.classList.contains("vlist-viewport--custom-scrollbar"),
     ).toBe(true);
-  });
-
-  it("should register an afterScroll handler", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    expect(ctx.afterScroll.length).toBe(0);
-
-    feature.setup!(ctx);
-
-    expect(ctx.afterScroll.length).toBeGreaterThan(0);
+    cleanup();
   });
 
   it("should register a destroy handler", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items);
 
-    expect(ctx.destroyHandlers.length).toBe(0);
+    const countBefore = destroyHandlers.length;
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.destroyHandlers.length).toBeGreaterThan(0);
+    expect(destroyHandlers.length).toBeGreaterThan(countBefore);
+    cleanup();
   });
 
-  it("should register a resize handler", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+  it("should have an onAfterScroll hook", () => {
+    const plugin = scrollbar<TestItem>();
 
-    expect(ctx.resizeHandlers.length).toBe(0);
-
-    feature.setup!(ctx);
-
-    expect(ctx.resizeHandlers.length).toBeGreaterThan(0);
+    expect(plugin.hooks?.onAfterScroll).toBeInstanceOf(Function);
   });
 
-  it("should not add any public methods", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+  it("should have an onResize hook", () => {
+    const plugin = scrollbar<TestItem>();
 
-    feature.setup!(ctx);
+    expect(plugin.hooks?.onResize).toBeInstanceOf(Function);
+  });
 
-    // Only internal flag, no public API methods
-    expect(ctx.methods.has("_hasScrollbar")).toBe(true);
-    expect(ctx.methods.size).toBe(1);
+  it("should register internal methods", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    // The scrollbar plugin registers internal coordination methods
+    expect(methods.has("_scrollbar:getInstance")).toBe(true);
+    expect(methods.has("_scrollbar:setCallback")).toBe(true);
+    cleanup();
   });
 
   it("should run destroy handler without error", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
-
-    // Should not throw
-    for (const handler of ctx.destroyHandlers) {
-      handler();
-    }
-  });
-
-  it("should register a contentSizeHandlers handler", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    expect(ctx.contentSizeHandlers.length).toBe(0);
-
-    feature.setup!(ctx);
-
-    expect(ctx.contentSizeHandlers.length).toBeGreaterThan(0);
-  });
-});
-
-// =============================================================================
-// withScrollbar — Resize Handler
-// =============================================================================
-
-describe("withScrollbar — Resize Handler", () => {
-  it("should update scrollbar bounds on resize", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    feature.setup!(ctx);
-
-    // Trigger resize handler — should not throw
-    expect(ctx.resizeHandlers.length).toBeGreaterThan(0);
-    expect(() => ctx.resizeHandlers[0]!(500, 800)).not.toThrow();
-  });
-
-  it("should update scrollbar bounds on content size change", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    feature.setup!(ctx);
-
-    // Trigger contentSizeHandlers — should not throw
-    expect(ctx.contentSizeHandlers.length).toBeGreaterThan(0);
-    expect(() => ctx.contentSizeHandlers[0]!()).not.toThrow();
-  });
-});
-
-// =============================================================================
-// withScrollbar — Feature Destroy
-// =============================================================================
-
-describe("withScrollbar — Feature Destroy", () => {
-  it("should clean up via feature.destroy()", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    feature.setup!(ctx);
-
-    expect(() => feature.destroy!()).not.toThrow();
-  });
-
-  it("should be safe to call feature.destroy() multiple times", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
-
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
     expect(() => {
-      feature.destroy!();
-      feature.destroy!();
+      for (const handler of destroyHandlers) {
+        handler();
+      }
     }).not.toThrow();
-  });
-
-  it("should be safe to call feature.destroy() without setup", () => {
-    const feature = withScrollbar<TestItem>();
-    expect(() => feature.destroy!()).not.toThrow();
+    cleanup();
   });
 });
 
 // =============================================================================
-// withScrollbar — Gutter
+// scrollbar — Resize Handler
 // =============================================================================
 
-describe("withScrollbar — Gutter", () => {
+describe("scrollbar — Resize Handler", () => {
+  it("should update scrollbar bounds on resize without throwing", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.hooks!.onResize!(500, 800)).not.toThrow();
+    cleanup();
+  });
+
+  it("should update scrollbar bounds on different resize dimensions", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.hooks!.onResize!(1200, 600)).not.toThrow();
+    cleanup();
+  });
+});
+
+// =============================================================================
+// scrollbar — AfterScroll Hook
+// =============================================================================
+
+describe("scrollbar — AfterScroll Hook", () => {
+  it("should update scrollbar position without throwing", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.hooks!.onAfterScroll!(200, 1)).not.toThrow();
+    cleanup();
+  });
+
+  it("should handle scroll position 0", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.hooks!.onAfterScroll!(0, 0)).not.toThrow();
+    cleanup();
+  });
+
+  it("should handle large scroll positions", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.hooks!.onAfterScroll!(9999, 1)).not.toThrow();
+    cleanup();
+  });
+});
+
+// =============================================================================
+// scrollbar — Plugin Destroy
+// =============================================================================
+
+describe("scrollbar — Plugin Destroy", () => {
+  it("should clean up via plugin.destroy()", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => plugin.destroy!()).not.toThrow();
+    cleanup();
+  });
+
+  it("should be safe to call plugin.destroy() multiple times", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    expect(() => {
+      plugin.destroy!();
+      plugin.destroy!();
+    }).not.toThrow();
+    cleanup();
+  });
+
+  it("should be safe to call plugin.destroy() without setup", () => {
+    const plugin = scrollbar<TestItem>();
+    expect(() => plugin.destroy!()).not.toThrow();
+  });
+
+  it("should remove custom-scrollbar CSS class on destroy via destroyHandler", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, dom, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    expect(dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
+
+    for (const handler of destroyHandlers) {
+      handler();
+    }
+
+    expect(dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(false);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// scrollbar — Gutter
+// =============================================================================
+
+describe("scrollbar — Gutter", () => {
   it("should add gutter class to viewport when gutter: true", () => {
-    const feature = withScrollbar<TestItem>({ gutter: true });
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>({ gutter: true });
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(true);
+    expect(dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(true);
+    cleanup();
   });
 
   it("should not add gutter class by default", () => {
-    const feature = withScrollbar<TestItem>();
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    expect(dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    cleanup();
   });
 
   it("should not add gutter class when gutter: false", () => {
-    const feature = withScrollbar<TestItem>({ gutter: false });
-    const ctx = createMockContext();
+    const plugin = scrollbar<TestItem>({ gutter: false });
+    const items = createTestItems(100);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
 
-    expect(ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    expect(dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    cleanup();
   });
 
-  it("should run destroy handler without error when gutter is set", () => {
-    const feature = withScrollbar<TestItem>({ gutter: true });
-    const ctx = createMockContext();
+  it("should remove gutter class on destroy", () => {
+    const plugin = scrollbar<TestItem>({ gutter: true });
+    const items = createTestItems(100);
+    const { ctx, dom, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items);
 
-    feature.setup!(ctx);
+    plugin.setup!(ctx);
+    expect(dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(true);
 
-    expect(() => {
-      for (const handler of ctx.destroyHandlers) handler();
-    }).not.toThrow();
+    for (const handler of destroyHandlers) {
+      handler();
+    }
+
+    expect(dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    cleanup();
   });
 });

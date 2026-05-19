@@ -17,7 +17,7 @@ import { describe, it, expect, mock } from "bun:test";
 import {
   createSimpleDataManager,
   type SimpleDataManager,
-} from "../../src/builder/data";
+} from "../../src/core/data";
 import type { VListItem } from "../../src/types";
 
 // =============================================================================

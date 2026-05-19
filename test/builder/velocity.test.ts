@@ -8,7 +8,7 @@ import {
   createVelocityTracker,
   updateVelocityTracker,
   MIN_RELIABLE_SAMPLES,
-} from "../../src/builder/velocity";
+} from "../../src/core/velocity";
 
 // =============================================================================
 // Constants Tests

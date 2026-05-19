@@ -1,23 +1,14 @@
 /**
- * vlist - Builder DOM Tests
+ * vlist v2 - Core DOM Tests
  *
- * NOTE: The functions exported by builder/dom.ts (resolveContainer,
- * createDOMStructure) are duplicates of the same logic in
- * rendering/renderer.ts, which is comprehensively tested in
- * rendering/renderer.test.ts (13 tests covering container resolution,
- * DOM structure creation, aria-label, horizontal mode, class prefix,
- * nesting, overflow styles, and content/items positioning).
- *
- * Coverage: 97.96% lines, 100% functions (via builder integration tests).
- *
- * This file exists to maintain the 1:1 source↔test mapping convention.
- * Add tests here only for builder/dom.ts behavior that diverges from
- * the rendering/renderer.ts implementation.
+ * Tests the core DOM structure creation functions:
+ * - resolveContainer: resolve HTML elements or selectors
+ * - createDOMStructure: create and configure root > viewport > content hierarchy
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
-import { resolveContainer, createDOMStructure } from "../../src/builder/dom";
+import { resolveContainer, createDOMStructure } from "../../src/core/dom";
 
 // =============================================================================
 // JSDOM Setup
@@ -58,150 +49,116 @@ describe("resolveContainer", () => {
 // =============================================================================
 
 describe("createDOMStructure", () => {
-  it("should create root, viewport, content, items, and liveRegion elements", () => {
+  it("should create root, viewport, and content elements", () => {
     const container = document.createElement("div");
-    const { root, viewport, content, items, liveRegion } = createDOMStructure(
+    const { root, viewport, content } = createDOMStructure(
       container,
       "vlist",
+      false,
+      true,
     );
 
     expect(root).toBeInstanceOf(HTMLElement);
     expect(viewport).toBeInstanceOf(HTMLElement);
     expect(content).toBeInstanceOf(HTMLElement);
-    expect(items).toBeInstanceOf(HTMLElement);
-    expect(liveRegion).toBeInstanceOf(HTMLElement);
   });
 
-  it("should nest elements correctly: container > root > viewport > content > items", () => {
+  it("should nest elements correctly: container > root > viewport > content", () => {
     const container = document.createElement("div");
-    const { root, viewport, content, items } = createDOMStructure(
+    const { root, viewport, content } = createDOMStructure(
       container,
       "vlist",
+      false,
+      true,
     );
 
     expect(root.parentElement).toBe(container);
     expect(viewport.parentElement).toBe(root);
     expect(content.parentElement).toBe(viewport);
-    expect(items.parentElement).toBe(content);
   });
 
   it("should apply class prefix to all elements", () => {
     const container = document.createElement("div");
-    const { root, viewport, content, items } = createDOMStructure(
+    const { root, viewport, content } = createDOMStructure(
       container,
       "my-list",
+      false,
+      true,
     );
 
     expect(root.className).toBe("my-list");
     expect(viewport.className).toBe("my-list-viewport");
     expect(content.className).toBe("my-list-content");
-    expect(items.className).toBe("my-list-items");
   });
 
-  it("should set listbox role and tabindex on items", () => {
+  it("should set listbox role and tabindex on content", () => {
     const container = document.createElement("div");
-    const { root, items } = createDOMStructure(container, "vlist");
+    const { root, content } = createDOMStructure(container, "vlist", false, true);
 
     expect(root.getAttribute("role")).toBeNull();
     expect(root.getAttribute("tabindex")).toBeNull();
-    expect(items.getAttribute("role")).toBe("listbox");
-    expect(items.getAttribute("tabindex")).toBe("0");
+    expect(content.getAttribute("role")).toBe("listbox");
+    expect(content.getAttribute("tabindex")).toBe("0");
   });
 
   it("should downgrade to list role when interactive is false", () => {
     const container = document.createElement("div");
-    const { items } = createDOMStructure(container, "vlist", undefined, false, false);
+    const { content } = createDOMStructure(container, "vlist", false, false);
 
-    expect(items.getAttribute("role")).toBe("list");
-    expect(items.hasAttribute("tabindex")).toBe(false);
+    expect(content.getAttribute("role")).toBe("list");
+    expect(content.hasAttribute("tabindex")).toBe(false);
   });
 
   it("should use listbox role when interactive is true", () => {
     const container = document.createElement("div");
-    const { items } = createDOMStructure(container, "vlist", undefined, false, true);
+    const { content } = createDOMStructure(container, "vlist", false, true);
 
-    expect(items.getAttribute("role")).toBe("listbox");
-    expect(items.getAttribute("tabindex")).toBe("0");
+    expect(content.getAttribute("role")).toBe("listbox");
+    expect(content.getAttribute("tabindex")).toBe("0");
   });
 
   it("should add aria-label when provided", () => {
     const container = document.createElement("div");
-    const { items } = createDOMStructure(container, "vlist", "My List");
+    const { content } = createDOMStructure(container, "vlist", false, true, "My List");
 
-    expect(items.getAttribute("aria-label")).toBe("My List");
+    expect(content.getAttribute("aria-label")).toBe("My List");
   });
 
   it("should not add aria-label when not provided", () => {
     const container = document.createElement("div");
-    const { items } = createDOMStructure(container, "vlist");
+    const { content } = createDOMStructure(container, "vlist", false, true);
 
-    expect(items.hasAttribute("aria-label")).toBe(false);
+    expect(content.hasAttribute("aria-label")).toBe(false);
   });
 
   it("should configure vertical mode by default", () => {
     const container = document.createElement("div");
-    const { root, viewport, content, items } = createDOMStructure(
+    const { root, viewport, content } = createDOMStructure(
       container,
       "vlist",
+      false,
+      true,
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(false);
-    expect(items.hasAttribute("aria-orientation")).toBe(false);
+    expect(content.hasAttribute("aria-orientation")).toBe(false);
     expect(viewport.style.overflow).toBe("auto");
-    expect(content.style.width).toBe("100%");
+    expect(viewport.style.height).toBe("100%");
+    expect(viewport.style.width).toBe("100%");
   });
 
   it("should configure horizontal mode when specified", () => {
     const container = document.createElement("div");
-    const { root, viewport, items } = createDOMStructure(
+    const { root, viewport, content } = createDOMStructure(
       container,
       "vlist",
-      undefined,
+      true,
       true,
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(true);
-    expect(items.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(content.getAttribute("aria-orientation")).toBe("horizontal");
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
-  });
-
-  // ── ARIA live region (#13b) ─────────────────────────────────────
-
-  it("should create a visually-hidden ARIA live region", () => {
-    const container = document.createElement("div");
-    const { liveRegion } = createDOMStructure(container, "vlist");
-
-    expect(liveRegion).toBeInstanceOf(HTMLElement);
-    expect(liveRegion.getAttribute("aria-live")).toBe("polite");
-    expect(liveRegion.getAttribute("aria-atomic")).toBe("true");
-    expect(liveRegion.getAttribute("role")).toBe("status");
-    expect(liveRegion.className).toBe("vlist-live");
-  });
-
-  it("should visually hide the live region with clip-rect technique", () => {
-    const container = document.createElement("div");
-    const { liveRegion } = createDOMStructure(container, "vlist");
-
-    expect(liveRegion.style.position).toBe("absolute");
-    expect(liveRegion.style.width).toBe("1px");
-    expect(liveRegion.style.height).toBe("1px");
-    expect(liveRegion.style.overflow).toBe("hidden");
-    // JSDOM normalizes clip rect values with units
-    expect(liveRegion.style.clip).toMatch(/rect\(0(px)?,\s*0(px)?,\s*0(px)?,\s*0(px)?\)/);
-  });
-
-  it("should place live region as a direct child of root", () => {
-    const container = document.createElement("div");
-    const { root, liveRegion } = createDOMStructure(container, "vlist");
-
-    expect(liveRegion.parentElement).toBe(root);
-  });
-
-  it("should use class prefix for live region class name", () => {
-    const container = document.createElement("div");
-    const { liveRegion } = createDOMStructure(container, "my-list");
-
-    expect(liveRegion.className).toBe("my-list-live");
   });
 });
