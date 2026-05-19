@@ -11,6 +11,41 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-05-19
+
+### Changed
+
+- **BREAKING: Plugin architecture** — replaced builder pattern (`vlist(config).use(withX()).build()`) with factory function (`createVList(config, [plugins])`). Plugins are passed as the second argument to `createVList()` and the instance is created immediately — no more `.build()` call.
+- **BREAKING: Plugin renames** — all `withX()` plugin functions renamed to bare names: `withGrid` → `grid`, `withSelection` → `selection`, `withScrollbar` → `scrollbar`, `withScale` → `scale`, `withPage` → `page`, `withSnapshots` → `snapshots`, `withTransition` → `transition`, `withAutoSize` → `autosize`, `withTable` → `table`, `withGroups` → `groups`, `withAsync` → `async`, `withMasonry` → `masonry`, `withSortable` → `sortable`.
+- **BREAKING: Plugin interface** — `VListFeature` replaced by `VListPlugin`. New interface: `name`, `priority?`, `conflicts?`, `setup(ctx: PluginContext)`, `hooks?: { onCalculate, onCommit, onAfterScroll, onIdle, onResize }`, `destroy?()`. Features no longer use callback arrays — hot-path hooks are compiled into linear arrays at creation time.
+- **BREAKING: Context interface** — `BuilderContext` replaced by `PluginContext`. Features register handlers via `registerClickHandler()`, `registerKeydownHandler()`, `registerDestroyHandler()`, and add public methods via `registerMethod()`. The `$` (MRefs) shared mutable state is replaced by `EngineState` TypedArrays.
+- **BREAKING: Directory structure** — `src/builder/` → `src/core/`, `src/features/` → `src/plugins/`.
+- **BREAKING: DOM structure** — the `.vlist-items` wrapper element is removed. v2 uses a 3-element structure: `root > viewport > content`.
+- **Core: 2-phase pipeline** — new render pipeline: Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions, Phase 2 (`onCommit`) reads buffers and updates DOM. Zero allocation per frame.
+- **Core: EngineState** — all hot-path state (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in TypedArrays on a single `EngineState` singleton.
+- **Core: Hook compilation** — plugin hooks are compiled once at creation into frozen linear arrays, iterated with zero dispatch overhead per frame.
+
+### Improved
+
+- **Base bundle** — 11.2 KB → 5.0 KB gzipped (-55%).
+- **grid** — 4.1 KB → 1.7 KB (-59%).
+- **selection** — 2.7 KB → 1.2 KB (-56%).
+- **async** — 4.6 KB → 3.9 KB (-15%).
+- **groups** — 4.7 KB → 2.5 KB (-47%).
+- **scale** — 3.6 KB → 3.4 KB (-6%).
+- **autosize** — 0.9 KB → 0.6 KB (-33%).
+- **masonry** — 3.4 KB → 2.9 KB (-15%).
+- **sortable** — 2.9 KB → 3.0 KB (+3%, added features).
+- **transition** — 2.1 KB → 1.9 KB (-10%).
+- **scrollbar** — unchanged at 1.8 KB.
+- **table** — unchanged at 5.8 KB.
+- **page** — unchanged at 0.7 KB.
+- **snapshots** — unchanged at 1.2 KB.
+
+### Migration
+
+See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guide.
+
 ## [1.9.0] - 2026-05-17
 
 ### Added
@@ -317,7 +352,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/floor/vlist/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/floor/vlist/compare/v1.8.3...v1.9.0
+[1.8.3]: https://github.com/floor/vlist/compare/v1.8.2...v1.8.3
+[1.8.2]: https://github.com/floor/vlist/compare/v1.8.1...v1.8.2
+[1.8.1]: https://github.com/floor/vlist/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/floor/vlist/compare/v1.7.9...v1.8.0
 [1.7.9]: https://github.com/floor/vlist/compare/v1.7.8...v1.7.9
 [1.7.8]: https://github.com/floor/vlist/compare/v1.7.7...v1.7.8
