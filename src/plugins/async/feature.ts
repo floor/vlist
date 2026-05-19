@@ -18,7 +18,7 @@
  */
 
 import type { VListItem, VListAdapter, Range, ScrollSnapshot } from "../../types";
-import type { VListFeature, BuilderContext, ReloadOptions } from "../../builder/types";
+import type { VListFeature, BuilderContext, ReloadOptions } from "../../core/types";
 
 import { createDataManager } from "./manager";
 

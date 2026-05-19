@@ -21,7 +21,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 
 /**
  * Options for the window scroll mode feature.

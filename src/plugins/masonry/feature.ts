@@ -34,9 +34,9 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 import { resolvePadding, crossAxisPaddingFrom, mainAxisPaddingFrom } from "../../utils/padding";
-import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
+import { resolveScrollArgs, createSmoothScroll } from "../../core/scroll";
 import { createAriaResolvers } from "../../rendering/aria";
 
 import { createMasonryLayout } from "./layout";

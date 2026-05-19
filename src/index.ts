@@ -21,18 +21,18 @@ export type { SelectionPluginConfig } from "./plugins/selection";
 
 // v1 builder API — disabled until features are migrated to v2 plugin interface
 // export { withScale } from "./plugins/scale/feature";
-// export { withAsync } from "./features/async";
+// export { withAsync } from "./plugins/async";
 // export { withScrollbar } from "./plugins/scrollbar/feature";
-// export { withPage } from "./features/page";
-// export { withGroups } from "./features/groups";
+// export { withPage } from "./plugins/page";
+// export { withGroups } from "./plugins/groups";
 // export { withGrid } from "./plugins/grid/feature";
-// export { withMasonry } from "./features/masonry";
+// export { withMasonry } from "./plugins/masonry";
 // export { withSelection } from "./plugins/selection/feature";
-// export { withSnapshots } from "./features/snapshots";
-// export { withTable } from "./features/table";
-// export { withSortable } from "./features/sortable";
-// export { withAutoSize } from "./features/autosize";
-// export { withTransition } from "./features/transition";
+// export { withSnapshots } from "./plugins/snapshots";
+// export { withTable } from "./plugins/table";
+// export { withSortable } from "./plugins/sortable";
+// export { withAutoSize } from "./plugins/autosize";
+// export { withTransition } from "./plugins/transition";
 
 // Utils
 export { createStats } from "./utils/stats";

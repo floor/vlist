@@ -23,7 +23,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 
 import {
   createGroupLayout,
@@ -42,7 +42,7 @@ import {
 import { createAsyncGroupBridge, type AsyncGroupBridge } from "./async-bridge";
 
 import { calculateScrollToIndex } from "../../rendering";
-import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
+import { resolveScrollArgs, createSmoothScroll } from "../../core/scroll";
 
 // =============================================================================
 // Feature Config

@@ -33,7 +33,7 @@
  */
 
 import type { VListItem, SelectionMode } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 import { resolvePadding } from "../../utils/padding";
 
 import {

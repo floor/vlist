@@ -25,7 +25,7 @@ export {
   type GroupHeaderItem,
   type GroupLayout,
   type StickyHeader,
-} from "./features/groups";
+} from "./plugins/groups";
 
 // =============================================================================
 // Grid domain
@@ -61,7 +61,7 @@ export {
   type ColumnResizeEvent,
   type ColumnSortEvent,
   type ColumnClickEvent,
-} from "./features/table";
+} from "./plugins/table";
 
 // =============================================================================
 // Masonry domain
@@ -75,7 +75,7 @@ export {
   type MasonryRenderer,
   type GetItemFn,
   type ItemPlacement,
-} from "./features/masonry";
+} from "./plugins/masonry";
 
 // =============================================================================
 // Rendering domain (virtual scrolling, size cache, scaling)
@@ -152,7 +152,7 @@ export {
   type DataManager as AsyncManager,
   type SparseStorage,
   type PlaceholderManager,
-} from "./features/async";
+} from "./plugins/async";
 
 // =============================================================================
 // Scrollbar domain

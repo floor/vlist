@@ -24,7 +24,7 @@
  */
 
 import type { VListItem, ScrollSnapshot } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 
 // =============================================================================
 // Config

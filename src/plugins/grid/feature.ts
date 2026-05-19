@@ -19,9 +19,9 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 import { resolvePadding, crossAxisPaddingFrom } from "../../utils/padding";
-import { resolveScrollArgs, createSmoothScroll } from "../../builder/scroll";
+import { resolveScrollArgs, createSmoothScroll } from "../../core/scroll";
 import { calculateScrollToIndex } from "../../rendering";
 import { createAriaResolvers } from "../../rendering/aria";
 

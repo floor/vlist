@@ -26,7 +26,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListFeature, BuilderContext } from "../../core/types";
 import type { SizeCache } from "../../rendering/sizes";
 import { createMeasuredSizeCache } from "../../rendering/measured";
 import { resolvePadding, mainAxisPaddingFrom } from "../../utils/padding";

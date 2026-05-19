@@ -6,4 +6,4 @@
 
 export { withPage } from "./feature";
 export type { WithPageOptions } from "./feature";
-export type { VListFeature } from "../../builder/types";
+export type { VListFeature } from "../../core/types";
