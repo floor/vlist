@@ -117,6 +117,10 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setRenderFn(renderIfNeeded: () => void, forceRender: () => void): void;
   renderIfNeeded(): void;
   forceRender(): void;
+
+  disableDefaultScroll(): void;
+  disableDefaultResize(): void;
+  setScrollTarget(target: EventTarget): void;
 }
 
 // =============================================================================

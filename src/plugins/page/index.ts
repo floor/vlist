@@ -1,9 +1,9 @@
 /**
- * vlist/window - Window Scroll Mode Feature
- *
- * Entry point for the window scroll feature.
+ * vlist/page - Window Scroll Mode
  */
 
-export { withPage } from "./feature";
-export type { WithPageOptions } from "./feature";
-export type { VListFeature } from "../../core/types";
+// v2 plugin
+export { page, type PagePluginConfig } from "./plugin";
+
+// v1 feature (legacy)
+export { withPage, type WithPageOptions } from "./feature";

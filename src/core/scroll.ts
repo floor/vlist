@@ -29,6 +29,8 @@ export interface ScrollHandlerConfig {
   readonly horizontal: boolean;
   readonly wheelEnabled: boolean;
   readonly idleTimeout: number;
+  /** Override the event target for scroll/wheel listeners (default: viewport) */
+  readonly scrollTarget?: EventTarget;
   /** Called synchronously on scroll — triggers the 2-phase pipeline */
   readonly onFrame: () => void;
   /** Called when scrolling becomes idle */
@@ -38,6 +40,7 @@ export interface ScrollHandlerConfig {
 export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler {
   const { state, viewport, horizontal, wheelEnabled, onFrame, onIdle } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
+  const target: EventTarget = config.scrollTarget ?? viewport;
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let animationId: number | null = null;
@@ -150,16 +153,16 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   return {
     attach(): void {
-      viewport.addEventListener("scroll", onScrollEvent, { passive: true });
+      target.addEventListener("scroll", onScrollEvent as EventListener, { passive: true });
       if (wheelEnabled) {
-        viewport.addEventListener("wheel", onWheelEvent, { passive: false });
+        target.addEventListener("wheel", onWheelEvent as EventListener, { passive: false });
       }
     },
 
     detach(): void {
-      viewport.removeEventListener("scroll", onScrollEvent);
+      target.removeEventListener("scroll", onScrollEvent as EventListener);
       if (wheelEnabled) {
-        viewport.removeEventListener("wheel", onWheelEvent);
+        target.removeEventListener("wheel", onWheelEvent as EventListener);
       }
       cancelScroll();
       if (idleTimer !== null) {

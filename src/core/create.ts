@@ -148,6 +148,9 @@ export function createVList<T extends VListItem = VListItem>(
   let scrollSetFn: ((pos: number) => void) | null = null;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
+  let skipDefaultScroll = false;
+  let skipDefaultResize = false;
+  let scrollTarget: EventTarget | null = null;
 
   const ctx: PluginContext<T> = {
     dom,
@@ -187,6 +190,9 @@ export function createVList<T extends VListItem = VListItem>(
     forceRender(): void {
       doForceRender();
     },
+    disableDefaultScroll(): void { skipDefaultScroll = true; },
+    disableDefaultResize(): void { skipDefaultResize = true; },
+    setScrollTarget(target: EventTarget): void { scrollTarget = target; },
   };
 
   // ── Pre-initialize container size so plugins can read it ────────
@@ -228,8 +234,9 @@ export function createVList<T extends VListItem = VListItem>(
     state,
     viewport: dom.viewport,
     horizontal: config.horizontal,
-    wheelEnabled: rawConfig.scroll?.wheel !== false,
+    wheelEnabled: skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false,
     idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+    ...(scrollTarget ? { scrollTarget } : {}),
     onFrame(): void {
       doRender();
       runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
@@ -286,27 +293,30 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── ResizeObserver ──────────────────────────────────────────────
 
-  const resizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const { width, height } = entry.contentRect;
-      const size = config.horizontal ? width : height;
-      const cross = config.horizontal ? height : width;
+  let resizeObserver: ResizeObserver | null = null;
+  if (!skipDefaultResize) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        const size = config.horizontal ? width : height;
+        const cross = config.horizontal ? height : width;
 
-      if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
+        if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
 
-      state.containerSize = size;
-      state.crossSize = cross;
-      state.resizeCapacity(size, minItemSize, config.overscan);
-      doForceRender();
-      runResizeHooks(hooks.resize, width, height);
-      emitter.emit("resize", { width, height });
-    }
-  });
-  resizeObserver.observe(dom.viewport);
+        state.containerSize = size;
+        state.crossSize = cross;
+        state.resizeCapacity(size, minItemSize, config.overscan);
+        doForceRender();
+        runResizeHooks(hooks.resize, width, height);
+        emitter.emit("resize", { width, height });
+      }
+    });
+    resizeObserver.observe(dom.viewport);
+  }
 
   // ── Initialize ──────────────────────────────────────────────────
 
-  scrollHandler.attach();
+  if (!skipDefaultScroll) scrollHandler.attach();
   state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
   state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
   state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
@@ -452,7 +462,7 @@ export function createVList<T extends VListItem = VListItem>(
       state.destroyed = true;
 
       scrollHandler.detach();
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("keydown", onContentKeydown);
 

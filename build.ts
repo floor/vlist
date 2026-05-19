@@ -26,9 +26,9 @@ async function build() {
   // reference all exports in a wrapper to force inclusion.
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
-    `import { createVList, scale, scrollbar, grid, selection,`,
+    `import { createVList, scale, scrollbar, grid, selection, page,`,
     `  createStats } from "${entryAbs}";`,
-    `export { createVList, scale, scrollbar, grid, selection,`,
+    `export { createVList, scale, scrollbar, grid, selection, page,`,
     `  createStats };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
@@ -141,7 +141,7 @@ async function build() {
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
   const ALL_PLUGINS = [
-    "scale", "scrollbar", "grid", "selection",
+    "scale", "scrollbar", "grid", "selection", "page",
   ] as const;
 
   const scenarios = [
