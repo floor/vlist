@@ -20,6 +20,9 @@ dist/
 .claude/worktrees
 scratchpad
 
+# DOCS for now
+docs/
+rfcs/
 # OS
 .DS_Store
 Thumbs.db

@@ -136,6 +136,7 @@ export function groups<T extends VListItem = VListItem>(
     }
 
     const groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
+    const groupHeaderClass = `${classPrefix}-group-header`;
 
     const isf = resolveItemState?.();
     const selClass = isf ? `${classPrefix}-item--selected` : "";
@@ -147,12 +148,15 @@ export function groups<T extends VListItem = VListItem>(
 
       if (element === undefined) {
         element = pool.acquire();
-        element.className = groupItemClass;
         element.setAttribute("data-index", String(i));
 
         let content: string | HTMLElement;
 
         if (entry.type === "header") {
+          element.className = groupHeaderClass;
+          element.setAttribute("role", "presentation");
+          element.removeAttribute("aria-selected");
+
           const headerItem: GroupHeaderItem = {
             id: `__group_header_${entry.group.groupIndex}`,
             __groupHeader: true,
@@ -163,12 +167,15 @@ export function groups<T extends VListItem = VListItem>(
 
           content = headerTemplate(entry.group.key, entry.group.groupIndex);
         } else {
+          element.className = groupItemClass;
+          element.setAttribute("role", "option");
+
           const dataIndex = entry.dataIndex;
           const item = items[dataIndex];
           if (!item) continue;
 
           element.setAttribute("data-id", String(item.id));
-          if (isf) isf(dataIndex, itemState);
+          if (isf) isf(i, itemState);
           else { itemState.selected = false; itemState.focused = false; }
           content = userTemplate(item, dataIndex, itemState);
         }
@@ -185,7 +192,7 @@ export function groups<T extends VListItem = VListItem>(
       }
 
       if (entry.type !== "header" && isf) {
-        isf(entry.dataIndex, itemState);
+        isf(i, itemState);
         element.classList.toggle(selClass, itemState.selected);
         element.classList.toggle(focClass, itemState.focused);
         if (itemState.selected) element.setAttribute("aria-selected", "true");
@@ -301,6 +308,13 @@ export function groups<T extends VListItem = VListItem>(
         );
 
         stickyHeader.update(engineState.scrollPosition);
+
+        const headerH = layout.getHeaderHeight(0);
+        if (!horizontal) {
+          ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
+        } else {
+          ctx.dom.viewport.style.width = `calc(100% - ${headerH}px)`;
+        }
       }
 
       ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);

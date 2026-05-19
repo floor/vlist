@@ -2,22 +2,21 @@
  * vlist v2 — Selection Plugin
  *
  * Manages selection state, click/keyboard handlers, ARIA attributes.
- * Adapted from v1 withSelection feature to the v2 plugin interface.
+ * Adapted from v1 withSelection feature + a11y.ts to the v2 plugin interface.
  */
 
 import type { VListItem, SelectionMode } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
+import type { SizeCache } from "../../core/sizes";
+import type { EngineState } from "../../core/state";
 import {
   createSelectionState,
-  selectOne,
-  toggleOne,
-  selectRangeMut as selectRange,
-  selectAllItems,
   moveFocus,
   getSelectedArray,
-  getSelectedItemsMut as getSelectedItems,
+  claimPlaceholderSelection,
   type SelectionState,
 } from "./state";
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 
 // =============================================================================
 // Config
@@ -34,6 +33,8 @@ export interface SelectionPluginConfig {
 // Factory
 // =============================================================================
 
+const focusPreventScroll = { preventScroll: true };
+
 export function selection<T extends VListItem = VListItem>(
   config?: SelectionPluginConfig,
 ): VListPlugin<T> {
@@ -42,30 +43,150 @@ export function selection<T extends VListItem = VListItem>(
   const focusOnClick = config?.focusOnClick ?? false;
 
   let state: SelectionState;
-  let items: () => readonly T[];
+  let getItem: (index: number) => T | undefined;
   let forceRender: () => void;
   let emitter: PluginContext<T>["emitter"];
   let dom: PluginContext<T>["dom"];
-  let resolvedConfig: PluginContext<T>["config"];
+  let sizeCache: SizeCache;
+  let engineState: EngineState;
+  let scrollTo: (pos: number) => void;
   let lastSelectedIndex = -1;
+
+  const selectedItemCache = new Map<string | number, T>();
+
+  let l2dFn: ((i: number) => number) | null = null;
+  let d2lFn: ((i: number) => number) | null = null;
+  let isGHFn: ((i: number) => boolean) | null = null;
+  let sivFn: ((i: number) => void) | null = null;
+  let getTotalFn: () => number;
+  let resolved = false;
+
+  function resolveOnce(ctx: PluginContext<T>): void {
+    if (resolved) return;
+    resolved = true;
+    l2dFn = (ctx.getMethod("_layoutToDataIndex") as typeof l2dFn) ?? null;
+    d2lFn = (ctx.getMethod("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+    isGHFn = (ctx.getMethod("_isGroupHeader") as typeof isGHFn) ?? null;
+    sivFn = (ctx.getMethod("_scrollItemIntoView") as typeof sivFn) ?? null;
+    const gl = ctx.getMethod("getGroupLayout") as (() => { totalEntries: number }) | undefined;
+    if (gl) {
+      const layout = gl();
+      getTotalFn = () => layout.totalEntries;
+    }
+  }
+
+  const toDataIndex = (layoutIdx: number): number =>
+    l2dFn ? l2dFn(layoutIdx) : layoutIdx;
+
+  const getItemAtLayout = (layoutIdx: number): T | undefined => {
+    const di = toDataIndex(layoutIdx);
+    return di >= 0 ? getItem(di) : undefined;
+  };
+
+  const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
+    if (!isGHFn) return from;
+    let i = from;
+    while (i >= 0 && i < total) {
+      if (!isGHFn(i)) return i;
+      i += dir;
+    }
+    i = from - dir;
+    while (i >= 0 && i < total) {
+      if (!isGHFn(i)) return i;
+      i -= dir;
+    }
+    return from;
+  };
+
+  // ── Selection mutations (keep Set + item cache in sync) ────────
+
+  function doSelect(id: string | number, item?: T): void {
+    if (mode === "single") {
+      state.selected.clear();
+      selectedItemCache.clear();
+    }
+    state.selected.add(id);
+    if (item) selectedItemCache.set(id, item);
+  }
+
+  function doToggle(id: string | number, item?: T): void {
+    if (state.selected.has(id)) {
+      state.selected.delete(id);
+      selectedItemCache.delete(id);
+    } else {
+      doSelect(id, item);
+    }
+  }
+
+  function doClear(): void {
+    state.selected.clear();
+    selectedItemCache.clear();
+  }
+
+  function doDeselect(id: string | number): void {
+    state.selected.delete(id);
+    selectedItemCache.delete(id);
+  }
+
+  function doSelectRange(from: number, to: number): void {
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+    for (let i = start; i <= end; i++) {
+      const item = getItem(i);
+      if (item) {
+        state.selected.add(item.id);
+        selectedItemCache.set(item.id, item);
+      }
+    }
+  }
+
+  function doSelectAll(): void {
+    const total = engineState.totalItems;
+    for (let i = 0; i < total; i++) {
+      const item = getItem(i);
+      if (item) {
+        state.selected.add(item.id);
+        selectedItemCache.set(item.id, item);
+      }
+    }
+  }
+
+  function collectSelectedItems(): T[] {
+    if (state.selected.size === 0) return [];
+
+    if (selectedItemCache.size >= state.selected.size) {
+      const result: T[] = [];
+      for (const id of state.selected) {
+        const item = selectedItemCache.get(id);
+        if (item) result.push(item);
+      }
+      if (result.length === state.selected.size) return result;
+    }
+
+    const result: T[] = [];
+    const remaining = new Set(state.selected);
+    const total = engineState.totalItems;
+    for (let i = 0; i < total && remaining.size > 0; i++) {
+      const item = getItem(i);
+      if (item && remaining.has(item.id)) {
+        result.push(item);
+        selectedItemCache.set(item.id, item);
+        remaining.delete(item.id);
+      }
+    }
+    return result;
+  }
 
   function emitSelectionChange(): void {
     forceRender();
     emitter.emit("selection:change", {
       selected: getSelectedArray(state.selected),
-      items: getSelectedItems(state.selected, items()),
+      items: collectSelectedItems(),
     });
   }
 
-  function findItemFromEvent(event: MouseEvent): { item: T; index: number } | null {
-    const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
-    if (!el) return null;
-    const index = parseInt(el.dataset.index ?? "-1", 10);
-    if (index < 0) return null;
-    const item = items()[index];
-    if (!item) return null;
-    return { item, index };
-  }
+  let hitItem: T | null = null;
+  let hitIndex = -1;
 
   return {
     name: "selection",
@@ -73,11 +194,15 @@ export function selection<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       state = createSelectionState(config?.initial);
-      items = ctx.getItems.bind(ctx);
+      getItem = ctx.getItem.bind(ctx);
       forceRender = ctx.forceRender.bind(ctx);
       emitter = ctx.emitter;
       dom = ctx.dom;
-      resolvedConfig = ctx.config;
+      const resolvedConfig = ctx.config;
+      sizeCache = ctx.sizeCache;
+      engineState = ctx.getState();
+      scrollTo = ctx.scrollTo.bind(ctx);
+      getTotalFn = () => engineState.totalItems;
 
       if (mode === "none") {
         ctx.registerMethod("select", () => {});
@@ -92,90 +217,186 @@ export function selection<T extends VListItem = VListItem>(
         return;
       }
 
+      const classPrefix = resolvedConfig.classPrefix;
+
       ctx.setItemStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
-        const allItems = items();
-        const id = allItems[index]?.id;
-        is.selected = id !== undefined && state.selected.has(id);
+        resolveOnce(ctx);
+        if (state.selected.size > 0) {
+          const di = toDataIndex(index);
+          const item = di >= 0 ? getItem(di) : undefined;
+          const id = item?.id;
+          if (id !== undefined) {
+            if (state.selected.has(id)) {
+              is.selected = true;
+            } else if (claimPlaceholderSelection(state.selected, di, id)) {
+              is.selected = true;
+              selectedItemCache.delete(PLACEHOLDER_ID_PREFIX + di);
+              selectedItemCache.set(id, item as T);
+            } else {
+              is.selected = false;
+            }
+          } else {
+            is.selected = false;
+          }
+        } else {
+          is.selected = false;
+        }
         is.focused = state.focusVisible && state.focusedIndex === index;
       });
 
       ctx.registerMethod("_getSelectedIds", (): Set<string | number> => state.selected);
       ctx.registerMethod("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
 
-      dom.root.classList.add(`${resolvedConfig.classPrefix}--selectable`);
+      dom.root.classList.add(`${classPrefix}--selectable`);
 
-      // ── Click handler ──────────────────────────────────────────
+      // ── Helpers ────────────────────────────────────────────────
+
+      const findItemFromEvent = (event: MouseEvent): boolean => {
+        hitItem = null;
+        hitIndex = -1;
+        const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
+        if (!el) return false;
+        const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
+        if (layoutIdx < 0) return false;
+        const di = toDataIndex(layoutIdx);
+        if (di < 0) return false;
+        const item = getItem(di);
+        if (!item) return false;
+        hitItem = item;
+        hitIndex = layoutIdx;
+        return true;
+      };
+
+      const scrollFocusIntoView = (index: number): void => {
+        if (index < 0) return;
+        if (sivFn) { sivFn(index); return; }
+        const offset = sizeCache.getOffset(index);
+        const size = sizeCache.getSize(index);
+        const cs = engineState.containerSize;
+        const sp = engineState.scrollPosition;
+
+        if (offset < sp) {
+          scrollTo(offset);
+        } else if (offset + size > sp + cs) {
+          scrollTo(offset - cs + size);
+        }
+      };
+
+      // ── Focus In/Out ──────────────────────────────────────────
+
+      const onFocusIn = (): void => {
+        if (engineState.destroyed) return;
+        resolveOnce(ctx);
+        if (!dom.content.matches(":focus-visible") && !dom.root.matches(":focus-visible")) return;
+        const t = getTotalFn();
+        if (t === 0) return;
+        let tgt = state.focusedIndex >= 0 ? Math.min(state.focusedIndex, t - 1) : 0;
+        tgt = skipHeaders(tgt, 1, t);
+        state.focusedIndex = tgt;
+        state.focusVisible = true;
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${tgt}`);
+        scrollFocusIntoView(tgt);
+        forceRender();
+      };
+      dom.root.addEventListener("focusin", onFocusIn);
+
+      const onFocusOut = (e: FocusEvent): void => {
+        if (engineState.destroyed) return;
+        const rel = e.relatedTarget as Node | null;
+        if (rel && dom.root.contains(rel)) return;
+        state.focusVisible = false;
+        forceRender();
+        dom.content.removeAttribute("aria-activedescendant");
+      };
+      dom.root.addEventListener("focusout", onFocusOut);
+
+      ctx.registerDestroyHandler(() => {
+        dom.root.removeEventListener("focusin", onFocusIn);
+        dom.root.removeEventListener("focusout", onFocusOut);
+      });
+
+      // ── Click handler ─────────────────────────────────────────
 
       ctx.registerClickHandler((event: MouseEvent): void => {
-        const hit = findItemFromEvent(event);
-        if (!hit) return;
+        resolveOnce(ctx);
+        if (!findItemFromEvent(event)) return;
 
-        // Shift+click range select
         if (mode === "multiple" && event.shiftKey && state.focusedIndex >= 0) {
           const anchor = lastSelectedIndex >= 0 ? lastSelectedIndex : state.focusedIndex;
-          selectRange(state.selected, items(), anchor, hit.index);
-          state.focusedIndex = hit.index;
+          const anchorData = toDataIndex(anchor);
+          const hitData = toDataIndex(hitIndex);
+          if (anchorData >= 0 && hitData >= 0) {
+            doSelectRange(anchorData, hitData);
+          }
+          state.focusedIndex = hitIndex;
           state.focusVisible = focusOnClick;
-          lastSelectedIndex = hit.index;
+          lastSelectedIndex = hitIndex;
           emitSelectionChange();
           return;
         }
 
-        state.focusedIndex = hit.index;
+        state.focusedIndex = hitIndex;
         state.focusVisible = focusOnClick;
-        lastSelectedIndex = hit.index;
-        toggleOne(state.selected, hit.item.id, mode);
+        lastSelectedIndex = hitIndex;
+        dom.content.focus(focusPreventScroll);
+        doToggle(hitItem!.id, hitItem!);
         emitSelectionChange();
       });
 
-      // ── Keyboard handler ───────────────────────────────────────
+      // ── Keyboard handler ──────────────────────────────────────
 
       if (resolvedConfig.interactive) {
         ctx.registerKeydownHandler((event: KeyboardEvent): void => {
-          const allItems = items();
-          const total = allItems.length;
+          resolveOnce(ctx);
+          const total = getTotalFn();
           if (total === 0) return;
 
           const prevFocus = state.focusedIndex;
           let handled = false;
-          let focusOnly = false;
+          let selectionChanged = false;
 
           switch (event.key) {
             case "ArrowUp":
               moveFocus(state, -1, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
-              focusOnly = true;
               break;
 
             case "ArrowDown":
               moveFocus(state, 1, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
-              focusOnly = true;
               break;
 
             case "Home":
               if (total > 0) state.focusedIndex = 0;
               state.focusVisible = true;
               handled = true;
-              focusOnly = true;
               break;
 
             case "End":
               if (total > 0) state.focusedIndex = total - 1;
               state.focusVisible = true;
               handled = true;
-              focusOnly = true;
               break;
 
             case "PageUp":
             case "PageDown": {
-              const pageSize = 10;
-              moveFocus(state, event.key === "PageUp" ? -pageSize : pageSize, total);
+              const idx = Math.max(0, state.focusedIndex);
+              const rowH = sizeCache.getSize(idx);
+              const cs = engineState.containerSize;
+              const pageSize = rowH > 0 ? Math.max(1, Math.floor(cs / rowH)) : 10;
+
+              if (l2dFn && d2lFn) {
+                const curData = l2dFn(state.focusedIndex);
+                const step = event.key === "PageUp" ? -pageSize : pageSize;
+                const maxData = engineState.totalItems - 1;
+                state.focusedIndex = d2lFn(Math.max(0, Math.min(maxData, curData + step)));
+              } else {
+                moveFocus(state, event.key === "PageUp" ? -pageSize : pageSize, total);
+              }
               state.focusVisible = true;
               handled = true;
-              focusOnly = true;
               break;
             }
 
@@ -183,31 +404,38 @@ export function selection<T extends VListItem = VListItem>(
             case "Enter":
               if (event.key === " " && event.shiftKey && mode === "multiple" && state.focusedIndex >= 0) {
                 if (lastSelectedIndex >= 0) {
-                  selectRange(state.selected, allItems, lastSelectedIndex, state.focusedIndex);
+                  const fromData = toDataIndex(lastSelectedIndex);
+                  const toData = toDataIndex(state.focusedIndex);
+                  if (fromData >= 0 && toData >= 0) {
+                    doSelectRange(fromData, toData);
+                  }
                 }
                 state.focusVisible = true;
+                selectionChanged = true;
                 handled = true;
                 break;
               }
               if (state.focusedIndex >= 0) {
-                const item = allItems[state.focusedIndex];
+                const item = getItemAtLayout(state.focusedIndex);
                 if (item) {
-                  toggleOne(state.selected, item.id, mode);
+                  doToggle(item.id, item);
                   lastSelectedIndex = state.focusedIndex;
                 }
                 state.focusVisible = true;
+                selectionChanged = true;
                 handled = true;
               }
               break;
 
             case "a":
               if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
-                if (state.selected.size === total) {
-                  state.selected.clear();
+                if (state.selected.size === engineState.totalItems) {
+                  doClear();
                 } else {
-                  selectAllItems(state.selected, allItems);
+                  doSelectAll();
                 }
                 state.focusVisible = true;
+                selectionChanged = true;
                 handled = true;
               }
               break;
@@ -217,84 +445,99 @@ export function selection<T extends VListItem = VListItem>(
               if (state.selected.size > 0) {
                 emitter.emit("delete", {
                   selected: getSelectedArray(state.selected),
-                  items: getSelectedItems(state.selected, allItems),
+                  items: collectSelectedItems(),
                 });
                 handled = true;
               }
               break;
           }
 
-          // Shift+Arrow: toggle destination item
-          if (event.shiftKey && mode === "multiple" && focusOnly && state.focusedIndex >= 0) {
+          // Skip group headers before shift-selection uses focusedIndex
+          if (state.focusedIndex !== prevFocus && isGHFn) {
+            const dir: 1 | -1 = state.focusedIndex > prevFocus ? 1 : -1;
+            state.focusedIndex = skipHeaders(state.focusedIndex, dir, total);
+          }
+
+          const focusMoved = state.focusedIndex !== prevFocus;
+
+          // Shift+movement: extend selection
+          if (event.shiftKey && mode === "multiple" && !selectionChanged && focusMoved) {
             const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown";
             if (isArrow) {
-              const destItem = allItems[state.focusedIndex];
-              if (destItem) {
-                toggleOne(state.selected, destItem.id, mode);
-              }
+              const destItem = getItemAtLayout(state.focusedIndex);
+              if (destItem) doToggle(destItem.id, destItem);
               lastSelectedIndex = state.focusedIndex;
-              focusOnly = false;
+              selectionChanged = true;
             }
 
             const isCtrlHomeEnd = (event.ctrlKey || event.metaKey)
               && (event.key === "Home" || event.key === "End");
             if (isCtrlHomeEnd) {
-              selectRange(state.selected, allItems, prevFocus >= 0 ? prevFocus : state.focusedIndex, state.focusedIndex);
+              const fromData = toDataIndex(prevFocus >= 0 ? prevFocus : state.focusedIndex);
+              const toData = toDataIndex(state.focusedIndex);
+              if (fromData >= 0 && toData >= 0) {
+                doSelectRange(fromData, toData);
+              }
               lastSelectedIndex = state.focusedIndex;
-              focusOnly = false;
+              selectionChanged = true;
             }
           }
 
-          // Selection follows focus
-          if (followFocus && mode === "single" && focusOnly && state.focusedIndex >= 0) {
-            const item = allItems[state.focusedIndex];
-            if (item) selectOne(state.selected, item.id, mode);
-            focusOnly = false;
+          // Follow focus: auto-select on movement
+          if (followFocus && mode === "single" && !selectionChanged && focusMoved && state.focusedIndex >= 0) {
+            const item = getItemAtLayout(state.focusedIndex);
+            if (item) doSelect(item.id, item);
+            selectionChanged = true;
           }
 
           if (handled) {
             event.preventDefault();
 
-            if (focusOnly) {
+            if (focusMoved && state.focusedIndex >= 0) {
+              scrollFocusIntoView(state.focusedIndex);
+              dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${state.focusedIndex}`);
+            }
+
+            if (selectionChanged) {
+              emitSelectionChange();
+            } else if (focusMoved) {
               forceRender();
-              if (state.focusedIndex >= 0 && state.focusedIndex !== prevFocus) {
-                const item = allItems[state.focusedIndex];
+              if (state.focusedIndex >= 0) {
+                const item = getItemAtLayout(state.focusedIndex);
                 if (item) {
                   emitter.emit("focus:change", { id: item.id, index: state.focusedIndex });
                 }
               }
-            } else {
-              emitSelectionChange();
             }
           }
         });
       }
 
-      // ── Public methods ─────────────────────────────────────────
+      // ── Public methods ────────────────────────────────────────
 
       ctx.registerMethod("select", (...ids: Array<string | number>): void => {
-        for (const id of ids) selectOne(state.selected, id, mode);
+        for (const id of ids) doSelect(id);
         emitSelectionChange();
       });
 
       ctx.registerMethod("deselect", (...ids: Array<string | number>): void => {
-        for (const id of ids) state.selected.delete(id);
+        for (const id of ids) doDeselect(id);
         emitSelectionChange();
       });
 
       ctx.registerMethod("toggleSelect", (id: string | number): void => {
-        toggleOne(state.selected, id, mode);
+        doToggle(id);
         emitSelectionChange();
       });
 
       ctx.registerMethod("selectAll", (): void => {
         if (mode !== "multiple") return;
-        selectAllItems(state.selected, items());
+        doSelectAll();
         emitSelectionChange();
       });
 
       ctx.registerMethod("clearSelection", (): void => {
-        state.selected.clear();
+        doClear();
         emitSelectionChange();
       });
 
@@ -303,30 +546,34 @@ export function selection<T extends VListItem = VListItem>(
       });
 
       ctx.registerMethod("getSelectedItems", (): T[] => {
-        return getSelectedItems(state.selected, items());
+        return collectSelectedItems();
       });
 
       ctx.registerMethod("selectNext", (): void => {
-        const allItems = items();
-        if (allItems.length === 0) return;
-        moveFocus(state, 1, allItems.length, resolvedConfig.reverse);
-        const item = allItems[state.focusedIndex];
-        if (item) selectOne(state.selected, item.id, mode);
+        resolveOnce(ctx);
+        const total = getTotalFn();
+        if (total === 0) return;
+        moveFocus(state, 1, total, resolvedConfig.reverse);
+        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, 1, total);
+        const item = getItemAtLayout(state.focusedIndex);
+        if (item) doSelect(item.id, item);
         emitSelectionChange();
       });
 
       ctx.registerMethod("selectPrevious", (): void => {
-        const allItems = items();
-        if (allItems.length === 0) return;
-        moveFocus(state, -1, allItems.length, resolvedConfig.reverse);
-        const item = allItems[state.focusedIndex];
-        if (item) selectOne(state.selected, item.id, mode);
+        resolveOnce(ctx);
+        const total = getTotalFn();
+        if (total === 0) return;
+        moveFocus(state, -1, total, resolvedConfig.reverse);
+        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, -1, total);
+        const item = getItemAtLayout(state.focusedIndex);
+        if (item) doSelect(item.id, item);
         emitSelectionChange();
       });
     },
 
     destroy(): void {
-      // State is GC'd with the plugin
+      selectedItemCache.clear();
     },
   };
 }
