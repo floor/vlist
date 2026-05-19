@@ -190,6 +190,11 @@ export function createVList<T extends VListItem = VListItem>(
     forceRender(): void {
       doForceRender();
     },
+    scrollTo(position: number): void {
+      if (scrollSetFn) scrollSetFn(position);
+      else if (config.horizontal) dom.viewport.scrollLeft = position;
+      else dom.viewport.scrollTop = position;
+    },
     disableDefaultScroll(): void { skipDefaultScroll = true; },
     disableDefaultResize(): void { skipDefaultResize = true; },
     setScrollTarget(target: EventTarget): void { scrollTarget = target; },

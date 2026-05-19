@@ -20,6 +20,8 @@ export { selection } from "./plugins/selection";
 export type { SelectionPluginConfig } from "./plugins/selection";
 export { page } from "./plugins/page";
 export type { PagePluginConfig } from "./plugins/page";
+export { snapshots } from "./plugins/snapshots";
+export type { SnapshotsPluginConfig } from "./plugins/snapshots";
 
 // v1 builder API — disabled until features are migrated to v2 plugin interface
 // export { withScale } from "./plugins/scale/feature";

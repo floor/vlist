@@ -1,9 +1,9 @@
 /**
  * vlist/snapshots - Scroll Save/Restore
- * Feature for SPA navigation and tab switching
- *
- * Usage: import { withSnapshots } from 'vlist/snapshots'
  */
 
-export { withSnapshots } from "./feature";
-export type { SnapshotConfig } from "./feature";
+// v2 plugin
+export { snapshots, type SnapshotsPluginConfig } from "./plugin";
+
+// v1 feature (legacy)
+export { withSnapshots, type SnapshotConfig } from "./feature";

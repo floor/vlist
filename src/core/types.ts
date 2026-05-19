@@ -118,6 +118,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   renderIfNeeded(): void;
   forceRender(): void;
 
+  scrollTo(position: number): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
