@@ -107,20 +107,20 @@ export function phase2Commit<T extends VListItem>(
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
-  // Build set of indices in the new render window
-  const newSet = new Set<number>();
-  for (let i = 0; i < count; i++) {
-    newSet.add(newIndices[i]!);
-  }
+  // Visible range bounds — indices are contiguous, so a range check
+  // replaces the per-frame Set allocation for O(1) membership tests.
+  const rangeStart = count > 0 ? newIndices[0]! : 0;
+  const rangeEnd = count > 0 ? newIndices[count - 1]! : -1;
 
-  // Release nodes no longer visible
-  for (const [idx, element] of rendered) {
-    if (!newSet.has(idx)) {
+  // Release nodes no longer visible.
+  // forEach avoids iterator/tuple allocations that for..of creates.
+  rendered.forEach((element, idx) => {
+    if (idx < rangeStart || idx > rangeEnd) {
       element.remove();
       pool.release(element);
       rendered.delete(idx);
     }
-  }
+  });
 
   // Acquire, bind identity, position
   const translateProp = horizontal ? "translateX(" : "translateY(";
