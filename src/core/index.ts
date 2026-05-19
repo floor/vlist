@@ -6,7 +6,7 @@
 export { createVList } from "./create";
 
 // Engine
-export { EngineState } from "./engine-state";
+export { EngineState } from "./state";
 export { phase1Calculate, phase2Commit, render } from "./pipeline";
 export { compileHooks, runCalculateHooks, runCommitHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
 export { createPool } from "./pool";

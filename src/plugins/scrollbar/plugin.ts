@@ -13,7 +13,7 @@
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
-import type { EngineState } from "../../core/engine-state";
+import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import { createScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
 

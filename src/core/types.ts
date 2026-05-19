@@ -7,7 +7,7 @@
 
 import type { VListItem, ItemTemplate } from "../types";
 import type { SizeCache } from "./sizes";
-import type { EngineState } from "./engine-state";
+import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 
 // =============================================================================

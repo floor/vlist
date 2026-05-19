@@ -16,7 +16,7 @@ import type {
   CompiledHooks,
 } from "./types";
 import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT } from "../constants";
-import { EngineState } from "./engine-state";
+import { EngineState } from "./state";
 import { createSizeCache } from "./sizes";
 import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";

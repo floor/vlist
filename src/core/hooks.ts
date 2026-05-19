@@ -45,13 +45,13 @@ export function compileHooks<T extends VListItem>(plugins: readonly VListPlugin<
 // Runners — zero allocation, linear iteration
 // =============================================================================
 
-export function runCalculateHooks(hooks: readonly CalculateHook[], state: import("./engine-state").EngineState): void {
+export function runCalculateHooks(hooks: readonly CalculateHook[], state: import("./state").EngineState): void {
   for (let i = 0; i < hooks.length; i++) {
     hooks[i]!(state);
   }
 }
 
-export function runCommitHooks(hooks: readonly CommitHook[], state: import("./engine-state").EngineState): void {
+export function runCommitHooks(hooks: readonly CommitHook[], state: import("./state").EngineState): void {
   for (let i = 0; i < hooks.length; i++) {
     hooks[i]!(state);
   }

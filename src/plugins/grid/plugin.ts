@@ -17,7 +17,7 @@
 import type { VListItem, ItemTemplate, ItemState } from "../../types";
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
-import type { EngineState } from "../../core/engine-state";
+import type { EngineState } from "../../core/state";
 import { createGridLayout } from "./layout";
 import type { GridLayout } from "./types";
 

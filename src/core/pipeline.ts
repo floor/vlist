@@ -13,7 +13,7 @@
 import type { SizeCache } from "./sizes";
 import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { CompiledHooks, ElementPool } from "./types";
-import { EngineState } from "./engine-state";
+import { EngineState } from "./state";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
 
 // =============================================================================

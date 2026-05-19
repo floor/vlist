@@ -5,7 +5,7 @@
  * scroll idle detection, and smooth scroll animation.
  */
 
-import type { EngineState } from "./engine-state";
+import type { EngineState } from "./state";
 import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY } from "../constants";
 
 // =============================================================================
