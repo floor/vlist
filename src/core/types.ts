@@ -122,6 +122,10 @@ export interface PluginContext<T extends VListItem = VListItem> {
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
+
+  removeItemById(id: string | number): number;
+  insertItemAt(item: T, index: number): void;
+  getRenderedElement(index: number): HTMLElement | null;
 }
 
 // =============================================================================

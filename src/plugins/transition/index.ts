@@ -1,9 +1,9 @@
 /**
  * vlist/transition — FLIP-based enter/exit animations
- * Opt-in animated add/remove for smooth list transitions
- *
- * Usage: import { withTransition } from 'vlist'
  */
 
-export { withTransition } from "./feature";
-export type { TransitionConfig, TransitionTiming } from "./feature";
+// v2 plugin
+export { transition, type TransitionPluginConfig, type TransitionTiming } from "./plugin";
+
+// v1 feature (legacy)
+export { withTransition, type TransitionConfig } from "./feature";

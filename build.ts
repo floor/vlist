@@ -27,9 +27,9 @@ async function build() {
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
     `import { createVList, scale, scrollbar, grid, selection, page,`,
-    `  snapshots, createStats } from "${entryAbs}";`,
+    `  snapshots, transition, createStats } from "${entryAbs}";`,
     `export { createVList, scale, scrollbar, grid, selection, page,`,
-    `  snapshots, createStats };`,
+    `  snapshots, transition, createStats };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
@@ -141,7 +141,7 @@ async function build() {
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
   const ALL_PLUGINS = [
-    "scale", "scrollbar", "grid", "selection", "page", "snapshots",
+    "scale", "scrollbar", "grid", "selection", "page", "snapshots", "transition",
   ] as const;
 
   const scenarios = [

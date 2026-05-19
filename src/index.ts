@@ -22,6 +22,8 @@ export { page } from "./plugins/page";
 export type { PagePluginConfig } from "./plugins/page";
 export { snapshots } from "./plugins/snapshots";
 export type { SnapshotsPluginConfig } from "./plugins/snapshots";
+export { transition } from "./plugins/transition";
+export type { TransitionPluginConfig } from "./plugins/transition";
 
 // v1 builder API — disabled until features are migrated to v2 plugin interface
 // export { withScale } from "./plugins/scale/feature";

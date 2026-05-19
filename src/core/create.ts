@@ -198,6 +198,24 @@ export function createVList<T extends VListItem = VListItem>(
     disableDefaultScroll(): void { skipDefaultScroll = true; },
     disableDefaultResize(): void { skipDefaultResize = true; },
     setScrollTarget(target: EventTarget): void { scrollTarget = target; },
+    removeItemById(id: string | number): number {
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) return -1;
+      items.splice(idx, 1);
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      return idx;
+    },
+    insertItemAt(item: T, index: number): void {
+      items.splice(index, 0, item);
+      state.totalItems = items.length;
+      sizeCache.rebuild(state.totalItems);
+      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+    },
+    getRenderedElement(index: number): HTMLElement | null {
+      return rendered.get(index) ?? null;
+    },
   };
 
   // ── Pre-initialize container size so plugins can read it ────────
