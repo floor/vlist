@@ -16,9 +16,9 @@ import {
 } from "bun:test";
 import { JSDOM } from "jsdom";
 
-import { createTableHeader } from "../../../src/features/table/header";
-import { createTableLayout } from "../../../src/features/table/layout";
-import type { TableColumn, TableLayout } from "../../../src/features/table/types";
+import { createTableHeader } from "../../../src/plugins/table/header";
+import { createTableLayout } from "../../../src/plugins/table/layout";
+import type { TableColumn, TableLayout } from "../../../src/plugins/table/types";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================
@@ -42,6 +42,7 @@ beforeAll(() => {
   global.window = jsdom.window as any;
   global.HTMLElement = jsdom.window.HTMLElement;
   global.MouseEvent = jsdom.window.MouseEvent;
+  global.KeyboardEvent = jsdom.window.KeyboardEvent;
   global.PointerEvent = (jsdom.window as any).PointerEvent ?? jsdom.window.MouseEvent;
 });
 

@@ -6,11 +6,11 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createTableRenderer, type TableRendererInstance } from "../../../src/features/table/renderer";
-import { createTableLayout } from "../../../src/features/table/layout";
+import { createTableRenderer, type TableRendererInstance } from "../../../src/plugins/table/renderer";
+import { createTableLayout } from "../../../src/plugins/table/layout";
 import { createSizeCache } from "../../../src/rendering/sizes";
 import { getCompressionState } from "../../../src/rendering/scale";
-import type { TableColumn, TableLayout } from "../../../src/features/table/types";
+import type { TableColumn, TableLayout } from "../../../src/plugins/table/types";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================

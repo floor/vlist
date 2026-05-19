@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { createAsyncGroupBridge } from "../../../src/features/groups/async-bridge";
+import { createAsyncGroupBridge } from "../../../src/plugins/groups/async-bridge";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================

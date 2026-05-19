@@ -25,7 +25,7 @@ import {
   selectFocused,
   selectRange,
   claimPlaceholderSelection,
-} from "../../../src/features/selection";
+} from "../../../src/plugins/selection";
 
 import type { VListItem } from "../../../src/types";
 

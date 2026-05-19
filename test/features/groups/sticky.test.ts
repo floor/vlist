@@ -24,9 +24,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createStickyHeader } from "../../../src/features/groups/sticky";
+import { createStickyHeader } from "../../../src/plugins/groups/sticky";
 import { createSizeCache } from "../../../src/rendering/sizes";
-import type { GroupLayout } from "../../../src/features/groups/types";
+import type { GroupLayout } from "../../../src/plugins/groups/types";
 
 // =============================================================================
 // JSDOM Setup

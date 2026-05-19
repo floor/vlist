@@ -14,9 +14,9 @@ import {
   afterEach,
 } from "bun:test";
 import { JSDOM } from "jsdom";
-import { createMasonryRenderer } from "../../../src/features/masonry/renderer";
-import type { MasonryRenderer, GetItemFn } from "../../../src/features/masonry/renderer";
-import type { ItemPlacement } from "../../../src/features/masonry/types";
+import { createMasonryRenderer } from "../../../src/plugins/masonry/renderer";
+import type { MasonryRenderer, GetItemFn } from "../../../src/plugins/masonry/renderer";
+import type { ItemPlacement } from "../../../src/plugins/masonry/types";
 import type { VListItem, ItemTemplate, ItemState } from "../../../src/types";
 
 // =============================================================================

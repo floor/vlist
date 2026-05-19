@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { createMasonryLayout } from "../../../src/features/masonry/layout";
-import type { MasonryLayout, ItemPlacement } from "../../../src/features/masonry/types";
+import { createMasonryLayout } from "../../../src/plugins/masonry/layout";
+import type { MasonryLayout, ItemPlacement } from "../../../src/plugins/masonry/types";
 
 // =============================================================================
 // Factory

@@ -12,5 +12,9 @@ export {
 export {
   createScrollController,
   rafThrottle,
+  isAtBottom,
+  isAtTop,
+  getScrollPercentage,
+  isRangeVisible,
   type ScrollController,
 } from "./controller";

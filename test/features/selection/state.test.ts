@@ -20,7 +20,7 @@ import {
   createSelectionState,
   isSelectionEmpty,
   getSelectionCount,
-} from "../../../src/features/selection/state";
+} from "../../../src/plugins/selection/state";
 
 describe("selection/state.ts (see index.test.ts for full coverage)", () => {
   it("should be fully tested via index.test.ts — smoke check", () => {

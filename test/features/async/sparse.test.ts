@@ -8,7 +8,7 @@ import {
   createSparseStorage,
   mergeRanges,
   calculateMissingRanges,
-} from "../../../src/features/async/sparse";
+} from "../../../src/plugins/async/sparse";
 
 import type { VListItem } from "../../../src/types";
 

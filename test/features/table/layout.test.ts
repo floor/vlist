@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { createTableLayout } from "../../../src/features/table/layout";
-import type { TableColumn } from "../../../src/features/table/types";
+import { createTableLayout } from "../../../src/plugins/table/layout";
+import type { TableColumn } from "../../../src/plugins/table/types";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================
