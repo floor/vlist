@@ -27,9 +27,11 @@ async function build() {
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
     `import { createVList, scale, scrollbar, grid, selection, page,`,
-    `  snapshots, transition, createStats } from "${entryAbs}";`,
+    `  snapshots, transition, autosize, masonry, async, groups,`,
+    `  table, sortable, createStats } from "${entryAbs}";`,
     `export { createVList, scale, scrollbar, grid, selection, page,`,
-    `  snapshots, transition, createStats };`,
+    `  snapshots, transition, autosize, masonry, async, groups,`,
+    `  table, sortable, createStats };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
@@ -142,6 +144,7 @@ async function build() {
 
   const ALL_PLUGINS = [
     "scale", "scrollbar", "grid", "selection", "page", "snapshots", "transition",
+    "autosize", "masonry", "async", "groups", "table", "sortable",
   ] as const;
 
   const scenarios = [
