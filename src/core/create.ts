@@ -132,6 +132,8 @@ export function createVList<T extends VListItem = VListItem>(
   const _rangeEvt = { range: { start: 0, end: -1 } };
   let prevEmittedStart = -1;
   let prevEmittedEnd = -1;
+  let lastEventScrollPos = -1;
+  let forceIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── Compile hooks from plugins ──────────────────────────────────
 
@@ -247,6 +249,25 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Render function ─────────────────────────────────────────────
 
+  const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
+
+  function emitScrollEvents(): void {
+    emitter.emit("scroll", { scrollPosition: state.scrollPosition, direction: state.scrollDirection > 0 ? "down" : "up" });
+
+    updateVelocityTracker(velocityTracker, state.scrollPosition);
+    _velEvt.velocity = velocityTracker.velocity;
+    _velEvt.reliable = velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES;
+    emitter.emit("velocity:change", _velEvt);
+
+    if (state.startIndex !== prevEmittedStart || state.prevRangeEnd !== prevEmittedEnd) {
+      prevEmittedStart = state.startIndex;
+      prevEmittedEnd = state.prevRangeEnd;
+      _rangeEvt.range.start = state.startIndex;
+      _rangeEvt.range.end = state.prevRangeEnd;
+      emitter.emit("range:change", _rangeEvt);
+    }
+  }
+
   function doRender(): void {
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
@@ -263,6 +284,22 @@ export function createVList<T extends VListItem = VListItem>(
       render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+
+    if (state.scrollPosition !== lastEventScrollPos) {
+      lastEventScrollPos = state.scrollPosition;
+      emitScrollEvents();
+
+      if (forceIdleTimer !== null) clearTimeout(forceIdleTimer);
+      forceIdleTimer = setTimeout(() => {
+        forceIdleTimer = null;
+        state.scrollDirection = 0;
+        runIdleHooks(hooks.idle);
+        _velEvt.velocity = 0;
+        _velEvt.reliable = false;
+        emitter.emit("velocity:change", _velEvt);
+        emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
+      }, idleTimeout);
+    }
   }
 
   // ── Scroll handler ──────────────────────────────────────────────
@@ -277,20 +314,8 @@ export function createVList<T extends VListItem = VListItem>(
     onFrame(): void {
       doRender();
       runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
-      emitter.emit("scroll", { scrollPosition: state.scrollPosition, direction: state.scrollDirection > 0 ? "down" : "up" });
-
-      updateVelocityTracker(velocityTracker, state.scrollPosition);
-      _velEvt.velocity = velocityTracker.velocity;
-      _velEvt.reliable = velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES;
-      emitter.emit("velocity:change", _velEvt);
-
-      if (state.startIndex !== prevEmittedStart || state.prevRangeEnd !== prevEmittedEnd) {
-        prevEmittedStart = state.startIndex;
-        prevEmittedEnd = state.prevRangeEnd;
-        _rangeEvt.range.start = state.startIndex;
-        _rangeEvt.range.end = state.prevRangeEnd;
-        emitter.emit("range:change", _rangeEvt);
-      }
+      lastEventScrollPos = state.scrollPosition;
+      emitScrollEvents();
     },
     onIdle(): void {
       runIdleHooks(hooks.idle);
@@ -502,6 +527,7 @@ export function createVList<T extends VListItem = VListItem>(
       if (state.destroyed) return;
       state.destroyed = true;
 
+      if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
       scrollHandler.detach();
       resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);

@@ -115,7 +115,7 @@ export const withScrollbar = <T extends VListItem = VListItem>(
       // scrollbar, remove it — we replace it with one that has the user's config.
       if (ctx.methods.has("_hasScrollbar")) {
         dom.root.querySelector(`.${classPrefix}-scrollbar`)?.remove();
-        dom.root.querySelector(`.${classPrefix}-scrollbar-hover`)?.remove();
+        dom.root.querySelector(`.${classPrefix}-scrollbar__hover`)?.remove();
       }
       ctx.methods.set("_hasScrollbar", () => true);
 

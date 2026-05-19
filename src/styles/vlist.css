@@ -356,7 +356,7 @@
 /* Hover zone — a real DOM element that's always pointer-events:auto so
    mouseenter fires even when the track is hidden (opacity:0 / pointer-events:none).
    Width/height is set via JS from the hoverZoneWidth config option. */
-.vlist-scrollbar-hover {
+.vlist-scrollbar__hover {
     position: absolute;
     top: 0;
     right: 0;
@@ -365,7 +365,7 @@
     pointer-events: auto;
 }
 
-.vlist-scrollbar-hover--horizontal {
+.vlist-scrollbar__hover--horizontal {
     top: auto;
     right: auto;
     bottom: 0;
@@ -381,7 +381,7 @@
 }
 
 /* Scrollbar thumb */
-.vlist-scrollbar-thumb {
+.vlist-scrollbar__thumb {
     position: absolute;
     top: 0;
     left: 0;
@@ -393,7 +393,7 @@
     transition: background-color 0.15s ease-out;
 }
 
-.vlist-scrollbar-thumb:hover {
+.vlist-scrollbar__thumb:hover {
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
@@ -403,7 +403,7 @@
     pointer-events: auto;
 }
 
-.vlist-scrollbar--dragging .vlist-scrollbar-thumb {
+.vlist-scrollbar--dragging .vlist-scrollbar__thumb {
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
@@ -485,7 +485,7 @@
     height: var(--vlist-custom-scrollbar-width);
 }
 
-.vlist-scrollbar--horizontal .vlist-scrollbar-thumb {
+.vlist-scrollbar--horizontal .vlist-scrollbar__thumb {
     top: 0;
     left: 0;
     width: auto;

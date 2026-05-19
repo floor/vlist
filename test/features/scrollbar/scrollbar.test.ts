@@ -107,7 +107,7 @@ describe("createScrollbar", () => {
       scrollbar = createScrollbar(viewport, onScrollMock);
 
       const track = viewport.querySelector(".vlist-scrollbar");
-      const thumb = viewport.querySelector(".vlist-scrollbar-thumb");
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb");
 
       expect(track).not.toBeNull();
       expect(thumb).not.toBeNull();
@@ -117,7 +117,7 @@ describe("createScrollbar", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "custom");
 
       const track = viewport.querySelector(".custom-scrollbar");
-      const thumb = viewport.querySelector(".custom-scrollbar-thumb");
+      const thumb = viewport.querySelector(".custom-scrollbar__thumb");
 
       expect(track).not.toBeNull();
       expect(thumb).not.toBeNull();
@@ -152,7 +152,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400); // 40% visible
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
@@ -165,7 +165,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(100000, 400); // Very small visible ratio
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
@@ -220,7 +220,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(0);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       expect(thumb.style.transform).toBe("translateY(0px)");
     });
@@ -233,7 +233,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(maxScroll);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
       const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
@@ -250,7 +250,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(maxScroll / 2); // 50% scrolled
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
       const maxThumbTravel = 396 - thumbHeight; // trackLength = 400 - 2×defaultPadding
@@ -551,7 +551,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
@@ -574,7 +574,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
@@ -684,7 +684,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(100000, 400);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
@@ -699,7 +699,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(100000, 400);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
 
@@ -759,7 +759,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400); // 40% visible
 
       // trackLength = 400 - 10 - 10 = 380
-      const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
       const trackLength = 400 - 2 * padding;
 
@@ -775,7 +775,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400); // 40% visible
 
       // trackLength = 400 - 5 - 15 = 380
-      const thumb = viewport.querySelector(".vlist-scrollbar-thumb") as HTMLElement;
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
       const thumbHeight = parseFloat(thumb.style.height);
       const trackLength = 400 - 5 - 15;
 
@@ -792,7 +792,7 @@ describe("createScrollbar", () => {
         padding: { top: 0, right: 10, bottom: 0, left: 0 },
       });
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(10 + 16);
     });
 
@@ -800,7 +800,7 @@ describe("createScrollbar", () => {
       const padding = 6;
       scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: true, padding });
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(padding + 16);
     });
 
@@ -811,14 +811,14 @@ describe("createScrollbar", () => {
         hoverZoneWidth: 12,
       });
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(12);
     });
 
     it("edge zone is always present even when showOnHover is false", () => {
       scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: false });
 
-      expect(viewport.querySelector(".vlist-scrollbar-hover")).not.toBeNull();
+      expect(viewport.querySelector(".vlist-scrollbar__hover")).not.toBeNull();
     });
 
     it("clicking in the padding margin above the track triggers page scroll upward", () => {
@@ -830,7 +830,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400);
       scrollbar.updatePosition(400); // scrolled down — not at top
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       Object.defineProperty(track, "getBoundingClientRect", {
         value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
@@ -855,7 +855,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400);
       scrollbar.updatePosition(0); // scrolled to top
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       Object.defineProperty(track, "getBoundingClientRect", {
         value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
@@ -879,7 +879,7 @@ describe("createScrollbar", () => {
       });
       scrollbar.updateBounds(1000, 400);
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       Object.defineProperty(track, "getBoundingClientRect", {
         value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
@@ -901,7 +901,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400);
       scrollbar.updatePosition(400);
 
-      const hoverZone = viewport.querySelector(".vlist-scrollbar-hover") as HTMLElement;
+      const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       Object.defineProperty(track, "getBoundingClientRect", {
         value: () => ({ top: 20, left: 0, right: 8, bottom: 380, height: 360 }),
@@ -945,7 +945,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400); // 40% visible
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
 
@@ -959,7 +959,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(0);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       expect(thumb.style.transform).toBe("translateX(0px)");
     });
@@ -972,7 +972,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(maxScroll);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
       const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
@@ -988,7 +988,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(maxScroll / 2); // 50% scrolled
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
       const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
@@ -1030,7 +1030,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
@@ -1071,7 +1071,7 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(100000, 400);
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const thumbWidth = parseFloat(thumb.style.width);
 
@@ -1114,7 +1114,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1148,7 +1148,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1180,7 +1180,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1211,7 +1211,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1249,7 +1249,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1280,7 +1280,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1307,7 +1307,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
@@ -1345,7 +1345,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       const mousedownEvent = new MouseEvent("mousedown", {
@@ -1407,7 +1407,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1511,7 +1511,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag
@@ -1537,7 +1537,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
       // Start drag at bottom
@@ -1572,7 +1572,7 @@ describe("createScrollbar", () => {
       scrollbar.show();
 
       const thumb = viewport.querySelector(
-        ".vlist-scrollbar-thumb",
+        ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
@@ -1637,7 +1637,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
 
     const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
     const thumb = viewport.querySelector(
-      ".vlist-scrollbar-thumb",
+      ".vlist-scrollbar__thumb",
     ) as HTMLElement;
 
     // We need to simulate a mousedown on the thumb to start drag,

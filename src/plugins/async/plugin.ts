@@ -24,6 +24,9 @@ import { createDataManager, type DataManager } from "./manager";
 
 import {
   INITIAL_LOAD_SIZE,
+  LOAD_VELOCITY_THRESHOLD,
+  PRELOAD_VELOCITY_THRESHOLD,
+  PRELOAD_AHEAD,
 } from "../../constants";
 
 // =============================================================================
@@ -74,6 +77,10 @@ export function async<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   const { adapter, total, autoLoad = true, storage } = config;
 
+  const cancelThreshold = config.loading?.cancelThreshold ?? LOAD_VELOCITY_THRESHOLD;
+  const preloadThreshold = config.loading?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
+  const preloadAhead = config.loading?.preloadAhead ?? PRELOAD_AHEAD;
+
   let dataManager: DataManager<T>;
   let engineState: EngineState;
   let sizeCache: SizeCache;
@@ -84,6 +91,7 @@ export function async<T extends VListItem = VListItem>(
   let pendingRange: { start: number; end: number } | null = null;
   let decelerationTimer: ReturnType<typeof setTimeout> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let currentVelocity = 0;
 
   // ============================================================================
   // Helpers
@@ -142,8 +150,12 @@ export function async<T extends VListItem = VListItem>(
       dom = ctx.dom;
       forceRender = ctx.forceRender.bind(ctx);
 
-      // Create data manager
-      dataManager = createDataManager({
+      // Create data manager — but first wire up virtualTotalFn
+      // so scrollToIndex and api.total reflect the async data total
+      let dataManagerRef: DataManager<T> | null = null;
+      ctx.setVirtualTotalFn(() => dataManagerRef?.getTotal() ?? 0);
+
+      dataManager = dataManagerRef = createDataManager({
         adapter,
         ...(total !== undefined && { initialTotal: total }),
         pageSize: storage?.chunkSize ?? INITIAL_LOAD_SIZE,
@@ -233,6 +245,11 @@ export function async<T extends VListItem = VListItem>(
         resetDeceleration();
       });
 
+      // Track velocity for load gating
+      emitter.on("velocity:change", ({ velocity }: { velocity: number }) => {
+        currentVelocity = Math.abs(velocity);
+      });
+
       // Network recovery
       const handleOnline = (): void => {
         if (engineState.destroyed) return;
@@ -268,9 +285,61 @@ export function async<T extends VListItem = VListItem>(
     },
 
     hooks: {
+      onAfterScroll(): void {
+        if (engineState.destroyed) return;
+
+        const visEnd = engineState.startIndex + Math.max(0, engineState.visibleCount - 1);
+
+        // Fast scrolling (above cancelThreshold): skip loading, defer to idle
+        if (currentVelocity > cancelThreshold) {
+          if (decelerationTimer !== null) {
+            clearTimeout(decelerationTimer);
+            decelerationTimer = null;
+          }
+          pendingRange = { start: engineState.startIndex, end: visEnd };
+          return;
+        }
+
+        // Moderate scrolling (between preloadThreshold and cancelThreshold):
+        // debounce with preload ahead in scroll direction
+        if (currentVelocity > preloadThreshold) {
+          let loadStart = engineState.startIndex;
+          let loadEnd = visEnd;
+          const dir = engineState.scrollDirection;
+          if (dir > 0) {
+            loadEnd = Math.min(loadEnd + preloadAhead, dataManager.getTotal() - 1);
+          } else if (dir < 0) {
+            loadStart = Math.max(0, loadStart - preloadAhead);
+          }
+
+          pendingRange = { start: loadStart, end: loadEnd };
+
+          if (decelerationTimer !== null) {
+            clearTimeout(decelerationTimer);
+          }
+          decelerationTimer = setTimeout(() => {
+            decelerationTimer = null;
+            if (engineState.destroyed || !pendingRange) return;
+            const { start, end } = pendingRange;
+            pendingRange = null;
+            if (end >= start) {
+              ensure(start, end).catch(onEnsureError);
+            }
+          }, 100);
+          return;
+        }
+
+        // Slow scrolling (below preloadThreshold): load visible range immediately
+        resetDeceleration();
+        if (visEnd >= engineState.startIndex) {
+          ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+        }
+      },
+
       onIdle(): void {
         if (engineState.destroyed) return;
 
+        currentVelocity = 0;
         loadPendingRange();
         resetDeceleration();
       },

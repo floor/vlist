@@ -37,7 +37,7 @@
     top: calc(var(--vlist-table-header-height, 0px) + var(--vlist-custom-scrollbar-padding-top, 2px));
 }*/
 
-.vlist--table .vlist-scrollbar-hover {
+.vlist--table .vlist-scrollbar__hover {
     top: var(--vlist-table-header-height, 0px);
     height: calc(100% - var(--vlist-table-header-height, 0px));
 }

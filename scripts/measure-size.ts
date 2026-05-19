@@ -42,7 +42,7 @@ const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
 const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   grid:       ["-grid-item", "getGridLayout", "updateGrid"],
   selection:  ["selectAll", "clearSelection"],
-  scrollbar:  ["-scrollbar-thumb"],
+  scrollbar:  ["-scrollbar__thumb"],
   scale:      ["touchcancel"],
   page:       ["scrollPadding"],
   snapshots:  ["getScrollSnapshot", "_updateCompressionMode"],

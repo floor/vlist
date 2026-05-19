@@ -30,18 +30,17 @@ export const LOAD_SIZE = 50;
 export const PRELOAD_AHEAD = 50;
 
 /**
- * Velocity threshold above which data loading is cancelled (px/ms)
- * When scrolling faster than this, we skip loading data since the user
- * is likely scrolling quickly past content they don't want to see.
- */
-export const LOAD_VELOCITY_THRESHOLD = 12;
-
-/**
  * Velocity threshold for preloading (px/ms)
  * When scrolling faster than this but slower than LOAD_VELOCITY_THRESHOLD,
  * we preload extra items in the scroll direction to reduce placeholder flashing.
  */
 export const PRELOAD_VELOCITY_THRESHOLD = 2;
+
+/**
+ * Velocity threshold above which data loading is cancelled (px/ms)
+ * Above this: skip loading, show placeholders, defer to idle.
+ */
+export const LOAD_VELOCITY_THRESHOLD = 15;
 
 // =============================================================================
 // Scale

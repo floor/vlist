@@ -248,7 +248,7 @@ export const createScrollbar = (
 
   const setupDOM = (): void => {
     track.className = `${classPrefix}-scrollbar`;
-    thumb.className = `${classPrefix}-scrollbar-thumb`;
+    thumb.className = `${classPrefix}-scrollbar__thumb`;
 
     if (horizontal) {
       track.classList.add(`${classPrefix}-scrollbar--horizontal`);
@@ -271,9 +271,9 @@ export const createScrollbar = (
     // Edge zone — covers the padding margin + track area along the scrollbar edge.
     // Always present so clicks in the padding margin are captured regardless of showOnHover.
     // pointer-events:auto so events fire even when the track is hidden (opacity:0).
-    hoverZone.className = `${classPrefix}-scrollbar-hover`;
+    hoverZone.className = `${classPrefix}-scrollbar__hover`;
     if (horizontal) {
-      hoverZone.classList.add(`${classPrefix}-scrollbar-hover--horizontal`);
+      hoverZone.classList.add(`${classPrefix}-scrollbar__hover--horizontal`);
       hoverZone.style.height = `${hoverZoneWidth}px`;
     } else {
       hoverZone.style.width = `${hoverZoneWidth}px`;

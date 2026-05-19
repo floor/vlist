@@ -165,6 +165,15 @@ export function phase2Commit<T extends VListItem>(
 
       rendered.set(dataIndex, element);
       contentElement.appendChild(element);
+    } else if (item !== undefined && element.getAttribute("data-id") !== String(item.id)) {
+      const result = template(item, dataIndex, itemState);
+      if (typeof result === "string") {
+        element.innerHTML = result;
+      } else {
+        element.innerHTML = "";
+        element.appendChild(result);
+      }
+      element.setAttribute("data-id", String(item.id));
     }
 
     if (itemStateFn) {

@@ -56,7 +56,7 @@ export interface DataFeatureConfig<T extends VListItem = VListItem> {
 
   /** Loading behavior configuration */
   loading?: {
-    /** Velocity threshold above which data loading is skipped (px/ms). Default: 5 */
+    /** Velocity threshold above which data loading is skipped (px/ms). Default: 15 */
     cancelThreshold?: number;
 
     /** Velocity threshold for preloading (px/ms). Default: 2 */
@@ -395,11 +395,8 @@ export const withAsync = <T extends VListItem = VListItem>(
               // Convert row-space renderRange to item-space for ensureRange
               const itemRange = getItemRangeFromRenderRange(renderRange);
 
-              // Calculate preload range based on scroll direction and velocity
               let loadStart = itemRange.start;
               let loadEnd = itemRange.end;
-              // In grid mode, virtualTotal is row count — use real item total for clamping.
-              // In non-grid mode, virtualTotal equals item total.
               const total = getGridLayout
                 ? ctx.dataManager.getTotal()
                 : ctx.getVirtualTotal();
