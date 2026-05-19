@@ -55,10 +55,10 @@ project:
 
 agents:
   - id: claude
-    name: "Claude (Opus 4.6)"
+    name: "Claude (Claude Code)"
     promptTemplate: "agents/committee.md"
     llm:
-      provider: anthropic
+      provider: claude-code
       model: claude-opus-4-20250514
       temperature: 0.3
       maxTokens: 4096
@@ -66,24 +66,25 @@ agents:
     autonomy: T1
     customInstructions: ""
 
-  - id: gemini
-    name: "Gemini (3.1 Pro)"
+  - id: codex
+    name: "Codex (OpenAI)"
     promptTemplate: "agents/committee.md"
     llm:
-      provider: gemini
-      model: gemini-2.5-pro
+      provider: openai
+      model: codex
       temperature: 0.3
       maxTokens: 4096
     capabilities: [read_code, review_rfc, vote]
     autonomy: T1
     customInstructions: ""
+    external: true
 
-  - id: gpt
-    name: "GPT (Codex)"
+  - id: gemma
+    name: "Gemma 3 (LM Studio)"
     promptTemplate: "agents/committee.md"
     llm:
-      provider: openai
-      model: gpt-4.1
+      provider: lmstudio
+      model: gemma-3
       temperature: 0.3
       maxTokens: 4096
     capabilities: [read_code, review_rfc, vote]
@@ -113,14 +114,14 @@ chain:
       canApprove: true
       canReject: true
 
-    - agentId: gemini
+    - agentId: codex
       receivesFrom: [{ type: trigger }]
       dispatchesTo: []
       reportsTo: null
       canApprove: true
       canReject: true
 
-    - agentId: gpt
+    - agentId: gemma
       receivesFrom: [{ type: trigger }]
       dispatchesTo: []
       reportsTo: null
