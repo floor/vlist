@@ -19,24 +19,20 @@ export { grid } from "./plugins/grid";
 export { selection } from "./plugins/selection";
 export type { SelectionPluginConfig } from "./plugins/selection";
 
-// Features - tree-shakeable (v1 builder API, will be removed)
-export { withScale } from "./plugins/scale/feature";
-export type { ScaleConfig } from "./plugins/scale/feature";
-export { withAsync } from "./features/async";
-export { withScrollbar } from "./plugins/scrollbar/feature";
-export { withPage } from "./features/page";
-export type { WithPageOptions } from "./features/page";
-export { withGroups } from "./features/groups";
-export { withGrid } from "./plugins/grid/feature";
-export { withMasonry } from "./features/masonry";
-export { withSelection } from "./plugins/selection/feature";
-export { withSnapshots } from "./features/snapshots";
-export { withTable } from "./features/table";
-export { withSortable } from "./features/sortable";
-export type { SortableConfig } from "./features/sortable";
-export { withAutoSize } from "./features/autosize";
-export { withTransition } from "./features/transition";
-export type { TransitionConfig, TransitionTiming } from "./features/transition";
+// v1 builder API — disabled until features are migrated to v2 plugin interface
+// export { withScale } from "./plugins/scale/feature";
+// export { withAsync } from "./features/async";
+// export { withScrollbar } from "./plugins/scrollbar/feature";
+// export { withPage } from "./features/page";
+// export { withGroups } from "./features/groups";
+// export { withGrid } from "./plugins/grid/feature";
+// export { withMasonry } from "./features/masonry";
+// export { withSelection } from "./plugins/selection/feature";
+// export { withSnapshots } from "./features/snapshots";
+// export { withTable } from "./features/table";
+// export { withSortable } from "./features/sortable";
+// export { withAutoSize } from "./features/autosize";
+// export { withTransition } from "./features/transition";
 
 // Utils
 export { createStats } from "./utils/stats";

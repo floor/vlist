@@ -26,14 +26,10 @@ async function build() {
   // reference all exports in a wrapper to force inclusion.
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
-    `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
-    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats,`,
-    `  createVList, scale, scrollbar, grid, selection } from "${entryAbs}";`,
-    `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
-    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats,`,
-    `  createVList, scale, scrollbar, grid, selection };`,
+    `import { createVList, scale, scrollbar, grid, selection,`,
+    `  createStats } from "${entryAbs}";`,
+    `export { createVList, scale, scrollbar, grid, selection,`,
+    `  createStats };`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
@@ -144,15 +140,13 @@ async function build() {
 
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
-  const ALL_FEATURES = [
-    "withGrid", "withMasonry", "withGroups", "withAsync", "withSelection",
-    "withScale", "withScrollbar", "withPage", "withSnapshots", "withTable",
-    "withSortable", "withAutoSize", "withTransition",
+  const ALL_PLUGINS = [
+    "scale", "scrollbar", "grid", "selection",
   ] as const;
 
   const scenarios = [
-    { name: "base", imports: ["vlist"] },
-    ...ALL_FEATURES.map((f) => ({ name: f, imports: ["vlist", f] })),
+    { name: "base", imports: ["createVList"] },
+    ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
   const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
@@ -187,8 +181,8 @@ async function build() {
 
   const base = sizes.base ?? { minified: "0", gzipped: "0" };
   const baseGz = parseFloat(base.gzipped);
-  if (baseGz < 5 || baseGz > 50) {
-    console.error(`\n  ✗ Base gzipped size ${base.gzipped} KB is outside expected range (5–50 KB). Build or tree-shaking may be broken.\n`);
+  if (baseGz < 3 || baseGz > 50) {
+    console.error(`\n  ✗ Base gzipped size ${base.gzipped} KB is outside expected range (3–50 KB). Build or tree-shaking may be broken.\n`);
     process.exit(1);
   }
 
