@@ -80,11 +80,11 @@ agents:
     external: true
 
   - id: gemma
-    name: "Gemma 3 (LM Studio)"
+    name: "Gemma 4 26B (LM Studio)"
     promptTemplate: "agents/committee.md"
     llm:
       provider: lmstudio
-      model: gemma-3
+      model: gemma4-26b-a4b
       temperature: 0.3
       maxTokens: 4096
     capabilities: [read_code, review_rfc, vote]
