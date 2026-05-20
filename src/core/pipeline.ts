@@ -13,7 +13,7 @@
 import type { SizeCache } from "./sizes";
 import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { CompiledHooks, ElementPool } from "./types";
-import { EngineState } from "./state";
+import type { EngineState } from "./state";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
 
 // =============================================================================
@@ -105,9 +105,11 @@ export function phase2Commit<T extends VListItem>(
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
   classPrefix?: string,
+  interactive?: boolean,
 ): void {
-  const selectedClass = itemStateFn ? `${classPrefix ?? "vlist"}-item--selected` : "";
-  const focusedClass = itemStateFn ? `${classPrefix ?? "vlist"}-item--focused` : "";
+  const prefix = classPrefix ?? "vlist";
+  const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
+  const focusedClass = itemStateFn ? `${prefix}-item--focused` : "";
   const items = getItemFn ? null : getItems();
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
@@ -129,6 +131,9 @@ export function phase2Commit<T extends VListItem>(
 
   // Acquire, bind identity, position
   const translateProp = horizontal ? "translateX(" : "translateY(";
+  const itemRole = interactive ? "option" : "listitem";
+  const ariaTotal = interactive ? String(state.totalItems) : "";
+  const totalChanged = interactive && state.totalItems !== state.prevAriaTotal;
 
   for (let i = 0; i < count; i++) {
     const dataIndex = newIndices[i]!;
@@ -158,22 +163,33 @@ export function phase2Commit<T extends VListItem>(
         }
       }
 
+      element.setAttribute("role", itemRole);
       element.setAttribute("data-index", String(dataIndex));
+      if (interactive) {
+        element.id = prefix + "-item-" + dataIndex;
+        element.setAttribute("aria-posinset", String(dataIndex + 1));
+        element.setAttribute("aria-setsize", ariaTotal);
+      }
       if (item !== undefined) {
         element.setAttribute("data-id", String(item.id));
       }
 
       rendered.set(dataIndex, element);
       contentElement.appendChild(element);
-    } else if (item !== undefined && element.getAttribute("data-id") !== String(item.id)) {
-      const result = template(item, dataIndex, itemState);
-      if (typeof result === "string") {
-        element.innerHTML = result;
-      } else {
-        element.innerHTML = "";
-        element.appendChild(result);
+    } else {
+      if (totalChanged) {
+        element.setAttribute("aria-setsize", ariaTotal);
       }
-      element.setAttribute("data-id", String(item.id));
+      if (item !== undefined && element.getAttribute("data-id") !== String(item.id)) {
+        const result = template(item, dataIndex, itemState);
+        if (typeof result === "string") {
+          element.innerHTML = result;
+        } else {
+          element.innerHTML = "";
+          element.appendChild(result);
+        }
+        element.setAttribute("data-id", String(item.id));
+      }
     }
 
     if (itemStateFn) {
@@ -190,6 +206,8 @@ export function phase2Commit<T extends VListItem>(
       element.style.height = size + "px";
     }
   }
+
+  if (interactive) state.prevAriaTotal = state.totalItems;
 
   runCommitHooks(hooks.commit, state);
 }
@@ -212,7 +230,8 @@ export function render<T extends VListItem>(
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
   classPrefix?: string,
+  interactive?: boolean,
 ): void {
   phase1Calculate(state, sizeCache, overscan, hooks);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix);
+  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive);
 }

@@ -16,7 +16,8 @@ import type {
   CompiledHooks,
 } from "./types";
 import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT } from "../constants";
-import { EngineState } from "./state";
+import { createEngineState } from "./state";
+import type { EngineState } from "./state";
 import { createSizeCache } from "./sizes";
 import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
@@ -113,7 +114,7 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Initialize engine state ─────────────────────────────────────
 
   const initialCapacity = Math.ceil(4096 / minItemSize) + config.overscan * 2 + 8;
-  const state = new EngineState(initialCapacity);
+  const state = createEngineState(initialCapacity);
   state.totalItems = totalItems;
 
   // ── Items storage ───────────────────────────────────────────────
@@ -253,6 +254,186 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
+  // ── Baseline a11y (interactive + no selection plugin) ───────────
+
+  if (config.interactive && !itemStateFn) {
+    let bFocusIdx = -1;
+    let bFocusVis = false;
+    let bSelId: string | number | undefined;
+    let bSelIdx = -1;
+
+    const bItem = (i: number): T | undefined =>
+      getItemFn ? getItemFn(i) : items[i];
+
+    const bTotal = (): number =>
+      virtualTotalFn ? virtualTotalFn() : items.length;
+
+    const _focusEvt = { id: 0 as string | number, index: 0 };
+    const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
+
+    itemStateFn = (_i: number, is: import("../types").ItemState): void => {
+      is.selected = bSelIdx === _i;
+      is.focused = bFocusVis && bFocusIdx === _i;
+    };
+
+    const bSkip = (from: number, dir: 1 | -1, total: number): number => {
+      let i = from;
+      while (i >= 0 && i < total) {
+        const it = bItem(i);
+        if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
+        i += dir;
+      }
+      i = from - dir;
+      while (i >= 0 && i < total) {
+        const it = bItem(i);
+        if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
+        i -= dir;
+      }
+      return from;
+    };
+
+    const bScrollTo = (idx: number): void => {
+      const off = sizeCache.getOffset(idx);
+      const sz = sizeCache.getSize(idx);
+      const sp = state.scrollPosition;
+      const cs = state.containerSize;
+
+      let pos = sp;
+      if (off < sp) pos = off;
+      else if (off + sz > sp + cs) pos = off + sz - cs;
+
+      if (pos !== sp) {
+        state.scrollPosition = pos;
+        ctx.scrollTo(pos);
+      }
+    };
+
+    const bCommit = (idx: number, scroll: boolean): void => {
+      dom.content.setAttribute("aria-activedescendant", `${config.classPrefix}-item-${idx}`);
+      if (scroll) bScrollTo(idx);
+      doForceRender();
+    };
+
+    const bMove = (next: number): void => {
+      bFocusIdx = next;
+      bFocusVis = true;
+      bCommit(next, true);
+      const it = bItem(next);
+      if (it) {
+        _focusEvt.id = it.id;
+        _focusEvt.index = next;
+        emitter.emit("focus:change", _focusEvt);
+      }
+    };
+
+    const bSelect = (idx: number, kbd: boolean): void => {
+      bFocusIdx = idx;
+      if (kbd) bFocusVis = true;
+      const it = bItem(idx);
+      if (it && bSelId === it.id) {
+        bSelId = undefined;
+        bSelIdx = -1;
+      } else {
+        bSelId = it?.id;
+        bSelIdx = it ? idx : -1;
+      }
+      bCommit(idx, kbd);
+      if (bSelId !== undefined && it && bSelId === it.id) {
+        _selEvt.selected[0] = bSelId;
+        _selEvt.selected.length = 1;
+        _selEvt.items[0] = it;
+        _selEvt.items.length = 1;
+      } else {
+        _selEvt.selected.length = 0;
+        _selEvt.items.length = 0;
+      }
+      emitter.emit("selection:change", _selEvt);
+    };
+
+    const bOnFocusIn = (): void => {
+      if (state.destroyed) return;
+      if (!dom.content.matches(":focus-visible")) return;
+      const t = bTotal();
+      if (t === 0) return;
+      let tgt = bFocusIdx >= 0 ? Math.min(bFocusIdx, t - 1) : 0;
+      tgt = bSkip(tgt, 1, t);
+      bMove(tgt);
+    };
+
+    const bOnFocusOut = (e: FocusEvent): void => {
+      if (state.destroyed) return;
+      const rel = e.relatedTarget as Node | null;
+      if (rel && dom.root.contains(rel)) return;
+      bFocusVis = false;
+      dom.content.removeAttribute("aria-activedescendant");
+      doForceRender();
+    };
+
+    dom.content.addEventListener("focusin", bOnFocusIn);
+    dom.content.addEventListener("focusout", bOnFocusOut);
+
+    keydownHandlers.push((e: KeyboardEvent): void => {
+      if (state.destroyed) return;
+      const total = bTotal();
+      if (total === 0) return;
+      const p = bFocusIdx;
+      let n = p;
+
+      if (e.key === " " || e.key === "Enter") {
+        if (p >= 0) {
+          const it = bItem(p);
+          if (it && !(it as Record<string, unknown>).__groupHeader) {
+            bSelect(p, true);
+          }
+        }
+        e.preventDefault();
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowUp":    if (config.horizontal) return; n = p - 1; break;
+        case "ArrowDown":  if (config.horizontal) return; n = p + 1; break;
+        case "ArrowLeft":  if (!config.horizontal) return; n = p - 1; break;
+        case "ArrowRight": if (!config.horizontal) return; n = p + 1; break;
+        case "PageUp":
+        case "PageDown": {
+          const sz = sizeCache.getSize(Math.max(0, p));
+          const delta = Math.max(1, Math.floor(state.containerSize / sz));
+          n = e.key === "PageUp" ? p - delta : p + delta;
+          break;
+        }
+        case "Home": n = 0; break;
+        case "End": n = total - 1; break;
+        default: return;
+      }
+
+      if (n < 0) n = 0;
+      else if (n >= total) n = total - 1;
+
+      e.preventDefault();
+      n = bSkip(n, n >= p ? 1 : -1, total);
+      if (n !== p) bMove(n);
+    });
+
+    clickHandlers.push((e: MouseEvent): void => {
+      if (state.destroyed) return;
+      const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
+      if (!el) return;
+      const idx = parseInt(el.dataset.index ?? "-1", 10);
+      if (idx < 0) return;
+      const it = bItem(idx);
+      if (!it || (it as Record<string, unknown>).__groupHeader) return;
+      bFocusVis = false;
+      dom.content.focus({ preventScroll: true });
+      bSelect(idx, false);
+    });
+
+    destroyHandlers.push(() => {
+      dom.content.removeEventListener("focusin", bOnFocusIn);
+      dom.content.removeEventListener("focusout", bOnFocusOut);
+    });
+  }
+
   // ── Render function ─────────────────────────────────────────────
 
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
@@ -278,7 +459,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive);
     }
   }
 
@@ -287,7 +468,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 

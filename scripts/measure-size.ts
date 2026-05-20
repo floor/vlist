@@ -32,6 +32,8 @@ type PluginName = (typeof ALL_PLUGINS)[number];
 const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
   // scale imports createScrollbar for fallback scrollbar in compressed mode
   scale: ["scrollbar"],
+  // selection does a dynamic getMethod("getGroupLayout") lookup — string only, no import
+  selection: ["groups"],
 };
 
 // ── Unique string markers per plugin ─────────────────────────────

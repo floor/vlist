@@ -20,14 +20,17 @@ export function createPool(classPrefix: string): ElementPool {
       }
       const el = document.createElement("div");
       el.className = itemClass;
-      el.setAttribute("role", "option");
       return el;
     },
 
     release(element: HTMLElement): void {
       element.className = itemClass;
       element.removeAttribute("style");
+      element.removeAttribute("id");
+      element.removeAttribute("role");
       element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("aria-setsize");
       element.removeAttribute("data-index");
       element.removeAttribute("data-id");
       element.innerHTML = "";

@@ -4,7 +4,7 @@
  * A minimal data manager that stores items in a plain array.
  * No sparse storage, no placeholders, no async adapter support.
  *
- * This keeps the builder core small (~12 KB). When the user installs
+ * This keeps the core small (~5 KB). When the user installs
  * withData(), that feature replaces this manager with the full
  * adapter-backed data manager from src/data/manager.ts.
  */

@@ -8,82 +8,116 @@
 
 import { OVERSCAN } from "../constants";
 
-export class EngineState {
+export interface EngineState {
   /** Data indices of visible items — Phase 1 writes, Phase 2 reads */
-  public visibleIndices: Int32Array;
+  visibleIndices: Int32Array;
 
   /** Pixel offsets along main axis for each visible item */
-  public visibleOffsets: Float64Array;
+  visibleOffsets: Float64Array;
 
   /** Sizes along main axis for each visible item */
-  public visibleSizes: Float64Array;
+  visibleSizes: Float64Array;
 
   /** Number of valid entries in the buffers (0 = empty range sentinel) */
-  public visibleCount: number = 0;
+  visibleCount: number;
 
   /** First data index in the visible window (contiguous layouts) */
-  public startIndex: number = 0;
+  startIndex: number;
 
   /** Total content size in pixels */
-  public totalSize: number = 0;
+  totalSize: number;
 
   /** Current buffer capacity */
-  public capacity: number;
+  capacity: number;
 
   // ── Scroll state (mutated by scroll handler, no allocation) ──────
 
-  public scrollPosition: number = 0;
-  public prevScrollPosition: number = 0;
+  scrollPosition: number;
+  prevScrollPosition: number;
 
   /** 1 = forward, -1 = backward, 0 = idle */
-  public scrollDirection: number = 0;
+  scrollDirection: number;
 
   // ── Container state (updated on resize, cold path) ───────────────
 
-  public containerSize: number = 0;
-  public crossSize: number = 0;
-  public totalItems: number = 0;
+  containerSize: number;
+  crossSize: number;
+  totalItems: number;
 
   // ── Render state (for range-unchanged fast path) ─────────────────
 
-  public prevRangeStart: number = 0;
-  public prevRangeEnd: number = -1;
-  public renderPending: boolean = false;
-  public initialized: boolean = false;
-  public destroyed: boolean = false;
+  prevRangeStart: number;
+  prevRangeEnd: number;
+  renderPending: boolean;
+  initialized: boolean;
+  destroyed: boolean;
 
   // ── Compression state ────────────────────────────────────────────
 
-  public isCompressed: boolean = false;
-  public compressionRatio: number = 1;
+  isCompressed: boolean;
+  compressionRatio: number;
 
-  constructor(initialCapacity: number) {
-    this.capacity = initialCapacity;
-    this.visibleIndices = new Int32Array(initialCapacity);
-    this.visibleOffsets = new Float64Array(initialCapacity);
-    this.visibleSizes = new Float64Array(initialCapacity);
-  }
+  // ── ARIA tracking (for aria-setsize freshness) ───────────────────
+
+  prevAriaTotal: number;
 
   /**
    * Resize buffers when container changes. Cold path only.
    * v1-compatible heuristic: capacity = ceil(containerSize / minItemSize) + overscan * 2
    */
-  resizeCapacity(containerSize: number, minItemSize: number, overscan: number = OVERSCAN): void {
-    if (minItemSize <= 0 || containerSize <= 0) return;
-
-    const needed = Math.ceil(containerSize / minItemSize) + overscan * 2;
-    if (needed <= this.capacity) return;
-
-    const newCapacity = needed + 8;
-    this.visibleIndices = new Int32Array(newCapacity);
-    this.visibleOffsets = new Float64Array(newCapacity);
-    this.visibleSizes = new Float64Array(newCapacity);
-    this.capacity = newCapacity;
-  }
+  resizeCapacity(containerSize: number, minItemSize: number, overscan?: number): void;
 
   /** Reset to empty range sentinel. visibleCount = 0 matches v1 {start:0, end:-1}. */
-  clear(): void {
-    this.visibleCount = 0;
-    this.startIndex = 0;
-  }
+  clear(): void;
+}
+
+export function createEngineState(initialCapacity: number): EngineState {
+  const state: EngineState = {
+    visibleIndices: new Int32Array(initialCapacity),
+    visibleOffsets: new Float64Array(initialCapacity),
+    visibleSizes: new Float64Array(initialCapacity),
+    visibleCount: 0,
+    startIndex: 0,
+    totalSize: 0,
+    capacity: initialCapacity,
+
+    scrollPosition: 0,
+    prevScrollPosition: 0,
+    scrollDirection: 0,
+
+    containerSize: 0,
+    crossSize: 0,
+    totalItems: 0,
+
+    prevRangeStart: 0,
+    prevRangeEnd: -1,
+    renderPending: false,
+    initialized: false,
+    destroyed: false,
+
+    isCompressed: false,
+    compressionRatio: 1,
+
+    prevAriaTotal: -1,
+
+    resizeCapacity(containerSize: number, minItemSize: number, overscan: number = OVERSCAN): void {
+      if (minItemSize <= 0 || containerSize <= 0) return;
+
+      const needed = Math.ceil(containerSize / minItemSize) + overscan * 2;
+      if (needed <= state.capacity) return;
+
+      const newCapacity = needed + 8;
+      state.visibleIndices = new Int32Array(newCapacity);
+      state.visibleOffsets = new Float64Array(newCapacity);
+      state.visibleSizes = new Float64Array(newCapacity);
+      state.capacity = newCapacity;
+    },
+
+    clear(): void {
+      state.visibleCount = 0;
+      state.startIndex = 0;
+    },
+  };
+
+  return state;
 }
