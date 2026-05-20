@@ -129,6 +129,12 @@ export function createPluginMockContext<T extends VListItem>(
     reverse: options?.reverse ?? false,
     classPrefix,
     interactive: options?.interactive ?? true,
+    mainAxisPadding: 0,
+    crossAxisPadding: 0,
+    startPadding: 0,
+    endPadding: 0,
+    crossPadStart: 0,
+    crossPadEnd: 0,
   };
 
   // ── Emitter ─────────────────────────────────────────────────────
