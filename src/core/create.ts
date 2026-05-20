@@ -172,6 +172,11 @@ export function createVList<T extends VListItem = VListItem>(
   let skipDefaultScroll = false;
   let skipDefaultResize = false;
   let scrollTarget: EventTarget | null = null;
+  let navTotalFn: (() => number) | null = null;
+  let navUd = 0;
+  let navLr = 0;
+  let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
+  let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let smoothScrollFn: ((target: number, duration: number) => void) | null = null;
 
   const ctx: PluginContext<T> = {
@@ -253,6 +258,23 @@ export function createVList<T extends VListItem = VListItem>(
     getRenderedElement(index: number): HTMLElement | null {
       return rendered.get(index) ?? null;
     },
+    setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
+      if (cfg.total) navTotalFn = cfg.total;
+      if (cfg.ud !== undefined) navUd = cfg.ud;
+      if (cfg.lr !== undefined) navLr = cfg.lr;
+      if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
+      if (cfg.navigate) navNavigateFn = cfg.navigate;
+    },
+    getNavConfig: (() => {
+      const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null };
+      return (): typeof _nav => {
+        _nav.ud = navUd;
+        _nav.lr = navLr;
+        _nav.scrollIndex = navScrollIndexFn;
+        _nav.navigate = navNavigateFn;
+        return _nav;
+      };
+    })(),
   };
 
   // ── Pre-initialize container size so plugins can read it ────────
@@ -280,7 +302,7 @@ export function createVList<T extends VListItem = VListItem>(
       getItemFn ? getItemFn(i) : items[i];
 
     const bTotal = (): number =>
-      virtualTotalFn ? virtualTotalFn() : items.length;
+      navTotalFn ? navTotalFn() : virtualTotalFn ? virtualTotalFn() : items.length;
 
     const _focusEvt = { id: 0 as string | number, index: 0 };
     const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
@@ -307,8 +329,9 @@ export function createVList<T extends VListItem = VListItem>(
     };
 
     const bScrollTo = (idx: number): void => {
-      const off = sizeCache.getOffset(idx);
-      const sz = sizeCache.getSize(idx);
+      const ci = navScrollIndexFn ? navScrollIndexFn(idx) : idx;
+      const off = sizeCache.getOffset(ci);
+      const sz = sizeCache.getSize(ci);
       const sp = state.scrollPosition;
       const cs = state.containerSize;
       const sP = config.startPadding;
@@ -408,21 +431,35 @@ export function createVList<T extends VListItem = VListItem>(
         return;
       }
 
-      switch (e.key) {
-        case "ArrowUp":    if (config.horizontal) return; n = p - 1; break;
-        case "ArrowDown":  if (config.horizontal) return; n = p + 1; break;
-        case "ArrowLeft":  if (!config.horizontal) return; n = p - 1; break;
-        case "ArrowRight": if (!config.horizontal) return; n = p + 1; break;
-        case "PageUp":
-        case "PageDown": {
-          const sz = sizeCache.getSize(Math.max(0, p));
-          const delta = Math.max(1, Math.floor(state.containerSize / sz));
-          n = e.key === "PageUp" ? p - delta : p + delta;
-          break;
+      if (navNavigateFn) {
+        switch (e.key) {
+          case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
+          case "PageUp": case "PageDown": case "Home": case "End":
+            n = navNavigateFn(p, e.key, total);
+            break;
+          default: return;
         }
-        case "Home": n = 0; break;
-        case "End": n = total - 1; break;
-        default: return;
+      } else {
+        const ud = navUd || 1;
+        const lr = navLr;
+        const hz = config.horizontal;
+        switch (e.key) {
+          case "ArrowUp":    if (hz && !lr) return; n = p - (hz ? lr : ud); break;
+          case "ArrowDown":  if (hz && !lr) return; n = p + (hz ? lr : ud); break;
+          case "ArrowLeft":  if (!hz && !lr) return; n = p - (hz ? ud : lr); break;
+          case "ArrowRight": if (!hz && !lr) return; n = p + (hz ? ud : lr); break;
+          case "PageUp":
+          case "PageDown": {
+            const sz = sizeCache.getSize(Math.max(0, navScrollIndexFn ? navScrollIndexFn(p) : p));
+            const visRows = Math.max(1, Math.floor(state.containerSize / sz));
+            const delta = visRows * ud;
+            n = e.key === "PageUp" ? p - delta : p + delta;
+            break;
+          }
+          case "Home": n = 0; break;
+          case "End": n = total - 1; break;
+          default: return;
+        }
       }
 
       if (n < 0) n = 0;

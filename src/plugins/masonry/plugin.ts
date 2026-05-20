@@ -93,6 +93,120 @@ export function masonry<T extends VListItem = VListItem>(
     focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
   }
 
+  // ── Per-lane navigation index ──
+  let laneItems: number[][] = [];
+  let itemLanePos: Int32Array = new Int32Array(0);
+  let laneYCenters: Float64Array[] = [];
+
+  function rebuildLaneIndex(): void {
+    const cols = layout.columns;
+    const total = cachedPlacements.length;
+
+    laneItems = new Array(cols);
+    for (let c = 0; c < cols; c++) laneItems[c] = [];
+
+    if (itemLanePos.length < total) {
+      itemLanePos = new Int32Array(total);
+    }
+
+    for (let i = 0; i < total; i++) {
+      const p = cachedPlacements[i]!;
+      const pos = laneItems[p.lane]!.length;
+      laneItems[p.lane]!.push(i);
+      itemLanePos[i] = pos;
+    }
+
+    laneYCenters = new Array(cols);
+    for (let c = 0; c < cols; c++) {
+      const items = laneItems[c]!;
+      const yc = new Float64Array(items.length);
+      for (let j = 0; j < items.length; j++) {
+        const p = cachedPlacements[items[j]!]!;
+        yc[j] = p.y + p.size * 0.5;
+      }
+      laneYCenters[c] = yc;
+    }
+  }
+
+  function bsNearest(arr: Float64Array, target: number): number {
+    const len = arr.length;
+    if (!len) return -1;
+    let lo = 0;
+    let hi = len - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid]! < target) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0 && Math.abs(arr[lo - 1]! - target) <= Math.abs(arr[lo]! - target)) {
+      return lo - 1;
+    }
+    return lo;
+  }
+
+  function navigate(currentIndex: number, key: string, total: number): number {
+    const placement = cachedPlacements[currentIndex];
+    if (!placement) return currentIndex;
+    const lane = placement.lane;
+    const cols = layout.columns;
+    const posInLane = itemLanePos[currentIndex]!;
+    const myLane = laneItems[lane]!;
+
+    const k = hz
+      ? key === "ArrowDown" ? "ArrowRight"
+        : key === "ArrowUp" ? "ArrowLeft"
+        : key === "ArrowRight" ? "ArrowDown"
+        : key === "ArrowLeft" ? "ArrowUp"
+        : key
+      : key;
+
+    switch (k) {
+      case "ArrowDown":
+        if (posInLane + 1 < myLane.length) return myLane[posInLane + 1]!;
+        return currentIndex;
+      case "ArrowUp":
+        if (posInLane > 0) return myLane[posInLane - 1]!;
+        return currentIndex;
+      case "ArrowRight": {
+        if (lane >= cols - 1) return currentIndex;
+        const targetLane = lane + 1;
+        const yCenter = placement.y + placement.size * 0.5;
+        const targetItems = laneItems[targetLane]!;
+        if (!targetItems.length) return currentIndex;
+        const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+        return pos >= 0 ? targetItems[pos]! : currentIndex;
+      }
+      case "ArrowLeft": {
+        if (lane <= 0) return currentIndex;
+        const targetLane = lane - 1;
+        const yCenter = placement.y + placement.size * 0.5;
+        const targetItems = laneItems[targetLane]!;
+        if (!targetItems.length) return currentIndex;
+        const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+        return pos >= 0 ? targetItems[pos]! : currentIndex;
+      }
+      case "Home":
+        return 0;
+      case "End":
+        return total - 1;
+      case "PageDown": {
+        const containerSize = engineState.containerSize;
+        const itemSize = placement.size > 0 ? placement.size : 150;
+        const jump = Math.max(1, Math.floor(containerSize / itemSize));
+        const target = Math.min(posInLane + jump, myLane.length - 1);
+        return myLane[target]!;
+      }
+      case "PageUp": {
+        const containerSize = engineState.containerSize;
+        const itemSize = placement.size > 0 ? placement.size : 150;
+        const jump = Math.max(1, Math.floor(containerSize / itemSize));
+        const target = Math.max(0, posInLane - jump);
+        return myLane[target]!;
+      }
+    }
+    return currentIndex;
+  }
+
   let rawSizeSpec: number | ((index: number, ...args: unknown[]) => number) | null = null;
 
   function getSizeFn(): (index: number) => number {
@@ -121,6 +235,7 @@ export function masonry<T extends VListItem = VListItem>(
     const totalItems = engineState.totalItems;
     cachedPlacements = layout.calculateLayout(totalItems, getSizeFn());
     lastLayoutTotal = totalItems;
+    rebuildLaneIndex();
 
     const totalSize = layout.getTotalSize(cachedPlacements);
     storedCtx.updateContentSize(totalSize);
@@ -292,6 +407,13 @@ export function masonry<T extends VListItem = VListItem>(
         } else if (itemBottom > scrollPos + containerSize) {
           ctx.scrollTo(itemBottom - containerSize);
         }
+      });
+
+      // ── Lane-aware 2D keyboard navigation ─────────────────────
+
+      ctx.setNavConfig({
+        total: () => engineState.totalItems,
+        navigate,
       });
 
       // ── Cleanup ────────────────────────────────────────────────

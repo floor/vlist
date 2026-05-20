@@ -270,8 +270,10 @@ export function selection<T extends VListItem = VListItem>(
       const scrollFocusIntoView = (index: number): void => {
         if (index < 0) return;
         if (sivFn) { sivFn(index); return; }
-        const offset = sizeCache.getOffset(index);
-        const size = sizeCache.getSize(index);
+        const nav = ctx.getNavConfig();
+        const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;
+        const offset = sizeCache.getOffset(ci);
+        const size = sizeCache.getSize(ci);
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
 
@@ -351,22 +353,62 @@ export function selection<T extends VListItem = VListItem>(
           const total = getTotalFn();
           if (total === 0) return;
 
+          const nav = ctx.getNavConfig();
           const prevFocus = state.focusedIndex;
           let handled = false;
           let selectionChanged = false;
 
-          switch (event.key) {
-            case "ArrowUp":
-              moveFocus(state, -1, total, resolvedConfig.reverse);
+          if (nav.navigate && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End")) {
+            const next = nav.navigate(state.focusedIndex, event.key, total);
+            if (next !== state.focusedIndex) {
+              state.focusedIndex = Math.max(0, Math.min(next, total - 1));
+            }
+            state.focusVisible = true;
+            handled = true;
+          } else switch (event.key) {
+            case "ArrowUp": {
+              const ud = nav.ud || 1;
+              const lr = nav.lr;
+              const hz = resolvedConfig.horizontal;
+              if (hz && !lr) break;
+              moveFocus(state, -(hz ? lr : ud), total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;
+            }
 
-            case "ArrowDown":
-              moveFocus(state, 1, total, resolvedConfig.reverse);
+            case "ArrowDown": {
+              const ud = nav.ud || 1;
+              const lr = nav.lr;
+              const hz = resolvedConfig.horizontal;
+              if (hz && !lr) break;
+              moveFocus(state, hz ? lr : ud, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;
+            }
+
+            case "ArrowLeft": {
+              const ud = nav.ud || 1;
+              const lr = nav.lr;
+              const hz = resolvedConfig.horizontal;
+              if (!hz && !lr) break;
+              moveFocus(state, -(hz ? ud : lr), total, resolvedConfig.reverse);
+              state.focusVisible = true;
+              handled = true;
+              break;
+            }
+
+            case "ArrowRight": {
+              const ud = nav.ud || 1;
+              const lr = nav.lr;
+              const hz = resolvedConfig.horizontal;
+              if (!hz && !lr) break;
+              moveFocus(state, hz ? ud : lr, total, resolvedConfig.reverse);
+              state.focusVisible = true;
+              handled = true;
+              break;
+            }
 
             case "Home":
               if (total > 0) state.focusedIndex = 0;
@@ -382,10 +424,13 @@ export function selection<T extends VListItem = VListItem>(
 
             case "PageUp":
             case "PageDown": {
+              const ud = nav.ud || 1;
               const idx = Math.max(0, state.focusedIndex);
-              const rowH = sizeCache.getSize(idx);
+              const si = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
+              const rowH = sizeCache.getSize(si);
               const cs = engineState.containerSize;
-              const pageSize = rowH > 0 ? Math.max(1, Math.floor(cs / rowH)) : 10;
+              const visRows = rowH > 0 ? Math.max(1, Math.floor(cs / rowH)) : 10;
+              const pageSize = visRows * ud;
 
               if (l2dFn && d2lFn) {
                 const curData = l2dFn(state.focusedIndex);
@@ -462,7 +507,7 @@ export function selection<T extends VListItem = VListItem>(
 
           // Shift+movement: extend selection
           if (event.shiftKey && mode === "multiple" && !selectionChanged && focusMoved) {
-            const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown";
+            const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight";
             if (isArrow) {
               const destItem = getItemAtLayout(state.focusedIndex);
               if (destItem) doToggle(destItem.id, destItem);

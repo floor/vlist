@@ -299,6 +299,10 @@ export function grid<T extends VListItem = VListItem>(
           ctx.rebuildSizeCache();
         }
 
+        if (newConfig.columns !== undefined) {
+          ctx.setNavConfig({ ud: layout.columns });
+        }
+
         containerWidth = engineState.crossSize;
         gridForceRender();
       });
@@ -330,6 +334,15 @@ export function grid<T extends VListItem = VListItem>(
 
         if (horizontal) ctx.dom.viewport.scrollLeft = pos;
         else ctx.dom.viewport.scrollTop = pos;
+      });
+
+      // ── 2D keyboard navigation ─────────────────────────────────
+
+      ctx.setNavConfig({
+        total: () => engineState.totalItems,
+        ud: config.columns,
+        lr: 1,
+        scrollIndex: (itemIndex: number) => layout.getRow(itemIndex),
       });
 
       // ── Cleanup ────────────────────────────────────────────────

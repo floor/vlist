@@ -255,6 +255,9 @@ export function createPluginMockContext<T extends VListItem>(
       }
       return null;
     },
+
+    setNavConfig: () => {},
+    getNavConfig: () => ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
   };
 
   const cleanup = () => {

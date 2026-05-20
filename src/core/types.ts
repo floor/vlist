@@ -142,6 +142,20 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setRemoveItemFn(fn: (id: string | number) => number): void;
   setInsertItemFn(fn: (item: T, index: number) => void): void;
   getRenderedElement(index: number): HTMLElement | null;
+
+  setNavConfig(config: {
+    total?: () => number;
+    ud?: number;
+    lr?: number;
+    scrollIndex?: (itemIndex: number) => number;
+    navigate?: (currentIndex: number, key: string, total: number) => number;
+  }): void;
+  getNavConfig(): {
+    ud: number;
+    lr: number;
+    scrollIndex: ((itemIndex: number) => number) | null;
+    navigate: ((currentIndex: number, key: string, total: number) => number) | null;
+  };
 }
 
 // =============================================================================
