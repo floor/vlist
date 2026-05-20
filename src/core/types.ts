@@ -57,6 +57,7 @@ export interface ResolvedConfig {
   readonly endPadding: number;
   readonly crossPadStart: number;
   readonly crossPadEnd: number;
+  readonly striped: boolean | "data" | "even" | "odd";
 }
 
 // =============================================================================

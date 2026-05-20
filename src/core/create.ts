@@ -49,6 +49,7 @@ function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): Resolved
     endPadding: horizontal ? pad.right : pad.bottom,
     crossPadStart: horizontal ? pad.top : pad.left,
     crossPadEnd: horizontal ? pad.bottom : pad.right,
+    striped: raw.item.striped || false,
   };
 }
 
@@ -105,6 +106,7 @@ export function createVList<T extends VListItem = VListItem>(
   const sizeSpec = resolveSizeConfig(rawConfig, config.horizontal);
   const minItemSize = typeof sizeSpec === "number" ? sizeSpec : 20;
   const totalItems = rawConfig.items?.length ?? 0;
+  const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
 
   // ── Sort and validate plugins ───────────────────────────────────
 
@@ -475,7 +477,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass);
     }
   }
 
@@ -484,7 +486,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 

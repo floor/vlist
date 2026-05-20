@@ -293,6 +293,7 @@ export function table<T extends VListItem = VListItem>(
         classPrefix,
         classPrefix,
         () => engineState.totalItems,
+        resolvedConfig.striped || undefined,
       );
 
       // ── Wire render pipeline ────────────────────────────────────

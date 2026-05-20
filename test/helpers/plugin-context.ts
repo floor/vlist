@@ -135,6 +135,7 @@ export function createPluginMockContext<T extends VListItem>(
     endPadding: 0,
     crossPadStart: 0,
     crossPadEnd: 0,
+    striped: false,
   };
 
   // ── Emitter ─────────────────────────────────────────────────────

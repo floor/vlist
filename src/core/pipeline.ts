@@ -113,6 +113,7 @@ export function phase2Commit<T extends VListItem>(
   startPadding?: number,
   crossPadStart?: number,
   crossPadEnd?: number,
+  oddClass?: string,
 ): void {
   const prefix = classPrefix ?? "vlist";
   const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
@@ -219,6 +220,8 @@ export function phase2Commit<T extends VListItem>(
       else element.removeAttribute("aria-selected");
     }
 
+    if (oddClass) element.classList.toggle(oddClass, (dataIndex & 1) === 1);
+
     element.style.transform = translateProp + (offset + sp) + "px)";
     if (horizontal) {
       element.style.width = size + "px";
@@ -254,7 +257,8 @@ export function render<T extends VListItem>(
   startPadding?: number,
   crossPadStart?: number,
   crossPadEnd?: number,
+  oddClass?: string,
 ): void {
   phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd);
+  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass);
 }

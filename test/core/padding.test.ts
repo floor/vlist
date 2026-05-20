@@ -381,3 +381,104 @@ describe("combined main + cross padding", () => {
     expect(el.style.right).toBe("20px");
   });
 });
+
+// =============================================================================
+// Striped — oddClass toggle
+// =============================================================================
+
+describe("phase2Commit striped", () => {
+  it("toggles odd class on odd-indexed items", () => {
+    const state = makeState(20, 4);
+    const items = createTestItems(20);
+    const rendered = new Map<number, HTMLElement>();
+    const content = document.createElement("div");
+    const pool = createPool("vlist");
+
+    phase2Commit(
+      state, pool, content, simpleTemplate as any,
+      () => items, rendered, false, HOOKS,
+      null, null, "vlist", true,
+      0, 0, 0, "vlist-item--odd",
+    );
+
+    expect(rendered.get(0)!.classList.contains("vlist-item--odd")).toBe(false);
+    expect(rendered.get(1)!.classList.contains("vlist-item--odd")).toBe(true);
+    expect(rendered.get(2)!.classList.contains("vlist-item--odd")).toBe(false);
+    expect(rendered.get(3)!.classList.contains("vlist-item--odd")).toBe(true);
+  });
+
+  it("does not add odd class when oddClass is empty", () => {
+    const state = makeState(20, 3);
+    const items = createTestItems(20);
+    const rendered = new Map<number, HTMLElement>();
+    const content = document.createElement("div");
+    const pool = createPool("vlist");
+
+    phase2Commit(
+      state, pool, content, simpleTemplate as any,
+      () => items, rendered, false, HOOKS,
+      null, null, "vlist", true,
+      0, 0, 0, "",
+    );
+
+    expect(rendered.get(0)!.classList.contains("vlist-item--odd")).toBe(false);
+    expect(rendered.get(1)!.classList.contains("vlist-item--odd")).toBe(false);
+  });
+
+  it("updates odd class when items shift after release/acquire", () => {
+    const items = createTestItems(20);
+    const rendered = new Map<number, HTMLElement>();
+    const content = document.createElement("div");
+    const pool = createPool("vlist");
+    const oddClass = "vlist-item--odd";
+
+    // First render: items 0-2
+    const state1 = makeState(20, 3);
+    phase2Commit(
+      state1, pool, content, simpleTemplate as any,
+      () => items, rendered, false, HOOKS,
+      null, null, "vlist", true,
+      0, 0, 0, oddClass,
+    );
+    expect(rendered.get(1)!.classList.contains(oddClass)).toBe(true);
+
+    // Second render: items 3-5 (releases 0-2, acquires 3-5)
+    const state2 = createEngineState(200);
+    state2.totalItems = 20;
+    state2.containerSize = 400;
+    state2.visibleCount = 3;
+    for (let i = 0; i < 3; i++) {
+      state2.visibleIndices[i] = i + 3;
+      state2.visibleOffsets[i] = (i + 3) * ITEM_SIZE;
+      state2.visibleSizes[i] = ITEM_SIZE;
+    }
+    phase2Commit(
+      state2, pool, content, simpleTemplate as any,
+      () => items, rendered, false, HOOKS,
+      null, null, "vlist", true,
+      0, 0, 0, oddClass,
+    );
+
+    expect(rendered.get(3)!.classList.contains(oddClass)).toBe(true);
+    expect(rendered.get(4)!.classList.contains(oddClass)).toBe(false);
+    expect(rendered.get(5)!.classList.contains(oddClass)).toBe(true);
+  });
+
+  it("works with custom classPrefix", () => {
+    const state = makeState(20, 2);
+    const items = createTestItems(20);
+    const rendered = new Map<number, HTMLElement>();
+    const content = document.createElement("div");
+    const pool = createPool("my");
+
+    phase2Commit(
+      state, pool, content, simpleTemplate as any,
+      () => items, rendered, false, HOOKS,
+      null, null, "my", true,
+      0, 0, 0, "my-item--odd",
+    );
+
+    expect(rendered.get(0)!.classList.contains("my-item--odd")).toBe(false);
+    expect(rendered.get(1)!.classList.contains("my-item--odd")).toBe(true);
+  });
+});
