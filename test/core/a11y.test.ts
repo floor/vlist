@@ -11,6 +11,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
+import { a11y } from "../../src/plugins/a11y";
 
 // =============================================================================
 // DOM Setup
@@ -41,7 +42,7 @@ function createList(count = 100, opts: CreateListOpts = {}) {
       item: { height: 50, template: simpleTemplate },
       ...opts,
     },
-    [],
+    opts.interactive === false ? [] : [a11y()],
   );
   return { vlist, container, items };
 }
@@ -358,7 +359,7 @@ describe("baseline a11y — group header skipping", () => {
         items,
         item: { height: 50, template: simpleTemplate },
       },
-      [],
+      [a11y()],
     );
     await flush();
 
@@ -390,7 +391,7 @@ describe("baseline a11y — group header skipping", () => {
         items,
         item: { height: 50, template: simpleTemplate },
       },
-      [],
+      [a11y()],
     );
     await flush();
 

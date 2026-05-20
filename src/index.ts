@@ -16,6 +16,7 @@ export type { ScalePluginConfig } from "./plugins/scale";
 export { scrollbar } from "./plugins/scrollbar";
 export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 export { grid } from "./plugins/grid";
+export { a11y } from "./plugins/a11y";
 export { selection } from "./plugins/selection";
 export type { SelectionPluginConfig } from "./plugins/selection";
 export { page } from "./plugins/page";

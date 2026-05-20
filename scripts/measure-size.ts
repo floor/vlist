@@ -16,7 +16,7 @@ const entry = `${root}/src/index.ts`;
 // ── All v2 plugin names ───────────────────────────────────────────
 
 const ALL_PLUGINS = [
-  "grid", "selection", "scrollbar", "scale",
+  "a11y", "grid", "selection", "scrollbar", "scale",
   "page", "snapshots", "transition", "autosize",
   "table", "groups", "async", "masonry", "sortable",
 ] as const;
@@ -42,6 +42,7 @@ const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
 // registered method names, event names, addEventListener targets.
 
 const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
+  a11y:       ['"a11y"'],
   grid:       ["-grid-item", "getGridLayout", "updateGrid"],
   selection:  ["selectAll", "clearSelection"],
   scrollbar:  ["-scrollbar__thumb"],
@@ -78,6 +79,7 @@ const excluded = (imported: readonly string[]): readonly PluginName[] => {
 
 const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
+  { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "grid",              imports: ["createVList", "grid"] },
   { name: "selection",         imports: ["createVList", "selection"] },
   { name: "scrollbar",         imports: ["createVList", "scrollbar"] },
