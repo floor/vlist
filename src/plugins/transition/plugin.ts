@@ -84,6 +84,13 @@ export function transition<T extends VListItem = VListItem>(
       const dataToLayout = (dataIndex: number): number =>
         toLayout ? toLayout(dataIndex) : dataIndex;
 
+      const findById = (id: string | number): { el: HTMLElement | null; layoutIndex: number } => {
+        const eid = String(id).replace(/"/g, '\\"');
+        const el = dom.content.querySelector(`[data-id="${eid}"]`) as HTMLElement | null;
+        const layoutIndex = el ? parseInt(el.dataset.index ?? "-1", 10) : -1;
+        return { el, layoutIndex };
+      };
+
       const commitStyles = (): void => {
         const children = dom.content.children;
         for (let i = 0; i < children.length; i++) {
@@ -106,10 +113,9 @@ export function transition<T extends VListItem = VListItem>(
             ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
             : -1;
 
-          const items = ctx.getItems();
-          let layoutIndex = items.findIndex((item) => item.id === id);
-          if (layoutIndex < 0 && typeof id === "number") layoutIndex = id;
-          const removedEl = layoutIndex >= 0 ? ctx.getRenderedElement(layoutIndex) : null;
+          const found = findById(id);
+          const layoutIndex = found.layoutIndex;
+          const removedEl = found.el;
           const itemSize = layoutIndex >= 0 ? sc.getSize(layoutIndex) : 0;
           const originalOffset = layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0;
 
@@ -218,7 +224,6 @@ export function transition<T extends VListItem = VListItem>(
             ? parseInt((active as HTMLElement).dataset?.index ?? "-1", 10)
             : -1;
 
-          const items = ctx.getItems();
           const targets: Array<{
             id: string | number;
             layoutIndex: number;
@@ -228,14 +233,13 @@ export function transition<T extends VListItem = VListItem>(
           }> = [];
 
           for (const id of ids) {
-            let layoutIndex = items.findIndex((item) => item.id === id);
-            if (layoutIndex < 0 && typeof id === "number") layoutIndex = id;
+            const found = findById(id);
             targets.push({
               id,
-              layoutIndex,
-              el: layoutIndex >= 0 ? ctx.getRenderedElement(layoutIndex) : null,
-              size: layoutIndex >= 0 ? sc.getSize(layoutIndex) : 0,
-              offset: layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0,
+              layoutIndex: found.layoutIndex,
+              el: found.el,
+              size: found.layoutIndex >= 0 ? sc.getSize(found.layoutIndex) : 0,
+              offset: found.layoutIndex >= 0 ? sc.getOffset(found.layoutIndex) : 0,
             });
           }
 

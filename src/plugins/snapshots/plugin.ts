@@ -306,6 +306,26 @@ export function snapshots<T extends VListItem = VListItem>(
         emitter.on("selection:change", debouncedSave);
         emitter.on("focus:change", debouncedSave);
 
+        let scrollSaveTimer = 0;
+        const scrollSaveCallback = (): void => {
+          scrollSaveTimer = 0;
+          saveToStorage!();
+        };
+        const debouncedScrollSave = (): void => {
+          if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+          scrollSaveTimer = setTimeout(scrollSaveCallback, 300) as unknown as number;
+        };
+
+        emitter.on("scroll", debouncedScrollSave);
+
+        const onBeforeUnload = (): void => { saveToStorage?.(); };
+        window.addEventListener("beforeunload", onBeforeUnload);
+
+        ctx.registerDestroyHandler(() => {
+          if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+          window.removeEventListener("beforeunload", onBeforeUnload);
+        });
+
         if (restoreSnapshot && restoreSnapshot.total && restoreSnapshot.total > 0) {
           const cancelAutoLoad = ctx.getMethod("_cancelAutoLoad") as
             | (() => void)

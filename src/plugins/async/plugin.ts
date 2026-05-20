@@ -92,6 +92,7 @@ export function async<T extends VListItem = VListItem>(
   let decelerationTimer: ReturnType<typeof setTimeout> | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let currentVelocity = 0;
+  let autoLoadCancelled = false;
 
   // ============================================================================
   // Helpers
@@ -189,6 +190,18 @@ export function async<T extends VListItem = VListItem>(
       // Bridge async data manager to the render pipeline
       ctx.setGetItemFn((index: number) => dataManager.getItem(index) as T | undefined);
 
+      ctx.setRemoveItemFn((id: string | number): number => {
+        const index = dataManager.getIndexById(id);
+        if (index < 0) return -1;
+        const removed = dataManager.removeItem(id);
+        if (!removed) return -1;
+        return index;
+      });
+
+      ctx.setInsertItemFn((item: T, index: number): void => {
+        dataManager.insertItem(item, index);
+      });
+
       // Register public methods
       ctx.registerMethod("reload", async (): Promise<void> => {
         pendingRange = null;
@@ -227,6 +240,16 @@ export function async<T extends VListItem = VListItem>(
 
       ctx.registerMethod("setTotal", (total: number): void => {
         dataManager.setTotal(total);
+      });
+
+      ctx.registerMethod("_getTotal", (): number => dataManager.getTotal());
+
+      ctx.registerMethod("_setTotal", (t: number): void => {
+        dataManager.setTotal(t);
+      });
+
+      ctx.registerMethod("_cancelAutoLoad", (): void => {
+        autoLoadCancelled = true;
       });
 
       // ARIA: aria-busy for loading state
@@ -274,6 +297,7 @@ export function async<T extends VListItem = VListItem>(
       // Load initial data (if autoLoad is enabled)
       if (autoLoad) {
         queueMicrotask(() => {
+          if (autoLoadCancelled) return;
           emitLoadStart(0);
           dataManager.loadInitial().catch((error) => {
             emitter.emit("error", { error, context: "loadInitial" });

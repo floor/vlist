@@ -132,6 +132,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
 
   removeItemById(id: string | number): number;
   insertItemAt(item: T, index: number): void;
+  setRemoveItemFn(fn: (id: string | number) => number): void;
+  setInsertItemFn(fn: (item: T, index: number) => void): void;
   getRenderedElement(index: number): HTMLElement | null;
 }
 

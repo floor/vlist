@@ -152,6 +152,8 @@ export function createVList<T extends VListItem = VListItem>(
   let customForceRender: (() => void) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
   let itemStateFn: ((index: number, state: import("../types").ItemState) => void) | null = null;
+  let removeItemByIdFn: ((id: string | number) => number) | null = null;
+  let insertItemAtFn: ((item: T, index: number) => void) | null = null;
   let skipDefaultScroll = false;
   let skipDefaultResize = false;
   let scrollTarget: EventTarget | null = null;
@@ -215,6 +217,7 @@ export function createVList<T extends VListItem = VListItem>(
     disableDefaultResize(): void { skipDefaultResize = true; },
     setScrollTarget(target: EventTarget): void { scrollTarget = target; },
     removeItemById(id: string | number): number {
+      if (removeItemByIdFn) return removeItemByIdFn(id);
       const idx = items.findIndex((item) => item.id === id);
       if (idx === -1) return -1;
       items.splice(idx, 1);
@@ -224,11 +227,14 @@ export function createVList<T extends VListItem = VListItem>(
       return idx;
     },
     insertItemAt(item: T, index: number): void {
+      if (insertItemAtFn) { insertItemAtFn(item, index); return; }
       items.splice(index, 0, item);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
       dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
     },
+    setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
+    setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
     getRenderedElement(index: number): HTMLElement | null {
       return rendered.get(index) ?? null;
     },
@@ -432,28 +438,44 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     insertItem(item: T, index?: number): void {
-      if (index === undefined) {
-        items.push(item);
+      if (insertItemAtFn) {
+        insertItemAtFn(item, index ?? state.totalItems);
       } else {
-        items.splice(index, 0, item);
+        if (index === undefined) {
+          items.push(item);
+        } else {
+          items.splice(index, 0, item);
+        }
+        state.totalItems = items.length;
+        sizeCache.rebuild(state.totalItems);
+        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
       }
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
       doForceRender();
     },
 
     removeItem(id: string | number): void {
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx === -1) return;
-      items.splice(idx, 1);
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      if (removeItemByIdFn) {
+        if (removeItemByIdFn(id) < 0) return;
+      } else {
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx === -1) return;
+        items.splice(idx, 1);
+        state.totalItems = items.length;
+        sizeCache.rebuild(state.totalItems);
+        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      }
       doForceRender();
     },
 
     removeItems(ids: ReadonlyArray<string | number>): number {
+      if (removeItemByIdFn) {
+        let removed = 0;
+        for (const id of ids) {
+          if (removeItemByIdFn(id) >= 0) removed++;
+        }
+        if (removed > 0) doForceRender();
+        return removed;
+      }
       const idSet = new Set(ids);
       const before = items.length;
       items = items.filter((item) => !idSet.has(item.id));
