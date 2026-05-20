@@ -30,7 +30,7 @@ export interface AutosizePluginConfig {
 export function autosize<T extends VListItem = VListItem>(
   config?: AutosizePluginConfig,
 ): VListPlugin<T> {
-  const gap = config?.gap ?? 0;
+  let gap = config?.gap ?? 0;
 
   let observer: ResizeObserver | null = null;
   let storedCtx: PluginContext<T> | null = null;
@@ -79,13 +79,23 @@ export function autosize<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       hz = ctx.config.horizontal;
       sizeProp = hz ? "width" : "height";
+      if (gap === 0) gap = ctx.config.gap;
 
-      // Read estimated size from the current sizeCache before replacing it
-      estimatedSize = ctx.sizeCache.getSize(0);
-      if (gap > 0) estimatedSize += gap;
+      // Read estimated size from the current sizeCache before replacing it.
+      // The initial cache already has gap baked in — read the raw spec size.
+      estimatedSize = typeof ctx.rawSizeSpec === "function"
+        ? (ctx.rawSizeSpec as (i: number) => number)(0) + gap
+        : (ctx.rawSizeSpec as number) + gap;
 
       // Replace the fixed sizeCache with a variable one backed by measurements
       ctx.setSizeConfig(sizeFn);
+      if (gap > 0) {
+        const orig = ctx.sizeCache.getTotalSize;
+        ctx.sizeCache.getTotalSize = (): number => {
+          const t = orig();
+          return t > 0 ? t - gap : 0;
+        };
+      }
 
       // ResizeObserver for measuring items
       observer = new ResizeObserver((entries) => {

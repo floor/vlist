@@ -50,6 +50,7 @@ function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): Resolved
     crossPadStart: horizontal ? pad.top : pad.left,
     crossPadEnd: horizontal ? pad.bottom : pad.right,
     striped: raw.item.striped || false,
+    gap: raw.item.gap ?? 0,
   };
 }
 
@@ -104,6 +105,12 @@ export function createVList<T extends VListItem = VListItem>(
 
   const config = resolveConfig(rawConfig);
   const sizeSpec = resolveSizeConfig(rawConfig, config.horizontal);
+  const gap = config.gap;
+  const gappedSizeSpec: number | ((index: number) => number) = gap > 0
+    ? typeof sizeSpec === "function"
+      ? (index: number) => (sizeSpec as (index: number) => number)(index) + gap
+      : (sizeSpec as number) + gap
+    : sizeSpec;
   const minItemSize = typeof sizeSpec === "number" ? sizeSpec : 20;
   const totalItems = rawConfig.items?.length ?? 0;
   const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
@@ -121,7 +128,14 @@ export function createVList<T extends VListItem = VListItem>(
   // Padding is handled via transform offsets (main axis) and inline
   // left/right or top/bottom (cross axis) in the pipeline, since items
   // are position:absolute and CSS padding on the container has no effect.
-  const sizeCache: SizeCache = createSizeCache(sizeSpec, totalItems);
+  const sizeCache: SizeCache = createSizeCache(gappedSizeSpec, totalItems);
+  if (gap > 0) {
+    const origGetTotalSize = sizeCache.getTotalSize;
+    sizeCache.getTotalSize = (): number => {
+      const total = origGetTotalSize();
+      return total > 0 ? total - gap : 0;
+    };
+  }
   const pool = createPool(config.classPrefix);
   const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
 
@@ -313,7 +327,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass, gap);
     }
   }
 
@@ -322,7 +336,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass, gap);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 

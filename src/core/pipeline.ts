@@ -114,8 +114,10 @@ export function phase2Commit<T extends VListItem>(
   crossPadStart?: number,
   crossPadEnd?: number,
   oddClass?: string,
+  gap?: number,
 ): void {
   const prefix = classPrefix ?? "vlist";
+  const gp = gap ?? 0;
   const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
   const focusedClass = itemStateFn ? `${prefix}-item--focused` : "";
   const items = getItemFn ? null : getItems();
@@ -224,9 +226,9 @@ export function phase2Commit<T extends VListItem>(
 
     element.style.transform = translateProp + (offset + sp) + "px)";
     if (horizontal) {
-      element.style.width = size + "px";
+      element.style.width = (size - gp) + "px";
     } else {
-      element.style.height = size + "px";
+      element.style.height = (size - gp) + "px";
     }
   }
 
@@ -258,7 +260,8 @@ export function render<T extends VListItem>(
   crossPadStart?: number,
   crossPadEnd?: number,
   oddClass?: string,
+  gap?: number,
 ): void {
   phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass);
+  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass, gap);
 }
