@@ -290,13 +290,13 @@ describe("selection — Method Registration", () => {
     cleanup();
   });
 
-  it("should register all 9 public methods in single mode", () => {
+  it("should register all 11 methods in single mode (9 public + 2 internal)", () => {
     const plugin = selection<TestItem>();
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
     plugin.setup!(ctx);
 
-    expect(methods.size).toBe(9);
+    expect(methods.size).toBe(11);
 
     cleanup();
   });

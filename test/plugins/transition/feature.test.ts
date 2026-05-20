@@ -1201,7 +1201,7 @@ describe("withTransition — Edge cases", () => {
     allAnimations.length = 0;
   });
 
-  it("animates removal by numeric index when id doesn't match", async () => {
+  it("removes by numeric index without animation when id doesn't match a DOM element", async () => {
     const items: TestItem[] = [
       { id: 10, name: "Item 10" },
       { id: 11, name: "Item 11" },
@@ -1220,10 +1220,9 @@ describe("withTransition — Edge cases", () => {
     const result = removeFn(1);
 
     expect(result).toBe(true);
-    expect(allAnimations.length).toBeGreaterThan(0);
+    expect(allAnimations.length).toBe(0);
 
     await flushMicrotasks();
-    allAnimations.length = 0;
   });
 
   it("clamps duration to MAX_DURATION (1000ms)", () => {

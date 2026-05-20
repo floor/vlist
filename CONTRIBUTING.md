@@ -116,7 +116,7 @@ createVList(config, [       → VList instance
 
 1. **Find the right domain** — most changes live in a specific domain folder
 2. **Write tests first** — add tests in `test/` before implementing
-3. **Run tests** — `bun test` (runs all), `bun test test/features/grid/` (runs one folder)
+3. **Run tests** — `bun test` (runs all), `bun test test/plugins/grid/` (runs one folder)
 4. **Type check** — `bun run typecheck`
 5. **Build** — `bun run build`
 6. **Test visually** — check relevant examples at [vlist.io](https://vlist.io/sandbox/)
@@ -128,10 +128,10 @@ createVList(config, [       → VList instance
 bun test
 
 # Specific file
-bun test test/features/grid/feature.test.ts
+bun test test/plugins/grid/feature.test.ts
 
 # Specific folder
-bun test test/features/grid/
+bun test test/plugins/grid/
 
 # Watch mode
 bun test --watch
@@ -284,10 +284,10 @@ export const myPlugin = <
 
 ### 3. Add tests
 
-Create matching test files in `test/features/{name}/`:
+Create matching test files in `test/plugins/{name}/`:
 
 ```
-test/features/{name}/
+test/plugins/{name}/
 ├── feature.test.ts    # Plugin tests using createPluginMockContext()
 ├── layout.test.ts     # Unit tests for layout logic (if applicable)
 └── ...

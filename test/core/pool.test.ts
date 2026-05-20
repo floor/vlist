@@ -57,7 +57,7 @@ describe("acquire", () => {
     expect(el).toBeInstanceOf(HTMLElement);
     expect(el.tagName).toBe("DIV");
     expect(el.className).toBe("vlist-item");
-    expect(el.getAttribute("role")).toBe("option");
+    expect(el.getAttribute("role")).toBeNull();
   });
 
   it("should return different elements on successive calls when pool is empty", () => {
@@ -172,6 +172,39 @@ describe("release", () => {
 
     const el2 = pool.acquire();
     expect(el2.hasAttribute("aria-selected")).toBe(false);
+  });
+
+  it("should remove aria-posinset attribute before pooling", () => {
+    const pool = createPool("vlist");
+    const el = pool.acquire();
+    el.setAttribute("aria-posinset", "5");
+
+    pool.release(el);
+
+    const el2 = pool.acquire();
+    expect(el2.hasAttribute("aria-posinset")).toBe(false);
+  });
+
+  it("should remove aria-setsize attribute before pooling", () => {
+    const pool = createPool("vlist");
+    const el = pool.acquire();
+    el.setAttribute("aria-setsize", "100");
+
+    pool.release(el);
+
+    const el2 = pool.acquire();
+    expect(el2.hasAttribute("aria-setsize")).toBe(false);
+  });
+
+  it("should remove role attribute before pooling", () => {
+    const pool = createPool("vlist");
+    const el = pool.acquire();
+    el.setAttribute("role", "option");
+
+    pool.release(el);
+
+    const el2 = pool.acquire();
+    expect(el2.getAttribute("role")).toBeNull();
   });
 
   it("should respect max pool size (hardcoded 100)", () => {
@@ -306,12 +339,12 @@ describe("pool lifecycle", () => {
     const pool = createPool("vlist");
     const el = pool.acquire();
 
-    expect(el.getAttribute("role")).toBe("option");
+    expect(el.getAttribute("role")).toBeNull();
 
     pool.release(el);
 
     const el2 = pool.acquire();
-    expect(el2.getAttribute("role")).toBe("option");
+    expect(el2.getAttribute("role")).toBeNull();
   });
 
   it("should track pool size correctly", () => {

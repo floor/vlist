@@ -13,7 +13,7 @@
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createScrollHandler } from "../../src/core/scroll";
-import { EngineState } from "../../src/core/state";
+import { createEngineState } from "../../src/core/state";
 
 beforeAll(() => setupDOM());
 afterAll(() => teardownDOM());
@@ -25,7 +25,7 @@ afterAll(() => teardownDOM());
 describe("createScrollHandler factory", () => {
   it("should return handler with required methods", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const config = {
       state,
       viewport,
@@ -53,7 +53,7 @@ describe("createScrollHandler factory", () => {
 describe("ScrollHandler.attach()", () => {
   it("should add scroll listener to viewport", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let scrolled = false;
     const config = {
       state,
@@ -82,7 +82,7 @@ describe("ScrollHandler.attach()", () => {
     const viewport = document.createElement("div");
     Object.defineProperty(viewport, "scrollHeight", { value: 5000, configurable: true });
     Object.defineProperty(viewport, "clientHeight", { value: 500, configurable: true });
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let wheeled = false;
     const config = {
       state,
@@ -110,7 +110,7 @@ describe("ScrollHandler.attach()", () => {
   it("should use scrollTarget if provided instead of viewport", () => {
     const viewport = document.createElement("div");
     const scrollTarget = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let scrolled = false;
     const config = {
       state,
@@ -143,7 +143,7 @@ describe("ScrollHandler.attach()", () => {
 describe("ScrollHandler.detach()", () => {
   it("should remove scroll listener from viewport", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let scrolled = false;
     const config = {
       state,
@@ -170,7 +170,7 @@ describe("ScrollHandler.detach()", () => {
 
   it("should remove wheel listener when it was attached", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let wheeled = false;
     const config = {
       state,
@@ -197,7 +197,7 @@ describe("ScrollHandler.detach()", () => {
 
   it("should cancel any pending animations", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -223,7 +223,7 @@ describe("ScrollHandler.detach()", () => {
 
   it("should clear idle timeout", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     let idle = false;
     const config = {
       state,
@@ -259,7 +259,7 @@ describe("ScrollHandler.detach()", () => {
 describe("ScrollHandler - vertical mode", () => {
   it("should read scrollTop for vertical viewport", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const config = {
       state,
       viewport,
@@ -283,7 +283,7 @@ describe("ScrollHandler - vertical mode", () => {
 
   it("should set scrollTop during smooth scroll animation", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -315,7 +315,7 @@ describe("ScrollHandler - vertical mode", () => {
 describe("ScrollHandler - horizontal mode", () => {
   it("should read scrollLeft for horizontal viewport", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const config = {
       state,
       viewport,
@@ -339,7 +339,7 @@ describe("ScrollHandler - horizontal mode", () => {
 
   it("should set scrollLeft during smooth scroll animation", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -371,7 +371,7 @@ describe("ScrollHandler - horizontal mode", () => {
 describe("ScrollHandler.cancelScroll()", () => {
   it("should stop smooth scroll animation in progress", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -402,7 +402,7 @@ describe("ScrollHandler.cancelScroll()", () => {
 
   it("should be safe to call when no animation is running", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const config = {
       state,
       viewport,
@@ -428,7 +428,7 @@ describe("ScrollHandler.cancelScroll()", () => {
 describe("ScrollHandler.smoothScrollTo()", () => {
   it("should animate to target position over duration", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -454,7 +454,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
 
   it("should reach exact target at end of animation", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -479,7 +479,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
 
   it("should jump directly for distance < 1px", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 100;
     const config = {
       state,
@@ -501,7 +501,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
 
   it("should call onFrame during animation", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const onFrame = mock(() => {});
     const config = {
@@ -527,7 +527,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
 
   it("should cancel previous animation when starting new one", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -563,7 +563,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
 describe("ScrollHandler.onFrame callback", () => {
   it("should fire onFrame on scroll event", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const onFrame = mock(() => {});
     const config = {
       state,
@@ -588,7 +588,7 @@ describe("ScrollHandler.onFrame callback", () => {
 
   it("should update state.scrollDirection on forward scroll", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 100;
     const config = {
       state,
@@ -613,7 +613,7 @@ describe("ScrollHandler.onFrame callback", () => {
 
   it("should update state.scrollDirection on backward scroll", () => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 200;
     const config = {
       state,
@@ -644,7 +644,7 @@ describe("ScrollHandler.onFrame callback", () => {
 describe("ScrollHandler.onIdle callback", () => {
   it("should fire onIdle after idleTimeout", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     const onIdle = mock(() => {});
     const config = {
       state,
@@ -672,7 +672,7 @@ describe("ScrollHandler.onIdle callback", () => {
 
   it("should reset scrollDirection on idle", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     const config = {
       state,
@@ -702,7 +702,7 @@ describe("ScrollHandler.onIdle callback", () => {
 
   it("should reschedule idle timeout on new scroll", (done) => {
     const viewport = document.createElement("div");
-    const state = new EngineState(10);
+    const state = createEngineState(10);
     state.scrollPosition = 0;
     let idleCount = 0;
     const config = {

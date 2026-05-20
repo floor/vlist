@@ -7,7 +7,7 @@
  * so tests can assert on plugin behavior.
  */
 
-import type { VListItem, ItemTemplate } from "../../src/types";
+import type { VListItem, ItemTemplate, ItemState } from "../../src/types";
 import type {
   PluginContext,
   DOMStructure,
@@ -15,7 +15,8 @@ import type {
   ResolvedConfig,
 } from "../../src/core/types";
 import type { SizeCache } from "../../src/core/sizes";
-import { EngineState } from "../../src/core/state";
+import { createEngineState } from "../../src/core/state";
+import type { EngineState } from "../../src/core/state";
 
 export interface PluginTestContext<T extends VListItem> {
   ctx: PluginContext<T>;
@@ -78,7 +79,7 @@ export function createPluginMockContext<T extends VListItem>(
   const dom: DOMStructure = { root, viewport, content };
 
   // ── Engine State ────────────────────────────────────────────────
-  const engineState = new EngineState(200);
+  const engineState = createEngineState(200);
   engineState.containerSize = hz ? containerWidth : containerHeight;
   engineState.crossSize = hz ? containerHeight : containerWidth;
   engineState.totalItems = items.length;
@@ -153,6 +154,10 @@ export function createPluginMockContext<T extends VListItem>(
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let _renderFnReplaced = false;
+  let getItemFn: ((index: number) => T | undefined) | null = null;
+  let itemStateFn: ((index: number, state: ItemState) => void) | null = null;
+  let removeItemByIdFn: ((id: string | number) => number) | null = null;
+  let insertItemAtFn: ((item: T, index: number) => void) | null = null;
 
   // ── Context ─────────────────────────────────────────────────────
   const ctx: PluginContext<T> = {
@@ -183,6 +188,7 @@ export function createPluginMockContext<T extends VListItem>(
     setVirtualTotalFn: () => {},
 
     getItems: () => items,
+    getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],
     getState: () => engineState,
     rebuildSizeCache: () => {},
     updateContentSize: (size: number) => {
@@ -204,16 +210,44 @@ export function createPluginMockContext<T extends VListItem>(
       if (customForceRender) customForceRender();
     },
 
+    setGetItemFn: (fn: (index: number) => T | undefined) => { getItemFn = fn; },
+    setItemStateFn: (fn: (index: number, state: ItemState) => void) => { itemStateFn = fn; },
+    getItemStateFn: () => itemStateFn,
+    get rawSizeSpec() { return itemSizeConfig; },
+
     scrollTo: (pos: number) => {
+      scrollCalls.push(pos);
+    },
+    smoothScrollTo: (pos: number, _duration: number) => {
       scrollCalls.push(pos);
     },
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
 
-    removeItemById: () => -1,
-    insertItemAt: () => {},
-    getRenderedElement: () => null,
+    removeItemById: (id: string | number) => {
+      if (removeItemByIdFn) return removeItemByIdFn(id);
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) return -1;
+      items.splice(idx, 1);
+      engineState.totalItems = items.length;
+      return idx;
+    },
+    insertItemAt: (item: T, index: number) => {
+      if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+      items.splice(index, 0, item);
+      engineState.totalItems = items.length;
+    },
+    setRemoveItemFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
+    setInsertItemFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
+    getRenderedElement: (index: number) => {
+      const children = content.children;
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i] as HTMLElement;
+        if (el.dataset.index === String(index)) return el;
+      }
+      return null;
+    },
   };
 
   const cleanup = () => {
