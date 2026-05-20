@@ -16,6 +16,7 @@ import type {
   CompiledHooks,
 } from "./types";
 import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT } from "../constants";
+import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
 import { createSizeCache } from "./sizes";
@@ -35,12 +36,19 @@ import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } fr
 
 function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): ResolvedConfig {
   const horizontal = raw.orientation === "horizontal";
+  const pad = resolvePadding(raw.padding);
   return {
     overscan: raw.overscan ?? OVERSCAN,
     horizontal,
     reverse: raw.reverse ?? false,
     classPrefix: raw.classPrefix ?? CLASS_PREFIX,
     interactive: raw.interactive ?? true,
+    mainAxisPadding: mainAxisPaddingFrom(pad, horizontal),
+    crossAxisPadding: crossAxisPaddingFrom(pad, horizontal),
+    startPadding: horizontal ? pad.left : pad.top,
+    endPadding: horizontal ? pad.right : pad.bottom,
+    crossPadStart: horizontal ? pad.top : pad.left,
+    crossPadEnd: horizontal ? pad.bottom : pad.right,
   };
 }
 
@@ -107,6 +115,10 @@ export function createVList<T extends VListItem = VListItem>(
 
   const container = resolveContainer(rawConfig.container);
   const dom = createDOMStructure(container, config.classPrefix, config.horizontal, config.interactive, rawConfig.ariaLabel);
+
+  // Padding is handled via transform offsets (main axis) and inline
+  // left/right or top/bottom (cross axis) in the pipeline, since items
+  // are position:absolute and CSS padding on the container has no effect.
   const sizeCache: SizeCache = createSizeCache(sizeSpec, totalItems);
   const pool = createPool(config.classPrefix);
   const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
@@ -191,7 +203,7 @@ export function createVList<T extends VListItem = VListItem>(
       sizeCache.rebuild(state.totalItems);
     },
     updateContentSize(size: number): void {
-      dom.content.style[config.horizontal ? "width" : "height"] = size + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
     },
     setRenderFn(renderFn: () => void, forceFn: () => void): void {
       customRenderIfNeeded = renderFn;
@@ -224,7 +236,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.splice(idx, 1);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       return idx;
     },
     insertItemAt(item: T, index: number): void {
@@ -232,7 +244,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.splice(index, 0, item);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
     },
     setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
     setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
@@ -297,10 +309,14 @@ export function createVList<T extends VListItem = VListItem>(
       const sz = sizeCache.getSize(idx);
       const sp = state.scrollPosition;
       const cs = state.containerSize;
+      const sP = config.startPadding;
+      const eP = config.endPadding;
+      const adjTop = off + sP;
+      const adjBot = adjTop + sz;
 
       let pos = sp;
-      if (off < sp) pos = off;
-      else if (off + sz > sp + cs) pos = off + sz - cs;
+      if (adjTop < sp) pos = Math.max(0, off);
+      else if (adjBot > sp + cs) pos = adjBot + eP - cs;
 
       if (pos !== sp) {
         state.scrollPosition = pos;
@@ -459,7 +475,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd);
     }
   }
 
@@ -468,7 +484,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 
@@ -575,7 +591,7 @@ export function createVList<T extends VListItem = VListItem>(
   state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
 
   // Set content height for scrollbar
-  dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+  dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
 
   state.initialized = true;
   doRender();
@@ -591,7 +607,7 @@ export function createVList<T extends VListItem = VListItem>(
       items = [...newItems];
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       doForceRender();
     },
 
@@ -599,7 +615,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.push(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       doForceRender();
     },
 
@@ -607,7 +623,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.unshift(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       doForceRender();
     },
 
@@ -629,7 +645,7 @@ export function createVList<T extends VListItem = VListItem>(
         }
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       }
       doForceRender();
     },
@@ -643,7 +659,7 @@ export function createVList<T extends VListItem = VListItem>(
         items.splice(idx, 1);
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
       }
       doForceRender();
     },
@@ -664,7 +680,7 @@ export function createVList<T extends VListItem = VListItem>(
       if (removed > 0) {
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
         state.renderPending = true;
         doRender();
       }
@@ -690,19 +706,21 @@ export function createVList<T extends VListItem = VListItem>(
       const itemSize = sizeCache.getSize(clamped);
       const cs = state.containerSize;
       const totalSize = sizeCache.getTotalSize();
-      const maxScroll = Math.max(0, totalSize - cs);
+      const mp = config.mainAxisPadding;
+      const maxScroll = Math.max(0, totalSize + mp - cs);
 
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
       const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
+      const sp = config.startPadding;
       let pos: number;
       switch (align) {
         case "center":
-          pos = offset - (cs - itemSize) / 2;
+          pos = sp + offset - (cs - itemSize) / 2;
           break;
         case "end":
-          pos = offset - cs + itemSize;
+          pos = offset + itemSize + mp - cs;
           break;
         default:
           pos = offset;

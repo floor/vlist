@@ -35,6 +35,7 @@ export function phase1Calculate(
   sizeCache: SizeCache,
   overscan: number,
   hooks: CompiledHooks,
+  startPadding?: number,
 ): void {
   if (state.containerSize <= 0 || state.totalItems === 0) {
     state.clear();
@@ -44,11 +45,14 @@ export function phase1Calculate(
   const scrollPos = state.scrollPosition;
   const containerSize = state.containerSize;
   const totalItems = state.totalItems;
+  const sp = startPadding ?? 0;
 
   state.totalSize = sizeCache.getTotalSize();
 
-  // Visible range (v1 range.ts:14-33)
-  let visStart = sizeCache.indexAtOffset(scrollPos);
+  // Visible range — items are visually shifted by startPadding in the
+  // transform, so subtract it from the range start lookup to avoid
+  // missing items at the top of the viewport.
+  let visStart = sizeCache.indexAtOffset(sp > 0 ? Math.max(0, scrollPos - sp) : scrollPos);
   let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
   if (visEnd < totalItems - 1) visEnd++;
   visStart = Math.max(0, visStart);
@@ -106,6 +110,9 @@ export function phase2Commit<T extends VListItem>(
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
   classPrefix?: string,
   interactive?: boolean,
+  startPadding?: number,
+  crossPadStart?: number,
+  crossPadEnd?: number,
 ): void {
   const prefix = classPrefix ?? "vlist";
   const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
@@ -134,6 +141,14 @@ export function phase2Commit<T extends VListItem>(
   const itemRole = interactive ? "option" : "listitem";
   const ariaTotal = interactive ? String(state.totalItems) : "";
   const totalChanged = interactive && state.totalItems !== state.prevAriaTotal;
+  const sp = startPadding ?? 0;
+  const cps = crossPadStart ?? 0;
+  const cpe = crossPadEnd ?? 0;
+  const hasCrossPad = cps !== 0 || cpe !== 0;
+  const crossStartProp = hasCrossPad ? (horizontal ? "top" : "left") : "";
+  const crossEndProp = hasCrossPad ? (horizontal ? "bottom" : "right") : "";
+  const crossStartVal = hasCrossPad ? cps + "px" : "";
+  const crossEndVal = hasCrossPad ? cpe + "px" : "";
 
   for (let i = 0; i < count; i++) {
     const dataIndex = newIndices[i]!;
@@ -174,6 +189,11 @@ export function phase2Commit<T extends VListItem>(
         element.setAttribute("data-id", String(item.id));
       }
 
+      if (hasCrossPad) {
+        element.style[crossStartProp] = crossStartVal;
+        element.style[crossEndProp] = crossEndVal;
+      }
+
       rendered.set(dataIndex, element);
       contentElement.appendChild(element);
     } else {
@@ -199,7 +219,7 @@ export function phase2Commit<T extends VListItem>(
       else element.removeAttribute("aria-selected");
     }
 
-    element.style.transform = translateProp + offset + "px)";
+    element.style.transform = translateProp + (offset + sp) + "px)";
     if (horizontal) {
       element.style.width = size + "px";
     } else {
@@ -231,7 +251,10 @@ export function render<T extends VListItem>(
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
   classPrefix?: string,
   interactive?: boolean,
+  startPadding?: number,
+  crossPadStart?: number,
+  crossPadEnd?: number,
 ): void {
-  phase1Calculate(state, sizeCache, overscan, hooks);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive);
+  phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
+  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd);
 }

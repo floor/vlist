@@ -51,6 +51,12 @@ export interface ResolvedConfig {
   readonly reverse: boolean;
   readonly classPrefix: string;
   readonly interactive: boolean;
+  readonly mainAxisPadding: number;
+  readonly crossAxisPadding: number;
+  readonly startPadding: number;
+  readonly endPadding: number;
+  readonly crossPadStart: number;
+  readonly crossPadEnd: number;
 }
 
 // =============================================================================
