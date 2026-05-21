@@ -351,16 +351,6 @@ export function masonry<T extends VListItem = VListItem>(
       // Initial layout
       calculateLayout();
 
-      // Wrap getTotalSize so create.ts uses masonry's layout-based total,
-      // not the base sizeCache total (which counts all items, not lanes).
-      const origGetTotalSize = ctx.sizeCache.getTotalSize;
-      ctx.sizeCache.getTotalSize = (): number => {
-        if (cachedPlacements.length > 0) {
-          return layout.getTotalSize(cachedPlacements);
-        }
-        return origGetTotalSize();
-      };
-
       // ── Public methods ─────────────────────────────────────────
 
       ctx.registerMethod("getMasonryLayout", () => layout);

@@ -257,7 +257,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.splice(idx, 1);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+      syncContentSize();
       return idx;
     },
     insertItemAt(item: T, index: number): void {
@@ -265,7 +265,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.splice(index, 0, item);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+      syncContentSize();
     },
     setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
     setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
@@ -323,6 +323,11 @@ export function createVList<T extends VListItem = VListItem>(
       _rangeEvt.range.end = state.prevRangeEnd;
       emitter.emit("range:change", _rangeEvt);
     }
+  }
+
+  function syncContentSize(): void {
+    if (customRenderIfNeeded) return;
+    dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
   }
 
   function doRender(): void {
@@ -445,7 +450,7 @@ export function createVList<T extends VListItem = VListItem>(
   state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
 
   // Set content height for scrollbar
-  dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+  syncContentSize();
 
   state.initialized = true;
   doRender();
@@ -461,7 +466,7 @@ export function createVList<T extends VListItem = VListItem>(
       items = [...newItems];
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+      syncContentSize();
       doForceRender();
     },
 
@@ -469,7 +474,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.push(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+      syncContentSize();
       doForceRender();
     },
 
@@ -477,7 +482,7 @@ export function createVList<T extends VListItem = VListItem>(
       items.unshift(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
-      dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+      syncContentSize();
       doForceRender();
     },
 
@@ -503,7 +508,7 @@ export function createVList<T extends VListItem = VListItem>(
         }
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+        syncContentSize();
       }
       doForceRender();
     },
@@ -517,7 +522,7 @@ export function createVList<T extends VListItem = VListItem>(
         items.splice(idx, 1);
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+        syncContentSize();
       }
       doForceRender();
     },
@@ -538,7 +543,7 @@ export function createVList<T extends VListItem = VListItem>(
       if (removed > 0) {
         state.totalItems = items.length;
         sizeCache.rebuild(state.totalItems);
-        dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+        syncContentSize();
         state.renderPending = true;
         doRender();
       }
