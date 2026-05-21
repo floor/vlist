@@ -322,7 +322,15 @@
     animation: vlist-placeholder-pulse 2s ease-in-out infinite;
 }
 
-/* Placeholder content styling - examples should define their own placeholder appearance */
+/* Automatic skeleton for leaf text elements — mask characters set natural width */
+.vlist-item--placeholder *:not(:has(*)) {
+    color: transparent;
+    background-color: var(--vlist-placeholder-bg);
+    border-radius: 4px;
+    width: fit-content;
+    line-height: 1.2;
+    transform: scaleY(0.8);
+}
 
 /* Combined selected + focused */
 .vlist-item.vlist-item--selected.vlist-item--focused {
