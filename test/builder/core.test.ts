@@ -718,7 +718,7 @@ describe("builder/core — validation errors", () => {
     ).toThrow("item.estimatedHeight must be a positive number");
   });
 
-  it("should throw when features conflict", () => {
+  it("should throw when features conflict in development", () => {
     expect(() =>
       vlist({
         container: document.createElement("div"),

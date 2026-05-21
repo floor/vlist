@@ -700,6 +700,11 @@ function setupAsyncPath<T extends VListItem>(
       bridge.insertAt(index, item);
       asyncDataManager.insertItem(item, index);
     },
+    updateItem: (layoutIndex: number, updates: Partial<T>) => {
+      const dataIndex = bridge.layoutToDataIndex(layoutIndex);
+      if (dataIndex >= 0) return asyncDataManager.updateItem(dataIndex, updates);
+      return asyncDataManager.updateItem(layoutIndex, updates);
+    },
     removeItem: (id: string | number) => {
       const dataIndex = asyncDataManager.getIndexById(id);
       if (dataIndex >= 0) {
