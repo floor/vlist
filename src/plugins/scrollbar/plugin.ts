@@ -72,8 +72,11 @@ export function scrollbar<T extends VListItem = VListItem>(
       // Defer initial bounds update — containerSize may be 0 during setup
       // since the viewport hasn't been laid out yet. The resize observer
       // will fire with the correct size after first paint.
+      // Skip if compressed — the scale plugin owns bounds in that case.
       queueMicrotask(() => {
-        sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+        if (!engineState.isCompressed) {
+          sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+        }
       });
 
       // Expose scrollbar instance for cross-plugin coordination (scale plugin)
@@ -96,7 +99,9 @@ export function scrollbar<T extends VListItem = VListItem>(
       },
 
       onResize(): void {
-        sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+        if (!engineState.isCompressed) {
+          sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+        }
       },
     },
 
