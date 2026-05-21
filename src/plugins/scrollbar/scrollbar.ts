@@ -542,33 +542,16 @@ export const createScrollbar = (
     // Update thumb immediately for responsive feel
     thumb.style.transform = `${translateFn}(${(newPosition / maxScroll) * maxThumbTravel}px)`;
 
-    // Throttle scroll callback with RAF
+    // Call synchronously — rAF throttle causes a one-frame lag because
+    // the HTML spec processes scroll events BEFORE rAF callbacks, so the
+    // pipeline would always render for the previous frame's scroll position.
     lastRequestedPosition = newPosition;
-
-    if (animationFrameId === null) {
-      animationFrameId = requestAnimationFrame(() => {
-        if (lastRequestedPosition !== null) {
-          onScroll(lastRequestedPosition);
-        }
-        animationFrameId = null;
-      });
-    }
+    onScroll(newPosition);
   };
 
   const handleMouseUp = (): void => {
     isDragging = false;
-
-    // Cancel pending RAF
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-
-    // Apply final position
-    if (lastRequestedPosition !== null) {
-      onScroll(lastRequestedPosition);
-      lastRequestedPosition = null;
-    }
+    lastRequestedPosition = null;
 
     track.classList.remove(`${classPrefix}-scrollbar--dragging`);
 
