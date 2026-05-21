@@ -331,8 +331,12 @@ export function async<T extends VListItem = VListItem>(
         }
 
         // Moderate scrolling (between preloadThreshold and cancelThreshold):
-        // debounce with preload ahead in scroll direction
+        // load visible range immediately, debounce preload-ahead only
         if (currentVelocity > preloadThreshold) {
+          if (visEnd >= engineState.startIndex) {
+            ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+          }
+
           let loadStart = engineState.startIndex;
           let loadEnd = visEnd;
           const dir = engineState.scrollDirection;
