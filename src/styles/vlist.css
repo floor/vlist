@@ -76,6 +76,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.3);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
+    --vlist-placeholder-bg-strong: rgba(0, 0, 0, 0.24);
 }
 
 /* =============================================================================
@@ -106,6 +107,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+    --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
 }
 
 /* Dark — OS preference (skipped when explicit light/dark is set) */
@@ -127,6 +129,7 @@
         --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
         --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+        --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
     }
 }
 
@@ -148,6 +151,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+    --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
 }
 
 /* =============================================================================
@@ -330,6 +334,11 @@
     width: fit-content;
     line-height: 1.2;
     transform: scaleY(0.8);
+}
+
+/* Darker skeleton for semantically heavy elements */
+.vlist-item--placeholder :is(strong, b, h1, h2, h3, h4):not(:has(*)) {
+    background-color: var(--vlist-placeholder-bg-strong);
 }
 
 /* Combined selected + focused */
