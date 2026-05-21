@@ -209,6 +209,7 @@ export function grid<T extends VListItem = VListItem>(
 
   function gridForceRender(): void {
     if (engineState.destroyed) return;
+    sizeCache.rebuild(getRowCount());
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -259,6 +260,20 @@ export function grid<T extends VListItem = VListItem>(
         }
       }
 
+      // Size cache must have rowCount entries, not totalItems.
+      // setSizeConfig creates with state.totalItems — fix immediately.
+      sizeCache.rebuild(getRowCount());
+
+      // Fix trailing gap: last row's cached size includes gap that
+      // shouldn't add empty space at the bottom.
+      if (gap > 0) {
+        const origGetTotalSize = sizeCache.getTotalSize;
+        sizeCache.getTotalSize = (): number => {
+          const t = origGetTotalSize();
+          return t > 0 ? t - gap : 0;
+        };
+      }
+
       // Virtual total = row count (not item count)
       ctx.setVirtualTotalFn(() => getRowCount());
 
@@ -296,7 +311,7 @@ export function grid<T extends VListItem = VListItem>(
           } else {
             ctx.setSizeConfig(baseRowSize + newGap);
           }
-          ctx.rebuildSizeCache();
+          sizeCache.rebuild(getRowCount());
         }
 
         if (newConfig.columns !== undefined) {
@@ -308,7 +323,10 @@ export function grid<T extends VListItem = VListItem>(
       });
 
       // Override scrollToIndex: item index → row index
-      ctx.registerMethod("scrollToIndex", (index: number, align: "start" | "center" | "end" = "start") => {
+      ctx.registerMethod("scrollToIndex", (
+        index: number,
+        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
+      ) => {
         const rowIndex = layout.getRow(index);
         const totalRows = getRowCount();
         if (totalRows === 0) return;
@@ -318,6 +336,10 @@ export function grid<T extends VListItem = VListItem>(
         const cs = engineState.containerSize;
         const totalSize = sizeCache.getTotalSize();
         const maxScroll = Math.max(0, totalSize - cs);
+
+        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
+        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
+        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         let pos: number;
         switch (align) {
@@ -332,8 +354,11 @@ export function grid<T extends VListItem = VListItem>(
         }
         pos = Math.max(0, Math.min(pos, maxScroll));
 
-        if (horizontal) ctx.dom.viewport.scrollLeft = pos;
-        else ctx.dom.viewport.scrollTop = pos;
+        if (behavior === "smooth" && duration && duration > 0) {
+          ctx.smoothScrollTo(pos, duration);
+        } else {
+          ctx.scrollTo(pos);
+        }
       });
 
       // ── 2D keyboard navigation ─────────────────────────────────

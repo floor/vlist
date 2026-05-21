@@ -299,6 +299,7 @@ export function masonry<T extends VListItem = VListItem>(
 
   function masonryForceRender(): void {
     if (engineState.destroyed) return;
+    calculateLayout();
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -350,6 +351,16 @@ export function masonry<T extends VListItem = VListItem>(
       // Initial layout
       calculateLayout();
 
+      // Wrap getTotalSize so create.ts uses masonry's layout-based total,
+      // not the base sizeCache total (which counts all items, not lanes).
+      const origGetTotalSize = ctx.sizeCache.getTotalSize;
+      ctx.sizeCache.getTotalSize = (): number => {
+        if (cachedPlacements.length > 0) {
+          return layout.getTotalSize(cachedPlacements);
+        }
+        return origGetTotalSize();
+      };
+
       // ── Public methods ─────────────────────────────────────────
 
       ctx.registerMethod("getMasonryLayout", () => layout);
@@ -365,7 +376,6 @@ export function masonry<T extends VListItem = VListItem>(
         if (newConfig.columns !== undefined) updates.columns = newConfig.columns;
         if (newConfig.gap !== undefined) updates.gap = newConfig.gap;
         layout.update(updates);
-        calculateLayout();
         renderer?.clear();
         masonryForceRender();
       });
@@ -373,10 +383,14 @@ export function masonry<T extends VListItem = VListItem>(
       // scrollToIndex: map item index to its placement position
       ctx.registerMethod("scrollToIndex", (
         index: number,
-        align: "start" | "center" | "end" = "start",
+        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
       ) => {
         const placement = cachedPlacements[index];
         if (!placement) return;
+
+        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
+        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
+        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements);
@@ -387,9 +401,17 @@ export function masonry<T extends VListItem = VListItem>(
           pos = placement.y - containerSize / 2 + placement.size / 2;
         } else if (align === "end") {
           pos = placement.y - containerSize + placement.size;
+          if (index >= engineState.totalItems - 1 && placement.y + placement.size > maxScroll) {
+            pos = maxScroll;
+          }
         }
         pos = Math.max(0, Math.min(pos, maxScroll));
-        ctx.scrollTo(pos);
+
+        if (behavior === "smooth" && duration && duration > 0) {
+          ctx.smoothScrollTo(pos, duration);
+        } else {
+          ctx.scrollTo(pos);
+        }
       });
 
       // Placement-based scroll into view (used by selection focus)
@@ -433,7 +455,6 @@ export function masonry<T extends VListItem = VListItem>(
         if (Math.abs(newCross - layout.containerSize) < 1) return;
 
         layout.update({ containerSize: newCross });
-        calculateLayout();
         renderer?.clear();
         masonryForceRender();
       },
