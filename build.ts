@@ -26,10 +26,10 @@ async function build() {
   // reference all exports in a wrapper to force inclusion.
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
-    `import { createVList, scale, scrollbar, grid, selection, page,`,
+    `import { createVList, a11y, scale, scrollbar, grid, selection, page,`,
     `  snapshots, transition, autosize, masonry, async, groups,`,
     `  table, sortable, createStats } from "${entryAbs}";`,
-    `export { createVList, scale, scrollbar, grid, selection, page,`,
+    `export { createVList, a11y, scale, scrollbar, grid, selection, page,`,
     `  snapshots, transition, autosize, masonry, async, groups,`,
     `  table, sortable, createStats };`,
   ].join("\n");
