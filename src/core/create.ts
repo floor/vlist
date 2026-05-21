@@ -183,6 +183,7 @@ export function createVList<T extends VListItem = VListItem>(
   let itemStateFn: ((index: number, state: import("../types").ItemState) => void) | null = null;
   let removeItemByIdFn: ((id: string | number) => number) | null = null;
   let insertItemAtFn: ((item: T, index: number) => void) | null = null;
+  let updateItemByIdFn: ((id: string | number, updates: Partial<T>) => boolean) | null = null;
   let skipDefaultScroll = false;
   let skipDefaultResize = false;
   let scrollTarget: EventTarget | null = null;
@@ -268,6 +269,7 @@ export function createVList<T extends VListItem = VListItem>(
     },
     setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
     setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
+    setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
     getRenderedElement(index: number): HTMLElement | null {
       return rendered.get(index) ?? null;
     },
@@ -480,9 +482,13 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     updateItem(id: string | number, updates: Partial<T>): void {
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx === -1) return;
-      items[idx] = { ...items[idx]!, ...updates };
+      if (updateItemByIdFn) {
+        if (!updateItemByIdFn(id, updates)) return;
+      } else {
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx === -1) return;
+        items[idx] = { ...items[idx]!, ...updates };
+      }
       doForceRender();
     },
 

@@ -202,6 +202,12 @@ export function async<T extends VListItem = VListItem>(
         dataManager.insertItem(item, index);
       });
 
+      ctx.setUpdateItemFn((id: string | number, updates: Partial<T>): boolean => {
+        const index = dataManager.getIndexById(id);
+        if (index < 0) return false;
+        return dataManager.updateItem(index, updates);
+      });
+
       // Register public methods
       ctx.registerMethod("reload", async (): Promise<void> => {
         pendingRange = null;
