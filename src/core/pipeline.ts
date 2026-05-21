@@ -15,6 +15,7 @@ import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { CompiledHooks, ElementPool } from "./types";
 import type { EngineState } from "./state";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
+import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
 // =============================================================================
 // Phase 1 — Calculate & Reconcile
@@ -36,10 +37,10 @@ export function phase1Calculate(
   overscan: number,
   hooks: CompiledHooks,
   startPadding?: number,
-): void {
+): boolean {
   if (state.containerSize <= 0 || state.totalItems === 0) {
     state.clear();
-    return;
+    return true;
   }
 
   const scrollPos = state.scrollPosition;
@@ -69,7 +70,7 @@ export function phase1Calculate(
 
   // Range-unchanged fast path (v1 core.ts:780-809)
   if (renderStart === state.prevRangeStart && renderEnd === state.prevRangeEnd && !state.renderPending) {
-    return;
+    return false;
   }
 
   // Fill TypedArray buffers
@@ -88,6 +89,7 @@ export function phase1Calculate(
   state.prevRangeStart = renderStart;
   state.prevRangeEnd = renderEnd;
   state.renderPending = false;
+  return true;
 }
 
 // =============================================================================
@@ -120,6 +122,8 @@ export function phase2Commit<T extends VListItem>(
   const gp = gap ?? 0;
   const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
   const focusedClass = itemStateFn ? `${prefix}-item--focused` : "";
+  const placeholderClass = `${prefix}-item--placeholder`;
+  const replacedClass = `${prefix}-item--replaced`;
   const items = getItemFn ? null : getItems();
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
@@ -168,42 +172,83 @@ export function phase2Commit<T extends VListItem>(
 
     let element = rendered.get(dataIndex);
 
+    const el = element as HTMLElement & {
+      _lastOffset?: number;
+      _lastSize?: number;
+      _lastSelected?: boolean;
+      _lastFocused?: boolean;
+    };
+
     if (element === undefined) {
-      element = pool.acquire();
+      const acquired = pool.acquire() as HTMLElement & {
+        _lastOffset?: number;
+        _lastSize?: number;
+        _lastSelected?: boolean;
+        _lastFocused?: boolean;
+      };
 
       if (item !== undefined) {
         const result = template(item, dataIndex, itemState);
         if (typeof result === "string") {
-          element.innerHTML = result;
+          acquired.innerHTML = result;
         } else {
-          element.innerHTML = "";
-          element.appendChild(result);
+          acquired.innerHTML = "";
+          acquired.appendChild(result);
         }
       }
 
-      element.setAttribute("role", itemRole);
-      element.setAttribute("data-index", String(dataIndex));
+      acquired.setAttribute("role", itemRole);
+      acquired.setAttribute("data-index", String(dataIndex));
       if (interactive) {
-        element.id = prefix + "-item-" + dataIndex;
-        element.setAttribute("aria-posinset", String(dataIndex + 1));
-        element.setAttribute("aria-setsize", ariaTotal);
+        acquired.id = prefix + "-item-" + dataIndex;
+        acquired.setAttribute("aria-posinset", String(dataIndex + 1));
+        acquired.setAttribute("aria-setsize", ariaTotal);
       }
       if (item !== undefined) {
-        element.setAttribute("data-id", String(item.id));
+        const itemId = String(item.id);
+        acquired.setAttribute("data-id", itemId);
+        if (itemId.startsWith(PLACEHOLDER_ID_PREFIX)) {
+          acquired.classList.add(placeholderClass);
+        }
       }
 
       if (hasCrossPad) {
-        element.style[crossStartProp] = crossStartVal;
-        element.style[crossEndProp] = crossEndVal;
+        acquired.style[crossStartProp] = crossStartVal;
+        acquired.style[crossEndProp] = crossEndVal;
       }
 
-      rendered.set(dataIndex, element);
-      contentElement.appendChild(element);
+      if (itemStateFn) {
+        acquired.classList.toggle(selectedClass, itemState.selected);
+        acquired.classList.toggle(focusedClass, itemState.focused);
+        if (itemState.selected) acquired.setAttribute("aria-selected", "true");
+        else acquired.removeAttribute("aria-selected");
+        acquired._lastSelected = itemState.selected;
+        acquired._lastFocused = itemState.focused;
+      }
+
+      if (oddClass) acquired.classList.toggle(oddClass, (dataIndex & 1) === 1);
+
+      const transformOffset = offset + sp;
+      acquired.style.transform = translateProp + transformOffset + "px)";
+      acquired._lastOffset = transformOffset;
+
+      const sizeVal = size - gp;
+      if (horizontal) {
+        acquired.style.width = sizeVal + "px";
+      } else {
+        acquired.style.height = sizeVal + "px";
+      }
+      acquired._lastSize = sizeVal;
+
+      rendered.set(dataIndex, acquired);
+      contentElement.appendChild(acquired);
     } else {
       if (totalChanged) {
         element.setAttribute("aria-setsize", ariaTotal);
       }
       if (item !== undefined && element.getAttribute("data-id") !== String(item.id)) {
+        const oldId = element.getAttribute("data-id");
+        const newId = String(item.id);
         const result = template(item, dataIndex, itemState);
         if (typeof result === "string") {
           element.innerHTML = result;
@@ -211,24 +256,47 @@ export function phase2Commit<T extends VListItem>(
           element.innerHTML = "";
           element.appendChild(result);
         }
-        element.setAttribute("data-id", String(item.id));
+        element.setAttribute("data-id", newId);
+
+        const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
+        const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+        if (wasPlaceholder !== isPlaceholder) {
+          element.classList.toggle(placeholderClass, isPlaceholder);
+        }
+        if (wasPlaceholder && !isPlaceholder) {
+          element.classList.add(replacedClass);
+          setTimeout(() => { element.classList.remove(replacedClass); }, 300);
+        }
       }
-    }
 
-    if (itemStateFn) {
-      element.classList.toggle(selectedClass, itemState.selected);
-      element.classList.toggle(focusedClass, itemState.focused);
-      if (itemState.selected) element.setAttribute("aria-selected", "true");
-      else element.removeAttribute("aria-selected");
-    }
+      if (itemStateFn) {
+        if (el._lastSelected !== itemState.selected) {
+          element.classList.toggle(selectedClass, itemState.selected);
+          if (itemState.selected) element.setAttribute("aria-selected", "true");
+          else element.removeAttribute("aria-selected");
+          el._lastSelected = itemState.selected;
+        }
+        if (el._lastFocused !== itemState.focused) {
+          element.classList.toggle(focusedClass, itemState.focused);
+          el._lastFocused = itemState.focused;
+        }
+      }
 
-    if (oddClass) element.classList.toggle(oddClass, (dataIndex & 1) === 1);
+      const transformOffset = offset + sp;
+      if (el._lastOffset !== transformOffset) {
+        element.style.transform = translateProp + transformOffset + "px)";
+        el._lastOffset = transformOffset;
+      }
 
-    element.style.transform = translateProp + (offset + sp) + "px)";
-    if (horizontal) {
-      element.style.width = (size - gp) + "px";
-    } else {
-      element.style.height = (size - gp) + "px";
+      const sizeVal = size - gp;
+      if (el._lastSize !== sizeVal) {
+        if (horizontal) {
+          element.style.width = sizeVal + "px";
+        } else {
+          element.style.height = sizeVal + "px";
+        }
+        el._lastSize = sizeVal;
+      }
     }
   }
 
@@ -262,6 +330,8 @@ export function render<T extends VListItem>(
   oddClass?: string,
   gap?: number,
 ): void {
-  phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
-  phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass, gap);
+  const changed = phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
+  if (changed) {
+    phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass, gap);
+  }
 }
