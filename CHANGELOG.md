@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-05-21
+
+### Fixed
+
+- **builder**: Handle feature conflicts gracefully in production — throw in development to catch mistakes early, silently skip the conflicting feature with a `console.warn` in production to prevent runtime crashes.
+- **groups**: Add `updateItem` to async group path for correct layout-to-data index mapping — without this, `updateItem` used raw layout indices instead of resolving through the group bridge.
+
 ## [1.9.0] - 2026-05-17
 
 ### Added
