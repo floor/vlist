@@ -54,7 +54,7 @@
     width: 0; /* vertical scrollbar: hidden (custom replaces it) */
 }
 
-.vlist--table .vlist-items {
+.vlist--table .vlist-content {
     contain: layout style;
 }
 

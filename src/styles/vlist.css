@@ -187,8 +187,8 @@
    when the user tabs in, so the container outline is never needed. */
 .vlist:focus,
 .vlist:focus-visible,
-.vlist-items:focus,
-.vlist-items:focus-visible {
+.vlist-content:focus,
+.vlist-content:focus-visible {
     outline: none;
 }
 
@@ -231,14 +231,8 @@
     background-color: var(--vlist-scrollbar-thumb-hover-color);
 }
 
-/* Content container (sets total height) */
+/* Content container (sets total height + contains items directly in v2) */
 .vlist-content {
-    position: relative;
-    width: 100%;
-}
-
-/* Items container */
-.vlist-items {
     position: relative;
     width: 100%;
     contain: layout style;
@@ -450,12 +444,6 @@
 
 /* Content container — width is set dynamically, height fills parent */
 .vlist--horizontal .vlist-content {
-    height: 100%;
-    width: auto;
-}
-
-/* Items container */
-.vlist--horizontal .vlist-items {
     height: 100%;
     width: auto;
 }
