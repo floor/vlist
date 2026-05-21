@@ -44,10 +44,16 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let animationId: number | null = null;
+  let wheelRendered = false;
 
   // ── Scroll event (passive, for native/touch scrolling) ──────────
 
   function onScrollEvent(): void {
+    if (wheelRendered) {
+      wheelRendered = false;
+      return;
+    }
+
     const pos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = pos;
@@ -62,12 +68,14 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
   function onWheelEvent(event: WheelEvent): void {
     if (state.isCompressed) return;
 
+    let next: number;
+
     if (horizontal) {
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
       const current = viewport.scrollLeft;
       const max = viewport.scrollWidth - viewport.clientWidth;
-      const next = Math.max(0, Math.min(current + event.deltaY * WHEEL_SENSITIVITY, max));
+      next = Math.max(0, Math.min(current + event.deltaY * WHEEL_SENSITIVITY, max));
       if (Math.abs(next - current) < 1) return;
 
       event.preventDefault();
@@ -83,7 +91,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
       const current = viewport.scrollTop;
       const max = viewport.scrollHeight - viewport.clientHeight;
-      const next = Math.max(0, Math.min(current + event.deltaY * WHEEL_SENSITIVITY, max));
+      next = Math.max(0, Math.min(current + event.deltaY * WHEEL_SENSITIVITY, max));
       if (Math.abs(next - current) < 1) return;
 
       event.preventDefault();
@@ -91,9 +99,10 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     }
 
     state.prevScrollPosition = state.scrollPosition;
-    state.scrollPosition = horizontal ? viewport.scrollLeft : viewport.scrollTop;
-    state.scrollDirection = state.scrollPosition > state.prevScrollPosition ? 1 : -1;
+    state.scrollPosition = next;
+    state.scrollDirection = next > state.prevScrollPosition ? 1 : -1;
 
+    wheelRendered = true;
     onFrame();
     scheduleIdle();
   }
