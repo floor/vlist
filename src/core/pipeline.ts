@@ -213,8 +213,8 @@ export function phase2Commit<T extends VListItem>(
       }
 
       if (hasCrossPad) {
-        acquired.style[crossStartProp] = crossStartVal;
-        acquired.style[crossEndProp] = crossEndVal;
+        acquired.style.setProperty(crossStartProp, crossStartVal);
+        acquired.style.setProperty(crossEndProp, crossEndVal);
       }
 
       if (itemStateFn) {

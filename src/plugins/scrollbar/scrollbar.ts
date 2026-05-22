@@ -206,7 +206,6 @@ export const createScrollbar = (
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
   let visible = false;
   let animationFrameId: number | null = null;
-  let lastRequestedPosition: number | null = null;
   let pageClickPos = 0;
   let pageScrollPosition = 0; // internal tracker — updated synchronously each tick
   let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -545,14 +544,11 @@ export const createScrollbar = (
     // Call synchronously — rAF throttle causes a one-frame lag because
     // the HTML spec processes scroll events BEFORE rAF callbacks, so the
     // pipeline would always render for the previous frame's scroll position.
-    lastRequestedPosition = newPosition;
     onScroll(newPosition);
   };
 
   const handleMouseUp = (): void => {
     isDragging = false;
-    lastRequestedPosition = null;
-
     track.classList.remove(`${classPrefix}-scrollbar--dragging`);
 
     // Schedule auto-hide only if not hovering
