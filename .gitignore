@@ -14,15 +14,18 @@ dist/
 *~
 
 #AI
+.agents/
 .cursor/
 .claude/
 .claude/settings.local.json
 .claude/worktrees
+.codex/
 scratchpad
 
 # DOCS for now
 docs/
 rfcs/
+
 # OS
 .DS_Store
 Thumbs.db
