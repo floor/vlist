@@ -6,7 +6,7 @@
  */
 
 import type { EngineState } from "./state";
-import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY, DEFAULT_EASING } from "../constants";
+import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY, SCROLL_EASING } from "../constants";
 
 // =============================================================================
 // Scroll Handler — wires scroll/wheel events to the pipeline
@@ -122,7 +122,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     }
   }
 
-  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing: (t: number) => number = DEFAULT_EASING): void {
+  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing: (t: number) => number = SCROLL_EASING): void {
     cancelScroll();
     const from = state.scrollPosition;
     if (Math.abs(target - from) < 1) {

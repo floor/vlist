@@ -15,7 +15,7 @@ import type {
   VisibleRangeFn,
   CompiledHooks,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -611,7 +611,7 @@ export function createVList<T extends VListItem = VListItem>(
       }
 
       if (behavior === "smooth") {
-        scrollHandler.smoothScrollTo(pos, duration ?? 300, scrollSetFn ?? undefined, easing);
+        scrollHandler.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else if (scrollSetFn) {
         scrollSetFn(pos);
       } else {

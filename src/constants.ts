@@ -63,7 +63,10 @@ export const SCROLL_IDLE_TIMEOUT = 150;
 export const WHEEL_SENSITIVITY = 1;
 
 /** Default easing for smooth scroll animations */
-export const DEFAULT_EASING = (t: number): number => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+export const SCROLL_EASING = (t: number): number => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+
+/** Default smooth scroll duration (ms) */
+export const SCROLL_DURATION = 300;
 
 // =============================================================================
 // Scrollbar

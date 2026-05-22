@@ -28,7 +28,7 @@ import {
   type CompressionState,
 } from "../../rendering/scale";
 import { createScrollbar, type Scrollbar } from "../scrollbar/scrollbar";
-import { DEFAULT_EASING } from "../../constants";
+import { SCROLL_EASING, SCROLL_DURATION } from "../../constants";
 
 // =============================================================================
 // Config
@@ -160,7 +160,7 @@ export function scale<T extends VListItem = VListItem>(
     applyVirtualScroll(Math.max(0, Math.min(pos, getMaxScroll())));
   }
 
-  function easedScrollTo(target: number, duration: number, easing: (t: number) => number = DEFAULT_EASING): void {
+  function easedScrollTo(target: number, duration: number, easing: (t: number) => number = SCROLL_EASING): void {
     cancelAnimations();
     const clampedTarget = Math.max(0, Math.min(target, getMaxScroll()));
     const from = virtualScrollPosition;
@@ -494,7 +494,7 @@ export function scale<T extends VListItem = VListItem>(
           compression, align as "start" | "center" | "end",
         );
         if (behavior === "smooth") {
-          easedScrollTo(virtualPos, duration ?? 300, easing);
+          easedScrollTo(virtualPos, duration ?? SCROLL_DURATION, easing);
         } else {
           setVirtualPosition(virtualPos);
         }
