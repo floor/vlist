@@ -360,6 +360,73 @@ describe("pipeline", () => {
     expect(el.querySelector("span")!.textContent).toBe("New 0");
   });
 
+  it("should re-render when item reference changes but id stays the same", () => {
+    const state = createEngineState(100);
+    state.containerSize = 500;
+    state.totalItems = 5;
+    const sizeCache = createSizeCache(40, 5);
+    const pool = createPool("vlist");
+    const content = document.createElement("div");
+    const rendered = new Map<number, HTMLElement>();
+    const hooks = compileHooks([]);
+
+    let items: TestItem[] = createTestItems(5);
+    const elementTemplate = (item: TestItem) => {
+      const el = document.createElement("span");
+      el.textContent = item.name;
+      return el;
+    };
+
+    phase1Calculate(state, sizeCache, 2, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+
+    const elBefore = rendered.get(0)!;
+    expect(elBefore.querySelector("span")!.textContent).toBe("Item 1");
+
+    // Replace item 0 with a new object that has the SAME id but different content
+    items = items.slice();
+    items[0] = { ...items[0]!, name: "Updated" };
+
+    state.renderPending = true;
+    phase1Calculate(state, sizeCache, 2, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+
+    const elAfter = rendered.get(0)!;
+    expect(elAfter.querySelector("span")!.textContent).toBe("Updated");
+  });
+
+  it("should NOT re-render when item reference is the same object", () => {
+    const state = createEngineState(100);
+    state.containerSize = 500;
+    state.totalItems = 5;
+    const sizeCache = createSizeCache(40, 5);
+    const pool = createPool("vlist");
+    const content = document.createElement("div");
+    const rendered = new Map<number, HTMLElement>();
+    const hooks = compileHooks([]);
+
+    const items: TestItem[] = createTestItems(5);
+    let templateCallCount = 0;
+    const elementTemplate = (item: TestItem) => {
+      templateCallCount++;
+      const el = document.createElement("span");
+      el.textContent = item.name;
+      return el;
+    };
+
+    phase1Calculate(state, sizeCache, 2, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    const initialCalls = templateCallCount;
+
+    // Re-render with the exact same items array — same references
+    state.renderPending = true;
+    phase1Calculate(state, sizeCache, 2, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+
+    // Template should NOT have been called again — same references
+    expect(templateCallCount).toBe(initialCalls);
+  });
+
   it("should toggle focused class on existing elements", () => {
     const state = createEngineState(100);
     state.containerSize = 500;
