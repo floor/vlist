@@ -518,12 +518,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       // Items array is 0-indexed relative to range.start
       const itemIndex = i - range.start;
       const item = items[itemIndex];
-      if (!item) {
-        console.warn(
-          `⚠️ RENDER: Missing item at index ${i} (range: ${range.start}-${range.end}, items.length: ${items.length})`,
-        );
-        continue;
-      }
+      if (!item) continue;
 
       let isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
