@@ -150,15 +150,6 @@ export function phase2Commit<T extends VListItem>(
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
-  // Release nodes no longer visible.
-  // Linear scan into visibleIndices supports arbitrary-order non-contiguous layouts.
-  // forEach with hoisted callback avoids per-frame closure + iterator allocation.
-  _relIndices = newIndices;
-  _relCount = count;
-  _relPool = pool;
-  _relRendered = rendered;
-  rendered.forEach(releaseIfNotVisible);
-
   // Acquire, bind identity, position
   const translateProp = horizontal ? "translateX(" : "translateY(";
   const itemRole = interactive ? "option" : "listitem";
@@ -321,6 +312,14 @@ export function phase2Commit<T extends VListItem>(
       }
     }
   }
+
+  // Release nodes no longer visible (after acquire so new elements are in the
+  // DOM before stale ones are removed — no single-frame gaps).
+  _relIndices = newIndices;
+  _relCount = count;
+  _relPool = pool;
+  _relRendered = rendered;
+  rendered.forEach(releaseIfNotVisible);
 
   if (interactive) state.prevAriaTotal = state.totalItems;
 
