@@ -18,14 +18,14 @@ You create the complete file structure for a new vlist feature, matching existin
    - `src/builder/types.ts` — `VListFeature`, `BuilderContext`, `BuilderConfig` interfaces
    - `src/features/grid/feature.ts` — canonical feature structure
    - `src/features/grid/index.ts` — barrel export pattern
-   - `test/features/grid/feature.test.ts` — test pattern
+   - `test/plugins/grid/plugin.test.ts` — test pattern
    - `src/index.ts` — how features are exported
 
 3. Create files:
    - `src/features/{name}/feature.ts` — implements `VListFeature<T>`
    - `src/features/{name}/index.ts` — barrel export
    - `src/features/{name}/types.ts` — config types (if needed)
-   - `test/features/{name}/feature.test.ts` — test skeleton
+   - `test/plugins/{name}/plugin.test.ts` — test skeleton
 
 4. Requirements:
    - Export a `with{Name}` factory function returning `VListFeature<T>`

@@ -155,7 +155,7 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 - `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
 - Each feature tested by: factory/validation, setup/registration, public methods, cross-feature integration
 - Features are unit-tested via mock `BuilderContext` — see existing tests for the pattern
-- 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/feature.test.ts)
+- 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/plugin.test.ts)
 
 ## Adding a New Feature
 
