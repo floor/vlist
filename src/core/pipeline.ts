@@ -137,7 +137,7 @@ export function phase2Commit<T extends VListItem>(
   const newIndices = state.visibleIndices;
 
   // Release nodes no longer visible.
-  // Binary search into sorted visibleIndices supports non-contiguous layouts.
+  // Linear scan into visibleIndices supports arbitrary-order non-contiguous layouts.
   // forEach avoids iterator/tuple allocations that for..of creates.
   rendered.forEach((element, idx) => {
     if (!isInVisible(newIndices, count, idx)) {
