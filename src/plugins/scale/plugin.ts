@@ -24,9 +24,11 @@ import {
   getCompressionState,
   calculateCompressedVisibleRange,
   calculateCompressedItemPosition,
+  calculateCompressedScrollToIndex,
   type CompressionState,
 } from "../../rendering/scale";
 import { createScrollbar, type Scrollbar } from "../scrollbar/scrollbar";
+import { DEFAULT_EASING } from "../../constants";
 
 // =============================================================================
 // Config
@@ -78,6 +80,7 @@ export function scale<T extends VListItem = VListItem>(
   let virtualScrollPosition = 0;
   let targetScrollPosition = 0;
   let smoothScrollId: number | null = null;
+  let easedScrollId: number | null = null;
 
   // Touch state
   let touchStartPos = 0;
@@ -137,6 +140,43 @@ export function scale<T extends VListItem = VListItem>(
   let touchMoveHandler: ((e: TouchEvent) => void) | null = null;
   let touchEndHandler: ((e: TouchEvent) => void) | null = null;
   let nativeScrollReset: (() => void) | null = null;
+
+  function applyVirtualScroll(pos: number): void {
+    virtualScrollPosition = pos;
+    targetScrollPosition = pos;
+    engineState.prevScrollPosition = engineState.scrollPosition;
+    engineState.scrollPosition = pos;
+    engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : -1;
+    storedCtx!.forceRender();
+  }
+
+  function cancelAnimations(): void {
+    if (smoothScrollId !== null) { cancelAnimationFrame(smoothScrollId); smoothScrollId = null; }
+    if (easedScrollId !== null) { cancelAnimationFrame(easedScrollId); easedScrollId = null; }
+  }
+
+  function setVirtualPosition(pos: number): void {
+    cancelAnimations();
+    applyVirtualScroll(Math.max(0, Math.min(pos, getMaxScroll())));
+  }
+
+  function easedScrollTo(target: number, duration: number, easing: (t: number) => number = DEFAULT_EASING): void {
+    cancelAnimations();
+    const clampedTarget = Math.max(0, Math.min(target, getMaxScroll()));
+    const from = virtualScrollPosition;
+    if (Math.abs(clampedTarget - from) < SNAP_THRESHOLD) {
+      applyVirtualScroll(clampedTarget);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number): void => {
+      const t = Math.min((now - start) / duration, 1);
+      applyVirtualScroll(from + (clampedTarget - from) * easing(t));
+      if (t < 1) easedScrollId = requestAnimationFrame(tick);
+      else easedScrollId = null;
+    };
+    easedScrollId = requestAnimationFrame(tick);
+  }
 
   function activateCompression(ctx: PluginContext<T>): void {
     compressedActive = true;
@@ -397,6 +437,7 @@ export function scale<T extends VListItem = VListItem>(
 
   function cleanup(): void {
     if (smoothScrollId !== null) { cancelAnimationFrame(smoothScrollId); smoothScrollId = null; }
+    if (easedScrollId !== null) { cancelAnimationFrame(easedScrollId); easedScrollId = null; }
     if (momentumId !== null) { cancelAnimationFrame(momentumId); momentumId = null; }
     if (wheelHandler) { viewport.removeEventListener("wheel", wheelHandler); wheelHandler = null; }
     if (touchStartHandler) { viewport.removeEventListener("touchstart", touchStartHandler); touchStartHandler = null; }
@@ -439,23 +480,25 @@ export function scale<T extends VListItem = VListItem>(
             (viewport as any)[prop] = actualOffset;
             return;
           }
-          // Convert actual offset → virtual (compressed) offset
-          const virtualPos = actualOffset * compression.ratio;
-          const maxScroll = getMaxScroll();
-          const clamped = Math.max(0, Math.min(virtualPos, maxScroll));
-
-          // Cancel any in-flight animations
-          if (smoothScrollId !== null) { cancelAnimationFrame(smoothScrollId); smoothScrollId = null; }
+          cancelAnimations();
           if (momentumId !== null) { cancelAnimationFrame(momentumId); momentumId = null; }
-
-          virtualScrollPosition = clamped;
-          targetScrollPosition = clamped;
-          engineState.prevScrollPosition = engineState.scrollPosition;
-          engineState.scrollPosition = clamped;
-          engineState.scrollDirection = clamped > engineState.prevScrollPosition ? 1 : -1;
-          ctx.forceRender();
+          const virtualPos = actualOffset * compression.ratio;
+          applyVirtualScroll(Math.max(0, Math.min(virtualPos, getMaxScroll())));
         },
       );
+
+      ctx.setScrollToIndexFn((index, align, behavior, duration, easing): void | false => {
+        if (!compression.isCompressed || !compressedActive) return false;
+        const virtualPos = calculateCompressedScrollToIndex(
+          index, sizeCache, engineState.containerSize, engineState.totalItems,
+          compression, align as "start" | "center" | "end",
+        );
+        if (behavior === "smooth") {
+          easedScrollTo(virtualPos, duration ?? 300, easing);
+        } else {
+          setVirtualPosition(virtualPos);
+        }
+      });
 
       // Initial compression check
       updateCompression(ctx);
@@ -517,6 +560,7 @@ export function scale<T extends VListItem = VListItem>(
           );
           state.visibleSizes[i] = sizeCache.getSize(idx);
         }
+
 
         state.prevRangeStart = renderStart;
         state.prevRangeEnd = renderEnd;

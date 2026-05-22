@@ -6,7 +6,7 @@
  */
 
 import type { EngineState } from "./state";
-import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY } from "../constants";
+import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY, DEFAULT_EASING } from "../constants";
 
 // =============================================================================
 // Scroll Handler — wires scroll/wheel events to the pipeline
@@ -20,7 +20,7 @@ export interface ScrollHandler {
   /** Cancel smooth scroll animation */
   cancelScroll(): void;
   /** Animate to a target scroll position */
-  smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void): void;
+  smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number): void;
 }
 
 export interface ScrollHandlerConfig {
@@ -115,10 +115,6 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   // ── Smooth scroll animation ─────────────────────────────────────
 
-  function easeInOutQuad(t: number): number {
-    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-  }
-
   function cancelScroll(): void {
     if (animationId !== null) {
       cancelAnimationFrame(animationId);
@@ -126,7 +122,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     }
   }
 
-  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void): void {
+  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing: (t: number) => number = DEFAULT_EASING): void {
     cancelScroll();
     const from = state.scrollPosition;
     if (Math.abs(target - from) < 1) {
@@ -140,11 +136,11 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     function tick(now: number): void {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const pos = from + (target - from) * easeInOutQuad(t);
+      const pos = from + (target - from) * easing(t);
       if (setFn) setFn(pos);
       else if (horizontal) viewport.scrollLeft = pos;
       else viewport.scrollTop = pos;
-      state.scrollPosition = pos;
+      if (!setFn) state.scrollPosition = pos;
       onFrame();
       if (t < 1) {
         animationId = requestAnimationFrame(tick);

@@ -193,8 +193,9 @@ export function createVList<T extends VListItem = VListItem>(
   let navLr = 0;
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
-  let smoothScrollFn: ((target: number, duration: number) => void) | null = null;
+  let smoothScrollFn: ((target: number, duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
+  let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
 
   const ctx: PluginContext<T> = {
     dom,
@@ -246,14 +247,15 @@ export function createVList<T extends VListItem = VListItem>(
       else if (config.horizontal) dom.viewport.scrollLeft = position;
       else dom.viewport.scrollTop = position;
     },
-    smoothScrollTo(position: number, duration: number): void {
-      if (smoothScrollFn) smoothScrollFn(position, duration);
+    smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void {
+      if (smoothScrollFn) smoothScrollFn(position, duration, undefined, easing);
       else ctx.scrollTo(position);
     },
     disableDefaultScroll(): void { skipDefaultScroll = true; },
     disableDefaultResize(): void { skipDefaultResize = true; },
     setScrollTarget(target: EventTarget): void { scrollTarget = target; },
     setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
+    setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
     onScrollFrame: doScrollFrame,
     onScrollIdle: doScrollIdle,
     removeItemById(id: string | number): number {
@@ -568,21 +570,27 @@ export function createVList<T extends VListItem = VListItem>(
 
     scrollToIndex(
       index: number,
-      alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
+      alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number; easing?: (t: number) => number } = "start",
     ): void {
       const total = virtualTotalFn ? virtualTotalFn() : items.length;
       if (total === 0) return;
       const clamped = Math.max(0, Math.min(index, total - 1));
+
+      const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
+      const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
+      const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
+      const easing = typeof alignOrOptions === "object" ? alignOrOptions.easing : undefined;
+
+      if (scrollToIndexFn && scrollToIndexFn(clamped, align, behavior, duration, easing) !== false) {
+        return;
+      }
+
       const offset = sizeCache.getOffset(clamped);
       const itemSize = sizeCache.getSize(clamped);
       const cs = state.containerSize;
       const totalSize = sizeCache.getTotalSize();
       const mp = config.mainAxisPadding;
       const maxScroll = Math.max(0, totalSize + mp - cs);
-
-      const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-      const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-      const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
       let pos: number;
       if (scrollToPosFn) {
@@ -603,7 +611,7 @@ export function createVList<T extends VListItem = VListItem>(
       }
 
       if (behavior === "smooth") {
-        scrollHandler.smoothScrollTo(pos, duration ?? 300, scrollSetFn ?? undefined);
+        scrollHandler.smoothScrollTo(pos, duration ?? 300, scrollSetFn ?? undefined, easing);
       } else if (scrollSetFn) {
         scrollSetFn(pos);
       } else {

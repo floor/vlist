@@ -557,6 +557,120 @@ describe("ScrollHandler.smoothScrollTo()", () => {
   });
 });
 
+describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
+  it("should use custom easing function during animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    const positions: number[] = [];
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => { positions.push(viewport.scrollTop); },
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    // Linear easing: progress should be proportional to time
+    handler.smoothScrollTo(100, 100, undefined, (t) => t);
+
+    setTimeout(() => {
+      expect(positions.length).toBeGreaterThan(0);
+      expect(viewport.scrollTop).toBe(100);
+      handler.detach();
+      done();
+    }, 150);
+  });
+
+  it("should apply easing to position calculation", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    // Easing that always returns 1 — should jump to end immediately
+    handler.smoothScrollTo(200, 300, undefined, () => 1);
+
+    requestAnimationFrame(() => {
+      expect(viewport.scrollTop).toBe(200);
+      handler.detach();
+      done();
+    });
+  });
+
+  it("should pass easing through setFn path", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    const setPositions: number[] = [];
+    const setFn = (pos: number) => { setPositions.push(pos); };
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => {},
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 100, setFn, (t) => t * t);
+
+    setTimeout(() => {
+      expect(setPositions.length).toBeGreaterThan(0);
+      // Quadratic easing: at t=0.5, pos should be 25 (0.5^2 * 100)
+      // All intermediate positions should be less than linear
+      const midpoint = setPositions[Math.floor(setPositions.length / 2)];
+      expect(midpoint).toBeLessThan(50);
+      handler.detach();
+      done();
+    }, 120);
+  });
+
+  it("should use DEFAULT_EASING when no easing is provided", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    const positions: number[] = [];
+    const config = {
+      state,
+      viewport,
+      horizontal: false,
+      wheelEnabled: false,
+      idleTimeout: 1500,
+      onFrame: () => { positions.push(viewport.scrollTop); },
+      onIdle: () => {},
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(100, 100);
+
+    setTimeout(() => {
+      expect(positions.length).toBeGreaterThan(0);
+      expect(viewport.scrollTop).toBe(100);
+      handler.detach();
+      done();
+    }, 150);
+  });
+});
+
 // =============================================================================
 // onScroll Callback Tests
 // =============================================================================

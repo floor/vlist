@@ -226,13 +226,14 @@ export function createPluginMockContext<T extends VListItem>(
     scrollTo: (pos: number) => {
       scrollCalls.push(pos);
     },
-    smoothScrollTo: (pos: number, _duration: number) => {
+    smoothScrollTo: (pos: number, _duration: number, _easing?: (t: number) => number) => {
       scrollCalls.push(pos);
     },
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
     setScrollToPosFn: () => {},
+    setScrollToIndexFn: () => { return undefined; },
     onScrollFrame: () => {},
     onScrollIdle: () => {},
 

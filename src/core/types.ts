@@ -133,11 +133,12 @@ export interface PluginContext<T extends VListItem = VListItem> {
   readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
 
   scrollTo(position: number): void;
-  smoothScrollTo(position: number, duration: number): void;
+  smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
   setScrollToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
+  setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
   onScrollFrame(): void;
   onScrollIdle(): void;
 
@@ -207,7 +208,7 @@ export interface VList<T extends VListItem = VListItem> {
   getItemAt(index: number): T | undefined;
   getIndexById(id: string | number): number;
 
-  scrollToIndex(index: number, align?: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number }): void;
+  scrollToIndex(index: number, align?: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number; easing?: (t: number) => number }): void;
   getScrollPosition(): number;
 
   on<K extends keyof import("../types").VListEvents<T>>(

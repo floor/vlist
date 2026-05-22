@@ -196,6 +196,47 @@ describe("createVList scroll", () => {
     expect(() => list!.scrollToIndex(10)).not.toThrow();
   });
 
+  it("should scrollToIndex with smooth behavior and custom easing", (done) => {
+    list = createVList(
+      { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
+      [],
+    );
+    const vp = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    list.scrollToIndex(50, { align: "start", behavior: "smooth", duration: 100, easing: (t: number) => t });
+
+    setTimeout(() => {
+      expect(vp.scrollTop).toBe(50 * 40);
+      done();
+    }, 150);
+  });
+
+  it("should scrollToIndex with easing function that overshoots (elastic)", (done) => {
+    list = createVList(
+      { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
+      [],
+    );
+    const vp = list.element.querySelector(".vlist-viewport") as HTMLElement;
+    const positions: number[] = [];
+
+    const observer = new MutationObserver(() => { positions.push(vp.scrollTop); });
+    observer.observe(vp, { attributes: true });
+
+    // Elastic easing overshoots then settles
+    const elasticOut = (t: number): number => {
+      if (t === 0 || t === 1) return t;
+      return Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
+    };
+
+    list.scrollToIndex(20, { align: "start", behavior: "smooth", duration: 150, easing: elasticOut });
+
+    setTimeout(() => {
+      observer.disconnect();
+      // Final position should be at target
+      expect(vp.scrollTop).toBe(20 * 40);
+      done();
+    }, 200);
+  });
+
   it("should emit scroll:idle after scrolling stops", async () => {
     list = createVList(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
