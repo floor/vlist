@@ -6,9 +6,6 @@
 // v2 Plugin
 export { table, type TablePluginConfig } from "./plugin";
 
-// Builder Feature (v1 — deprecated)
-export { withTable, type TableFeatureConfig } from "./feature";
-
 // Layout
 export { createTableLayout } from "./layout";
 

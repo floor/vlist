@@ -6,9 +6,6 @@
 // v2 Plugin
 export { groups, type GroupsPluginConfig } from "./plugin";
 
-// Builder Feature
-export { withGroups, type GroupsFeatureConfig } from "./feature";
-
 // Types
 export type {
   GroupsConfig,

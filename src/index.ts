@@ -38,21 +38,6 @@ export type { TablePluginConfig } from "./plugins/table";
 export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
 
-// v1 builder API — disabled until features are migrated to v2 plugin interface
-// export { withScale } from "./plugins/scale/feature";
-// export { withAsync } from "./plugins/async";
-// export { withScrollbar } from "./plugins/scrollbar/feature";
-// export { withPage } from "./plugins/page";
-// export { withGroups } from "./plugins/groups";
-// export { withGrid } from "./plugins/grid/feature";
-// export { withMasonry } from "./plugins/masonry";
-// export { withSelection } from "./plugins/selection/feature";
-// export { withSnapshots } from "./plugins/snapshots";
-// export { withTable } from "./plugins/table";
-// export { withSortable } from "./plugins/sortable";
-// export { withAutoSize } from "./plugins/autosize";
-// export { withTransition } from "./plugins/transition";
-
 // Utils
 export { createStats } from "./utils/stats";
 export type { Stats, StatsConfig, StatsState } from "./utils/stats";
