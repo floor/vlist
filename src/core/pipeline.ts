@@ -107,6 +107,20 @@ function isInVisible(indices: Int32Array, count: number, idx: number): boolean {
   return false;
 }
 
+/** Module-scope release state — avoids per-frame closure in rendered.forEach */
+let _relIndices: Int32Array;
+let _relCount: number;
+let _relPool: ElementPool;
+let _relRendered: Map<number, HTMLElement>;
+
+function releaseIfNotVisible(element: HTMLElement, idx: number): void {
+  if (!isInVisible(_relIndices, _relCount, idx)) {
+    element.remove();
+    _relPool.release(element);
+    _relRendered.delete(idx);
+  }
+}
+
 export function phase2Commit<T extends VListItem>(
   state: EngineState,
   pool: ElementPool,
@@ -138,14 +152,12 @@ export function phase2Commit<T extends VListItem>(
 
   // Release nodes no longer visible.
   // Linear scan into visibleIndices supports arbitrary-order non-contiguous layouts.
-  // forEach avoids iterator/tuple allocations that for..of creates.
-  rendered.forEach((element, idx) => {
-    if (!isInVisible(newIndices, count, idx)) {
-      element.remove();
-      pool.release(element);
-      rendered.delete(idx);
-    }
-  });
+  // forEach with hoisted callback avoids per-frame closure + iterator allocation.
+  _relIndices = newIndices;
+  _relCount = count;
+  _relPool = pool;
+  _relRendered = rendered;
+  rendered.forEach(releaseIfNotVisible);
 
   // Acquire, bind identity, position
   const translateProp = horizontal ? "translateX(" : "translateY(";

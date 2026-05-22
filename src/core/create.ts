@@ -159,6 +159,8 @@ export function createVList<T extends VListItem = VListItem>(
   const velocityTracker = createVelocityTracker();
   const _velEvt = { velocity: 0, reliable: false };
   const _rangeEvt = { range: { start: 0, end: -1 } };
+  const _scrollEvt: { scrollPosition: number; direction: "down" | "up" } = { scrollPosition: 0, direction: "down" };
+  const _idleEvt: { scrollPosition: number } = { scrollPosition: 0 };
   let prevEmittedStart = -1;
   let prevEmittedEnd = -1;
   let lastEventScrollPos = -1;
@@ -313,7 +315,9 @@ export function createVList<T extends VListItem = VListItem>(
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
 
   function emitScrollEvents(): void {
-    emitter.emit("scroll", { scrollPosition: state.scrollPosition, direction: state.scrollDirection > 0 ? "down" : "up" });
+    _scrollEvt.scrollPosition = state.scrollPosition;
+    _scrollEvt.direction = state.scrollDirection > 0 ? "down" : "up";
+    emitter.emit("scroll", _scrollEvt);
 
     updateVelocityTracker(velocityTracker, state.scrollPosition);
     _velEvt.velocity = velocityTracker.velocity;
@@ -357,7 +361,8 @@ export function createVList<T extends VListItem = VListItem>(
     _velEvt.velocity = 0;
     _velEvt.reliable = false;
     emitter.emit("velocity:change", _velEvt);
-    emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
+    _idleEvt.scrollPosition = state.scrollPosition;
+    emitter.emit("scroll:idle", _idleEvt);
   }
 
   function doForceRender(): void {
