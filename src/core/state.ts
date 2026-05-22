@@ -107,9 +107,15 @@ export function createEngineState(initialCapacity: number): EngineState {
       if (needed <= state.capacity) return;
 
       const newCapacity = needed + 8;
-      state.visibleIndices = new Int32Array(newCapacity);
-      state.visibleOffsets = new Float64Array(newCapacity);
-      state.visibleSizes = new Float64Array(newCapacity);
+      const newIndices = new Int32Array(newCapacity);
+      const newOffsets = new Float64Array(newCapacity);
+      const newSizes = new Float64Array(newCapacity);
+      newIndices.set(state.visibleIndices);
+      newOffsets.set(state.visibleOffsets);
+      newSizes.set(state.visibleSizes);
+      state.visibleIndices = newIndices;
+      state.visibleOffsets = newOffsets;
+      state.visibleSizes = newSizes;
       state.capacity = newCapacity;
     },
 

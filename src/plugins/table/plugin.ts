@@ -80,6 +80,10 @@ export function table<T extends VListItem = VListItem>(
   // Render Functions
   // =========================================================================
 
+  // Persistent per-render buffers — hoisted to avoid per-frame allocation
+  const rangeItems: T[] = [];
+  const range = { start: 0, end: 0 };
+
   function tableRenderIfNeeded(): void {
     if (engineState.destroyed || !storedCtx || !tableRenderer || !tableLayout) return;
 
@@ -132,13 +136,14 @@ export function table<T extends VListItem = VListItem>(
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
-    const rangeItems: T[] = [];
+    rangeItems.length = 0;
     for (let i = renderStart; i <= renderEnd; i++) {
       const item = storedCtx.getItem(i);
       if (item) rangeItems.push(item);
     }
 
-    const range = { start: renderStart, end: renderEnd };
+    range.start = renderStart;
+    range.end = renderEnd;
     tableRenderer.render(rangeItems, range, selectedIds, focusedIndex);
 
     // Update engine state

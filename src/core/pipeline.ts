@@ -99,6 +99,14 @@ export function phase1Calculate(
 /** Reusable ItemState singleton — never allocated per frame */
 const itemState: ItemState = { selected: false, focused: false };
 
+/** Linear scan for idx in visibleIndices[0..count). Handles arbitrary order. Zero allocation. */
+function isInVisible(indices: Int32Array, count: number, idx: number): boolean {
+  for (let i = 0; i < count; i++) {
+    if (indices[i] === idx) return true;
+  }
+  return false;
+}
+
 export function phase2Commit<T extends VListItem>(
   state: EngineState,
   pool: ElementPool,
@@ -128,15 +136,11 @@ export function phase2Commit<T extends VListItem>(
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
-  // Visible range bounds — indices are contiguous, so a range check
-  // replaces the per-frame Set allocation for O(1) membership tests.
-  const rangeStart = count > 0 ? newIndices[0]! : 0;
-  const rangeEnd = count > 0 ? newIndices[count - 1]! : -1;
-
   // Release nodes no longer visible.
+  // Binary search into sorted visibleIndices supports non-contiguous layouts.
   // forEach avoids iterator/tuple allocations that for..of creates.
   rendered.forEach((element, idx) => {
-    if (idx < rangeStart || idx > rangeEnd) {
+    if (!isInVisible(newIndices, count, idx)) {
       element.remove();
       pool.release(element);
       rendered.delete(idx);
@@ -177,6 +181,7 @@ export function phase2Commit<T extends VListItem>(
       _lastSize?: number;
       _lastSelected?: boolean;
       _lastFocused?: boolean;
+      _lastItem?: unknown;
     };
 
     if (element === undefined) {
@@ -185,6 +190,7 @@ export function phase2Commit<T extends VListItem>(
         _lastSize?: number;
         _lastSelected?: boolean;
         _lastFocused?: boolean;
+        _lastItem?: unknown;
       };
 
       if (item !== undefined) {
@@ -240,13 +246,14 @@ export function phase2Commit<T extends VListItem>(
       }
       acquired._lastSize = sizeVal;
 
+      acquired._lastItem = item;
       rendered.set(dataIndex, acquired);
       contentElement.appendChild(acquired);
     } else {
       if (totalChanged) {
         element.setAttribute("aria-setsize", ariaTotal);
       }
-      if (item !== undefined && element.getAttribute("data-id") !== String(item.id)) {
+      if (item !== undefined && el._lastItem !== item) {
         const oldId = element.getAttribute("data-id");
         const newId = String(item.id);
         const result = template(item, dataIndex, itemState);
@@ -257,15 +264,18 @@ export function phase2Commit<T extends VListItem>(
           element.appendChild(result);
         }
         element.setAttribute("data-id", newId);
+        el._lastItem = item;
 
-        const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
-        const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
-        if (wasPlaceholder !== isPlaceholder) {
-          element.classList.toggle(placeholderClass, isPlaceholder);
-        }
-        if (wasPlaceholder && !isPlaceholder) {
-          element.classList.add(replacedClass);
-          setTimeout(() => { element.classList.remove(replacedClass); }, 300);
+        if (oldId !== newId) {
+          const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
+          const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+          if (wasPlaceholder !== isPlaceholder) {
+            element.classList.toggle(placeholderClass, isPlaceholder);
+          }
+          if (wasPlaceholder && !isPlaceholder) {
+            element.classList.add(replacedClass);
+            setTimeout(() => { element.classList.remove(replacedClass); }, 300);
+          }
         }
       }
 

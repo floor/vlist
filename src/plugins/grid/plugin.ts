@@ -133,13 +133,13 @@ export function grid<T extends VListItem = VListItem>(
     const items = getItems();
 
     // Release items outside the new range
-    for (const [idx, element] of rendered) {
+    rendered.forEach((element, idx) => {
       if (idx < itemRange.start || idx > itemRange.end) {
         element.remove();
         pool.release(element);
         rendered.delete(idx);
       }
-    }
+    });
 
     // Render items in range
     const gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
@@ -387,10 +387,10 @@ export function grid<T extends VListItem = VListItem>(
         if (Math.abs(newCross - containerWidth) < 1) return;
         containerWidth = newCross;
 
-        for (const [index, element] of rendered) {
+        rendered.forEach((element, index) => {
           applySizeStyles(element, index);
           element.style.transform = buildTransform(index);
-        }
+        });
       },
     },
 

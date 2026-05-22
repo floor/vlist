@@ -81,6 +81,10 @@ export function masonry<T extends VListItem = VListItem>(
     containerWidth: 0,
   };
 
+  // Persistent getItem closure — avoids per-render allocation
+  let cachedItems: readonly T[] = [];
+  const getItem = (index: number): T | undefined => cachedItems[index];
+
   // Selection method references (resolved lazily)
   let selectedIdsGetter: (() => Set<string | number>) | null = null;
   let focusedIndexGetter: (() => number) | null = null;
@@ -271,8 +275,7 @@ export function masonry<T extends VListItem = VListItem>(
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
-    const items = storedCtx.getItems();
-    const getItem = (index: number): T | undefined => items[index];
+    cachedItems = storedCtx.getItems();
 
     renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex);
 

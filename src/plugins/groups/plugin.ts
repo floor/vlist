@@ -127,13 +127,13 @@ export function groups<T extends VListItem = VListItem>(
 
     const items = getItems();
 
-    for (const [idx, element] of rendered) {
+    rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
         element.remove();
         pool.release(element);
         rendered.delete(idx);
       }
-    }
+    });
 
     const groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
     const groupHeaderClass = `${classPrefix}-group-header`;
