@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createTableRenderer, type TableRendererInstance } from "../../../src/plugins/table/renderer";
 import { createTableLayout } from "../../../src/plugins/table/layout";
 import { createSizeCache } from "../../../src/rendering/sizes";
@@ -14,32 +14,11 @@ import type { TableColumn, TableLayout } from "../../../src/plugins/table/types"
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.DocumentFragment = dom.window.DocumentFragment;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Helpers

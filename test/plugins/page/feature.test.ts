@@ -27,37 +27,22 @@ import {
   beforeAll,
   afterAll,
 } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { page } from "../../../src/plugins/page/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
+  GlobalRegistrator.register();
+  // happy-dom implements scrollTo (unlike JSDOM). Override to no-op to prevent
+  // state leaking between tests via window.scrollY.
+  window.scrollTo = (() => {}) as any;
 });
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Helpers
@@ -358,7 +343,7 @@ describe("page — Window Resize Handler", () => {
     // Simulate a meaningful window resize (change > 1px)
     Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
     Object.defineProperty(window, "innerWidth", { value: 1200, configurable: true });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     expect(emitSpy).toHaveBeenCalledWith("resize", { width: 1200, height: 900 });
 
@@ -380,7 +365,7 @@ describe("page — Window Resize Handler", () => {
 
     Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
     Object.defineProperty(window, "innerWidth", { value: 1200, configurable: true });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     expect(engineState.containerSize).toBe(900);
 
@@ -401,7 +386,7 @@ describe("page — Window Resize Handler", () => {
 
     // Simulate a meaningful resize
     Object.defineProperty(window, "innerHeight", { value: 1200, configurable: true });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     expect(forceRenderSpy).toHaveBeenCalled();
 
@@ -427,7 +412,7 @@ describe("page — Window Resize Handler", () => {
       value: currentHeight,
       configurable: true,
     });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     // Should NOT emit resize — no change (delta = 0 < 1)
     expect(emitSpy).not.toHaveBeenCalledWith("resize", expect.anything());
@@ -448,7 +433,7 @@ describe("page — Window Resize Handler", () => {
 
     // Simulate a meaningful width change
     Object.defineProperty(window, "innerWidth", { value: 2000, configurable: true });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     expect(emitSpy).toHaveBeenCalledWith("resize", expect.objectContaining({ width: 2000 }));
 
@@ -534,7 +519,7 @@ describe("page — Destroy Cleanup", () => {
 
     // Simulate resize after destroy
     Object.defineProperty(window, "innerHeight", { value: 1500, configurable: true });
-    window.dispatchEvent(new dom.window.Event("resize"));
+    window.dispatchEvent(new Event("resize"));
 
     // Should not emit — listener was removed
     expect(emitSpy).not.toHaveBeenCalled();
@@ -592,7 +577,7 @@ describe("page — scrollPadding", () => {
 
     // Mock getBoundingClientRect: list scrolled well past viewport top
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -500, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: -500, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -620,7 +605,7 @@ describe("page — scrollPadding", () => {
 
     // Mock getBoundingClientRect: list slightly scrolled
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -100, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: -100, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -647,7 +632,7 @@ describe("page — scrollPadding", () => {
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
 
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -100, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: -100, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -675,7 +660,7 @@ describe("page — scrollPadding", () => {
 
     // List is well below the sticky bar (hero still visible)
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 400, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: 400, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -703,7 +688,7 @@ describe("page — scrollPadding", () => {
 
     // List top is at 40, which is above the sticky bar bottom (100)
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 40, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: 40, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -733,7 +718,7 @@ describe("page — scrollPadding", () => {
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
 
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -200, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: -200, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -770,7 +755,7 @@ describe("page — scrollPadding", () => {
 
     // Mock getBoundingClientRect for horizontal: use rect.left
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: 0, left: -100 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: 0, left: -100 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;
@@ -797,7 +782,7 @@ describe("page — scrollPadding", () => {
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
 
     const origGetBCR = ctx.dom.viewport.getBoundingClientRect;
-    ctx.dom.viewport.getBoundingClientRect = () => ({ ...origGetBCR.call(ctx.dom.viewport), top: -500, left: 0 }) as DOMRect;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, right: 0, bottom: 0, top: -500, left: 0 }) as DOMRect;
 
     const scrollToSpy = mock((..._args: any[]) => {});
     window.scrollTo = scrollToSpy as any;

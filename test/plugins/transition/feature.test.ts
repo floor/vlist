@@ -5,14 +5,10 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 import type { PluginContext } from "../../../src/core/types";
 
 // =============================================================================
-// JSDOM + Web Animations API Mock
+// DOM + Web Animations API Mock
 // =============================================================================
 
-import { JSDOM } from "jsdom";
-
-let jsdom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 interface MockAnimation {
   finished: Promise<Animation>;
@@ -40,29 +36,18 @@ const createMockAnimation = (
     keyframes,
     options,
   };
-  setTimeout(() => {
+  Promise.resolve().then(() => {
     anim.playState = "finished" as AnimationPlayState;
     resolveFn(anim as unknown as Animation);
-  }, 0);
+  });
   allAnimations.push(anim);
   return anim;
 };
 
 beforeAll(() => {
-  jsdom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
+  GlobalRegistrator.register();
 
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = jsdom.window.document;
-  global.window = jsdom.window as any;
-  global.HTMLElement = jsdom.window.HTMLElement;
-  (global as any).Element = jsdom.window.Element;
-
-  jsdom.window.HTMLElement.prototype.animate = function (
+  HTMLElement.prototype.animate = function (
     this: HTMLElement,
     keyframes: Keyframe[] | PropertyIndexedKeyframes,
     options?: number | KeyframeAnimationOptions,
@@ -75,8 +60,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
+  GlobalRegistrator.unregister();
 });
 
 // =============================================================================
@@ -1534,17 +1518,13 @@ describe("withTransition — ensureRange scheduling", () => {
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
 
+    allAnimations.length = 0;
     const removeFn = methods.get("removeItem") as (id: string | number) => boolean;
     removeFn(3);
 
-    await flushMicrotasks();
-
-    // ensureRange in v2 is on ctx directly if present (not dataManager)
-    // The plugin accesses ctx.dataManager which doesn't exist in v2.
-    // This test verifies the plugin completes successfully — ensureRange
-    // was on dataManager in v1 but v2 doesn't expose that path.
-    // We verify the remove still succeeds.
     expect(allAnimations.length).toBeGreaterThan(0);
+
+    await flushMicrotasks();
     allAnimations.length = 0;
   });
 });

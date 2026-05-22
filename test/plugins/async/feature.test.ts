@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { async as asyncPlugin } from "../../../src/plugins/async/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -15,31 +15,11 @@ import { createEmitter } from "../../../src/events/emitter";
 import type { VListEvents } from "../../../src/types";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Helpers
@@ -543,7 +523,7 @@ describe("async - Network Recovery", () => {
 
     // Simulate network recovery — should not throw
     expect(() => {
-      const onlineEvent = new dom.window.Event("online");
+      const onlineEvent = new Event("online");
       window.dispatchEvent(onlineEvent);
     }).not.toThrow();
   });
@@ -565,7 +545,7 @@ describe("async - Network Recovery", () => {
     // adapter.read must not have been called for initial load
     expect(adapter.read).not.toHaveBeenCalled();
 
-    const onlineEvent = new dom.window.Event("online");
+    const onlineEvent = new Event("online");
     window.dispatchEvent(onlineEvent);
 
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -586,7 +566,7 @@ describe("async - Network Recovery", () => {
 
     // The listener should have been removed (no error on dispatching)
     expect(() => {
-      window.dispatchEvent(new dom.window.Event("online"));
+      window.dispatchEvent(new Event("online"));
     }).not.toThrow();
   });
 });

@@ -73,8 +73,10 @@
   },
   "homepage": "https://vlist.io",
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.9.0",
     "@types/bun": "^1.0.0",
     "@types/jsdom": "^27.0.0",
+    "happy-dom": "^20.9.0",
     "jsdom": "^28.0.0",
     "typescript": "^5.0.0"
   }

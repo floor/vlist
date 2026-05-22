@@ -3,7 +3,8 @@
  * Tests for scroll controller and utilities
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   rafThrottle,
   isAtBottom,
@@ -11,6 +12,9 @@ import {
   getScrollPercentage,
   isRangeVisible,
 } from "../../../src/plugins/scrollbar";
+
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // Mock requestAnimationFrame for testing
 let rafCallbacks: Array<() => void> = [];
@@ -273,15 +277,19 @@ describe("createScrollController", () => {
       pretendToBeVisual: true,
     });
 
-    // Set up globals
+    // Set up globals so events and elements share the same realm
     globalThis.document = dom.window.document;
     globalThis.window = dom.window as any;
     globalThis.HTMLElement = dom.window.HTMLElement;
+    globalThis.Event = dom.window.Event as any;
+    globalThis.WheelEvent = dom.window.WheelEvent as any;
+    globalThis.MouseEvent = dom.window.MouseEvent as any;
+    globalThis.KeyboardEvent = dom.window.KeyboardEvent as any;
 
-    viewport = dom.window.document.createElement("div");
+    viewport = dom.window.document.createElement("div") as unknown as HTMLElement;
     Object.defineProperty(viewport, "clientHeight", { value: 500 });
     Object.defineProperty(viewport, "scrollHeight", { value: 2000 });
-    dom.window.document.body.appendChild(viewport);
+    document.body.appendChild(viewport);
 
     // RAF mocks for this describe block
     rafCallbacks = [];
@@ -361,7 +369,7 @@ describe("createScrollController", () => {
       });
 
       // Simulate wheel scroll to position 5000 (triggers idle detection)
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 5000,
         bubbles: true,
       });
@@ -423,7 +431,7 @@ describe("createScrollController", () => {
     beforeEach(() => {
       viewportTop = 0;
 
-      // Track scroll listeners added to window
+      // Track scroll listeners added to window (controller calls window.addEventListener)
       scrollListeners = [];
       const origAdd = dom.window.addEventListener.bind(dom.window);
       const origRemove = dom.window.removeEventListener.bind(dom.window);
@@ -993,7 +1001,7 @@ describe("createScrollController", () => {
       });
 
       // Dispatch a wheel event with deltaY only (mouse wheel)
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 100,
         deltaX: 0,
         bubbles: true,
@@ -1021,7 +1029,7 @@ describe("createScrollController", () => {
       });
 
       // Dispatch a wheel event with deltaX (trackpad horizontal swipe)
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 50,
         deltaX: 30,
         bubbles: true,
@@ -1045,7 +1053,7 @@ describe("createScrollController", () => {
       controller.destroy();
 
       // After destroy, dispatching wheel events should not cause errors
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 100,
         bubbles: true,
         cancelable: true,
@@ -1158,7 +1166,7 @@ describe("createScrollController", () => {
 
       // In native horizontal mode with wheel, the handleHorizontalWheel listener is active
       // Dispatch a wheel with deltaY to verify it works
-      const wheelBefore = new dom.window.WheelEvent("wheel", {
+      const wheelBefore = new WheelEvent("wheel", {
         deltaY: 50,
         deltaX: 0,
         bubbles: true,
@@ -1181,7 +1189,7 @@ describe("createScrollController", () => {
 
       // Now wheel events should go through handleWheel (compressed), not handleHorizontalWheel
       // scrollLeft should stay 0 (overflow is hidden, compressed mode handles position manually)
-      const wheelAfter = new dom.window.WheelEvent("wheel", {
+      const wheelAfter = new WheelEvent("wheel", {
         deltaY: 50,
         deltaX: 0,
         bubbles: true,
@@ -1304,7 +1312,7 @@ describe("createScrollController", () => {
       // In compressed mode, scrollLeft should not be affected by wheel
       // (handleWheel manages scrollPosition manually)
       viewport.scrollLeft = 0;
-      const wheelCompressed = new dom.window.WheelEvent("wheel", {
+      const wheelCompressed = new WheelEvent("wheel", {
         deltaY: 50,
         deltaX: 0,
         bubbles: true,
@@ -1321,7 +1329,7 @@ describe("createScrollController", () => {
       const restoredBase = viewport.scrollLeft;
 
       // Now wheel deltaY should remap to scrollLeft again
-      const wheelNative = new dom.window.WheelEvent("wheel", {
+      const wheelNative = new WheelEvent("wheel", {
         deltaY: 75,
         deltaX: 0,
         bubbles: true,
@@ -1365,7 +1373,7 @@ describe("createScrollController", () => {
 
       // In horizontal compressed mode, handleWheel uses deltaX || deltaY
       // Send deltaX (trackpad horizontal swipe in compressed mode)
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaX: 200,
         deltaY: 0,
         bubbles: true,
@@ -1409,7 +1417,7 @@ describe("createScrollController", () => {
       });
 
       // deltaX is 0, so handleWheel should fall back to deltaY
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaX: 0,
         deltaY: 150,
         bubbles: true,
@@ -1480,7 +1488,7 @@ describe("createScrollController", () => {
 
       // Simulate native horizontal scroll
       viewport.scrollLeft = 250;
-      const scrollEvent = new dom.window.Event("scroll", { bubbles: true });
+      const scrollEvent = new Event("scroll", { bubbles: true });
       viewport.dispatchEvent(scrollEvent);
       flushRaf();
 
@@ -1509,7 +1517,7 @@ describe("createScrollController", () => {
 
       // With wheel disabled, blockWheel should preventDefault
       let defaultPrevented = false;
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 100,
         bubbles: true,
         cancelable: true,
@@ -1976,7 +1984,7 @@ describe("createScrollController", () => {
         onScroll: (data) => scrollData.push(data),
       });
 
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: 100,
         bubbles: true,
         cancelable: true,
@@ -2005,7 +2013,7 @@ describe("createScrollController", () => {
       });
 
       // Scroll up when already at top
-      const wheelEvent = new dom.window.WheelEvent("wheel", {
+      const wheelEvent = new WheelEvent("wheel", {
         deltaY: -500,
         bubbles: true,
         cancelable: true,

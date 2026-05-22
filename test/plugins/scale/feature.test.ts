@@ -64,9 +64,10 @@ beforeAll(() => {
   global.document = dom.window.document;
   global.window = dom.window as any;
   global.HTMLElement = dom.window.HTMLElement;
-  global.MouseEvent = dom.window.MouseEvent;
-  global.KeyboardEvent = dom.window.KeyboardEvent;
-  global.Element = dom.window.Element;
+  global.MouseEvent = dom.window.MouseEvent as any;
+  global.KeyboardEvent = dom.window.KeyboardEvent as any;
+  global.Element = dom.window.Element as any;
+  global.Event = dom.window.Event as any;
 
   global.ResizeObserver = class ResizeObserver {
     private callback: ResizeObserverCallback;
@@ -105,17 +106,17 @@ beforeAll(() => {
   // Override them on HTMLElement.prototype so createVList() reads the correct
   // container size when initializing engineState (matching the ResizeObserver
   // mock values above: 500px height × 300px width).
-  Object.defineProperty(dom.window.HTMLElement.prototype, "clientHeight", {
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get: () => 500,
     configurable: true,
   });
-  Object.defineProperty(dom.window.HTMLElement.prototype, "clientWidth", {
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     get: () => 300,
     configurable: true,
   });
 
-  if (!dom.window.Element.prototype.scrollTo) {
-    dom.window.Element.prototype.scrollTo = function (
+  if (!Element.prototype.scrollTo) {
+    Element.prototype.scrollTo = function (
       options?: ScrollToOptions | number,
     ): void {
       if (typeof options === "number") {
@@ -195,7 +196,7 @@ interface MockTouchEventInit {
 /**
  * Minimal TouchEvent implementation for JSDOM.
  *
- * Uses dom.window.Event as the base class so that dispatchEvent() works
+ * Uses Event as the base class so that dispatchEvent() works
  * correctly on JSDOM elements.
  */
 const createTouchEvent = (
@@ -206,7 +207,7 @@ const createTouchEvent = (
   changedTouches: MockTouch[];
   targetTouches: MockTouch[];
 } => {
-  const event = new dom.window.Event(type, {
+  const event = new Event(type, {
     bubbles: init.bubbles ?? true,
     cancelable: init.cancelable ?? true,
   });
@@ -822,7 +823,7 @@ describe("scale touch scrolling", () => {
       const viewport = getViewport(list);
 
       // Dispatch a wheel event to start the lerp animation
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1209,7 +1210,7 @@ describe("scale touch scrolling", () => {
       const viewport = getViewport(list);
 
       // Dispatch a wheel event to start the lerp animation
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1242,7 +1243,7 @@ describe("scale touch scrolling", () => {
       const viewport = getViewport(list);
 
       // Start lerp via wheel
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1299,7 +1300,7 @@ describe("scale touch scrolling", () => {
       const viewport = getViewport(list);
 
       // Start lerp via wheel
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1374,7 +1375,7 @@ describe("scale touch scrolling", () => {
       expect(list.getScrollPosition()).toBeGreaterThan(0);
 
       // Start a wheel scroll to trigger the lerp animation (smoothScrollTick)
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1422,7 +1423,7 @@ describe("scale touch scrolling", () => {
       expect(viewport.style.overflow).toBe("hidden");
 
       // Start a lerp animation via wheel (sets smoothScrollId)
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1530,7 +1531,7 @@ describe("scale touch scrolling", () => {
       flushAllRAF();
 
       // Start a lerp animation via wheel (sets smoothScrollId)
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });
@@ -1603,7 +1604,7 @@ describe("scale touch scrolling", () => {
       const viewport = getViewport(list);
 
       // Start lerp animation via wheel (sets smoothScrollId)
-      const wheelEvent = new dom.window.Event("wheel", {
+      const wheelEvent = new Event("wheel", {
         bubbles: true,
         cancelable: true,
       });

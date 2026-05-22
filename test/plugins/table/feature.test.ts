@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { table } from "../../../src/plugins/table/plugin";
 import type { VListItem } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
@@ -16,32 +16,11 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 import type { PluginTestContext } from "../../helpers/plugin-context";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.DocumentFragment = dom.window.DocumentFragment;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Helpers
@@ -544,7 +523,7 @@ describe("table - Events", () => {
 
     const headerCells = tableCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
     const nameHeader = headerCells[0] as HTMLElement;
-    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    const clickEvt = new MouseEvent("click", { bubbles: true });
     nameHeader.dispatchEvent(clickEvt);
 
     const sortEvents = tableCtx.emitted.filter(e => e.event === "column:sort");
@@ -1251,7 +1230,7 @@ describe("table - Integration", () => {
     const headerCells = tableCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
     const nameHeader = headerCells[0] as HTMLElement;
 
-    const clickEvt = new dom.window.MouseEvent("click", { bubbles: true });
+    const clickEvt = new MouseEvent("click", { bubbles: true });
     nameHeader.dispatchEvent(clickEvt);
 
     const sortEvents = tableCtx.emitted.filter(e => e.event === "column:sort");

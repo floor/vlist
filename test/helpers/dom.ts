@@ -1,9 +1,10 @@
 /**
- * vlist/test/helpers — Shared DOM Setup
+ * vlist/test/helpers — Shared DOM Setup (happy-dom)
  *
- * Centralises the JSDOM environment bootstrap and MockResizeObserver that
- * is duplicated across 20+ test files.  Import `setupDOM` / `teardownDOM`
- * in your `beforeAll` / `afterAll` hooks.
+ * Uses happy-dom's GlobalRegistrator for full DOM API support including
+ * querySelector, scrollTo, ResizeObserver, sessionStorage, etc.
+ *
+ * Each test file runs in its own Bun worker, so GlobalRegistrator is safe.
  *
  * Usage:
  *   import { setupDOM, teardownDOM } from "../helpers/dom";
@@ -11,31 +12,13 @@
  *   afterAll(() => teardownDOM());
  */
 
-import { JSDOM } from "jsdom";
-
-// =============================================================================
-// Saved originals — restored by teardownDOM()
-// =============================================================================
-
-let dom: JSDOM;
-let origDocument: typeof globalThis.document;
-let origWindow: typeof globalThis.window;
-let origHTMLElement: typeof globalThis.HTMLElement;
-let origElement: typeof globalThis.Element | undefined;
-let origMouseEvent: typeof globalThis.MouseEvent | undefined;
-let origKeyboardEvent: typeof globalThis.KeyboardEvent | undefined;
-let origEvent: typeof globalThis.Event | undefined;
-let origWheelEvent: typeof globalThis.WheelEvent | undefined;
-let origResizeObserver: typeof globalThis.ResizeObserver | undefined;
-let origRAF: typeof globalThis.requestAnimationFrame | undefined;
-let origCAF: typeof globalThis.cancelAnimationFrame | undefined;
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 // =============================================================================
 // MockResizeObserver
 // =============================================================================
 
 export interface MockResizeObserverInstance extends ResizeObserver {
-  /** The callback passed to the constructor */
   readonly callback: ResizeObserverCallback;
 }
 
@@ -87,6 +70,84 @@ export const createMockResizeObserver = (
 };
 
 // =============================================================================
+// Fake Timers
+// =============================================================================
+
+interface FakeTimerHandle {
+  id: number;
+  fn: () => void;
+  time: number;
+  interval: number;
+}
+
+export function useFakeTimers(): {
+  tick: (ms: number) => void;
+  restore: () => void;
+} {
+  const timers: FakeTimerHandle[] = [];
+  let now = 0;
+  let nextId = 1;
+
+  const origSetTimeout = global.setTimeout;
+  const origClearTimeout = global.clearTimeout;
+  const origSetInterval = global.setInterval;
+  const origClearInterval = global.clearInterval;
+
+  global.setTimeout = ((fn: () => void, delay = 0): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: 0 });
+    return id;
+  }) as any;
+
+  global.clearTimeout = ((id: number): void => {
+    const idx = timers.findIndex((t) => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  global.setInterval = ((fn: () => void, delay: number): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: delay });
+    return id;
+  }) as any;
+
+  global.clearInterval = ((id: number): void => {
+    const idx = timers.findIndex((t) => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  const tick = (ms: number): void => {
+    const target = now + ms;
+    while (true) {
+      let earliest: FakeTimerHandle | undefined;
+      for (const t of timers) {
+        if (t.time <= target && (!earliest || t.time < earliest.time))
+          earliest = t;
+      }
+      if (!earliest) break;
+      now = earliest.time;
+      if (earliest.interval > 0) {
+        earliest.time = now + earliest.interval;
+        earliest.fn();
+      } else {
+        const idx = timers.indexOf(earliest);
+        timers.splice(idx, 1);
+        earliest.fn();
+      }
+    }
+    now = target;
+  };
+
+  const restore = (): void => {
+    global.setTimeout = origSetTimeout;
+    global.clearTimeout = origClearTimeout;
+    global.setInterval = origSetInterval;
+    global.clearInterval = origClearInterval;
+  };
+
+  return { tick, restore };
+}
+
+// =============================================================================
 // Setup / Teardown
 // =============================================================================
 
@@ -99,88 +160,51 @@ export interface SetupDOMOptions {
   immediateResize?: boolean;
 }
 
+let registered = false;
+let origRAF: typeof globalThis.requestAnimationFrame | undefined;
+let origCAF: typeof globalThis.cancelAnimationFrame | undefined;
+
 /**
- * Bootstrap a JSDOM environment and install standard mocks.
+ * Bootstrap a happy-dom environment via GlobalRegistrator.
  *
- * Assigns `document`, `window`, `HTMLElement`, `Element`, `MouseEvent`,
- * `KeyboardEvent`, `ResizeObserver`, `requestAnimationFrame`, and
- * `cancelAnimationFrame` on the global object.
+ * Provides all standard DOM APIs: document, window, HTMLElement, Element,
+ * MouseEvent, KeyboardEvent, ResizeObserver, requestAnimationFrame,
+ * cancelAnimationFrame, scrollTo, sessionStorage, queueMicrotask.
  *
- * Call `teardownDOM()` in `afterAll` to restore the originals.
+ * Call `teardownDOM()` in `afterAll` to unregister.
  */
-export const setupDOM = (opts: SetupDOMOptions = {}): JSDOM => {
+export const setupDOM = (opts: SetupDOMOptions = {}): void => {
   const { width = 300, height = 500, immediateResize = true } = opts;
 
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  // Save originals
-  origDocument = global.document;
-  origWindow = global.window;
-  origHTMLElement = global.HTMLElement;
-  origElement = (global as any).Element;
-  origMouseEvent = (global as any).MouseEvent;
-  origKeyboardEvent = (global as any).KeyboardEvent;
-  origEvent = (global as any).Event;
-  origWheelEvent = (global as any).WheelEvent;
-  origResizeObserver = (global as any).ResizeObserver;
-  origRAF = global.requestAnimationFrame;
-  origCAF = global.cancelAnimationFrame;
-
-  // Install JSDOM globals
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  (global as any).Element = dom.window.Element;
-  (global as any).MouseEvent = dom.window.MouseEvent;
-  (global as any).KeyboardEvent = dom.window.KeyboardEvent;
-  (global as any).Event = dom.window.Event;
-  (global as any).WheelEvent = dom.window.WheelEvent;
-
-  // Install scrollTo polyfill (JSDOM doesn't have it)
-  if (!dom.window.Element.prototype.scrollTo) {
-    dom.window.Element.prototype.scrollTo = function (
-      options?: ScrollToOptions | number,
-    ) {
-      if (typeof options === "number") {
-        this.scrollTop = options;
-      } else if (options && typeof options.top === "number") {
-        this.scrollTop = options.top;
-      }
-    };
+  if (!registered) {
+    GlobalRegistrator.register();
+    registered = true;
   }
-  (dom.window as any).scrollTo = () => {};
 
-  // ResizeObserver mock
+  // Override ResizeObserver with our controllable mock
   global.ResizeObserver = createMockResizeObserver({
     width,
     height,
     immediate: immediateResize,
   });
 
-  // requestAnimationFrame / cancelAnimationFrame
+  // Override rAF with setTimeout-based version for test determinism
+  origRAF = global.requestAnimationFrame;
+  origCAF = global.cancelAnimationFrame;
   global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
     setTimeout(() => cb(performance.now()), 0) as unknown as number;
   global.cancelAnimationFrame = (id: number): void => clearTimeout(id);
-
-  return dom;
 };
 
 /**
- * Restore all globals to their pre-setup values.
+ * Unregister happy-dom globals.
  */
 export const teardownDOM = (): void => {
-  global.document = origDocument;
-  global.window = origWindow;
-  global.HTMLElement = origHTMLElement;
-  if (origElement !== undefined) (global as any).Element = origElement;
-  if (origMouseEvent !== undefined) (global as any).MouseEvent = origMouseEvent;
-  if (origKeyboardEvent !== undefined) (global as any).KeyboardEvent = origKeyboardEvent;
-  if (origEvent !== undefined) (global as any).Event = origEvent;
-  if (origWheelEvent !== undefined) (global as any).WheelEvent = origWheelEvent;
-  if (origResizeObserver !== undefined) global.ResizeObserver = origResizeObserver;
-  if (origRAF !== undefined) global.requestAnimationFrame = origRAF;
-  if (origCAF !== undefined) global.cancelAnimationFrame = origCAF;
+  if (origRAF) global.requestAnimationFrame = origRAF;
+  if (origCAF) global.cancelAnimationFrame = origCAF;
+
+  if (registered) {
+    GlobalRegistrator.unregister();
+    registered = false;
+  }
 };

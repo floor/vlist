@@ -8,52 +8,17 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { masonry } from "../../../src/plugins/masonry/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-let originalRAF: typeof globalThis.requestAnimationFrame;
-let originalCAF: typeof globalThis.cancelAnimationFrame;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  originalRAF = global.requestAnimationFrame;
-  originalCAF = global.cancelAnimationFrame;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.Element = dom.window.Element;
-
-  global.requestAnimationFrame = (callback: FrameRequestCallback): number => {
-    return setTimeout(() => callback(performance.now()), 0) as unknown as number;
-  };
-  global.cancelAnimationFrame = (id: number): void => {
-    clearTimeout(id);
-  };
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-  global.requestAnimationFrame = originalRAF;
-  global.cancelAnimationFrame = originalCAF;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Helpers

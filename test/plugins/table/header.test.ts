@@ -14,7 +14,7 @@ import {
   afterAll,
   beforeEach,
 } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 import { createTableHeader } from "../../../src/plugins/table/header";
 import { createTableLayout } from "../../../src/plugins/table/layout";
@@ -22,34 +22,11 @@ import type { TableColumn, TableLayout } from "../../../src/plugins/table/types"
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let jsdom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-
-beforeAll(() => {
-  jsdom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-
-  global.document = jsdom.window.document;
-  global.window = jsdom.window as any;
-  global.HTMLElement = jsdom.window.HTMLElement;
-  global.MouseEvent = jsdom.window.MouseEvent;
-  global.KeyboardEvent = jsdom.window.KeyboardEvent;
-  global.PointerEvent = (jsdom.window as any).PointerEvent ?? jsdom.window.MouseEvent;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Test Types & Helpers

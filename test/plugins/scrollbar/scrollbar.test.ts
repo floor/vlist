@@ -13,53 +13,32 @@ import {
   afterAll,
   mock,
 } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   createScrollbar,
   type Scrollbar,
 } from "../../../src/plugins/scrollbar/scrollbar";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-let originalRAF: any;
-let originalCAF: any;
+let origRAF: typeof globalThis.requestAnimationFrame;
+let origCAF: typeof globalThis.cancelAnimationFrame;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-  originalRAF = global.requestAnimationFrame;
-  originalCAF = global.cancelAnimationFrame;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.MouseEvent = dom.window.MouseEvent;
-
-  // Mock requestAnimationFrame / cancelAnimationFrame (used by scrollbar drag)
-  global.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-    return setTimeout(() => cb(performance.now()), 0) as unknown as number;
-  };
-  global.cancelAnimationFrame = (id: number): void => {
-    clearTimeout(id);
-  };
+  GlobalRegistrator.register();
+  origRAF = global.requestAnimationFrame;
+  origCAF = global.cancelAnimationFrame;
+  global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
+    setTimeout(() => cb(performance.now()), 16) as unknown as number;
+  global.cancelAnimationFrame = (id: number): void => clearTimeout(id);
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-  global.requestAnimationFrame = originalRAF;
-  global.cancelAnimationFrame = originalCAF;
-  dom.window.close();
+  global.requestAnimationFrame = origRAF;
+  global.cancelAnimationFrame = origCAF;
+  GlobalRegistrator.unregister();
 });
 
 // =============================================================================
@@ -75,6 +54,71 @@ const createMockViewport = (): HTMLElement => {
   return viewport;
 };
 
+interface FakeTimerHandle { id: number; fn: () => void; time: number; interval: number }
+
+function useFakeTimers(): { tick: (ms: number) => void; restore: () => void } {
+  const timers: FakeTimerHandle[] = [];
+  let now = 0;
+  let nextId = 1;
+
+  const origSetTimeout = global.setTimeout;
+  const origClearTimeout = global.clearTimeout;
+  const origSetInterval = global.setInterval;
+  const origClearInterval = global.clearInterval;
+
+  global.setTimeout = ((fn: () => void, delay = 0): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: 0 });
+    return id;
+  }) as any;
+
+  global.clearTimeout = ((id: number): void => {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  global.setInterval = ((fn: () => void, delay: number): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: delay });
+    return id;
+  }) as any;
+
+  global.clearInterval = ((id: number): void => {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  const tick = (ms: number): void => {
+    const target = now + ms;
+    while (true) {
+      let earliest: FakeTimerHandle | undefined;
+      for (const t of timers) {
+        if (t.time <= target && (!earliest || t.time < earliest.time)) earliest = t;
+      }
+      if (!earliest) break;
+      now = earliest.time;
+      if (earliest.interval > 0) {
+        earliest.time = now + earliest.interval;
+        earliest.fn();
+      } else {
+        const idx = timers.indexOf(earliest);
+        timers.splice(idx, 1);
+        earliest.fn();
+      }
+    }
+    now = target;
+  };
+
+  const restore = (): void => {
+    global.setTimeout = origSetTimeout;
+    global.clearTimeout = origClearTimeout;
+    global.setInterval = origSetInterval;
+    global.clearInterval = origClearInterval;
+  };
+
+  return { tick, restore };
+}
+
 const cleanupViewport = (viewport: HTMLElement): void => {
   if (viewport && viewport.parentNode) {
     viewport.parentNode.removeChild(viewport);
@@ -89,8 +133,10 @@ describe("createScrollbar", () => {
   let viewport: HTMLElement;
   let scrollbar: Scrollbar;
   let onScrollMock: ReturnType<typeof mock>;
+  let fakeTimers: { tick: (ms: number) => void; restore: () => void };
 
   beforeEach(() => {
+    fakeTimers = useFakeTimers();
     viewport = createMockViewport();
     onScrollMock = mock(() => {});
   });
@@ -100,6 +146,7 @@ describe("createScrollbar", () => {
       scrollbar.destroy();
     }
     cleanupViewport(viewport);
+    fakeTimers.restore();
   });
 
   describe("initialization", () => {
@@ -478,7 +525,7 @@ describe("createScrollbar", () => {
       track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
 
       // Wait past initial delay + at least one repeat interval
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      fakeTimers.tick(500);
 
       // Release
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
@@ -508,7 +555,7 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(100); // maxScroll = 100
 
       // Wait past initial delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      fakeTimers.tick(500);
 
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
@@ -539,7 +586,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // After autoHideDelay, it should be hidden
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      fakeTimers.tick(100);
       expect(scrollbar.isVisible()).toBe(false);
     });
   });
@@ -605,7 +652,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // Wait for auto-hide
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
     });
@@ -620,7 +667,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // Wait a bit
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      fakeTimers.tick(50);
 
       expect(scrollbar.isVisible()).toBe(true);
     });
@@ -1132,7 +1179,7 @@ describe("createScrollbar", () => {
       document.dispatchEvent(mousemoveEvent);
 
       // Wait for RAF to fire
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      fakeTimers.tick(50);
 
       // onScroll should have been called with a new position
       expect(onScrollMock).toHaveBeenCalled();
@@ -1266,7 +1313,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // Wait for auto-hide delay
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
     });
@@ -1291,7 +1338,7 @@ describe("createScrollbar", () => {
       thumb.dispatchEvent(mousedownEvent);
 
       // Wait longer than autoHideDelay
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      fakeTimers.tick(60);
 
       // Should still be visible because drag is in progress
       expect(scrollbar.isVisible()).toBe(true);
@@ -1318,7 +1365,7 @@ describe("createScrollbar", () => {
       document.dispatchEvent(
         new MouseEvent("mousemove", { clientY: 100, bubbles: true }),
       );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      fakeTimers.tick(20);
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
@@ -1332,7 +1379,7 @@ describe("createScrollbar", () => {
       document.dispatchEvent(
         new MouseEvent("mousemove", { clientY: 200, bubbles: true }),
       );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      fakeTimers.tick(20);
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
       // Should have additional onScroll calls from second drag
@@ -1393,7 +1440,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // Wait for auto-hide delay
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
     });
@@ -1419,7 +1466,7 @@ describe("createScrollbar", () => {
       viewport.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
 
       // Wait longer than autoHideDelay
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      fakeTimers.tick(60);
 
       // Should still be visible because drag is in progress
       expect(scrollbar.isVisible()).toBe(true);
@@ -1440,11 +1487,11 @@ describe("createScrollbar", () => {
       viewport.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
 
       // Re-enter before the hide timer fires
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      fakeTimers.tick(30);
       viewport.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
 
       // Wait past the original hide delay
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      fakeTimers.tick(100);
 
       // Should still be visible because mouseenter cancelled the timer
       // and started a new auto-hide cycle
@@ -1464,7 +1511,7 @@ describe("createScrollbar", () => {
       viewport.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
 
       // Wait a bit
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      fakeTimers.tick(50);
 
       // Should still be visible (autoHide is false, but viewport leave
       // still schedules a timeout if autoHide is true — when false, nothing happens)
@@ -1550,7 +1597,7 @@ describe("createScrollbar", () => {
         new MouseEvent("mousemove", { clientY: 9999, bubbles: true }),
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      fakeTimers.tick(20);
 
       // onScroll should have been called with a clamped value
       if (onScrollMock.mock.calls.length > 0) {
@@ -1645,7 +1692,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
     // then destroy while the RAF is pending.
     if (thumb) {
       // Start drag — fires mousedown on thumb
-      const mousedown = new dom.window.MouseEvent("mousedown", {
+      const mousedown = new MouseEvent("mousedown", {
         bubbles: true,
         clientX: 0,
         clientY: 10,
@@ -1653,7 +1700,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
       thumb.dispatchEvent(mousedown);
 
       // Simulate a mousemove — this schedules a RAF
-      const mousemove = new dom.window.MouseEvent("mousemove", {
+      const mousemove = new MouseEvent("mousemove", {
         bubbles: true,
         clientX: 0,
         clientY: 50,

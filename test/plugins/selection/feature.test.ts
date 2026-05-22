@@ -23,10 +23,8 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // JSDOM Setup
 // =============================================================================
 
-let jsdom: ReturnType<typeof setupDOM>;
-
 beforeAll(() => {
-  jsdom = setupDOM();
+  setupDOM();
 });
 
 afterAll(() => {
@@ -604,7 +602,7 @@ describe("selection — Click Handler", () => {
   }
 
   function makeClickEvent(target: HTMLElement, opts?: { shiftKey?: boolean }): MouseEvent {
-    const event = new (jsdom.window as any).MouseEvent("click", {
+    const event = new MouseEvent("click", {
       bubbles: true,
       shiftKey: opts?.shiftKey ?? false,
     });
@@ -782,7 +780,7 @@ describe("selection — Keyboard Handler", () => {
       metaKey?: boolean;
     },
   ): KeyboardEvent {
-    const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key,
       shiftKey: opts?.shiftKey ?? false,
       ctrlKey: opts?.ctrlKey ?? false,
@@ -1101,7 +1099,7 @@ describe("selection — Shift+keyboard range selection", () => {
       key: string,
       opts?: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean },
     ): KeyboardEvent => {
-      const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+      const event = new KeyboardEvent("keydown", {
         key,
         shiftKey: opts?.shiftKey ?? false,
         ctrlKey: opts?.ctrlKey ?? false,
@@ -1446,7 +1444,7 @@ describe("selection — Shift+keyboard range selection", () => {
     plugin.setup!(ctx);
 
     const fireKey = (key: string, opts?: { shiftKey?: boolean }) => {
-      const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+      const event = new KeyboardEvent("keydown", {
         key,
         shiftKey: opts?.shiftKey ?? false,
         bubbles: true,
@@ -1486,7 +1484,7 @@ describe("selection — followFocus", () => {
     plugin.setup!(ctx);
 
     const fireKey = (key: string) => {
-      const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+      const event = new KeyboardEvent("keydown", {
         key,
         bubbles: true,
       });
@@ -1518,7 +1516,7 @@ describe("selection — followFocus", () => {
     plugin.setup!(ctx);
 
     const fireKey = (key: string) => {
-      const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+      const event = new KeyboardEvent("keydown", {
         key,
         bubbles: true,
       });
@@ -1638,7 +1636,7 @@ describe("selection — Emitter Events", () => {
 
     plugin.setup!(ctx);
 
-    const event = new (jsdom.window as any).KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key: "ArrowDown",
       bubbles: true,
     });

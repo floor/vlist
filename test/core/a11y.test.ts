@@ -17,9 +17,7 @@ import { a11y } from "../../src/plugins/a11y";
 // DOM Setup
 // =============================================================================
 
-let jsdom: ReturnType<typeof setupDOM>;
-
-beforeAll(() => { jsdom = setupDOM(); });
+beforeAll(() => setupDOM());
 afterAll(() => teardownDOM());
 
 // =============================================================================
@@ -482,7 +480,7 @@ describe("baseline a11y — aria-activedescendant cleanup", () => {
     const outsideEl = document.createElement("div");
     document.body.appendChild(outsideEl);
     content.dispatchEvent(
-      new (jsdom.window as any).FocusEvent("focusout", { bubbles: true, relatedTarget: outsideEl }),
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: outsideEl }),
     );
     await flush();
 
@@ -508,7 +506,7 @@ describe("baseline a11y — aria-activedescendant cleanup", () => {
     rootEl.appendChild(innerEl);
 
     content.dispatchEvent(
-      new (jsdom.window as any).FocusEvent("focusout", { bubbles: true, relatedTarget: innerEl }),
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: innerEl }),
     );
     await flush();
 

@@ -7,54 +7,29 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { snapshots } from "../../../src/plugins/snapshots/plugin";
 import type { VListItem, ScrollSnapshot } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-let originalQueueMicrotask: any;
-let originalSessionStorage: any;
-let originalRAF: any;
+let origRAF: typeof globalThis.requestAnimationFrame;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-  originalQueueMicrotask = global.queueMicrotask;
-  originalSessionStorage = (global as any).sessionStorage;
-  originalRAF = global.requestAnimationFrame;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  (global as any).sessionStorage = dom.window.sessionStorage;
-
-  if (!global.requestAnimationFrame) {
-    global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
-      setTimeout(() => cb(performance.now()), 0) as unknown as number;
-  }
-  if (!global.cancelAnimationFrame) {
-    global.cancelAnimationFrame = (id: number) => clearTimeout(id);
-  }
+  GlobalRegistrator.register();
+  origRAF = global.requestAnimationFrame;
+  global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    cb(performance.now());
+    return 0;
+  }) as typeof requestAnimationFrame;
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-  global.queueMicrotask = originalQueueMicrotask;
-  (global as any).sessionStorage = originalSessionStorage;
-  global.requestAnimationFrame = originalRAF;
+  global.requestAnimationFrame = origRAF;
+  GlobalRegistrator.unregister();
 });
 
 // =============================================================================
@@ -817,22 +792,6 @@ describe("snapshots - sizeCache Rebuild", () => {
 // =============================================================================
 
 describe("snapshots - loadVisibleRange", () => {
-  // requestAnimationFrame in the source code may resolve to the JSDOM window's
-  // rAF rather than our global polyfill. Replace with synchronous version so
-  // the callback fires immediately and tests are deterministic.
-  let savedRAF: typeof globalThis.requestAnimationFrame;
-
-  beforeAll(() => {
-    savedRAF = global.requestAnimationFrame;
-    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      cb(performance.now());
-      return 0;
-    }) as typeof requestAnimationFrame;
-  });
-
-  afterAll(() => {
-    global.requestAnimationFrame = savedRAF;
-  });
 
   it("should call loadVisibleRange instead of reload when available", () => {
     const loadVisibleFn = mock(async () => {});
@@ -889,20 +848,6 @@ describe("snapshots - loadVisibleRange", () => {
 // =============================================================================
 
 describe("snapshots - Auto-Restore", () => {
-  // Same synchronous rAF override as loadVisibleRange tests above.
-  let savedRAF: typeof globalThis.requestAnimationFrame;
-
-  beforeAll(() => {
-    savedRAF = global.requestAnimationFrame;
-    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      cb(performance.now());
-      return 0;
-    }) as typeof requestAnimationFrame;
-  });
-
-  afterAll(() => {
-    global.requestAnimationFrame = savedRAF;
-  });
 
   it("should schedule restoreScroll via queueMicrotask when restore provided", async () => {
     const { ctx, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
@@ -1207,19 +1152,6 @@ describe("snapshots - Edge Cases", () => {
 
 describe("snapshots - autoSave", () => {
   const AUTO_SAVE_KEY = "test-autosave";
-  let savedRAF: typeof globalThis.requestAnimationFrame;
-
-  beforeAll(() => {
-    savedRAF = global.requestAnimationFrame;
-    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      cb(performance.now());
-      return 0;
-    }) as typeof requestAnimationFrame;
-  });
-
-  afterAll(() => {
-    global.requestAnimationFrame = savedRAF;
-  });
 
   function clearAutoSave() {
     try {
@@ -1514,9 +1446,10 @@ describe("snapshots - Selection Seeding", () => {
   });
 
   it("should persist seeded selection via post-restore save", async () => {
-    clearAutoSave();
+    const KEY = "test-seed-persist";
+    sessionStorage.removeItem(KEY);
     const savedSnapshot: ScrollSnapshot = { index: 10, offsetInItem: 0, total: 100, selectedIds: [42] };
-    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+    sessionStorage.setItem(KEY, JSON.stringify(savedSnapshot));
 
     const { ctx, methods, cleanup } = createMockContext({
       totalItems: 100,
@@ -1525,15 +1458,15 @@ describe("snapshots - Selection Seeding", () => {
       extraMethods: { _seedSelection: () => {} },
     });
 
-    const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
-
-    // Register getSelected BEFORE flushing so getScrollSnapshot() picks it up
+    // Register getSelected BEFORE setup (mirrors real plugin ordering)
     methods.set("getSelected", () => [42]);
+
+    const plugin = snapshots<TestItem>({ autoSave: KEY });
+    plugin.setup(ctx);
 
     await flushAsync();
 
-    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    const stored = sessionStorage.getItem(KEY);
     expect(stored).not.toBeNull();
     expect(JSON.parse(stored!).selectedIds).toEqual([42]);
     cleanup();
@@ -1570,19 +1503,6 @@ describe("snapshots - Selection Seeding", () => {
 // =============================================================================
 
 describe("snapshots - Focus Save/Restore", () => {
-  let savedRAF: typeof globalThis.requestAnimationFrame;
-
-  beforeAll(() => {
-    savedRAF = global.requestAnimationFrame;
-    global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-      cb(performance.now());
-      return 0;
-    }) as typeof requestAnimationFrame;
-  });
-
-  afterAll(() => {
-    global.requestAnimationFrame = savedRAF;
-  });
 
   it("should capture focusedId when _getFocusedId is present", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0 });

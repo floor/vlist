@@ -6,49 +6,106 @@
  * Adapted from v1 withSortable feature tests to v2 PluginContext API.
  */
 
-import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
-import { JSDOM } from "jsdom";
+import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { sortable } from "../../../src/plugins/sortable/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 
 // =============================================================================
-// JSDOM Setup
+// Fake Timer Utility
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-let originalWindow: any;
-let originalRAF: typeof globalThis.requestAnimationFrame;
-let originalCAF: typeof globalThis.cancelAnimationFrame;
+interface FakeTimerHandle { id: number; fn: () => void; time: number; interval: number }
+
+let fakeTimers: { tick: (ms: number) => void; restore: () => void };
+
+function useFakeTimers(): { tick: (ms: number) => void; restore: () => void } {
+  const timers: FakeTimerHandle[] = [];
+  let now = 0;
+  let nextId = 1;
+
+  const origSetTimeout = global.setTimeout;
+  const origClearTimeout = global.clearTimeout;
+  const origSetInterval = global.setInterval;
+  const origClearInterval = global.clearInterval;
+
+  global.setTimeout = ((fn: () => void, delay = 0): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: 0 });
+    return id;
+  }) as any;
+
+  global.clearTimeout = ((id: number): void => {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  global.setInterval = ((fn: () => void, delay: number): number => {
+    const id = nextId++;
+    timers.push({ id, fn, time: now + delay, interval: delay });
+    return id;
+  }) as any;
+
+  global.clearInterval = ((id: number): void => {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx !== -1) timers.splice(idx, 1);
+  }) as any;
+
+  const tick = (ms: number): void => {
+    const target = now + ms;
+    while (true) {
+      let earliest: FakeTimerHandle | undefined;
+      for (const t of timers) {
+        if (t.time <= target && (!earliest || t.time < earliest.time)) earliest = t;
+      }
+      if (!earliest) break;
+      now = earliest.time;
+      if (earliest.interval > 0) {
+        earliest.time = now + earliest.interval;
+        earliest.fn();
+      } else {
+        const idx = timers.indexOf(earliest);
+        timers.splice(idx, 1);
+        earliest.fn();
+      }
+    }
+    now = target;
+  };
+
+  const restore = (): void => {
+    global.setTimeout = origSetTimeout;
+    global.clearTimeout = origClearTimeout;
+    global.setInterval = origSetInterval;
+    global.clearInterval = origClearInterval;
+  };
+
+  return { tick, restore };
+}
+
+beforeEach(() => { fakeTimers = useFakeTimers(); });
+afterEach(() => { fakeTimers.restore(); });
+
+// =============================================================================
+// DOM Setup
+// =============================================================================
+
+let origRAF: typeof globalThis.requestAnimationFrame;
+let origCAF: typeof globalThis.cancelAnimationFrame;
 
 beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-    pretendToBeVisual: true,
-  });
-
-  originalDocument = global.document;
-  originalWindow = global.window;
-  originalRAF = global.requestAnimationFrame;
-  originalCAF = global.cancelAnimationFrame;
-
-  global.document = dom.window.document;
-  global.window = dom.window as any;
-  global.HTMLElement = dom.window.HTMLElement;
-  global.Element = dom.window.Element;
-  (global as any).PointerEvent = dom.window.PointerEvent ?? dom.window.MouseEvent;
-
+  GlobalRegistrator.register();
+  origRAF = global.requestAnimationFrame;
+  origCAF = global.cancelAnimationFrame;
   global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
-    setTimeout(() => cb(performance.now()), 0) as unknown as number;
+    setTimeout(() => cb(performance.now()), 16) as unknown as number;
   global.cancelAnimationFrame = (id: number): void => clearTimeout(id);
 });
 
 afterAll(() => {
-  global.document = originalDocument;
-  global.window = originalWindow;
-  global.requestAnimationFrame = originalRAF;
-  global.cancelAnimationFrame = originalCAF;
+  global.requestAnimationFrame = origRAF;
+  global.cancelAnimationFrame = origCAF;
+  GlobalRegistrator.unregister();
 });
 
 // =============================================================================
@@ -203,7 +260,7 @@ describe("sortable — handle config", () => {
     const itemEl = ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
     expect(itemEl).toBeDefined();
 
-    const event = new (dom.window.PointerEvent ?? dom.window.MouseEvent)(
+    const event = new (PointerEvent ?? MouseEvent)(
       "pointerdown",
       {
         bubbles: true,
@@ -225,7 +282,7 @@ describe("sortable — handle config", () => {
 
     const itemEl = ctx.dom.content.querySelector("[data-index='0']") as HTMLElement;
 
-    const event = new (dom.window.PointerEvent ?? dom.window.MouseEvent)(
+    const event = new (PointerEvent ?? MouseEvent)(
       "pointerdown",
       {
         bubbles: true,
@@ -252,7 +309,7 @@ describe("sortable — handle config", () => {
     handle.className = "drag-handle";
     itemEl.appendChild(handle);
 
-    const event = new (dom.window.PointerEvent ?? dom.window.MouseEvent)(
+    const event = new (PointerEvent ?? MouseEvent)(
       "pointerdown",
       {
         bubbles: true,
@@ -295,7 +352,7 @@ describe("sortable — isSorting", () => {
 
     // Grab via Space
     ctx.dom.root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key: " ",
         bubbles: true,
         cancelable: true,
@@ -317,7 +374,7 @@ describe("sortable — isSorting", () => {
 
     // Grab
     ctx.dom.root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key: " ",
         bubbles: true,
         cancelable: true,
@@ -327,7 +384,7 @@ describe("sortable — isSorting", () => {
 
     // Drop
     ctx.dom.root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key: " ",
         bubbles: true,
         cancelable: true,
@@ -348,7 +405,7 @@ describe("sortable — isSorting", () => {
 
     // Grab
     ctx.dom.root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key: " ",
         bubbles: true,
         cancelable: true,
@@ -358,7 +415,7 @@ describe("sortable — isSorting", () => {
 
     // Cancel
     ctx.dom.root.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key: "Escape",
         bubbles: true,
         cancelable: true,
@@ -385,7 +442,7 @@ describe("sortable — sort events", () => {
     moveY: number,
   ): ReturnType<typeof mock> {
     const PointerEventCtor =
-      dom.window.PointerEvent ?? dom.window.MouseEvent;
+      PointerEvent ?? MouseEvent;
 
     const itemEl = ctx.dom.content.querySelector(
       `[data-index='${fromIndex}']`,
@@ -480,7 +537,7 @@ describe("sortable — sort events", () => {
 
     // pointerup to finish the drag
     const PointerEventCtor =
-      dom.window.PointerEvent ?? dom.window.MouseEvent;
+      PointerEvent ?? MouseEvent;
     const upEvt = new PointerEventCtor("pointerup", {
       bubbles: true,
       clientX: 200,
@@ -490,7 +547,7 @@ describe("sortable — sort events", () => {
     document.dispatchEvent(upEvt);
 
     // sort:end is emitted after the drop animation timeout (shiftDuration + 50ms)
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
 
     const sortEndCall = emitSpy.mock.calls.find(
       (c: unknown[]) => c[0] === "sort:end",
@@ -582,7 +639,7 @@ describe("sortable — sort events", () => {
 
     // Additional move to ensure drop position updates
     const PointerEventCtor =
-      dom.window.PointerEvent ?? dom.window.MouseEvent;
+      PointerEvent ?? MouseEvent;
     const moveEvt2 = new PointerEventCtor("pointermove", {
       bubbles: true,
       clientX: 200,
@@ -600,7 +657,7 @@ describe("sortable — sort events", () => {
     document.dispatchEvent(upEvt);
 
     // Wait for drop animation timeout
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
 
     // sort:start should have been emitted
     const sortStartCall = emitSpy.mock.calls.find(
@@ -634,7 +691,7 @@ describe("sortable — ghostContainer", () => {
     fromIndex: number,
   ): void {
     const PointerEventCtor =
-      dom.window.PointerEvent ?? dom.window.MouseEvent;
+      PointerEvent ?? MouseEvent;
 
     const itemEl = ctx.dom.content.querySelector(
       `[data-index='${fromIndex}']`,
@@ -735,7 +792,7 @@ describe("sortable — ghostContainer", () => {
     expect(container.querySelector(".vlist-sort-ghost")).not.toBeNull();
 
     const PointerEventCtor =
-      dom.window.PointerEvent ?? dom.window.MouseEvent;
+      PointerEvent ?? MouseEvent;
     document.dispatchEvent(
       new PointerEventCtor("pointerup", {
         bubbles: true,
@@ -745,7 +802,7 @@ describe("sortable — ghostContainer", () => {
       }),
     );
 
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
 
     expect(container.querySelector(".vlist-sort-ghost")).toBeNull();
 
@@ -807,7 +864,7 @@ describe("sortable — keyboard reordering", () => {
     key: string,
     opts: Partial<KeyboardEventInit> = {},
   ): KeyboardEvent {
-    const event = new dom.window.KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key,
       bubbles: true,
       cancelable: true,
@@ -1118,7 +1175,7 @@ describe("sortable — live region announcements", () => {
 
   function dispatchKey(target: HTMLElement, key: string): void {
     target.dispatchEvent(
-      new dom.window.KeyboardEvent("keydown", {
+      new KeyboardEvent("keydown", {
         key,
         bubbles: true,
         cancelable: true,
@@ -1190,7 +1247,7 @@ describe("sortable — pointer up without drag", () => {
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1239,12 +1296,12 @@ describe("sortable — keyboard key blocking", () => {
     const mockCtx = setupKeyboard(3);
 
     // Enter grab mode
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: " ", bubbles: true, cancelable: true,
     }));
 
     // Press an unrelated key (e.g., "a")
-    const event = new dom.window.KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key: "a", bubbles: true, cancelable: true,
     });
     mockCtx.ctx.dom.root.dispatchEvent(event);
@@ -1256,11 +1313,11 @@ describe("sortable — keyboard key blocking", () => {
   it("does not block F-keys during grab mode", () => {
     const mockCtx = setupKeyboard(3);
 
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: " ", bubbles: true, cancelable: true,
     }));
 
-    const event = new dom.window.KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key: "F5", bubbles: true, cancelable: true,
     });
     mockCtx.ctx.dom.root.dispatchEvent(event);
@@ -1272,11 +1329,11 @@ describe("sortable — keyboard key blocking", () => {
   it("does not block Tab during grab mode", () => {
     const mockCtx = setupKeyboard(3);
 
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: " ", bubbles: true, cancelable: true,
     }));
 
-    const event = new dom.window.KeyboardEvent("keydown", {
+    const event = new KeyboardEvent("keydown", {
       key: "Tab", bubbles: true, cancelable: true,
     });
     mockCtx.ctx.dom.root.dispatchEvent(event);
@@ -1300,7 +1357,7 @@ describe("sortable — edge scrolling", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1317,7 +1374,7 @@ describe("sortable — edge scrolling", () => {
     }));
 
     // Let rAF tick for edge scroll
-    await new Promise((r) => setTimeout(r, 50));
+    fakeTimers.tick(50);
 
     // scrollTo should have been called (edge scroll active near bottom)
     expect(mockCtx.scrollCalls.length).toBeGreaterThan(0);
@@ -1327,7 +1384,7 @@ describe("sortable — edge scrolling", () => {
       bubbles: true, clientX: 200, clientY: 590, button: 0,
     }));
 
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
     mockCtx.cleanup();
   });
 
@@ -1340,7 +1397,7 @@ describe("sortable — edge scrolling", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1362,14 +1419,14 @@ describe("sortable — edge scrolling", () => {
     }));
 
     // Let rAF tick
-    await new Promise((r) => setTimeout(r, 50));
+    fakeTimers.tick(50);
 
     // Clean up
     document.dispatchEvent(new PointerEventCtor("pointerup", {
       bubbles: true, clientX: 200, clientY: -50, button: 0,
     }));
 
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
 
     // Should not throw, and sorting should have ended
     const isSorting = mockCtx.methods.get("isSorting") as () => boolean;
@@ -1393,7 +1450,7 @@ describe("sortable — pointer cancel", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1412,7 +1469,7 @@ describe("sortable — pointer cancel", () => {
       bubbles: true, clientX: 200, clientY: 200,
     }));
 
-    await new Promise((r) => setTimeout(r, 250));
+    fakeTimers.tick(250);
 
     const isSorting = mockCtx.methods.get("isSorting") as () => boolean;
     expect(isSorting()).toBe(false);
@@ -1435,7 +1492,7 @@ describe("sortable — escape cancels pointer drag", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1453,12 +1510,12 @@ describe("sortable — escape cancels pointer drag", () => {
     expect(isSorting()).toBe(true);
 
     // Press Escape — triggers animateDrop(dragIndex, dragIndex) with ghost animation
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Escape", bubbles: true, cancelable: true,
     }));
 
     // Wait for ghost animation to complete (setTimeout fallback)
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     expect(isSorting()).toBe(false);
 
@@ -1485,7 +1542,7 @@ describe("sortable — drop at same position", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='3']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1504,7 +1561,7 @@ describe("sortable — drop at same position", () => {
       bubbles: true, clientX: 200, clientY: 216, button: 0,
     }));
 
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     const cancelCall = mockCtx.emitSpy.mock.calls.find(
       (c: unknown[]) => c[0] === "sort:cancel",
@@ -1535,13 +1592,13 @@ describe("sortable — keyboard grab cancelled by pointer", () => {
     const isSorting = mockCtx.methods.get("isSorting") as () => boolean;
 
     // Start keyboard grab
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: " ", bubbles: true, cancelable: true,
     }));
     expect(isSorting()).toBe(true);
 
     // Pointer down on a different item — should cancel keyboard grab
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='5']") as HTMLElement;
     itemEl.dispatchEvent(new PointerEventCtor("pointerdown", {
       bubbles: true, clientX: 200, clientY: 308, button: 0,
@@ -1578,7 +1635,7 @@ describe("sortable — focus preservation", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='1']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1600,7 +1657,7 @@ describe("sortable — focus preservation", () => {
     }));
 
     // Wait for drop animation
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     // _focusById should have been called with id 5 (the originally-focused item)
     const focusCalls = focusByIdSpy.mock.calls as unknown[][];
@@ -1624,7 +1681,7 @@ describe("sortable — focus preservation", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='1']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1642,7 +1699,7 @@ describe("sortable — focus preservation", () => {
       bubbles: true, clientX: 200, clientY: 84 + 20, button: 0,
     }));
 
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     // focusById should NOT have been called (no item was focused)
     expect(focusByIdSpy.mock.calls.length).toBe(0);
@@ -1663,7 +1720,7 @@ describe("sortable — drop index calculation", () => {
     getDropIndices: () => number[];
     cleanup: () => void;
   } {
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector(
       `[data-index='${fromIndex}']`,
     ) as HTMLElement;
@@ -1932,7 +1989,7 @@ describe("sortable — settling class", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='1']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1950,7 +2007,7 @@ describe("sortable — settling class", () => {
     }));
 
     // Wait for ghost animation + finalize
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     // --settling should have been removed after rAF
     expect(mockCtx.ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
@@ -1967,7 +2024,7 @@ describe("sortable — settling class", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='3']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -1985,7 +2042,7 @@ describe("sortable — settling class", () => {
     }));
 
     // Wait for ghost animation + finalize + rAF
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     // --settling added and removed in both paths
     expect(mockCtx.ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
@@ -2008,7 +2065,7 @@ describe("sortable — drag-source class", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -2037,7 +2094,7 @@ describe("sortable — drag-source class", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -2053,7 +2110,7 @@ describe("sortable — drag-source class", () => {
       bubbles: true, clientX: 200, clientY: 200, button: 0,
     }));
 
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     expect(itemEl.classList.contains("vlist-item--drag-source")).toBe(false);
 
@@ -2069,7 +2126,7 @@ describe("sortable — drag-source class", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -2112,7 +2169,7 @@ describe("sortable — escape animates ghost return", () => {
 
     plugin.setup!(mockCtx.ctx);
 
-    const PointerEventCtor = dom.window.PointerEvent ?? dom.window.MouseEvent;
+    const PointerEventCtor = PointerEvent ?? MouseEvent;
     const itemEl = mockCtx.ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
 
     itemEl.getBoundingClientRect = () =>
@@ -2130,7 +2187,7 @@ describe("sortable — escape animates ghost return", () => {
     expect(isSorting()).toBe(true);
 
     // Press Escape — should NOT finalize immediately (ghost animates back)
-    mockCtx.ctx.dom.root.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Escape", bubbles: true, cancelable: true,
     }));
 
@@ -2144,7 +2201,7 @@ describe("sortable — escape animates ghost return", () => {
     expect(earlyCancel).toBeUndefined();
 
     // Wait for animation to complete
-    await new Promise((r) => setTimeout(r, 300));
+    fakeTimers.tick(300);
 
     // Now sorting is done and sort:cancel has been emitted
     expect(isSorting()).toBe(false);
