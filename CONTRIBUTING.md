@@ -128,7 +128,7 @@ createVList(config, [       → VList instance
 bun test
 
 # Specific file
-bun test test/plugins/grid/feature.test.ts
+bun test test/plugins/grid/plugin.test.ts
 
 # Specific folder
 bun test test/plugins/grid/
@@ -288,7 +288,7 @@ Create matching test files in `test/plugins/{name}/`:
 
 ```
 test/plugins/{name}/
-├── feature.test.ts    # Plugin tests using createPluginMockContext()
+├── plugin.test.ts     # Plugin tests using createPluginMockContext()
 ├── layout.test.ts     # Unit tests for layout logic (if applicable)
 └── ...
 ```

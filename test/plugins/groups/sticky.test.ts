@@ -8,7 +8,7 @@
  *   that drives header positioning calculations
  * - builder/index.test.ts (233 tests) — builder integration tests that exercise
  *   sticky headers via withGroups({ stickyHeaders: true })
- * - groups/feature.test.ts — feature integration tests that verify afterScroll
+ * - groups/plugin.test.ts — plugin integration tests that verify afterScroll
  *   handler registration and destroy cleanup for sticky headers
  *
  * Coverage: 86.07% lines, 100% functions.

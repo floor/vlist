@@ -148,7 +148,7 @@ function createMockContext() {
   }
 
   // Wire up an emit spy so tests can inspect emitted events
-  const emitSpy = mock(() => {});
+  const emitSpy = mock((..._args: unknown[]) => {});
   (result.ctx as any).emitter = {
     on: () => () => {},
     off: () => {},
@@ -1124,7 +1124,7 @@ describe("sortable — ARIA attributes", () => {
     mockCtx.ctx.dom.content.appendChild(el);
 
     // Invoke the onCommit hook (v2 equivalent of afterRenderBatch)
-    plugin.hooks?.onCommit?.();
+    plugin.hooks?.onCommit?.({} as any);
 
     expect(el.getAttribute("aria-roledescription")).toBe("sortable item");
     expect(el.getAttribute("aria-describedby")).toBe("vlist-sort-instructions");
@@ -2147,7 +2147,7 @@ describe("sortable — drag-source class", () => {
     itemEl.replaceWith(newEl);
 
     // Call onCommit hook to re-apply state to recycled elements
-    plugin.hooks?.onCommit?.();
+    plugin.hooks?.onCommit?.({} as any);
 
     expect(newEl.classList.contains("vlist-item--drag-source")).toBe(true);
 
