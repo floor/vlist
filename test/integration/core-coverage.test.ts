@@ -239,7 +239,7 @@ describe("createVList scroll", () => {
 
   it("should emit scroll:idle after scrolling stops", async () => {
     list = createVList(
-      { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
+      { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate }, scroll: { idleTimeout: 50 } },
       [],
     );
     const handler = mock(() => {});
