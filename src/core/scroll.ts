@@ -20,7 +20,7 @@ export interface ScrollHandler {
   /** Cancel smooth scroll animation */
   cancelScroll(): void;
   /** Animate to a target scroll position */
-  smoothScrollTo(target: number, duration: number): void;
+  smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void): void;
 }
 
 export interface ScrollHandlerConfig {
@@ -44,17 +44,13 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let animationId: number | null = null;
-  let wheelRendered = false;
 
   // ── Scroll event (passive, for native/touch scrolling) ──────────
 
   function onScrollEvent(): void {
-    if (wheelRendered) {
-      wheelRendered = false;
-      return;
-    }
-
     const pos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
+    if (pos === state.scrollPosition) return;
+
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = pos;
     state.scrollDirection = pos > state.prevScrollPosition ? 1 : pos < state.prevScrollPosition ? -1 : 0;
@@ -102,7 +98,6 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     state.scrollPosition = next;
     state.scrollDirection = next > state.prevScrollPosition ? 1 : -1;
 
-    wheelRendered = true;
     onFrame();
     scheduleIdle();
   }
@@ -131,11 +126,12 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     }
   }
 
-  function smoothScrollTo(target: number, duration: number): void {
+  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void): void {
     cancelScroll();
     const from = state.scrollPosition;
     if (Math.abs(target - from) < 1) {
-      if (horizontal) viewport.scrollLeft = target;
+      if (setFn) setFn(target);
+      else if (horizontal) viewport.scrollLeft = target;
       else viewport.scrollTop = target;
       return;
     }
@@ -145,7 +141,8 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
       const pos = from + (target - from) * easeInOutQuad(t);
-      if (horizontal) viewport.scrollLeft = pos;
+      if (setFn) setFn(pos);
+      else if (horizontal) viewport.scrollLeft = pos;
       else viewport.scrollTop = pos;
       state.scrollPosition = pos;
       onFrame();

@@ -192,6 +192,7 @@ export function createVList<T extends VListItem = VListItem>(
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let smoothScrollFn: ((target: number, duration: number) => void) | null = null;
+  let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
 
   const ctx: PluginContext<T> = {
     dom,
@@ -250,6 +251,9 @@ export function createVList<T extends VListItem = VListItem>(
     disableDefaultScroll(): void { skipDefaultScroll = true; },
     disableDefaultResize(): void { skipDefaultResize = true; },
     setScrollTarget(target: EventTarget): void { scrollTarget = target; },
+    setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
+    onScrollFrame: doScrollFrame,
+    onScrollIdle: doScrollIdle,
     removeItemById(id: string | number): number {
       if (removeItemByIdFn) return removeItemByIdFn(id);
       const idx = items.findIndex((item) => item.id === id);
@@ -338,6 +342,24 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
+  function doScrollFrame(): void {
+    doRender();
+    runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+    if (state.scrollPosition !== lastEventScrollPos) {
+      lastEventScrollPos = state.scrollPosition;
+      emitScrollEvents();
+    }
+  }
+
+  function doScrollIdle(): void {
+    state.scrollDirection = 0;
+    runIdleHooks(hooks.idle);
+    _velEvt.velocity = 0;
+    _velEvt.reliable = false;
+    emitter.emit("velocity:change", _velEvt);
+    emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
+  }
+
   function doForceRender(): void {
     state.renderPending = true;
     if (customForceRender) {
@@ -352,15 +374,7 @@ export function createVList<T extends VListItem = VListItem>(
       emitScrollEvents();
 
       if (forceIdleTimer !== null) clearTimeout(forceIdleTimer);
-      forceIdleTimer = setTimeout(() => {
-        forceIdleTimer = null;
-        state.scrollDirection = 0;
-        runIdleHooks(hooks.idle);
-        _velEvt.velocity = 0;
-        _velEvt.reliable = false;
-        emitter.emit("velocity:change", _velEvt);
-        emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
-      }, idleTimeout);
+      forceIdleTimer = setTimeout(doScrollIdle, idleTimeout);
     }
   }
 
@@ -373,19 +387,8 @@ export function createVList<T extends VListItem = VListItem>(
     wheelEnabled: skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false,
     idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
     ...(scrollTarget ? { scrollTarget } : {}),
-    onFrame(): void {
-      doRender();
-      runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
-      lastEventScrollPos = state.scrollPosition;
-      emitScrollEvents();
-    },
-    onIdle(): void {
-      runIdleHooks(hooks.idle);
-      _velEvt.velocity = 0;
-      _velEvt.reliable = false;
-      emitter.emit("velocity:change", _velEvt);
-      emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
-    },
+    onFrame: doScrollFrame,
+    onIdle: doScrollIdle,
   });
 
   smoothScrollFn = scrollHandler.smoothScrollTo;
@@ -576,24 +579,28 @@ export function createVList<T extends VListItem = VListItem>(
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
       const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
-      const sp = config.startPadding;
       let pos: number;
-      switch (align) {
-        case "center":
-          pos = sp + offset - (cs - itemSize) / 2;
-          break;
-        case "end":
-          pos = offset + itemSize + mp - cs;
-          break;
-        default:
-          pos = offset;
+      if (scrollToPosFn) {
+        pos = scrollToPosFn(clamped, sizeCache, cs, total, align);
+      } else {
+        const sp = config.startPadding;
+        switch (align) {
+          case "center":
+            pos = sp + offset - (cs - itemSize) / 2;
+            break;
+          case "end":
+            pos = offset + itemSize + mp - cs;
+            break;
+          default:
+            pos = offset;
+        }
+        pos = Math.max(0, Math.min(pos, maxScroll));
       }
-      pos = Math.max(0, Math.min(pos, maxScroll));
 
-      if (scrollSetFn) {
+      if (behavior === "smooth") {
+        scrollHandler.smoothScrollTo(pos, duration ?? 300, scrollSetFn ?? undefined);
+      } else if (scrollSetFn) {
         scrollSetFn(pos);
-      } else if (behavior === "smooth" && duration && duration > 0) {
-        scrollHandler.smoothScrollTo(pos, duration);
       } else {
         if (config.horizontal) dom.viewport.scrollLeft = pos;
         else dom.viewport.scrollTop = pos;

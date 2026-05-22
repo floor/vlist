@@ -128,6 +128,7 @@ describe("ScrollHandler.attach()", () => {
     const handler = createScrollHandler(config);
     handler.attach();
 
+    viewport.scrollTop = 100;
     const event = new Event("scroll", { bubbles: true });
     scrollTarget.dispatchEvent(event);
 

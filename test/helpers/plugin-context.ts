@@ -232,6 +232,9 @@ export function createPluginMockContext<T extends VListItem>(
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
+    setScrollToPosFn: () => {},
+    onScrollFrame: () => {},
+    onScrollIdle: () => {},
 
     removeItemById: (id: string | number) => {
       if (removeItemByIdFn) return removeItemByIdFn(id);

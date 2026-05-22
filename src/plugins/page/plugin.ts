@@ -102,17 +102,12 @@ export function page<T extends VListItem = VListItem>(
         state.scrollDirection = pos > state.prevScrollPosition ? 1
           : pos < state.prevScrollPosition ? -1 : 0;
 
-        ctx.renderIfNeeded();
-        emitter.emit("scroll", {
-          scrollPosition: state.scrollPosition,
-          direction: state.scrollDirection > 0 ? "down" : "up",
-        });
+        ctx.onScrollFrame();
 
         if (idleTimer !== null) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           idleTimer = null;
-          state.scrollDirection = 0;
-          emitter.emit("scroll:idle", { scrollPosition: state.scrollPosition });
+          ctx.onScrollIdle();
         }, 150);
       };
 
@@ -144,6 +139,29 @@ export function page<T extends VListItem = VListItem>(
 
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
       if (scrollPadding) {
+        ctx.setScrollToPosFn((index, sc, containerSize, totalItems, align) => {
+          const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
+          const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
+          if (totalItems === 0) return 0;
+          const clamped = Math.max(0, Math.min(index, totalItems - 1));
+          const offset = sc.getOffset(clamped);
+          const itemSize = sc.getSize(clamped);
+          const totalSize = sc.getTotalSize();
+          const maxScroll = Math.max(0, totalSize - containerSize + endPad);
+          let pos: number;
+          switch (align) {
+            case "center":
+              pos = offset - startPad - (containerSize - startPad - endPad - itemSize) / 2;
+              break;
+            case "end":
+              pos = offset - containerSize + itemSize + endPad;
+              break;
+            default:
+              pos = offset - startPad;
+          }
+          return Math.max(-startPad, Math.min(pos, maxScroll));
+        });
+
         ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
           const containerSize = hz ? win.innerWidth : win.innerHeight;
           const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
