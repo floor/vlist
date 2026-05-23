@@ -1,7 +1,7 @@
 /**
  * vlist v2 — Element Pool
  *
- * Same contract as v1: acquire() = pop or create, release() = reset + push.
+ * acquire() = pop or create, release() = reset + push.
  * Max pool size: 100.
  */
 

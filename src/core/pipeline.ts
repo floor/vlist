@@ -5,7 +5,7 @@
  *   Reads scroll position + size cache, writes into EngineState TypedArrays.
  *
  * Phase 2: Commit — reads EngineState buffers, updates DOM via pool.
- *   Sub-phases: release → acquire → identity bind → position.
+ *   Sub-phases: acquire → identity bind → position → release.
  *
  * Both phases are synchronous. No intermediate objects are allocated.
  */
@@ -25,11 +25,11 @@ import { PLACEHOLDER_ID_PREFIX } from "../constants";
  * Calculate visible range and fill EngineState buffers.
  * Zero allocation — all writes go into pre-allocated TypedArrays.
  *
- * v1 compliance:
- * - Zero container size early exit (v1 core.ts:745-751)
- * - Empty range sentinel: visibleCount = 0 (v1 {start:0, end:-1})
- * - Overscan application (v1 range.ts:44-50)
- * - Render count safety cap (v1 core.ts:765-778)
+ * Guards:
+ * - Zero container size early exit
+ * - Empty range sentinel: visibleCount = 0
+ * - Overscan application
+ * - Render count safety cap
  */
 export function phase1Calculate(
   state: EngineState,
@@ -59,16 +59,16 @@ export function phase1Calculate(
   visStart = Math.max(0, visStart);
   visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
 
-  // Overscan (v1 range.ts:39-51)
+  // Overscan
   const renderStart = Math.max(0, visStart - overscan);
   const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-  // Safety cap (v1 core.ts:765-778)
+  // Safety cap
   const maxRender = Math.ceil(containerSize / 1) + overscan * 2 + 10;
   const count = renderEnd - renderStart + 1;
   const safeCap = Math.min(count, state.capacity, maxRender);
 
-  // Range-unchanged fast path (v1 core.ts:780-809)
+  // Range-unchanged fast path
   if (renderStart === state.prevRangeStart && renderEnd === state.prevRangeEnd && !state.renderPending) {
     return false;
   }

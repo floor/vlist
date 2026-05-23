@@ -1,6 +1,5 @@
-// src/builder/velocity.ts
 /**
- * vlist/builder — Velocity Tracking
+ * vlist v2 — Velocity Tracking
  * Lightweight 2-sample velocity tracker for scroll momentum detection.
  */
 

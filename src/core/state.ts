@@ -63,11 +63,11 @@ export interface EngineState {
 
   /**
    * Resize buffers when container changes. Cold path only.
-   * v1-compatible heuristic: capacity = ceil(containerSize / minItemSize) + overscan * 2
+   * Heuristic: capacity = ceil(containerSize / minItemSize) + overscan * 2
    */
   resizeCapacity(containerSize: number, minItemSize: number, overscan?: number): void;
 
-  /** Reset to empty range sentinel. visibleCount = 0 matches v1 {start:0, end:-1}. */
+  /** Reset to empty range sentinel. */
   clear(): void;
 }
 

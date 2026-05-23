@@ -1,8 +1,8 @@
 /**
  * vlist v2 — Scroll Handling
  *
- * Wheel interception for synchronous rendering (v1 compliance),
- * scroll idle detection, and smooth scroll animation.
+ * Wheel interception for synchronous rendering, scroll idle detection,
+ * and smooth scroll animation.
  */
 
 import type { EngineState } from "./state";
