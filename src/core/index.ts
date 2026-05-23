@@ -8,7 +8,8 @@ export { createVList } from "./create";
 // Engine
 export { createEngineState } from "./state";
 export type { EngineState } from "./state";
-export { phase1Calculate, phase2Commit, render } from "./pipeline";
+export { phase1Calculate, phase2Commit, render, createRenderConfig } from "./pipeline";
+export type { RenderConfig } from "./pipeline";
 export { compileHooks, runCalculateHooks, runCommitHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
 export { createPool } from "./pool";
 export { createSizeCache, countVisibleItems, countItemsFittingFromBottom, getOffsetForVirtualIndex } from "./sizes";

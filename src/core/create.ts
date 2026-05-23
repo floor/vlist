@@ -25,7 +25,7 @@ import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollHandler } from "./scroll";
 import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
-import { render } from "./pipeline";
+import { render, createRenderConfig } from "./pipeline";
 import { createEmitter, type Emitter } from "../events";
 import type { VListEvents } from "../types";
 import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } from "./velocity";
@@ -114,6 +114,11 @@ export function createVList<T extends VListItem = VListItem>(
   const minItemSize = typeof sizeSpec === "number" ? sizeSpec : 20;
   const totalItems = rawConfig.items?.length ?? 0;
   const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
+  const rc = createRenderConfig(
+    config.classPrefix, config.horizontal, config.interactive,
+    config.startPadding, config.crossPadStart, config.crossPadEnd,
+    oddClass, gap,
+  );
 
   // ── Sort and validate plugins ───────────────────────────────────
 
@@ -346,7 +351,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass, gap);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
   }
 
@@ -374,7 +379,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (customForceRender) {
       customForceRender();
     } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, config.horizontal, hooks, getItemFn, itemStateFn, config.classPrefix, config.interactive, config.startPadding, config.crossPadStart, config.crossPadEnd, oddClass, gap);
+      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 

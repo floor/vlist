@@ -9,7 +9,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createEngineState } from "../../src/core/state";
-import { phase2Commit } from "../../src/core/pipeline";
+import { phase2Commit, createRenderConfig } from "../../src/core/pipeline";
 import { createPool } from "../../src/core/pool";
 import { compileHooks } from "../../src/core/hooks";
 
@@ -56,12 +56,10 @@ function runCommit(
     simpleTemplate as any,
     () => items,
     rendered,
-    false,
+    createRenderConfig("vlist", false, interactive, 0, 0, 0, "", 0),
     hooks,
     null,
     null,
-    "vlist",
-    interactive,
   );
 }
 

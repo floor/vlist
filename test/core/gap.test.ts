@@ -11,7 +11,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createEngineState } from "../../src/core/state";
-import { phase1Calculate, phase2Commit } from "../../src/core/pipeline";
+import { phase1Calculate, phase2Commit, createRenderConfig } from "../../src/core/pipeline";
 import { createPool } from "../../src/core/pool";
 import { compileHooks } from "../../src/core/hooks";
 import { createSizeCache } from "../../src/core/sizes";
@@ -61,9 +61,8 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, false, HOOKS,
-      null, null, "vlist", true,
-      0, 0, 0, "", GAP,
+      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", GAP), HOOKS,
+      null, null,
     );
 
     expect(rendered.get(0)!.style.height).toBe(`${ITEM_SIZE}px`);
@@ -80,9 +79,8 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, true, HOOKS,
-      null, null, "vlist", true,
-      0, 0, 0, "", GAP,
+      () => items, rendered, createRenderConfig("vlist", true, true, 0, 0, 0, "", GAP), HOOKS,
+      null, null,
     );
 
     expect(rendered.get(0)!.style.width).toBe(`${ITEM_SIZE}px`);
@@ -107,9 +105,8 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, false, HOOKS,
-      null, null, "vlist", true,
-      0, 0, 0, "", 0,
+      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", 0), HOOKS,
+      null, null,
     );
 
     expect(rendered.get(0)!.style.height).toBe(`${ITEM_SIZE}px`);
@@ -124,9 +121,8 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, false, HOOKS,
-      null, null, "vlist", true,
-      0, 0, 0, "", GAP,
+      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", GAP), HOOKS,
+      null, null,
     );
 
     expect(rendered.get(0)!.style.transform).toBe("translateY(0px)");

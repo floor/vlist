@@ -20,6 +20,7 @@ import {
 import {
   phase1Calculate,
   phase2Commit,
+  createRenderConfig,
 } from "../../src/core/pipeline";
 import {
   compileHooks,
@@ -365,7 +366,7 @@ describe("pipeline", () => {
 
     const items: TestItem[] = createTestItems(5);
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     expect(rendered.size).toBeGreaterThan(0);
     const first = rendered.get(0)!;
@@ -390,12 +391,12 @@ describe("pipeline", () => {
     };
 
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     items = items.map((item, i) => ({ ...item, id: item.id + 100, name: `New ${i}` }));
     state.renderPending = true;
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     const el = rendered.get(0)!;
     expect(el.querySelector("span")!.textContent).toBe("New 0");
@@ -419,7 +420,7 @@ describe("pipeline", () => {
     };
 
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     const elBefore = rendered.get(0)!;
     expect(elBefore.querySelector("span")!.textContent).toBe("Item 1");
@@ -430,7 +431,7 @@ describe("pipeline", () => {
 
     state.renderPending = true;
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     const elAfter = rendered.get(0)!;
     expect(elAfter.querySelector("span")!.textContent).toBe("Updated");
@@ -456,13 +457,13 @@ describe("pipeline", () => {
     };
 
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
     const initialCalls = templateCallCount;
 
     // Re-render with the exact same items array — same references
     state.renderPending = true;
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, false, hooks);
+    phase2Commit(state, pool, content, elementTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks);
 
     // Template should NOT have been called again — same references
     expect(templateCallCount).toBe(initialCalls);
@@ -486,19 +487,19 @@ describe("pipeline", () => {
     };
 
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, false, hooks, null, itemStateFn);
+    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks, null, itemStateFn);
 
     focusedIndex = 0;
     state.renderPending = true;
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, false, hooks, null, itemStateFn);
+    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks, null, itemStateFn);
 
     expect(rendered.get(0)!.classList.contains("vlist-item--focused")).toBe(true);
 
     focusedIndex = 1;
     state.renderPending = true;
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, false, hooks, null, itemStateFn);
+    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, createRenderConfig("vlist", false, false, 0, 0, 0, "", 0), hooks, null, itemStateFn);
 
     expect(rendered.get(0)!.classList.contains("vlist-item--focused")).toBe(false);
     expect(rendered.get(1)!.classList.contains("vlist-item--focused")).toBe(true);
@@ -518,7 +519,7 @@ describe("pipeline", () => {
     const sizeCache = createSizeCache(() => itemWidth, 5);
 
     phase1Calculate(state, sizeCache, 2, hooks);
-    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, true, hooks);
+    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, createRenderConfig("vlist", true, false, 0, 0, 0, "", 0), hooks);
 
     const el = rendered.get(0)!;
     expect(el.style.width).toBe("100px");
@@ -527,7 +528,7 @@ describe("pipeline", () => {
     const newCache = createSizeCache(() => itemWidth, 5);
     state.renderPending = true;
     phase1Calculate(state, newCache, 2, hooks);
-    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, true, hooks);
+    phase2Commit(state, pool, content, simpleTemplate, () => items, rendered, createRenderConfig("vlist", true, false, 0, 0, 0, "", 0), hooks);
 
     expect(el.style.width).toBe("150px");
   });

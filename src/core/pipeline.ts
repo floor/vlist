@@ -18,6 +18,62 @@ import { runCalculateHooks, runCommitHooks } from "./hooks";
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
 // =============================================================================
+// Render Configuration — resolved once at init, reused every frame
+// =============================================================================
+
+export interface RenderConfig {
+  readonly prefix: string;
+  readonly selectedClass: string;
+  readonly focusedClass: string;
+  readonly placeholderClass: string;
+  readonly replacedClass: string;
+  readonly translateProp: "translateX(" | "translateY(";
+  readonly itemRole: "option" | "listitem";
+  readonly interactive: boolean;
+  readonly horizontal: boolean;
+  readonly startPadding: number;
+  readonly gap: number;
+  readonly hasCrossPad: boolean;
+  readonly crossStartProp: string;
+  readonly crossEndProp: string;
+  readonly crossStartVal: string;
+  readonly crossEndVal: string;
+  readonly oddClass: string;
+}
+
+export function createRenderConfig(
+  classPrefix: string,
+  horizontal: boolean,
+  interactive: boolean,
+  startPadding: number,
+  crossPadStart: number,
+  crossPadEnd: number,
+  oddClass: string,
+  gap: number,
+): RenderConfig {
+  const hasCrossPad = crossPadStart !== 0 || crossPadEnd !== 0;
+  return {
+    prefix: classPrefix,
+    selectedClass: `${classPrefix}-item--selected`,
+    focusedClass: `${classPrefix}-item--focused`,
+    placeholderClass: `${classPrefix}-item--placeholder`,
+    replacedClass: `${classPrefix}-item--replaced`,
+    translateProp: horizontal ? "translateX(" : "translateY(",
+    itemRole: interactive ? "option" : "listitem",
+    interactive,
+    horizontal,
+    startPadding,
+    gap,
+    hasCrossPad,
+    crossStartProp: hasCrossPad ? (horizontal ? "top" : "left") : "",
+    crossEndProp: hasCrossPad ? (horizontal ? "bottom" : "right") : "",
+    crossStartVal: hasCrossPad ? crossPadStart + "px" : "",
+    crossEndVal: hasCrossPad ? crossPadEnd + "px" : "",
+    oddClass,
+  };
+}
+
+// =============================================================================
 // Phase 1 — Calculate & Reconcile
 // =============================================================================
 
@@ -128,41 +184,17 @@ export function phase2Commit<T extends VListItem>(
   template: ItemTemplate<T>,
   getItems: () => readonly T[],
   rendered: Map<number, HTMLElement>,
-  horizontal: boolean,
+  rc: RenderConfig,
   hooks: CompiledHooks,
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
-  classPrefix?: string,
-  interactive?: boolean,
-  startPadding?: number,
-  crossPadStart?: number,
-  crossPadEnd?: number,
-  oddClass?: string,
-  gap?: number,
 ): void {
-  const prefix = classPrefix ?? "vlist";
-  const gp = gap ?? 0;
-  const selectedClass = itemStateFn ? `${prefix}-item--selected` : "";
-  const focusedClass = itemStateFn ? `${prefix}-item--focused` : "";
-  const placeholderClass = `${prefix}-item--placeholder`;
-  const replacedClass = `${prefix}-item--replaced`;
   const items = getItemFn ? null : getItems();
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
-  // Acquire, bind identity, position
-  const translateProp = horizontal ? "translateX(" : "translateY(";
-  const itemRole = interactive ? "option" : "listitem";
-  const ariaTotal = interactive ? String(state.totalItems) : "";
-  const totalChanged = interactive && state.totalItems !== state.prevAriaTotal;
-  const sp = startPadding ?? 0;
-  const cps = crossPadStart ?? 0;
-  const cpe = crossPadEnd ?? 0;
-  const hasCrossPad = cps !== 0 || cpe !== 0;
-  const crossStartProp = hasCrossPad ? (horizontal ? "top" : "left") : "";
-  const crossEndProp = hasCrossPad ? (horizontal ? "bottom" : "right") : "";
-  const crossStartVal = hasCrossPad ? cps + "px" : "";
-  const crossEndVal = hasCrossPad ? cpe + "px" : "";
+  const ariaTotal = rc.interactive ? String(state.totalItems) : "";
+  const totalChanged = rc.interactive && state.totalItems !== state.prevAriaTotal;
 
   for (let i = 0; i < count; i++) {
     const dataIndex = newIndices[i]!;
@@ -206,10 +238,10 @@ export function phase2Commit<T extends VListItem>(
         }
       }
 
-      acquired.setAttribute("role", itemRole);
+      acquired.setAttribute("role", rc.itemRole);
       acquired.setAttribute("data-index", String(dataIndex));
-      if (interactive) {
-        acquired.id = prefix + "-item-" + dataIndex;
+      if (rc.interactive) {
+        acquired.id = rc.prefix + "-item-" + dataIndex;
         acquired.setAttribute("aria-posinset", String(dataIndex + 1));
         acquired.setAttribute("aria-setsize", ariaTotal);
       }
@@ -217,32 +249,32 @@ export function phase2Commit<T extends VListItem>(
         const itemId = String(item.id);
         acquired.setAttribute("data-id", itemId);
         if (itemId.startsWith(PLACEHOLDER_ID_PREFIX)) {
-          acquired.classList.add(placeholderClass);
+          acquired.classList.add(rc.placeholderClass);
         }
       }
 
-      if (hasCrossPad) {
-        acquired.style.setProperty(crossStartProp, crossStartVal);
-        acquired.style.setProperty(crossEndProp, crossEndVal);
+      if (rc.hasCrossPad) {
+        acquired.style.setProperty(rc.crossStartProp, rc.crossStartVal);
+        acquired.style.setProperty(rc.crossEndProp, rc.crossEndVal);
       }
 
       if (itemStateFn) {
-        acquired.classList.toggle(selectedClass, itemState.selected);
-        acquired.classList.toggle(focusedClass, itemState.focused);
+        acquired.classList.toggle(rc.selectedClass, itemState.selected);
+        acquired.classList.toggle(rc.focusedClass, itemState.focused);
         if (itemState.selected) acquired.setAttribute("aria-selected", "true");
         else acquired.removeAttribute("aria-selected");
         acquired._lastSelected = itemState.selected;
         acquired._lastFocused = itemState.focused;
       }
 
-      if (oddClass) acquired.classList.toggle(oddClass, (dataIndex & 1) === 1);
+      if (rc.oddClass) acquired.classList.toggle(rc.oddClass, (dataIndex & 1) === 1);
 
-      const transformOffset = offset + sp;
-      acquired.style.transform = translateProp + transformOffset + "px)";
+      const transformOffset = offset + rc.startPadding;
+      acquired.style.transform = rc.translateProp + transformOffset + "px)";
       acquired._lastOffset = transformOffset;
 
-      const sizeVal = size - gp;
-      if (horizontal) {
+      const sizeVal = size - rc.gap;
+      if (rc.horizontal) {
         acquired.style.width = sizeVal + "px";
       } else {
         acquired.style.height = sizeVal + "px";
@@ -273,37 +305,37 @@ export function phase2Commit<T extends VListItem>(
           const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
           const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
           if (wasPlaceholder !== isPlaceholder) {
-            element.classList.toggle(placeholderClass, isPlaceholder);
+            element.classList.toggle(rc.placeholderClass, isPlaceholder);
           }
           if (wasPlaceholder && !isPlaceholder) {
-            element.classList.add(replacedClass);
-            setTimeout(() => { element.classList.remove(replacedClass); }, 300);
+            element.classList.add(rc.replacedClass);
+            setTimeout(() => { element.classList.remove(rc.replacedClass); }, 300);
           }
         }
       }
 
       if (itemStateFn) {
         if (el._lastSelected !== itemState.selected) {
-          element.classList.toggle(selectedClass, itemState.selected);
+          element.classList.toggle(rc.selectedClass, itemState.selected);
           if (itemState.selected) element.setAttribute("aria-selected", "true");
           else element.removeAttribute("aria-selected");
           el._lastSelected = itemState.selected;
         }
         if (el._lastFocused !== itemState.focused) {
-          element.classList.toggle(focusedClass, itemState.focused);
+          element.classList.toggle(rc.focusedClass, itemState.focused);
           el._lastFocused = itemState.focused;
         }
       }
 
-      const transformOffset = offset + sp;
+      const transformOffset = offset + rc.startPadding;
       if (el._lastOffset !== transformOffset) {
-        element.style.transform = translateProp + transformOffset + "px)";
+        element.style.transform = rc.translateProp + transformOffset + "px)";
         el._lastOffset = transformOffset;
       }
 
-      const sizeVal = size - gp;
+      const sizeVal = size - rc.gap;
       if (el._lastSize !== sizeVal) {
-        if (horizontal) {
+        if (rc.horizontal) {
           element.style.width = sizeVal + "px";
         } else {
           element.style.height = sizeVal + "px";
@@ -321,7 +353,7 @@ export function phase2Commit<T extends VListItem>(
   _relRendered = rendered;
   rendered.forEach(releaseIfNotVisible);
 
-  if (interactive) state.prevAriaTotal = state.totalItems;
+  if (rc.interactive) state.prevAriaTotal = state.totalItems;
 
   runCommitHooks(hooks.commit, state);
 }
@@ -339,20 +371,13 @@ export function render<T extends VListItem>(
   template: ItemTemplate<T>,
   getItems: () => readonly T[],
   rendered: Map<number, HTMLElement>,
-  horizontal: boolean,
+  rc: RenderConfig,
   hooks: CompiledHooks,
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
-  classPrefix?: string,
-  interactive?: boolean,
-  startPadding?: number,
-  crossPadStart?: number,
-  crossPadEnd?: number,
-  oddClass?: string,
-  gap?: number,
 ): void {
-  const changed = phase1Calculate(state, sizeCache, overscan, hooks, startPadding);
+  const changed = phase1Calculate(state, sizeCache, overscan, hooks, rc.startPadding);
   if (changed) {
-    phase2Commit(state, pool, contentElement, template, getItems, rendered, horizontal, hooks, getItemFn, itemStateFn, classPrefix, interactive, startPadding, crossPadStart, crossPadEnd, oddClass, gap);
+    phase2Commit(state, pool, contentElement, template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
   }
 }
