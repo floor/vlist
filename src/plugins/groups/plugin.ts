@@ -74,9 +74,19 @@ export function groups<T extends VListItem = VListItem>(
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let forceNextRender = true;
+  let lastDataCount = -1;
 
   function getLayoutItemCount(): number {
     return layout.totalEntries;
+  }
+
+  function syncLayoutIfNeeded(): void {
+    const items = getItems();
+    if (items.length === lastDataCount) return;
+    lastDataCount = items.length;
+    layout.rebuild(items.length, (i) => items[i]);
+    sizeCache.rebuild(layout.totalEntries);
+    contentElement.style[horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
   }
 
   function buildTransform(layoutIndex: number): string {
@@ -98,6 +108,8 @@ export function groups<T extends VListItem = VListItem>(
 
   function groupsRenderIfNeeded(): void {
     if (engineState.destroyed) return;
+
+    syncLayoutIfNeeded();
 
     const scrollPos = engineState.scrollPosition;
     const cs = engineState.containerSize;
@@ -249,6 +261,7 @@ export function groups<T extends VListItem = VListItem>(
 
       const originalItems = getItems();
       layout = createGroupLayout(originalItems.length, config, (i) => originalItems[i]);
+      lastDataCount = originalItems.length;
 
       const getHeaderHeight =
         typeof headerHeightRaw === "number"
@@ -272,6 +285,7 @@ export function groups<T extends VListItem = VListItem>(
       };
 
       ctx.setSizeConfig(groupedSizeFn);
+      sizeCache.rebuild(layout.totalEntries);
       ctx.setVirtualTotalFn(() => layout.totalEntries);
 
       rootElement.classList.add(`${classPrefix}--grouped`);
@@ -326,6 +340,9 @@ export function groups<T extends VListItem = VListItem>(
       );
       ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number =>
         layout.layoutToDataIndex(layoutIndex),
+      );
+      ctx.registerMethod("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+        rendered.get(layoutIndex) ?? null,
       );
       ctx.registerMethod("_isGroupHeader", (layoutIndex: number): boolean => {
         const entry = layout.getEntry(layoutIndex);

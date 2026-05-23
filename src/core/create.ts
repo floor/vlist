@@ -279,6 +279,8 @@ export function createVList<T extends VListItem = VListItem>(
     setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
     setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
     getRenderedElement(index: number): HTMLElement | null {
+      const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
+      if (override) return override(index);
       return rendered.get(index) ?? null;
     },
     setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {

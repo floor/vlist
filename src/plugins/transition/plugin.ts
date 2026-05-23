@@ -402,9 +402,11 @@ export function transition<T extends VListItem = VListItem>(
           const postInsertLayoutIndex = dataToLayout(insertDataIndex);
 
           if (cfg.reverse && scrollDelta === 0 && wasAtEnd) {
-            const maxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
-            dom.viewport[scrollProp] = maxScroll;
-            scrollDelta = dom.viewport[scrollProp] - oldScroll;
+            dom.viewport[scrollProp] = dom.viewport[sizeProp] - dom.viewport[clientProp];
+            const bumped = dom.viewport[scrollProp];
+            state.prevScrollPosition = state.scrollPosition;
+            state.scrollPosition = bumped;
+            scrollDelta = bumped - oldScroll;
             if (scrollDelta > 0) {
               ctx.forceRender();
               commitStyles();
