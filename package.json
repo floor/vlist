@@ -64,6 +64,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "bench": "bun run scripts/bench.ts",
     "bench:quick": "bun run scripts/bench.ts --quick",
+    "bench:full": "bun run scripts/bench.ts --full",
     "bench:compare": "bun run scripts/bench.ts --quick --compare",
     "size": "bun run scripts/measure-size.ts",
     "release": "bun run scripts/release.ts",

@@ -6,8 +6,9 @@
  * and optionally compares against baseline or stores results to SQLite.
  *
  * Usage:
- *   bun run bench                          # full suite @ 10K
+ *   bun run bench                          # default: all suites @ 10K + 100K
  *   bun run bench --quick                  # smoke (render + scrollto) @ 10K
+ *   bun run bench --full                   # all suites @ 10K + 100K + 1M
  *   bun run bench --compare                # run + compare against baseline
  *   bun run bench --store                  # run + store to SQLite
  *   bun run bench --suite=render           # single suite
@@ -23,7 +24,9 @@ const vlistIoDir = resolve(root, process.env.VLIST_IO_DIR ?? "../vlist.io");
 
 const SMOKE_SUITES = "render-vanilla,scrollto-vanilla";
 const DEFAULT_SUITES = "render-vanilla,scroll-vanilla,scrollto-vanilla,memory-vanilla";
-const DEFAULT_ITEMS = "10000";
+const QUICK_ITEMS = "10000";
+const DEFAULT_ITEMS = "10000,100000";
+const FULL_ITEMS = "10000,100000,1000000";
 const SERVER_PORT = 3338;
 const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
 const STARTUP_TIMEOUT_MS = 15_000;
@@ -31,25 +34,28 @@ const POLL_INTERVAL_MS = 300;
 
 interface Args {
   quick: boolean;
+  full: boolean;
   compare: boolean;
   store: boolean;
   dryRun: boolean;
   suite: string | null;
-  items: string;
+  items: string | null;
 }
 
 function parseArgs(): Args {
   const flags: Args = {
     quick: false,
+    full: false,
     compare: false,
     store: false,
     dryRun: false,
     suite: null,
-    items: DEFAULT_ITEMS,
+    items: null,
   };
 
   for (const arg of process.argv.slice(2)) {
     if (arg === "--quick") flags.quick = true;
+    else if (arg === "--full") flags.full = true;
     else if (arg === "--compare") flags.compare = true;
     else if (arg === "--store") flags.store = true;
     else if (arg === "--dry-run") flags.dryRun = true;
@@ -137,12 +143,16 @@ async function run(cmd: string[], cwd: string, label: string): Promise<void> {
 async function main(): Promise<void> {
   const args = parseArgs();
   const suites = args.suite ?? (args.quick ? SMOKE_SUITES : DEFAULT_SUITES);
+  const items = args.items ?? (args.quick ? QUICK_ITEMS : args.full ? FULL_ITEMS : DEFAULT_ITEMS);
+
+  const mode = args.quick ? "quick" : args.full ? "full" : "default";
 
   console.log("═══════════════════════════════════════════════");
   console.log("  vlist benchmark");
   console.log("═══════════════════════════════════════════════");
+  console.log(`  mode:    ${mode}`);
   console.log(`  suites:  ${suites}`);
-  console.log(`  items:   ${Number(args.items).toLocaleString()}`);
+  console.log(`  items:   ${items.split(",").map((n: string) => Number(n).toLocaleString()).join(", ")}`);
   console.log(`  compare: ${args.compare}`);
   console.log(`  store:   ${args.store}`);
   console.log(`  vlist.io: ${vlistIoDir}`);
@@ -170,7 +180,7 @@ async function main(): Promise<void> {
         "bun", "run", "bench:ci", "--",
         "--skip-build",
         `--url=${SERVER_URL}`,
-        `--item-counts=${args.items}`,
+        `--item-counts=${items}`,
         `--suites=${suites}`,
       ],
       vlistIoDir,
