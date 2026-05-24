@@ -182,6 +182,7 @@ async function main(): Promise<void> {
         `--url=${SERVER_URL}`,
         `--item-counts=${items}`,
         `--suites=${suites}`,
+        `--intensity=${mode}`,
       ],
       vlistIoDir,
       "Running benchmarks",
