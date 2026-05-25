@@ -196,6 +196,8 @@ export function phase2Commit<T extends VListItem>(
   const ariaTotal = rc.interactive ? String(state.totalItems) : "";
   const totalChanged = rc.interactive && state.totalItems !== state.prevAriaTotal;
 
+  let fragment: DocumentFragment | null = null;
+
   for (let i = 0; i < count; i++) {
     const dataIndex = newIndices[i]!;
     const offset = state.visibleOffsets[i]!;
@@ -283,7 +285,8 @@ export function phase2Commit<T extends VListItem>(
 
       acquired._lastItem = item;
       rendered.set(dataIndex, acquired);
-      contentElement.appendChild(acquired);
+      if (fragment === null) fragment = document.createDocumentFragment();
+      fragment.appendChild(acquired);
     } else {
       if (totalChanged) {
         element.setAttribute("aria-setsize", ariaTotal);
@@ -344,6 +347,9 @@ export function phase2Commit<T extends VListItem>(
       }
     }
   }
+
+  // Flush all new elements in one DOM operation
+  if (fragment !== null) contentElement.appendChild(fragment);
 
   // Release nodes no longer visible (after acquire so new elements are in the
   // DOM before stale ones are removed — no single-frame gaps).

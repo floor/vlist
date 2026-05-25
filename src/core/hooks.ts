@@ -21,7 +21,14 @@ import type { VListItem } from "../types";
 // Compiler — collects hooks from plugins, returns frozen arrays
 // =============================================================================
 
+const EMPTY: readonly [] = [];
+const EMPTY_HOOKS: CompiledHooks = {
+  calculate: EMPTY, commit: EMPTY, afterScroll: EMPTY, idle: EMPTY, resize: EMPTY,
+};
+
 export function compileHooks<T extends VListItem>(plugins: readonly VListPlugin<T>[]): CompiledHooks {
+  if (plugins.length === 0) return EMPTY_HOOKS;
+
   const calculate: CalculateHook[] = [];
   const commit: CommitHook[] = [];
   const afterScroll: AfterScrollHook[] = [];

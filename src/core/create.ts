@@ -122,8 +122,8 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Sort and validate plugins ───────────────────────────────────
 
-  const sorted = sortPlugins(plugins);
-  checkConflicts(sorted);
+  const sorted = plugins.length > 0 ? sortPlugins(plugins) : plugins;
+  if (plugins.length > 0) checkConflicts(sorted);
 
   // ── Create core components ──────────────────────────────────────
 
@@ -202,110 +202,6 @@ export function createVList<T extends VListItem = VListItem>(
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
 
-  const ctx: PluginContext<T> = {
-    dom,
-    sizeCache,
-    pool,
-    config,
-    emitter,
-    template: rawConfig.item.template,
-    registerMethod(name: string, fn: Function): void { methods.set(name, fn); },
-    getMethod(name: string): Function | undefined { return methods.get(name); },
-    registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
-    registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
-    registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
-    setSizeConfig(sc: number | ((index: number) => number)): void {
-      const newCache = createSizeCache(sc, state.totalItems);
-      Object.assign(sizeCache, newCache);
-    },
-    setVisibleRangeFn(_fn: VisibleRangeFn): void { /* wired in Phase B when scale plugin consumes it */ },
-    setScrollFns(get: () => number, set: (pos: number) => void): void {
-      scrollGetFn = get;
-      scrollSetFn = set;
-    },
-    setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
-    getItems,
-    getItem(index: number): T | undefined {
-      return getItemFn ? getItemFn(index) : items[index];
-    },
-    getState(): EngineState { return state; },
-    rebuildSizeCache(): void {
-      sizeCache.rebuild(state.totalItems);
-    },
-    updateContentSize(size: number): void {
-      dom.content.style[config.horizontal ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
-    },
-    setRenderFn(renderFn: () => void, forceFn: () => void): void {
-      customRenderIfNeeded = renderFn;
-      customForceRender = forceFn;
-    },
-    renderIfNeeded(): void { doRender(); },
-    forceRender(): void {
-      doForceRender();
-    },
-    setGetItemFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
-    setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
-    getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
-    get rawSizeSpec() { return sizeSpec; },
-    scrollTo(position: number): void {
-      if (scrollSetFn) scrollSetFn(position);
-      else if (config.horizontal) dom.viewport.scrollLeft = position;
-      else dom.viewport.scrollTop = position;
-    },
-    smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void {
-      if (smoothScrollFn) smoothScrollFn(position, duration, undefined, easing);
-      else ctx.scrollTo(position);
-    },
-    disableDefaultScroll(): void { skipDefaultScroll = true; },
-    disableDefaultResize(): void { skipDefaultResize = true; },
-    setScrollTarget(target: EventTarget): void { scrollTarget = target; },
-    setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
-    setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
-    onScrollFrame: doScrollFrame,
-    onScrollIdle: doScrollIdle,
-    removeItemById(id: string | number): number {
-      if (removeItemByIdFn) return removeItemByIdFn(id);
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx === -1) return -1;
-      items.splice(idx, 1);
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      syncContentSize();
-      return idx;
-    },
-    insertItemAt(item: T, index: number): void {
-      if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-      items.splice(index, 0, item);
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      syncContentSize();
-    },
-    setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
-    setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
-    setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
-    getRenderedElement(index: number): HTMLElement | null {
-      const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
-      if (override) return override(index);
-      return rendered.get(index) ?? null;
-    },
-    setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
-      if (cfg.ud !== undefined) navUd = cfg.ud;
-      if (cfg.lr !== undefined) navLr = cfg.lr;
-      if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
-      if (cfg.navigate) navNavigateFn = cfg.navigate;
-    },
-    getNavConfig: (() => {
-      const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null };
-      return (): typeof _nav => {
-        _nav.ud = navUd;
-        _nav.lr = navLr;
-        _nav.scrollIndex = navScrollIndexFn;
-        _nav.navigate = navNavigateFn;
-        return _nav;
-      };
-    })(),
-  };
-
   // ── Pre-initialize container size so plugins can read it ────────
 
   state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
@@ -313,9 +209,115 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Run plugin setup (cold path) ────────────────────────────────
 
-  for (const plugin of sorted) {
-    if (plugin.setup) {
-      plugin.setup(ctx);
+  if (plugins.length > 0) {
+    const ctx: PluginContext<T> = {
+      dom,
+      sizeCache,
+      pool,
+      config,
+      emitter,
+      template: rawConfig.item.template,
+      registerMethod(name: string, fn: Function): void { methods.set(name, fn); },
+      getMethod(name: string): Function | undefined { return methods.get(name); },
+      registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
+      registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
+      registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
+      setSizeConfig(sc: number | ((index: number) => number)): void {
+        const newCache = createSizeCache(sc, state.totalItems);
+        Object.assign(sizeCache, newCache);
+      },
+      setVisibleRangeFn(_fn: VisibleRangeFn): void { /* wired in Phase B when scale plugin consumes it */ },
+      setScrollFns(get: () => number, set: (pos: number) => void): void {
+        scrollGetFn = get;
+        scrollSetFn = set;
+      },
+      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
+      getItems,
+      getItem(index: number): T | undefined {
+        return getItemFn ? getItemFn(index) : items[index];
+      },
+      getState(): EngineState { return state; },
+      rebuildSizeCache(): void {
+        sizeCache.rebuild(state.totalItems);
+      },
+      updateContentSize(size: number): void {
+        dom.content.style[config.horizontal ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
+      },
+      setRenderFn(renderFn: () => void, forceFn: () => void): void {
+        customRenderIfNeeded = renderFn;
+        customForceRender = forceFn;
+      },
+      renderIfNeeded(): void { doRender(); },
+      forceRender(): void {
+        doForceRender();
+      },
+      setGetItemFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
+      setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
+      getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
+      get rawSizeSpec() { return sizeSpec; },
+      scrollTo(position: number): void {
+        if (scrollSetFn) scrollSetFn(position);
+        else if (config.horizontal) dom.viewport.scrollLeft = position;
+        else dom.viewport.scrollTop = position;
+      },
+      smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void {
+        if (smoothScrollFn) smoothScrollFn(position, duration, undefined, easing);
+        else ctx.scrollTo(position);
+      },
+      disableDefaultScroll(): void { skipDefaultScroll = true; },
+      disableDefaultResize(): void { skipDefaultResize = true; },
+      setScrollTarget(target: EventTarget): void { scrollTarget = target; },
+      setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
+      setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
+      onScrollFrame: doScrollFrame,
+      onScrollIdle: doScrollIdle,
+      removeItemById(id: string | number): number {
+        if (removeItemByIdFn) return removeItemByIdFn(id);
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx === -1) return -1;
+        items.splice(idx, 1);
+        state.totalItems = items.length;
+        sizeCache.rebuild(state.totalItems);
+        syncContentSize();
+        return idx;
+      },
+      insertItemAt(item: T, index: number): void {
+        if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+        items.splice(index, 0, item);
+        state.totalItems = items.length;
+        sizeCache.rebuild(state.totalItems);
+        syncContentSize();
+      },
+      setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
+      setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
+      setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
+      getRenderedElement(index: number): HTMLElement | null {
+        const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
+        if (override) return override(index);
+        return rendered.get(index) ?? null;
+      },
+      setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
+        if (cfg.ud !== undefined) navUd = cfg.ud;
+        if (cfg.lr !== undefined) navLr = cfg.lr;
+        if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
+        if (cfg.navigate) navNavigateFn = cfg.navigate;
+      },
+      getNavConfig: (() => {
+        const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null };
+        return (): typeof _nav => {
+          _nav.ud = navUd;
+          _nav.lr = navLr;
+          _nav.scrollIndex = navScrollIndexFn;
+          _nav.navigate = navNavigateFn;
+          return _nav;
+        };
+      })(),
+    };
+
+    for (const plugin of sorted) {
+      if (plugin.setup) {
+        plugin.setup(ctx);
+      }
     }
   }
 
@@ -438,39 +440,46 @@ export function createVList<T extends VListItem = VListItem>(
 
   let resizeObserver: ResizeObserver | null = null;
   if (!skipDefaultResize) {
-    resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const size = config.horizontal ? width : height;
-        const cross = config.horizontal ? height : width;
+    const initObserver = (): void => {
+      if (state.destroyed) return;
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          const size = config.horizontal ? width : height;
+          const cross = config.horizontal ? height : width;
 
-        if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
+          if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
 
-        state.containerSize = size;
-        state.crossSize = cross;
-        state.resizeCapacity(size, minItemSize, config.overscan);
-        doForceRender();
-        runResizeHooks(hooks.resize, width, height);
-        emitter.emit("resize", { width, height });
-      }
-    });
-    resizeObserver.observe(dom.viewport);
+          state.containerSize = size;
+          state.crossSize = cross;
+          state.resizeCapacity(size, minItemSize, config.overscan);
+          doForceRender();
+          runResizeHooks(hooks.resize, width, height);
+          emitter.emit("resize", { width, height });
+        }
+      });
+      resizeObserver.observe(dom.viewport);
+    };
+    setTimeout(initObserver, 0);
   }
 
   // ── Initialize ──────────────────────────────────────────────────
 
-  if (!skipDefaultScroll) scrollHandler.attach();
-  if (!skipDefaultResize) {
-    state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
-    state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
-  }
   state.resizeCapacity(state.containerSize, minItemSize, config.overscan);
 
-  // Set content height for scrollbar
   syncContentSize();
-
   state.initialized = true;
-  doRender();
+  let initialRafId: number | null = null;
+  if (rawConfig.defer) {
+    initialRafId = requestAnimationFrame(() => {
+      initialRafId = null;
+      if (!state.destroyed) doRender();
+    });
+  } else {
+    doRender();
+  }
+
+  if (!skipDefaultScroll) scrollHandler.attach();
 
   // ── Public API ──────────────────────────────────────────────────
 
@@ -638,6 +647,7 @@ export function createVList<T extends VListItem = VListItem>(
       if (state.destroyed) return;
       state.destroyed = true;
 
+      if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
       scrollHandler.detach();
       resizeObserver?.disconnect();

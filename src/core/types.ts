@@ -254,4 +254,6 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
     gutter?: "auto" | "stable";
     idleTimeout?: number;
   };
+  /** Defer initial render to the next animation frame. */
+  defer?: boolean;
 }

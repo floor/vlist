@@ -12,15 +12,15 @@ const MAX_POOL_SIZE = 100;
 export function createPool(classPrefix: string): ElementPool {
   const pool: HTMLElement[] = [];
   const itemClass = `${classPrefix}-item`;
+  const tpl = document.createElement("div");
+  tpl.className = itemClass;
 
   return {
     acquire(): HTMLElement {
       if (pool.length > 0) {
         return pool.pop()!;
       }
-      const el = document.createElement("div");
-      el.className = itemClass;
-      return el;
+      return tpl.cloneNode(false) as HTMLElement;
     },
 
     release(element: HTMLElement): void {
