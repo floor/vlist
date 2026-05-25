@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, rmSync } from "fs";
 import { resolve } from "path";
 
 const isDev = process.argv.includes("--watch");
+const withTypes = process.argv.includes("--types");
 
 async function build() {
   const totalStart = performance.now();
@@ -18,19 +19,91 @@ async function build() {
     );
   }
 
-  // Transpile TypeScript → JavaScript + type declarations.
-  // Preserves module structure (no bundling) so consumers can tree-shake.
-  const tscStart = performance.now();
-  const tsc = await $`bunx tsc -p tsconfig.build.json`.quiet().nothrow();
-  if (tsc.exitCode !== 0) {
-    console.error("\nTypeScript compilation failed:\n");
-    console.error(tsc.stderr.toString());
+  // Build main bundle
+  const bundleStart = performance.now();
+
+  // Bun tree-shakes re-export barrels into empty stubs, so we
+  // reference all exports in a wrapper to force inclusion.
+  const entryAbs = resolve("./src/index.ts");
+  const wrapperCode = [
+    `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
+    `  snapshots, transition, autosize, masonry, async, groups, table, sortable,`,
+    `  createStats } from "${entryAbs}";`,
+  ].join("\n");
+  const wrapperPath = "/tmp/_vlist_build_entry.ts";
+  writeFileSync(wrapperPath, wrapperCode);
+
+  const bundleResult = await Bun.build({
+    entrypoints: [wrapperPath],
+    outdir: "./dist",
+    format: "esm",
+    target: "browser",
+    minify: !isDev,
+    sourcemap: isDev ? "inline" : "none",
+    naming: "index.js",
+  });
+
+  if (!bundleResult.success) {
+    console.error("\nBundle build failed:\n");
+    for (const log of bundleResult.logs) {
+      console.error(log);
+    }
     process.exit(1);
   }
-  const tscTime = performance.now() - tscStart;
+
+  const bundleFile = Bun.file("./dist/index.js");
+  const bundleSize = (bundleFile.size / 1024).toFixed(1);
+  const bundleTime = performance.now() - bundleStart;
   console.log(
-    `  Transpile   ${tscTime.toFixed(0).padStart(6)}ms  dist/**/*.js + dist/**/*.d.ts`,
+    `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
+
+  // Build internals bundle (low-level exports for advanced users)
+  const internalsStart = performance.now();
+
+  const intWrapperCode = `export * from "${resolve("./src/internals.ts")}";`;
+  const intWrapperPath = "/tmp/_vlist_build_internals.ts";
+  writeFileSync(intWrapperPath, intWrapperCode);
+
+  const internalsResult = await Bun.build({
+    entrypoints: [intWrapperPath],
+    outdir: "./dist",
+    format: "esm",
+    target: "browser",
+    minify: !isDev,
+    sourcemap: isDev ? "inline" : "none",
+    naming: "internals.js",
+  });
+
+  if (!internalsResult.success) {
+    console.error("\nInternals build failed:\n");
+    for (const log of internalsResult.logs) {
+      console.error(log);
+    }
+    process.exit(1);
+  }
+
+  const internalsFile = Bun.file("./dist/internals.js");
+  const internalsSize = (internalsFile.size / 1024).toFixed(1);
+  const internalsTime = performance.now() - internalsStart;
+  console.log(
+    `  Internals   ${internalsTime.toFixed(0).padStart(6)}ms  dist/internals.js (${internalsSize} KB)`,
+  );
+
+  // Generate type declarations (optional — pass --types or used in prepublishOnly)
+  if (withTypes) {
+    const dtsStart = performance.now();
+    const tsc = await $`bunx tsc -p tsconfig.build.json`.quiet().nothrow();
+    if (tsc.exitCode !== 0) {
+      console.error("\nTypeScript declaration generation failed:\n");
+      console.error(tsc.stderr.toString());
+      process.exit(1);
+    }
+    const dtsTime = performance.now() - dtsStart;
+    console.log(
+      `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/**/*.d.ts`,
+    );
+  }
 
   // Minify and copy CSS
   const cssStart = performance.now();
@@ -65,8 +138,6 @@ async function build() {
   );
 
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
-
-  const entryAbs = resolve("./src/index.ts");
 
   const ALL_PLUGINS = [
     "scale", "scrollbar", "grid", "selection", "page", "snapshots", "transition",
