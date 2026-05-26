@@ -49,7 +49,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   function onScrollEvent(): void {
     const pos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
-    if (pos === state.scrollPosition) return;
+    if (Math.abs(pos - state.scrollPosition) < 0.5) return;
 
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = pos;
