@@ -137,6 +137,7 @@ export function groups<T extends VListItem = VListItem>(
     element: HTMLElement,
     entry: ReturnType<GroupLayout["getEntry"]>,
     isf: ItemStateFn | null,
+    layoutIndex: number,
   ): boolean {
     if (entry.type === "header") {
       element.className = groupHeaderClass;
@@ -182,7 +183,7 @@ export function groups<T extends VListItem = VListItem>(
       element.classList.remove(`${classPrefix}-item--placeholder`);
     }
 
-    if (isf) isf(dataIndex, itemState);
+    if (isf) isf(layoutIndex, itemState);
     else { itemState.selected = false; itemState.focused = false; }
     const content = userTemplate(item, dataIndex, itemState);
     if (typeof content === "string") {
@@ -264,7 +265,7 @@ export function groups<T extends VListItem = VListItem>(
           element.setAttribute("data-index", String(i));
         }
 
-        const hasContent = renderItemContent(element!, entry, isf);
+        const hasContent = renderItemContent(element!, entry, isf, i);
 
         if (hasContent) {
           placeholderIndices.delete(i);
@@ -279,7 +280,7 @@ export function groups<T extends VListItem = VListItem>(
       }
 
       if (entry.type !== "header" && isf) {
-        isf(entry.dataIndex, itemState);
+        isf(i, itemState);
         element!.classList.toggle(selClass, itemState.selected);
         element!.classList.toggle(focClass, itemState.focused);
         if (itemState.selected) element!.setAttribute("aria-selected", "true");
