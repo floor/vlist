@@ -38,6 +38,8 @@ export interface GroupsPluginConfig extends GroupsConfig {}
 
 const itemState: ItemState = { selected: false, focused: false };
 
+const DEBUG = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
+
 export function groups<T extends VListItem = VListItem>(
   config: GroupsPluginConfig,
 ): VListPlugin<T> {
@@ -73,22 +75,37 @@ export function groups<T extends VListItem = VListItem>(
   let groupHeaderClass: string;
 
   const rendered = new Map<number, HTMLElement>();
+  // Track which layout indices currently show placeholder content
+  const placeholderIndices = new Set<number>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let forceNextRender = true;
   let lastDataCount = -1;
+  let origSizeCacheRebuild: SizeCache["rebuild"];
 
   function getLayoutItemCount(): number {
     return layout.totalEntries;
   }
 
+  // Only rebuilds layout when the data total changes (initial load, reload).
+  // Item content updates (placeholder → real) are handled by the render loop
+  // updating existing DOM elements in-place — no layout rebuild needed.
   function syncLayoutIfNeeded(): void {
     const dataCount = engineState.totalItems;
-    if (dataCount === lastDataCount && !forceNextRender) return;
+    if (dataCount === lastDataCount) return;
+
+    if (DEBUG) {
+      console.log(`[groups] syncLayout: ${lastDataCount} → ${dataCount}`);
+    }
+
     lastDataCount = dataCount;
     layout.rebuild(dataCount, ctxGetItem);
-    sizeCache.rebuild(layout.totalEntries);
+    origSizeCacheRebuild(layout.totalEntries);
     contentElement.style[horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+    if (stickyHeader) {
+      stickyHeader.refresh();
+      stickyHeader.update(engineState.scrollPosition);
+    }
   }
 
   function buildTransform(layoutIndex: number): string {
@@ -108,6 +125,59 @@ export function groups<T extends VListItem = VListItem>(
     }
   }
 
+  function renderItemContent(
+    element: HTMLElement,
+    entry: ReturnType<GroupLayout["getEntry"]>,
+    isf: ItemStateFn | null,
+  ): boolean {
+    if (entry.type === "header") {
+      element.className = groupHeaderClass;
+      element.setAttribute("role", "presentation");
+      element.removeAttribute("aria-selected");
+
+      const headerItem: GroupHeaderItem = {
+        id: `__group_header_${entry.group.groupIndex}`,
+        __groupHeader: true,
+        groupKey: entry.group.key,
+        groupIndex: entry.group.groupIndex,
+      };
+      element.setAttribute("data-id", String(headerItem.id));
+
+      const content = headerTemplate(entry.group.key, entry.group.groupIndex);
+      if (typeof content === "string") {
+        element.innerHTML = content;
+      } else {
+        element.innerHTML = "";
+        element.appendChild(content);
+      }
+      return true;
+    }
+
+    // Data item
+    element.className = groupItemClass;
+    element.setAttribute("role", "option");
+
+    const dataIndex = entry.dataIndex;
+    const item = ctxGetItem(dataIndex);
+
+    if (!item || item._isPlaceholder) {
+      element.innerHTML = "";
+      return false; // placeholder
+    }
+
+    element.setAttribute("data-id", String(item.id));
+    if (isf) isf(dataIndex, itemState);
+    else { itemState.selected = false; itemState.focused = false; }
+    const content = userTemplate(item, dataIndex, itemState);
+    if (typeof content === "string") {
+      element.innerHTML = content;
+    } else {
+      element.innerHTML = "";
+      element.appendChild(content);
+    }
+    return true;
+  }
+
   function groupsRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
@@ -121,6 +191,7 @@ export function groups<T extends VListItem = VListItem>(
     }
     lastScrollPosition = scrollPos;
     lastContainerSize = cs;
+    const isForced = forceNextRender;
     forceNextRender = false;
 
     const totalItems = getLayoutItemCount();
@@ -131,6 +202,7 @@ export function groups<T extends VListItem = VListItem>(
           pool.release(element);
         });
         rendered.clear();
+        placeholderIndices.clear();
       }
       return;
     }
@@ -148,11 +220,13 @@ export function groups<T extends VListItem = VListItem>(
       return;
     }
 
+    // Recycle elements outside the new range
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
         element.remove();
         pool.release(element);
         rendered.delete(idx);
+        placeholderIndices.delete(idx);
       }
     });
 
@@ -163,62 +237,41 @@ export function groups<T extends VListItem = VListItem>(
     for (let i = renderStart; i <= renderEnd; i++) {
       let element = rendered.get(i);
       const entry = layout.getEntry(i);
+      const isNew = element === undefined;
 
-      if (element === undefined) {
-        element = pool.acquire();
-        element.setAttribute("data-index", String(i));
+      // Check if existing placeholder element now has real data
+      const needsUpdate = !isNew && isForced && placeholderIndices.has(i) && entry.type === "item";
 
-        let content: string | HTMLElement;
-
-        if (entry.type === "header") {
-          element.className = groupHeaderClass;
-          element.setAttribute("role", "presentation");
-          element.removeAttribute("aria-selected");
-
-          const headerItem: GroupHeaderItem = {
-            id: `__group_header_${entry.group.groupIndex}`,
-            __groupHeader: true,
-            groupKey: entry.group.key,
-            groupIndex: entry.group.groupIndex,
-          };
-          element.setAttribute("data-id", String(headerItem.id));
-
-          content = headerTemplate(entry.group.key, entry.group.groupIndex);
-        } else {
-          element.className = groupItemClass;
-          element.setAttribute("role", "option");
-
-          const dataIndex = entry.dataIndex;
-          const item = ctxGetItem(dataIndex);
-          if (!item || item._isPlaceholder) continue;
-
-          element.setAttribute("data-id", String(item.id));
-          if (isf) isf(i, itemState);
-          else { itemState.selected = false; itemState.focused = false; }
-          content = userTemplate(item, dataIndex, itemState);
+      if (isNew || needsUpdate) {
+        if (isNew) {
+          element = pool.acquire();
+          element.setAttribute("data-index", String(i));
         }
 
-        if (typeof content === "string") {
-          element.innerHTML = content;
+        const hasContent = renderItemContent(element!, entry, isf);
+
+        if (hasContent) {
+          placeholderIndices.delete(i);
         } else {
-          element.innerHTML = "";
-          element.appendChild(content);
+          placeholderIndices.add(i);
         }
 
-        rendered.set(i, element);
-        contentElement.appendChild(element);
+        if (isNew) {
+          rendered.set(i, element!);
+          contentElement.appendChild(element!);
+        }
       }
 
       if (entry.type !== "header" && isf) {
-        isf(i, itemState);
-        element.classList.toggle(selClass, itemState.selected);
-        element.classList.toggle(focClass, itemState.focused);
-        if (itemState.selected) element.setAttribute("aria-selected", "true");
-        else element.removeAttribute("aria-selected");
+        isf(entry.dataIndex, itemState);
+        element!.classList.toggle(selClass, itemState.selected);
+        element!.classList.toggle(focClass, itemState.focused);
+        if (itemState.selected) element!.setAttribute("aria-selected", "true");
+        else element!.removeAttribute("aria-selected");
       }
 
-      applySizeStyles(element, i);
-      element.style.transform = buildTransform(i);
+      applySizeStyles(element!, i);
+      element!.style.transform = buildTransform(i);
     }
 
     const totalSize = sizeCache.getTotalSize();
@@ -228,19 +281,35 @@ export function groups<T extends VListItem = VListItem>(
     engineState.prevRangeEnd = renderEnd;
     engineState.renderPending = false;
 
-    const count = renderEnd - renderStart + 1;
-    engineState.visibleCount = Math.min(count, engineState.capacity);
-    engineState.startIndex = renderStart;
-    for (let i = 0; i < engineState.visibleCount; i++) {
-      const idx = renderStart + i;
-      engineState.visibleIndices[i] = idx;
-      engineState.visibleOffsets[i] = sizeCache.getOffset(idx);
-      engineState.visibleSizes[i] = sizeCache.getSize(idx);
+    // Fill engine state with DATA indices so the async plugin loads
+    // the correct items (it reads startIndex/visibleCount as data indices).
+    let dataFillCount = 0;
+    let firstDataIndex = 0;
+    let foundFirst = false;
+    for (let i = renderStart; i <= renderEnd && dataFillCount < engineState.capacity; i++) {
+      const entry = layout.getEntry(i);
+      if (entry.type === "item") {
+        if (!foundFirst) { firstDataIndex = entry.dataIndex; foundFirst = true; }
+        engineState.visibleIndices[dataFillCount] = entry.dataIndex;
+        engineState.visibleOffsets[dataFillCount] = sizeCache.getOffset(i);
+        engineState.visibleSizes[dataFillCount] = sizeCache.getSize(i);
+        dataFillCount++;
+      }
     }
+    engineState.visibleCount = dataFillCount;
+    engineState.startIndex = firstDataIndex;
   }
 
+  // v1 pattern: forceRender does NO layout rebuild and NO DOM clearing.
+  // It just forces the render loop to run, which updates placeholder
+  // elements in-place when real data has arrived.
   function groupsForceRender(): void {
     if (engineState.destroyed) return;
+
+    if (DEBUG) {
+      console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
+    }
+
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -292,12 +361,21 @@ export function groups<T extends VListItem = VListItem>(
       };
 
       ctx.setSizeConfig(groupedSizeFn);
+
+      // Intercept sizeCache.rebuild: external callers (async plugin) pass
+      // data count, but groups needs layout count. Always use layout.totalEntries
+      // to keep prefix sums consistent with the grouped layout.
+      origSizeCacheRebuild = sizeCache.rebuild;
+      sizeCache.rebuild = (_n: number): void => {
+        origSizeCacheRebuild(layout.totalEntries);
+      };
+
       sizeCache.rebuild(layout.totalEntries);
       ctx.setVirtualTotalFn(() => layout.totalEntries);
 
       rootElement.classList.add(`${classPrefix}--grouped`);
 
-      if (config.sticky !== false && layout.groupCount > 0) {
+      if (config.sticky !== false) {
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = layout.groups[groupIndex];
           if (!group) return;
@@ -309,11 +387,13 @@ export function groups<T extends VListItem = VListItem>(
           }
         };
 
+        const headerH = layout.getHeaderHeight(0);
+
         const stickyContainer = createStickyContainer(
           rootElement,
           classPrefix,
           horizontal,
-          layout.getHeaderHeight(0),
+          headerH,
         );
 
         stickyHeader = createStickyHeader(
@@ -330,7 +410,6 @@ export function groups<T extends VListItem = VListItem>(
 
         stickyHeader.update(engineState.scrollPosition);
 
-        const headerH = layout.getHeaderHeight(0);
         if (!horizontal) {
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
         } else {
@@ -399,6 +478,7 @@ export function groups<T extends VListItem = VListItem>(
           element.remove();
         }
         rendered.clear();
+        placeholderIndices.clear();
         if (stickyHeader) {
           stickyHeader.destroy();
           stickyHeader = null;
@@ -421,6 +501,7 @@ export function groups<T extends VListItem = VListItem>(
         stickyHeader = null;
       }
       rendered.clear();
+      placeholderIndices.clear();
     },
   };
 }
