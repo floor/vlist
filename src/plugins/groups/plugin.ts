@@ -99,6 +99,7 @@ export function groups<T extends VListItem = VListItem>(
       console.log(`[groups] syncLayout: ${lastDataCount} → ${dataCount}`);
     }
 
+    const wasLoaded = lastDataCount > 0;
     lastDataCount = dataCount;
     layout.rebuild(dataCount, ctxGetItem);
     origSizeCacheRebuild(layout.totalEntries);
@@ -107,6 +108,19 @@ export function groups<T extends VListItem = VListItem>(
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
+    }
+
+    // Layout indices shifted (item added/removed) — rendered elements
+    // are keyed by old layout indices and show stale content. Clear them
+    // so the render loop recreates everything. Skip on initial load
+    // (wasLoaded=false) to avoid a flash.
+    if (wasLoaded) {
+      rendered.forEach((element) => {
+        element.remove();
+        pool.release(element);
+      });
+      rendered.clear();
+      placeholderIndices.clear();
     }
 
     const getSb = getMethod?.("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
