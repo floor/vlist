@@ -11,6 +11,27 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Performance
+
+- **Optimized initial render path** — batch DOM insertions via DocumentFragment, `cloneNode(false)` from pre-built template in element pool, defer ResizeObserver and scroll listeners until after first paint, skip plugin sort/conflict check when no plugins used
+- **Build: switched from tsc transpile to Bun.build bundle** — 15x faster dev builds (1200ms → 78ms), same output
+
+### Added
+
+- Normalized benchmark workflow with tiered item counts (10K, 100K, 1M) and intensity modes
+
+## [2.0.1] - 2026-05-23
+
+### Performance
+
+- **Precomputed render configuration** — extract stable per-frame string computations (class names, translate prefix, cross-axis properties) into a `RenderConfig` object created once during setup. Eliminates repeated string concatenation on every scroll frame. `phase2Commit()` simplified from 17 parameters to 10.
+
+### Refactored
+
+- Removed unused `range.ts` (`calcVisibleRange` / `applyOverscan` — dead code that also violated hot-path allocation rules)
+- Removed unused `data.ts` (`createSimpleDataManager` — 245 lines never imported by core or plugins)
+- Fixed stale v1 comments and documentation drift across core modules
+
 ## [2.0.0] - 2026-05-19
 
 ### Changed

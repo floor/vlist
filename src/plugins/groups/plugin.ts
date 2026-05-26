@@ -64,11 +64,13 @@ export function groups<T extends VListItem = VListItem>(
   let contentElement: HTMLElement;
   let rootElement: HTMLElement;
   let userTemplate: ItemTemplate<T>;
-  let getItems: () => readonly T[];
+  let ctxGetItem: (index: number) => T | undefined;
   let horizontal: boolean;
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
+  let groupItemClass: string;
+  let groupHeaderClass: string;
 
   const rendered = new Map<number, HTMLElement>();
   let lastScrollPosition = -1;
@@ -81,10 +83,10 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   function syncLayoutIfNeeded(): void {
-    const items = getItems();
-    if (items.length === lastDataCount) return;
-    lastDataCount = items.length;
-    layout.rebuild(items.length, (i) => items[i]);
+    const dataCount = engineState.totalItems;
+    if (dataCount === lastDataCount && !forceNextRender) return;
+    lastDataCount = dataCount;
+    layout.rebuild(dataCount, ctxGetItem);
     sizeCache.rebuild(layout.totalEntries);
     contentElement.style[horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
   }
@@ -122,7 +124,16 @@ export function groups<T extends VListItem = VListItem>(
     forceNextRender = false;
 
     const totalItems = getLayoutItemCount();
-    if (cs <= 0 || totalItems === 0) return;
+    if (cs <= 0 || totalItems === 0) {
+      if (rendered.size > 0) {
+        rendered.forEach((element) => {
+          element.remove();
+          pool.release(element);
+        });
+        rendered.clear();
+      }
+      return;
+    }
 
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
@@ -137,8 +148,6 @@ export function groups<T extends VListItem = VListItem>(
       return;
     }
 
-    const items = getItems();
-
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
         element.remove();
@@ -146,9 +155,6 @@ export function groups<T extends VListItem = VListItem>(
         rendered.delete(idx);
       }
     });
-
-    const groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
-    const groupHeaderClass = `${classPrefix}-group-header`;
 
     const isf = resolveItemState?.();
     const selClass = isf ? `${classPrefix}-item--selected` : "";
@@ -183,8 +189,8 @@ export function groups<T extends VListItem = VListItem>(
           element.setAttribute("role", "option");
 
           const dataIndex = entry.dataIndex;
-          const item = items[dataIndex];
-          if (!item) continue;
+          const item = ctxGetItem(dataIndex);
+          if (!item || item._isPlaceholder) continue;
 
           element.setAttribute("data-id", String(item.id));
           if (isf) isf(i, itemState);
@@ -256,12 +262,14 @@ export function groups<T extends VListItem = VListItem>(
       horizontal = ctx.config.horizontal;
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
-      getItems = ctx.getItems.bind(ctx);
+      ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
+      groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
+      groupHeaderClass = `${classPrefix}-group-header`;
 
-      const originalItems = getItems();
-      layout = createGroupLayout(originalItems.length, config, (i) => originalItems[i]);
-      lastDataCount = originalItems.length;
+      const dataCount = engineState.totalItems;
+      layout = createGroupLayout(dataCount, config, ctxGetItem);
+      lastDataCount = dataCount;
 
       const getHeaderHeight =
         typeof headerHeightRaw === "number"
@@ -273,7 +281,6 @@ export function groups<T extends VListItem = VListItem>(
             };
 
       const origGetSize = sizeCache.getSize;
-      const getItemSize = (dataIndex: number): number => origGetSize(dataIndex);
 
       const groupedSizeFn = (layoutIndex: number): number => {
         const entry = layout.getEntry(layoutIndex);
@@ -281,7 +288,7 @@ export function groups<T extends VListItem = VListItem>(
           if (config.sticky !== false && entry.group.groupIndex === 0) return 0;
           return getHeaderHeight(entry.group.groupIndex);
         }
-        return getItemSize(entry.dataIndex);
+        return origGetSize(entry.dataIndex);
       };
 
       ctx.setSizeConfig(groupedSizeFn);

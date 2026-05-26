@@ -1,8 +1,8 @@
 # vlist
 
-The virtual list library for every framework. Accessible by default, batteries-included, with composable plugins — in 5.0 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 6.9 KB.
 
-**v2.0.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
+**v2.0.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Accessible by default, batteries-i
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **5.0 KB gzipped** — composable plugins with perfect tree-shaking
+- **6.9 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Vertical & horizontal** — single axis-neutral code path, every plugin works in both orientations
 
@@ -56,20 +56,20 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 5.0 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `async()` | +3.9 KB | Lazy loading with velocity-aware fetching |
-| `selection()` | +1.2 KB | Single/multiple selection with 2D keyboard nav |
-| `scale()` | +3.4 KB | 1M+ items via scroll compression |
-| `groups()` | +2.5 KB | Sticky/inline headers with async group discovery |
+| **Base** | 6.9 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| `async()` | +4.3 KB | Lazy loading with velocity-aware fetching |
+| `selection()` | +2.3 KB | Single/multiple selection with 2D keyboard nav |
+| `scale()` | +3.7 KB | 1M+ items via scroll compression |
+| `groups()` | +2.9 KB | Sticky/inline headers with async group discovery |
 | `autosize()` | +0.6 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +1.8 KB | Custom scrollbar UI |
-| `grid()` | +1.7 KB | 2D grid layout |
-| `masonry()` | +2.9 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `grid()` | +2.0 KB | 2D grid layout |
+| `masonry()` | +3.5 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `page()` | +0.7 KB | Window-level scrolling |
 | `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
 | `snapshots()` | +1.2 KB | Scroll position save/restore |
-| `transition()` | +1.9 KB | FLIP-based enter/exit animations for insert & remove |
+| `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Framework Adapters
 
@@ -83,6 +83,20 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 ## Docs & Examples
 
 **18 interactive examples, full API reference, tutorials, and live benchmarks → [vlist.io](https://vlist.io)**
+
+## Migrating from v1
+
+v2 is a ground-up rewrite — simpler API, 55% smaller base bundle, zero-allocation scroll path. [Full announcement →](https://vlist.io/blog/v2)
+
+| v1 | v2 |
+|----|-----|
+| `vlist(config).use(withGrid()).build()` | `createVList(config, [grid()])` |
+| `withGrid`, `withSelection`, … | `grid`, `selection`, … |
+| `VListFeature` | `VListPlugin` |
+| `BuilderContext` | `PluginContext` |
+| `.vlist-items` | `.vlist-content` |
+
+The instance API (`setItems`, `scrollToIndex`, `on`, `destroy`) is unchanged.
 
 ## License
 
