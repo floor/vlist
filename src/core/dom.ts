@@ -48,5 +48,15 @@ export function createDOMStructure(
   const viewport = root.firstElementChild as HTMLElement;
   const content = viewport.firstElementChild as HTMLElement;
 
-  return { root, viewport, content };
+  const liveRegion = document.createElement("div");
+  liveRegion.className = `${classPrefix}-live`;
+  liveRegion.style.cssText =
+    "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+    "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.setAttribute("role", "status");
+  root.appendChild(liveRegion);
+
+  return { root, viewport, content, liveRegion };
 }

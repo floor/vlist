@@ -69,6 +69,7 @@ export interface DOMStructure {
   readonly root: HTMLElement;
   readonly viewport: HTMLElement;
   readonly content: HTMLElement;
+  readonly liveRegion: HTMLElement;
 }
 
 // =============================================================================

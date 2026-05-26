@@ -15,7 +15,7 @@ import type {
   VisibleRangeFn,
   CompiledHooks,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -410,9 +410,20 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
+  let sizeWarningEmitted = false;
+
   function syncContentSize(): void {
     if (customRenderIfNeeded) return;
-    dom.content.style[config.horizontal ? "width" : "height"] = (sizeCache.getTotalSize() + config.mainAxisPadding) + "px";
+    const totalSize = sizeCache.getTotalSize();
+    dom.content.style[config.horizontal ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
+
+    if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
+      sizeWarningEmitted = true;
+      emitter.emit("error", {
+        error: new Error(`Content size (${totalSize}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use the scale() plugin for large datasets.`),
+        context: "content:size:overflow",
+      });
+    }
   }
 
   function doRender(): void {
@@ -503,11 +514,23 @@ export function createVList<T extends VListItem = VListItem>(
     if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event: e });
   }
 
+  function onContentDblClick(e: MouseEvent): void {
+    const hit = resolveClickedItem(e);
+    if (hit) emitter.emit("item:dblclick", { item: hit.item, index: hit.index, event: e });
+  }
+
+  function onContentContextMenu(e: MouseEvent): void {
+    const hit = resolveClickedItem(e);
+    if (hit) emitter.emit("item:contextmenu", { item: hit.item, index: hit.index, event: e });
+  }
+
   function onContentKeydown(e: KeyboardEvent): void {
     for (let i = 0; i < keydownHandlers.length; i++) keydownHandlers[i]!(e);
   }
 
   dom.content.addEventListener("click", onContentClick);
+  dom.content.addEventListener("dblclick", onContentDblClick);
+  dom.content.addEventListener("contextmenu", onContentContextMenu);
   if (keydownHandlers.length > 0) dom.content.addEventListener("keydown", onContentKeydown);
 
   // ── ResizeObserver ──────────────────────────────────────────────
@@ -730,6 +753,8 @@ export function createVList<T extends VListItem = VListItem>(
       scrollHandler.detach();
       resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);
+      dom.content.removeEventListener("dblclick", onContentDblClick);
+      dom.content.removeEventListener("contextmenu", onContentContextMenu);
       dom.content.removeEventListener("keydown", onContentKeydown);
 
       const destroyErrors: Error[] = [];

@@ -25,6 +25,7 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
       const engineState = ctx.getState();
       const emitter = ctx.emitter;
       const classPrefix = config.classPrefix;
+      const liveRegion = dom.liveRegion;
 
       let focusIdx = -1;
       let focusVis = false;
@@ -41,6 +42,11 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
         is.selected = selIdx === _i;
         is.focused = focusVis && focusIdx === _i;
       });
+
+      function announce(message: string): void {
+        liveRegion.textContent = "";
+        liveRegion.textContent = message;
+      }
 
       const skip = (from: number, dir: 1 | -1, total: number): number => {
         let i = from;
@@ -95,6 +101,7 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
           _focusEvt.id = it.id;
           _focusEvt.index = next;
           emitter.emit("focus:change", _focusEvt);
+          announce(`Item ${next + 1} of ${getTotal()}`);
         }
       };
 
@@ -115,9 +122,11 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
           _selEvt.selected.length = 1;
           _selEvt.items[0] = it;
           _selEvt.items.length = 1;
+          announce(`Selected, item ${idx + 1} of ${getTotal()}`);
         } else {
           _selEvt.selected.length = 0;
           _selEvt.items.length = 0;
+          announce(`Deselected`);
         }
         emitter.emit("selection:change", _selEvt);
       };
