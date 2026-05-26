@@ -47,8 +47,14 @@ export interface DataManagerConfig<T extends VListItem = VListItem> {
   /** Items per load request (default: 50) */
   pageSize?: number;
 
-  /** Callback when state changes */
+  /** Maximum concurrent chunk requests (0 = unlimited, default: 6) */
+  maxConcurrent?: number;
+
+  /** Callback when state changes (all changes including loading flags) */
   onStateChange?: (state: DataState<T>) => void;
+
+  /** Callback when data mutates (total, items, eviction) — NOT for loading-state-only changes */
+  onDataChange?: () => void;
 
   /** Callback when items are loaded */
   onItemsLoaded?: (items: T[], offset: number, total: number) => void;
@@ -189,7 +195,9 @@ export const createDataManager = <T extends VListItem = VListItem>(
     storage: storageConfig,
     placeholder: placeholderConfig,
     pageSize = LOAD_SIZE,
+    maxConcurrent = 0,
     onStateChange,
+    onDataChange,
     onItemsLoaded,
     onItemsEvicted,
   } = config;
@@ -199,6 +207,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     ...storageConfig,
     onEvict: (count, _ranges) => {
       onItemsEvicted?.(count);
+      notifyDataChange();
       notifyStateChange();
     },
   });
@@ -247,11 +256,12 @@ export const createDataManager = <T extends VListItem = VListItem>(
   // Internal Helpers
   // ==========================================================================
 
-  /**
-   * Notify state change
-   */
   const notifyStateChange = (): void => {
     onStateChange?.(getState());
+  };
+
+  const notifyDataChange = (): void => {
+    onDataChange?.();
   };
 
   /**
@@ -384,6 +394,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
   const setTotal = (total: number): void => {
     storage.setTotal(total);
     hasMore = storage.getCachedCount() < total;
+    notifyDataChange();
     notifyStateChange();
   };
 
@@ -432,10 +443,11 @@ export const createDataManager = <T extends VListItem = VListItem>(
       hasMore = false;
     }
 
-    // Notify — state change MUST fire before onItemsLoaded so that
-    // the size cache is rebuilt (via onStateChange → sizeCache.rebuild)
-    // before onItemsLoaded triggers a forced render. Without this order
-    // the render sees sizeCache.totalSize=0 and only shows a few rows.
+    // Data change MUST fire before onItemsLoaded so that the size cache
+    // is rebuilt (via onDataChange → sizeCache.rebuild) before
+    // onItemsLoaded triggers a forced render. Without this order the
+    // render sees sizeCache.totalSize=0 and only shows a few rows.
+    notifyDataChange();
     notifyStateChange();
     onItemsLoaded?.(items, offset, storage.getTotal());
   };
@@ -456,6 +468,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     }
     updateIdIndex(index, updated);
 
+    notifyDataChange();
     notifyStateChange();
     return true;
   };
@@ -464,6 +477,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     storage.insert(index, item);
     rebuildIdIndex();
     abortAndClearLoads();
+    notifyDataChange();
     notifyStateChange();
   };
 
@@ -479,6 +493,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     rebuildIdIndex();
     abortAndClearLoads();
 
+    notifyDataChange();
     notifyStateChange();
     return true;
   };
@@ -534,6 +549,66 @@ export const createDataManager = <T extends VListItem = VListItem>(
     }
 
     if (chunksToLoad.length === 0) {
+      if (loadPromises.length > 0) {
+        await Promise.all(loadPromises);
+      }
+      return;
+    }
+
+    // Enforce max concurrent request limit (zero-allocation path)
+    if (maxConcurrent > 0) {
+      const totalAfterNew = activeLoads.size + chunksToLoad.length;
+
+      if (totalAfterNew > maxConcurrent) {
+        const center = (start + end) / 2;
+
+        // Abort furthest existing loads first — new loads are closer to
+        // the current viewport and therefore higher priority.
+        // Single-pass find-max loop instead of spread+map+sort to avoid
+        // heap allocations on the hot path.
+        let toAbort = Math.min(totalAfterNew - maxConcurrent, activeLoads.size);
+        while (toAbort > 0) {
+          let furthestKey: string | null = null;
+          let furthestDist = -1;
+          let furthestCtrl: AbortController | null = null;
+
+          for (const [key, load] of activeLoads) {
+            const dash = key.indexOf("-");
+            const loadStart = parseInt(key.slice(0, dash), 10);
+            const loadEnd = parseInt(key.slice(dash + 1), 10);
+            const dist = Math.abs((loadStart + loadEnd) / 2 - center);
+            if (dist > furthestDist) {
+              furthestDist = dist;
+              furthestKey = key;
+              furthestCtrl = load[1];
+            }
+          }
+
+          if (furthestKey) {
+            furthestCtrl!.abort();
+            activeLoads.delete(furthestKey);
+          }
+          toAbort--;
+        }
+
+        // If still over limit after aborting existing, trim new chunks.
+        // In-place sort on the already-allocated chunksToLoad array.
+        const remaining = maxConcurrent - activeLoads.size;
+        if (chunksToLoad.length > remaining) {
+          chunksToLoad.sort((a, b) => {
+            const distA = Math.abs((a.start + a.end) / 2 - center);
+            const distB = Math.abs((b.start + b.end) / 2 - center);
+            return distA - distB;
+          });
+          chunksToLoad.length = Math.max(0, remaining);
+        }
+      }
+    }
+
+    if (chunksToLoad.length === 0) {
+      if (loadPromises.length > 0) {
+        await Promise.all(loadPromises);
+      }
       return;
     }
 
@@ -589,9 +664,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
           error = err instanceof Error ? err : new Error(String(err));
         } finally {
           activeLoads.delete(key);
-          pendingRanges = pendingRanges.filter(
-            (r) => r.start !== chunk.start || r.end !== chunk.end,
+          const prIdx = pendingRanges.findIndex(
+            (r) => r.start === chunk.start && r.end === chunk.end,
           );
+          if (prIdx >= 0) pendingRanges.splice(prIdx, 1);
           isLoading = activeLoads.size > 0;
           notifyStateChange();
         }
@@ -666,6 +742,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     hasMoreHighWater = 0;
     error = undefined;
 
+    notifyDataChange();
     notifyStateChange();
   };
 
@@ -694,6 +771,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     error = undefined;
     pendingRanges = [];
     isLoading = false;
+    notifyDataChange();
     notifyStateChange();
   };
 
@@ -708,6 +786,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     error = undefined;
     pendingRanges = [];
     isLoading = false;
+    notifyDataChange();
     notifyStateChange();
   };
 
@@ -720,6 +799,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     setItems(initialItems, 0, initialTotal ?? initialItems.length);
   } else if (initialTotal !== undefined) {
     storage.setTotal(initialTotal);
+    notifyDataChange();
     notifyStateChange();
   }
 

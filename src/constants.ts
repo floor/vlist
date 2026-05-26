@@ -42,6 +42,9 @@ export const PRELOAD_VELOCITY_THRESHOLD = 2;
  */
 export const LOAD_VELOCITY_THRESHOLD = 15;
 
+/** Maximum concurrent chunk requests (0 = unlimited) */
+export const MAX_CONCURRENT_LOADS = 6;
+
 // =============================================================================
 // Scale
 // =============================================================================

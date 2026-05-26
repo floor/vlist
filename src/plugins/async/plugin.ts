@@ -27,6 +27,7 @@ import {
   LOAD_VELOCITY_THRESHOLD,
   PRELOAD_VELOCITY_THRESHOLD,
   PRELOAD_AHEAD,
+  MAX_CONCURRENT_LOADS,
 } from "../../constants";
 
 // =============================================================================
@@ -65,6 +66,9 @@ export interface AsyncPluginConfig<T extends VListItem = VListItem> {
 
     /** Number of items to preload in scroll direction */
     preloadAhead?: number;
+
+    /** Maximum concurrent chunk requests (0 = unlimited, default: 6) */
+    maxConcurrent?: number;
   };
 }
 
@@ -80,6 +84,7 @@ export function async<T extends VListItem = VListItem>(
   const cancelThreshold = config.loading?.cancelThreshold ?? LOAD_VELOCITY_THRESHOLD;
   const preloadThreshold = config.loading?.preloadThreshold ?? PRELOAD_VELOCITY_THRESHOLD;
   const preloadAhead = config.loading?.preloadAhead ?? PRELOAD_AHEAD;
+  const maxConcurrent = config.loading?.maxConcurrent ?? MAX_CONCURRENT_LOADS;
 
   let dataManager: DataManager<T>;
   let engineState: EngineState;
@@ -93,6 +98,11 @@ export function async<T extends VListItem = VListItem>(
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let currentVelocity = 0;
   let autoLoadCancelled = false;
+
+  // Track last requested chunk range to skip redundant ensure() calls
+  let lastFirstChunk = -1;
+  let lastLastChunk = -1;
+  const chunkSize = storage?.chunkSize ?? INITIAL_LOAD_SIZE;
 
   // ============================================================================
   // Helpers
@@ -160,6 +170,7 @@ export function async<T extends VListItem = VListItem>(
         adapter,
         ...(total !== undefined && { initialTotal: total }),
         pageSize: storage?.chunkSize ?? INITIAL_LOAD_SIZE,
+        maxConcurrent,
         ...(storage && {
           storage: {
             ...(storage.chunkSize !== undefined && { chunkSize: storage.chunkSize }),
@@ -167,7 +178,7 @@ export function async<T extends VListItem = VListItem>(
             ...(storage.evictionBuffer !== undefined && { evictionBuffer: storage.evictionBuffer }),
           },
         }),
-        onStateChange: () => {
+        onDataChange: () => {
           if (engineState.initialized) {
             const newTotal = dataManager.getTotal();
             engineState.totalItems = newTotal;
@@ -211,6 +222,8 @@ export function async<T extends VListItem = VListItem>(
       // Register public methods
       ctx.registerMethod("reload", async (): Promise<void> => {
         pendingRange = null;
+        lastFirstChunk = -1;
+        lastLastChunk = -1;
 
         ctx.forceRender();
 
@@ -339,8 +352,14 @@ export function async<T extends VListItem = VListItem>(
         // Moderate scrolling (between preloadThreshold and cancelThreshold):
         // load visible range immediately, debounce preload-ahead only
         if (currentVelocity > preloadThreshold) {
-          if (visEnd >= engineState.startIndex) {
-            ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+          const fc = Math.floor(engineState.startIndex / chunkSize);
+          const lc = Math.floor(visEnd / chunkSize);
+          if (fc !== lastFirstChunk || lc !== lastLastChunk) {
+            lastFirstChunk = fc;
+            lastLastChunk = lc;
+            if (visEnd >= engineState.startIndex) {
+              ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+            }
           }
 
           let loadStart = engineState.startIndex;
@@ -371,8 +390,14 @@ export function async<T extends VListItem = VListItem>(
 
         // Slow scrolling (below preloadThreshold): load visible range immediately
         resetDeceleration();
-        if (visEnd >= engineState.startIndex) {
-          ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+        const fc = Math.floor(engineState.startIndex / chunkSize);
+        const lc = Math.floor(visEnd / chunkSize);
+        if (fc !== lastFirstChunk || lc !== lastLastChunk) {
+          lastFirstChunk = fc;
+          lastLastChunk = lc;
+          if (visEnd >= engineState.startIndex) {
+            ensure(engineState.startIndex, visEnd).catch(onEnsureError);
+          }
         }
       },
 
@@ -380,6 +405,8 @@ export function async<T extends VListItem = VListItem>(
         if (engineState.destroyed) return;
 
         currentVelocity = 0;
+        lastFirstChunk = -1;
+        lastLastChunk = -1;
         loadPendingRange();
         resetDeceleration();
       },
