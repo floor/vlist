@@ -35,6 +35,8 @@ export function scrollbar<T extends VListItem = VListItem>(
   let sb: Scrollbar | null = null;
   let engineState: EngineState;
   let sizeCache: SizeCache;
+  let lastBoundsTotal = 0;
+  let lastBoundsContainer = 0;
 
   return {
     name: "scrollbar",
@@ -94,13 +96,26 @@ export function scrollbar<T extends VListItem = VListItem>(
 
     hooks: {
       onAfterScroll(scrollPosition: number): void {
+        if (!engineState.isCompressed) {
+          const total = sizeCache.getTotalSize();
+          const container = engineState.containerSize;
+          if (total !== lastBoundsTotal || container !== lastBoundsContainer) {
+            lastBoundsTotal = total;
+            lastBoundsContainer = container;
+            sb?.updateBounds(total, container);
+          }
+        }
         sb?.updatePosition(scrollPosition);
         sb?.show();
       },
 
       onResize(): void {
         if (!engineState.isCompressed) {
-          sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+          const total = sizeCache.getTotalSize();
+          const container = engineState.containerSize;
+          lastBoundsTotal = total;
+          lastBoundsContainer = container;
+          sb?.updateBounds(total, container);
         }
       },
     },

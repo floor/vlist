@@ -73,6 +73,7 @@ export function groups<T extends VListItem = VListItem>(
   let resolveItemState: (() => ItemStateFn | null) | null = null;
   let groupItemClass: string;
   let groupHeaderClass: string;
+  let getMethod: ((name: string) => Function | undefined) | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -101,10 +102,17 @@ export function groups<T extends VListItem = VListItem>(
     lastDataCount = dataCount;
     layout.rebuild(dataCount, ctxGetItem);
     origSizeCacheRebuild(layout.totalEntries);
-    contentElement.style[horizontal ? "width" : "height"] = sizeCache.getTotalSize() + "px";
+    const totalSize = sizeCache.getTotalSize();
+    contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
+    }
+
+    const getSb = getMethod?.("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
+    if (getSb) {
+      const sb = getSb();
+      sb?.updateBounds(totalSize, engineState.containerSize);
     }
   }
 
@@ -160,12 +168,20 @@ export function groups<T extends VListItem = VListItem>(
     const dataIndex = entry.dataIndex;
     const item = ctxGetItem(dataIndex);
 
-    if (!item || item._isPlaceholder) {
+    if (!item) {
       element.innerHTML = "";
-      return false; // placeholder
+      return false;
     }
 
     element.setAttribute("data-id", String(item.id));
+    const isPlaceholder = item._isPlaceholder === true;
+
+    if (isPlaceholder) {
+      element.classList.add(`${classPrefix}-item--placeholder`);
+    } else {
+      element.classList.remove(`${classPrefix}-item--placeholder`);
+    }
+
     if (isf) isf(dataIndex, itemState);
     else { itemState.selected = false; itemState.focused = false; }
     const content = userTemplate(item, dataIndex, itemState);
@@ -175,7 +191,7 @@ export function groups<T extends VListItem = VListItem>(
       element.innerHTML = "";
       element.appendChild(content);
     }
-    return true;
+    return !isPlaceholder;
   }
 
   function groupsRenderIfNeeded(): void {
@@ -333,6 +349,7 @@ export function groups<T extends VListItem = VListItem>(
       overscan = ctx.config.overscan;
       ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
+      getMethod = ctx.getMethod.bind(ctx);
       groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
 
