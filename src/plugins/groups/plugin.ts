@@ -79,6 +79,9 @@ export function groups<T extends VListItem = VListItem>(
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
   const placeholderIndices = new Set<number>();
+  // Elements detached during boundary changes, keyed by data-id.
+  // Reused in the next render pass to avoid pool round-trip (which clears innerHTML).
+  const detached = new Map<string, HTMLElement>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let forceNextRender = true;
@@ -113,17 +116,10 @@ export function groups<T extends VListItem = VListItem>(
       stickyHeader.update(engineState.scrollPosition);
     }
 
-    // Layout indices shifted (item added/removed) — rendered elements
-    // are keyed by old layout indices and show stale content. Clear them
-    // so the render loop recreates everything. Skip on initial load
-    // (wasLoaded=false) to avoid a flash.
+    // Layout indices shifted — detach elements (keyed by data-id) so the
+    // render loop can reclaim them without a pool round-trip that clears innerHTML.
     if (wasLoaded) {
-      rendered.forEach((element) => {
-        element.remove();
-        pool.release(element);
-      });
-      rendered.clear();
-      placeholderIndices.clear();
+      detachAll();
     }
 
     const getSb = getMethod?.("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
@@ -150,6 +146,27 @@ export function groups<T extends VListItem = VListItem>(
     }
   }
 
+  function detachAll(): void {
+    rendered.forEach((element) => {
+      element.remove();
+      const id = element.getAttribute("data-id");
+      if (id) {
+        detached.set(id, element);
+      } else {
+        pool.release(element);
+      }
+    });
+    rendered.clear();
+    placeholderIndices.clear();
+  }
+
+  function drainDetached(): void {
+    if (detached.size > 0) {
+      detached.forEach((element) => pool.release(element));
+      detached.clear();
+    }
+  }
+
   function renderItemContent(
     element: HTMLElement,
     entry: ReturnType<GroupLayout["getEntry"]>,
@@ -157,17 +174,15 @@ export function groups<T extends VListItem = VListItem>(
     layoutIndex: number,
   ): boolean {
     if (entry.type === "header") {
+      const headerId = `__group_header_${entry.group.groupIndex}`;
+      if (element.getAttribute("data-id") === headerId) {
+        return true;
+      }
+
       element.className = groupHeaderClass;
       element.setAttribute("role", "presentation");
       element.removeAttribute("aria-selected");
-
-      const headerItem: GroupHeaderItem = {
-        id: `__group_header_${entry.group.groupIndex}`,
-        __groupHeader: true,
-        groupKey: entry.group.key,
-        groupIndex: entry.group.groupIndex,
-      };
-      element.setAttribute("data-id", String(headerItem.id));
+      element.setAttribute("data-id", headerId);
 
       const content = headerTemplate(entry.group.key, entry.group.groupIndex);
       if (typeof content === "string") {
@@ -180,9 +195,6 @@ export function groups<T extends VListItem = VListItem>(
     }
 
     // Data item
-    element.className = groupItemClass;
-    element.setAttribute("role", "option");
-
     const dataIndex = entry.dataIndex;
     const item = ctxGetItem(dataIndex);
 
@@ -191,13 +203,20 @@ export function groups<T extends VListItem = VListItem>(
       return false;
     }
 
-    element.setAttribute("data-id", String(item.id));
     const isPlaceholder = item._isPlaceholder === true;
+    const itemId = String(item.id);
+
+    // Element already shows this item with real content — skip template
+    if (!isPlaceholder && element.getAttribute("data-id") === itemId) {
+      return true;
+    }
+
+    element.className = groupItemClass;
+    element.setAttribute("role", "option");
+    element.setAttribute("data-id", itemId);
 
     if (isPlaceholder) {
       element.classList.add(`${classPrefix}-item--placeholder`);
-    } else {
-      element.classList.remove(`${classPrefix}-item--placeholder`);
     }
 
     if (isf) isf(layoutIndex, itemState);
@@ -267,46 +286,78 @@ export function groups<T extends VListItem = VListItem>(
     const isf = resolveItemState?.();
     const selClass = isf ? `${classPrefix}-item--selected` : "";
     const focClass = isf ? `${classPrefix}-item--focused` : "";
+    let fragment: DocumentFragment | null = null;
 
     for (let i = renderStart; i <= renderEnd; i++) {
       let element = rendered.get(i);
-      const entry = layout.getEntry(i);
-      const isNew = element === undefined;
+      let isHeader = false;
 
-      // Check if existing placeholder element now has real data
-      const needsUpdate = !isNew && isForced && placeholderIndices.has(i) && entry.type === "item";
+      if (element === undefined) {
+        // ── New element ──
+        const entry = layout.getEntry(i);
+        isHeader = entry.type === "header";
 
-      if (isNew || needsUpdate) {
-        if (isNew) {
-          element = pool.acquire();
-          element.setAttribute("data-index", String(i));
-        }
-
-        const hasContent = renderItemContent(element!, entry, isf, i);
-
-        if (hasContent) {
-          placeholderIndices.delete(i);
+        // Try to reclaim a detached element with matching data-id
+        // (avoids pool round-trip that destroys innerHTML / images)
+        let expectedId: string | undefined;
+        if (isHeader) {
+          expectedId = `__group_header_${entry.group.groupIndex}`;
         } else {
-          placeholderIndices.add(i);
+          const item = ctxGetItem(entry.dataIndex);
+          if (item && item._isPlaceholder !== true) {
+            expectedId = String(item.id);
+          }
         }
+        if (expectedId !== undefined) {
+          const reused = detached.get(expectedId);
+          if (reused) {
+            detached.delete(expectedId);
+            element = reused;
+          }
+        }
+        if (!element) {
+          element = pool.acquire();
+        }
+        element.setAttribute("data-index", String(i));
 
-        if (isNew) {
-          rendered.set(i, element!);
-          contentElement.appendChild(element!);
+        const hasContent = renderItemContent(element, entry, isf, i);
+        if (hasContent) placeholderIndices.delete(i);
+        else placeholderIndices.add(i);
+
+        applySizeStyles(element, i);
+        element.style.transform = buildTransform(i);
+
+        rendered.set(i, element);
+        if (!fragment) fragment = document.createDocumentFragment();
+        fragment.appendChild(element);
+
+      } else if (isForced && placeholderIndices.has(i)) {
+        // ── Existing placeholder — check if real data arrived ──
+        const entry = layout.getEntry(i);
+        if (entry.type === "item") {
+          const hasContent = renderItemContent(element, entry, isf, i);
+          if (hasContent) placeholderIndices.delete(i);
+          else placeholderIndices.add(i);
         }
+      } else {
+        // ── Existing unchanged element — fast path ──
+        isHeader = element.classList.contains(groupHeaderClass);
       }
 
-      if (entry.type !== "header" && isf) {
+      if (!isHeader && isf) {
         isf(i, itemState);
         element!.classList.toggle(selClass, itemState.selected);
         element!.classList.toggle(focClass, itemState.focused);
         if (itemState.selected) element!.setAttribute("aria-selected", "true");
         else element!.removeAttribute("aria-selected");
       }
-
-      applySizeStyles(element!, i);
-      element!.style.transform = buildTransform(i);
     }
+
+    if (fragment) {
+      contentElement.appendChild(fragment);
+    }
+
+    drainDetached();
 
     const totalSize = sizeCache.getTotalSize();
     contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
@@ -372,12 +423,27 @@ export function groups<T extends VListItem = VListItem>(
           stickyHeader.refresh();
           stickyHeader.update(engineState.scrollPosition);
         }
-        rendered.forEach((element) => {
-          element.remove();
-          pool.release(element);
-        });
-        rendered.clear();
-        placeholderIndices.clear();
+
+        // Only clear DOM if the boundary shift affects the rendered range.
+        // Preload-ahead data often creates new groups far from the viewport
+        // — no reason to destroy visible elements for that.
+        let firstShift = Infinity;
+        const minG = Math.min(prevGroupCount, newGroups.length);
+        for (let g = 0; g < minG; g++) {
+          if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
+            firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
+            break;
+          }
+        }
+        if (newGroups.length > prevGroupCount && minG < newGroups.length) {
+          firstShift = Math.min(firstShift, newGroups[minG]!.headerLayoutIndex);
+        } else if (prevGroupCount > newGroups.length && minG < prevGroupCount) {
+          firstShift = Math.min(firstShift, prevGroups[minG]!.headerLayoutIndex);
+        }
+
+        if (firstShift <= engineState.prevRangeEnd) {
+          detachAll();
+        }
 
         const getSb = getMethod?.("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
         if (getSb) {
@@ -411,7 +477,7 @@ export function groups<T extends VListItem = VListItem>(
       ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
       getMethod = ctx.getMethod.bind(ctx);
-      groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
+      groupItemClass = `${classPrefix}-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
 
       // Resolve raw storage accessor (async plugin) — returns undefined for
@@ -590,6 +656,7 @@ export function groups<T extends VListItem = VListItem>(
       }
       rendered.clear();
       placeholderIndices.clear();
+      detached.clear();
     },
   };
 }
