@@ -67,6 +67,7 @@ export function groups<T extends VListItem = VListItem>(
   let rootElement: HTMLElement;
   let userTemplate: ItemTemplate<T>;
   let ctxGetItem: (index: number) => T | undefined;
+  let getLoadedItem: ((index: number) => T | undefined) | null = null;
   let horizontal: boolean;
   let classPrefix: string;
   let overscan: number;
@@ -101,7 +102,7 @@ export function groups<T extends VListItem = VListItem>(
 
     const wasLoaded = lastDataCount > 0;
     lastDataCount = dataCount;
-    layout.rebuild(dataCount, ctxGetItem);
+    layout.rebuild(dataCount, getLoadedItem ?? ctxGetItem);
     origSizeCacheRebuild(layout.totalEntries);
     const totalSize = sizeCache.getTotalSize();
     contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
@@ -331,14 +332,57 @@ export function groups<T extends VListItem = VListItem>(
     engineState.startIndex = firstDataIndex;
   }
 
-  // v1 pattern: forceRender does NO layout rebuild and NO DOM clearing.
-  // It just forces the render loop to run, which updates placeholder
-  // elements in-place when real data has arrived.
   function groupsForceRender(): void {
     if (engineState.destroyed) return;
 
     if (DEBUG) {
       console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
+    }
+
+    // When async data arrives, group boundaries may change. But forceRender
+    // is also called on every scale-plugin lerp tick (60fps), so we must NOT
+    // run the expensive layout.rebuild on every call. Quick O(1) check first:
+    // sample visible placeholders to see if any now have real data.
+    if (placeholderIndices.size > 0) {
+      let hasNewData = false;
+      for (const layoutIdx of placeholderIndices) {
+        const entry = layout.getEntry(layoutIdx);
+        if (entry.type === "item") {
+          const item = (getLoadedItem ?? ctxGetItem)(entry.dataIndex);
+          if (item && item._isPlaceholder !== true) {
+            hasNewData = true;
+            break;
+          }
+        }
+      }
+
+      if (hasNewData) {
+        const oldTotalEntries = layout.totalEntries;
+        layout.rebuild(lastDataCount, getLoadedItem ?? ctxGetItem);
+        const newTotalEntries = layout.totalEntries;
+
+        if (newTotalEntries !== oldTotalEntries) {
+          origSizeCacheRebuild(newTotalEntries);
+          const totalSize = sizeCache.getTotalSize();
+          contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+          if (stickyHeader) {
+            stickyHeader.refresh();
+            stickyHeader.update(engineState.scrollPosition);
+          }
+          rendered.forEach((element) => {
+            element.remove();
+            pool.release(element);
+          });
+          rendered.clear();
+          placeholderIndices.clear();
+
+          const getSb = getMethod?.("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
+          if (getSb) {
+            const sb = getSb();
+            sb?.updateBounds(totalSize, engineState.containerSize);
+          }
+        }
+      }
     }
 
     engineState.prevRangeStart = -1;
@@ -368,8 +412,16 @@ export function groups<T extends VListItem = VListItem>(
       groupItemClass = `${classPrefix}-item ${classPrefix}-groups-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
 
+      // Resolve raw storage accessor (async plugin) — returns undefined for
+      // unloaded items without generating placeholder objects. Used in
+      // buildGroups to skip unloaded items efficiently.
+      queueMicrotask(() => {
+        const fn = getMethod?.("_getLoadedItem") as ((i: number) => T | undefined) | undefined;
+        if (fn) getLoadedItem = fn;
+      });
+
       const dataCount = engineState.totalItems;
-      layout = createGroupLayout(dataCount, config, ctxGetItem);
+      layout = createGroupLayout(dataCount, config, getLoadedItem ?? ctxGetItem);
       lastDataCount = dataCount;
 
       const getHeaderHeight =

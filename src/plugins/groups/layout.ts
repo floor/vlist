@@ -91,15 +91,24 @@ const buildGroups = (
   if (itemCount === 0) return [];
 
   const groups: GroupBoundary[] = [];
-  let currentKey = getGroupForIndex(0, getItem?.(0));
+  let currentKey: string | null = null;
   let groupStart = 0;
-  let headerLayoutIndex = 0; // first group's header is at layout index 0
+  let headerLayoutIndex = 0;
 
-  for (let i = 1; i < itemCount; i++) {
-    const key = getGroupForIndex(i, getItem?.(i));
+  for (let i = 0; i < itemCount; i++) {
+    const item = getItem?.(i);
+    // Skip unloaded items — they extend the current group without
+    // creating boundaries. This avoids "Unknown" headers for placeholders.
+    if (!item) continue;
 
-    if (key !== currentKey) {
-      // Close the current group
+    const key = getGroupForIndex(i, item);
+
+    if (currentKey === null) {
+      // First loaded item — start first group
+      currentKey = key;
+      groupStart = 0;
+      // All items before this one (unloaded) belong to this group
+    } else if (key !== currentKey) {
       const count = i - groupStart;
       groups.push({
         key: currentKey,
@@ -108,23 +117,22 @@ const buildGroups = (
         firstDataIndex: groupStart,
         count,
       });
-
-      // Start a new group
-      // The new header's layout index = previous header's layout index + 1 (header) + count (items)
       headerLayoutIndex = headerLayoutIndex + 1 + count;
       currentKey = key;
       groupStart = i;
     }
   }
 
-  // Close the last group
-  groups.push({
-    key: currentKey,
-    groupIndex: groups.length,
-    headerLayoutIndex,
-    firstDataIndex: groupStart,
-    count: itemCount - groupStart,
-  });
+  if (currentKey !== null) {
+    // Close the last group — includes all remaining unloaded items
+    groups.push({
+      key: currentKey,
+      groupIndex: groups.length,
+      headerLayoutIndex,
+      firstDataIndex: groupStart,
+      count: itemCount - groupStart,
+    });
+  }
 
   return groups;
 };

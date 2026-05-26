@@ -258,6 +258,10 @@ export function async<T extends VListItem = VListItem>(
         autoLoadCancelled = true;
       });
 
+      ctx.registerMethod("_getLoadedItem", (index: number): T | undefined => {
+        return dataManager.getStorage().get(index) as T | undefined;
+      });
+
       // ARIA: aria-busy for loading state
       emitter.on("load:start", () => {
         dom.root.setAttribute("aria-busy", "true");
