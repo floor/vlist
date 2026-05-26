@@ -11,9 +11,10 @@
  */
 
 import type { SizeCache } from "./sizes";
-import type { VListItem, ItemTemplate, ItemState } from "../types";
+import type { VListItem, ItemTemplate, ItemState, VListEvents } from "../types";
 import type { CompiledHooks, ElementPool } from "./types";
 import type { EngineState } from "./state";
+import type { Emitter } from "../events";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
@@ -39,6 +40,7 @@ export interface RenderConfig {
   readonly crossStartVal: string;
   readonly crossEndVal: string;
   readonly oddClass: string;
+  readonly emitter: Emitter<VListEvents> | null;
 }
 
 export function createRenderConfig(
@@ -50,6 +52,7 @@ export function createRenderConfig(
   crossPadEnd: number,
   oddClass: string,
   gap: number,
+  emitter?: Emitter<VListEvents> | null,
 ): RenderConfig {
   const hasCrossPad = crossPadStart !== 0 || crossPadEnd !== 0;
   return {
@@ -70,6 +73,7 @@ export function createRenderConfig(
     crossStartVal: hasCrossPad ? crossPadStart + "px" : "",
     crossEndVal: hasCrossPad ? crossPadEnd + "px" : "",
     oddClass,
+    emitter: emitter ?? null,
   };
 }
 
@@ -231,7 +235,19 @@ export function phase2Commit<T extends VListItem>(
       };
 
       if (item !== undefined) {
-        const result = template(item, dataIndex, itemState);
+        let result: string | HTMLElement;
+        try {
+          result = template(item, dataIndex, itemState);
+        } catch (err: unknown) {
+          if (rc.emitter) {
+            rc.emitter.emit("error", {
+              error: err instanceof Error ? err : new Error(String(err)),
+              context: `template:render:${dataIndex}`,
+            });
+          }
+          pool.release(acquired);
+          continue;
+        }
         if (typeof result === "string") {
           acquired.innerHTML = result;
         } else {
@@ -294,7 +310,18 @@ export function phase2Commit<T extends VListItem>(
       if (item !== undefined && el._lastItem !== item) {
         const oldId = element.getAttribute("data-id");
         const newId = String(item.id);
-        const result = template(item, dataIndex, itemState);
+        let result: string | HTMLElement;
+        try {
+          result = template(item, dataIndex, itemState);
+        } catch (err: unknown) {
+          if (rc.emitter) {
+            rc.emitter.emit("error", {
+              error: err instanceof Error ? err : new Error(String(err)),
+              context: `template:render:${dataIndex}`,
+            });
+          }
+          continue;
+        }
         if (typeof result === "string") {
           element.innerHTML = result;
         } else {

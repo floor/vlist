@@ -31,6 +31,56 @@ import type { VListEvents } from "../types";
 import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } from "./velocity";
 
 // =============================================================================
+// Config Validation
+// =============================================================================
+
+function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
+  const { item } = raw;
+
+  // Validate item.height (only if explicitly provided and is a number)
+  if (item.height !== undefined && typeof item.height === "number") {
+    if (!Number.isFinite(item.height) || item.height <= 0) {
+      throw new Error(`vlist: item.height must be a positive number, got ${item.height}`);
+    }
+  }
+
+  // Validate item.width (only if explicitly provided and is a number)
+  if (item.width !== undefined && typeof item.width === "number") {
+    if (!Number.isFinite(item.width) || item.width <= 0) {
+      throw new Error(`vlist: item.width must be a positive number, got ${item.width}`);
+    }
+  }
+
+  // Validate item.estimatedHeight (only if explicitly provided)
+  if (item.estimatedHeight !== undefined) {
+    if (!Number.isFinite(item.estimatedHeight) || item.estimatedHeight <= 0) {
+      throw new Error(`vlist: item.estimatedHeight must be a positive number, got ${item.estimatedHeight}`);
+    }
+  }
+
+  // Validate item.estimatedWidth (only if explicitly provided)
+  if (item.estimatedWidth !== undefined) {
+    if (!Number.isFinite(item.estimatedWidth) || item.estimatedWidth <= 0) {
+      throw new Error(`vlist: item.estimatedWidth must be a positive number, got ${item.estimatedWidth}`);
+    }
+  }
+
+  // Validate item.gap (only if explicitly provided)
+  if (item.gap !== undefined) {
+    if (typeof item.gap !== "number" || !Number.isFinite(item.gap) || item.gap < 0) {
+      throw new Error(`vlist: item.gap must be a non-negative number, got ${item.gap}`);
+    }
+  }
+
+  // Validate overscan (only if explicitly provided)
+  if (raw.overscan !== undefined) {
+    if (typeof raw.overscan !== "number" || !Number.isFinite(raw.overscan) || raw.overscan < 0) {
+      throw new Error(`vlist: overscan must be a non-negative number, got ${raw.overscan}`);
+    }
+  }
+}
+
+// =============================================================================
 // Config Resolution
 // =============================================================================
 
@@ -101,6 +151,10 @@ export function createVList<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
 ): VList<T> {
+  // ── Validate config ─────────────────────────────────────────────
+
+  validateConfig(rawConfig);
+
   // ── Resolve config ──────────────────────────────────────────────
 
   const config = resolveConfig(rawConfig);
@@ -114,10 +168,11 @@ export function createVList<T extends VListItem = VListItem>(
   const minItemSize = typeof sizeSpec === "number" ? sizeSpec : 20;
   const totalItems = rawConfig.items?.length ?? 0;
   const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
+  const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
   const rc = createRenderConfig(
     config.classPrefix, config.horizontal, config.interactive,
     config.startPadding, config.crossPadStart, config.crossPadEnd,
-    oddClass, gap,
+    oddClass, gap, emitter as unknown as Emitter<VListEvents>,
   );
 
   // ── Sort and validate plugins ───────────────────────────────────
@@ -142,7 +197,6 @@ export function createVList<T extends VListItem = VListItem>(
     };
   }
   const pool = createPool(config.classPrefix);
-  const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
 
   // ── Initialize engine state ─────────────────────────────────────
 
@@ -316,10 +370,22 @@ export function createVList<T extends VListItem = VListItem>(
 
     for (const plugin of sorted) {
       if (plugin.setup) {
-        plugin.setup(ctx);
+        try {
+          plugin.setup(ctx);
+        } catch (err) {
+          emitter.emit("error", {
+            error: err instanceof Error ? err : new Error(String(err)),
+            context: `plugin:setup:${plugin.name}`,
+          });
+        }
       }
     }
   }
+
+  // ── Scrolling class toggle ──────────────────────────────────────
+
+  const scrollingClass = config.classPrefix + "--scrolling";
+  let isScrolling = false;
 
   // ── Render function ─────────────────────────────────────────────
 
@@ -358,6 +424,10 @@ export function createVList<T extends VListItem = VListItem>(
   }
 
   function doScrollFrame(): void {
+    if (!isScrolling) {
+      isScrolling = true;
+      dom.root.classList.add(scrollingClass);
+    }
     doRender();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
     if (state.scrollPosition !== lastEventScrollPos) {
@@ -367,6 +437,10 @@ export function createVList<T extends VListItem = VListItem>(
   }
 
   function doScrollIdle(): void {
+    if (isScrolling) {
+      isScrolling = false;
+      dom.root.classList.remove(scrollingClass);
+    }
     state.scrollDirection = 0;
     runIdleHooks(hooks.idle);
     _velEvt.velocity = 0;
@@ -647,6 +721,10 @@ export function createVList<T extends VListItem = VListItem>(
       if (state.destroyed) return;
       state.destroyed = true;
 
+      if (isScrolling) {
+        isScrolling = false;
+        dom.root.classList.remove(scrollingClass);
+      }
       if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
       scrollHandler.detach();
@@ -654,9 +732,22 @@ export function createVList<T extends VListItem = VListItem>(
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("keydown", onContentKeydown);
 
-      for (const handler of destroyHandlers) handler();
+      const destroyErrors: Error[] = [];
+      for (const handler of destroyHandlers) {
+        try {
+          handler();
+        } catch (err) {
+          destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
       for (const plugin of sorted) {
-        if (plugin.destroy) plugin.destroy();
+        if (plugin.destroy) {
+          try {
+            plugin.destroy();
+          } catch (err) {
+            destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
+          }
+        }
       }
 
       for (const [, element] of rendered) {
@@ -668,6 +759,12 @@ export function createVList<T extends VListItem = VListItem>(
       dom.root.remove();
       emitter.emit("destroy", undefined as any);
       emitter.clear();
+
+      if (destroyErrors.length > 0) {
+        for (const err of destroyErrors) {
+          console.error("vlist: error during destroy:", err);
+        }
+      }
     },
   };
 
