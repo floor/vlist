@@ -76,7 +76,12 @@ export function createPluginMockContext<T extends VListItem>(
     configurable: true,
   });
 
-  const dom: DOMStructure = { root, viewport, content };
+  const liveRegion = document.createElement("div");
+  liveRegion.className = `${classPrefix}-live`;
+  liveRegion.setAttribute("aria-live", "polite");
+  root.appendChild(liveRegion);
+
+  const dom: DOMStructure = { root, viewport, content, liveRegion };
 
   // ── Engine State ────────────────────────────────────────────────
   const engineState = createEngineState(200);

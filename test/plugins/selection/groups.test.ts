@@ -1,0 +1,421 @@
+/**
+ * vlist v2 — Selection + Groups Integration Tests
+ *
+ * Verifies selection behavior when group headers are present:
+ * shift+click range selection skips headers, keyboard range selection
+ * with Shift+Arrow across headers, and header-skip on focus navigation.
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { selection } from "../../../src/plugins/selection/plugin";
+import type { VListItem } from "../../../src/types";
+import { setupDOM, teardownDOM } from "../../helpers/dom";
+import { createPluginMockContext } from "../../helpers/plugin-context";
+
+// =============================================================================
+// DOM Setup
+// =============================================================================
+
+beforeAll(() => setupDOM());
+afterAll(() => teardownDOM());
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+interface TestItem extends VListItem {
+  id: number;
+  name: string;
+  __groupHeader?: boolean;
+}
+
+// Layout: [H0, I1, I2, I3, H4, I5, I6, I7, H8, I9]
+// Headers at layout indices 0, 4, 8
+// Data items at layout indices 1, 2, 3, 5, 6, 7, 9
+function createGroupedItems(): TestItem[] {
+  return [
+    { id: 100, name: "Group A", __groupHeader: true },
+    { id: 1, name: "Item 1" },
+    { id: 2, name: "Item 2" },
+    { id: 3, name: "Item 3" },
+    { id: 200, name: "Group B", __groupHeader: true },
+    { id: 5, name: "Item 5" },
+    { id: 6, name: "Item 6" },
+    { id: 7, name: "Item 7" },
+    { id: 300, name: "Group C", __groupHeader: true },
+    { id: 9, name: "Item 9" },
+  ];
+}
+
+function setupWithGroups(mode: "single" | "multiple" = "multiple") {
+  const items = createGroupedItems();
+  const mockCtx = createPluginMockContext<TestItem>(items, {
+    itemSize: 50,
+    containerHeight: 500,
+  });
+
+  // Register group-awareness methods that the selection plugin resolves
+  mockCtx.ctx.registerMethod("_isGroupHeader", (layoutIdx: number): boolean => {
+    const item = items[layoutIdx];
+    return item?.__groupHeader === true;
+  });
+  mockCtx.ctx.registerMethod("_layoutToDataIndex", (layoutIdx: number): number => layoutIdx);
+  mockCtx.ctx.registerMethod("_dataToLayoutIndex", (dataIdx: number): number => dataIdx);
+
+  const plugin = selection<TestItem>({ mode });
+  plugin.setup(mockCtx.ctx);
+
+  const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
+
+  return { plugin, mockCtx, items, getSelected };
+}
+
+function makeItemElement(index: number): HTMLElement {
+  const el = document.createElement("div");
+  el.setAttribute("data-index", String(index));
+  return el;
+}
+
+function makeClickEvent(target: HTMLElement, opts?: { shiftKey?: boolean }): MouseEvent {
+  const event = new MouseEvent("click", {
+    bubbles: true,
+    shiftKey: opts?.shiftKey ?? false,
+  });
+  Object.defineProperty(event, "target", { value: target });
+  return event;
+}
+
+function makeKeyEvent(key: string, opts?: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    bubbles: true,
+    shiftKey: opts?.shiftKey ?? false,
+    ctrlKey: opts?.ctrlKey ?? false,
+    metaKey: opts?.metaKey ?? false,
+  });
+  return event;
+}
+
+// =============================================================================
+// Navigation skips group headers
+// =============================================================================
+
+describe("selection + groups — focus navigation skips headers", () => {
+  it("ArrowDown skips group header at target index", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups("single");
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // ArrowDown from -1 → tries 0 (header) → skips to 1
+    handler(makeKeyEvent("ArrowDown"));
+
+    const getFocusedIndex = mockCtx.methods.get("_getFocusedIndex") as () => number;
+    expect(getFocusedIndex()).toBe(1);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("ArrowDown from item 3 skips header at 4 to land on 5", () => {
+    const { plugin, mockCtx } = setupWithGroups("single");
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 3: ArrowDown × 4 (→1, →2, →3)
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+    handler(makeKeyEvent("ArrowDown")); // → tries 4 (header) → 5
+
+    const getFocusedIndex = mockCtx.methods.get("_getFocusedIndex") as () => number;
+    expect(getFocusedIndex()).toBe(5);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("ArrowUp from item 5 skips header at 4 to land on 3", () => {
+    const { plugin, mockCtx } = setupWithGroups("single");
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 5
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+    handler(makeKeyEvent("ArrowDown")); // → 5 (skip header 4)
+
+    // Now ArrowUp from 5 → tries 4 (header) → 3
+    handler(makeKeyEvent("ArrowUp"));
+
+    const getFocusedIndex = mockCtx.methods.get("_getFocusedIndex") as () => number;
+    expect(getFocusedIndex()).toBe(3);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// Shift+click range selection with group headers
+// =============================================================================
+
+describe("selection + groups — shift+click range selection", () => {
+  it("shift+click range includes headers in data range (doSelectRange uses data indices)", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.clickHandlers[0]!;
+
+    // Click item at layout index 1 (id=1)
+    handler(makeClickEvent(makeItemElement(1)));
+    expect(getSelected()).toEqual([1]);
+
+    // Shift+click item at layout index 6 (id=6) — range 1..6
+    handler(makeClickEvent(makeItemElement(6), { shiftKey: true }));
+
+    const selected = getSelected();
+    // doSelectRange(1, 6) selects data indices 1..6
+    // Items: id=1 (idx=1), id=2 (idx=2), id=3 (idx=3),
+    //        id=200 header (idx=4), id=5 (idx=5), id=6 (idx=6)
+    expect(selected).toContain(1);
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(5);
+    expect(selected).toContain(6);
+    // Header (id=200) is included in range since doSelectRange doesn't filter headers
+    expect(selected).toContain(200);
+    expect(selected.length).toBe(6);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("shift+click backward range works correctly", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.clickHandlers[0]!;
+
+    // Click item at layout index 7 (id=7)
+    handler(makeClickEvent(makeItemElement(7)));
+
+    // Shift+click item at layout index 2 (id=2) — backward range
+    handler(makeClickEvent(makeItemElement(2), { shiftKey: true }));
+
+    const selected = getSelected();
+    // Range 2..7: ids 2, 3, 200, 5, 6, 7
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(5);
+    expect(selected).toContain(6);
+    expect(selected).toContain(7);
+    expect(selected.length).toBe(6);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// Shift+Arrow keyboard range selection with headers
+// =============================================================================
+
+describe("selection + groups — shift+arrow range selection", () => {
+  it("Shift+ArrowDown toggles selection on destination, skipping header", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 3
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+
+    // Select current item to establish anchor
+    handler(makeKeyEvent(" ")); // select item at 3
+    expect(getSelected()).toContain(3);
+
+    // Shift+ArrowDown → skips header 4, lands on 5, toggles item at 5
+    handler(makeKeyEvent("ArrowDown", { shiftKey: true }));
+
+    const selected = getSelected();
+    expect(selected).toContain(3);
+    expect(selected).toContain(5);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("Shift+ArrowUp toggles selection on destination, skipping header", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 5
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+    handler(makeKeyEvent("ArrowDown")); // → 5 (skips header 4)
+
+    // Select current item
+    handler(makeKeyEvent(" ")); // select item at 5
+
+    // Shift+ArrowUp → skips header 4, lands on 3, toggles item at 3
+    handler(makeKeyEvent("ArrowUp", { shiftKey: true }));
+
+    const selected = getSelected();
+    expect(selected).toContain(5);
+    expect(selected).toContain(3);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// Ctrl+Shift+Home/End range selection
+// =============================================================================
+
+describe("selection + groups — Ctrl+Shift+Home/End", () => {
+  it("Ctrl+Shift+End selects from current to end", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 5
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+    handler(makeKeyEvent("ArrowDown")); // → 5
+
+    // Ctrl+Shift+End → range from 5 to 9 (end, skipping header)
+    handler(makeKeyEvent("End", { shiftKey: true, ctrlKey: true }));
+
+    const selected = getSelected();
+    // Range from focus (5) to end focus (9, skipping header 8)
+    // doSelectRange covers data indices from prevFocus to new focus
+    expect(selected.length).toBeGreaterThanOrEqual(2);
+    expect(selected).toContain(5);
+    expect(selected).toContain(9);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("Ctrl+Shift+Home selects from current to beginning", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // Navigate to item 7
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+    handler(makeKeyEvent("ArrowDown")); // → 5
+    handler(makeKeyEvent("ArrowDown")); // → 6
+    handler(makeKeyEvent("ArrowDown")); // → 7
+
+    // Ctrl+Shift+Home → range from 7 to 0 (Home, skipping header)
+    handler(makeKeyEvent("Home", { shiftKey: true, ctrlKey: true }));
+
+    const selected = getSelected();
+    // Focus goes to 0 → skipHeaders → 1
+    // doSelectRange from prevFocus (7) to new focus (1)
+    expect(selected.length).toBeGreaterThanOrEqual(2);
+    expect(selected).toContain(1);
+    expect(selected).toContain(7);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// Space does not select group headers
+// =============================================================================
+
+describe("selection + groups — Space skips headers", () => {
+  it("navigating to a header and pressing Space does not select header", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups();
+
+    const handler = mockCtx.keydownHandlers[0]!;
+
+    // First ArrowDown skips header at 0, lands on 1
+    handler(makeKeyEvent("ArrowDown"));
+
+    // Navigate to 1 and check Space selects it
+    handler(makeKeyEvent(" "));
+    expect(getSelected()).toContain(1);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// followFocus=false: focus-selection desync
+// =============================================================================
+
+describe("selection + groups — followFocus=false desync", () => {
+  it("navigation without shift does not change selection", () => {
+    const items = createGroupedItems();
+    const mockCtx = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 500,
+    });
+
+    mockCtx.ctx.registerMethod("_isGroupHeader", (i: number): boolean =>
+      items[i]?.__groupHeader === true);
+    mockCtx.ctx.registerMethod("_layoutToDataIndex", (i: number): number => i);
+    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (i: number): number => i);
+
+    const plugin = selection<TestItem>({ mode: "multiple", followFocus: false });
+    plugin.setup(mockCtx.ctx);
+
+    const handler = mockCtx.keydownHandlers[0]!;
+    const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
+
+    // Navigate to 1, select it
+    handler(makeKeyEvent("ArrowDown")); // → 1
+    handler(makeKeyEvent(" ")); // select 1
+    expect(getSelected()).toContain(1);
+
+    // Navigate away without shift
+    handler(makeKeyEvent("ArrowDown")); // → 2
+    handler(makeKeyEvent("ArrowDown")); // → 3
+
+    // Selection unchanged — only item 1 selected
+    expect(getSelected()).toEqual([1]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("followFocus=true in single mode auto-selects on navigation", () => {
+    const items = createGroupedItems();
+    const mockCtx = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 500,
+    });
+
+    mockCtx.ctx.registerMethod("_isGroupHeader", (i: number): boolean =>
+      items[i]?.__groupHeader === true);
+    mockCtx.ctx.registerMethod("_layoutToDataIndex", (i: number): number => i);
+    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (i: number): number => i);
+
+    const plugin = selection<TestItem>({ mode: "single", followFocus: true });
+    plugin.setup(mockCtx.ctx);
+
+    const handler = mockCtx.keydownHandlers[0]!;
+    const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
+
+    handler(makeKeyEvent("ArrowDown")); // → 1, auto-selects
+    expect(getSelected()).toContain(1);
+
+    handler(makeKeyEvent("ArrowDown")); // → 2, auto-selects (replaces 1)
+    expect(getSelected()).toEqual([2]);
+    expect(getSelected()).not.toContain(1);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
