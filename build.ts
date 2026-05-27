@@ -140,8 +140,9 @@ async function build() {
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
   const ALL_PLUGINS = [
-    "scale", "scrollbar", "grid", "selection", "page", "snapshots", "transition",
-    "autosize", "masonry", "async", "groups", "table", "sortable",
+    "a11y", "selection", "async", "scrollbar", "sortable",
+    "groups", "scale", "page", "snapshots", "transition",
+    "autosize", "grid", "table", "masonry",
   ] as const;
 
   const scenarios = [

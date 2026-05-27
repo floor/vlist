@@ -11,16 +11,49 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- **`item:dblclick` and `item:contextmenu` events** — delegated double-click and right-click events on items, matching the existing `item:click` pattern
+- **16M content size warning** — emits an `error` event when total content size exceeds the browser's max virtual scroll limit, suggesting the `scale()` plugin
+- **ARIA live region announcements** — a11y plugin announces focus changes ("Item 3 of 100") and selection state ("Selected", "Deselected") via a screen-reader-only live region
+- **`--scrolling` class on root** — added/removed on scroll start/idle for CSS-driven scroll state styling
+
+### Fixed
+
+- **Config validation** — `createVList` now validates item dimensions, estimated sizes, gap, and overscan at creation time with descriptive error messages
+- **Template error handling** — template render errors are caught and emitted as `error` events instead of crashing the render loop
+- **Plugin setup resilience** — plugin `setup()` errors are caught and emitted as `error` events, preventing one broken plugin from blocking others
+- **Destroy resilience** — `destroy()` continues cleanup even if individual teardown steps throw
+
+### Tests
+
+- **Test-driven hardening** — 13-phase systematic recovery adding ~590 tests (2,633 → 3,223), fixing 29 failing tests, and raising line coverage from 94.30% to 95.99%. Covers core boundary conditions, data ops edge cases, error recovery, plugin integration combos, 2D keyboard navigation, async lifecycle, memory leak detection, and performance benchmarks.
+
+## [2.0.0-rc.2] - 2026-05-26
+
 ### Performance
 
 - **Optimized initial render path** — batch DOM insertions via DocumentFragment, `cloneNode(false)` from pre-built template in element pool, defer ResizeObserver and scroll listeners until after first paint, skip plugin sort/conflict check when no plugins used
 - **Build: switched from tsc transpile to Bun.build bundle** — 15x faster dev builds (1200ms → 78ms), same output
+- **async: maxConcurrent request limiting** — configurable cap on in-flight chunk requests (default: 6) with zero-allocation distance-based eviction of furthest loads
+- **async: split onDataChange/onStateChange notifications** — loading-state-only changes no longer trigger the expensive sizeCache rebuild pipeline
+- **async: chunk-range dedup in onAfterScroll** — skip redundant `ensureRange()` calls when scroll hasn't crossed a chunk boundary
+- **async: in-place findIndex+splice** — replace `.filter()` allocation with single `findIndex` + `splice` for pendingRanges cleanup
+- **groups: detached map reuse on boundary changes** — elements are saved by data-id instead of released to pool (which clears innerHTML), then reclaimed in the next render pass. Eliminates image blink on scroll stop.
+- **groups: data-id fast path in renderItemContent** — skip template rendering and all DOM writes when element already shows the correct item
+- **groups: zero-write scroll frames** — transform/size writes moved to new-element path only (stable per layout index), no `getEntry()` call for existing unchanged elements
+- **groups: DocumentFragment batching** — single DOM insertion for all new elements per render pass
+- **groups: removed dead `vlist-groups-item` class** — eliminated redundant className and attribute writes
 
 ### Added
 
 - Normalized benchmark workflow with tiered item counts (10K, 100K, 1M) and intensity modes
 
-## [2.0.1] - 2026-05-23
+### Fixed
+
+- **async: ensureRange early-return correctness** — when no new chunks are needed but loads are in-flight, await `Promise.all(loadPromises)` instead of returning immediately
+
+## [2.0.0-rc.1] - 2026-05-23
 
 ### Performance
 
@@ -373,7 +406,9 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0-rc.2...HEAD
+[2.0.0-rc.2]: https://github.com/floor/vlist/compare/v2.0.0-rc.1...v2.0.0-rc.2
+[2.0.0-rc.1]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.0-rc.1
 [2.0.0]: https://github.com/floor/vlist/compare/v1.9.0...v2.0.0
 [1.9.0]: https://github.com/floor/vlist/compare/v1.8.3...v1.9.0
 [1.8.3]: https://github.com/floor/vlist/compare/v1.8.2...v1.8.3
