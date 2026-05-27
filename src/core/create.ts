@@ -185,6 +185,16 @@ export function createVList<T extends VListItem = VListItem>(
   const container = resolveContainer(rawConfig.container);
   const dom = createDOMStructure(container, config.classPrefix, config.horizontal, config.interactive, rawConfig.ariaLabel);
 
+  // ── Scroll config: scrollbar & gutter CSS classes ──────────────
+
+  const scrollbarMode = rawConfig.scroll?.scrollbar;
+  if (scrollbarMode === "none") {
+    dom.viewport.classList.add(`${config.classPrefix}-viewport--no-scrollbar`);
+  }
+  if (rawConfig.scroll?.gutter === "stable") {
+    dom.viewport.classList.add(`${config.classPrefix}-viewport--gutter-stable`);
+  }
+
   // Padding is handled via transform offsets (main axis) and inline
   // left/right or top/bottom (cross axis) in the pipeline, since items
   // are position:absolute and CSS padding on the container has no effect.
