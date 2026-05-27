@@ -161,6 +161,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
           if (!state.isCompressed) {
             ctx.updateContentSize(sizeCache.getTotalSize());
+            state.totalSize = sizeCache.getTotalSize();
           }
         }
 
@@ -176,6 +177,7 @@ export function snapshots<T extends VListItem = VListItem>(
           if (updateCompression) updateCompression();
           if (!state.isCompressed) {
             ctx.updateContentSize(sizeCache.getTotalSize());
+            state.totalSize = sizeCache.getTotalSize();
           }
         }
 
