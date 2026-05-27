@@ -48,7 +48,7 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   scrollbar:  ["-scrollbar__thumb"],
   scale:      ["touchcancel"],
   page:       ["scrollPadding"],
-  snapshots:  ["getScrollSnapshot", "_updateCompressionMode"],
+  snapshots:  ["getScrollSnapshot", "restoreScroll"],
   transition: ["remove:end", "insert:end"],
   autosize:   ["getMeasuredCount", "setMeasuredSize"],
   table:      ["--table", "column:resize", "column:sort"],
