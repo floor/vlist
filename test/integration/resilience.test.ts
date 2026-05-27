@@ -190,6 +190,18 @@ describe("plugin setup error isolation", () => {
 // =============================================================================
 
 describe("destroy resilience", () => {
+  let origConsoleError: typeof console.error;
+  const errorLogs: unknown[][] = [];
+
+  beforeEach(() => {
+    origConsoleError = console.error;
+    errorLogs.length = 0;
+    console.error = (...args: unknown[]) => { errorLogs.push(args); };
+  });
+  afterEach(() => {
+    console.error = origConsoleError;
+  });
+
   it("should not prevent remaining handlers from running when one throws", () => {
     const secondHandler = mock(() => {});
 
@@ -347,36 +359,28 @@ describe("destroy resilience", () => {
   });
 
   it("should log errors when destroy handler throws", () => {
-    const origConsoleError = console.error;
-    const errorLogs: unknown[] = [];
-    console.error = (...args: unknown[]) => { errorLogs.push(args); };
+    const plugin: VListPlugin<TestItem> = {
+      name: "log-test",
+      priority: 10,
+      setup(ctx: PluginContext<TestItem>): void {
+        ctx.registerDestroyHandler(() => {
+          throw new Error("logged error");
+        });
+      },
+    };
 
-    try {
-      const plugin: VListPlugin<TestItem> = {
-        name: "log-test",
-        priority: 10,
-        setup(ctx: PluginContext<TestItem>): void {
-          ctx.registerDestroyHandler(() => {
-            throw new Error("logged error");
-          });
-        },
-      };
+    list = createVList(
+      { container, items: createTestItems(5), item: { height: 40, template: simpleTemplate } },
+      [plugin],
+    );
 
-      list = createVList(
-        { container, items: createTestItems(5), item: { height: 40, template: simpleTemplate } },
-        [plugin],
-      );
+    list.destroy();
+    list = null;
 
-      list.destroy();
-      list = null;
-
-      expect(errorLogs.length).toBe(1);
-      const logArgs = errorLogs[0] as unknown[];
-      expect(logArgs[0]).toBe("vlist: error during destroy:");
-      expect(logArgs[1]).toBeInstanceOf(Error);
-      expect((logArgs[1] as Error).message).toBe("logged error");
-    } finally {
-      console.error = origConsoleError;
-    }
+    expect(errorLogs.length).toBe(1);
+    const logArgs = errorLogs[0]!;
+    expect(logArgs[0]).toBe("vlist: error during destroy:");
+    expect(logArgs[1]).toBeInstanceOf(Error);
+    expect((logArgs[1] as Error).message).toBe("logged error");
   });
 });
