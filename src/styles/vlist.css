@@ -570,6 +570,13 @@
     -webkit-touch-callout: none;
 }
 
+/* Force grabbing cursor on all descendants during drag —
+   the ghost has pointer-events:none so cursor comes from
+   underlying items whose own cursor rules would otherwise win. */
+.vlist--sorting * {
+    cursor: inherit !important;
+}
+
 /* Keyboard grab — highlight the grabbed item */
 .vlist-item--kb-sorting {
     outline: 2px solid var(--vlist-focus-ring, #3b82f6);
