@@ -287,20 +287,21 @@ describe("cross-feature — async + grid", () => {
 
   it("updates placeholder elements when real data arrives", async () => {
     let resolveRead: ((value: any) => void) | null = null;
+    const localContainer = createContainer({ width: 300, height: 500 });
     const adapter: VListAdapter<TestItem> = {
       read: mock(async ({ offset, limit }) => {
         return new Promise((resolve) => { resolveRead = resolve; });
       }),
     };
 
-    list = createVList<TestItem>(
-      { container, items: [], item: { height: 50, template: simpleTemplate } },
+    const localList = createVList<TestItem>(
+      { container: localContainer, items: [], item: { height: 50, template: simpleTemplate } },
       [asyncPlugin({ adapter, autoLoad: true, total: 50 }), grid({ columns: 3 })],
     );
 
     // Before data arrives, elements should be placeholders
     await new Promise((r) => setTimeout(r, 10));
-    const content = getContent(container);
+    const content = getContent(localContainer);
     const placeholders = content.querySelectorAll("[data-id^='__placeholder']");
 
     // Resolve with real data
@@ -324,6 +325,9 @@ describe("cross-feature — async + grid", () => {
     expect(firstItem).not.toBeNull();
     expect(firstItem!.getAttribute("data-id")).toBe("1");
     expect(firstItem!.innerHTML).toContain("Item 1");
+
+    localList.destroy();
+    localContainer.remove();
   });
 
   it("grid items have correct dimensions after async load", async () => {
