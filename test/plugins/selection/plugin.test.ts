@@ -1654,3 +1654,154 @@ describe("selection — Emitter Events", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// selection — Internal Methods (_seedSelection, _getFocusedId, _focusById)
+// =============================================================================
+
+describe("selection — Internal Methods", () => {
+  it("_seedSelection should add IDs to selection without emitting events", () => {
+    const plugin = selection<TestItem>({ mode: "multiple" });
+    const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
+
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    plugin.setup!(ctx);
+
+    const seedFn = methods.get("_seedSelection") as (ids: Array<string | number>) => void;
+    seedFn([2, 5, 8]);
+
+    const getSelected = methods.get("getSelected") as () => Array<string | number>;
+    const selected = getSelected();
+    expect(selected).toContain(2);
+    expect(selected).toContain(5);
+    expect(selected).toContain(8);
+
+    const selectionChanges = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "selection:change",
+    );
+    expect(selectionChanges.length).toBe(0);
+
+    cleanup();
+  });
+
+  it("_getFocusedId should return undefined when no item is focused", () => {
+    const plugin = selection<TestItem>();
+    const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
+
+    plugin.setup!(ctx);
+
+    const getFocusedId = methods.get("_getFocusedId") as () => string | number | undefined;
+    expect(getFocusedId()).toBeUndefined();
+
+    cleanup();
+  });
+
+  it("_getFocusedId should return the focused item ID after keyboard navigation", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>();
+
+    function createContextWithEmitter2(testItems: TestItem[]) {
+      const mock_context = createPluginMockContext(testItems, { interactive: true });
+      const listeners = new Map<string, Array<(...args: any[]) => void>>();
+      (mock_context.ctx.emitter as any).on = (
+        event: string,
+        handler: (...args: any[]) => void,
+      ) => {
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event)!.push(handler);
+        return () => {};
+      };
+      return mock_context;
+    }
+
+    const { ctx, methods, keydownHandlers, cleanup } = createContextWithEmitter2(items);
+    plugin.setup!(ctx);
+
+    // Simulate focusin to activate focusVisible
+    const content = ctx.dom.content;
+    Object.defineProperty(content, "matches", { value: () => true, configurable: true });
+    Object.defineProperty(ctx.dom.root, "matches", { value: () => true, configurable: true });
+    content.dispatchEvent(new Event("focusin", { bubbles: true }));
+
+    // Navigate down once (focus moves from 0 to 1)
+    const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true });
+    (event as any).preventDefault = mock(() => {});
+    keydownHandlers[0]!(event);
+
+    const getFocusedId = methods.get("_getFocusedId") as () => string | number | undefined;
+    expect(getFocusedId()).toBe(1);
+
+    cleanup();
+  });
+
+  it("_focusById should set focused index and emit focus:change", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>();
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    focusByIdFn(5);
+
+    // After _focusById, _getFocusedId should return the ID
+    const getFocusedId = methods.get("_getFocusedId") as () => string | number | undefined;
+    expect(getFocusedId()).toBe(5);
+
+    // Should have emitted focus:change with the correct item
+    const focusChangeCalls = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "focus:change",
+    );
+    expect(focusChangeCalls.length).toBe(1);
+    expect(focusChangeCalls[0]![1]).toEqual({ id: 5, index: 5 });
+
+    cleanup();
+  });
+
+  it("_focusById should no-op for unknown IDs", () => {
+    const items = createTestItems(5);
+    const plugin = selection<TestItem>();
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    const emitSpy = mock(() => {});
+    (ctx.emitter as any).emit = emitSpy;
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    focusByIdFn(999);
+
+    const getFocusedId = methods.get("_getFocusedId") as () => string | number | undefined;
+    expect(getFocusedId()).toBeUndefined();
+
+    const focusChangeCalls = (emitSpy.mock.calls as any[][]).filter(
+      (c) => c[0] === "focus:change",
+    );
+    expect(focusChangeCalls.length).toBe(0);
+
+    cleanup();
+  });
+
+  it("none mode stubs should be safe no-ops", () => {
+    const plugin = selection<TestItem>({ mode: "none" });
+    const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(5));
+
+    plugin.setup!(ctx);
+
+    const seedFn = methods.get("_seedSelection") as (ids: Array<string | number>) => void;
+    const getFocusedId = methods.get("_getFocusedId") as () => string | number | undefined;
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+
+    // Should not throw
+    seedFn([1, 2]);
+    focusByIdFn(1);
+    expect(getFocusedId()).toBeUndefined();
+
+    cleanup();
+  });
+});
