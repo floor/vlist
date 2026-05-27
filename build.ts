@@ -26,12 +26,9 @@ async function build() {
   // reference all exports in a wrapper to force inclusion.
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
-    `import { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
-    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats } from "${entryAbs}";`,
-    `export { vlist, withGrid, withMasonry, withGroups, withAsync, withSelection,`,
-    `  withScale, withScrollbar, withPage, withSnapshots, withTable, withSortable,`,
-    `  withAutoSize, withTransition, createStats };`,
+    `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
+    `  snapshots, transition, autosize, masonry, data, groups, table, sortable,`,
+    `  createStats } from "${entryAbs}";`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
@@ -93,7 +90,7 @@ async function build() {
     `  Internals   ${internalsTime.toFixed(0).padStart(6)}ms  dist/internals.js (${internalsSize} KB)`,
   );
 
-  // Generate type declarations (optional)
+  // Generate type declarations (optional — pass --types or used in prepublishOnly)
   if (withTypes) {
     const dtsStart = performance.now();
     const tsc = await $`bunx tsc -p tsconfig.build.json`.quiet().nothrow();
@@ -104,7 +101,7 @@ async function build() {
     }
     const dtsTime = performance.now() - dtsStart;
     console.log(
-      `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/*.d.ts`,
+      `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/**/*.d.ts`,
     );
   }
 
@@ -142,15 +139,15 @@ async function build() {
 
   // ── Size measurement (tree-shaken, mirrors scripts/measure-size.ts) ──
 
-  const ALL_FEATURES = [
-    "withGrid", "withMasonry", "withGroups", "withAsync", "withSelection",
-    "withScale", "withScrollbar", "withPage", "withSnapshots", "withTable",
-    "withSortable", "withAutoSize", "withTransition",
+  const ALL_PLUGINS = [
+    "a11y", "selection", "data", "scrollbar", "sortable",
+    "groups", "scale", "page", "snapshots", "transition",
+    "autosize", "grid", "table", "masonry",
   ] as const;
 
   const scenarios = [
-    { name: "base", imports: ["vlist"] },
-    ...ALL_FEATURES.map((f) => ({ name: f, imports: ["vlist", f] })),
+    { name: "base", imports: ["createVList"] },
+    ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
   const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
@@ -185,8 +182,8 @@ async function build() {
 
   const base = sizes.base ?? { minified: "0", gzipped: "0" };
   const baseGz = parseFloat(base.gzipped);
-  if (baseGz < 5 || baseGz > 50) {
-    console.error(`\n  ✗ Base gzipped size ${base.gzipped} KB is outside expected range (5–50 KB). Build or tree-shaking may be broken.\n`);
+  if (baseGz < 3 || baseGz > 50) {
+    console.error(`\n  ✗ Base gzipped size ${base.gzipped} KB is outside expected range (3–50 KB). Build or tree-shaking may be broken.\n`);
     process.exit(1);
   }
 

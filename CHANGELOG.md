@@ -11,12 +11,124 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-## [1.9.1] - 2026-05-21
+## [2.0.0] - 2026-05-27
+
+### Added
+
+- **Scrollbar touch support** — thumb drag and track tap via touch events, enabling scrollbar interaction on touch devices
+- **Selection internal methods** — `_getFocusedId`, `_focusById`, `_seedSelection` for cross-plugin coordination (snapshots, sortable)
 
 ### Fixed
 
-- **builder**: Handle feature conflicts gracefully in production — throw in development to catch mistakes early, silently skip the conflicting feature with a `console.warn` in production to prevent runtime crashes.
-- **groups**: Add `updateItem` to async group path for correct layout-to-data index mapping — without this, `updateItem` used raw layout indices instead of resolving through the group bridge.
+- **Groups ARIA attributes** — grouped items now receive `id`, `aria-posinset`, and `aria-setsize` when `interactive` is enabled, fixing broken `aria-activedescendant` references
+- **Snapshots v1→v2 migration** — aligned auto-save bootstrap, compression mode restore, and `focusedId` save/restore with v1 behavior
+- **`scroll.scrollbar` and `scroll.gutter` config** — CSS classes (`vlist-viewport--no-scrollbar`, `vlist-viewport--gutter-stable`) now wired in `createVList`
+- **Sortable drag cursor** — force `grabbing` cursor on all descendants during drag, preventing open-hand flicker over handles (fixes #46)
+- **Grid async data** — per-item accessor for async data compatibility, in-memory item tracking, deduplicated template apply
+
+### Refactored
+
+- **Grid plugin** — in-memory item tracking and deduplicated template application
+- **`async` → `data` plugin rename** — `async()` is a JS reserved word; exported function renamed to `data()`, type renamed to `DataPluginConfig`
+
+### Tests
+
+- Groups plugin coverage: 66% → 87% lines (registered methods, scrollToIndex, horizontal mode, render lifecycle, selection state, placeholder transitions, async boundaries)
+- Engine state coverage: 61% → 100% (resizeCapacity, clear)
+- Selection internal methods: 6 new tests for `_seedSelection`, `_getFocusedId`, `_focusById`
+- Grid async rendering, placeholder transitions, dimension tests
+- Concurrent test isolation fixes
+
+## [2.0.0-rc.3] - 2026-05-27
+
+### Added
+
+- **`item:dblclick` and `item:contextmenu` events** — delegated double-click and right-click events on items, matching the existing `item:click` pattern
+- **16M content size warning** — emits an `error` event when total content size exceeds the browser's max virtual scroll limit, suggesting the `scale()` plugin
+- **ARIA live region announcements** — a11y plugin announces focus changes ("Item 3 of 100") and selection state ("Selected", "Deselected") via a screen-reader-only live region
+- **`--scrolling` class on root** — added/removed on scroll start/idle for CSS-driven scroll state styling
+
+### Fixed
+
+- **Config validation** — `createVList` now validates item dimensions, estimated sizes, gap, and overscan at creation time with descriptive error messages
+- **Template error handling** — template render errors are caught and emitted as `error` events instead of crashing the render loop
+- **Plugin setup resilience** — plugin `setup()` errors are caught and emitted as `error` events, preventing one broken plugin from blocking others
+- **Destroy resilience** — `destroy()` continues cleanup even if individual teardown steps throw
+
+### Tests
+
+- **Test-driven hardening** — 13-phase systematic recovery adding ~590 tests (2,633 → 3,223), fixing 29 failing tests, and raising line coverage from 94.30% to 95.99%. Covers core boundary conditions, data ops edge cases, error recovery, plugin integration combos, 2D keyboard navigation, async lifecycle, memory leak detection, and performance benchmarks.
+
+## [2.0.0-rc.2] - 2026-05-26
+
+### Performance
+
+- **Optimized initial render path** — batch DOM insertions via DocumentFragment, `cloneNode(false)` from pre-built template in element pool, defer ResizeObserver and scroll listeners until after first paint, skip plugin sort/conflict check when no plugins used
+- **Build: switched from tsc transpile to Bun.build bundle** — 15x faster dev builds (1200ms → 78ms), same output
+- **async: maxConcurrent request limiting** — configurable cap on in-flight chunk requests (default: 6) with zero-allocation distance-based eviction of furthest loads
+- **async: split onDataChange/onStateChange notifications** — loading-state-only changes no longer trigger the expensive sizeCache rebuild pipeline
+- **async: chunk-range dedup in onAfterScroll** — skip redundant `ensureRange()` calls when scroll hasn't crossed a chunk boundary
+- **async: in-place findIndex+splice** — replace `.filter()` allocation with single `findIndex` + `splice` for pendingRanges cleanup
+- **groups: detached map reuse on boundary changes** — elements are saved by data-id instead of released to pool (which clears innerHTML), then reclaimed in the next render pass. Eliminates image blink on scroll stop.
+- **groups: data-id fast path in renderItemContent** — skip template rendering and all DOM writes when element already shows the correct item
+- **groups: zero-write scroll frames** — transform/size writes moved to new-element path only (stable per layout index), no `getEntry()` call for existing unchanged elements
+- **groups: DocumentFragment batching** — single DOM insertion for all new elements per render pass
+- **groups: removed dead `vlist-groups-item` class** — eliminated redundant className and attribute writes
+
+### Added
+
+- Normalized benchmark workflow with tiered item counts (10K, 100K, 1M) and intensity modes
+
+### Fixed
+
+- **async: ensureRange early-return correctness** — when no new chunks are needed but loads are in-flight, await `Promise.all(loadPromises)` instead of returning immediately
+
+## [2.0.0-rc.1] - 2026-05-23
+
+### Performance
+
+- **Precomputed render configuration** — extract stable per-frame string computations (class names, translate prefix, cross-axis properties) into a `RenderConfig` object created once during setup. Eliminates repeated string concatenation on every scroll frame. `phase2Commit()` simplified from 17 parameters to 10.
+
+### Refactored
+
+- Removed unused `range.ts` (`calcVisibleRange` / `applyOverscan` — dead code that also violated hot-path allocation rules)
+- Removed unused `data.ts` (`createSimpleDataManager` — 245 lines never imported by core or plugins)
+- Fixed stale v1 comments and documentation drift across core modules
+
+## [2.0.0-beta.1] - 2026-05-19
+
+### Changed
+
+- **BREAKING: Plugin architecture** — replaced builder pattern (`vlist(config).use(withX()).build()`) with factory function (`createVList(config, [plugins])`). Plugins are passed as the second argument to `createVList()` and the instance is created immediately — no more `.build()` call.
+- **BREAKING: Plugin renames** — all `withX()` plugin functions renamed to bare names: `withGrid` → `grid`, `withSelection` → `selection`, `withScrollbar` → `scrollbar`, `withScale` → `scale`, `withPage` → `page`, `withSnapshots` → `snapshots`, `withTransition` → `transition`, `withAutoSize` → `autosize`, `withTable` → `table`, `withGroups` → `groups`, `withAsync` → `async`, `withMasonry` → `masonry`, `withSortable` → `sortable`.
+- **BREAKING: Plugin interface** — `VListFeature` replaced by `VListPlugin`. New interface: `name`, `priority?`, `conflicts?`, `setup(ctx: PluginContext)`, `hooks?: { onCalculate, onCommit, onAfterScroll, onIdle, onResize }`, `destroy?()`. Features no longer use callback arrays — hot-path hooks are compiled into linear arrays at creation time.
+- **BREAKING: Context interface** — `BuilderContext` replaced by `PluginContext`. Features register handlers via `registerClickHandler()`, `registerKeydownHandler()`, `registerDestroyHandler()`, and add public methods via `registerMethod()`. The `$` (MRefs) shared mutable state is replaced by `EngineState` TypedArrays.
+- **BREAKING: Directory structure** — `src/builder/` → `src/core/`, `src/features/` → `src/plugins/`.
+- **BREAKING: DOM structure** — the `.vlist-items` wrapper element is removed. v2 uses a 3-element structure: `root > viewport > content`.
+- **Core: 2-phase pipeline** — new render pipeline: Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions, Phase 2 (`onCommit`) reads buffers and updates DOM. Zero allocation per frame.
+- **Core: EngineState** — all hot-path state (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in TypedArrays on a single `EngineState` singleton.
+- **Core: Hook compilation** — plugin hooks are compiled once at creation into frozen linear arrays, iterated with zero dispatch overhead per frame.
+
+### Improved
+
+- **Base bundle** — 11.2 KB → 5.0 KB gzipped (-55%).
+- **grid** — 4.1 KB → 1.7 KB (-59%).
+- **selection** — 2.7 KB → 1.2 KB (-56%).
+- **async** — 4.6 KB → 3.9 KB (-15%).
+- **groups** — 4.7 KB → 2.5 KB (-47%).
+- **scale** — 3.6 KB → 3.4 KB (-6%).
+- **autosize** — 0.9 KB → 0.6 KB (-33%).
+- **masonry** — 3.4 KB → 2.9 KB (-15%).
+- **sortable** — 2.9 KB → 3.0 KB (+3%, added features).
+- **transition** — 2.1 KB → 1.9 KB (-10%).
+- **scrollbar** — unchanged at 1.8 KB.
+- **table** — unchanged at 5.8 KB.
+- **page** — unchanged at 0.7 KB.
+- **snapshots** — unchanged at 1.2 KB.
+
+### Migration
+
+See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guide.
 
 ## [1.9.0] - 2026-05-17
 
@@ -324,7 +436,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0-rc.3...HEAD
+[2.0.0-rc.3]: https://github.com/floor/vlist/compare/v2.0.0-rc.2...v2.0.0-rc.3
+[2.0.0-rc.2]: https://github.com/floor/vlist/compare/v2.0.0-rc.1...v2.0.0-rc.2
+[2.0.0-rc.1]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.0-rc.1
+[2.0.0]: https://github.com/floor/vlist/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/floor/vlist/compare/v1.8.3...v1.9.0
+[1.8.3]: https://github.com/floor/vlist/compare/v1.8.2...v1.8.3
+[1.8.2]: https://github.com/floor/vlist/compare/v1.8.1...v1.8.2
+[1.8.1]: https://github.com/floor/vlist/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/floor/vlist/compare/v1.7.9...v1.8.0
 [1.7.9]: https://github.com/floor/vlist/compare/v1.7.8...v1.7.9
 [1.7.8]: https://github.com/floor/vlist/compare/v1.7.7...v1.7.8

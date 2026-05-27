@@ -9,7 +9,7 @@
    ============================================================================= */
 
 /* Masonry modifier on root */
-.vlist--masonry .vlist-items {
+.vlist--masonry .vlist-content {
     contain: layout style;
 }
 

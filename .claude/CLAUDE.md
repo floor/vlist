@@ -29,7 +29,10 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 
 - `bun install` — install deps
 - `bun test` — run all tests
-- `bun test test/features/grid/` — run one folder
+- `bun test --concurrent` — run all tests in parallel (~2x faster)
+- `bun test --changed` — run only tests affected by uncommitted changes
+- `bun test --changed=staging` — run tests affected by changes since staging
+- `bun test test/plugins/grid/` — run one folder
 - `bun test --watch` — watch mode
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
@@ -145,11 +148,14 @@ Use orientation-neutral terminology. The library supports both vertical and hori
 
 ## Testing
 
-Bun test runner with JSDOM. Tests mirror `src/` structure.
+Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `src/` structure.
 
-- Shared helpers in `test/helpers/`: `setupDOM`, `teardownDOM`, `createTestItems`, `createContainer`, `simpleTemplate`, timer flush utilities
+- DOM environment: `GlobalRegistrator.register()` in `beforeAll`, `unregister()` in `afterAll` — sets all browser globals
+- Shared helpers in `test/helpers/`: `setupDOM`, `teardownDOM`, `createTestItems`, `createContainer`, `simpleTemplate`, `useFakeTimers`
+- `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
 - Each feature tested by: factory/validation, setup/registration, public methods, cross-feature integration
 - Features are unit-tested via mock `BuilderContext` — see existing tests for the pattern
+- 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/plugin.test.ts)
 
 ## Adding a New Feature
 

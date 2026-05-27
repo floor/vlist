@@ -37,22 +37,26 @@ Interactive examples and documentation are available at **[vlist.io](https://vli
 vlist/
 ├── src/
 │   ├── index.ts              # Main entry — exports everything
+│   ├── internals.ts          # Low-level exports for advanced users
 │   ├── types.ts              # Public type definitions
-│   ├── constants.ts          # Shared constants
-│   ├── builder/              # Builder pattern + core materialize
-│   │   ├── index.ts          #   Builder entry + vlist() factory
-│   │   ├── core.ts           #   Core materialize function (hot path)
-│   │   ├── materialize.ts    #   Context factory + $ (MRefs) setup
-│   │   ├── types.ts          #   BuilderContext, VListFeature, VList interfaces
-│   │   ├── context.ts        #   Simplified context creator
-│   │   ├── data.ts           #   Simple data manager
-│   │   ├── dom.ts            #   DOM structure creation
+│   ├── constants.ts          # Shared constants and defaults
+│   ├── core/                 # Core engine + factory
+│   │   ├── index.ts          #   Core entry
+│   │   ├── create.ts         #   createVList() factory
+│   │   ├── types.ts          #   PluginContext, VListPlugin, VList, CreateVListConfig
+│   │   ├── pipeline.ts       #   2-phase render pipeline (calculate → commit)
+│   │   ├── hooks.ts          #   Hook compilation (plugin hooks → linear arrays)
+│   │   ├── state.ts          #   EngineState (TypedArray-based hot-path state)
+│   │   ├── sizes.ts          #   Size cache (prefix sums, O(1) lookups)
+│   │   ├── data.ts           #   Data manager
+│   │   ├── dom.ts            #   DOM structure creation (root, viewport, content)
 │   │   ├── pool.ts           #   Element pool (DOM recycling)
-│   │   ├── range.ts          #   Range calculations
-│   │   ├── scroll.ts         #   Scroll utilities
+│   │   ├── range.ts          #   Visible range calculations
+│   │   ├── scroll.ts         #   Scroll handler
 │   │   └── velocity.ts       #   Scroll velocity tracking
-│   ├── features/             # Composable features (opt-in via .use())
+│   ├── plugins/              # Composable plugins (opt-in via plugins array)
 │   │   ├── async/            #   Async data adapter (infinite scroll)
+│   │   ├── autosize/         #   Auto-measure items via ResizeObserver
 │   │   ├── grid/             #   2D grid / card layout
 │   │   ├── groups/           #   Sticky group headers
 │   │   ├── masonry/          #   Pinterest-style layout
@@ -61,38 +65,21 @@ vlist/
 │   │   ├── scrollbar/        #   Custom scrollbar
 │   │   ├── selection/        #   Selection state management
 │   │   ├── snapshots/        #   Scroll save/restore
-│   │   └── table/            #   Data table with columns + sorting
-│   ├── rendering/            # Core rendering engine
-│   │   ├── index.ts          #   Rendering entry
-│   │   ├── sizes.ts          #   Size cache (prefix sums)
-│   │   ├── measured.ts       #   Auto-measurement (Mode B)
-│   │   ├── renderer.ts       #   DOM rendering with pooling
-│   │   ├── viewport.ts       #   Virtual scroll calculations
-│   │   ├── scale.ts          #   Scale/compression utilities
-│   │   └── sort.ts           #   Sort utilities
+│   │   ├── sortable/         #   Drag-and-drop reordering
+│   │   ├── table/            #   Data table with columns + sorting
+│   │   └── transition/       #   FLIP-based enter/exit animations
 │   ├── events/               # Event emitter
-│   │   ├── index.ts
-│   │   └── emitter.ts
 │   └── styles/               # CSS files
 │       ├── vlist.css          #   Core styles
-│       ├── vlist-table.css    #   Table feature styles
+│       ├── vlist-table.css    #   Table plugin styles
 │       └── vlist-extras.css   #   Optional variants
 ├── test/                     # Tests (mirrors src/ structure)
-│   ├── builder/
-│   ├── features/
-│   │   ├── async/
-│   │   ├── grid/
-│   │   ├── groups/
-│   │   ├── masonry/
-│   │   ├── page/
-│   │   ├── scale/
-│   │   ├── scrollbar/
-│   │   ├── selection/
-│   │   ├── snapshots/
-│   │   └── table/
+│   ├── helpers/              #   setupDOM, createPluginMockContext, timer utils
+│   ├── builder/              #   Core engine tests
+│   ├── features/             #   One folder per plugin
 │   ├── rendering/
 │   ├── events/
-│   └── integration/
+│   └── utils/
 ├── scripts/                  # Build & measurement scripts
 ├── build.ts                  # Build script
 ├── package.json
@@ -103,25 +90,25 @@ vlist/
 
 ### Architecture
 
-vlist uses a **builder/feature architecture**. The core provides virtual scrolling essentials, and everything else is opt-in via composable features.
+vlist uses a **factory + plugin architecture**. The core provides virtual scrolling essentials, and everything else is opt-in via composable plugins.
 
 ```
-vlist({ config })          → VListBuilder    (configure)
-  .use(withGrid())         → VListBuilder    (compose features)
-  .use(withSelection())    → VListBuilder    (chainable)
-  .build()                 → VList           (materialize)
+createVList(config, [       → VList instance
+  grid(),                      (plugins composed at creation)
+  selection(),
+])
 ```
 
-- **Builder** (`src/builder/`) — The `vlist()` factory creates a builder. `.use()` registers features, `.build()` materializes the DOM and returns the public `VList` API.
-- **Features** (`src/features/`) — Self-contained capabilities that compose via `BuilderContext` hooks. Each feature receives the context in `setup()` and wires event handlers, DOM modifications, and public methods.
-- **Rendering** (`src/rendering/`) — Pure rendering engine: size cache (prefix sums), virtual scroll calculations, DOM rendering with element pooling, and scale/compression for 1M+ items.
+- **Core** (`src/core/`) — The `createVList()` factory creates the DOM structure, scroll handling, element pooling, and 2-phase render pipeline. Plugins are set up during creation and their hooks are compiled into linear arrays for zero-overhead iteration.
+- **Plugins** (`src/plugins/`) — Self-contained capabilities that compose via `PluginContext` hooks. Each plugin receives the context in `setup()` and wires event handlers, DOM modifications, and public methods.
 - **Events** (`src/events/`) — Typed event emitter.
 
 **Key patterns:**
 
-- **`$` (MRefs)** — Shared mutable state lives in a single object with short property names (`$.st` for scroll target, `$.vp` for viewport state, etc.). Both `core.ts` and `materialize.ts` read/write through it. Short names survive minification without bloating the bundle.
-- **`BuilderContext`** — The context object passed to every feature's `setup()`. Features register callbacks on arrays (`afterScroll`, `clickHandlers`, `keydownHandlers`, `resizeHandlers`, `destroyHandlers`) and can replace core components (`renderer`, `dataManager`, `scrollController`).
-- **`VListFeature`** — The interface every feature implements: `name`, `priority` (lower runs first), `setup(ctx)`, optional `destroy()`, optional `conflicts` array.
+- **EngineState** — TypedArray-based state singleton. All hot-path data (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in typed arrays — zero allocation per frame.
+- **2-Phase Pipeline** — Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions. Phase 2 (`onCommit`) reads the buffers and updates DOM. Plugins hook into either phase.
+- **`PluginContext`** — The context object passed to every plugin's `setup()`. Plugins register handlers (`registerClickHandler`, `registerKeydownHandler`, `registerDestroyHandler`), add public methods (`registerMethod`), and can replace core functions (`setSizeConfig`, `setVisibleRangeFn`, `setRenderFn`).
+- **`VListPlugin`** — The interface every plugin implements: `name`, optional `priority` (lower runs first), optional `conflicts` array, `setup(ctx)`, optional `hooks` object (`onCalculate`, `onCommit`, `onAfterScroll`, `onIdle`, `onResize`), optional `destroy()`.
 
 ## Development Workflow
 
@@ -129,7 +116,7 @@ vlist({ config })          → VListBuilder    (configure)
 
 1. **Find the right domain** — most changes live in a specific domain folder
 2. **Write tests first** — add tests in `test/` before implementing
-3. **Run tests** — `bun test` (runs all), `bun test test/features/grid/` (runs one folder)
+3. **Run tests** — `bun test` (runs all), `bun test test/plugins/grid/` (runs one folder)
 4. **Type check** — `bun run typecheck`
 5. **Build** — `bun run build`
 6. **Test visually** — check relevant examples at [vlist.io](https://vlist.io/sandbox/)
@@ -141,16 +128,16 @@ vlist({ config })          → VListBuilder    (configure)
 bun test
 
 # Specific file
-bun test test/features/grid/layout.test.ts
+bun test test/plugins/grid/plugin.test.ts
 
 # Specific folder
-bun test test/features/grid/
+bun test test/plugins/grid/
 
 # Watch mode
 bun test --watch
 ```
 
-Tests use [Bun's test runner](https://bun.sh/docs/cli/test) with JSDOM for DOM testing. Every domain has corresponding tests mirroring the `src/` structure.
+Tests use [Bun's test runner](https://bun.sh/docs/cli/test) with JSDOM for DOM testing. Every domain has corresponding tests mirroring the `src/` structure. Plugin tests use the `createPluginMockContext()` helper from `test/helpers/plugin-context.ts`.
 
 ### Building
 
@@ -215,78 +202,81 @@ vlist has **zero runtime dependencies** by design. Do not add external packages.
 
 Dev dependencies (testing, building) are fine.
 
-## Adding a New Feature
+## Adding a New Plugin
 
-Features are the primary extension mechanism. Each feature is a self-contained module in `src/features/`.
+Plugins are the primary extension mechanism. Each plugin is a self-contained module in `src/plugins/`.
 
-### 1. Create the feature directory
+### 1. Create the plugin directory
 
 ```
-src/features/{name}/
-├── feature.ts    # VListFeature implementation
+src/plugins/{name}/
+├── plugin.ts     # VListPlugin implementation
+├── feature.ts    # Core logic
 ├── index.ts      # Public exports
 ├── types.ts      # Type definitions (if needed)
 └── ...           # Supporting files (layout.ts, renderer.ts, etc.)
 ```
 
-### 2. Implement `VListFeature`
+### 2. Implement `VListPlugin`
 
 ```typescript
-// src/features/{name}/feature.ts
+// src/plugins/{name}/plugin.ts
 import type { VListItem } from "../../types";
-import type { VListFeature, BuilderContext } from "../../builder/types";
+import type { VListPlugin, PluginContext } from "../../core/types";
 
-export const withMyFeature = <
+export const myPlugin = <
   T extends VListItem = VListItem,
->(): VListFeature<T> => {
-  // Local state lives in the closure — persists across setup/destroy
-  let cleanup: (() => void) | null = null;
-
+>(): VListPlugin<T> => {
   return {
-    name: "withMyFeature",
+    name: "myPlugin",
     priority: 50, // Lower runs first. Use 5-10 for early, 50 for standard, 90+ for late.
 
-    // Optional: declare conflicts with other features
-    conflicts: ["withGrid"], // Cannot combine with grid
+    // Optional: declare conflicts with other plugins
+    conflicts: ["grid"], // Cannot combine with grid
 
-    // Optional: declare methods this feature adds to the public VList API
-    methods: ["myMethod"],
+    setup(ctx: PluginContext<T>): void {
+      const { dom, config, emitter, sizeCache } = ctx;
 
-    setup(ctx: BuilderContext<T>): void {
-      const { dom, config, emitter, state } = ctx;
-
-      // Wire into extension points:
-      ctx.afterScroll.push((scrollPosition, direction) => {
-        // Runs after each scroll-triggered render
-      });
-
-      ctx.clickHandlers.push((event: MouseEvent) => {
+      // Register click/keydown handlers:
+      ctx.registerClickHandler((event: MouseEvent) => {
         // Attached as DOM click listener on the root element
       });
 
-      ctx.keydownHandlers.push((event: KeyboardEvent) => {
+      ctx.registerKeydownHandler((event: KeyboardEvent) => {
         // Attached as DOM keydown listener on the root element
       });
 
-      ctx.resizeHandlers.push((width, height) => {
-        // Runs when the container resizes
-      });
-
-      ctx.destroyHandlers.push(() => {
+      ctx.registerDestroyHandler(() => {
         // Cleanup: remove listeners, free resources
       });
 
       // Add public API methods:
-      ctx.methods.set("myMethod", () => {
-        // Accessible as list.myMethod() after .build()
+      ctx.registerMethod("myMethod", () => {
+        // Accessible as list.myMethod() on the VList instance
       });
     },
 
+    // Hot-path hooks — compiled into linear arrays, iterated per frame
+    hooks: {
+      onCalculate(state) {
+        // Phase 1: mutate EngineState TypedArrays
+      },
+      onCommit(state) {
+        // Phase 2: read state, update DOM
+      },
+      onAfterScroll(scrollPosition, direction) {
+        // Runs after both phases complete
+      },
+      onIdle() {
+        // Runs when scrolling stops
+      },
+      onResize(width, height) {
+        // Runs on container resize
+      },
+    },
+
     destroy(): void {
-      if (cleanup) {
-        cleanup();
-        cleanup = null;
-      }
+      // Final cleanup
     },
   };
 };
@@ -294,11 +284,11 @@ export const withMyFeature = <
 
 ### 3. Add tests
 
-Create matching test files in `test/features/{name}/`:
+Create matching test files in `test/plugins/{name}/`:
 
 ```
-test/features/{name}/
-├── feature.test.ts    # Integration tests for the feature
+test/plugins/{name}/
+├── plugin.test.ts     # Plugin tests using createPluginMockContext()
 ├── layout.test.ts     # Unit tests for layout logic (if applicable)
 └── ...
 ```
@@ -306,22 +296,22 @@ test/features/{name}/
 ### 4. Export from `src/index.ts`
 
 ```typescript
-export { withMyFeature } from "./features/{name}";
+export { myPlugin } from "./plugins/{name}";
 ```
 
 ### 5. Add package.json export (if sub-module import is needed)
 
-In `package.json` exports map — only if the feature needs a standalone import path.
+In `package.json` exports map — only if the plugin needs a standalone import path.
 
 ### 6. Create a sandbox example
 
 Add an interactive example in the [vlist.io](https://github.com/floor/vlist.io) repository.
 
 **Reference implementations:**
-- `src/features/page/` — simple feature (single file, ~180 lines)
-- `src/features/selection/` — medium feature (state management + keyboard)
-- `src/features/grid/` — complex feature (layout engine + custom renderer)
-- `src/features/table/` — complex feature (columns, headers, sorting, resizing)
+- `src/plugins/page/` — simple plugin (single file, ~180 lines)
+- `src/plugins/selection/` — medium plugin (state management + keyboard)
+- `src/plugins/grid/` — complex plugin (layout engine + custom renderer)
+- `src/plugins/table/` — complex plugin (columns, headers, sorting, resizing)
 
 ## Commit Messages
 
@@ -335,14 +325,14 @@ feat(grid): add 2D grid layout mode
 fix(scroll): prevent jitter on fast scroll
 docs(readme): update API reference
 test(rendering): add scale edge cases
-refactor(builder): simplify context creation
+refactor(core): simplify pipeline
 perf(core): reduce allocations in scroll handler
 chore(deps): update dev dependencies
 ```
 
 **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
 
-**Scopes:** `core`, `builder`, `rendering`, or specific feature names (`grid`, `selection`, `table`, `scale`, `async`, `groups`, `masonry`, `page`, `scrollbar`, `snapshots`). Also: `styles`, `deps`, `readme`.
+**Scopes:** `core`, `render`, `styles`, or specific plugin names (`grid`, `selection`, `table`, `scale`, `async`, `groups`, `masonry`, `page`, `scrollbar`, `snapshots`, `sortable`, `transition`). Also: `deps`, `readme`.
 
 ## Pull Requests
 

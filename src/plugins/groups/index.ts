@@ -1,0 +1,32 @@
+/**
+ * vlist - Groups Domain
+ * Sticky headers and grouped lists
+ */
+
+// v2 Plugin
+export { groups, type GroupsPluginConfig } from "./plugin";
+
+// Types
+export type {
+  GroupsConfig,
+  GroupBoundary,
+  LayoutEntry,
+  GroupHeaderItem,
+  GroupLayout,
+  StickyHeader,
+} from "./types";
+
+export { isGroupHeader } from "./types";
+
+// Layout
+export {
+  createGroupLayout,
+  buildLayoutItems,
+  createGroupedSizeFn,
+} from "./layout";
+
+// Sticky Header
+export { createStickyHeader } from "./sticky";
+
+// Async Bridge
+export { createAsyncGroupBridge, type AsyncBridgeConfig, type AsyncGroupBridge } from "./async-bridge";

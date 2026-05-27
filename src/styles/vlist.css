@@ -76,6 +76,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.3);
     --vlist-placeholder-bg: rgba(0, 0, 0, 0.2);
+    --vlist-placeholder-bg-strong: rgba(0, 0, 0, 0.24);
 }
 
 /* =============================================================================
@@ -106,6 +107,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+    --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
 }
 
 /* Dark — OS preference (skipped when explicit light/dark is set) */
@@ -127,6 +129,7 @@
         --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
         --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
         --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+        --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
     }
 }
 
@@ -148,6 +151,7 @@
     --vlist-custom-scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
     --vlist-custom-scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.3);
     --vlist-placeholder-bg: rgba(255, 255, 255, 0.3);
+    --vlist-placeholder-bg-strong: rgba(255, 255, 255, 0.35);
 }
 
 /* =============================================================================
@@ -187,8 +191,8 @@
    when the user tabs in, so the container outline is never needed. */
 .vlist:focus,
 .vlist:focus-visible,
-.vlist-items:focus,
-.vlist-items:focus-visible {
+.vlist-content:focus,
+.vlist-content:focus-visible {
     outline: none;
 }
 
@@ -231,14 +235,8 @@
     background-color: var(--vlist-scrollbar-thumb-hover-color);
 }
 
-/* Content container (sets total height) */
+/* Content container (sets total height + contains items directly in v2) */
 .vlist-content {
-    position: relative;
-    width: 100%;
-}
-
-/* Items container */
-.vlist-items {
     position: relative;
     width: 100%;
     contain: layout style;
@@ -328,7 +326,20 @@
     animation: vlist-placeholder-pulse 2s ease-in-out infinite;
 }
 
-/* Placeholder content styling - examples should define their own placeholder appearance */
+/* Automatic skeleton for leaf text elements — mask characters set natural width */
+.vlist-item--placeholder *:not(:has(*)) {
+    color: transparent;
+    background-color: var(--vlist-placeholder-bg);
+    border-radius: 4px;
+    width: fit-content;
+    line-height: 1.2;
+    transform: scaleY(0.8);
+}
+
+/* Darker skeleton for semantically heavy elements */
+.vlist-item--placeholder :is(strong, b, h1, h2, h3, h4):not(:has(*)) {
+    background-color: var(--vlist-placeholder-bg-strong);
+}
 
 /* Combined selected + focused */
 .vlist-item.vlist-item--selected.vlist-item--focused {
@@ -356,7 +367,7 @@
 /* Hover zone — a real DOM element that's always pointer-events:auto so
    mouseenter fires even when the track is hidden (opacity:0 / pointer-events:none).
    Width/height is set via JS from the hoverZoneWidth config option. */
-.vlist-scrollbar-hover {
+.vlist-scrollbar__hover {
     position: absolute;
     top: 0;
     right: 0;
@@ -365,7 +376,7 @@
     pointer-events: auto;
 }
 
-.vlist-scrollbar-hover--horizontal {
+.vlist-scrollbar__hover--horizontal {
     top: auto;
     right: auto;
     bottom: 0;
@@ -381,7 +392,7 @@
 }
 
 /* Scrollbar thumb */
-.vlist-scrollbar-thumb {
+.vlist-scrollbar__thumb {
     position: absolute;
     top: 0;
     left: 0;
@@ -393,7 +404,7 @@
     transition: background-color 0.15s ease-out;
 }
 
-.vlist-scrollbar-thumb:hover {
+.vlist-scrollbar__thumb:hover {
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
@@ -403,7 +414,7 @@
     pointer-events: auto;
 }
 
-.vlist-scrollbar--dragging .vlist-scrollbar-thumb {
+.vlist-scrollbar--dragging .vlist-scrollbar__thumb {
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
@@ -454,12 +465,6 @@
     width: auto;
 }
 
-/* Items container */
-.vlist--horizontal .vlist-items {
-    height: 100%;
-    width: auto;
-}
-
 /* Individual item — positioned absolutely on the X axis */
 .vlist--horizontal .vlist-item,
 .vlist--horizontal .vlist-group-header {
@@ -485,7 +490,7 @@
     height: var(--vlist-custom-scrollbar-width);
 }
 
-.vlist-scrollbar--horizontal .vlist-scrollbar-thumb {
+.vlist-scrollbar--horizontal .vlist-scrollbar__thumb {
     top: 0;
     left: 0;
     width: auto;
@@ -563,6 +568,13 @@
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+}
+
+/* Force grabbing cursor on all descendants during drag —
+   the ghost has pointer-events:none so cursor comes from
+   underlying items whose own cursor rules would otherwise win. */
+.vlist--sorting * {
+    cursor: inherit !important;
 }
 
 /* Keyboard grab — highlight the grabbed item */
