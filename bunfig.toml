@@ -1,4 +1,5 @@
 [test]
+concurrent = true
 
 # Only report coverage for source files, not the bundled dist output
 coverageSkipTestFiles = true

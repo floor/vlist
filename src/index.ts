@@ -9,27 +9,34 @@
  * @packageDocumentation
  */
 
-// Main builder export
-export { vlist } from "./builder";
-
-// Features - tree-shakeable
-export { withScale } from "./features/scale";
-export type { ScaleConfig } from "./features/scale";
-export { withAsync } from "./features/async";
-export { withScrollbar } from "./features/scrollbar";
-export { withPage } from "./features/page";
-export type { WithPageOptions } from "./features/page";
-export { withGroups } from "./features/groups";
-export { withGrid } from "./features/grid";
-export { withMasonry } from "./features/masonry";
-export { withSelection } from "./features/selection";
-export { withSnapshots } from "./features/snapshots";
-export { withTable } from "./features/table";
-export { withSortable } from "./features/sortable";
-export type { SortableConfig } from "./features/sortable";
-export { withAutoSize } from "./features/autosize";
-export { withTransition } from "./features/transition";
-export type { TransitionConfig, TransitionTiming } from "./features/transition";
+// v2 factory + plugins
+export { createVList } from "./core/create";
+export { scale } from "./plugins/scale";
+export type { ScalePluginConfig } from "./plugins/scale";
+export { scrollbar } from "./plugins/scrollbar";
+export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
+export { grid } from "./plugins/grid";
+export { a11y } from "./plugins/a11y";
+export { selection } from "./plugins/selection";
+export type { SelectionPluginConfig } from "./plugins/selection";
+export { page } from "./plugins/page";
+export type { PagePluginConfig } from "./plugins/page";
+export { snapshots } from "./plugins/snapshots";
+export type { SnapshotsPluginConfig } from "./plugins/snapshots";
+export { transition } from "./plugins/transition";
+export type { TransitionPluginConfig } from "./plugins/transition";
+export { autosize } from "./plugins/autosize";
+export type { AutosizePluginConfig } from "./plugins/autosize";
+export { masonry } from "./plugins/masonry";
+export type { MasonryPluginConfig } from "./plugins/masonry";
+export { data } from "./plugins/async";
+export type { DataPluginConfig } from "./plugins/async";
+export { groups } from "./plugins/groups";
+export type { GroupsPluginConfig } from "./plugins/groups";
+export { table } from "./plugins/table";
+export type { TablePluginConfig } from "./plugins/table";
+export { sortable } from "./plugins/sortable";
+export type { SortablePluginConfig } from "./plugins/sortable";
 
 // Utils
 export { createStats } from "./utils/stats";
@@ -85,13 +92,14 @@ export type {
   GridHeightContext,
 } from "./types";
 
-// Builder types
+// v2 core types
 export type {
-  VListBuilder,
   VList,
-  BuilderConfig,
-  VListConfig,
-  VListFeature,
-  BuilderContext,
-  ReloadOptions,
-} from "./builder";
+  VListPlugin,
+  PluginContext,
+  CreateVListConfig,
+  CompiledHooks,
+  ResolvedConfig,
+  DOMStructure,
+  ElementPool,
+} from "./core/types";

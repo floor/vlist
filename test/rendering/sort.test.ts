@@ -4,27 +4,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { JSDOM } from "jsdom";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { sortRenderedDOM } from "../../src/rendering/sort";
 
 // =============================================================================
-// JSDOM Setup
+// DOM Setup
 // =============================================================================
 
-let dom: JSDOM;
-let originalDocument: any;
-
-beforeAll(() => {
-  dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    url: "http://localhost/",
-  });
-  originalDocument = global.document;
-  global.document = dom.window.document;
-});
-
-afterAll(() => {
-  global.document = originalDocument;
-});
+beforeAll(() => { GlobalRegistrator.register(); });
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Helpers

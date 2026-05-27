@@ -29,3 +29,8 @@ export {
   flushRAF,
   flushRAFs,
 } from "./timers";
+
+export {
+  createPluginMockContext,
+  type PluginTestContext,
+} from "./plugin-context";

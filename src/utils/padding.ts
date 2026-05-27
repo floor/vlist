@@ -1,19 +1,15 @@
-// src/utils/padding.ts
 /**
  * vlist/utils — Padding Resolution
  * Shared helpers for resolving the CSS-shorthand padding config into
- * concrete pixel values. Used by core (to apply CSS) and by features
+ * concrete pixel values. Used by core (to apply CSS) and by plugins
  * (to subtract cross-axis padding from container dimensions).
  */
-
-import type { BuilderConfig } from "../builder/types";
 
 // =============================================================================
 // Types
 // =============================================================================
 
-/** Padding config — re-exported from BuilderConfig for convenience */
-export type PaddingConfig = NonNullable<BuilderConfig["padding"]>;
+export type PaddingConfig = number | [number, number] | [number, number, number, number];
 
 /** Resolved padding — all four sides in pixels */
 export interface ResolvedPadding {

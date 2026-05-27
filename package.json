@@ -1,6 +1,6 @@
 {
   "name": "vlist",
-  "version": "1.9.1",
+  "version": "2.0.0",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -47,8 +47,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist/index.js",
-    "dist/internals.js",
+    "dist/**/*.js",
     "dist/**/*.d.ts",
     "dist/**/*.css",
     "dist/size.json",
@@ -63,9 +62,13 @@
     "test": "bun test",
     "test:changed": "bun test --changed",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "bench": "bun run scripts/bench.ts",
+    "bench:quick": "bun run scripts/bench.ts --quick",
+    "bench:full": "bun run scripts/bench.ts --full",
+    "bench:compare": "bun run scripts/bench.ts --quick --compare",
     "size": "bun run scripts/measure-size.ts",
     "release": "bun run scripts/release.ts",
-    "prepublishOnly": "bun run build --types && cp README.md README.github.md && cp npm-readme.md README.md",
+    "prepublishOnly": "bun run build -- --types && cp README.md README.github.md && cp npm-readme.md README.md",
     "postpublish": "cp README.github.md README.md && rm README.github.md"
   },
   "bugs": {
@@ -73,8 +76,10 @@
   },
   "homepage": "https://vlist.io",
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.9.0",
     "@types/bun": "^1.0.0",
     "@types/jsdom": "^27.0.0",
+    "happy-dom": "^20.9.0",
     "jsdom": "^28.0.0",
     "typescript": "^5.0.0"
   }
