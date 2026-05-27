@@ -808,4 +808,76 @@ describe("groups — Edge Cases", () => {
     expect(dom.root.classList.contains("mylist--grouped")).toBe(true);
     cleanup();
   });
+
+  it("data items have id, aria-posinset, aria-setsize when interactive", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      interactive: true,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const dataItems = Array.from(dom.content.querySelectorAll('[role="option"]'));
+    expect(dataItems.length).toBeGreaterThan(0);
+
+    for (const el of dataItems) {
+      expect(el.id).toMatch(/^vlist-item-\d+$/);
+      expect(el.getAttribute("aria-posinset")).not.toBeNull();
+      expect(el.getAttribute("aria-setsize")).toBe("10");
+    }
+    cleanup();
+  });
+
+  it("data items do not have id or aria attributes when not interactive", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      interactive: false,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const dataItems = Array.from(dom.content.querySelectorAll('[role="option"]'));
+    expect(dataItems.length).toBeGreaterThan(0);
+
+    for (const el of dataItems) {
+      expect(el.id).toBe("");
+      expect(el.getAttribute("aria-posinset")).toBeNull();
+      expect(el.getAttribute("aria-setsize")).toBeNull();
+    }
+    cleanup();
+  });
+
+  it("group headers do not have id or aria-posinset", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      interactive: true,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const headers = Array.from(dom.content.querySelectorAll('[role="presentation"]'));
+    expect(headers.length).toBeGreaterThan(0);
+
+    for (const el of headers) {
+      expect(el.id).toBe("");
+      expect(el.getAttribute("aria-posinset")).toBeNull();
+      expect(el.getAttribute("aria-setsize")).toBeNull();
+    }
+    cleanup();
+  });
 });
