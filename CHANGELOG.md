@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.0-rc.3] - 2026-05-27
+
 ### Added
 
 - **`item:dblclick` and `item:contextmenu` events** — delegated double-click and right-click events on items, matching the existing `item:click` pattern
@@ -406,7 +408,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0-rc.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0-rc.3...HEAD
+[2.0.0-rc.3]: https://github.com/floor/vlist/compare/v2.0.0-rc.2...v2.0.0-rc.3
 [2.0.0-rc.2]: https://github.com/floor/vlist/compare/v2.0.0-rc.1...v2.0.0-rc.2
 [2.0.0-rc.1]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.0-rc.1
 [2.0.0]: https://github.com/floor/vlist/compare/v1.9.0...v2.0.0
