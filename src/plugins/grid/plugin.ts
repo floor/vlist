@@ -54,7 +54,7 @@ export function grid<T extends VListItem = VListItem>(
   let pool: ElementPool;
   let contentElement: HTMLElement;
   let template: ItemTemplate<T>;
-  let getItems: () => readonly T[];
+  let getItem: (index: number) => T | undefined;
   let horizontal: boolean;
   let classPrefix: string;
   let overscan: number;
@@ -130,7 +130,6 @@ export function grid<T extends VListItem = VListItem>(
 
     // Convert row range → flat item range
     const itemRange = layout.getItemRange(renderStart, renderEnd, engineState.totalItems);
-    const items = getItems();
 
     // Release items outside the new range
     rendered.forEach((element, idx) => {
@@ -148,7 +147,7 @@ export function grid<T extends VListItem = VListItem>(
     const focClass = isf ? `${classPrefix}-item--focused` : "";
 
     for (let i = itemRange.start; i <= itemRange.end; i++) {
-      const item = items[i];
+      const item = getItem(i);
       if (!item) continue;
 
       let element = rendered.get(i);
@@ -171,6 +170,17 @@ export function grid<T extends VListItem = VListItem>(
 
         rendered.set(i, element);
         contentElement.appendChild(element);
+      } else if (element.getAttribute("data-id") !== String(item.id)) {
+        element.setAttribute("data-id", String(item.id));
+        if (isf) isf(i, itemState);
+        else { itemState.selected = false; itemState.focused = false; }
+        const result = template(item, i, itemState);
+        if (typeof result === "string") {
+          element.innerHTML = result;
+        } else {
+          element.innerHTML = "";
+          element.appendChild(result);
+        }
       }
 
       if (isf) {
@@ -234,7 +244,7 @@ export function grid<T extends VListItem = VListItem>(
       horizontal = ctx.config.horizontal;
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
-      getItems = ctx.getItems.bind(ctx);
+      getItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
 
       // Initialize container width
