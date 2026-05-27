@@ -75,6 +75,7 @@ export function groups<T extends VListItem = VListItem>(
   let groupItemClass: string;
   let groupHeaderClass: string;
   let getMethod: ((name: string) => Function | undefined) | null = null;
+  let interactive: boolean;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -208,12 +209,22 @@ export function groups<T extends VListItem = VListItem>(
 
     // Element already shows this item with real content — skip template
     if (!isPlaceholder && element.getAttribute("data-id") === itemId) {
+      if (interactive) {
+        element.id = `${classPrefix}-item-${layoutIndex}`;
+        element.setAttribute("aria-posinset", String(dataIndex + 1));
+        element.setAttribute("aria-setsize", String(engineState.totalItems));
+      }
       return true;
     }
 
     element.className = groupItemClass;
     element.setAttribute("role", "option");
     element.setAttribute("data-id", itemId);
+    if (interactive) {
+      element.id = `${classPrefix}-item-${layoutIndex}`;
+      element.setAttribute("aria-posinset", String(dataIndex + 1));
+      element.setAttribute("aria-setsize", String(engineState.totalItems));
+    }
 
     if (isPlaceholder) {
       element.classList.add(`${classPrefix}-item--placeholder`);
@@ -477,6 +488,7 @@ export function groups<T extends VListItem = VListItem>(
       ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
       getMethod = ctx.getMethod.bind(ctx);
+      interactive = ctx.config.interactive;
       groupItemClass = `${classPrefix}-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
 
