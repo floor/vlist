@@ -60,7 +60,8 @@ export function grid<T extends VListItem = VListItem>(
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
 
-  const rendered = new Map<number, HTMLElement>();
+  interface TrackedElement { el: HTMLElement; lastId: string | number; }
+  const rendered = new Map<number, TrackedElement>();
   let containerWidth = 0;
 
   // Mutable range objects — reused across frames
@@ -93,6 +94,18 @@ export function grid<T extends VListItem = VListItem>(
     } else {
       element.style.width = `${colWidth}px`;
       element.style.height = `${rowHeight}px`;
+    }
+  }
+
+  function applyTemplate(el: HTMLElement, item: T, index: number, isf: ItemStateFn | null): void {
+    if (isf) isf(index, itemState);
+    else { itemState.selected = false; itemState.focused = false; }
+    const result = template(item, index, itemState);
+    if (typeof result === "string") {
+      el.innerHTML = result;
+    } else {
+      el.innerHTML = "";
+      el.appendChild(result);
     }
   }
 
@@ -132,10 +145,10 @@ export function grid<T extends VListItem = VListItem>(
     const itemRange = layout.getItemRange(renderStart, renderEnd, engineState.totalItems);
 
     // Release items outside the new range
-    rendered.forEach((element, idx) => {
+    rendered.forEach((tracked, idx) => {
       if (idx < itemRange.start || idx > itemRange.end) {
-        element.remove();
-        pool.release(element);
+        tracked.el.remove();
+        pool.release(tracked.el);
         rendered.delete(idx);
       }
     });
@@ -150,49 +163,33 @@ export function grid<T extends VListItem = VListItem>(
       const item = getItem(i);
       if (!item) continue;
 
-      let element = rendered.get(i);
+      let tracked = rendered.get(i);
 
-      if (element === undefined) {
-        element = pool.acquire();
-        element.className = gridItemClass;
-        element.setAttribute("data-index", String(i));
-        element.setAttribute("data-id", String(item.id));
-
-        if (isf) isf(i, itemState);
-        else { itemState.selected = false; itemState.focused = false; }
-        const result = template(item, i, itemState);
-        if (typeof result === "string") {
-          element.innerHTML = result;
-        } else {
-          element.innerHTML = "";
-          element.appendChild(result);
-        }
-
-        rendered.set(i, element);
-        contentElement.appendChild(element);
-      } else if (element.getAttribute("data-id") !== String(item.id)) {
-        element.setAttribute("data-id", String(item.id));
-        if (isf) isf(i, itemState);
-        else { itemState.selected = false; itemState.focused = false; }
-        const result = template(item, i, itemState);
-        if (typeof result === "string") {
-          element.innerHTML = result;
-        } else {
-          element.innerHTML = "";
-          element.appendChild(result);
-        }
+      if (tracked === undefined) {
+        const el = pool.acquire();
+        el.className = gridItemClass;
+        el.setAttribute("data-index", String(i));
+        el.setAttribute("data-id", String(item.id));
+        applyTemplate(el, item, i, isf);
+        tracked = { el, lastId: item.id };
+        rendered.set(i, tracked);
+        contentElement.appendChild(el);
+      } else if (tracked.lastId !== item.id) {
+        tracked.el.setAttribute("data-id", String(item.id));
+        tracked.lastId = item.id;
+        applyTemplate(tracked.el, item, i, isf);
       }
 
       if (isf) {
         isf(i, itemState);
-        element.classList.toggle(selClass, itemState.selected);
-        element.classList.toggle(focClass, itemState.focused);
-        if (itemState.selected) element.setAttribute("aria-selected", "true");
-        else element.removeAttribute("aria-selected");
+        tracked.el.classList.toggle(selClass, itemState.selected);
+        tracked.el.classList.toggle(focClass, itemState.focused);
+        if (itemState.selected) tracked.el.setAttribute("aria-selected", "true");
+        else tracked.el.removeAttribute("aria-selected");
       }
 
-      applySizeStyles(element, i);
-      element.style.transform = buildTransform(i);
+      applySizeStyles(tracked.el, i);
+      tracked.el.style.transform = buildTransform(i);
     }
 
     // Update content size for scrollbar
@@ -383,8 +380,8 @@ export function grid<T extends VListItem = VListItem>(
       // ── Cleanup ────────────────────────────────────────────────
 
       ctx.registerDestroyHandler(() => {
-        for (const [, element] of rendered) {
-          element.remove();
+        for (const [, tracked] of rendered) {
+          tracked.el.remove();
         }
         rendered.clear();
         ctx.dom.root.classList.remove(`${classPrefix}--grid`);
@@ -397,9 +394,9 @@ export function grid<T extends VListItem = VListItem>(
         if (Math.abs(newCross - containerWidth) < 1) return;
         containerWidth = newCross;
 
-        rendered.forEach((element, index) => {
-          applySizeStyles(element, index);
-          element.style.transform = buildTransform(index);
+        rendered.forEach((tracked, index) => {
+          applySizeStyles(tracked.el, index);
+          tracked.el.style.transform = buildTransform(index);
         });
       },
     },
