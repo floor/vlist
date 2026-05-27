@@ -27,6 +27,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Refactored
 
 - **Grid plugin** — in-memory item tracking and deduplicated template application
+- **`async` → `data` plugin rename** — `async()` is a JS reserved word; exported function renamed to `data()`, type renamed to `DataPluginConfig`
 
 ### Tests
 
