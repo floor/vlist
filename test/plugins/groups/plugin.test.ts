@@ -881,3 +881,589 @@ describe("groups — Edge Cases", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// groups — Registered Methods
+// =============================================================================
+
+describe("groups — Registered Methods", () => {
+  it("registers _dataToLayoutIndex that maps data indices to layout indices", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const d2l = methods.get("_dataToLayoutIndex") as (i: number) => number;
+    expect(d2l).toBeDefined();
+    // Layout: [hdrA, item0..item4, hdrB, item5..item9]
+    expect(d2l(0)).toBe(1); // first item after header A
+    expect(d2l(5)).toBe(7); // first item after header B
+    cleanup();
+  });
+
+  it("registers _layoutToDataIndex that maps layout indices to data indices", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const l2d = methods.get("_layoutToDataIndex") as (i: number) => number;
+    expect(l2d).toBeDefined();
+    expect(l2d(0)).toBe(-1); // header A
+    expect(l2d(1)).toBe(0);  // first data item
+    expect(l2d(6)).toBe(-1); // header B
+    cleanup();
+  });
+
+  it("registers _getRenderedElement that returns rendered elements by layout index", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const getEl = methods.get("_getRenderedElement") as (i: number) => HTMLElement | null;
+    expect(getEl).toBeDefined();
+    expect(getEl(0)).not.toBeNull(); // header A should be rendered
+    expect(getEl(1)).not.toBeNull(); // first data item should be rendered
+    expect(getEl(999)).toBeNull();   // out of range
+    cleanup();
+  });
+
+  it("registers _isGroupHeader that identifies header layout indices", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const isHeader = methods.get("_isGroupHeader") as (i: number) => boolean;
+    expect(isHeader).toBeDefined();
+    expect(isHeader(0)).toBe(true);  // header A
+    expect(isHeader(1)).toBe(false); // data item
+    expect(isHeader(6)).toBe(true);  // header B
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — scrollToIndex
+// =============================================================================
+
+describe("groups — scrollToIndex", () => {
+  const makePlugin = () => groups<TestItem>({
+    getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+    header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    sticky: false,
+  });
+
+  it("scrolls to start of a data item by default", () => {
+    const plugin = makePlugin();
+    const items = createTestItems(10);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 200,
+    });
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
+    scrollToIndex(0); // data index 0 → layout index 1
+    // Mock sizeCache: each entry is 50px, so layout index 1 offset = 50
+    expect(scrollCalls.length).toBe(1);
+    expect(scrollCalls[0]).toBe(50);
+    cleanup();
+  });
+
+  it("scrolls to center of a data item", () => {
+    const plugin = makePlugin();
+    const items = createTestItems(10);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 200,
+    });
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
+    scrollToIndex(0, "center");
+    // offset=32, itemSize=50, container=200 → 32 - (200-50)/2 = 32-75 = -43 → clamped to 0
+    expect(scrollCalls[0]).toBe(0);
+    cleanup();
+  });
+
+  it("scrolls to end alignment", () => {
+    const plugin = makePlugin();
+    const items = createTestItems(10);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 200,
+    });
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
+    scrollToIndex(5); // data index 5, first item of group B
+    const pos = scrollCalls[0]!;
+    expect(pos).toBeGreaterThan(0);
+
+    scrollCalls.length = 0;
+    scrollToIndex(5, "end");
+    // end alignment: offset - containerSize + itemSize
+    expect(scrollCalls[0]).not.toBe(pos);
+    cleanup();
+  });
+
+  it("scrolls with object options including smooth", () => {
+    const plugin = makePlugin();
+    const items = createTestItems(10);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 200,
+    });
+
+    plugin.setup!(ctx);
+
+    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
+    scrollToIndex(3, { align: "start", behavior: "smooth", duration: 300 });
+    expect(scrollCalls.length).toBe(1);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — Horizontal Mode
+// =============================================================================
+
+describe("groups — Horizontal Mode", () => {
+  it("uses horizontal transforms and size styles", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { width: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      horizontal: true,
+      itemSize: 80,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstItem = dom.content.querySelector('[role="option"]') as HTMLElement;
+    expect(firstItem).not.toBeNull();
+    expect(firstItem.style.transform).toContain("translate(");
+    expect(firstItem.style.width).toBeTruthy();
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — Render Lifecycle
+// =============================================================================
+
+describe("groups — Render Lifecycle", () => {
+  it("clears rendered elements when containerSize becomes zero", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    expect(dom.content.children.length).toBeGreaterThan(0);
+
+    engineState.containerSize = 0;
+    ctx.forceRender();
+    expect(dom.content.children.length).toBe(0);
+    cleanup();
+  });
+
+  it("recycles elements outside the visible range on scroll", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(30);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 200,
+      overscan: 1,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const initialCount = dom.content.children.length;
+    expect(initialCount).toBeGreaterThan(0);
+
+    // Scroll far down — old elements should be recycled
+    engineState.scrollPosition = 1000;
+    ctx.renderIfNeeded();
+
+    const afterScrollCount = dom.content.children.length;
+    expect(afterScrollCount).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("skips render when scroll position and container size unchanged", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const countAfterFirst = dom.content.children.length;
+
+    // Second render with same state — should be a no-op
+    ctx.renderIfNeeded();
+    expect(dom.content.children.length).toBe(countAfterFirst);
+    cleanup();
+  });
+
+  it("updates ARIA attributes when element is reused at a different layout index", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      interactive: true,
+      itemSize: 50,
+      containerHeight: 200,
+      overscan: 0,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    // Record initial state
+    const firstOption = dom.content.querySelector('[role="option"]') as HTMLElement;
+    expect(firstOption).not.toBeNull();
+    const initialPosinset = firstOption.getAttribute("aria-posinset");
+
+    // Scroll to trigger re-render with different items in view
+    engineState.scrollPosition = 400;
+    ctx.forceRender();
+
+    // Items should still have valid ARIA attributes
+    const options = Array.from(dom.content.querySelectorAll('[role="option"]'));
+    for (const el of options) {
+      expect(el.getAttribute("aria-posinset")).not.toBeNull();
+      expect(el.getAttribute("aria-setsize")).toBe("10");
+    }
+    cleanup();
+  });
+
+  it("rebuilds layout when totalItems changes between renders", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    const firstCount = dom.content.children.length;
+
+    // Add more items and re-render
+    for (let i = 10; i < 20; i++) {
+      items.push({ id: i, name: `Item ${i}`, category: "C" });
+    }
+    engineState.totalItems = items.length;
+    ctx.forceRender();
+
+    // Should have re-rendered (layout rebuilds on totalItems change)
+    expect(dom.content.children.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("handles template returning HTMLElement instead of string", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      template: (item: TestItem) => {
+        const el = document.createElement("span");
+        el.textContent = item.name;
+        return el as unknown as string;
+      },
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const option = dom.content.querySelector('[role="option"]') as HTMLElement;
+    expect(option).not.toBeNull();
+    expect(option.querySelector("span")).not.toBeNull();
+    cleanup();
+  });
+
+  it("adds placeholder class to items that are placeholders", () => {
+    const placeholderItems: TestItem[] = Array.from({ length: 10 }, (_, i) => ({
+      id: i,
+      name: `Item ${i}`,
+      category: i < 5 ? "A" : "B",
+      _isPlaceholder: true,
+    } as TestItem));
+
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(placeholderItems);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const placeholders = dom.content.querySelectorAll(".vlist-item--placeholder");
+    expect(placeholders.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("applies selection state classes when itemStateFn is set", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    // Register an itemStateFn that marks index 1 as selected
+    ctx.setItemStateFn((layoutIndex: number, state) => {
+      state.selected = layoutIndex === 1;
+      state.focused = layoutIndex === 2;
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const selectedEls = dom.content.querySelectorAll(".vlist-item--selected");
+    expect(selectedEls.length).toBe(1);
+    expect(selectedEls[0]!.getAttribute("aria-selected")).toBe("true");
+
+    const focusedEls = dom.content.querySelectorAll(".vlist-item--focused");
+    expect(focusedEls.length).toBe(1);
+    cleanup();
+  });
+
+  it("removes aria-selected from non-selected items", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    ctx.setItemStateFn((_layoutIndex: number, state) => {
+      state.selected = false;
+      state.focused = false;
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const options = dom.content.querySelectorAll('[role="option"]');
+    for (const el of Array.from(options)) {
+      expect(el.getAttribute("aria-selected")).toBeNull();
+    }
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — Placeholder → Real Data Transition
+// =============================================================================
+
+describe("groups — Placeholder → Real Data Transition", () => {
+  it("replaces placeholder content when real data arrives on forceRender", () => {
+    // Placeholders use temporary IDs; when real data arrives, the item gets a new ID
+    const items: TestItem[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `__placeholder_${i}` as unknown as number,
+      name: "",
+      category: i < 5 ? "A" : "B",
+      _isPlaceholder: true,
+    } as TestItem));
+
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const placeholdersBefore = dom.content.querySelectorAll(".vlist-item--placeholder").length;
+    expect(placeholdersBefore).toBeGreaterThan(0);
+
+    // Replace placeholders with real items (different IDs)
+    for (let i = 0; i < 10; i++) {
+      items[i] = { id: i, name: `Item ${i}`, category: i < 5 ? "A" : "B" };
+    }
+
+    ctx.forceRender();
+
+    const placeholdersAfter = dom.content.querySelectorAll(".vlist-item--placeholder").length;
+    expect(placeholdersAfter).toBe(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — Null Item Handling
+// =============================================================================
+
+describe("groups — Null Item Handling", () => {
+  it("handles getItem returning undefined gracefully", () => {
+    const items = createTestItems(10);
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    // Override getItem to return undefined for some indices
+    ctx.setGetItemFn((index: number) => {
+      if (index >= 5) return undefined;
+      return items[index];
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    // Should still render without errors
+    expect(dom.content.children.length).toBeGreaterThan(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — Range Early Exit
+// =============================================================================
+
+describe("groups — Range Early Exit", () => {
+  it("skips re-render when range is unchanged and no render pending", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const count1 = dom.content.children.length;
+
+    // renderIfNeeded with same scroll position — should hit the range-unchanged early exit
+    ctx.renderIfNeeded();
+    ctx.renderIfNeeded();
+
+    expect(dom.content.children.length).toBe(count1);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — forceRender with async data
+// =============================================================================
+
+describe("groups — forceRender with async data", () => {
+  it("rebuilds layout when loaded count changes and boundaries shift", () => {
+    let loadedCount = 0;
+    const items: TestItem[] = Array.from({ length: 10 }, (_, i) => ({
+      id: i,
+      name: `Item ${i}`,
+      category: "A",
+    }));
+
+    const plugin = groups<TestItem>({
+      getGroupForIndex: () => "A",
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const { ctx, methods, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    // Register _getLoadedCount so forceRender's boundary check runs
+    methods.set("_getLoadedCount", () => loadedCount);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    expect(dom.content.children.length).toBeGreaterThan(0);
+
+    // Simulate async data arriving
+    loadedCount = 5;
+    ctx.forceRender();
+    expect(dom.content.children.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("detaches elements when boundary shift is within rendered range", () => {
+    let loadedCount = 0;
+    const items: TestItem[] = Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      name: `Item ${i}`,
+      category: i < 10 ? "A" : "B",
+    }));
+
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 10 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const { ctx, methods, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items);
+
+    methods.set("_getLoadedCount", () => loadedCount);
+    methods.set("_getLoadedItem", (i: number) => items[i]);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    const initialCount = dom.content.children.length;
+
+    // Change grouping so boundaries shift within rendered range
+    loadedCount = 10;
+    items[4]!.category = "B";
+    ctx.forceRender();
+
+    expect(dom.content.children.length).toBeGreaterThan(0);
+    cleanup();
+  });
+});
