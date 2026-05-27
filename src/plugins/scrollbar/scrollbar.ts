@@ -561,6 +561,71 @@ export const createScrollbar = (
   };
 
   // =============================================================================
+  // Touch Handlers (thumb drag)
+  // =============================================================================
+
+  const touchPos = horizontal
+    ? (e: TouchEvent) => e.touches[0]!.clientX
+    : (e: TouchEvent) => e.touches[0]!.clientY;
+
+  const handleThumbTouchStart = (e: TouchEvent): void => {
+    e.stopPropagation();
+
+    isDragging = true;
+    dragStartPos = touchPos(e);
+    dragStartScrollPosition = currentScrollPosition;
+
+    clearHideTimeout();
+    track.classList.add(`${classPrefix}-scrollbar--dragging`);
+  };
+
+  const handleThumbTouchMove = (e: TouchEvent): void => {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    const delta = touchPos(e) - dragStartPos;
+    const scrollRatio = maxThumbTravel > 0 ? delta / maxThumbTravel : 0;
+    const maxScroll = totalSize - containerSize;
+    const deltaScroll = scrollRatio * maxScroll;
+
+    const newPosition = Math.max(
+      0,
+      Math.min(dragStartScrollPosition + deltaScroll, maxScroll),
+    );
+    thumb.style.transform = `${translateFn}(${(newPosition / maxScroll) * maxThumbTravel}px)`;
+    onScroll(newPosition);
+  };
+
+  const handleThumbTouchEnd = (): void => {
+    isDragging = false;
+    track.classList.remove(`${classPrefix}-scrollbar--dragging`);
+
+    if (autoHide) {
+      scheduleHide();
+    }
+  };
+
+  const handleTrackTouchStart = (e: TouchEvent): void => {
+    if (e.target === thumb) return;
+    if (maxThumbTravel <= 0) return;
+
+    const touch = e.touches[0]!;
+    const trackRect = track.getBoundingClientRect();
+    const pos = (horizontal ? touch.clientX : touch.clientY) - trackRect[rectStart];
+
+    if (clickBehavior === 'jump') {
+      const maxScroll = totalSize - containerSize;
+      const clampedThumbStart = Math.max(0, Math.min(pos - thumbSize / 2, maxThumbTravel));
+      onScroll((clampedThumbStart / maxThumbTravel) * maxScroll);
+    } else {
+      pageClickPos = pos;
+      pageScrollPosition = currentScrollPosition;
+      firePageScroll();
+    }
+    show();
+  };
+
+  // =============================================================================
   // Viewport Hover Handlers (show on hover)
   // =============================================================================
 
@@ -620,7 +685,11 @@ export const createScrollbar = (
     track.removeEventListener("mouseenter", handleScrollbarAreaEnter);
     document.removeEventListener("mouseup", handleRepeatMouseUp);
     track.removeEventListener("mouseleave", handleScrollbarAreaLeave);
+    track.removeEventListener("touchstart", handleTrackTouchStart);
     thumb.removeEventListener("mousedown", handleThumbMouseDown);
+    thumb.removeEventListener("touchstart", handleThumbTouchStart);
+    thumb.removeEventListener("touchmove", handleThumbTouchMove);
+    thumb.removeEventListener("touchend", handleThumbTouchEnd);
     viewport.removeEventListener("mouseenter", handleViewportEnter);
     viewport.removeEventListener("mouseleave", handleViewportLeave);
     document.removeEventListener("mousemove", handleMouseMove);
@@ -653,7 +722,11 @@ export const createScrollbar = (
   track.addEventListener("mousedown", handleTrackMouseDown);
   track.addEventListener("mouseenter", handleScrollbarAreaEnter);
   track.addEventListener("mouseleave", handleScrollbarAreaLeave);
+  track.addEventListener("touchstart", handleTrackTouchStart, { passive: true });
   thumb.addEventListener("mousedown", handleThumbMouseDown);
+  thumb.addEventListener("touchstart", handleThumbTouchStart, { passive: true });
+  thumb.addEventListener("touchmove", handleThumbTouchMove, { passive: false });
+  thumb.addEventListener("touchend", handleThumbTouchEnd, { passive: true });
   viewport.addEventListener("mouseenter", handleViewportEnter);
   viewport.addEventListener("mouseleave", handleViewportLeave);
 

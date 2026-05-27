@@ -640,6 +640,257 @@ describe("createScrollbar", () => {
     });
   });
 
+  // ===========================================================================
+  // Touch — Thumb Drag
+  // ===========================================================================
+
+  describe("touch — thumb drag", () => {
+    it("should add dragging class on thumb touchstart", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock);
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+
+      thumb.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+        bubbles: true,
+      }));
+
+      expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(true);
+
+      // Cleanup
+      thumb.dispatchEvent(new TouchEvent("touchend", {
+        touches: [] as any,
+        bubbles: true,
+      }));
+    });
+
+    it("should remove dragging class on thumb touchend", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock);
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+
+      thumb.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+        bubbles: true,
+      }));
+
+      thumb.dispatchEvent(new TouchEvent("touchend", {
+        touches: [] as any,
+        bubbles: true,
+      }));
+
+      expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
+    });
+
+    it("should call onScroll during thumb touchmove", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock);
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+
+      thumb.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+        bubbles: true,
+      }));
+
+      thumb.dispatchEvent(new TouchEvent("touchmove", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 150 })] as any,
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+
+      // Cleanup
+      thumb.dispatchEvent(new TouchEvent("touchend", {
+        touches: [] as any,
+        bubbles: true,
+      }));
+    });
+
+    it("should not call onScroll on touchmove without prior touchstart", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock);
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+
+      thumb.dispatchEvent(new TouchEvent("touchmove", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 150 })] as any,
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      expect(onScrollMock).not.toHaveBeenCalled();
+    });
+
+    it("should schedule auto-hide on thumb touchend when autoHide is true", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: true,
+        autoHideDelay: 50,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+
+      thumb.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+        bubbles: true,
+      }));
+
+      thumb.dispatchEvent(new TouchEvent("touchend", {
+        touches: [] as any,
+        bubbles: true,
+      }));
+
+      expect(scrollbar.isVisible()).toBe(true);
+      fakeTimers.tick(100);
+      expect(scrollbar.isVisible()).toBe(false);
+    });
+  });
+
+  // ===========================================================================
+  // Touch — Track Tap
+  // ===========================================================================
+
+  describe("touch — track tap", () => {
+    it("should jump to position on track touch with 'jump' clickBehavior", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'jump',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+        bubbles: true,
+      }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+    });
+
+    it("should page-scroll on track touch with 'scroll' clickBehavior", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'scroll',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: track, clientY: 350 })] as any,
+        bubbles: true,
+      }));
+
+      expect(onScrollMock).toHaveBeenCalled();
+    });
+
+    it("should ignore track touch when target is thumb", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'jump',
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      // The touchstart handler checks e.target === thumb and returns early.
+      // Dispatch on track but with thumb as the target via the event reaching the track.
+      // Since we can't set target directly, we dispatch on thumb which bubbles to track.
+      // The handler is on track, and e.target will be thumb.
+      thumb.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: thumb, clientY: 200 })] as any,
+        bubbles: true,
+      }));
+
+      // The thumb's own touchstart handler fires (adding dragging class),
+      // but the track's touchstart handler should bail because target === thumb.
+      // onScroll should NOT be called by the track tap handler.
+      // (The thumb touchstart doesn't call onScroll itself.)
+      // Note: thumb's handler calls stopPropagation, so the event won't reach track at all.
+      expect(onScrollMock).not.toHaveBeenCalled();
+
+      // Cleanup
+      thumb.dispatchEvent(new TouchEvent("touchend", {
+        touches: [] as any,
+        bubbles: true,
+      }));
+    });
+
+    it("should show scrollbar on track touch", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: true,
+        clickBehavior: 'jump',
+      });
+      scrollbar.updateBounds(1000, 400);
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      expect(scrollbar.isVisible()).toBe(false);
+
+      track.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+        bubbles: true,
+      }));
+
+      expect(scrollbar.isVisible()).toBe(true);
+    });
+
+    it("should not call onScroll when maxThumbTravel <= 0", () => {
+      scrollbar = createScrollbar(viewport, onScrollMock, {
+        autoHide: false,
+        clickBehavior: 'jump',
+        minThumbSize: 500,
+      });
+      scrollbar.updateBounds(1000, 400);
+      scrollbar.show();
+
+      const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
+      track.getBoundingClientRect = () => ({
+        top: 0, left: 0, right: 8, bottom: 400,
+        width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
+      });
+
+      track.dispatchEvent(new TouchEvent("touchstart", {
+        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+        bubbles: true,
+      }));
+
+      expect(onScrollMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("auto-hide", () => {
     it("should auto-hide after delay when autoHide is true", async () => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
