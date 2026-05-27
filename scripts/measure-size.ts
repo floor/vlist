@@ -16,9 +16,9 @@ const entry = `${root}/src/index.ts`;
 // ── All v2 plugin names ───────────────────────────────────────────
 
 const ALL_PLUGINS = [
-  "a11y", "grid", "selection", "scrollbar", "scale",
-  "page", "snapshots", "transition", "autosize",
-  "table", "groups", "async", "masonry", "sortable",
+  "a11y", "selection", "async", "scrollbar", "sortable",
+  "groups", "scale", "page", "snapshots", "transition",
+  "autosize", "grid", "table", "masonry",
 ] as const;
 
 type PluginName = (typeof ALL_PLUGINS)[number];
@@ -80,19 +80,19 @@ const excluded = (imported: readonly string[]): readonly PluginName[] => {
 const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
-  { name: "grid",              imports: ["createVList", "grid"] },
   { name: "selection",         imports: ["createVList", "selection"] },
+  { name: "async",             imports: ["createVList", "async"] },
   { name: "scrollbar",         imports: ["createVList", "scrollbar"] },
+  { name: "sortable",          imports: ["createVList", "sortable"] },
+  { name: "groups",            imports: ["createVList", "groups"] },
   { name: "scale",             imports: ["createVList", "scale"] },
   { name: "page",              imports: ["createVList", "page"] },
   { name: "snapshots",         imports: ["createVList", "snapshots"] },
   { name: "transition",        imports: ["createVList", "transition"] },
   { name: "autosize",          imports: ["createVList", "autosize"] },
+  { name: "grid",              imports: ["createVList", "grid"] },
   { name: "table",             imports: ["createVList", "table"] },
-  { name: "groups",            imports: ["createVList", "groups"] },
-  { name: "async",             imports: ["createVList", "async"] },
   { name: "masonry",           imports: ["createVList", "masonry"] },
-  { name: "sortable",          imports: ["createVList", "sortable"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────
