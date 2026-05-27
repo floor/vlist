@@ -29,6 +29,8 @@ export interface PluginTestContext<T extends VListItem> {
   items: T[];
   scrollCalls: number[];
   renderFnReplaced: boolean;
+  navConfig: any;
+  scrollToPosFn: any;
   cleanup: () => void;
 }
 
