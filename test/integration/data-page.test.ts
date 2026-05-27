@@ -11,7 +11,7 @@ import {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
-import { async as asyncPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/async/plugin";
 import { page } from "../../src/plugins/page/plugin";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
 import type { VListAdapter } from "../../src/types";
@@ -128,7 +128,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), page()],
+        [dataPlugin({ adapter }), page()],
       );
 
       await waitForLoad(list);
@@ -140,7 +140,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(250);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 250 })],
+        [dataPlugin({ adapter, total: 250 })],
       );
 
       await waitForLoad(list);
@@ -151,7 +151,7 @@ describe("async + page integration", () => {
       const adapter = createDelayedAdapter(100, 1000);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 100 })],
+        [dataPlugin({ adapter, total: 100 })],
       );
 
       expect(list.total).toBe(100);
@@ -161,7 +161,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 100 })],
+        [dataPlugin({ adapter, total: 100 })],
       );
 
       await waitForLoad(list);
@@ -179,7 +179,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), page()],
+        [dataPlugin({ adapter }), page()],
       );
 
       await waitForLoad(list);
@@ -192,7 +192,7 @@ describe("async + page integration", () => {
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
         [
-          asyncPlugin({ adapter }),
+          dataPlugin({ adapter }),
           page({ scrollPadding: { top: 60, bottom: 20 } }),
         ],
       );
@@ -207,7 +207,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter })],
+        [dataPlugin({ adapter })],
       );
 
       await waitForLoad(list);
@@ -225,7 +225,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, autoLoad: false, total: 100 })],
+        [dataPlugin({ adapter, autoLoad: false, total: 100 })],
       );
 
       expect(adapter.readCalls.length).toBe(0);
@@ -235,7 +235,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, autoLoad: false, total: 100 })],
+        [dataPlugin({ adapter, autoLoad: false, total: 100 })],
       );
 
       expect(adapter.readCalls.length).toBe(0);
@@ -257,7 +257,7 @@ describe("async + page integration", () => {
 
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 100 })],
+        [dataPlugin({ adapter, total: 100 })],
       );
 
       const ref = list;
@@ -274,7 +274,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter })],
+        [dataPlugin({ adapter })],
       );
 
       await waitForLoad(list);
@@ -289,7 +289,7 @@ describe("async + page integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter })],
+        [dataPlugin({ adapter })],
       );
 
       await waitForLoad(list);

@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { async as asyncPlugin } from "../../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../../src/plugins/async/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { createEmitter } from "../../../src/events/emitter";
@@ -93,7 +93,7 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 describe("async lifecycle — velocity-gated loading", () => {
   it("loads data when velocity is below cancelThreshold", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -114,7 +114,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
   it("skips loading when velocity exceeds cancelThreshold", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -134,7 +134,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
   it("queues pending range when velocity is too high", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 100,
@@ -158,7 +158,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
   it("does not load on afterScroll when destroyed", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -185,7 +185,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 describe("async lifecycle — preload behavior", () => {
   it("preloads ahead when velocity is between preload and cancel thresholds", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -211,7 +211,7 @@ describe("async lifecycle — preload behavior", () => {
 
   it("loads visible range immediately at low velocity", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 200,
@@ -237,7 +237,7 @@ describe("async lifecycle — preload behavior", () => {
 describe("async lifecycle — idle hook", () => {
   it("loads pending range on idle", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 100,
@@ -261,7 +261,7 @@ describe("async lifecycle — idle hook", () => {
 
   it("resets velocity to 0 on idle", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -287,7 +287,7 @@ describe("async lifecycle — idle hook", () => {
 
   it("does not process idle when destroyed", () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -303,7 +303,7 @@ describe("async lifecycle — idle hook", () => {
 
   it("resets chunk tracking on idle so new range is fetched", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -345,7 +345,7 @@ describe("async lifecycle — idle hook", () => {
 describe("async lifecycle — error handling", () => {
   it("adapter error in ensureRange does not crash the plugin", async () => {
     const adapter = createFailingAdapter("chunk load failed");
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -366,7 +366,7 @@ describe("async lifecycle — error handling", () => {
 
   it("adapter error in loadInitial does not crash the plugin", async () => {
     const adapter = createFailingAdapter("initial load failed");
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -383,7 +383,7 @@ describe("async lifecycle — error handling", () => {
     const adapter: VListAdapter<TestItem> = {
       read: mock(async () => ({ items: "not-an-array", total: 10 } as any)),
     };
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     const errors: Array<{ error: Error; context: string }> = [];
@@ -401,7 +401,7 @@ describe("async lifecycle — error handling", () => {
     const adapter: VListAdapter<TestItem> = {
       read: mock(async () => null as any),
     };
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     const errors: Array<{ error: Error; context: string }> = [];
@@ -423,7 +423,7 @@ describe("async lifecycle — error handling", () => {
 describe("async lifecycle — reload", () => {
   it("reload calls forceRender", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     let forceRenderCount = 0;
@@ -443,7 +443,7 @@ describe("async lifecycle — reload", () => {
 
   it("reload resets chunk tracking", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -480,7 +480,7 @@ describe("async lifecycle — reload", () => {
 describe("async lifecycle — ARIA attributes", () => {
   it("sets aria-busy=true on load:start", async () => {
     const adapter = createMockAdapter(100, { delay: 100 });
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -494,7 +494,7 @@ describe("async lifecycle — ARIA attributes", () => {
 
   it("removes aria-busy on load:end", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -514,7 +514,7 @@ describe("async lifecycle — ARIA attributes", () => {
 describe("async lifecycle — autoLoad", () => {
   it("autoLoad=true calls adapter.read on setup", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: true });
+    const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -526,7 +526,7 @@ describe("async lifecycle — autoLoad", () => {
 
   it("autoLoad=false does not call adapter.read on setup", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -538,7 +538,7 @@ describe("async lifecycle — autoLoad", () => {
 
   it("autoLoad=false with total sets total without loading", async () => {
     const adapter = createMockAdapter(500);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 500 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 500 });
     const { ctx, engineState } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -560,7 +560,7 @@ describe("async lifecycle — autoLoad", () => {
 describe("async lifecycle — loadVisibleRange", () => {
   it("loadVisibleRange triggers load for current visible range", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -580,7 +580,7 @@ describe("async lifecycle — loadVisibleRange", () => {
 
   it("loadVisibleRange is a no-op when visibleCount is 0", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
       visibleCount: 0,
       startIndex: 0,
@@ -606,7 +606,7 @@ describe("async lifecycle — loadVisibleRange", () => {
 describe("async lifecycle — network recovery", () => {
   it("online event triggers load for visible range", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -625,7 +625,7 @@ describe("async lifecycle — network recovery", () => {
 
   it("online event is ignored when destroyed", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -650,7 +650,7 @@ describe("async lifecycle — network recovery", () => {
 describe("async lifecycle — chunk deduplication", () => {
   it("same chunk range is not re-fetched on consecutive scrolls", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -676,7 +676,7 @@ describe("async lifecycle — chunk deduplication", () => {
 
   it("different chunk range triggers new fetch", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 0,
@@ -707,7 +707,7 @@ describe("async lifecycle — chunk deduplication", () => {
 describe("async lifecycle — destroy cleanup", () => {
   it("destroy cleans up timers without error", () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
     plugin.setup(ctx);
@@ -718,7 +718,7 @@ describe("async lifecycle — destroy cleanup", () => {
 
   it("online listener is removed on destroy", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,
@@ -742,7 +742,7 @@ describe("async lifecycle — destroy cleanup", () => {
 
   it("deceleration timer is cleared on destroy", async () => {
     const adapter = createMockAdapter(1000);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 1000 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
       visibleCount: 10,
       startIndex: 50,

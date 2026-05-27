@@ -31,7 +31,7 @@ import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
-import { async as asyncPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/async/plugin";
 import { table } from "../../src/plugins/table/plugin";
 import type { VListAdapter } from "../../src/types";
 
@@ -244,7 +244,7 @@ describe("cross-feature — async + grid", () => {
     const adapter = createMockAdapter(200);
     list = createVList<TestItem>(
       { container, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
+      [dataPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
     );
 
     await waitForLoad(list);
@@ -256,7 +256,7 @@ describe("cross-feature — async + grid", () => {
     const adapter = createMockAdapter(100);
     list = createVList<TestItem>(
       { container, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 2 })],
+      [dataPlugin({ adapter, autoLoad: true }), grid({ columns: 2 })],
     );
 
     await waitForLoad(list);
@@ -271,7 +271,7 @@ describe("cross-feature — async + grid", () => {
     const adapter = createMockAdapter(100);
     list = createVList<TestItem>(
       { container, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
+      [dataPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
     );
 
     await waitForLoad(list);
@@ -296,7 +296,7 @@ describe("cross-feature — async + grid", () => {
 
     const localList = createVList<TestItem>(
       { container: localContainer, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true, total: 50 }), grid({ columns: 3 })],
+      [dataPlugin({ adapter, autoLoad: true, total: 50 }), grid({ columns: 3 })],
     );
 
     // Before data arrives, elements should be placeholders
@@ -334,7 +334,7 @@ describe("cross-feature — async + grid", () => {
     const adapter = createMockAdapter(100);
     list = createVList<TestItem>(
       { container, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
+      [dataPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
     );
 
     await waitForLoad(list);
@@ -358,7 +358,7 @@ describe("cross-feature — async + groups", () => {
     list = createVList<TestItem>(
       { container, items: [], item: { height: 40, template: simpleTemplate } },
       [
-        asyncPlugin({ adapter, autoLoad: true }),
+        dataPlugin({ adapter, autoLoad: true }),
         groups({
           getGroupForIndex: (i: number) => (i < 50 ? "A" : "B"),
           header: { height: 30, template: (g: string) => `<div>${g}</div>` },
@@ -376,7 +376,7 @@ describe("cross-feature — async + groups", () => {
     list = createVList<TestItem>(
       { container, items: [], item: { height: 40, template: simpleTemplate } },
       [
-        asyncPlugin({ adapter, autoLoad: true }),
+        dataPlugin({ adapter, autoLoad: true }),
         groups({
           getGroupForIndex: (i: number) => (i < 25 ? "X" : "Y"),
           header: { height: 30, template: (g: string) => `<div>${g}</div>` },
@@ -403,7 +403,7 @@ describe("cross-feature — async + table", () => {
     list = createVList<TestItem>(
       { container, items: [], item: { height: 40, template: simpleTemplate } },
       [
-        asyncPlugin({ adapter, autoLoad: true }),
+        dataPlugin({ adapter, autoLoad: true }),
         table({
           columns: [
             { key: "name", header: "Name", width: 150 },
@@ -424,7 +424,7 @@ describe("cross-feature — async + table", () => {
     list = createVList<TestItem>(
       { container, items: [], item: { height: 40, template: simpleTemplate } },
       [
-        asyncPlugin({ adapter, autoLoad: true }),
+        dataPlugin({ adapter, autoLoad: true }),
         table({
           columns: [
             { key: "name", header: "Name", width: 150 },
@@ -446,7 +446,7 @@ describe("cross-feature — async + table", () => {
     list = createVList<TestItem>(
       { container, items: [], item: { height: 40, template: simpleTemplate } },
       [
-        asyncPlugin({ adapter, autoLoad: true }),
+        dataPlugin({ adapter, autoLoad: true }),
         table({
           columns: [{ key: "name", header: "Name", width: 200 }],
           rowHeight: 40,
@@ -692,7 +692,7 @@ describe("cross-feature — destroy ordering", () => {
     const adapter = createMockAdapter(100);
     list = createVList<TestItem>(
       { container, items: [], item: { height: 50, template: simpleTemplate } },
-      [asyncPlugin({ adapter, autoLoad: true }), selection(), scrollbar()],
+      [dataPlugin({ adapter, autoLoad: true }), selection(), scrollbar()],
     );
 
     await waitForLoad(list);

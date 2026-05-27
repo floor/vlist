@@ -12,7 +12,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
-import { async as asyncPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/async/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import type { VListAdapter } from "../../src/types";
@@ -104,7 +104,7 @@ describe("async + snapshots integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), snapshots()],
+        [dataPlugin({ adapter }), snapshots()],
       );
 
       await waitForLoad(list);
@@ -120,7 +120,7 @@ describe("async + snapshots integration", () => {
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
         [
-          asyncPlugin({ adapter }),
+          dataPlugin({ adapter }),
           selection({ mode: "multiple" }),
           snapshots(),
         ],
@@ -142,7 +142,7 @@ describe("async + snapshots integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), snapshots()],
+        [dataPlugin({ adapter }), snapshots()],
       );
 
       await waitForLoad(list);
@@ -160,7 +160,7 @@ describe("async + snapshots integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), snapshots({ autoSave: storageKey })],
+        [dataPlugin({ adapter }), snapshots({ autoSave: storageKey })],
       );
 
       await waitForLoad(list);
@@ -177,7 +177,7 @@ describe("async + snapshots integration", () => {
       const container1 = createContainer({ width: 300, height: 500 });
       const list1 = createVList(
         { container: container1, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), snapshots({ autoSave: storageKey })],
+        [dataPlugin({ adapter }), snapshots({ autoSave: storageKey })],
       );
 
       await waitForLoad(list1);
@@ -188,7 +188,7 @@ describe("async + snapshots integration", () => {
       const container2 = createContainer({ width: 300, height: 500 });
       const list2 = createVList(
         { container: container2, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), snapshots({ autoSave: storageKey })],
+        [dataPlugin({ adapter }), snapshots({ autoSave: storageKey })],
       );
 
       await waitForLoad(list2);
@@ -206,7 +206,7 @@ describe("async + snapshots integration", () => {
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
         [
-          asyncPlugin({ adapter }),
+          dataPlugin({ adapter }),
           selection({ mode: "multiple" }),
           snapshots(),
         ],

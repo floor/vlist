@@ -20,7 +20,7 @@ import {
 import { scale } from "../../src/plugins/scale/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
-import { async as asyncPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/async/plugin";
 import { grid } from "../../src/plugins/grid/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
@@ -204,7 +204,7 @@ describe("memory — DOM leak detection per plugin", () => {
         items: [],
         item: { height: 40, template: simpleTemplate },
       },
-      [asyncPlugin({ adapter: createMockAdapter(50), autoLoad: true })],
+      [dataPlugin({ adapter: createMockAdapter(50), autoLoad: true })],
     );
 
     await waitForLoad(list);
@@ -518,7 +518,7 @@ describe("memory — async lifecycle cleanup", () => {
         items: [],
         item: { height: 40, template: simpleTemplate },
       },
-      [asyncPlugin({ adapter, autoLoad: true })],
+      [dataPlugin({ adapter, autoLoad: true })],
     );
 
     await waitForLoad(list);
@@ -545,7 +545,7 @@ describe("memory — async lifecycle cleanup", () => {
         items: [],
         item: { height: 40, template: simpleTemplate },
       },
-      [asyncPlugin({ adapter: slowAdapter, autoLoad: true })],
+      [dataPlugin({ adapter: slowAdapter, autoLoad: true })],
     );
 
     // Destroy before the load completes

@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { async as asyncPlugin } from "../../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../../src/plugins/async/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { createEmitter } from "../../../src/events/emitter";
@@ -124,16 +124,16 @@ function createContextWithRealEmitter(options?: {
 describe("async - Factory", () => {
   it("should create a plugin with name and priority", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
 
-    expect(plugin.name).toBe("async");
+    expect(plugin.name).toBe("data");
     expect(plugin.priority).toBe(20);
     expect(plugin.setup).toBeFunction();
   });
 
   it("should accept loading configuration", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({
+    const plugin = dataPlugin({
       adapter,
       loading: {
         cancelThreshold: 50,
@@ -148,7 +148,7 @@ describe("async - Factory", () => {
 
   it("should use default loading thresholds when not provided", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
 
     expect(plugin).toBeDefined();
     expect(plugin.setup).toBeFunction();
@@ -156,7 +156,7 @@ describe("async - Factory", () => {
 
   it("should have onIdle hook", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
 
     expect(plugin.hooks).toBeDefined();
     expect(plugin.hooks!.onIdle).toBeFunction();
@@ -170,7 +170,7 @@ describe("async - Factory", () => {
 describe("async - Setup", () => {
   it("should register reload method", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -181,7 +181,7 @@ describe("async - Setup", () => {
 
   it("should register loadVisibleRange method", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -192,7 +192,7 @@ describe("async - Setup", () => {
 
   it("should add destroy handler for cleanup", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, destroyHandlers } = createContextWithRealEmitter();
 
     const initialHandlerCount = destroyHandlers.length;
@@ -203,7 +203,7 @@ describe("async - Setup", () => {
 
   it("should call loadInitial on setup when autoLoad is true", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -216,7 +216,7 @@ describe("async - Setup", () => {
 
   it("should emit load:start on initial load", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, emitter } = createContextWithRealEmitter();
 
     const loadStartEvents: any[] = [];
@@ -237,7 +237,7 @@ describe("async - Setup", () => {
 describe("async - ARIA Attributes", () => {
   it("should set aria-busy on load:start", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, emitter, dom } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -250,7 +250,7 @@ describe("async - ARIA Attributes", () => {
 
   it("should remove aria-busy on load:end", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, emitter, dom } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -277,7 +277,7 @@ describe("async - Error Handling", () => {
         throw testError;
       }),
     };
-    const plugin = asyncPlugin({ adapter: failingAdapter });
+    const plugin = dataPlugin({ adapter: failingAdapter });
     const { ctx } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -300,7 +300,7 @@ describe("async - Error Handling", () => {
 describe("async - Reload Method", () => {
   it("should call forceRender on reload", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods, getForceRenderCallCount } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -316,7 +316,7 @@ describe("async - Reload Method", () => {
 
   it("should call scrollTo(0) on reload", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods, scrollCalls } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -330,7 +330,7 @@ describe("async - Reload Method", () => {
 
   it("should call adapter.read again on reload when autoLoad is true", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -348,7 +348,7 @@ describe("async - Reload Method", () => {
 
   it("should NOT call adapter.read on reload when autoLoad is false", async () => {
     const adapter = createMockAdapter(500);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 500 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 500 });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -374,7 +374,7 @@ describe("async - Reload Method", () => {
 describe("async - autoLoad: false with total", () => {
   it("should set total without loading when autoLoad is false and total is provided", async () => {
     const adapter = createMockAdapter(500);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 500 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 500 });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -389,7 +389,7 @@ describe("async - autoLoad: false with total", () => {
 
   it("should register getTotal method", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -400,7 +400,7 @@ describe("async - autoLoad: false with total", () => {
 
   it("should register setTotal method", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -411,7 +411,7 @@ describe("async - autoLoad: false with total", () => {
 
   it("should update total via setTotal method", () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, methods } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -432,7 +432,7 @@ describe("async - autoLoad: false with total", () => {
 describe("async - onIdle Hook", () => {
   it("should not throw when onIdle is called with no pending range", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -443,7 +443,7 @@ describe("async - onIdle Hook", () => {
 
   it("should not call loadPendingRange when engineState is destroyed", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods } = createContextWithRealEmitter({
       startIndex: 10,
       visibleCount: 10,
@@ -468,7 +468,7 @@ describe("async - onIdle Hook", () => {
 describe("async - loadVisibleRange Method", () => {
   it("should call forceRender when loadVisibleRange is called", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, methods, getForceRenderCallCount } = createContextWithRealEmitter({
       startIndex: 0,
       visibleCount: 10,
@@ -487,7 +487,7 @@ describe("async - loadVisibleRange Method", () => {
 
   it("should not call ensureRange when visibleCount is 0", async () => {
     const adapter = createMockAdapter(100);
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, methods } = createContextWithRealEmitter({
       startIndex: 0,
       visibleCount: 0,
@@ -512,7 +512,7 @@ describe("async - loadVisibleRange Method", () => {
 describe("async - Network Recovery", () => {
   it("should not crash when 'online' event fires", async () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter({
       startIndex: 10,
       visibleCount: 10,
@@ -533,7 +533,7 @@ describe("async - Network Recovery", () => {
     // Use autoLoad: false so the initial queueMicrotask path is skipped.
     // We mark the list as destroyed before dispatching 'online' to verify
     // that handleOnline returns early when engineState.destroyed is true.
-    const plugin = asyncPlugin({ adapter, autoLoad: false, total: 100 });
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx } = createContextWithRealEmitter({
       startIndex: 10,
       visibleCount: 10,
@@ -554,7 +554,7 @@ describe("async - Network Recovery", () => {
 
   it("should clean up online listener on destroy", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, destroyHandlers } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -578,7 +578,7 @@ describe("async - Network Recovery", () => {
 describe("async - Destroyed State", () => {
   it("should not process onIdle when engineState.destroyed is true", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter({
       destroyed: true,
     });
@@ -597,7 +597,7 @@ describe("async - Destroyed State", () => {
 describe("async - Destroy Cleanup", () => {
   it("should clean up idle timer on destroy", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx, destroyHandlers } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);
@@ -612,7 +612,7 @@ describe("async - Destroy Cleanup", () => {
 
   it("should call plugin.destroy without error", () => {
     const adapter = createMockAdapter();
-    const plugin = asyncPlugin({ adapter });
+    const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter();
 
     plugin.setup!(ctx);

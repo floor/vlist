@@ -12,7 +12,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
-import { async as asyncPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/async/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import type { VListAdapter } from "../../src/types";
 
@@ -102,7 +102,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);
@@ -118,7 +118,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 100 }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter, total: 100 }), selection({ mode: "multiple" })],
       );
 
       (list as any).select(5, 10);
@@ -137,7 +137,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);
@@ -157,7 +157,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);
@@ -172,7 +172,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);
@@ -190,7 +190,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(50);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter, total: 50 }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter, total: 50 }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);
@@ -206,7 +206,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "single" })],
+        [dataPlugin({ adapter }), selection({ mode: "single" })],
       );
 
       await waitForLoad(list);
@@ -225,7 +225,7 @@ describe("async + selection integration", () => {
       const adapter = createMockAdapter(100);
       list = createVList(
         { container, item: { height: 40, template: simpleTemplate } },
-        [asyncPlugin({ adapter }), selection({ mode: "multiple" })],
+        [dataPlugin({ adapter }), selection({ mode: "multiple" })],
       );
 
       await waitForLoad(list);

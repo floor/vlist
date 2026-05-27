@@ -34,7 +34,7 @@ import {
 // Config
 // =============================================================================
 
-export interface AsyncPluginConfig<T extends VListItem = VListItem> {
+export interface DataPluginConfig<T extends VListItem = VListItem> {
   /** Async data source (required) */
   adapter: VListAdapter<T>;
 
@@ -76,8 +76,8 @@ export interface AsyncPluginConfig<T extends VListItem = VListItem> {
 // Factory
 // =============================================================================
 
-export function async<T extends VListItem = VListItem>(
-  config: AsyncPluginConfig<T>,
+export function data<T extends VListItem = VListItem>(
+  config: DataPluginConfig<T>,
 ): VListPlugin<T> {
   const { adapter, total, autoLoad = true, storage } = config;
 
@@ -151,7 +151,7 @@ export function async<T extends VListItem = VListItem>(
   // ============================================================================
 
   return {
-    name: "async",
+    name: "data",
     priority: 20,
 
     setup(ctx: PluginContext<T>): void {

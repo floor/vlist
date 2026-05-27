@@ -4,7 +4,7 @@
  */
 
 // v2 Plugin
-export { async, type AsyncPluginConfig } from "./plugin";
+export { data, type DataPluginConfig } from "./plugin";
 
 // Data Manager
 export {

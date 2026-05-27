@@ -1,6 +1,6 @@
 # vlist
 
-The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 6.9 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.7 KB.
 
 **v2.0.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md)
 
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **6.9 KB gzipped** — composable plugins with perfect tree-shaking
+- **7.7 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Vertical & horizontal** — single axis-neutral code path, every plugin works in both orientations
 
@@ -56,19 +56,19 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 6.9 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `async()` | +4.3 KB | Lazy loading with velocity-aware fetching |
-| `selection()` | +2.3 KB | Single/multiple selection with 2D keyboard nav |
-| `scale()` | +3.7 KB | 1M+ items via scroll compression |
-| `groups()` | +2.9 KB | Sticky/inline headers with async group discovery |
-| `autosize()` | +0.6 KB | Auto-measure items via ResizeObserver |
-| `scrollbar()` | +1.8 KB | Custom scrollbar UI |
-| `grid()` | +2.0 KB | 2D grid layout |
+| **Base** | 7.7 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| `data()` | +4.7 KB | Lazy loading with velocity-aware fetching |
+| `selection()` | +2.4 KB | Single/multiple selection with 2D keyboard nav |
+| `scale()` | +3.9 KB | 1M+ items via scroll compression |
+| `groups()` | +3.7 KB | Sticky/inline headers with async group discovery |
+| `autosize()` | +0.7 KB | Auto-measure items via ResizeObserver |
+| `scrollbar()` | +2.0 KB | Custom scrollbar UI |
+| `grid()` | +2.1 KB | 2D grid layout |
 | `masonry()` | +3.5 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `page()` | +0.7 KB | Window-level scrolling |
-| `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
-| `snapshots()` | +1.2 KB | Scroll position save/restore |
+| `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
+| `snapshots()` | +1.3 KB | Scroll position save/restore |
 | `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Framework Adapters

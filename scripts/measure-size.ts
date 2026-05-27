@@ -16,7 +16,7 @@ const entry = `${root}/src/index.ts`;
 // ── All v2 plugin names ───────────────────────────────────────────
 
 const ALL_PLUGINS = [
-  "a11y", "selection", "async", "scrollbar", "sortable",
+  "a11y", "selection", "data", "scrollbar", "sortable",
   "groups", "scale", "page", "snapshots", "transition",
   "autosize", "grid", "table", "masonry",
 ] as const;
@@ -53,7 +53,7 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   autosize:   ["getMeasuredCount", "setMeasuredSize"],
   table:      ["--table", "column:resize", "column:sort"],
   groups:     ["--grouped", "getGroupLayout"],
-  async:      ["load:start", "load:end"],
+  data:       ["load:start", "load:end"],
   masonry:    ["--masonry", "getMasonryLayout", "updateMasonry"],
   sortable:   ["sort:start", "sort:end", "--sorting"],
 };
@@ -81,7 +81,7 @@ const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
-  { name: "async",             imports: ["createVList", "async"] },
+  { name: "data",              imports: ["createVList", "data"] },
   { name: "scrollbar",         imports: ["createVList", "scrollbar"] },
   { name: "sortable",          imports: ["createVList", "sortable"] },
   { name: "groups",            imports: ["createVList", "groups"] },
