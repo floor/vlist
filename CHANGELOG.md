@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-05-27
+
 ### Added
 
 - **Scrollbar touch support** — thumb drag and track tap via touch events, enabling scrollbar interaction on touch devices
@@ -93,7 +95,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - Removed unused `data.ts` (`createSimpleDataManager` — 245 lines never imported by core or plugins)
 - Fixed stale v1 comments and documentation drift across core modules
 
-## [2.0.0] - 2026-05-19
+## [2.0.0-beta.1] - 2026-05-19
 
 ### Changed
 

@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.7 KB.
 
-**v2.0.1** — [Changelog](./CHANGELOG.md)
+**v2.0.0** — [Changelog](./CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -345,7 +345,7 @@ Dark mode works out of the box via `prefers-color-scheme`, Tailwind's `.dark` cl
 | 100K items | 0.08 MB | ~0 MB |
 | 1M items | 0.09 MB | 0.19 MB |
 
-- **Initial render:** ~8ms (constant, regardless of item count)
+- **Initial render:** ~2ms (constant, regardless of item count)
 - **Scroll:** 120 FPS at any scale
 - **DOM nodes:** ~26 in document with 100K items (visible + overscan only)
 
