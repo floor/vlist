@@ -266,6 +266,82 @@ describe("cross-feature — async + grid", () => {
       list = null;
     }).not.toThrow();
   });
+
+  it("renders DOM elements with real data, not empty placeholders", async () => {
+    const adapter = createMockAdapter(100);
+    list = createVList<TestItem>(
+      { container, items: [], item: { height: 50, template: simpleTemplate } },
+      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
+    );
+
+    await waitForLoad(list);
+
+    const content = getContent(container);
+    expect(content.children.length).toBeGreaterThan(0);
+
+    const firstItem = content.querySelector("[data-index='0']") as HTMLElement;
+    expect(firstItem).not.toBeNull();
+    expect(firstItem!.getAttribute("data-id")).not.toMatch(/^__placeholder/);
+    expect(firstItem!.innerHTML).toContain("Item 1");
+  });
+
+  it("updates placeholder elements when real data arrives", async () => {
+    let resolveRead: ((value: any) => void) | null = null;
+    const adapter: VListAdapter<TestItem> = {
+      read: mock(async ({ offset, limit }) => {
+        return new Promise((resolve) => { resolveRead = resolve; });
+      }),
+    };
+
+    list = createVList<TestItem>(
+      { container, items: [], item: { height: 50, template: simpleTemplate } },
+      [asyncPlugin({ adapter, autoLoad: true, total: 50 }), grid({ columns: 3 })],
+    );
+
+    // Before data arrives, elements should be placeholders
+    await new Promise((r) => setTimeout(r, 10));
+    const content = getContent(container);
+    const placeholders = content.querySelectorAll("[data-id^='__placeholder']");
+
+    // Resolve with real data
+    resolveRead!({
+      items: Array.from({ length: 25 }, (_, i) => ({
+        id: i + 1,
+        name: `Item ${i + 1}`,
+        value: (i + 1) * 10,
+      })),
+      total: 50,
+      hasMore: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // After data arrives, placeholders should be replaced with real content
+    const realItems = content.querySelectorAll("[data-index]");
+    expect(realItems.length).toBeGreaterThan(0);
+
+    const firstItem = content.querySelector("[data-index='0']") as HTMLElement;
+    expect(firstItem).not.toBeNull();
+    expect(firstItem!.getAttribute("data-id")).toBe("1");
+    expect(firstItem!.innerHTML).toContain("Item 1");
+  });
+
+  it("grid items have correct dimensions after async load", async () => {
+    const adapter = createMockAdapter(100);
+    list = createVList<TestItem>(
+      { container, items: [], item: { height: 50, template: simpleTemplate } },
+      [asyncPlugin({ adapter, autoLoad: true }), grid({ columns: 3 })],
+    );
+
+    await waitForLoad(list);
+
+    const content = getContent(container);
+    const firstItem = content.querySelector("[data-index='0']") as HTMLElement;
+    expect(firstItem).not.toBeNull();
+    expect(firstItem!.style.width).toBeTruthy();
+    expect(firstItem!.style.height).toBeTruthy();
+    expect(firstItem!.style.transform).toContain("translate(");
+  });
 });
 
 // =============================================================================
