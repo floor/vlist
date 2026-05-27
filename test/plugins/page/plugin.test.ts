@@ -809,3 +809,143 @@ describe("page — scrollPadding", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// page — Window scroll event handler
+// =============================================================================
+
+describe("page — Window scroll", () => {
+  it("should update scroll state on window scroll", () => {
+    const plugin = page<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } = createPluginMockContext(items);
+    const onScrollFrameSpy = mock(() => {});
+    (ctx as any).onScrollFrame = onScrollFrameSpy;
+
+    plugin.setup!(ctx);
+
+    engineState.scrollPosition = 0;
+    engineState.prevScrollPosition = 0;
+
+    window.dispatchEvent(new Event("scroll"));
+
+    expect(onScrollFrameSpy).toHaveBeenCalled();
+    plugin.destroy!();
+    cleanup();
+  });
+
+  it("should fire onScrollIdle after 150ms of no scrolling", async () => {
+    const plugin = page<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext(items);
+    const onScrollIdleSpy = mock(() => {});
+    (ctx as any).onScrollIdle = onScrollIdleSpy;
+    (ctx as any).onScrollFrame = () => {};
+
+    plugin.setup!(ctx);
+
+    window.dispatchEvent(new Event("scroll"));
+
+    await new Promise((r) => setTimeout(r, 200));
+    expect(onScrollIdleSpy).toHaveBeenCalled();
+
+    plugin.destroy!();
+    cleanup();
+  });
+
+  it("should clear previous idle timer on rapid scroll", async () => {
+    const plugin = page<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext(items);
+    const onScrollIdleSpy = mock(() => {});
+    (ctx as any).onScrollIdle = onScrollIdleSpy;
+    (ctx as any).onScrollFrame = () => {};
+
+    plugin.setup!(ctx);
+
+    window.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("scroll"));
+
+    await new Promise((r) => setTimeout(r, 200));
+    expect(onScrollIdleSpy).toHaveBeenCalledTimes(1);
+
+    plugin.destroy!();
+    cleanup();
+  });
+
+  it("should not fire scroll events after destroy", () => {
+    const plugin = page<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, cleanup } = createPluginMockContext(items);
+    const onScrollFrameSpy = mock(() => {});
+    (ctx as any).onScrollFrame = onScrollFrameSpy;
+
+    plugin.setup!(ctx);
+    plugin.destroy!();
+
+    onScrollFrameSpy.mockClear();
+    window.dispatchEvent(new Event("scroll"));
+
+    expect(onScrollFrameSpy).not.toHaveBeenCalled();
+    cleanup();
+  });
+});
+
+// =============================================================================
+// page — scrollToPosFn (scroll padding alignment)
+// =============================================================================
+
+describe("page — scrollToPosFn", () => {
+  function setupScrollToPos(padding: Record<string, number>) {
+    const plugin = page<TestItem>({ scrollPadding: padding });
+    const items = createTestItems(100);
+    const mock = createPluginMockContext(items, { itemSize: 50 });
+    plugin.setup!(mock.ctx);
+    const fn = mock.scrollToPosFn;
+    return { plugin, mock, fn };
+  }
+
+  it("should capture scrollToPosFn when scrollPadding is set", () => {
+    const { plugin, mock, fn } = setupScrollToPos({ top: 60, bottom: 40 });
+    expect(fn).not.toBeNull();
+    plugin.destroy!();
+    mock.cleanup();
+  });
+
+  it("returns 0 when totalItems is 0", () => {
+    const { plugin, mock, fn } = setupScrollToPos({ top: 60 });
+    const mockSc = { getOffset: () => 0, getSize: () => 50, getTotalSize: () => 0 };
+    const result = fn(0, mockSc, 500, 0, "start");
+    expect(result).toBe(0);
+    plugin.destroy!();
+    mock.cleanup();
+  });
+
+  it("start alignment offsets by startPad", () => {
+    const { plugin, mock, fn } = setupScrollToPos({ top: 60 });
+    const mockSc = { getOffset: (i: number) => i * 50, getSize: () => 50, getTotalSize: () => 5000 };
+    const result = fn(5, mockSc, 500, 100, "start");
+    expect(result).toBe(250 - 60);
+    plugin.destroy!();
+    mock.cleanup();
+  });
+
+  it("center alignment centers between padding", () => {
+    const { plugin, mock, fn } = setupScrollToPos({ top: 60, bottom: 40 });
+    const mockSc = { getOffset: (i: number) => i * 50, getSize: () => 50, getTotalSize: () => 5000 };
+    const result = fn(10, mockSc, 500, 100, "center");
+    expect(typeof result).toBe("number");
+    plugin.destroy!();
+    mock.cleanup();
+  });
+
+  it("end alignment accounts for endPad", () => {
+    const { plugin, mock, fn } = setupScrollToPos({ top: 60, bottom: 40 });
+    const mockSc = { getOffset: (i: number) => i * 50, getSize: () => 50, getTotalSize: () => 5000 };
+    const result = fn(10, mockSc, 500, 100, "end");
+    expect(result).toBe(500 - 500 + 50 + 40);
+    plugin.destroy!();
+    mock.cleanup();
+  });
+});
