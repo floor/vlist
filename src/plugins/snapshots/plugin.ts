@@ -331,6 +331,11 @@ export function snapshots<T extends VListItem = VListItem>(
             | (() => void)
             | undefined;
           if (cancelAutoLoad) cancelAutoLoad();
+
+          const setTotal = ctx.getMethod("_setTotal") as
+            | ((total: number) => void)
+            | undefined;
+          if (setTotal) setTotal(restoreSnapshot.total);
         }
       }
 
