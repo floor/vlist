@@ -122,7 +122,7 @@ describe("plugin setup error isolation", () => {
     );
 
     expect(errorHandler).toHaveBeenCalledTimes(1);
-    const payload = errorHandler.mock.calls[0]![0] as { error: Error; context: string };
+    const payload = (errorHandler.mock.calls as any)[0][0] as { error: Error; context: string };
     expect(payload.error).toBeInstanceOf(Error);
     expect(payload.error.message).toBe("kaboom");
     expect(payload.context).toBe("plugin:setup:kaboom-plugin");

@@ -289,8 +289,8 @@ describe("cross-feature — async + grid", () => {
     let resolveRead: ((value: any) => void) | null = null;
     const localContainer = createContainer({ width: 300, height: 500 });
     const adapter: VListAdapter<TestItem> = {
-      read: mock(async ({ offset, limit }) => {
-        return new Promise((resolve) => { resolveRead = resolve; });
+      read: mock(async ({ offset, limit }: any) => {
+        return new Promise<any>((resolve) => { resolveRead = resolve; });
       }),
     };
 
@@ -406,8 +406,8 @@ describe("cross-feature — async + table", () => {
         dataPlugin({ adapter, autoLoad: true }),
         table({
           columns: [
-            { key: "name", header: "Name", width: 150 },
-            { key: "value", header: "Value", width: 100 },
+            { key: "name", label: "Name", width: 150 },
+            { key: "value", label: "Value", width: 100 },
           ],
           rowHeight: 40,
         }),
@@ -427,7 +427,7 @@ describe("cross-feature — async + table", () => {
         dataPlugin({ adapter, autoLoad: true }),
         table({
           columns: [
-            { key: "name", header: "Name", width: 150 },
+            { key: "name", label: "Name", width: 150 },
           ],
           rowHeight: 40,
         }),
@@ -448,7 +448,7 @@ describe("cross-feature — async + table", () => {
       [
         dataPlugin({ adapter, autoLoad: true }),
         table({
-          columns: [{ key: "name", header: "Name", width: 200 }],
+          columns: [{ key: "name", label: "Name", width: 200 }],
           rowHeight: 40,
         }),
       ],

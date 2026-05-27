@@ -29,7 +29,6 @@ import {
 import { createStickyHeader, createStickyContainer } from "./sticky";
 
 import {
-  type GroupHeaderItem,
   type GroupLayout,
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
@@ -294,7 +293,7 @@ export function groups<T extends VListItem = VListItem>(
       }
     });
 
-    const isf = resolveItemState?.();
+    const isf = resolveItemState?.() ?? null;
     const selClass = isf ? `${classPrefix}-item--selected` : "";
     const focClass = isf ? `${classPrefix}-item--focused` : "";
     let fragment: DocumentFragment | null = null;
@@ -311,7 +310,7 @@ export function groups<T extends VListItem = VListItem>(
         // Try to reclaim a detached element with matching data-id
         // (avoids pool round-trip that destroys innerHTML / images)
         let expectedId: string | undefined;
-        if (isHeader) {
+        if (entry.type === "header") {
           expectedId = `__group_header_${entry.group.groupIndex}`;
         } else {
           const item = ctxGetItem(entry.dataIndex);
