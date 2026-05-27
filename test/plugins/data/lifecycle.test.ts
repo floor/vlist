@@ -105,7 +105,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
     // Simulate slow scroll — velocity below threshold
     emitter.emit("velocity:change", { velocity: 1, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
 
     await flush();
 
@@ -126,7 +126,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
     // Simulate fast scroll — velocity above cancel threshold
     emitter.emit("velocity:change", { velocity: LOAD_VELOCITY_THRESHOLD + 5, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
 
     // No immediate load — data is deferred
     expect(adapter.read).not.toHaveBeenCalled();
@@ -146,7 +146,7 @@ describe("async lifecycle — velocity-gated loading", () => {
 
     // Fast scroll — should queue range
     emitter.emit("velocity:change", { velocity: LOAD_VELOCITY_THRESHOLD + 10, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
 
     // Now trigger idle — should load the pending range
     emitter.emit("velocity:change", { velocity: 0, reliable: true } as any);
@@ -171,7 +171,7 @@ describe("async lifecycle — velocity-gated loading", () => {
     engineState.destroyed = true;
 
     emitter.emit("velocity:change", { velocity: 1, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
 
     expect(adapter.read).not.toHaveBeenCalled();
@@ -201,7 +201,7 @@ describe("async lifecycle — preload behavior", () => {
 
     // Set scroll direction to down
     engineState.scrollDirection = 1;
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
 
     await flush();
 
@@ -223,7 +223,7 @@ describe("async lifecycle — preload behavior", () => {
 
     // Slow velocity — below preload threshold
     emitter.emit("velocity:change", { velocity: 0.5, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
 
     expect(adapter.read).toHaveBeenCalled();
@@ -249,7 +249,7 @@ describe("async lifecycle — idle hook", () => {
 
     // Fast scroll to queue pending range
     emitter.emit("velocity:change", { velocity: LOAD_VELOCITY_THRESHOLD + 5, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     expect(adapter.read).not.toHaveBeenCalled();
 
     // Idle fires — should process pending
@@ -279,7 +279,7 @@ describe("async lifecycle — idle hook", () => {
 
     // Now a scroll should load immediately (velocity is 0 internally)
     engineState.startIndex = 50;
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
 
     expect(adapter.read).toHaveBeenCalled();
@@ -315,13 +315,13 @@ describe("async lifecycle — idle hook", () => {
 
     // First slow scroll — loads chunk 0
     emitter.emit("velocity:change", { velocity: 0.5, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const callCount1 = (adapter.read as any).mock.calls.length;
     expect(callCount1).toBeGreaterThan(0);
 
     // Same range scroll again — skipped by plugin chunk dedup
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const callCount2 = (adapter.read as any).mock.calls.length;
     expect(callCount2).toBe(callCount1);
@@ -331,7 +331,7 @@ describe("async lifecycle — idle hook", () => {
 
     // Move to a different range — now the plugin allows the call through
     engineState.startIndex = 200;
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const callCount3 = (adapter.read as any).mock.calls.length;
     expect(callCount3).toBeGreaterThan(callCount2);
@@ -357,7 +357,7 @@ describe("async lifecycle — error handling", () => {
 
     // Trigger a load — adapter throws, but loadRange catches internally
     emitter.emit("velocity:change", { velocity: 0, reliable: true } as any);
-    expect(() => plugin.hooks!.onAfterScroll!()).not.toThrow();
+    expect(() => plugin.hooks!.onAfterScroll!(0, 1)).not.toThrow();
     await wait(50);
 
     // Plugin is still functional
@@ -455,7 +455,7 @@ describe("async lifecycle — reload", () => {
 
     // Load once
     emitter.emit("velocity:change", { velocity: 0, reliable: true } as any);
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const callsBefore = (adapter.read as any).mock.calls.length;
 
@@ -466,7 +466,7 @@ describe("async lifecycle — reload", () => {
       await flush();
 
       // After reload, same range should reload
-      plugin.hooks!.onAfterScroll!();
+      plugin.hooks!.onAfterScroll!(0, 1);
       await flush();
       expect((adapter.read as any).mock.calls.length).toBeGreaterThan(callsBefore);
     }
@@ -663,13 +663,13 @@ describe("async lifecycle — chunk deduplication", () => {
     emitter.emit("velocity:change", { velocity: 0.5, reliable: true } as any);
 
     // First scroll loads chunk
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const calls1 = (adapter.read as any).mock.calls.length;
     expect(calls1).toBeGreaterThan(0);
 
     // Same range — deduplicated
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     expect((adapter.read as any).mock.calls.length).toBe(calls1);
   });
@@ -688,13 +688,13 @@ describe("async lifecycle — chunk deduplication", () => {
 
     emitter.emit("velocity:change", { velocity: 0.5, reliable: true } as any);
 
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     const calls1 = (adapter.read as any).mock.calls.length;
 
     // Move to different chunk
     engineState.startIndex = 200;
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
     await flush();
     expect((adapter.read as any).mock.calls.length).toBeGreaterThan(calls1);
   });
@@ -756,7 +756,7 @@ describe("async lifecycle — destroy cleanup", () => {
     const midVelocity = (PRELOAD_VELOCITY_THRESHOLD + LOAD_VELOCITY_THRESHOLD) / 2;
     emitter.emit("velocity:change", { velocity: midVelocity, reliable: true } as any);
     engineState.scrollDirection = 1;
-    plugin.hooks!.onAfterScroll!();
+    plugin.hooks!.onAfterScroll!(0, 1);
 
     // Destroy before timer fires
     plugin.destroy!();

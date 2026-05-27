@@ -533,7 +533,7 @@ describe("memory — async lifecycle cleanup", () => {
     let resolveRead: ((v: any) => void) | null = null;
     const slowAdapter: VListAdapter<TestItem> = {
       read: mock(async () => {
-        return new Promise((resolve) => {
+        return new Promise<any>((resolve) => {
           resolveRead = resolve;
         });
       }),

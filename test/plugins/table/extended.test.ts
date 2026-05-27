@@ -598,7 +598,7 @@ describe("table — selection integration", () => {
           ],
           rowHeight: 40,
         }),
-        selection({ mode: "multi" }),
+        selection({ mode: "multiple" }),
       ],
     );
 
@@ -666,7 +666,7 @@ describe("table — selection integration", () => {
           ],
           rowHeight: 40,
         }),
-        selection({ mode: "multi" }),
+        selection({ mode: "multiple" }),
       ],
     );
 

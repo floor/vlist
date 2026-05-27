@@ -155,11 +155,11 @@ describe("data ops extended — string IDs", () => {
     );
 
     expect(list.total).toBe(3);
-    expect(list.getItemAt(0)!.id).toBe("alpha");
+    expect(list.getItemAt(0)?.id as unknown).toBe("alpha");
 
     list.removeItem("beta");
     expect(list.total).toBe(2);
-    expect(list.getItemAt(1)!.id).toBe("gamma");
+    expect(list.getItemAt(1)?.id as unknown).toBe("gamma");
 
     list.destroy();
     container.remove();

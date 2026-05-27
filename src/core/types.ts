@@ -252,6 +252,7 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
   ariaLabel?: string;
   scroll?: {
     wheel?: boolean;
+    scrollbar?: "none";
     gutter?: "auto" | "stable";
     idleTimeout?: number;
   };

@@ -155,7 +155,7 @@ export function grid<T extends VListItem = VListItem>(
 
     // Render items in range
     const gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
-    const isf = resolveItemState?.();
+    const isf = resolveItemState?.() ?? null;
     const selClass = isf ? `${classPrefix}-item--selected` : "";
     const focClass = isf ? `${classPrefix}-item--focused` : "";
 
