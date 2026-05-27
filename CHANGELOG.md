@@ -11,6 +11,31 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- **Scrollbar touch support** — thumb drag and track tap via touch events, enabling scrollbar interaction on touch devices
+- **Selection internal methods** — `_getFocusedId`, `_focusById`, `_seedSelection` for cross-plugin coordination (snapshots, sortable)
+
+### Fixed
+
+- **Groups ARIA attributes** — grouped items now receive `id`, `aria-posinset`, and `aria-setsize` when `interactive` is enabled, fixing broken `aria-activedescendant` references
+- **Snapshots v1→v2 migration** — aligned auto-save bootstrap, compression mode restore, and `focusedId` save/restore with v1 behavior
+- **`scroll.scrollbar` and `scroll.gutter` config** — CSS classes (`vlist-viewport--no-scrollbar`, `vlist-viewport--gutter-stable`) now wired in `createVList`
+- **Sortable drag cursor** — force `grabbing` cursor on all descendants during drag, preventing open-hand flicker over handles (fixes #46)
+- **Grid async data** — per-item accessor for async data compatibility, in-memory item tracking, deduplicated template apply
+
+### Refactored
+
+- **Grid plugin** — in-memory item tracking and deduplicated template application
+
+### Tests
+
+- Groups plugin coverage: 66% → 87% lines (registered methods, scrollToIndex, horizontal mode, render lifecycle, selection state, placeholder transitions, async boundaries)
+- Engine state coverage: 61% → 100% (resizeCapacity, clear)
+- Selection internal methods: 6 new tests for `_seedSelection`, `_getFocusedId`, `_focusById`
+- Grid async rendering, placeholder transitions, dimension tests
+- Concurrent test isolation fixes
+
 ## [2.0.0-rc.3] - 2026-05-27
 
 ### Added
