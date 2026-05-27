@@ -31,7 +31,7 @@ Debug a failing vlist test with full context.
 5. Output:
    ```
    ## Failing Test
-   **File:** test/features/async/feature.test.ts
+   **File:** test/plugins/async/plugin.test.ts
    **Test:** "should cancel load when velocity exceeds threshold"
    **Error:** Expected 0 but received 1
 

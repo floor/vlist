@@ -1,21 +1,20 @@
 # vlist
 
-The virtual list library for every framework. Accessible by default, batteries-included, with composable features — in 11.2 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 6.9 KB.
 
-**v1.9.0** — [Changelog](./CHANGELOG.md)
+**v2.0.1** — [Changelog](./CHANGELOG.md)
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
-- **New: `withTransition()`** — FLIP-based enter/exit animations for insert and remove, with batch `removeItems()` for simultaneous multi-item transitions
-- **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering, ARIA live region
+- **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **11.2 KB gzipped** — composable features with perfect tree-shaking
+- **6.9 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Grid, masonry, table, groups, async, selection, sortable, transition, scale** — all opt-in
-- **Vertical & horizontal** — single axis-neutral code path, every feature works in both orientations
+- **Vertical & horizontal** — single axis-neutral code path, every plugin works in both orientations
 
 **18 interactive examples, docs & benchmarks → [vlist.io](https://vlist.io)**
 
@@ -49,10 +48,10 @@ npm install vlist vlist-vue    # or vlist-svelte / vlist-solidjs / vlist-react
 ## Quick Start
 
 ```typescript
-import { vlist } from 'vlist'
+import { createVList } from 'vlist'
 import 'vlist/styles'
 
-const list = vlist({
+const list = createVList({
   container: '#my-list',
   items: [
     { id: 1, name: 'Alice' },
@@ -63,52 +62,52 @@ const list = vlist({
     height: 48,
     template: (item) => `<div>${item.name}</div>`,
   },
-}).build()
+})
 
 list.scrollToIndex(10)
 list.setItems(newItems)
 list.on('item:click', ({ item }) => console.log(item))
 ```
 
-## Builder Pattern
+## Plugin System
 
 Start with the base, add only what you need:
 
 ```typescript
-import { vlist, withGrid, withGroups, withSelection } from 'vlist'
+import { createVList, grid, groups, selection } from 'vlist'
 
-const list = vlist({
+const list = createVList({
   container: '#app',
   items: photos,
   item: { height: 200, template: renderPhoto },
-})
-  .use(withGrid({ columns: 4, gap: 16 }))
-  .use(withGroups({
+}, [
+  grid({ columns: 4, gap: 16 }),
+  groups({
     getGroupForIndex: (i) => photos[i].category,
     header: { height: 40, template: (cat) => `<h2>${cat}</h2>` },
-  }))
-  .use(withSelection({ mode: 'multiple' }))
-  .build()
+  }),
+  selection({ mode: 'multiple' }),
+])
 ```
 
-### Features
+### Plugins
 
-| Feature | Size | Description |
-|---------|------|-------------|
-| **Base** | 11.2 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `withAsync()` | +4.6 KB | Lazy loading with velocity-aware fetching |
-| `withSelection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
-| `withScale()` | +3.6 KB | 1M+ items via scroll compression |
-| `withGroups()` | +4.7 KB | Sticky/inline headers with async group discovery |
-| `withAutoSize()` | +0.9 KB | Auto-measure items via ResizeObserver |
-| `withScrollbar()` | +1.8 KB | Custom scrollbar UI |
-| `withGrid()` | +4.1 KB | 2D grid layout |
-| `withMasonry()` | +3.4 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `withTable()` | +5.8 KB | Data table with columns, resize, sort |
-| `withPage()` | +0.7 KB | Window-level scrolling |
-| `withSortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
-| `withSnapshots()` | +1.2 KB | Scroll position save/restore |
-| `withTransition()` | +2.1 KB | FLIP-based enter/exit animations for insert & remove |
+| Plugin | Size | Description |
+|--------|------|-------------|
+| **Base** | 6.9 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| `async()` | +4.3 KB | Lazy loading with velocity-aware fetching |
+| `selection()` | +2.3 KB | Single/multiple selection with 2D keyboard nav |
+| `scale()` | +3.7 KB | 1M+ items via scroll compression |
+| `groups()` | +2.9 KB | Sticky/inline headers with async group discovery |
+| `autosize()` | +0.6 KB | Auto-measure items via ResizeObserver |
+| `scrollbar()` | +1.8 KB | Custom scrollbar UI |
+| `grid()` | +2.0 KB | 2D grid layout |
+| `masonry()` | +3.5 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `table()` | +5.8 KB | Data table with columns, resize, sort |
+| `page()` | +0.7 KB | Window-level scrolling |
+| `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
+| `snapshots()` | +1.2 KB | Scroll position save/restore |
+| `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Examples
 
@@ -117,14 +116,14 @@ More examples at **[vlist.io](https://vlist.io)**.
 ### Data Table
 
 ```typescript
-import { vlist, withTable, withSelection } from 'vlist'
+import { createVList, table, selection } from 'vlist'
 
-const table = vlist({
+const myTable = createVList({
   container: '#my-table',
   items: contacts,
   item: { height: 36, template: () => '' },
-})
-  .use(withTable({
+}, [
+  table({
     columns: [
       { key: 'name',   label: 'Name',   width: 200, sortable: true },
       { key: 'email',  label: 'Email',  width: 260, sortable: true },
@@ -134,20 +133,20 @@ const table = vlist({
     rowHeight: 36,
     headerHeight: 36,
     resizable: true,
-  }))
-  .use(withSelection({ mode: 'single' }))
-  .build()
+  }),
+  selection({ mode: 'single' }),
+])
 
-table.on('column:sort', ({ key, direction }) => { /* re-sort data */ })
-table.on('column:resize', ({ key, width }) => { /* persist widths */ })
+myTable.on('column:sort', ({ key, direction }) => { /* re-sort data */ })
+myTable.on('column:resize', ({ key, width }) => { /* persist widths */ })
 ```
 
 ### Grid Layout
 
 ```typescript
-import { vlist, withGrid, withScrollbar } from 'vlist'
+import { createVList, grid, scrollbar } from 'vlist'
 
-const gallery = vlist({
+const gallery = createVList({
   container: '#gallery',
   items: photos,
   item: {
@@ -159,25 +158,25 @@ const gallery = vlist({
       </div>
     `,
   },
-})
-  .use(withGrid({ columns: 4, gap: 16 }))
-  .use(withScrollbar({ autoHide: true }))
-  .build()
+}, [
+  grid({ columns: 4, gap: 16 }),
+  scrollbar({ autoHide: true }),
+])
 ```
 
 ### Animated Insert & Remove
 
 ```typescript
-import { vlist, withTransition, withSelection } from 'vlist'
+import { createVList, transition, selection } from 'vlist'
 
-const list = vlist({
+const list = createVList({
   container: '#playlist',
   items: tracks,
   item: { height: 64, template: renderTrack },
-})
-  .use(withTransition({ duration: 200 }))
-  .use(withSelection({ mode: 'multiple' }))
-  .build()
+}, [
+  transition({ duration: 200 }),
+  selection({ mode: 'multiple' }),
+])
 
 // Single item — collapses with fade-out, siblings slide up
 list.removeItem(trackId)
@@ -192,9 +191,9 @@ list.insertItem({ id: 42, title: 'New Track' }, 0)
 ### Async Loading
 
 ```typescript
-import { vlist, withAsync } from 'vlist'
+import { createVList, async as asyncPlugin } from 'vlist'
 
-const list = vlist({
+const list = createVList({
   container: '#list',
   item: {
     height: 64,
@@ -202,8 +201,8 @@ const list = vlist({
       ? `<div>${item.name}</div>`
       : `<div class="placeholder">Loading…</div>`,
   },
-})
-  .use(withAsync({
+}, [
+  asyncPlugin({
     adapter: {
       read: async ({ offset, limit }) => {
         const res = await fetch(`/api/users?offset=${offset}&limit=${limit}`)
@@ -211,8 +210,8 @@ const list = vlist({
         return { items: data.items, total: data.total, hasMore: data.hasMore }
       },
     },
-  }))
-  .build()
+  }),
+])
 ```
 
 ## Accessibility
@@ -224,7 +223,6 @@ Every vlist is accessible by default following the [WAI-ARIA listbox pattern](ht
 - **Masonry lane-aware nav** — arrows stay in the same visual column
 - **Home/End, PageUp/PageDown, Ctrl+Home/End** — full keyboard coverage
 - **Screen-reader DOM ordering** — items reordered on scroll idle for correct reading order
-- **ARIA live region** — announces loading state changes
 - **Focus recovery** — maintains focus when items are removed
 
 Set `interactive: false` for display-only lists (log viewers, activity feeds) where items contain their own interactive elements.
@@ -232,7 +230,7 @@ Set `interactive: false` for display-only lists (log viewers, activity feeds) wh
 ## API
 
 ```typescript
-const list = vlist(config).use(...features).build()
+const list = createVList(config, [plugin1(), plugin2()])
 ```
 
 ### Data
@@ -242,13 +240,12 @@ const list = vlist(config).use(...features).build()
 | `list.setItems(items)` | Replace all items |
 | `list.appendItems(items)` | Add to end (auto-scrolls in reverse mode) |
 | `list.prependItems(items)` | Add to start (preserves scroll position) |
-| `list.updateItem(index, partial)` | Update a single item by index |
-| `list.insertItem(item, index?)` | Insert at index (animated with `withTransition`) |
-| `list.removeItem(id)` | Remove by ID (animated with `withTransition`) |
+| `list.updateItem(id, partial)` | Update a single item by ID |
+| `list.insertItem(item, index?)` | Insert at index (animated with `transition`) |
+| `list.removeItem(id)` | Remove by ID (animated with `transition`) |
 | `list.removeItems(ids)` | Batch remove (simultaneous animations) |
 | `list.getItemAt(index)` | Get item at index |
 | `list.getIndexById(id)` | Get index by item ID |
-| `list.reload()` | Re-fetch from adapter (async) |
 
 ### Navigation
 
@@ -256,10 +253,9 @@ const list = vlist(config).use(...features).build()
 |--------|-------------|
 | `list.scrollToIndex(i, align?)` | Scroll to index (`'start'` \| `'center'` \| `'end'`) |
 | `list.scrollToIndex(i, opts?)` | With `{ align, behavior: 'smooth', duration }` |
-| `list.cancelScroll()` | Cancel smooth scroll animation |
 | `list.getScrollPosition()` | Current scroll offset |
 
-### Selection (with `withSelection()`)
+### Selection (with `selection()`)
 
 | Method | Description |
 |--------|-------------|
@@ -296,24 +292,24 @@ list.on('sort:cancel', ({ originalItems }) => {})
 | `list.total` | Total item count |
 | `list.destroy()` | Cleanup and remove from DOM |
 
-## Feature Configuration
+## Plugin Configuration
 
-Each feature's config is fully typed — hover in your IDE for details.
+Each plugin's config is fully typed — hover in your IDE for details.
 
 ```typescript
-withGrid({ columns: 4, gap: 16 })
-withMasonry({ columns: 4, gap: 16 })
-withGroups({ getGroupForIndex, header: { height, template }, sticky?: true })
-withSelection({ mode: 'single' | 'multiple', initial?: [...ids] })
-withAsync({ adapter: { read }, loading?: { cancelThreshold? } })
-withTable({ columns, rowHeight, headerHeight?, resizable? })
-withAutoSize()                        // auto-measure items (requires estimatedHeight)
-withScale()                           // auto-activates at 16.7M px
-withScrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
-withTransition({ duration?: 200, insert?: timing, remove?: timing })
-withSortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
-withPage()                            // no config — uses document scroll
-withSnapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
+grid({ columns: 4, gap: 16 })
+masonry({ columns: 4, gap: 16 })
+groups({ getGroupForIndex, header: { height, template }, sticky?: true })
+selection({ mode: 'single' | 'multiple', initial?: [...ids] })
+async({ adapter: { read }, loading?: { cancelThreshold? } })
+table({ columns, rowHeight, headerHeight?, resizable? })
+autosize()                        // auto-measure items (requires estimatedHeight)
+scale()                           // auto-activates at 16.7M px
+scrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
+transition({ duration?: 200, insert?: timing, remove?: timing })
+sortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
+page()                            // no config — uses document scroll
+snapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
 ```
 
 Full configuration reference → **[vlist.io](https://vlist.io)**
@@ -328,15 +324,14 @@ Full configuration reference → **[vlist.io](https://vlist.io)**
 | `padding` | `0` | Content inset — number, `[v, h]`, or `[top, right, bottom, left]` |
 | `interactive` | `true` | Enable built-in keyboard navigation |
 | `reverse` | `false` | Reverse mode for chat UIs |
-| `scroll.wrap` | `false` | Wrap focus around at boundaries |
 
 ## Styling
 
 ```typescript
 import 'vlist/styles'           // core (always required)
-import 'vlist/styles/grid'      // when using withGrid()
-import 'vlist/styles/masonry'   // when using withMasonry()
-import 'vlist/styles/table'     // when using withTable()
+import 'vlist/styles/grid'      // when using grid()
+import 'vlist/styles/masonry'   // when using masonry()
+import 'vlist/styles/table'     // when using table()
 import 'vlist/styles/extras'    // optional (variants, loading states, animations)
 ```
 
@@ -361,21 +356,33 @@ Live benchmarks against 9 competitors → **[vlist.io/benchmarks](https://vlist.
 Fully typed. Generic over your item type:
 
 ```typescript
-import { vlist, withGrid, type VList } from 'vlist'
+import { createVList, grid, type VList } from 'vlist'
 
 interface Photo { id: number; url: string; title: string }
 
-const list: VList<Photo> = vlist<Photo>({
+const list: VList<Photo> = createVList<Photo>({
   container: '#gallery',
   items: photos,
   item: {
     height: 200,
     template: (photo) => `<img src="${photo.url}" />`,
   },
-})
-  .use(withGrid({ columns: 4 }))
-  .build()
+}, [grid({ columns: 4 })])
 ```
+
+## Migrating from v1
+
+v2 is a ground-up rewrite — simpler API, 55% smaller base bundle, zero-allocation scroll path. [Full announcement →](https://vlist.io/blog/v2)
+
+| v1 | v2 |
+|----|-----|
+| `vlist(config).use(withGrid()).build()` | `createVList(config, [grid()])` |
+| `withGrid`, `withSelection`, … | `grid`, `selection`, … |
+| `VListFeature` | `VListPlugin` |
+| `BuilderContext` | `PluginContext` |
+| `.vlist-items` | `.vlist-content` |
+
+The instance API (`setItems`, `scrollToIndex`, `on`, `destroy`) is unchanged.
 
 ## Contributing
 

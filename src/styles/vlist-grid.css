@@ -9,7 +9,7 @@
    ============================================================================= */
 
 /* Grid modifier on root */
-.vlist--grid .vlist-items {
+.vlist--grid .vlist-content {
     contain: layout style;
 }
 

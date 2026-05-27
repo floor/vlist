@@ -1,11 +1,10 @@
 /**
- * vlist — Feature Size Measurement + Tree-Shaking Verification
- * Builds each feature combination with tree-shaking and reports gzipped sizes.
- * Also verifies that unused features are actually excluded from the bundle.
+ * vlist v2 — Plugin Size Measurement + Tree-Shaking Verification
+ * Builds each plugin combination with tree-shaking and reports gzipped sizes.
+ * Also verifies that unused plugins are actually excluded from the bundle.
  *
  * Usage:
- *   bun run size
- *   bun run scripts/measure-size.ts
+ *   bun run scripts/size.ts
  */
 
 import { gzipSync } from "bun";
@@ -14,114 +13,86 @@ import { resolve } from "path";
 const root = resolve(import.meta.dir, "..");
 const entry = `${root}/src/index.ts`;
 
-// ── All feature names ─────────────────────────────────────────────
+// ── All v2 plugin names ───────────────────────────────────────────
 
-const ALL_FEATURES = [
-  "withGrid",
-  "withMasonry",
-  "withGroups",
-  "withAsync",
-  "withSelection",
-  "withScale",
-  "withScrollbar",
-  "withPage",
-  "withSnapshots",
-  "withTable",
-  "withAutoSize",
-  "withSortable",
-  "withTransition",
+const ALL_PLUGINS = [
+  "a11y", "selection", "async", "scrollbar", "sortable",
+  "groups", "scale", "page", "snapshots", "transition",
+  "autosize", "grid", "table", "masonry",
 ] as const;
 
-type FeatureName = (typeof ALL_FEATURES)[number];
+type PluginName = (typeof ALL_PLUGINS)[number];
 
-// ── Known cross-feature dependencies ──────────────────────────────
+// ── Known cross-plugin dependencies ──────────────────────────────
 //
-// Some features legitimately import code from other features at the
-// source level.  These show up in the tree-shaken bundle even when
-// the dependency feature wasn't explicitly imported by the consumer.
-//
-// Map: feature → set of features whose markers may appear in its bundle.
+// Some plugins legitimately import code from other modules.
+// These markers may appear in the bundle even when the dependency
+// plugin wasn't explicitly imported by the consumer.
 
-const KNOWN_DEPS: Partial<Record<FeatureName, readonly FeatureName[]>> = {
-  // withGroups pulls in grid/renderer via require() for grouped grid layouts
-  withGroups: ["withGrid"],
-  // withAsync references "restoreScroll" method name string from withSnapshots
-  withAsync: ["withSnapshots"],
-  // withScale imports createScrollbar for compressed-mode auto-scrollbar
-  withScale: ["withScrollbar"],
-  // withSnapshots references "loadVisibleRange" method name string from withAsync
-  withSnapshots: ["withAsync"],
+const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
+  // scale imports createScrollbar for fallback scrollbar in compressed mode
+  scale: ["scrollbar"],
+  // selection does a dynamic getMethod("getGroupLayout") lookup — string only, no import
+  selection: ["groups"],
 };
 
-// ── Unique string markers per feature ─────────────────────────────
+// ── Unique string markers per plugin ─────────────────────────────
 //
-// Minified bundles mangle identifiers, so we search for string
-// literals that are unique to each feature — CSS class suffixes,
-// method names, event names, ARIA attributes — that survive
-// minification.
-//
-// Each entry maps a feature name to an array of marker strings.
-// If **any** marker is found in the output, the feature leaked in.
-//
-// NOTE: "withGrid"/"withMasonry" appear as string literals in
-// core.ts via features.has() checks — don't use those as markers.
+// String literals that survive minification: CSS class fragments,
+// registered method names, event names, addEventListener targets.
 
-const FEATURE_MARKERS: Record<FeatureName, readonly string[]> = {
-  withGrid:      ["-grid-item"],
-  withMasonry:   ["-masonry-item"],
-  withGroups:    ["__group_header_", "-sticky-header"],
-  withAsync:     ["loadVisibleRange"],
-  withSelection: ["selectAll"],
-  withScale:     ["touchcancel"],
-  withScrollbar: ["-scrollbar-thumb"],
-  withPage:      ["innerWidth"],
-  withSnapshots: ["getScrollSnapshot", "restoreScroll"],
-  withTable:     ["aria-colcount", "gridcell"],
-  withAutoSize:  ["setMeasuredSize", "isMeasured"],
-  withSortable:  ["sort-ghost", "isSorting"],
-  withTransition: ["scaleY"],
+const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
+  a11y:       ['"a11y"'],
+  grid:       ["-grid-item", "getGridLayout", "updateGrid"],
+  selection:  ["selectAll", "clearSelection"],
+  scrollbar:  ["-scrollbar__thumb"],
+  scale:      ["touchcancel"],
+  page:       ["scrollPadding"],
+  snapshots:  ["getScrollSnapshot", "restoreScroll"],
+  transition: ["remove:end", "insert:end"],
+  autosize:   ["getMeasuredCount", "setMeasuredSize"],
+  table:      ["--table", "column:resize", "column:sort"],
+  groups:     ["--grouped", "getGroupLayout"],
+  async:      ["load:start", "load:end"],
+  masonry:    ["--masonry", "getMasonryLayout", "updateMasonry"],
+  sortable:   ["sort:start", "sort:end", "--sorting"],
 };
 
-// ── Feature scenarios ─────────────────────────────────────────────
+// ── Scenarios ─────────────────────────────────────────────────────
 
 interface Scenario {
   name: string;
   imports: string[];
-  /** Computed: features that must NOT appear in the tree-shaken output */
-  mustNotContain: readonly FeatureName[];
+  mustNotContain: readonly PluginName[];
 }
 
-/**
- * Derive mustNotContain automatically:
- *   ALL_FEATURES − imported features − their known transitive deps
- */
-const excluded = (imported: readonly string[]): readonly FeatureName[] => {
+const excluded = (imported: readonly string[]): readonly PluginName[] => {
   const allowed = new Set<string>(imported);
 
-  // Expand with known transitive dependencies
-  for (const feat of imported) {
-    const deps = KNOWN_DEPS[feat as FeatureName];
+  for (const name of imported) {
+    const deps = KNOWN_DEPS[name as PluginName];
     if (deps) for (const dep of deps) allowed.add(dep);
   }
 
-  return ALL_FEATURES.filter((f) => !allowed.has(f));
+  return ALL_PLUGINS.filter((p) => !allowed.has(p));
 };
 
 const scenarios: Scenario[] = [
-  { name: "Base",          imports: ["vlist"] },
-  { name: "withGrid",      imports: ["vlist", "withGrid"] },
-  { name: "withMasonry",   imports: ["vlist", "withMasonry"] },
-  { name: "withGroups",    imports: ["vlist", "withGroups"] },
-  { name: "withAsync",     imports: ["vlist", "withAsync"] },
-  { name: "withSelection", imports: ["vlist", "withSelection"] },
-  { name: "withScale",     imports: ["vlist", "withScale"] },
-  { name: "withScrollbar", imports: ["vlist", "withScrollbar"] },
-  { name: "withPage",      imports: ["vlist", "withPage"] },
-  { name: "withSnapshots", imports: ["vlist", "withSnapshots"] },
-  { name: "withTable",     imports: ["vlist", "withTable"] },
-  { name: "withAutoSize",  imports: ["vlist", "withAutoSize"] },
-  { name: "withSortable",  imports: ["vlist", "withSortable"] },
-  { name: "withTransition", imports: ["vlist", "withTransition"] },
+  { name: "Base (createVList)", imports: ["createVList"] },
+  { name: "a11y",              imports: ["createVList", "a11y"] },
+  { name: "selection",         imports: ["createVList", "selection"] },
+  { name: "async",             imports: ["createVList", "async"] },
+  { name: "scrollbar",         imports: ["createVList", "scrollbar"] },
+  { name: "sortable",          imports: ["createVList", "sortable"] },
+  { name: "groups",            imports: ["createVList", "groups"] },
+  { name: "scale",             imports: ["createVList", "scale"] },
+  { name: "page",              imports: ["createVList", "page"] },
+  { name: "snapshots",         imports: ["createVList", "snapshots"] },
+  { name: "transition",        imports: ["createVList", "transition"] },
+  { name: "autosize",          imports: ["createVList", "autosize"] },
+  { name: "grid",              imports: ["createVList", "grid"] },
+  { name: "table",             imports: ["createVList", "table"] },
+  { name: "masonry",           imports: ["createVList", "masonry"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────
@@ -145,7 +116,7 @@ const treeShakeFailures: TreeShakeFailure[] = [];
 for (const scenario of scenarios) {
   const imports = scenario.imports.join(", ");
   const code = `import { ${imports} } from "${entry}"; globalThis._v = [${imports}];`;
-  const tmpFile = `/tmp/_vlist_size_${scenario.name}.ts`;
+  const tmpFile = `/tmp/_vlist_v2_size_${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
 
   await Bun.write(tmpFile, code);
 
@@ -181,17 +152,17 @@ for (const scenario of scenarios) {
   if (scenario.mustNotContain.length > 0) {
     const bundleText = new TextDecoder().decode(output);
 
-    for (const featureName of scenario.mustNotContain) {
-      const markers = FEATURE_MARKERS[featureName];
+    for (const pluginName of scenario.mustNotContain) {
+      const markers = PLUGIN_MARKERS[pluginName];
 
       for (const marker of markers) {
         if (bundleText.includes(marker)) {
           treeShakeFailures.push({
             scenario: scenario.name,
-            leaked: featureName,
+            leaked: pluginName,
             marker,
           });
-          break; // one marker is enough to flag the feature
+          break;
         }
       }
     }
@@ -218,13 +189,15 @@ const pad = (s: string, n: number) => s.padStart(n);
 const sep = "─".repeat(LINE_W);
 
 console.log("");
-console.log(`  ${"Feature".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Delta".padStart(COL_DELTA)}`);
+console.log("  vlist v2 — Plugin Sizes");
+console.log("");
+console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Delta".padStart(COL_DELTA)}`);
 console.log(`  ${sep}`);
 
 for (const r of results) {
   const min = `${r.minKB.toFixed(1)} KB`;
   const gz = `${r.gzKB.toFixed(1)} KB`;
-  const delta = r.name === "Base" ? "" : `+${r.deltaKB.toFixed(1)} KB`;
+  const delta = r.name.startsWith("Base") ? "" : `+${r.deltaKB.toFixed(1)} KB`;
 
   console.log(
     `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(delta, COL_DELTA)}`,
@@ -238,7 +211,7 @@ console.log(`  ${sep}`);
 console.log("");
 
 if (treeShakeFailures.length === 0) {
-  console.log(`  ✓ Tree-shaking: all ${scenarios.length} scenarios clean — unused features excluded`);
+  console.log(`  ✓ Tree-shaking: all ${scenarios.length} scenarios clean — unused plugins excluded`);
 } else {
   console.log(`  ✗ Tree-shaking: ${treeShakeFailures.length} leak(s) detected`);
   console.log("");
