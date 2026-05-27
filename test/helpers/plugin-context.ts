@@ -167,6 +167,8 @@ export function createPluginMockContext<T extends VListItem>(
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let _renderFnReplaced = false;
+  let _navConfig: any = null;
+  let _scrollToPosFn: any = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
   let itemStateFn: ((index: number, state: ItemState) => void) | null = null;
   let removeItemByIdFn: ((id: string | number) => number) | null = null;
@@ -237,7 +239,7 @@ export function createPluginMockContext<T extends VListItem>(
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
-    setScrollToPosFn: () => {},
+    setScrollToPosFn: (fn: any) => { _scrollToPosFn = fn; },
     setScrollToIndexFn: () => { return undefined; },
     onScrollFrame: () => {},
     onScrollIdle: () => {},
@@ -267,8 +269,8 @@ export function createPluginMockContext<T extends VListItem>(
       return null;
     },
 
-    setNavConfig: () => {},
-    getNavConfig: () => ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
+    setNavConfig: (cfg: any) => { _navConfig = cfg; },
+    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
   };
 
   const cleanup = () => {
@@ -287,6 +289,12 @@ export function createPluginMockContext<T extends VListItem>(
     scrollCalls,
     get renderFnReplaced() {
       return _renderFnReplaced;
+    },
+    get navConfig() {
+      return _navConfig;
+    },
+    get scrollToPosFn() {
+      return _scrollToPosFn;
     },
     cleanup,
   };

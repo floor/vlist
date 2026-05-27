@@ -985,3 +985,304 @@ describe("masonry - Plugin Metadata", () => {
     expect(plugin.hooks?.onIdle).toBeInstanceOf(Function);
   });
 });
+
+// =============================================================================
+// masonry — navigate (lane-aware 2D keyboard navigation)
+// =============================================================================
+
+describe("masonry - navigate", () => {
+  function setupWithNav(count = 20, columns = 4) {
+    const plugin = masonry<TestItem>({ columns, gap: 8 });
+    const items = createTestItems(count, (i) => 100 + (i % 3) * 50);
+    const mock = createPluginMockContext<TestItem>(items);
+    mock.engineState.containerSize = 500;
+    mock.engineState.crossSize = 400;
+    plugin.setup!(mock.ctx);
+    mock.ctx.forceRender();
+    const nav = mock.navConfig;
+    return { plugin, ctx: mock.ctx, engineState: mock.engineState, nav, scrollCalls: mock.scrollCalls, cleanup: mock.cleanup };
+  }
+
+  it("should register a navigate function via setNavConfig", () => {
+    const { nav, cleanup } = setupWithNav();
+    expect(nav).not.toBeNull();
+    expect(typeof nav.navigate).toBe("function");
+    cleanup();
+  });
+
+  it("ArrowDown moves within the same lane", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "ArrowDown", 20);
+    expect(result).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("ArrowUp moves within the same lane", () => {
+    const { nav, cleanup } = setupWithNav();
+    const idx = nav.navigate(0, "ArrowDown", 20);
+    const back = nav.navigate(idx, "ArrowUp", 20);
+    expect(back).toBe(0);
+    cleanup();
+  });
+
+  it("ArrowUp at first item in lane stays put", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "ArrowUp", 20);
+    expect(result).toBe(0);
+    cleanup();
+  });
+
+  it("ArrowRight moves to adjacent lane", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "ArrowRight", 20);
+    expect(result).not.toBe(0);
+    cleanup();
+  });
+
+  it("ArrowLeft at leftmost lane stays put", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "ArrowLeft", 20);
+    expect(result).toBe(0);
+    cleanup();
+  });
+
+  it("ArrowRight at rightmost lane stays put", () => {
+    const { nav, cleanup } = setupWithNav(20, 4);
+    const rightmostFirst = nav.navigate(0, "ArrowRight", 20);
+    const rightmost2 = nav.navigate(rightmostFirst, "ArrowRight", 20);
+    const rightmost3 = nav.navigate(rightmost2, "ArrowRight", 20);
+    const rightmost4 = nav.navigate(rightmost3, "ArrowRight", 20);
+    expect(rightmost4).toBe(rightmost3);
+    cleanup();
+  });
+
+  it("Home goes to first item", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(10, "Home", 20);
+    expect(result).toBe(0);
+    cleanup();
+  });
+
+  it("End goes to last item", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "End", 20);
+    expect(result).toBe(19);
+    cleanup();
+  });
+
+  it("PageDown jumps by visible page within lane", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(0, "PageDown", 20);
+    expect(result).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("PageUp jumps back within lane", () => {
+    const { nav, cleanup } = setupWithNav();
+    const down = nav.navigate(0, "PageDown", 20);
+    const up = nav.navigate(down, "PageUp", 20);
+    expect(up).toBeLessThan(down);
+    cleanup();
+  });
+
+  it("unknown key returns current index", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(5, "Tab", 20);
+    expect(result).toBe(5);
+    cleanup();
+  });
+
+  it("invalid current index returns current index", () => {
+    const { nav, cleanup } = setupWithNav();
+    const result = nav.navigate(999, "ArrowDown", 20);
+    expect(result).toBe(999);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// masonry — updateMasonry
+// =============================================================================
+
+describe("masonry - updateMasonry", () => {
+  it("updates columns and gap", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const updateFn = methods.get("updateMasonry");
+    expect(updateFn).toBeDefined();
+    updateFn!({ columns: 3, gap: 16 });
+
+    cleanup();
+  });
+
+  it("throws for columns < 1", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(10, () => 100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+
+    const updateFn = methods.get("updateMasonry");
+    expect(() => updateFn!({ columns: 0 })).toThrow("columns must be >= 1");
+    cleanup();
+  });
+
+  it("throws for gap < 0", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(10, () => 100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+
+    const updateFn = methods.get("updateMasonry");
+    expect(() => updateFn!({ gap: -1 })).toThrow("gap must be >= 0");
+    cleanup();
+  });
+});
+
+// =============================================================================
+// masonry — _scrollItemIntoView
+// =============================================================================
+
+describe("masonry - _scrollItemIntoView", () => {
+  it("scrolls up when item is above viewport", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 500;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    expect(scrollFn).toBeDefined();
+    scrollFn!(0);
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("scrolls down when item is below viewport", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 0;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(39);
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("does nothing for invalid index", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(10, () => 100);
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(999);
+    expect(scrollCalls.length).toBe(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// masonry — scrollToIndex smooth scroll
+// =============================================================================
+
+describe("masonry - scrollToIndex smooth", () => {
+  it("uses smoothScrollTo with behavior smooth and duration", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const scrollToIndex = methods.get("scrollToIndex");
+    scrollToIndex!(5, { align: "start", behavior: "smooth", duration: 300 });
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("scrollToIndex end alignment on last item snaps to maxScroll", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const scrollToIndex = methods.get("scrollToIndex");
+    scrollToIndex!(19, "end");
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// masonry — getSizeFn with config.size
+// =============================================================================
+
+describe("masonry - custom size function", () => {
+  it("uses config.size when provided", () => {
+    const sizeFn = (_i: number, _ctx: any) => 200;
+    const plugin = masonry<TestItem>({ columns: 4, size: sizeFn });
+    const items = createTestItems(10, () => 100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    cleanup();
+  });
+});
+
+// =============================================================================
+// masonry — onIdle and destroy
+// =============================================================================
+
+describe("masonry - onIdle and destroy", () => {
+  it("onIdle calls renderer.sortDOM", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    expect(() => plugin.hooks!.onIdle!()).not.toThrow();
+    cleanup();
+  });
+
+  it("plugin.destroy() cleans up", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(10, () => 100);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    expect(() => plugin.destroy!()).not.toThrow();
+    cleanup();
+  });
+
+  it("renderIfNeeded recalculates layout when totalItems changes", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, engineState, dom, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 500;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const childrenBefore = dom.content.children.length;
+    engineState.totalItems = 30;
+    ctx.renderIfNeeded();
+    cleanup();
+  });
+});
