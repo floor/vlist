@@ -288,18 +288,18 @@ describe("selection — Method Registration", () => {
     cleanup();
   });
 
-  it("should register all 11 methods in single mode (9 public + 2 internal)", () => {
+  it("should register all 14 methods in single mode (9 public + 5 internal)", () => {
     const plugin = selection<TestItem>();
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
     plugin.setup!(ctx);
 
-    expect(methods.size).toBe(11);
+    expect(methods.size).toBe(14);
 
     cleanup();
   });
 
-  it("should register all 9 methods in none mode (no-ops)", () => {
+  it("should register all 12 methods in none mode (no-ops)", () => {
     const plugin = selection<TestItem>({ mode: "none" });
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
@@ -314,6 +314,9 @@ describe("selection — Method Registration", () => {
     expect(methods.has("getSelectedItems")).toBe(true);
     expect(methods.has("selectNext")).toBe(true);
     expect(methods.has("selectPrevious")).toBe(true);
+    expect(methods.has("_seedSelection")).toBe(true);
+    expect(methods.has("_getFocusedId")).toBe(true);
+    expect(methods.has("_focusById")).toBe(true);
 
     cleanup();
   });

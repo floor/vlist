@@ -214,6 +214,9 @@ export function selection<T extends VListItem = VListItem>(
         ctx.registerMethod("getSelectedItems", () => []);
         ctx.registerMethod("selectNext", () => {});
         ctx.registerMethod("selectPrevious", () => {});
+        ctx.registerMethod("_seedSelection", () => {});
+        ctx.registerMethod("_getFocusedId", () => undefined);
+        ctx.registerMethod("_focusById", () => {});
         return;
       }
 
@@ -614,6 +617,30 @@ export function selection<T extends VListItem = VListItem>(
         const item = getItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
         emitSelectionChange();
+      });
+
+      // ── Internal methods (used by snapshots, sortable) ────────
+
+      ctx.registerMethod("_seedSelection", (ids: Array<string | number>): void => {
+        for (const id of ids) state.selected.add(id);
+      });
+
+      ctx.registerMethod("_getFocusedId", (): string | number | undefined => {
+        if (state.focusedIndex < 0) return undefined;
+        return getItemAtLayout(state.focusedIndex)?.id;
+      });
+
+      ctx.registerMethod("_focusById", (id: string | number): void => {
+        const total = engineState.totalItems;
+        for (let i = 0; i < total; i++) {
+          const item = getItem(i);
+          if (item && item.id === id) {
+            const layoutIdx = d2lFn ? d2lFn(i) : i;
+            state.focusedIndex = layoutIdx;
+            emitter.emit("focus:change", { id, index: layoutIdx });
+            return;
+          }
+        }
       });
     },
 
