@@ -11,6 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-05-28
+
+### Fixed
+
+- **Grid/masonry item identity** — track items by reference instead of `item.id`, preventing stale renders when items share ids across updates
+- **Pipeline multi-instance safety** — removed module-scope release state that could corrupt element recycling when two vlist instances share a frame
+- **Autosize scroll anchor** — use `sizeCache.indexAtOffset(scrollPosition)` for true first-visible index instead of `startIndex` which includes overscan, fixing over-compensation during measurements
+- **Autosize scroll-to-end with measured items** — `smoothScrollTo` now accepts a dynamic target function re-evaluated each animation frame, so smooth scroll tracks the real maxScroll as ResizeObserver measurements change content size. End-pinning snaps via the ResizeObserver callback instead of onIdle, eliminating the 100ms-delayed chop
+
+### Refactored
+
+- **Removed dead `setVisibleRangeFn`** — no-op stub with no callers removed from PluginContext, types, and exports
+
 ## [2.0.2] - 2026-05-28
 
 ### Fixed
