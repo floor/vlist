@@ -78,7 +78,7 @@ export function transition<T extends VListItem = VListItem>(
       const dom = ctx.dom;
       const state = ctx.getState();
       const origin = cfg.reverse ? "bottom center" : "top center";
-      const prop = cfg.horizontal ? "translateX" : "translateY";
+      const prop = cfg.axis.primary === "x" ? "translateX" : "translateY";
 
       const toLayout = (ctx.getMethod("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       const dataToLayout = (dataIndex: number): number =>
@@ -143,7 +143,7 @@ export function transition<T extends VListItem = VListItem>(
           exitClone.removeAttribute("aria-selected");
           exitClone.classList.remove(`${cfg.classPrefix}-item--selected`);
 
-          const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
+          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
           const oldScroll = dom.viewport[scrollProp];
 
           // LAST — remove data + reconcile
@@ -274,7 +274,7 @@ export function transition<T extends VListItem = VListItem>(
             if (elId && idx >= 0) oldOffsetById.set(elId, sc.getOffset(idx));
           }
 
-          const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
+          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
           const oldScroll = dom.viewport[scrollProp];
 
           // Remove all items (descending order preserved)
@@ -386,9 +386,9 @@ export function transition<T extends VListItem = VListItem>(
             if (id && idx >= 0) oldOffsetById.set(id, sc.getOffset(idx));
           }
 
-          const scrollProp = cfg.horizontal ? "scrollLeft" : "scrollTop";
-          const sizeProp = cfg.horizontal ? "scrollWidth" : "scrollHeight";
-          const clientProp = cfg.horizontal ? "clientWidth" : "clientHeight";
+          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
+          const sizeProp = cfg.axis.primary === "x" ? "scrollWidth" : "scrollHeight";
+          const clientProp = cfg.axis.primary === "x" ? "clientWidth" : "clientHeight";
           const oldScroll = dom.viewport[scrollProp];
           const oldMaxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
           const wasAtEnd = oldScroll >= oldMaxScroll - 1;

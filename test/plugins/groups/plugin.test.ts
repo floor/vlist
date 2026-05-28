@@ -325,7 +325,7 @@ describe("groups — Setup", () => {
     });
     const items = createTestItems(20);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
     });
 
     expect(() => plugin.setup!(ctx)).not.toThrow();
@@ -1059,7 +1059,7 @@ describe("groups — Horizontal Mode", () => {
     });
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
       itemSize: 80,
     });
 

@@ -67,7 +67,7 @@ export function groups<T extends VListItem = VListItem>(
   let userTemplate: ItemTemplate<T>;
   let ctxGetItem: (index: number) => T | undefined;
   let getLoadedItem: ((index: number) => T | undefined) | null = null;
-  let horizontal: boolean;
+  let isX: boolean;
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
@@ -110,7 +110,7 @@ export function groups<T extends VListItem = VListItem>(
     layout.rebuild(dataCount, getLoadedItem ?? ctxGetItem);
     origSizeCacheRebuild(layout.totalEntries);
     const totalSize = sizeCache.getTotalSize();
-    contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
@@ -131,7 +131,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function buildTransform(layoutIndex: number): string {
     const offset = sizeCache.getOffset(layoutIndex);
-    if (horizontal) {
+    if (isX) {
       return `translate(${Math.round(offset)}px, 0)`;
     }
     return `translate(0, ${Math.round(offset)}px)`;
@@ -139,7 +139,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
     const size = sizeCache.getSize(layoutIndex);
-    if (horizontal) {
+    if (isX) {
       element.style.width = `${size}px`;
     } else {
       element.style.height = `${size}px`;
@@ -370,7 +370,7 @@ export function groups<T extends VListItem = VListItem>(
     drainDetached();
 
     const totalSize = sizeCache.getTotalSize();
-    contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
@@ -428,7 +428,7 @@ export function groups<T extends VListItem = VListItem>(
       if (boundariesChanged) {
         origSizeCacheRebuild(layout.totalEntries);
         const totalSize = sizeCache.getTotalSize();
-        contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+        contentElement.style[isX ? "width" : "height"] = totalSize + "px";
         if (stickyHeader) {
           stickyHeader.refresh();
           stickyHeader.update(engineState.scrollPosition);
@@ -481,7 +481,7 @@ export function groups<T extends VListItem = VListItem>(
       contentElement = ctx.dom.content;
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
-      horizontal = ctx.config.horizontal;
+      isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       ctxGetItem = ctx.getItem.bind(ctx);
@@ -557,7 +557,7 @@ export function groups<T extends VListItem = VListItem>(
         const stickyContainer = createStickyContainer(
           rootElement,
           classPrefix,
-          horizontal,
+          isX,
           headerH,
         );
 
@@ -567,7 +567,7 @@ export function groups<T extends VListItem = VListItem>(
           sizeCache,
           renderInto,
           classPrefix,
-          horizontal,
+          isX,
           0,
           undefined,
           stickyContainer,
@@ -575,7 +575,7 @@ export function groups<T extends VListItem = VListItem>(
 
         stickyHeader.update(engineState.scrollPosition);
 
-        if (!horizontal) {
+        if (!isX) {
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
         } else {
           ctx.dom.viewport.style.width = `calc(100% - ${headerH}px)`;

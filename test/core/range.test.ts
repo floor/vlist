@@ -187,7 +187,7 @@ describe("range — scroll event", () => {
       [],
     );
 
-    const scrollEvents: Array<{ scrollPosition: number; direction: "down" | "up" }> = [];
+    const scrollEvents: Array<{ scrollPosition: number; direction: "down" | "up" | "left" | "right" }> = [];
     list.on("scroll", (e) => {
       scrollEvents.push({ scrollPosition: e.scrollPosition, direction: e.direction });
     });
@@ -210,7 +210,7 @@ describe("range — scroll event", () => {
       [],
     );
 
-    const scrollEvents: Array<{ direction: "down" | "up" }> = [];
+    const scrollEvents: Array<{ direction: "down" | "up" | "left" | "right" }> = [];
     list.on("scroll", (e) => {
       scrollEvents.push({ direction: e.direction });
     });
@@ -222,6 +222,35 @@ describe("range — scroll event", () => {
     expect(scrollEvents.length).toBe(2);
     expect(scrollEvents[0]!.direction).toBe("down");
     expect(scrollEvents[1]!.direction).toBe("up");
+  });
+
+  it("emits direction=right/left for horizontal lists", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(100),
+        orientation: "horizontal",
+        item: { width: 50, height: 400, template: simpleTemplate },
+      },
+      [],
+    );
+
+    const scrollEvents: Array<{ direction: "down" | "up" | "left" | "right" }> = [];
+    list.on("scroll", (e) => {
+      scrollEvents.push({ direction: e.direction });
+    });
+
+    const viewport = getViewport(container);
+
+    Object.defineProperty(viewport, "scrollLeft", { value: 300, writable: true, configurable: true });
+    viewport.dispatchEvent(new Event("scroll", { bubbles: false }));
+
+    Object.defineProperty(viewport, "scrollLeft", { value: 100, writable: true, configurable: true });
+    viewport.dispatchEvent(new Event("scroll", { bubbles: false }));
+
+    expect(scrollEvents.length).toBe(2);
+    expect(scrollEvents[0]!.direction).toBe("right");
+    expect(scrollEvents[1]!.direction).toBe("left");
   });
 });
 

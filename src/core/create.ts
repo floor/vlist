@@ -14,6 +14,8 @@ import type {
   ResolvedConfig,
   VisibleRangeFn,
   CompiledHooks,
+  Axis,
+  AxisConfig,
 } from "./types";
 import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
@@ -84,21 +86,39 @@ function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
 // Config Resolution
 // =============================================================================
 
-function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): ResolvedConfig {
-  const horizontal = raw.orientation === "horizontal";
+function resolveAxis<T extends VListItem>(
+  orientation: "vertical" | "horizontal" | undefined,
+  plugins: readonly VListPlugin<T>[],
+): AxisConfig {
+  const primary: Axis = orientation === "horizontal" ? "x" : "y";
+  const hasGridPlugin = plugins.some((p) => p.name === "grid");
+  if (hasGridPlugin) {
+    const cross: Axis = primary === "x" ? "y" : "x";
+    return { primary, cross };
+  }
+  return { primary };
+}
+
+function resolveConfig<T extends VListItem>(
+  raw: CreateVListConfig<T>,
+  plugins: readonly VListPlugin<T>[],
+): ResolvedConfig {
+  const axis = resolveAxis(raw.orientation, plugins);
+  const isX = axis.primary === "x";
   const pad = resolvePadding(raw.padding);
   return {
+    axis,
+    hasCrossAxis: axis.cross !== undefined,
     overscan: raw.overscan ?? OVERSCAN,
-    horizontal,
     reverse: raw.reverse ?? false,
     classPrefix: raw.classPrefix ?? CLASS_PREFIX,
     interactive: raw.interactive ?? true,
-    mainAxisPadding: mainAxisPaddingFrom(pad, horizontal),
-    crossAxisPadding: crossAxisPaddingFrom(pad, horizontal),
-    startPadding: horizontal ? pad.left : pad.top,
-    endPadding: horizontal ? pad.right : pad.bottom,
-    crossPadStart: horizontal ? pad.top : pad.left,
-    crossPadEnd: horizontal ? pad.bottom : pad.right,
+    mainAxisPadding: mainAxisPaddingFrom(pad, isX),
+    crossAxisPadding: crossAxisPaddingFrom(pad, isX),
+    startPadding: isX ? pad.left : pad.top,
+    endPadding: isX ? pad.right : pad.bottom,
+    crossPadStart: isX ? pad.top : pad.left,
+    crossPadEnd: isX ? pad.bottom : pad.right,
     striped: raw.item.striped || false,
     gap: raw.item.gap ?? 0,
   };
@@ -106,9 +126,9 @@ function resolveConfig<T extends VListItem>(raw: CreateVListConfig<T>): Resolved
 
 function resolveSizeConfig<T extends VListItem>(
   raw: CreateVListConfig<T>,
-  horizontal: boolean,
+  isX: boolean,
 ): number | ((index: number) => number) {
-  if (horizontal) {
+  if (isX) {
     return raw.item.width ?? raw.item.estimatedWidth ?? 100;
   }
   return raw.item.height ?? raw.item.estimatedHeight ?? 40;
@@ -157,8 +177,9 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Resolve config ──────────────────────────────────────────────
 
-  const config = resolveConfig(rawConfig);
-  const sizeSpec = resolveSizeConfig(rawConfig, config.horizontal);
+  const config = resolveConfig(rawConfig, plugins);
+  const isX = config.axis.primary === "x";
+  const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
   const gappedSizeSpec: number | ((index: number) => number) = gap > 0
     ? typeof sizeSpec === "function"
@@ -170,7 +191,7 @@ export function createVList<T extends VListItem = VListItem>(
   const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
   const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
   const rc = createRenderConfig(
-    config.classPrefix, config.horizontal, config.interactive,
+    config.classPrefix, isX, config.interactive,
     config.startPadding, config.crossPadStart, config.crossPadEnd,
     oddClass, gap, emitter as unknown as Emitter<VListEvents>,
   );
@@ -183,7 +204,7 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Create core components ──────────────────────────────────────
 
   const container = resolveContainer(rawConfig.container);
-  const dom = createDOMStructure(container, config.classPrefix, config.horizontal, config.interactive, rawConfig.ariaLabel);
+  const dom = createDOMStructure(container, config.classPrefix, isX, config.interactive, rawConfig.ariaLabel);
 
   // ── Scroll config: scrollbar & gutter CSS classes ──────────────
 
@@ -228,7 +249,7 @@ export function createVList<T extends VListItem = VListItem>(
   const velocityTracker = createVelocityTracker();
   const _velEvt = { velocity: 0, reliable: false };
   const _rangeEvt = { range: { start: 0, end: -1 } };
-  const _scrollEvt: { scrollPosition: number; direction: "down" | "up" } = { scrollPosition: 0, direction: "down" };
+  const _scrollEvt: { scrollPosition: number; direction: "down" | "up" | "left" | "right" } = { scrollPosition: 0, direction: "down" };
   const _idleEvt: { scrollPosition: number } = { scrollPosition: 0 };
   let prevEmittedStart = -1;
   let prevEmittedEnd = -1;
@@ -268,8 +289,8 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Pre-initialize container size so plugins can read it ────────
 
-  state.containerSize = config.horizontal ? dom.viewport.clientWidth : dom.viewport.clientHeight;
-  state.crossSize = config.horizontal ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+  state.containerSize = isX ? dom.viewport.clientWidth : dom.viewport.clientHeight;
+  state.crossSize = isX ? dom.viewport.clientHeight : dom.viewport.clientWidth;
 
   // ── Run plugin setup (cold path) ────────────────────────────────
 
@@ -305,7 +326,8 @@ export function createVList<T extends VListItem = VListItem>(
         sizeCache.rebuild(state.totalItems);
       },
       updateContentSize(size: number): void {
-        dom.content.style[config.horizontal ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
+        state.totalSize = size;
+        dom.content.style[isX ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
       },
       setRenderFn(renderFn: () => void, forceFn: () => void): void {
         customRenderIfNeeded = renderFn;
@@ -321,7 +343,7 @@ export function createVList<T extends VListItem = VListItem>(
       get rawSizeSpec() { return sizeSpec; },
       scrollTo(position: number): void {
         if (scrollSetFn) scrollSetFn(position);
-        else if (config.horizontal) dom.viewport.scrollLeft = position;
+        else if (isX) dom.viewport.scrollLeft = position;
         else dom.viewport.scrollTop = position;
       },
       smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void {
@@ -403,7 +425,11 @@ export function createVList<T extends VListItem = VListItem>(
 
   function emitScrollEvents(): void {
     _scrollEvt.scrollPosition = state.scrollPosition;
-    _scrollEvt.direction = state.scrollDirection > 0 ? "down" : "up";
+    if (isX) {
+      _scrollEvt.direction = state.scrollDirection > 0 ? "right" : "left";
+    } else {
+      _scrollEvt.direction = state.scrollDirection > 0 ? "down" : "up";
+    }
     emitter.emit("scroll", _scrollEvt);
 
     updateVelocityTracker(velocityTracker, state.scrollPosition);
@@ -425,7 +451,7 @@ export function createVList<T extends VListItem = VListItem>(
   function syncContentSize(): void {
     if (customRenderIfNeeded) return;
     const totalSize = sizeCache.getTotalSize();
-    dom.content.style[config.horizontal ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
+    dom.content.style[isX ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
 
     if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
       sizeWarningEmitted = true;
@@ -494,7 +520,7 @@ export function createVList<T extends VListItem = VListItem>(
   const scrollHandler = createScrollHandler({
     state,
     viewport: dom.viewport,
-    horizontal: config.horizontal,
+    isX,
     wheelEnabled: skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false,
     idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
     ...(scrollTarget ? { scrollTarget } : {}),
@@ -552,8 +578,8 @@ export function createVList<T extends VListItem = VListItem>(
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           const { width, height } = entry.contentRect;
-          const size = config.horizontal ? width : height;
-          const cross = config.horizontal ? height : width;
+          const size = isX ? width : height;
+          const cross = isX ? height : width;
 
           if (Math.abs(size - state.containerSize) < 1 && Math.abs(cross - state.crossSize) < 1) continue;
 
@@ -738,7 +764,7 @@ export function createVList<T extends VListItem = VListItem>(
       } else if (scrollSetFn) {
         scrollSetFn(pos);
       } else {
-        if (config.horizontal) dom.viewport.scrollLeft = pos;
+        if (isX) dom.viewport.scrollLeft = pos;
         else dom.viewport.scrollTop = pos;
       }
     },

@@ -161,6 +161,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
           if (!state.isCompressed) {
             ctx.updateContentSize(sizeCache.getTotalSize());
+            state.totalSize = sizeCache.getTotalSize();
           }
         }
 
@@ -176,6 +177,7 @@ export function snapshots<T extends VListItem = VListItem>(
           if (updateCompression) updateCompression();
           if (!state.isCompressed) {
             ctx.updateContentSize(sizeCache.getTotalSize());
+            state.totalSize = sizeCache.getTotalSize();
           }
         }
 
@@ -299,7 +301,7 @@ export function snapshots<T extends VListItem = VListItem>(
           if (saveTimer) return;
           saveTimer = requestAnimationFrame(() => {
             saveTimer = 0;
-            saveToStorage!();
+            if (saveToStorage) saveToStorage();
           }) as unknown as number;
         };
 
@@ -309,7 +311,7 @@ export function snapshots<T extends VListItem = VListItem>(
         let scrollSaveTimer = 0;
         const scrollSaveCallback = (): void => {
           scrollSaveTimer = 0;
-          saveToStorage!();
+          if (saveToStorage) saveToStorage();
         };
         const debouncedScrollSave = (): void => {
           if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
@@ -322,6 +324,7 @@ export function snapshots<T extends VListItem = VListItem>(
         window.addEventListener("beforeunload", onBeforeUnload);
 
         ctx.registerDestroyHandler(() => {
+          if (saveTimer) cancelAnimationFrame(saveTimer);
           if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
           window.removeEventListener("beforeunload", onBeforeUnload);
         });

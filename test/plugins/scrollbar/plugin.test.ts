@@ -342,3 +342,68 @@ describe("scrollbar — Gutter", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// scrollbar — Uses engineState.totalSize (not sizeCache)
+// =============================================================================
+
+describe("scrollbar — engineState.totalSize", () => {
+  it("should use engineState.totalSize for bounds, not sizeCache", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 600,
+    });
+
+    plugin.setup!(ctx);
+
+    // sizeCache total = 100 * 50 = 5000
+    // Simulate a layout plugin (e.g. masonry) setting a smaller total
+    engineState.totalSize = 1200;
+
+    // onAfterScroll should read engineState.totalSize (1200), not sizeCache (5000)
+    expect(() => plugin.hooks!.onAfterScroll!(600, 1)).not.toThrow();
+
+    // Scroll to the layout-computed end — should not throw
+    expect(() => plugin.hooks!.onAfterScroll!(600, 1)).not.toThrow();
+    cleanup();
+  });
+
+  it("should update bounds when engineState.totalSize changes", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 600,
+    });
+
+    plugin.setup!(ctx);
+
+    // First call sets initial bounds
+    engineState.totalSize = 5000;
+    plugin.hooks!.onAfterScroll!(0, 0);
+
+    // Layout plugin changes total (e.g. masonry recalculates)
+    engineState.totalSize = 1200;
+    // Should not throw — bounds should update to the new total
+    expect(() => plugin.hooks!.onAfterScroll!(500, 1)).not.toThrow();
+    cleanup();
+  });
+
+  it("should use engineState.totalSize on resize", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      itemSize: 50,
+      containerHeight: 600,
+    });
+
+    plugin.setup!(ctx);
+
+    // Simulate masonry total
+    engineState.totalSize = 1200;
+    expect(() => plugin.hooks!.onResize!(1200, 600)).not.toThrow();
+    cleanup();
+  });
+});

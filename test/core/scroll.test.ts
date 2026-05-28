@@ -29,7 +29,7 @@ describe("createScrollHandler factory", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -58,7 +58,7 @@ describe("ScrollHandler.attach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {
@@ -87,7 +87,7 @@ describe("ScrollHandler.attach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: true,
       idleTimeout: 1500,
       onFrame: () => {
@@ -116,7 +116,7 @@ describe("ScrollHandler.attach()", () => {
       state,
       viewport,
       scrollTarget,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {
@@ -149,7 +149,7 @@ describe("ScrollHandler.detach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {
@@ -176,7 +176,7 @@ describe("ScrollHandler.detach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: true,
       idleTimeout: 1500,
       onFrame: () => {
@@ -203,7 +203,7 @@ describe("ScrollHandler.detach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -229,7 +229,7 @@ describe("ScrollHandler.detach()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 100,
       onFrame: () => {},
@@ -264,7 +264,7 @@ describe("ScrollHandler - vertical mode", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -289,7 +289,7 @@ describe("ScrollHandler - vertical mode", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -320,7 +320,7 @@ describe("ScrollHandler - horizontal mode", () => {
     const config = {
       state,
       viewport,
-      horizontal: true,
+      isX: true,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -345,7 +345,7 @@ describe("ScrollHandler - horizontal mode", () => {
     const config = {
       state,
       viewport,
-      horizontal: true,
+      isX: true,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -377,7 +377,7 @@ describe("ScrollHandler.cancelScroll()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -407,7 +407,7 @@ describe("ScrollHandler.cancelScroll()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -434,7 +434,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -460,7 +460,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -485,7 +485,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -508,7 +508,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame,
@@ -533,7 +533,7 @@ describe("ScrollHandler.smoothScrollTo()", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -566,7 +566,7 @@ describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => { positions.push(viewport.scrollTop); },
@@ -593,7 +593,7 @@ describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -621,7 +621,7 @@ describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -651,7 +651,7 @@ describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => { positions.push(viewport.scrollTop); },
@@ -683,7 +683,7 @@ describe("ScrollHandler.onFrame callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame,
@@ -708,7 +708,7 @@ describe("ScrollHandler.onFrame callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -733,7 +733,7 @@ describe("ScrollHandler.onFrame callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => {},
@@ -764,7 +764,7 @@ describe("ScrollHandler.onIdle callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 100,
       onFrame: () => {},
@@ -792,7 +792,7 @@ describe("ScrollHandler.onIdle callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 100,
       onFrame: () => {},
@@ -823,7 +823,7 @@ describe("ScrollHandler.onIdle callback", () => {
     const config = {
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 100,
       onFrame: () => {},

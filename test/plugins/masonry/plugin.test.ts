@@ -158,7 +158,7 @@ describe("masonry - Setup", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
     });
 
     plugin.setup!(ctx);

@@ -256,7 +256,7 @@ describe("grid - Configuration", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
     });
 
     plugin.setup!(ctx);
@@ -792,7 +792,7 @@ describe("grid - Edge Cases", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(8);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
     });
 
     plugin.setup!(ctx);
@@ -808,7 +808,7 @@ describe("grid - Edge Cases", () => {
     const plugin = grid<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(8);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      horizontal: true,
+      isX: true,
       containerHeight: 400,
       containerWidth: 1000,
     });

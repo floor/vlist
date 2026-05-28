@@ -578,7 +578,7 @@ describe("scroll handler horizontal wheel", () => {
     const handler = createScrollHandler({
       state,
       viewport,
-      horizontal: true,
+      isX: true,
       wheelEnabled: true,
       idleTimeout: 150,
       onFrame,
@@ -603,7 +603,7 @@ describe("scroll handler horizontal wheel", () => {
 
     const onFrame = mock(() => {});
     const handler = createScrollHandler({
-      state, viewport, horizontal: true, wheelEnabled: true, idleTimeout: 150,
+      state, viewport, isX: true, wheelEnabled: true, idleTimeout: 150,
       onFrame, onIdle: () => {},
     });
     handler.attach();
@@ -628,7 +628,7 @@ describe("scroll handler horizontal wheel", () => {
 
     const onFrame = mock(() => {});
     const handler = createScrollHandler({
-      state, viewport, horizontal: false, wheelEnabled: true, idleTimeout: 150,
+      state, viewport, isX: false, wheelEnabled: true, idleTimeout: 150,
       onFrame, onIdle: () => {},
     });
     handler.attach();

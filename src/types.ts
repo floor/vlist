@@ -599,7 +599,7 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   "focus:change": { id: string | number; index: number };
 
   /** Scroll position changed */
-  scroll: { scrollPosition: number; direction: "up" | "down" };
+  scroll: { scrollPosition: number; direction: "up" | "down" | "left" | "right" };
 
   /** Scroll velocity changed */
   "velocity:change": { velocity: number; reliable: boolean };

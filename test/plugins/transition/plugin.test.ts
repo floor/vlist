@@ -104,7 +104,7 @@ function createItemElement(
  */
 function createMockContext(
   overrides: {
-    horizontal?: boolean;
+    isX?: boolean;
     reverse?: boolean;
     items?: TestItem[];
   } = {},
@@ -119,7 +119,7 @@ function createMockContext(
   const testItems: TestItem[] = overrides.items ?? createTestItems(20);
 
   const base = createPluginMockContext<TestItem>(testItems, {
-    horizontal: overrides.horizontal ?? false,
+    isX: overrides.isX ?? false,
     reverse: overrides.reverse ?? false,
     itemSize: 50,
     containerWidth: 400,
@@ -797,7 +797,7 @@ describe("withTransition — insertItem (animated)", () => {
 
 describe("withTransition — Horizontal mode", () => {
   it("uses translateX instead of translateY", async () => {
-    const { ctx, dom, testItems, methods } = createMockContext({ horizontal: true });
+    const { ctx, dom, testItems, methods } = createMockContext({ isX: true });
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const plugin = transition();
@@ -819,7 +819,7 @@ describe("withTransition — Horizontal mode", () => {
   });
 
   it("uses scrollLeft for scroll position in horizontal mode", async () => {
-    const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext({ horizontal: true });
+    const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext({ isX: true });
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const plugin = transition();

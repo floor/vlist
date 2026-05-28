@@ -62,7 +62,7 @@ export function scale<T extends VListItem = VListItem>(
   let engineState: EngineState;
   let sizeCache: SizeCache;
   let viewport: HTMLElement;
-  let horizontal: boolean;
+  let isX: boolean;
   let overscan: number;
 
   let compression: CompressionState = {
@@ -181,8 +181,8 @@ export function scale<T extends VListItem = VListItem>(
   function activateCompression(ctx: PluginContext<T>): void {
     compressedActive = true;
     engineState.isCompressed = true;
-    const scrollProp = horizontal ? "scrollLeft" : "scrollTop";
-    const overflowProp = horizontal ? "overflowX" : "overflow";
+    const scrollProp = isX ? "scrollLeft" : "scrollTop";
+    const overflowProp = isX ? "overflowX" : "overflow";
 
     // Capture native position before disabling
     const nativePos = viewport[scrollProp as keyof HTMLElement] as number;
@@ -251,7 +251,7 @@ export function scale<T extends VListItem = VListItem>(
       }
       const touch = e.touches[0];
       if (!touch) return;
-      const y = horizontal ? touch.clientX : touch.clientY;
+      const y = isX ? touch.clientX : touch.clientY;
       touchStartPos = y;
       touchScrollStart = virtualScrollPosition;
       sampleCount = 1;
@@ -264,7 +264,7 @@ export function scale<T extends VListItem = VListItem>(
       e.preventDefault();
       const touch = e.touches[0];
       if (!touch) return;
-      const y = horizontal ? touch.clientX : touch.clientY;
+      const y = isX ? touch.clientX : touch.clientY;
       const now = performance.now();
 
       const slot = sampleCount < TOUCH_VELOCITY_SAMPLES ? sampleCount : sampleHead;
@@ -400,7 +400,7 @@ export function scale<T extends VListItem = VListItem>(
         scrollbarCallback,
         {},
         classPrefix,
-        horizontal,
+        isX,
         ctx.dom.root,
       );
       ownsScrollbar = true;
@@ -428,7 +428,7 @@ export function scale<T extends VListItem = VListItem>(
 
     cleanup();
 
-    const overflowProp = horizontal ? "overflowX" : "overflow";
+    const overflowProp = isX ? "overflowX" : "overflow";
     (viewport.style as any)[overflowProp] = "auto";
 
     slack = 0;
@@ -452,7 +452,7 @@ export function scale<T extends VListItem = VListItem>(
     fallbackScrollbar = null;
     ownsScrollbar = false;
 
-    const scrollProp = horizontal ? "scrollLeft" : "scrollTop";
+    const scrollProp = isX ? "scrollLeft" : "scrollTop";
     if (viewport && (viewport as any)[scrollProp] !== 0) {
       (viewport as any)[scrollProp] = 0;
     }
@@ -466,7 +466,7 @@ export function scale<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;
       viewport = ctx.dom.viewport;
-      horizontal = ctx.config.horizontal;
+      isX = ctx.config.axis.primary === "x";
       overscan = ctx.config.overscan;
 
       storedCtx = ctx;
@@ -478,7 +478,7 @@ export function scale<T extends VListItem = VListItem>(
         () => virtualScrollPosition,
         (actualOffset: number) => {
           if (!compression.isCompressed || !compressedActive) {
-            const prop = horizontal ? "scrollLeft" : "scrollTop";
+            const prop = isX ? "scrollLeft" : "scrollTop";
             (viewport as any)[prop] = actualOffset;
             return;
           }

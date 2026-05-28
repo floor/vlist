@@ -11,6 +11,27 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-05-28
+
+### Fixed
+
+- **Scrollbar thumb in masonry/horizontal mode** — scrollbar plugin was reading `sizeCache.getTotalSize()` (flat-list total) instead of the layout-computed total, causing the thumb to stop short of the end in masonry horizontal layouts
+- **Scroll direction labels for horizontal lists** — horizontal lists now correctly emit `direction: "left" | "right"` instead of `"up" | "down"` in scroll events
+- **Snapshots totalSize sync** — `restoreScroll` now syncs `state.totalSize` during bootstrap, preventing stale scroll bounds after restore
+- **Snapshots destroy safety** — prevent `TypeError` when list is destroyed during a pending save timer
+- **TypeScript declarations** — build now emits `.d.ts` files in the published package
+
+### Refactored
+
+- **Axis-based internal model (RFC-005)** — replaced `horizontal: boolean` on `ResolvedConfig` with `AxisConfig { primary: 'x' | 'y', cross?: 'x' | 'y' }`. All internal code uses `config.axis.primary === "x"` (aliased as `isX`) instead of `horizontal`. New `hasCrossAxis` field replaces the implicit grid detection. `Axis` and `AxisConfig` types are now exported.
+
+### Tests
+
+- Axis-config resolution tests: vertical, horizontal, vertical grid, horizontal grid
+- Scrollbar `engineState.totalSize` tests: bounds from engine state, bounds update on change, resize
+- Horizontal scroll direction label test
+- Coverage threshold tests for masonry, page, selection plugins
+
 ## [2.0.0] - 2026-05-27
 
 ### Added

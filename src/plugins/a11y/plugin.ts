@@ -187,12 +187,12 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
         } else {
           const ud = nav.ud || 1;
           const lr = nav.lr;
-          const hz = config.horizontal;
+          const isX = config.axis.primary === "x";
           switch (e.key) {
-            case "ArrowUp":    if (hz && !lr) return; n = p - (hz ? lr : ud); break;
-            case "ArrowDown":  if (hz && !lr) return; n = p + (hz ? lr : ud); break;
-            case "ArrowLeft":  if (!hz && !lr) return; n = p - (hz ? ud : lr); break;
-            case "ArrowRight": if (!hz && !lr) return; n = p + (hz ? ud : lr); break;
+            case "ArrowUp":    if (isX && !lr) return; n = p - (isX ? lr : ud); break;
+            case "ArrowDown":  if (isX && !lr) return; n = p + (isX ? lr : ud); break;
+            case "ArrowLeft":  if (!isX && !lr) return; n = p - (isX ? ud : lr); break;
+            case "ArrowRight": if (!isX && !lr) return; n = p + (isX ? ud : lr); break;
             case "PageUp":
             case "PageDown": {
               const sz = sizeCache.getSize(Math.max(0, nav.scrollIndex ? nav.scrollIndex(p) : p));

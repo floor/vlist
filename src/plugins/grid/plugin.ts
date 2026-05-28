@@ -55,7 +55,7 @@ export function grid<T extends VListItem = VListItem>(
   let contentElement: HTMLElement;
   let template: ItemTemplate<T>;
   let getItem: (index: number) => T | undefined;
-  let horizontal: boolean;
+  let isX: boolean;
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
@@ -78,7 +78,7 @@ export function grid<T extends VListItem = VListItem>(
     const col = layout.getCol(itemIndex);
     const x = layout.getColumnOffset(col, containerWidth);
     const y = sizeCache.getOffset(row);
-    if (horizontal) {
+    if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
     return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
@@ -88,7 +88,7 @@ export function grid<T extends VListItem = VListItem>(
     const row = layout.getRow(itemIndex);
     const colWidth = layout.getColumnWidth(containerWidth);
     const rowHeight = sizeCache.getSize(row) - layout.gap;
-    if (horizontal) {
+    if (isX) {
       element.style.width = `${rowHeight}px`;
       element.style.height = `${colWidth}px`;
     } else {
@@ -194,7 +194,7 @@ export function grid<T extends VListItem = VListItem>(
 
     // Update content size for scrollbar
     const totalSize = sizeCache.getTotalSize();
-    contentElement.style[horizontal ? "width" : "height"] = totalSize + "px";
+    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
 
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
@@ -238,7 +238,7 @@ export function grid<T extends VListItem = VListItem>(
       pool = ctx.pool;
       contentElement = ctx.dom.content;
       template = ctx.template;
-      horizontal = ctx.config.horizontal;
+      isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       getItem = ctx.getItem.bind(ctx);
