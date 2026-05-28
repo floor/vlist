@@ -485,20 +485,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     }
     // Once groupsActive is true, it stays true (groups don't disappear mid-scroll)
 
-    // Release items outside the new range, with grace period to prevent
-    // boundary thrashing (hover blink, CSS transition replay).
-    // Items that just left the visible range keep their DOM element for
-    // RELEASE_GRACE extra render cycles — if they re-enter, the same
-    // element is reused with :hover state intact.
-    for (const [index, tracked] of rendered) {
-      if (index >= range.start && index <= range.end) {
-        tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
-
     // Check if aria-setsize changed (total items mutated) — update existing items only when needed
     let setSizeChanged = false;
     if (totalItemsGetter) {
@@ -611,6 +597,20 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     // Single DOM insertion for all new elements — minimizes reflows
     if (fragment) itemsContainer.appendChild(fragment);
+
+    // Release items outside the new range (after append so new elements are
+    // in the DOM before stale ones are removed — no single-frame gaps).
+    // Grace period prevents boundary thrashing (hover blink, CSS transition
+    // replay): items that just left the visible range keep their DOM element
+    // for RELEASE_GRACE extra render cycles.
+    for (const [index, tracked] of rendered) {
+      if (index >= range.start && index <= range.end) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        pool.release(tracked.element);
+        rendered.delete(index);
+      }
+    }
 
   };
 

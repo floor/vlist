@@ -365,20 +365,6 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       visibleSet.add(placements[i]!.index);
     }
 
-    // Release items no longer visible, with grace period to prevent
-    // boundary thrashing (hover blink, CSS transition replay).
-    // Items that just left the visible set keep their DOM element for
-    // RELEASE_GRACE extra render cycles — if they re-enter, the same
-    // element is reused with :hover state intact.
-    for (const [index, tracked] of rendered) {
-      if (visibleSet.has(index)) {
-        tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
-
     // DocumentFragment for batched DOM insertion of new elements
     // (matches core renderer and grid renderer patterns)
     let fragment: DocumentFragment | null = null;
@@ -465,6 +451,20 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
     // Single DOM insertion for all new elements — minimizes reflows
     if (fragment) itemsContainer.appendChild(fragment);
+
+    // Release items no longer visible (after append so new elements are in
+    // the DOM before stale ones are removed — no single-frame gaps).
+    // Grace period prevents boundary thrashing (hover blink, CSS transition
+    // replay): items that just left the visible set keep their DOM element
+    // for RELEASE_GRACE extra render cycles.
+    for (const [index, tracked] of rendered) {
+      if (visibleSet.has(index)) {
+        tracked.lastSeenFrame = frameCounter;
+      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+        pool.release(tracked.element);
+        rendered.delete(index);
+      }
+    }
   };
 
   /**

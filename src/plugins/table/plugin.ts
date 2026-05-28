@@ -161,8 +161,10 @@ export function table<T extends VListItem = VListItem>(
       engineState.visibleSizes[i] = sizeCache.getSize(idx);
     }
 
-    // Update content size
-    storedCtx.dom.content.style.height = sizeCache.getTotalSize() + "px";
+    // Update content size (also sync engineState for scrollbar plugin)
+    const totalSize = sizeCache.getTotalSize();
+    engineState.totalSize = totalSize;
+    storedCtx.dom.content.style.height = totalSize + "px";
   }
 
   function tableForceRender(): void {
