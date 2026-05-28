@@ -12,7 +12,6 @@ import type {
   VList,
   PluginContext,
   ResolvedConfig,
-  VisibleRangeFn,
   CompiledHooks,
   Axis,
   AxisConfig,
@@ -311,7 +310,6 @@ export function createVList<T extends VListItem = VListItem>(
         const newCache = createSizeCache(sc, state.totalItems);
         Object.assign(sizeCache, newCache);
       },
-      setVisibleRangeFn(_fn: VisibleRangeFn): void { /* wired in Phase B when scale plugin consumes it */ },
       setScrollFns(get: () => number, set: (pos: number) => void): void {
         scrollGetFn = get;
         scrollSetFn = set;

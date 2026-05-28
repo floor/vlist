@@ -107,7 +107,7 @@ createVList(config, [       → VList instance
 
 - **EngineState** — TypedArray-based state singleton. All hot-path data (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in typed arrays — zero allocation per frame.
 - **2-Phase Pipeline** — Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions. Phase 2 (`onCommit`) reads the buffers and updates DOM. Plugins hook into either phase.
-- **`PluginContext`** — The context object passed to every plugin's `setup()`. Plugins register handlers (`registerClickHandler`, `registerKeydownHandler`, `registerDestroyHandler`), add public methods (`registerMethod`), and can replace core functions (`setSizeConfig`, `setVisibleRangeFn`, `setRenderFn`).
+- **`PluginContext`** — The context object passed to every plugin's `setup()`. Plugins register handlers (`registerClickHandler`, `registerKeydownHandler`, `registerDestroyHandler`), add public methods (`registerMethod`), and can replace core functions (`setSizeConfig`, `setRenderFn`).
 - **`VListPlugin`** — The interface every plugin implements: `name`, optional `priority` (lower runs first), optional `conflicts` array, `setup(ctx)`, optional `hooks` object (`onCalculate`, `onCommit`, `onAfterScroll`, `onIdle`, `onResize`), optional `destroy()`.
 
 ## Development Workflow

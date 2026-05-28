@@ -30,7 +30,6 @@ export type {
   ResolvedConfig,
   DOMStructure,
   ElementPool,
-  VisibleRangeFn,
   PluginContext,
   VListPlugin,
   VList,

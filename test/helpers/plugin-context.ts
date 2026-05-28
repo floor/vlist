@@ -201,7 +201,6 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     setSizeConfig: () => {},
-    setVisibleRangeFn: () => {},
     setScrollFns: () => {},
     setVirtualTotalFn: () => {},
 
