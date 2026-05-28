@@ -48,7 +48,7 @@ export function page<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       const { dom, sizeCache, config: cfg, emitter } = ctx;
-      const hz = cfg.horizontal;
+      const isX = cfg.axis.primary === "x";
       const win = window;
       const state = ctx.getState();
 
@@ -60,7 +60,7 @@ export function page<T extends VListItem = VListItem>(
       dom.root.style.overflow = "visible";
       dom.root.style.height = "auto";
 
-      if (hz) {
+      if (isX) {
         dom.viewport.style.overflowX = "visible";
         dom.viewport.style.overflowY = "visible";
       } else {
@@ -73,12 +73,12 @@ export function page<T extends VListItem = VListItem>(
       ctx.setScrollFns(
         (): number => {
           const rect = dom.viewport.getBoundingClientRect();
-          return Math.max(0, hz ? -rect.left : -rect.top);
+          return Math.max(0, isX ? -rect.left : -rect.top);
         },
         (pos: number): void => {
           const rect = dom.viewport.getBoundingClientRect();
-          const target = (hz ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;
-          if (hz) {
+          const target = (isX ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;
+          if (isX) {
             win.scrollTo({ left: target, top: win.scrollY, behavior: "instant" });
           } else {
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
@@ -87,15 +87,15 @@ export function page<T extends VListItem = VListItem>(
       );
 
       // ── 4. Set container size from window ──────────────────────
-      state.containerSize = hz ? win.innerWidth : win.innerHeight;
-      state.crossSize = hz ? win.innerHeight : win.innerWidth;
+      state.containerSize = isX ? win.innerWidth : win.innerHeight;
+      state.crossSize = isX ? win.innerHeight : win.innerWidth;
 
       // ── 5. Window scroll listener ──────────────────────────────
       let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
       const onWindowScroll = (): void => {
         const rect = dom.viewport.getBoundingClientRect();
-        const pos = Math.max(0, hz ? -rect.left : -rect.top);
+        const pos = Math.max(0, isX ? -rect.left : -rect.top);
 
         state.prevScrollPosition = state.scrollPosition;
         state.scrollPosition = pos;
@@ -121,14 +121,14 @@ export function page<T extends VListItem = VListItem>(
       const onWindowResize = (): void => {
         const w = win.innerWidth;
         const h = win.innerHeight;
-        const sizeDelta = hz ? Math.abs(w - prevW) : Math.abs(h - prevH);
+        const sizeDelta = isX ? Math.abs(w - prevW) : Math.abs(h - prevH);
 
         if (sizeDelta < 1) return;
 
         prevW = w;
         prevH = h;
-        state.containerSize = hz ? w : h;
-        state.crossSize = hz ? h : w;
+        state.containerSize = isX ? w : h;
+        state.crossSize = isX ? h : w;
 
         ctx.forceRender();
         emitter.emit("resize", { width: w, height: h });
@@ -140,8 +140,8 @@ export function page<T extends VListItem = VListItem>(
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
       if (scrollPadding) {
         ctx.setScrollToPosFn((index, sc, containerSize, totalItems, align) => {
-          const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
+          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
+          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
           if (totalItems === 0) return 0;
           const clamped = Math.max(0, Math.min(index, totalItems - 1));
           const offset = sc.getOffset(clamped);
@@ -163,13 +163,13 @@ export function page<T extends VListItem = VListItem>(
         });
 
         ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
-          const containerSize = hz ? win.innerWidth : win.innerHeight;
-          const startPad = resolvePad(hz ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(hz ? scrollPadding.right : scrollPadding.bottom);
+          const containerSize = isX ? win.innerWidth : win.innerHeight;
+          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
+          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
 
           const rect = dom.viewport.getBoundingClientRect();
-          const domScroll = hz ? win.scrollX : win.scrollY;
-          const listScreenPos = hz ? rect.left : rect.top;
+          const domScroll = isX ? win.scrollX : win.scrollY;
+          const listScreenPos = isX ? rect.left : rect.top;
           const listDocPos = listScreenPos + domScroll;
 
           const itemOffset = sizeCache.getOffset(index);
@@ -186,7 +186,7 @@ export function page<T extends VListItem = VListItem>(
           }
 
           if (newTarget !== domScroll) {
-            if (hz) {
+            if (isX) {
               win.scrollTo({ left: newTarget, top: win.scrollY, behavior: "instant" });
             } else {
               win.scrollTo({ left: win.scrollX, top: newTarget, behavior: "instant" });

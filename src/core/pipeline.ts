@@ -29,9 +29,9 @@ export interface RenderConfig {
   readonly placeholderClass: string;
   readonly replacedClass: string;
   readonly translateProp: "translateX(" | "translateY(";
+  readonly sizeProp: "width" | "height";
   readonly itemRole: "option" | "listitem";
   readonly interactive: boolean;
-  readonly horizontal: boolean;
   readonly startPadding: number;
   readonly gap: number;
   readonly hasCrossPad: boolean;
@@ -45,7 +45,7 @@ export interface RenderConfig {
 
 export function createRenderConfig(
   classPrefix: string,
-  horizontal: boolean,
+  isX: boolean,
   interactive: boolean,
   startPadding: number,
   crossPadStart: number,
@@ -61,15 +61,15 @@ export function createRenderConfig(
     focusedClass: `${classPrefix}-item--focused`,
     placeholderClass: `${classPrefix}-item--placeholder`,
     replacedClass: `${classPrefix}-item--replaced`,
-    translateProp: horizontal ? "translateX(" : "translateY(",
+    translateProp: isX ? "translateX(" : "translateY(",
+    sizeProp: isX ? "width" : "height",
     itemRole: interactive ? "option" : "listitem",
     interactive,
-    horizontal,
     startPadding,
     gap,
     hasCrossPad,
-    crossStartProp: hasCrossPad ? (horizontal ? "top" : "left") : "",
-    crossEndProp: hasCrossPad ? (horizontal ? "bottom" : "right") : "",
+    crossStartProp: hasCrossPad ? (isX ? "top" : "left") : "",
+    crossEndProp: hasCrossPad ? (isX ? "bottom" : "right") : "",
     crossStartVal: hasCrossPad ? crossPadStart + "px" : "",
     crossEndVal: hasCrossPad ? crossPadEnd + "px" : "",
     oddClass,
@@ -292,11 +292,7 @@ export function phase2Commit<T extends VListItem>(
       acquired._lastOffset = transformOffset;
 
       const sizeVal = size - rc.gap;
-      if (rc.horizontal) {
-        acquired.style.width = sizeVal + "px";
-      } else {
-        acquired.style.height = sizeVal + "px";
-      }
+      acquired.style[rc.sizeProp] = sizeVal + "px";
       acquired._lastSize = sizeVal;
 
       acquired._lastItem = item;
@@ -365,11 +361,7 @@ export function phase2Commit<T extends VListItem>(
 
       const sizeVal = size - rc.gap;
       if (el._lastSize !== sizeVal) {
-        if (rc.horizontal) {
-          element.style.width = sizeVal + "px";
-        } else {
-          element.style.height = sizeVal + "px";
-        }
+        element.style[rc.sizeProp] = sizeVal + "px";
         el._lastSize = sizeVal;
       }
     }

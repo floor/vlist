@@ -19,6 +19,8 @@ export { createScrollHandler } from "./scroll";
 export type { SizeCache } from "./sizes";
 export type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 export type {
+  Axis,
+  AxisConfig,
   CalculateHook,
   CommitHook,
   AfterScrollHook,

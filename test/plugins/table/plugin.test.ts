@@ -210,7 +210,7 @@ describe("table - Setup", () => {
   it("should throw if horizontal is true", () => {
     const plugin = table({ columns: testColumns, rowHeight: 40 });
     const items = createTestItems(10);
-    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { horizontal: true });
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { isX: true });
 
     expect(() => plugin.setup!(ctx)).toThrow("cannot be used with horizontal orientation");
     cleanup();

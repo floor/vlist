@@ -33,7 +33,7 @@ function createViewport(opts: {
 }
 
 function makeHandler(viewport: HTMLElement, opts: {
-  horizontal?: boolean;
+  isX?: boolean;
   state?: ReturnType<typeof createEngineState>;
 } = {}) {
   const state = opts.state ?? createEngineState(10);
@@ -41,7 +41,7 @@ function makeHandler(viewport: HTMLElement, opts: {
   const config = {
     state,
     viewport,
-    horizontal: opts.horizontal ?? false,
+    isX: opts.isX ?? false,
     wheelEnabled: true,
     idleTimeout: 1500,
     onFrame: () => { frames.push(state.scrollPosition); },
@@ -135,7 +135,7 @@ describe("scroll bounds — horizontal wheel clamping", () => {
     state.scrollPosition = 20;
     viewport.scrollLeft = 20;
 
-    const { handler } = makeHandler(viewport, { horizontal: true, state });
+    const { handler } = makeHandler(viewport, { isX: true, state });
 
     fireWheel(viewport, -5000);
 
@@ -149,7 +149,7 @@ describe("scroll bounds — horizontal wheel clamping", () => {
     state.scrollPosition = 2400;
     viewport.scrollLeft = 2400;
 
-    const { handler } = makeHandler(viewport, { horizontal: true, state });
+    const { handler } = makeHandler(viewport, { isX: true, state });
 
     fireWheel(viewport, 5000);
 
@@ -174,7 +174,7 @@ describe("scroll bounds — sub-pixel filtering", () => {
     const handler = createScrollHandler({
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: true,
       idleTimeout: 1500,
       onFrame: () => { frames.push(state.scrollPosition); },
@@ -198,7 +198,7 @@ describe("scroll bounds — sub-pixel filtering", () => {
     const handler = createScrollHandler({
       state,
       viewport,
-      horizontal: false,
+      isX: false,
       wheelEnabled: false,
       idleTimeout: 1500,
       onFrame: () => { frameCount++; },
@@ -323,7 +323,7 @@ describe("scroll bounds — cross-axis passthrough", () => {
     state.scrollPosition = 100;
     viewport.scrollLeft = 100;
 
-    const { handler, frames } = makeHandler(viewport, { horizontal: true, state });
+    const { handler, frames } = makeHandler(viewport, { isX: true, state });
 
     // In horizontal mode, deltaX > deltaY means it's the primary axis → ignored by wheel handler
     viewport.dispatchEvent(

@@ -37,7 +37,7 @@ export interface PluginTestContext<T extends VListItem> {
 export function createPluginMockContext<T extends VListItem>(
   items: T[],
   options?: {
-    horizontal?: boolean;
+    isX?: boolean;
     reverse?: boolean;
     classPrefix?: string;
     overscan?: number;
@@ -48,7 +48,7 @@ export function createPluginMockContext<T extends VListItem>(
     template?: ItemTemplate<T>;
   },
 ): PluginTestContext<T> {
-  const hz = options?.horizontal ?? false;
+  const isX = options?.isX ?? false;
   const classPrefix = options?.classPrefix ?? "vlist";
   const containerWidth = options?.containerWidth ?? 800;
   const containerHeight = options?.containerHeight ?? 600;
@@ -87,8 +87,8 @@ export function createPluginMockContext<T extends VListItem>(
 
   // ── Engine State ────────────────────────────────────────────────
   const engineState = createEngineState(200);
-  engineState.containerSize = hz ? containerWidth : containerHeight;
-  engineState.crossSize = hz ? containerHeight : containerWidth;
+  engineState.containerSize = isX ? containerWidth : containerHeight;
+  engineState.crossSize = isX ? containerHeight : containerWidth;
   engineState.totalItems = items.length;
   engineState.scrollPosition = 0;
 
@@ -131,8 +131,9 @@ export function createPluginMockContext<T extends VListItem>(
 
   // ── Config ──────────────────────────────────────────────────────
   const config: ResolvedConfig = {
+    axis: { primary: isX ? "x" : "y" },
+    hasCrossAxis: false,
     overscan: options?.overscan ?? 2,
-    horizontal: hz,
     reverse: options?.reverse ?? false,
     classPrefix,
     interactive: options?.interactive ?? true,
@@ -209,7 +210,7 @@ export function createPluginMockContext<T extends VListItem>(
     getState: () => engineState,
     rebuildSizeCache: () => {},
     updateContentSize: (size: number) => {
-      if (hz) {
+      if (isX) {
         content.style.width = `${size}px`;
       } else {
         content.style.height = `${size}px`;

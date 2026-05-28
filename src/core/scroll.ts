@@ -26,7 +26,7 @@ export interface ScrollHandler {
 export interface ScrollHandlerConfig {
   readonly state: EngineState;
   readonly viewport: HTMLElement;
-  readonly horizontal: boolean;
+  readonly isX: boolean;
   readonly wheelEnabled: boolean;
   readonly idleTimeout: number;
   /** Override the event target for scroll/wheel listeners (default: viewport) */
@@ -38,7 +38,7 @@ export interface ScrollHandlerConfig {
 }
 
 export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler {
-  const { state, viewport, horizontal, wheelEnabled, onFrame, onIdle } = config;
+  const { state, viewport, isX, wheelEnabled, onFrame, onIdle } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
   const target: EventTarget = config.scrollTarget ?? viewport;
 
@@ -48,7 +48,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
   // ── Scroll event (passive, for native/touch scrolling) ──────────
 
   function onScrollEvent(): void {
-    const pos = horizontal ? viewport.scrollLeft : viewport.scrollTop;
+    const pos = isX ? viewport.scrollLeft : viewport.scrollTop;
     if (Math.abs(pos - state.scrollPosition) < 0.5) return;
 
     state.prevScrollPosition = state.scrollPosition;
@@ -66,7 +66,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
     let next: number;
 
-    if (horizontal) {
+    if (isX) {
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
       const current = viewport.scrollLeft;
@@ -127,7 +127,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     const from = state.scrollPosition;
     if (Math.abs(target - from) < 1) {
       if (setFn) setFn(target);
-      else if (horizontal) viewport.scrollLeft = target;
+      else if (isX) viewport.scrollLeft = target;
       else viewport.scrollTop = target;
       return;
     }
@@ -138,7 +138,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
       const t = Math.min(elapsed / duration, 1);
       const pos = from + (target - from) * easing(t);
       if (setFn) setFn(pos);
-      else if (horizontal) viewport.scrollLeft = pos;
+      else if (isX) viewport.scrollLeft = pos;
       else viewport.scrollTop = pos;
       if (!setFn) state.scrollPosition = pos;
       onFrame();

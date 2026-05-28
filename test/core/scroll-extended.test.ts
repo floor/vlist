@@ -51,7 +51,7 @@ function makeHandler(overrides: Partial<ScrollHandlerConfig> = {}): {
   const config: ScrollHandlerConfig = {
     state,
     viewport,
-    horizontal: false,
+    isX: false,
     wheelEnabled: true,
     idleTimeout: 100,
     onFrame,
@@ -245,7 +245,7 @@ describe("wheel handler — horizontal mode", () => {
     viewport.scrollLeft = 100;
     const state = createEngineState(10);
     state.scrollPosition = 100;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     fireWheel(viewport, 30);
 
@@ -260,7 +260,7 @@ describe("wheel handler — horizontal mode", () => {
     const state = createEngineState(10);
     state.scrollPosition = 100;
     const onFrame = mock(() => {});
-    const { handler } = makeHandler({ viewport, state, horizontal: true, onFrame });
+    const { handler } = makeHandler({ viewport, state, isX: true, onFrame });
 
     // abs(deltaX) > abs(deltaY) → native horizontal passthrough
     fireWheel(viewport, 10, 50);
@@ -275,7 +275,7 @@ describe("wheel handler — horizontal mode", () => {
     viewport.scrollLeft = 5;
     const state = createEngineState(10);
     state.scrollPosition = 5;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     fireWheel(viewport, -1000);
 
@@ -289,7 +289,7 @@ describe("wheel handler — horizontal mode", () => {
     viewport.scrollLeft = 2490;
     const state = createEngineState(10);
     state.scrollPosition = 2490;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     fireWheel(viewport, 500);
 
@@ -305,7 +305,7 @@ describe("wheel handler — horizontal mode", () => {
     const state = createEngineState(10);
     state.scrollPosition = 100;
     const onFrame = mock(() => {});
-    const { handler } = makeHandler({ viewport, state, horizontal: true, onFrame });
+    const { handler } = makeHandler({ viewport, state, isX: true, onFrame });
 
     fireWheel(viewport, 0.3);
 
@@ -318,7 +318,7 @@ describe("wheel handler — horizontal mode", () => {
     viewport.scrollLeft = 100;
     const state = createEngineState(10);
     state.scrollPosition = 100;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     const event = fireWheel(viewport, 50);
 
@@ -333,7 +333,7 @@ describe("wheel handler — horizontal mode", () => {
     state.scrollPosition = 100;
     state.isCompressed = true;
     const onFrame = mock(() => {});
-    const { handler } = makeHandler({ viewport, state, horizontal: true, onFrame });
+    const { handler } = makeHandler({ viewport, state, isX: true, onFrame });
 
     fireWheel(viewport, 50);
 
@@ -347,7 +347,7 @@ describe("wheel handler — horizontal mode", () => {
     viewport.scrollLeft = 200;
     const state = createEngineState(10);
     state.scrollPosition = 200;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     fireWheel(viewport, -50);
 
@@ -655,7 +655,7 @@ describe("smooth scroll — edge cases", () => {
     const viewport = createViewport({ scrollWidth: 5000, clientWidth: 500 });
     const state = createEngineState(10);
     state.scrollPosition = 0;
-    const { handler } = makeHandler({ viewport, state, horizontal: true });
+    const { handler } = makeHandler({ viewport, state, isX: true });
 
     handler.smoothScrollTo(300, 100);
 

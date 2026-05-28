@@ -106,7 +106,7 @@ describe("page — DOM Modifications", () => {
   it("should set viewport overflow to visible (vertical mode)", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items, { horizontal: false });
+    const { ctx, cleanup } = createPluginMockContext(items, { isX: false });
 
     plugin.setup!(ctx);
     expect(ctx.dom.viewport.style.overflow).toBe("visible");
@@ -116,7 +116,7 @@ describe("page — DOM Modifications", () => {
   it("should set viewport overflowX and overflowY to visible (horizontal mode)", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items, { horizontal: true });
+    const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
 
     plugin.setup!(ctx);
     expect(ctx.dom.viewport.style.overflowX).toBe("visible");
@@ -263,7 +263,7 @@ describe("page — Scroll Position Functions", () => {
   it("getTop should use rect.left in horizontal mode", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items, { horizontal: true });
+    const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
     const setScrollFnsSpy = mock((_get: any, _set: any) => {});
     (ctx as any).setScrollFns = setScrollFnsSpy;
 
@@ -281,7 +281,7 @@ describe("page — Scroll Position Functions", () => {
   it("setTop should use window.scrollTo with horizontal args in horizontal mode", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items, { horizontal: true });
+    const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
     const setScrollFnsSpy = mock((_get: any, _set: any) => {});
     (ctx as any).setScrollFns = setScrollFnsSpy;
 
@@ -425,7 +425,7 @@ describe("page — Window Resize Handler", () => {
   it("should handle horizontal resize using width as main axis", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items, { horizontal: true });
+    const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
     const emitSpy = mock(() => {});
     (ctx.emitter as any).emit = emitSpy;
 
@@ -749,7 +749,7 @@ describe("page — scrollPadding", () => {
   it("should use left/right padding in horizontal mode", () => {
     const plugin = page<TestItem>({ scrollPadding: { left: 80, right: 40 } });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext(items, { horizontal: true, itemSize: 50 });
+    const { ctx, methods, cleanup } = createPluginMockContext(items, { isX: true, itemSize: 50 });
 
     Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
 

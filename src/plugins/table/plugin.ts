@@ -191,7 +191,7 @@ export function table<T extends VListItem = VListItem>(
       const { dom, config: resolvedConfig, emitter } = ctx;
       const { classPrefix } = resolvedConfig;
 
-      if (resolvedConfig.horizontal) {
+      if (resolvedConfig.axis.primary === "x") {
         throw new Error("[vlist] table: cannot be used with horizontal orientation");
       }
       if (resolvedConfig.reverse) {

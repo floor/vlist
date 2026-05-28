@@ -94,6 +94,8 @@ export type {
 
 // v2 core types
 export type {
+  Axis,
+  AxisConfig,
   VList,
   VListPlugin,
   PluginContext,

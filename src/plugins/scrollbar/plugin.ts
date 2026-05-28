@@ -44,14 +44,15 @@ export function scrollbar<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       const { dom, config: resolvedConfig } = ctx;
-      const { classPrefix, horizontal } = resolvedConfig;
+      const { classPrefix } = resolvedConfig;
+      const isX = resolvedConfig.axis.primary === "x";
 
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;
 
       // Indirect callback — scale plugin can redirect via registerMethod
       let scrollCb = (position: number): void => {
-        if (horizontal) dom.viewport.scrollLeft = position;
+        if (isX) dom.viewport.scrollLeft = position;
         else dom.viewport.scrollTop = position;
       };
       ctx.registerMethod("_scrollbar:setCallback", (cb: (pos: number) => void) => { scrollCb = cb; });
@@ -61,7 +62,7 @@ export function scrollbar<T extends VListItem = VListItem>(
         (position: number) => { scrollCb(position); },
         config,
         classPrefix,
-        horizontal,
+        isX,
         dom.root,
       );
 

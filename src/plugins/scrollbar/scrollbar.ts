@@ -160,7 +160,7 @@ const resolvePadding = (raw: ScrollbarPadding | undefined): ResolvedPadding => {
  * @param onScroll - Callback when scrollbar interaction causes scroll
  * @param config - Scrollbar configuration
  * @param classPrefix - CSS class prefix (default: 'vlist')
- * @param horizontal - Whether the scrollbar is horizontal (default: false)
+ * @param isX - Whether the primary axis is X (horizontal, default: false)
  * @param parent - Element to append scrollbar DOM to (default: viewport)
  */
 export const createScrollbar = (
@@ -168,7 +168,7 @@ export const createScrollbar = (
   onScroll: ScrollCallback,
   config: ScrollbarConfig = {},
   classPrefix = "vlist",
-  horizontal = false,
+  isX = false,
   parent?: HTMLElement,
 ): Scrollbar => {
   const {
@@ -186,9 +186,9 @@ export const createScrollbar = (
   const pad = resolvePadding(config.padding);
 
   // Axis-aware padding: start/end along the scroll axis, wall-side for hover zone default
-  const scrollAxisStartPad = horizontal ? pad.left : pad.top;
-  const scrollAxisEndPad   = horizontal ? pad.right : pad.bottom;
-  const wallPad            = horizontal ? pad.bottom : pad.right;
+  const scrollAxisStartPad = isX ? pad.left : pad.top;
+  const scrollAxisEndPad   = isX ? pad.right : pad.bottom;
+  const wallPad            = isX ? pad.bottom : pad.right;
 
   // Hover zone covers wall-gap + fixed reach beyond the track edge
   const hoverZoneWidth = config.hoverZoneWidth ?? (wallPad + HOVER_ZONE_REACH);
@@ -213,12 +213,12 @@ export const createScrollbar = (
   let repeatLastTime: number | null = null;
 
   // Axis helpers — select CSS property / mouse coordinate once
-  const thumbSizeProp = horizontal ? "width" : "height";
-  const translateFn = horizontal ? "translateX" : "translateY";
-  const mousePos = horizontal
+  const thumbSizeProp = isX ? "width" : "height";
+  const translateFn = isX ? "translateX" : "translateY";
+  const mousePos = isX
     ? (e: MouseEvent) => e.clientX
     : (e: MouseEvent) => e.clientY;
-  const rectStart = horizontal ? "left" : "top";
+  const rectStart = isX ? "left" : "top";
 
   // DOM elements
   const track = document.createElement("div");
@@ -229,16 +229,16 @@ export const createScrollbar = (
   // When the scrollbar lives on root, offset its top to align with the viewport.
   // Uses the CSS variable for padding so runtime updates via CSS take effect
   // without rebuilding the scrollbar.
-  const startPadVar = horizontal
+  const startPadVar = isX
     ? "--vlist-custom-scrollbar-padding-left"
     : "--vlist-custom-scrollbar-padding-top";
   const syncTrackOffset = (): void => {
     if (attachTo === viewport) return;
     const offset = viewport.offsetTop;
-    track.style[horizontal ? "left" : "top"] = offset
+    track.style[isX ? "left" : "top"] = offset
       ? `calc(var(${startPadVar}) + ${offset}px)`
       : `var(${startPadVar})`;
-    hoverZone.style[horizontal ? "left" : "top"] = `${offset}px`;
+    hoverZone.style[isX ? "left" : "top"] = `${offset}px`;
   };
 
   // =============================================================================
@@ -249,7 +249,7 @@ export const createScrollbar = (
     track.className = `${classPrefix}-scrollbar`;
     thumb.className = `${classPrefix}-scrollbar__thumb`;
 
-    if (horizontal) {
+    if (isX) {
       track.classList.add(`${classPrefix}-scrollbar--horizontal`);
     }
 
@@ -271,7 +271,7 @@ export const createScrollbar = (
     // Always present so clicks in the padding margin are captured regardless of showOnHover.
     // pointer-events:auto so events fire even when the track is hidden (opacity:0).
     hoverZone.className = `${classPrefix}-scrollbar__hover`;
-    if (horizontal) {
+    if (isX) {
       hoverZone.classList.add(`${classPrefix}-scrollbar__hover--horizontal`);
       hoverZone.style.height = `${hoverZoneWidth}px`;
     } else {
@@ -564,7 +564,7 @@ export const createScrollbar = (
   // Touch Handlers (thumb drag)
   // =============================================================================
 
-  const touchPos = horizontal
+  const touchPos = isX
     ? (e: TouchEvent) => e.touches[0]!.clientX
     : (e: TouchEvent) => e.touches[0]!.clientY;
 
@@ -611,7 +611,7 @@ export const createScrollbar = (
 
     const touch = e.touches[0]!;
     const trackRect = track.getBoundingClientRect();
-    const pos = (horizontal ? touch.clientX : touch.clientY) - trackRect[rectStart];
+    const pos = (isX ? touch.clientX : touch.clientY) - trackRect[rectStart];
 
     if (clickBehavior === 'jump') {
       const maxScroll = totalSize - containerSize;

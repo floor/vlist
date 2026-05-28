@@ -63,7 +63,7 @@ export function masonry<T extends VListItem = VListItem>(
   let renderer: MasonryRenderer<T> | null = null;
   let engineState: EngineState;
   let storedCtx: PluginContext<T> | null = null;
-  let hz: boolean;
+  let isX: boolean;
   let classPrefix: string;
   let overscanPx: number;
   let cachedPlacements: ItemPlacement[] = [];
@@ -156,7 +156,7 @@ export function masonry<T extends VListItem = VListItem>(
     const posInLane = itemLanePos[currentIndex]!;
     const myLane = laneItems[lane]!;
 
-    const k = hz
+    const k = isX
       ? key === "ArrowDown" ? "ArrowRight"
         : key === "ArrowUp" ? "ArrowLeft"
         : key === "ArrowRight" ? "ArrowDown"
@@ -319,7 +319,7 @@ export function masonry<T extends VListItem = VListItem>(
       storedCtx = ctx;
       engineState = ctx.getState();
       rawSizeSpec = ctx.rawSizeSpec;
-      hz = ctx.config.horizontal;
+      isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;
 
@@ -339,7 +339,7 @@ export function masonry<T extends VListItem = VListItem>(
         ctx.dom.content,
         ctx.template,
         classPrefix,
-        hz,
+        isX,
         () => engineState.totalItems,
         undefined,
         undefined,

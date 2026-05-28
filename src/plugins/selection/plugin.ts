@@ -372,9 +372,9 @@ export function selection<T extends VListItem = VListItem>(
             case "ArrowUp": {
               const ud = nav.ud || 1;
               const lr = nav.lr;
-              const hz = resolvedConfig.horizontal;
-              if (hz && !lr) break;
-              moveFocus(state, -(hz ? lr : ud), total, resolvedConfig.reverse);
+              const isX = resolvedConfig.axis.primary === "x";
+              if (isX && !lr) break;
+              moveFocus(state, -(isX ? lr : ud), total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;
@@ -383,9 +383,9 @@ export function selection<T extends VListItem = VListItem>(
             case "ArrowDown": {
               const ud = nav.ud || 1;
               const lr = nav.lr;
-              const hz = resolvedConfig.horizontal;
-              if (hz && !lr) break;
-              moveFocus(state, hz ? lr : ud, total, resolvedConfig.reverse);
+              const isX = resolvedConfig.axis.primary === "x";
+              if (isX && !lr) break;
+              moveFocus(state, isX ? lr : ud, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;
@@ -394,9 +394,9 @@ export function selection<T extends VListItem = VListItem>(
             case "ArrowLeft": {
               const ud = nav.ud || 1;
               const lr = nav.lr;
-              const hz = resolvedConfig.horizontal;
-              if (!hz && !lr) break;
-              moveFocus(state, -(hz ? ud : lr), total, resolvedConfig.reverse);
+              const isX = resolvedConfig.axis.primary === "x";
+              if (!isX && !lr) break;
+              moveFocus(state, -(isX ? ud : lr), total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;
@@ -405,9 +405,9 @@ export function selection<T extends VListItem = VListItem>(
             case "ArrowRight": {
               const ud = nav.ud || 1;
               const lr = nav.lr;
-              const hz = resolvedConfig.horizontal;
-              if (!hz && !lr) break;
-              moveFocus(state, hz ? ud : lr, total, resolvedConfig.reverse);
+              const isX = resolvedConfig.axis.primary === "x";
+              if (!isX && !lr) break;
+              moveFocus(state, isX ? ud : lr, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;

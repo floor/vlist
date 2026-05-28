@@ -247,7 +247,11 @@ export const clampScrollPosition = (
 export const getScrollDirection = (
   currentScrollTop: number,
   previousScrollTop: number,
-): "up" | "down" => {
+  isX = false,
+): "up" | "down" | "left" | "right" => {
+  if (isX) {
+    return currentScrollTop >= previousScrollTop ? "right" : "left";
+  }
   return currentScrollTop >= previousScrollTop ? "down" : "up";
 };
 

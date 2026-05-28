@@ -187,7 +187,7 @@ describe("range — scroll event", () => {
       [],
     );
 
-    const scrollEvents: Array<{ scrollPosition: number; direction: "down" | "up" }> = [];
+    const scrollEvents: Array<{ scrollPosition: number; direction: "down" | "up" | "left" | "right" }> = [];
     list.on("scroll", (e) => {
       scrollEvents.push({ scrollPosition: e.scrollPosition, direction: e.direction });
     });
@@ -210,7 +210,7 @@ describe("range — scroll event", () => {
       [],
     );
 
-    const scrollEvents: Array<{ direction: "down" | "up" }> = [];
+    const scrollEvents: Array<{ direction: "down" | "up" | "left" | "right" }> = [];
     list.on("scroll", (e) => {
       scrollEvents.push({ direction: e.direction });
     });

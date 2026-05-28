@@ -42,12 +42,24 @@ export interface CompiledHooks {
 }
 
 // =============================================================================
+// Axis Configuration
+// =============================================================================
+
+export type Axis = "x" | "y";
+
+export interface AxisConfig {
+  readonly primary: Axis;
+  readonly cross?: Axis;
+}
+
+// =============================================================================
 // Resolved Configuration
 // =============================================================================
 
 export interface ResolvedConfig {
+  readonly axis: AxisConfig;
+  readonly hasCrossAxis: boolean;
   readonly overscan: number;
-  readonly horizontal: boolean;
   readonly reverse: boolean;
   readonly classPrefix: string;
   readonly interactive: boolean;

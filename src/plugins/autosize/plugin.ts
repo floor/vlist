@@ -35,7 +35,7 @@ export function autosize<T extends VListItem = VListItem>(
   let observer: ResizeObserver | null = null;
   let storedCtx: PluginContext<T> | null = null;
   let engineState: EngineState;
-  let hz: boolean;
+  let isX: boolean;
   let sizeProp: "width" | "height";
   let estimatedSize: number;
 
@@ -77,8 +77,8 @@ export function autosize<T extends VListItem = VListItem>(
     setup(ctx: PluginContext<T>): void {
       storedCtx = ctx;
       engineState = ctx.getState();
-      hz = ctx.config.horizontal;
-      sizeProp = hz ? "width" : "height";
+      isX = ctx.config.axis.primary === "x";
+      sizeProp = isX ? "width" : "height";
       if (gap === 0) gap = ctx.config.gap;
 
       // Read estimated size from the current sizeCache before replacing it.
@@ -119,7 +119,7 @@ export function autosize<T extends VListItem = VListItem>(
 
           const boxSize = entry.borderBoxSize[0];
           if (!boxSize) continue;
-          const newSize = hz ? boxSize.inlineSize : boxSize.blockSize;
+          const newSize = isX ? boxSize.inlineSize : boxSize.blockSize;
           if (newSize <= 0) continue;
 
           const sizeWithGap = newSize + gap;

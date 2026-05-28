@@ -25,20 +25,20 @@ export function resolveContainer(container: HTMLElement | string): HTMLElement {
 export function createDOMStructure(
   container: HTMLElement,
   classPrefix: string,
-  horizontal: boolean,
+  isX: boolean,
   interactive: boolean,
   ariaLabel?: string,
 ): DOMStructure {
-  const rootCls = horizontal ? `${classPrefix} ${classPrefix}--horizontal` : classPrefix;
-  const vpStyle = horizontal
+  const rootCls = isX ? `${classPrefix} ${classPrefix}--horizontal` : classPrefix;
+  const vpStyle = isX
     ? "overflow-x:auto;overflow-y:hidden;height:100%;width:100%"
     : "overflow:auto;height:100%;width:100%";
-  const cStyle = horizontal ? "position:relative;height:100%" : "position:relative;width:100%";
+  const cStyle = isX ? "position:relative;height:100%" : "position:relative;width:100%";
 
   let cAttrs = ` role="${interactive ? "listbox" : "list"}"`;
   if (interactive) cAttrs += ' tabindex="0"';
   if (ariaLabel) cAttrs += ` aria-label="${ariaLabel.replace(/"/g, "&quot;")}"`;
-  if (horizontal) cAttrs += ' aria-orientation="horizontal"';
+  if (isX) cAttrs += ' aria-orientation="horizontal"';
 
   container.insertAdjacentHTML("beforeend",
     `<div class="${rootCls}"><div class="${classPrefix}-viewport" style="${vpStyle}" tabindex="-1"><div class="${classPrefix}-content" style="${cStyle}"${cAttrs}></div></div></div>`,

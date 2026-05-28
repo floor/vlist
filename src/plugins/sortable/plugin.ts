@@ -61,7 +61,7 @@ export function sortable<T extends VListItem = VListItem>(
   let viewportEl: HTMLElement;
   let rootEl: HTMLElement;
   let classPrefix: string;
-  let horizontal: boolean;
+  let isX: boolean;
 
   // Precomputed values
   let prop: string;
@@ -141,7 +141,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     const viewportRect = viewportEl.getBoundingClientRect();
     const scrollPos = engineState.scrollPosition;
-    const ghostTop = horizontal
+    const ghostTop = isX
       ? pointerCurrentX - ghostOffsetX - viewportRect.left + viewportEl.scrollLeft + scrollPos
       : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
     const ghostBottom = ghostTop + draggedItemSize;
@@ -212,7 +212,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const isPointerOutsideViewport = (): boolean => {
     const viewportRect = viewportEl.getBoundingClientRect();
-    if (horizontal) {
+    if (isX) {
       return pointerCurrentX < viewportRect.left || pointerCurrentX > viewportRect.right;
     }
     return pointerCurrentY < viewportRect.top || pointerCurrentY > viewportRect.bottom;
@@ -232,7 +232,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const scrollIntoView = (index: number): void => {
     if (!storedCtx) return;
-    const containerSize = horizontal
+    const containerSize = isX
       ? viewportEl.clientWidth
       : viewportEl.clientHeight;
     const scrollPos = engineState.scrollPosition;
@@ -284,7 +284,7 @@ export function sortable<T extends VListItem = VListItem>(
       let delta = 0;
       const maxT = 3;
 
-      if (horizontal) {
+      if (isX) {
         const distFromStart = pointerCurrentX - viewportRect.left;
         const distFromEnd = viewportRect.right - pointerCurrentX;
         if (distFromStart < edgeScrollZone) {
@@ -310,7 +310,7 @@ export function sortable<T extends VListItem = VListItem>(
 
       if (delta !== 0) {
         const currentScroll = engineState.scrollPosition;
-        const maxScroll = sizeCache.getTotalSize() - (horizontal
+        const maxScroll = sizeCache.getTotalSize() - (isX
           ? viewportEl.clientWidth
           : viewportEl.clientHeight);
         const atLimit = (delta < 0 && currentScroll <= 0)
@@ -414,7 +414,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
 
-    if (horizontal) {
+    if (isX) {
       ghost.style.left = `${viewportRect.left - viewportEl.scrollLeft + targetOffset - scrollPos}px`;
       ghost.style.top = `${viewportRect.top}px`;
     } else {
@@ -739,9 +739,9 @@ export function sortable<T extends VListItem = VListItem>(
       viewportEl = ctx.dom.viewport;
       rootEl = ctx.dom.root;
       classPrefix = ctx.config.classPrefix;
-      horizontal = ctx.config.horizontal;
+      isX = ctx.config.axis.primary === "x";
 
-      prop = horizontal ? "translateX" : "translateY";
+      prop = isX ? "translateX" : "translateY";
       shiftTransition = shiftDuration > 0
         ? `transform ${shiftDuration}ms ease`
         : "none";

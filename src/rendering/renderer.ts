@@ -229,7 +229,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
   classPrefix: string,
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
-  horizontal?: boolean,
+  isX?: boolean,
   crossAxisSize?: number,
   compressionFns?: {
     getState: CompressionStateFn;
@@ -319,7 +319,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
    * For variable heights, the height depends on the item index.
    */
   const applyStaticStyles = (element: HTMLElement, index: number): void => {
-    if (horizontal) {
+    if (isX) {
       element.style.width = `${sizeCache.getSize(index)}px`;
       if (crossAxisSize != null) {
         element.style.height = `${crossAxisSize}px`;
@@ -465,7 +465,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     }
 
     const offset = calculateOffset(index, compressionCtx);
-    element.style.transform = horizontal
+    element.style.transform = isX
       ? `translateX(${Math.round(offset)}px)`
       : `translateY(${Math.round(offset)}px)`;
 
@@ -595,7 +595,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
         // Position update only when offset changed
         const offset = calculateOffset(i, compressionCtx);
         if (existing.lastOffset !== offset) {
-          existing.element.style.transform = horizontal
+          existing.element.style.transform = isX
             ? `translateX(${Math.round(offset)}px)`
             : `translateY(${Math.round(offset)}px)`;
           existing.lastOffset = offset;
@@ -634,7 +634,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
     for (const [index, tracked] of rendered) {
       const offset = calculateOffset(index, compressionCtx);
       if (tracked.lastOffset !== offset) {
-        tracked.element.style.transform = horizontal
+        tracked.element.style.transform = isX
           ? `translateX(${Math.round(offset)}px)`
           : `translateY(${Math.round(offset)}px)`;
         tracked.lastOffset = offset;
@@ -755,14 +755,14 @@ export const createDOMStructure = (
   container: HTMLElement,
   classPrefix: string,
   ariaLabel?: string,
-  horizontal?: boolean,
+  isX?: boolean,
   interactive?: boolean,
 ): DOMStructure => {
   // Root element
   const root = document.createElement("div");
   root.className = `${classPrefix}`;
 
-  if (horizontal) {
+  if (isX) {
     root.classList.add(`${classPrefix}--horizontal`);
   }
 
@@ -773,7 +773,7 @@ export const createDOMStructure = (
   viewport.style.height = "100%";
   viewport.style.width = "100%";
 
-  if (horizontal) {
+  if (isX) {
     viewport.style.overflowX = "auto";
     viewport.style.overflowY = "hidden";
   } else {
@@ -785,7 +785,7 @@ export const createDOMStructure = (
   content.className = `${classPrefix}-content`;
   content.style.position = "relative";
 
-  if (horizontal) {
+  if (isX) {
     content.style.height = "100%";
     // Width will be set by updateContentWidth
   } else {
@@ -799,10 +799,10 @@ export const createDOMStructure = (
   items.setAttribute("role", interactive !== false ? "listbox" : "list");
   if (interactive !== false) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
-  if (horizontal) items.setAttribute("aria-orientation", "horizontal");
+  if (isX) items.setAttribute("aria-orientation", "horizontal");
   items.style.position = "relative";
 
-  if (horizontal) {
+  if (isX) {
     items.style.height = "100%";
   } else {
     items.style.width = "100%";

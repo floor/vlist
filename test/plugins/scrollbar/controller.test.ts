@@ -844,7 +844,7 @@ describe("createScrollController", () => {
       Object.defineProperty(viewport, "clientWidth", { value: 800 });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       // The controller should read clientWidth instead of clientHeight.
@@ -873,7 +873,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       // In native (non-compressed) mode, getScrollTop reads scrollLeft
@@ -884,7 +884,7 @@ describe("createScrollController", () => {
 
     it("should set overflowX auto and overflowY hidden in native mode", () => {
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       expect(viewport.style.overflowX).toBe("auto");
@@ -902,7 +902,7 @@ describe("createScrollController", () => {
       };
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         compressed: true,
         compression,
       });
@@ -930,7 +930,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       // At scrollLeft=0, not at bottom (end)
@@ -957,7 +957,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       // At scrollLeft=0, percentage should be 0
@@ -973,7 +973,7 @@ describe("createScrollController", () => {
       }) as any;
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
       });
 
       controller.scrollTo(200);
@@ -996,7 +996,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
       });
 
@@ -1024,7 +1024,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
       });
 
@@ -1046,7 +1046,7 @@ describe("createScrollController", () => {
 
     it("should clean up horizontal wheel listener on destroy", () => {
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
       });
 
@@ -1078,7 +1078,7 @@ describe("createScrollController", () => {
 
       const onScroll = mock(() => {});
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         onScroll,
       });
@@ -1121,7 +1121,7 @@ describe("createScrollController", () => {
 
       const onScroll = mock(() => {});
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         onScroll,
       });
@@ -1160,7 +1160,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
       });
 
@@ -1221,7 +1221,7 @@ describe("createScrollController", () => {
       };
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1260,7 +1260,7 @@ describe("createScrollController", () => {
 
       const onScroll = mock(() => {});
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1303,7 +1303,7 @@ describe("createScrollController", () => {
       };
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1362,7 +1362,7 @@ describe("createScrollController", () => {
 
       const onScroll = mock(() => {});
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1409,7 +1409,7 @@ describe("createScrollController", () => {
 
       const onScroll = mock(() => {});
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1452,7 +1452,7 @@ describe("createScrollController", () => {
 
       const scrollData: any[] = [];
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: true,
         compressed: true,
         compression,
@@ -1482,7 +1482,7 @@ describe("createScrollController", () => {
 
       const scrollData: any[] = [];
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         onScroll: (data) => scrollData.push(data),
       });
 
@@ -1511,7 +1511,7 @@ describe("createScrollController", () => {
       });
 
       const controller = createScrollController(viewport, {
-        horizontal: true,
+        isX: true,
         wheel: false,
       });
 
@@ -2224,7 +2224,7 @@ describe("scroll controller horizontal mode", () => {
 
   it("should enable and disable compression in horizontal mode", () => {
     const controller = createScrollController(viewport, {
-      horizontal: true,
+      isX: true,
     });
 
     const compression = {
@@ -2247,7 +2247,7 @@ describe("scroll controller horizontal mode", () => {
 
   it("should handle horizontal compression with wheel enabled", () => {
     const controller = createScrollController(viewport, {
-      horizontal: true,
+      isX: true,
       wheel: true,
     });
 
@@ -2270,7 +2270,7 @@ describe("scroll controller horizontal mode", () => {
 
   it("should handle horizontal compression with wheel disabled", () => {
     const controller = createScrollController(viewport, {
-      horizontal: true,
+      isX: true,
       wheel: false,
     });
 
@@ -2290,7 +2290,7 @@ describe("scroll controller horizontal mode", () => {
 
   it("should scrollTo in horizontal non-compressed mode (scrollLeft)", () => {
     const controller = createScrollController(viewport, {
-      horizontal: true,
+      isX: true,
     });
 
     // Non-compressed scrollTo should set viewport.scrollLeft
@@ -2418,7 +2418,7 @@ describe("scroll controller window mode compression", () => {
 
     const controller = createScrollController(viewport, {
       scrollElement: window,
-      horizontal: true,
+      isX: true,
     });
 
     // L559-563: horizontal window-mode scrollTo uses window.scrollTo with left
