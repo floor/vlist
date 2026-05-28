@@ -11,6 +11,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-05-28
+
+### Added
+
+- **Grid + Scale compression** — grid plugin supports scale plugin compression for 1M+ item grids with compressed range calculation, viewport-relative positioning, and virtual-space smooth scrolling
+- **Table + Scale compression** — table plugin supports scale plugin compression for 1M+ row tables with compressed range calculation and viewport-relative row positioning
+
+### Fixed
+
+- **Table item identity** — track items by reference instead of `item.id`, preventing stale renders when items share ids across updates (#91)
+- **Render pipeline ordering** — release stale elements after appending new ones, preventing transient blank frames during synchronous renders; table plugin syncs `engineState.totalSize` for correct scrollbar bounds
+
+### Performance
+
+- **Contiguous release fast path** — batch element release when items are contiguous in the release queue, reducing DOM operations during range shifts (RFC-006)
+
+### Refactored
+
+- **Table render pipeline** — align with core pipeline: release-after-create ordering, removed redundant `scrollPos === lastScrollPosition` bail-out and 4 associated state variables
+
 ## [2.0.3] - 2026-05-28
 
 ### Fixed
@@ -470,7 +490,10 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v2.0.0-rc.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v2.0.4...HEAD
+[2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4
+[2.0.3]: https://github.com/floor/vlist/compare/v2.0.2...v2.0.3
+[2.0.2]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.2
 [2.0.0-rc.3]: https://github.com/floor/vlist/compare/v2.0.0-rc.2...v2.0.0-rc.3
 [2.0.0-rc.2]: https://github.com/floor/vlist/compare/v2.0.0-rc.1...v2.0.0-rc.2
 [2.0.0-rc.1]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.0-rc.1
