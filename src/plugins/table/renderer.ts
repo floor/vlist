@@ -138,7 +138,10 @@ interface TrackedRow {
   /** Whether this row is a group header (fast flag — avoids DOM queries) */
   isGroupHeader: boolean;
 
-  /** Last rendered item ID (for change detection) */
+  /** Last rendered item reference (for change detection) */
+  _lastItem: unknown;
+
+  /** Last rendered item ID (for data-id attribute and placeholder transitions) */
   lastItemId: string | number;
 
   /** Last selected state */
@@ -432,6 +435,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       cells: [],  // No cells for group headers
       index,
       isGroupHeader: true,
+      _lastItem: item,
       lastItemId: item.id,
       lastSelected: false,
       lastFocused: false,
@@ -490,6 +494,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       cells,
       index,
       isGroupHeader: false,
+      _lastItem: item,
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
@@ -578,8 +583,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
         if (isHeader) {
           // ── Group header fast path ──
-          const idChanged = existing.lastItemId !== item.id;
-          if (idChanged) {
+          const itemChanged = existing._lastItem !== item;
+          if (itemChanged) {
             // Different group header — re-render content
             const headerItem = item as unknown as GroupHeaderItem;
             const content = existing.element.firstElementChild as HTMLElement;
@@ -592,6 +597,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               }
             }
             existing.element.setAttribute("data-id", String(item.id));
+            existing._lastItem = item;
             existing.lastItemId = item.id;
           }
 
@@ -610,12 +616,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
         } else {
-          // ── Data row path (existing logic) ──
-          const idChanged = existing.lastItemId !== item.id;
+          // ── Data row path ──
+          const itemChanged = existing._lastItem !== item;
           const selectedChanged = existing.lastSelected !== isSelected;
           const focusedChanged = existing.lastFocused !== isFocused;
 
-          if (idChanged) {
+          if (itemChanged) {
             // Different item at this index — full re-render of cells
             const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
             const isPlaceholder = isPH(item.id);
@@ -639,10 +645,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               setTimeout(() => {
                 existing.element.classList.remove(replacedClass);
               }, 300);
-
-
             }
 
+            existing._lastItem = item;
             existing.lastItemId = item.id;
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
@@ -745,6 +750,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       applyCellTemplate(existing.cells[c]!, item, cols[c]!, index);
     }
     existing.element.setAttribute("data-id", String(item.id));
+    existing._lastItem = item;
     existing.lastItemId = item.id;
 
     applyRowClasses(existing.element, index, isSelected, isFocused);

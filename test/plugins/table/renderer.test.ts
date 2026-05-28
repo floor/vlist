@@ -399,7 +399,7 @@ describe("selection and focus", () => {
 // =============================================================================
 
 describe("change tracking", () => {
-  it("should skip template re-evaluation when item ID unchanged", () => {
+  it("should skip template re-evaluation when item reference is unchanged", () => {
     const columns: TableColumn<TestItem>[] = [
       col("name", {
         width: 200,
@@ -415,11 +415,30 @@ describe("change tracking", () => {
     const cell = container.querySelector(".vlist-table-cell")!;
     const originalHTML = cell.innerHTML;
 
-    // Re-render with same item — template should not be re-evaluated
-    // (we can verify by checking the same element is reused)
+    // Re-render with same item reference — template should not be re-evaluated
     renderer.render(items, { start: 0, end: 0 }, EMPTY_SET, -1);
 
     expect(cell.innerHTML).toBe(originalHTML);
+
+    container.remove();
+  });
+
+  it("should re-render cells when item reference changes even with same id", () => {
+    const { renderer, container } = createTestRenderer();
+    const items1: TestItem[] = [{ id: 1, name: "Alice", email: "alice@test.com", role: "admin" }];
+    const items2: TestItem[] = [{ id: 1, name: "Alice Updated", email: "alice2@test.com", role: "admin" }];
+
+    renderer.render(items1, { start: 0, end: 0 }, EMPTY_SET, -1);
+
+    let cells = container.querySelectorAll(".vlist-table-cell");
+    expect(cells[0]!.textContent).toBe("Alice");
+
+    // Different object with same id — must re-render
+    renderer.render(items2, { start: 0, end: 0 }, EMPTY_SET, -1);
+
+    cells = container.querySelectorAll(".vlist-table-cell");
+    expect(cells[0]!.textContent).toBe("Alice Updated");
+    expect(cells[1]!.textContent).toBe("alice2@test.com");
 
     container.remove();
   });
