@@ -161,8 +161,8 @@ export function table<T extends VListItem = VListItem>(
       engineState.visibleSizes[i] = sizeCache.getSize(idx);
     }
 
-    // Update content size
-    storedCtx.dom.content.style.height = sizeCache.getTotalSize() + "px";
+    // Content size is managed by the renderer via paddingTop/paddingBottom.
+    // Rows are in document flow, so padding + row heights = total scroll height.
   }
 
   function tableForceRender(): void {

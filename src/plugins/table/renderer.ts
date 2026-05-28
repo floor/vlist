@@ -1,30 +1,29 @@
 /**
- * vlist/table - Renderer
- * Renders virtualized rows with cell-based layout within the virtual scroll container.
+ * vlist/table - Renderer (flow mode)
+ * Renders virtualized rows in normal document flow with padding-based positioning.
  *
- * Each row is an absolutely positioned element (like the list renderer),
- * containing child elements for each cell. Cells are sized and positioned
- * according to the resolved column layout from TableLayout.
+ * Rows are rendered in DOM order with paddingTop/paddingBottom on the container
+ * to create the illusion of the full content height. This eliminates the blank
+ * frame problem during native scrollbar drag — rows are physically at their
+ * correct document position, so the browser compositor shows them naturally.
  *
  * Key design decisions:
- * - Rows are the unit of virtualization (same as list mode — 1:1 with items)
- * - Each row contains N cell elements (one per column)
- * - Row positioning is translateY-based (from the size cache)
- * - Cell positioning uses absolute left + width from the column layout
+ * - Rows are in document flow (position: relative), not absolute + translateY
+ * - Container paddingTop = offset of first rendered row
+ * - Container paddingBottom = totalSize - end of last rendered row
+ * - DOM children are kept in index order (reordered on range change)
+ * - Cells are still absolutely positioned within each row
  * - Element pooling avoids createElement cost (row-level pooling)
  * - Change tracking skips template re-evaluation when data + state unchanged
- * - Release grace period prevents boundary thrashing (hover blink, transition replay)
- * - DocumentFragment batched insertion for new elements
  *
  * Performance:
- * - O(1) Set-based visibility diffing (not O(n) .some())
  * - Template re-evaluation skipped when item id + selection/focus state unchanged
- * - Position update skipped when coordinates unchanged (position tracking)
  * - Cell widths are only updated when column layout changes (not every scroll frame)
+ * - DOM reorder only when visible range changes (not every scroll frame)
  * - Released elements removed from DOM immediately, pooled for reuse
  *
  * DOM structure per row:
- *   .vlist-item.vlist-table-row (position: absolute, translateY)
+ *   .vlist-item.vlist-table-row (position: relative, in document flow)
  *   ├── .vlist-table-cell [col 0] (position: absolute, left, width)
  *   ├── .vlist-table-cell [col 1]
  *   └── ...
@@ -37,7 +36,6 @@ import type {
 
 import type { SizeCache } from "../../rendering/sizes";
 import type { CompressionContext } from "../../rendering/renderer";
-import { calculateCompressedItemPosition } from "../../rendering/scale";
 import { claimPlaceholderSelection } from "../../plugins/selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
@@ -149,9 +147,6 @@ interface TrackedRow {
 
   /** Last focused state */
   lastFocused: boolean;
-
-  /** Last translateY offset in pixels (numeric for fast comparison) */
-  lastOffset: number;
 
   /** Last height in pixels (for change detection) */
   lastHeight: number;
@@ -305,33 +300,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   };
 
   // =========================================================================
-  // Row Positioning (compression-aware)
-  // =========================================================================
-
-  /**
-   * Calculate the Y offset for a row.
-   * Uses compression-aware positioning for large datasets (withScale).
-   */
-  const calculateRowOffset = (
-    index: number,
-    sc: SizeCache,
-    compressionCtx?: CompressionContext,
-  ): number => {
-    if (compressionCtx?.compression?.isCompressed) {
-      return Math.round(calculateCompressedItemPosition(
-        index,
-        compressionCtx.scrollPosition,
-        sc,
-        compressionCtx.totalItems,
-        compressionCtx.containerSize,
-        compressionCtx.compression,
-        compressionCtx.rangeStart,
-      ));
-    }
-    return sc.getOffset(index);
-  };
-
-  // =========================================================================
   // Cell Sizing & Positioning
   // =========================================================================
 
@@ -396,15 +364,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     item: T,
     index: number,
     sc: SizeCache,
-    compressionCtx?: CompressionContext,
   ): TrackedRow => {
     const element = pool.acquire();
     const headerItem = item as unknown as GroupHeaderItem;
     const height = sc.getSize(index);
-    const offset = calculateRowOffset(index, sc, compressionCtx);
 
-    // Set all styles in one operation (element was reset by pool.release)
-    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
+    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px`;
     element.className = groupHeaderRowClass;
 
     // ARIA — group header is presentational, not a data row
@@ -432,14 +397,13 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
     return {
       element,
-      cells: [],  // No cells for group headers
+      cells: [],
       index,
       isGroupHeader: true,
       _lastItem: item,
       lastItemId: item.id,
       lastSelected: false,
       lastFocused: false,
-      lastOffset: offset,
       lastHeight: height,
     };
   };
@@ -454,15 +418,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
     sc: SizeCache,
-    compressionCtx?: CompressionContext,
   ): TrackedRow => {
     const element = pool.acquire();
     const height = sc.getSize(index);
-    const offset = calculateRowOffset(index, sc, compressionCtx);
     const isPlaceholder = isPH(item.id);
 
-    // Set all row styles in one operation (element was reset by pool.release)
-    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
+    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px`;
 
     applyRowClasses(element, index, isSelected, isFocused, isPlaceholder);
 
@@ -498,7 +459,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastOffset: offset,
       lastHeight: height,
     };
   };
@@ -523,16 +483,15 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
-    compressionCtx?: CompressionContext,
+    _compressionCtx?: CompressionContext,
   ): void => {
-    // Release items outside the new range immediately.
-    // Tables don't need a grace period — row hover is a simple background
-    // change with no CSS transitions to preserve, and each graced row
-    // carries N cell elements so the DOM cost is high.
+    // Release items outside the new range
+    let needsReorder = false;
     for (const [index, tracked] of rendered) {
       if (index < range.start || index > range.end) {
         pool.release(tracked.element);
         rendered.delete(index);
+        needsReorder = true;
       }
     }
 
@@ -544,16 +503,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       setSizeChanged = true;
     }
 
-    // DocumentFragment for batched DOM insertion of new elements
-    let fragment: DocumentFragment | null = null;
-
     // Resolve size cache and stripe function once per frame (not per item)
     const sc = getSizeCache();
     cachedStripeFn = (typeof striped === "string" && stripeIndexFn) ? stripeIndexFn() : null;
 
     // Render each item in range
     for (let i = range.start; i <= range.end; i++) {
-      // Items array is 0-indexed relative to range.start
       const itemIndex = i - range.start;
       const item = items[itemIndex];
       if (!item) continue;
@@ -561,7 +516,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       let isSelected = selectedIds.has(item.id);
       const isFocused = i === focusedIndex;
 
-      // ── Check if this item is a group header ──
       const isHeader = groupHeaderFn ? groupHeaderFn(item) : false;
 
       const existing = rendered.get(i);
@@ -569,15 +523,13 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       if (existing) {
         // ── Check if row type changed (data row ↔ group header) ──
         if (existing.isGroupHeader !== isHeader) {
-          // Type changed — release old element, create new one
           pool.release(existing.element);
           rendered.delete(i);
           const tracked = isHeader
-            ? renderGroupHeaderRow(item, i, sc, compressionCtx)
-            : renderRow(item, i, isSelected, isFocused, sc, compressionCtx);
+            ? renderGroupHeaderRow(item, i, sc)
+            : renderRow(item, i, isSelected, isFocused, sc);
           rendered.set(i, tracked);
-          if (!fragment) fragment = document.createDocumentFragment();
-          fragment.appendChild(tracked.element);
+          needsReorder = true;
           continue;
         }
 
@@ -585,7 +537,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           // ── Group header fast path ──
           const itemChanged = existing._lastItem !== item;
           if (itemChanged) {
-            // Different group header — re-render content
             const headerItem = item as unknown as GroupHeaderItem;
             const content = existing.element.firstElementChild as HTMLElement;
             if (content && groupHeaderTemplate) {
@@ -601,14 +552,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.lastItemId = item.id;
           }
 
-          // Position update (compression-aware)
-          const offset = calculateRowOffset(i, sc, compressionCtx);
-          if (existing.lastOffset !== offset) {
-            existing.lastOffset = offset;
-            existing.element.style.transform = `translateY(${offset}px)`;
-          }
-
-          // Height update (only when changed)
           const height = sc.getSize(i);
           if (existing.lastHeight !== height) {
             existing.lastHeight = height;
@@ -622,11 +565,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           const focusedChanged = existing.lastFocused !== isFocused;
 
           if (itemChanged) {
-            // Different item at this index — full re-render of cells
             const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
             const isPlaceholder = isPH(item.id);
 
-            // Transfer selection from placeholder → real item ID (async loading)
             if (!isPlaceholder && claimPlaceholderSelection(selectedIds, i, item.id)) {
               isSelected = true;
             }
@@ -639,7 +580,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.element.setAttribute("data-id", String(item.id));
             setAriaSelected(existing.element, isSelected);
 
-            // Fade-in animation when placeholder is replaced with real data
             if (wasPlaceholder && !isPlaceholder) {
               existing.element.classList.add(replacedClass);
               setTimeout(() => {
@@ -652,53 +592,57 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
           } else if (selectedChanged || focusedChanged) {
-            // Same item — only update classes/aria if state changed
             applyRowClasses(existing.element, i, isSelected, isFocused, isPH(item.id));
             setAriaSelected(existing.element, isSelected);
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
           }
 
-          // Position update only when offset changed (compression-aware)
-          const offset = calculateRowOffset(i, sc, compressionCtx);
-          if (existing.lastOffset !== offset) {
-            existing.lastOffset = offset;
-            existing.element.style.transform = `translateY(${offset}px)`;
-          }
-
-          // Update row height only when changed
           const height = sc.getSize(i);
           if (existing.lastHeight !== height) {
             existing.lastHeight = height;
             existing.element.style.height = `${height}px`;
           }
 
-          // Update ARIA set size if changed
           if (setSizeChanged) {
             existing.element.setAttribute("aria-rowindex", String(i + 2));
           }
-
         }
       } else {
-        // Transfer selection from placeholder → real item ID (async loading)
         if (claimPlaceholderSelection(selectedIds, i, item.id)) {
           isSelected = true;
         }
 
-        // New row — create and collect in fragment for batched insertion
         const tracked = isHeader
-          ? renderGroupHeaderRow(item, i, sc, compressionCtx)
-          : renderRow(item, i, isSelected, isFocused, sc, compressionCtx);
+          ? renderGroupHeaderRow(item, i, sc)
+          : renderRow(item, i, isSelected, isFocused, sc);
         rendered.set(i, tracked);
-
-        if (!fragment) fragment = document.createDocumentFragment();
-        fragment.appendChild(tracked.element);
+        needsReorder = true;
       }
     }
 
-    // Single DOM insertion for all new elements — minimizes reflows
-    if (fragment) {
-      container.appendChild(fragment);
+    // ── Flow positioning: padding + DOM order ──
+    // Update container padding to position rows at correct scroll offsets.
+    // paddingTop + visible row heights + paddingBottom = totalSize
+    const totalSize = sc.getTotalSize();
+    const paddingTop = range.end >= range.start ? sc.getOffset(range.start) : 0;
+    const lastEnd = range.end >= range.start
+      ? sc.getOffset(range.end) + sc.getSize(range.end)
+      : 0;
+    const paddingBottom = Math.max(0, totalSize - lastEnd);
+
+    container.style.paddingTop = paddingTop + "px";
+    container.style.paddingBottom = paddingBottom + "px";
+
+    // Reorder DOM children to match index order when elements changed.
+    // Rows are in document flow, so DOM order = visual order.
+    if (needsReorder) {
+      const frag = document.createDocumentFragment();
+      for (let i = range.start; i <= range.end; i++) {
+        const tracked = rendered.get(i);
+        if (tracked) frag.appendChild(tracked.element);
+      }
+      container.appendChild(frag);
     }
   };
 
@@ -706,22 +650,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   // Position Update (compressed scrolling)
   // =========================================================================
 
-  /**
-   * Update positions of all rendered rows (for compressed scrolling).
-   * Called when the scroll position changed but the visible range didn't —
-   * in compressed mode, items are positioned relative to the viewport so
-   * they must be repositioned on every scroll frame.
-   */
-  const updatePositions = (compressionCtx: CompressionContext): void => {
-    const sc = getSizeCache();
-    for (const [index, tracked] of rendered) {
-      const offset = calculateRowOffset(index, sc, compressionCtx);
-      if (tracked.lastOffset !== offset) {
-        tracked.lastOffset = offset;
-        tracked.element.style.transform = `translateY(${offset}px)`;
-      }
-    }
-  };
+  // Flow rendering positions rows via container padding, not per-element
+  // transforms. Compressed scrolling (scale plugin) is not compatible with
+  // flow mode — positions would need to change on every scroll frame,
+  // causing layout shifts. This is a no-op.
+  const updatePositions = (_compressionCtx: CompressionContext): void => {};
 
   // =========================================================================
   // Single Item Update
@@ -836,6 +769,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     }
     rendered.clear();
     lastAriaSetSize = -1;
+    container.style.paddingTop = "";
+    container.style.paddingBottom = "";
   };
 
   /**

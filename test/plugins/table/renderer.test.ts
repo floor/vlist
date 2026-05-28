@@ -170,16 +170,28 @@ describe("render", () => {
     container.remove();
   });
 
-  it("should position rows with translateY from size cache", () => {
+  it("should position rows via container padding (flow rendering)", () => {
     const { renderer, container } = createTestRenderer({ rowHeight: 40 });
     const items = makeItems(3);
 
     renderer.render(items, { start: 0, end: 2 }, EMPTY_SET, -1);
 
     const rows = container.querySelectorAll(".vlist-table-row");
-    expect((rows[0] as HTMLElement).style.transform).toBe("translateY(0px)");
-    expect((rows[1] as HTMLElement).style.transform).toBe("translateY(40px)");
-    expect((rows[2] as HTMLElement).style.transform).toBe("translateY(80px)");
+    expect(rows.length).toBe(3);
+
+    // Flow rendering: no translateY, rows are in document flow
+    expect((rows[0] as HTMLElement).style.transform).toBe("");
+    expect((rows[1] as HTMLElement).style.transform).toBe("");
+
+    // Container padding positions the rows
+    expect(container.style.paddingTop).toBe("0px");
+    // paddingBottom = totalSize - offset(2) - size(2) = 4000 - 80 - 40 = 3880
+    expect(container.style.paddingBottom).toBe("3880px");
+
+    // DOM order should match data-index order
+    expect((rows[0] as HTMLElement).getAttribute("data-index")).toBe("0");
+    expect((rows[1] as HTMLElement).getAttribute("data-index")).toBe("1");
+    expect((rows[2] as HTMLElement).getAttribute("data-index")).toBe("2");
 
     container.remove();
   });
@@ -463,17 +475,16 @@ describe("change tracking", () => {
     container.remove();
   });
 
-  it("should update position when transform changes", () => {
-    const { renderer, container, sizeCache } = createTestRenderer({ rowHeight: 40 });
+  it("should set container paddingTop for non-zero range start", () => {
+    const { renderer, container } = createTestRenderer({ rowHeight: 40 });
     const items = makeItems(2);
 
-    // Render at range starting from index 5
+    // Render at range starting from index 5 — paddingTop = 5 * 40 = 200
     renderer.render(items, { start: 5, end: 6 }, EMPTY_SET, -1);
 
     const row = renderer.getElement(5);
     expect(row).toBeDefined();
-    // Size cache for index 5 at height 40 → offset = 5 * 40 = 200
-    expect(row!.style.transform).toBe("translateY(200px)");
+    expect(container.style.paddingTop).toBe("200px");
 
     container.remove();
   });
@@ -840,7 +851,7 @@ describe("cell alignment", () => {
 // =============================================================================
 
 describe("offset-based rendering", () => {
-  it("should render items starting from a non-zero offset", () => {
+  it("should render items starting from a non-zero offset with correct padding", () => {
     const { renderer, container } = createTestRenderer({ rowHeight: 40 });
     const items = makeItems(20);
 
@@ -850,9 +861,13 @@ describe("offset-based rendering", () => {
     const rows = container.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBe(5);
 
-    // First row should be at index 10, offset = 10 * 40 = 400
+    // First row should be at index 10
     expect((rows[0] as HTMLElement).getAttribute("data-index")).toBe("10");
-    expect((rows[0] as HTMLElement).style.transform).toBe("translateY(400px)");
+
+    // paddingTop = offset of index 10 = 10 * 40 = 400
+    expect(container.style.paddingTop).toBe("400px");
+    // paddingBottom = totalSize - offset(14) - size(14) = 4000 - 560 - 40 = 3400
+    expect(container.style.paddingBottom).toBe("3400px");
 
     container.remove();
   });
@@ -1187,24 +1202,29 @@ describe("group headers", () => {
       container.remove();
     });
 
-    it("should position rows correctly with mixed heights", () => {
+    it("should render rows in correct DOM order with mixed heights", () => {
       const { renderer, container } = createGroupedRenderer();
       const items = makeGroupedItems();
 
       renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
 
-      // Index 0: header A at offset 0
+      // Flow rendering: no transforms, rows in DOM order
       const h0 = renderer.getElement(0)!;
-      expect(h0.style.transform).toBe("translateY(0px)");
+      expect(h0.getAttribute("data-index")).toBe("0");
 
-      // Index 1: first data row at offset HEADER_HEIGHT (32)
       const d1 = renderer.getElement(1)!;
-      expect(d1.style.transform).toBe(`translateY(${HEADER_HEIGHT}px)`);
+      expect(d1.getAttribute("data-index")).toBe("1");
 
-      // Index 4: header B at offset 32 + 3*40 = 152
       const h4 = renderer.getElement(4)!;
-      const expectedOffset = HEADER_HEIGHT + 3 * ROW_HEIGHT;
-      expect(h4.style.transform).toBe(`translateY(${expectedOffset}px)`);
+      expect(h4.getAttribute("data-index")).toBe("4");
+
+      // paddingTop = 0 (starts at index 0)
+      expect(container.style.paddingTop).toBe("0px");
+
+      // Rows have correct heights
+      expect(h0.style.height).toBe(`${HEADER_HEIGHT}px`);
+      expect(d1.style.height).toBe(`${ROW_HEIGHT}px`);
+      expect(h4.style.height).toBe(`${HEADER_HEIGHT}px`);
 
       container.remove();
     });
@@ -1850,7 +1870,7 @@ describe("striped", () => {
 // Table Renderer — Compressed Positioning (withScale)
 // =============================================================================
 
-describe("table renderer compressed positioning", () => {
+describe("table renderer flow positioning", () => {
   let itemsContainer: HTMLElement;
 
   beforeEach(() => {
@@ -1859,80 +1879,7 @@ describe("table renderer compressed positioning", () => {
     document.body.appendChild(itemsContainer);
   });
 
-  it("should use compressed positioning for large tables", () => {
-    const totalItems = 2_000_000;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-      col("email", { width: 300 }),
-      col("role", { width: 100 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(600);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(20);
-
-    // Build compression state for the large dataset
-    const compression = getCompressionState(totalItems, sizeCache as any, false);
-    expect(compression.isCompressed).toBe(true);
-
-    // Calculate a scroll position that maps to the target range in compressed space.
-    // actualOffset = 100000 * 36 = 3,600,000
-    // scrollRatio = actualOffset / actualSize = 3,600,000 / 72,000,000 = 0.05
-    // scrollPosition = scrollRatio * virtualSize
-    const actualOffset = sizeCache.getOffset(100000);
-    const scrollPosition = (actualOffset / compression.actualSize) * compression.virtualSize;
-
-    const compressionCtx = {
-      scrollPosition,
-      totalItems,
-      containerSize: 500,
-      rangeStart: 100000,
-      compression,
-    };
-
-    renderer.render(
-      items,
-      { start: 100000, end: 100019 },
-      EMPTY_SET,
-      -1,
-      compressionCtx,
-    );
-
-    // Verify rows were rendered
-    const rendered = itemsContainer.querySelectorAll("[data-index]");
-    expect(rendered.length).toBe(20);
-
-    // In compressed mode, items should be positioned relative to the viewport
-    // (viewport-relative, not at absolute sizeCache offsets of ~3.6M px)
-    const firstRow = rendered[0] as HTMLElement;
-    const transform = firstRow.style.transform;
-    expect(transform).toMatch(/translateY\([-\d.]+px\)/);
-
-    // The first visible item should be near the top of the viewport (small offset)
-    const match = transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match).toBeTruthy();
-    const renderedY = parseFloat(match![1]!);
-    // Viewport-relative: should be within a reasonable range, not millions of pixels
-    expect(Math.abs(renderedY)).toBeLessThan(1000);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should use absolute positioning when no compression context", () => {
+  it("should use padding-based flow positioning for rows", () => {
     const totalItems = 100;
     const rowHeight = 36;
     const columns: TableColumn<TestItem>[] = [
@@ -1956,23 +1903,25 @@ describe("table renderer compressed positioning", () => {
 
     const items = makeItems(5);
 
-    // Render without compression context
     renderer.render(items, { start: 0, end: 4 }, EMPTY_SET, -1);
 
-    // First row at index 0 should be at offset 0
+    // No translateY — rows are in document flow
     const firstRow = itemsContainer.querySelector("[data-index='0']") as HTMLElement;
-    expect(firstRow.style.transform).toBe("translateY(0px)");
+    expect(firstRow.style.transform).toBe("");
 
-    // Second row at index 1 should be at absolute offset = rowHeight
-    const secondRow = itemsContainer.querySelector("[data-index='1']") as HTMLElement;
-    expect(secondRow.style.transform).toBe(`translateY(${rowHeight}px)`);
+    // paddingTop = offset(0) = 0
+    expect(itemsContainer.style.paddingTop).toBe("0px");
+    // paddingBottom = totalSize - offset(4) - size(4) = 3600 - 144 - 36 = 3420
+    const totalSize = sizeCache.getTotalSize();
+    const expectedBottom = totalSize - sizeCache.getOffset(4) - sizeCache.getSize(4);
+    expect(itemsContainer.style.paddingBottom).toBe(`${expectedBottom}px`);
 
     renderer.destroy();
     itemsContainer.remove();
   });
 
-  it("should update positions on subsequent render with changed scroll", () => {
-    const totalItems = 2_000_000;
+  it("should update padding when range shifts", () => {
+    const totalItems = 100;
     const rowHeight = 36;
     const columns: TableColumn<TestItem>[] = [
       col("name", { width: 200 }),
@@ -1992,43 +1941,92 @@ describe("table renderer compressed positioning", () => {
       () => totalItems,
     );
 
-    const items = makeItems(10);
-    const compression = getCompressionState(totalItems, sizeCache as any, false);
+    const items = makeItems(20);
 
-    // Calculate scroll position for range start
-    const actualOffset = sizeCache.getOffset(100000);
-    const scrollA = (actualOffset / compression.actualSize) * compression.virtualSize;
+    // First render at range 0-9
+    renderer.render(items.slice(0, 10), { start: 0, end: 9 }, EMPTY_SET, -1);
+    expect(itemsContainer.style.paddingTop).toBe("0px");
 
-    // First render at scroll position A
-    const ctxA = {
-      scrollPosition: scrollA,
-      totalItems,
-      containerSize: 500,
-      rangeStart: 100000,
-      compression,
-    };
-    renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctxA);
-
-    const firstRow = itemsContainer.querySelector("[data-index='100000']") as HTMLElement;
-    const posA = firstRow.style.transform;
-
-    // Second render at scroll position B (same range, different scroll — user scrolled a bit)
-    const ctxB = {
-      ...ctxA,
-      scrollPosition: scrollA + 1000,
-    };
-    renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctxB);
-
-    const posB = firstRow.style.transform;
-
-    // Positions should differ because scroll position changed
-    expect(posA).not.toBe(posB);
+    // Shift to range 10-19
+    renderer.render(items.slice(10, 20), { start: 10, end: 19 }, EMPTY_SET, -1);
+    // paddingTop = offset(10) = 10 * 36 = 360
+    expect(itemsContainer.style.paddingTop).toBe("360px");
 
     renderer.destroy();
     itemsContainer.remove();
   });
 
-  it("should update positions via updatePositions()", () => {
+  it("should keep DOM children in index order", () => {
+    const totalItems = 100;
+    const rowHeight = 36;
+    const columns: TableColumn<TestItem>[] = [
+      col("name", { width: 200 }),
+    ];
+
+    const sizeCache = createSizeCache(rowHeight, totalItems);
+    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
+    layout.resolve(200);
+
+    const renderer = createTableRenderer<TestItem>(
+      itemsContainer,
+      () => sizeCache as any,
+      layout,
+      columns,
+      "vlist",
+      "vlist",
+      () => totalItems,
+    );
+
+    const items = makeItems(20);
+
+    // Render range 5-14
+    renderer.render(items.slice(5, 15), { start: 5, end: 14 }, EMPTY_SET, -1);
+
+    const rows = itemsContainer.querySelectorAll("[data-index]");
+    for (let i = 0; i < rows.length - 1; i++) {
+      const a = parseInt(rows[i]!.getAttribute("data-index")!, 10);
+      const b = parseInt(rows[i + 1]!.getAttribute("data-index")!, 10);
+      expect(a).toBeLessThan(b);
+    }
+
+    renderer.destroy();
+    itemsContainer.remove();
+  });
+
+  it("should reset padding on clear", () => {
+    const totalItems = 20;
+    const rowHeight = 36;
+    const columns: TableColumn<TestItem>[] = [
+      col("name", { width: 200 }),
+    ];
+
+    const sizeCache = createSizeCache(rowHeight, totalItems);
+    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
+    layout.resolve(200);
+
+    const renderer = createTableRenderer<TestItem>(
+      itemsContainer,
+      () => sizeCache as any,
+      layout,
+      columns,
+      "vlist",
+      "vlist",
+      () => totalItems,
+    );
+
+    const items = makeItems(5);
+    renderer.render(items, { start: 5, end: 9 }, EMPTY_SET, -1);
+    expect(itemsContainer.style.paddingTop).toBe("180px");
+
+    renderer.clear();
+    expect(itemsContainer.style.paddingTop).toBe("");
+    expect(itemsContainer.style.paddingBottom).toBe("");
+
+    renderer.destroy();
+    itemsContainer.remove();
+  });
+
+  it("should accept compressionCtx parameter without using it for positioning", () => {
     const totalItems = 2_000_000;
     const rowHeight = 36;
     const columns: TableColumn<TestItem>[] = [
@@ -2055,7 +2053,6 @@ describe("table renderer compressed positioning", () => {
     const actualOffset = sizeCache.getOffset(100000);
     const scrollPos = (actualOffset / compression.actualSize) * compression.virtualSize;
 
-    // Initial render
     const ctx = {
       scrollPosition: scrollPos,
       totalItems,
@@ -2063,76 +2060,17 @@ describe("table renderer compressed positioning", () => {
       rangeStart: 100000,
       compression,
     };
+
+    // Should render without error even with compression context
     renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctx);
 
-    const firstRow = itemsContainer.querySelector("[data-index='100000']") as HTMLElement;
-    const posBefore = firstRow.style.transform;
+    const rendered = itemsContainer.querySelectorAll("[data-index]");
+    expect(rendered.length).toBe(10);
 
-    // Update positions without a full render (scroll moved, range unchanged)
-    renderer.updatePositions({
-      ...ctx,
-      scrollPosition: scrollPos + 2000,
-    });
-
-    const posAfter = firstRow.style.transform;
-    expect(posBefore).not.toBe(posAfter);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should use force-mode compressed positioning (ratio=1)", () => {
-    const totalItems = 100;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(200);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(5);
-
-    // Force compression — ratio will be 1 (actualSize < MAX_VIRTUAL_SIZE)
-    const compression = getCompressionState(totalItems, sizeCache as any, true);
-    expect(compression.isCompressed).toBe(true);
-    expect(compression.ratio).toBe(1);
-
-    const scrollPosition = 500;
-    const ctx = {
-      scrollPosition,
-      totalItems,
-      containerSize: 300,
-      rangeStart: 0,
-      compression,
-    };
-
-    renderer.render(items, { start: 0, end: 4 }, EMPTY_SET, -1, ctx);
-
-    // With ratio=1, items are positioned at (offset - scrollPosition)
-    // Index 0: offset 0 - 500 = -500
-    const firstRow = itemsContainer.querySelector("[data-index='0']") as HTMLElement;
-    const match = firstRow.style.transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match).toBeTruthy();
-    const y = parseFloat(match![1]!);
-    expect(y).toBe(0 - scrollPosition);
-
-    // Index 1: offset 36 - 500 = -464
-    const secondRow = itemsContainer.querySelector("[data-index='1']") as HTMLElement;
-    const match2 = secondRow.style.transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match2).toBeTruthy();
-    expect(parseFloat(match2![1]!)).toBe(rowHeight - scrollPosition);
+    // Rows should use flow positioning (padding), not compressed transforms
+    const firstRow = rendered[0] as HTMLElement;
+    expect(firstRow.style.transform).toBe("");
+    expect(itemsContainer.style.paddingTop).not.toBe("");
 
     renderer.destroy();
     itemsContainer.remove();

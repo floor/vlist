@@ -56,6 +56,7 @@
 
 .vlist--table .vlist-content {
     contain: layout style;
+    height: auto;
 }
 
 /* =============================================================================
@@ -206,19 +207,16 @@
    ============================================================================= */
 
 .vlist-table-row {
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
     display: flex;
     box-sizing: border-box;
-    contain: content;
+    contain: layout paint style;
     border-bottom: none;
     background-color: var(--vlist-bg, #ffffff);
     cursor: default;
     user-select: none;
     transition: background-color var(--vlist-transition-duration, 150ms)
         var(--vlist-transition-timing, ease-in-out);
-    will-change: transform;
 }
 
 /* Suppress transitions during active scroll */
