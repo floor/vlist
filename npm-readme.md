@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.7 KB.
 
-**v2.0.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
+**v2.0.2** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -13,7 +13,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
 - **7.7 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
-- **Vertical & horizontal** — single axis-neutral code path, every plugin works in both orientations
+- **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
 ## Install
 
