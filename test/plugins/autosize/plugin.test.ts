@@ -671,12 +671,12 @@ describe("autosize anchor preservation", () => {
     mockCtx.cleanup();
   });
 
-  it("snaps to bottom when at bottom and item above resizes", () => {
+  it("snaps to end when at end and item above resizes", () => {
     const { mockCtx, plugin, triggerMeasurement } = setupAnchorTest();
     const state = mockCtx.engineState;
     const viewport = mockCtx.dom.viewport;
 
-    // Make scrollTo update engineState so snapToBottom works correctly
+    // Make scrollTo update engineState so snapToEnd works correctly
     mockCtx.ctx.scrollTo = (pos: number) => {
       mockCtx.scrollCalls.push(pos);
       state.scrollPosition = pos;
@@ -691,7 +691,7 @@ describe("autosize anchor preservation", () => {
     const el = addElement(mockCtx.dom.content, 3);
     plugin.hooks!.onCommit!(state);
 
-    // Step 2: scroll to bottom (maxScroll = 1000 - 300 = 700, within BOTTOM_THRESHOLD)
+    // Step 2: scroll to end (maxScroll = 1000 - 300 = 700, within END_THRESHOLD)
     state.startIndex = 14;
     state.scrollPosition = 700;
     state.totalItems = 20;
@@ -700,7 +700,7 @@ describe("autosize anchor preservation", () => {
     for (let i = 0; i < 6; i++) state.visibleIndices[i] = 14 + i;
 
     // scrollHeight must be dynamic: updateContentSize sets content.style.height,
-    // and snapToBottom re-reads scrollHeight after reflow. Simulate by tracking
+    // and snapToEnd re-reads scrollHeight after reflow. Simulate by tracking
     // content height and returning it via a getter.
     let fakeScrollHeight = 1000;
     Object.defineProperty(viewport, "scrollHeight", {
@@ -716,9 +716,41 @@ describe("autosize anchor preservation", () => {
     triggerMeasurement(el, 80);
 
     // Compensation: scrollTo(700 + 30 = 730), then snap: scrollTo(1030 - 300 = 730)
-    // Both happen — compensation and snap-to-bottom
+    // Both happen — compensation and snap-to-end
     expect(mockCtx.scrollCalls).toContain(730);
     expect(mockCtx.scrollCalls.length).toBeGreaterThanOrEqual(1);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("compensates scroll for overscan items above the visible viewport edge", () => {
+    const { mockCtx, plugin, triggerMeasurement } = setupAnchorTest();
+    const state = mockCtx.engineState;
+
+    // Step 1: item 3 is in the rendered range, observe it
+    state.startIndex = 0;
+    state.scrollPosition = 0;
+    state.visibleCount = 10;
+    for (let i = 0; i < 10; i++) state.visibleIndices[i] = i;
+
+    const el3 = addElement(mockCtx.dom.content, 3);
+    plugin.hooks!.onCommit!(state);
+
+    // Step 2: scroll down. startIndex=3 (includes overscan), but
+    // scrollPosition=250 means the first truly visible item is 5 (250/50).
+    // Item 3 is rendered via overscan but sits above the viewport edge.
+    state.startIndex = 3;
+    state.scrollPosition = 250;
+    state.visibleCount = 10;
+    for (let i = 0; i < 10; i++) state.visibleIndices[i] = 3 + i;
+
+    // Measure item 3 at 80px instead of estimated 50px → delta = +30
+    triggerMeasurement(el3, 80);
+
+    // Item 3 is above the true first visible (index 5), so scroll
+    // compensation fires: scrollTo(250 + 30 = 280)
+    expect(mockCtx.scrollCalls).toContain(280);
 
     plugin.destroy();
     mockCtx.cleanup();
@@ -751,6 +783,257 @@ describe("autosize anchor preservation", () => {
 
     expect(mockCtx.scrollCalls).toContain(530);
     expect(mockCtx.scrollCalls).toContain(540);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// End-Pinning — scrollToIndex(last, "end") keeps snapping after measurements
+// =============================================================================
+
+describe("autosize end-pinning", () => {
+  function createControllableRO() {
+    let roCallback: ResizeObserverCallback | null = null;
+    const observed = new Map<Element, number>();
+
+    class ControllableRO {
+      constructor(cb: ResizeObserverCallback) { roCallback = cb; }
+      observe(el: Element): void {
+        const idx = parseInt((el as HTMLElement).getAttribute("data-index") ?? "0", 10);
+        observed.set(el, idx);
+      }
+      unobserve(el: Element): void { observed.delete(el); }
+      disconnect(): void { observed.clear(); }
+    }
+
+    function triggerMeasurement(el: HTMLElement, size: number): void {
+      roCallback!(
+        [{
+          target: el,
+          contentRect: { width: size, height: size, top: 0, left: 0, bottom: size, right: size, x: 0, y: 0, toJSON: () => ({}) } as DOMRectReadOnly,
+          borderBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
+          contentBoxSize: [{ blockSize: size, inlineSize: size } as ResizeObserverSize],
+          devicePixelContentBoxSize: [],
+        } as ResizeObserverEntry],
+        null as unknown as ResizeObserver,
+      );
+    }
+
+    (global as any).ResizeObserver = ControllableRO;
+    return { triggerMeasurement, observed };
+  }
+
+  function addElement(content: HTMLElement, index: number): HTMLElement {
+    const el = document.createElement("div");
+    el.setAttribute("data-index", String(index));
+    content.appendChild(el);
+    return el;
+  }
+
+  function setupPinTest() {
+    const { triggerMeasurement, observed } = createControllableRO();
+
+    const mockCtx = createPluginMockContext(createTestItems(20), {
+      itemSize: 50,
+      containerHeight: 300,
+    });
+
+    let pluginSizeFn: ((index: number) => number) | null = null;
+    mockCtx.ctx.setSizeConfig = (fn: (index: number) => number) => {
+      pluginSizeFn = fn;
+    };
+
+    mockCtx.ctx.rebuildSizeCache = () => {};
+
+    let forceRenderCount = 0;
+    mockCtx.ctx.forceRender = () => { forceRenderCount++; };
+
+    // Capture the scrollToIndexFn registered by the plugin
+    let scrollToIndexFn: ((index: number, align: string, behavior?: string) => void | false) | null = null;
+    mockCtx.ctx.setScrollToIndexFn = (fn: any) => { scrollToIndexFn = fn; };
+
+    const plugin = autosize();
+    plugin.setup(mockCtx.ctx);
+
+    return {
+      mockCtx,
+      plugin,
+      triggerMeasurement,
+      observed,
+      get forceRenderCount() { return forceRenderCount; },
+      simulateScrollToIndex: (index: number, align: string, behavior?: string) => scrollToIndexFn?.(index, align, behavior),
+    };
+  }
+
+  it("does NOT snap on idle just because pinnedToEnd is set", () => {
+    const { mockCtx, plugin, simulateScrollToIndex } = setupPinTest();
+    const state = mockCtx.engineState;
+    const viewport = mockCtx.dom.viewport;
+
+    // Simulate scrollToIndex(19, "end") — sets pinnedToEnd
+    simulateScrollToIndex(19, "end");
+
+    state.scrollPosition = 650;
+    state.scrollDirection = 0;
+    state.totalItems = 20;
+
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => 1000,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+
+    const scrollCallsBefore = mockCtx.scrollCalls.length;
+    plugin.hooks!.onIdle!();
+
+    // onIdle no longer snaps for pinnedToEnd — that's handled by
+    // ResizeObserver and dynamic scroll targets, avoiding the 100ms chop
+    expect(mockCtx.scrollCalls.length).toBe(scrollCallsBefore);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("snaps to end in ResizeObserver when pinned and not scrolling", () => {
+    const { mockCtx, plugin, triggerMeasurement, simulateScrollToIndex } = setupPinTest();
+    const state = mockCtx.engineState;
+    const viewport = mockCtx.dom.viewport;
+
+    // Render item 18 and observe it
+    state.startIndex = 14;
+    state.scrollPosition = 700;
+    state.scrollDirection = 0; // not scrolling (after animation ended)
+    state.totalItems = 20;
+    state.prevRangeEnd = 19;
+    state.visibleCount = 6;
+    for (let i = 0; i < 6; i++) state.visibleIndices[i] = 14 + i;
+
+    const el = addElement(mockCtx.dom.content, 18);
+    plugin.hooks!.onCommit!(state);
+
+    // Activate pin
+    simulateScrollToIndex(19, "end");
+
+    let fakeScrollHeight = 1050;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => fakeScrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+
+    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1050; };
+
+    // Measure item 18 at 80px (bigger than 50px estimated)
+    triggerMeasurement(el, 80);
+
+    // Should snap: maxScroll = 1050 - 300 = 750
+    expect(mockCtx.scrollCalls).toContain(750);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("does NOT snap during active smooth scroll even when pinned", () => {
+    const { mockCtx, plugin, triggerMeasurement, simulateScrollToIndex } = setupPinTest();
+    const state = mockCtx.engineState;
+    const viewport = mockCtx.dom.viewport;
+
+    state.startIndex = 14;
+    state.scrollPosition = 500;
+    state.scrollDirection = 1; // actively scrolling down
+    state.totalItems = 20;
+    state.prevRangeEnd = 19;
+    state.visibleCount = 6;
+    for (let i = 0; i < 6; i++) state.visibleIndices[i] = 14 + i;
+
+    const el = addElement(mockCtx.dom.content, 18);
+    plugin.hooks!.onCommit!(state);
+
+    // Use "smooth" behavior so animatingToEnd is set — prevents snap during animation
+    simulateScrollToIndex(19, "end", "smooth");
+
+    let fakeScrollHeight = 1050;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => fakeScrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+
+    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1050; };
+
+    triggerMeasurement(el, 80);
+
+    // During smooth scroll animation (animatingToEnd=true), pinnedToEnd
+    // should NOT snap to avoid fighting the animation. Content size IS updated
+    // via the nearEnd path, but snapToEnd is deferred until animation completes.
+    expect(mockCtx.scrollCalls).not.toContain(750);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("clears pin when scrollToIndex targets a non-end item", () => {
+    const { mockCtx, plugin, simulateScrollToIndex } = setupPinTest();
+    const state = mockCtx.engineState;
+    const viewport = mockCtx.dom.viewport;
+
+    // Pin to end
+    simulateScrollToIndex(19, "end");
+
+    // Now scroll to middle
+    simulateScrollToIndex(10, "start");
+
+    // Trigger idle — should NOT snap since pin was cleared
+    state.scrollPosition = 500;
+    state.scrollDirection = 0;
+    state.totalItems = 20;
+
+    let fakeScrollHeight = 1000;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => fakeScrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+
+    const scrollCallsBefore = mockCtx.scrollCalls.length;
+    plugin.hooks!.onIdle!();
+
+    // No snap — pin was cleared
+    expect(mockCtx.scrollCalls.length).toBe(scrollCallsBefore);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("clears pin on wheel event (user takes control)", () => {
+    const { mockCtx, plugin, simulateScrollToIndex } = setupPinTest();
+    const state = mockCtx.engineState;
+    const viewport = mockCtx.dom.viewport;
+
+    // Pin to end
+    simulateScrollToIndex(19, "end");
+
+    // User scrolls with mouse wheel
+    viewport.dispatchEvent(new Event("wheel"));
+
+    // Trigger idle — should NOT snap since wheel cleared the pin
+    state.scrollPosition = 500;
+    state.scrollDirection = 0;
+    state.totalItems = 20;
+
+    let fakeScrollHeight = 1000;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => fakeScrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+
+    const scrollCallsBefore = mockCtx.scrollCalls.length;
+    plugin.hooks!.onIdle!();
+
+    expect(mockCtx.scrollCalls.length).toBe(scrollCallsBefore);
 
     plugin.destroy();
     mockCtx.cleanup();

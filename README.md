@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.7 KB.
 
-**v2.0.2** — [Changelog](./CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
+**v2.0.3** — [Changelog](./CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -99,12 +99,12 @@ const list = createVList({
 | `selection()` | +2.4 KB | Single/multiple selection with 2D keyboard nav |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
 | `groups()` | +3.7 KB | Sticky/inline headers with async group discovery |
-| `autosize()` | +0.7 KB | Auto-measure items via ResizeObserver |
+| `autosize()` | +0.9 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.1 KB | 2D grid layout |
 | `masonry()` | +3.5 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
-| `page()` | +0.7 KB | Window-level scrolling |
+| `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
 | `snapshots()` | +1.3 KB | Scroll position save/restore |
 | `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |

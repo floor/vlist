@@ -96,19 +96,6 @@ export interface ElementPool {
 }
 
 // =============================================================================
-// Visible Range Function (replaceable by plugins)
-// =============================================================================
-
-export type VisibleRangeFn = (
-  scrollPosition: number,
-  containerSize: number,
-  sizeCache: SizeCache,
-  totalItems: number,
-  outStart: { value: number },
-  outEnd: { value: number },
-) => void;
-
-// =============================================================================
 // Plugin Context — cold path only, scoped access for setup()
 // =============================================================================
 
@@ -127,7 +114,6 @@ export interface PluginContext<T extends VListItem = VListItem> {
   registerDestroyHandler(handler: () => void): void;
 
   setSizeConfig(config: number | ((index: number) => number)): void;
-  setVisibleRangeFn(fn: VisibleRangeFn): void;
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   setVirtualTotalFn(fn: () => number): void;
 
@@ -146,7 +132,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
 
   scrollTo(position: number): void;
-  smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void;
+  smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;

@@ -19,8 +19,8 @@ export interface ScrollHandler {
   detach(): void;
   /** Cancel smooth scroll animation */
   cancelScroll(): void;
-  /** Animate to a target scroll position */
-  smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number): void;
+  /** Animate to a target scroll position (target may be a function for dynamic tracking) */
+  smoothScrollTo(target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void): void;
 }
 
 export interface ScrollHandlerConfig {
@@ -122,18 +122,29 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
     }
   }
 
-  function smoothScrollTo(target: number, duration: number, setFn?: (pos: number) => void, easing: (t: number) => number = SCROLL_EASING): void {
+  function smoothScrollTo(
+    targetOrFn: number | (() => number),
+    duration: number,
+    setFn?: (pos: number) => void,
+    easing: (t: number) => number = SCROLL_EASING,
+    onComplete?: () => void,
+  ): void {
     cancelScroll();
     const from = state.scrollPosition;
+    const getTarget = typeof targetOrFn === "function" ? targetOrFn : (): number => targetOrFn;
+    let target = getTarget();
+
     if (Math.abs(target - from) < 1) {
       if (setFn) setFn(target);
       else if (isX) viewport.scrollLeft = target;
       else viewport.scrollTop = target;
+      onComplete?.();
       return;
     }
 
     const start = performance.now();
     function tick(now: number): void {
+      target = getTarget();
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
       const pos = from + (target - from) * easing(t);
@@ -146,6 +157,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
         animationId = requestAnimationFrame(tick);
       } else {
         animationId = null;
+        onComplete?.();
       }
     }
     animationId = requestAnimationFrame(tick);

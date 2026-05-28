@@ -60,7 +60,7 @@ export function grid<T extends VListItem = VListItem>(
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
 
-  interface TrackedElement { el: HTMLElement; lastId: string | number; }
+  interface TrackedElement { el: HTMLElement; lastItem: unknown; }
   const rendered = new Map<number, TrackedElement>();
   let containerWidth = 0;
 
@@ -171,12 +171,12 @@ export function grid<T extends VListItem = VListItem>(
         el.setAttribute("data-index", String(i));
         el.setAttribute("data-id", String(item.id));
         applyTemplate(el, item, i, isf);
-        tracked = { el, lastId: item.id };
+        tracked = { el, lastItem: item };
         rendered.set(i, tracked);
         contentElement.appendChild(el);
-      } else if (tracked.lastId !== item.id) {
+      } else if (tracked.lastItem !== item) {
         tracked.el.setAttribute("data-id", String(item.id));
-        tracked.lastId = item.id;
+        tracked.lastItem = item;
         applyTemplate(tracked.el, item, i, isf);
       }
 

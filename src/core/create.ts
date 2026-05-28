@@ -12,7 +12,6 @@ import type {
   VList,
   PluginContext,
   ResolvedConfig,
-  VisibleRangeFn,
   CompiledHooks,
   Axis,
   AxisConfig,
@@ -283,7 +282,7 @@ export function createVList<T extends VListItem = VListItem>(
   let navLr = 0;
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
-  let smoothScrollFn: ((target: number, duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number) => void) | null = null;
+  let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
 
@@ -311,7 +310,6 @@ export function createVList<T extends VListItem = VListItem>(
         const newCache = createSizeCache(sc, state.totalItems);
         Object.assign(sizeCache, newCache);
       },
-      setVisibleRangeFn(_fn: VisibleRangeFn): void { /* wired in Phase B when scale plugin consumes it */ },
       setScrollFns(get: () => number, set: (pos: number) => void): void {
         scrollGetFn = get;
         scrollSetFn = set;
@@ -346,9 +344,9 @@ export function createVList<T extends VListItem = VListItem>(
         else if (isX) dom.viewport.scrollLeft = position;
         else dom.viewport.scrollTop = position;
       },
-      smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void {
-        if (smoothScrollFn) smoothScrollFn(position, duration, undefined, easing);
-        else ctx.scrollTo(position);
+      smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
+        if (smoothScrollFn) smoothScrollFn(target, duration, undefined, easing, onComplete);
+        else ctx.scrollTo(typeof target === "function" ? target() : target);
       },
       disableDefaultScroll(): void { skipDefaultScroll = true; },
       disableDefaultResize(): void { skipDefaultResize = true; },

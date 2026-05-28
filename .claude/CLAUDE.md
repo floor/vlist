@@ -224,8 +224,8 @@ Before tagging a new version, complete ALL of these steps:
 1. Bump the version in `package.json`
 2. Update `CHANGELOG.md` with the new version entries
 3. Run `bun run size` to get current bundle sizes
-4. Update `README.md` — version reference AND bundle size numbers
-5. Update `npm-readme.md` — bundle size numbers
+4. Update `README.md` — version reference, base size in tagline, AND verify every row in the Plugins size table against `bun run size` output
+5. Update `npm-readme.md` — version reference and base size
 
 ### Cross-Repo Staging Deploy (`notify-staging.yml`)
 When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.

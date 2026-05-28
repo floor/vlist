@@ -201,7 +201,6 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     setSizeConfig: () => {},
-    setVisibleRangeFn: () => {},
     setScrollFns: () => {},
     setVirtualTotalFn: () => {},
 
@@ -237,8 +236,8 @@ export function createPluginMockContext<T extends VListItem>(
     scrollTo: (pos: number) => {
       scrollCalls.push(pos);
     },
-    smoothScrollTo: (pos: number, _duration: number, _easing?: (t: number) => number) => {
-      scrollCalls.push(pos);
+    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, _onComplete?: () => void) => {
+      scrollCalls.push(typeof target === "function" ? target() : target);
     },
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},

@@ -7,12 +7,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
-import { phase1Calculate } from "../../src/core/pipeline";
+import { phase1Calculate, phase2Commit, createRenderConfig } from "../../src/core/pipeline";
 import { createEngineState } from "../../src/core/state";
 import type { EngineState } from "../../src/core/state";
 import { createSizeCache } from "../../src/core/sizes";
 import type { SizeCache } from "../../src/core/sizes";
 import type { CompiledHooks } from "../../src/core/types";
+import { createPool } from "../../src/core/pool";
+import { createTestItems, simpleTemplate } from "../helpers/factory";
 
 // =============================================================================
 // DOM Setup — required for Bun worker globals
@@ -439,6 +441,87 @@ describe("phase1Calculate — range calculations", () => {
     expect(state.startIndex).toBe(0);
     for (let i = 0; i < 5; i++) {
       expect(state.visibleIndices[i]).toBe(i);
+    }
+  });
+});
+
+// =============================================================================
+// phase2Commit — Multi-instance isolation
+// =============================================================================
+
+describe("phase2Commit — multiple instances do not interfere", () => {
+  it("two instances releasing different items in the same frame produce correct results", () => {
+    const items = createTestItems(20);
+    const hooks = emptyHooks();
+    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0);
+
+    // ── Instance A: renders items 0-9, then scrolls to show 5-14 ──
+    const stateA = createEngineState(20);
+    stateA.totalItems = 20;
+    const poolA = createPool("vlist");
+    const contentA = document.createElement("div");
+    const renderedA = new Map<number, HTMLElement>();
+
+    stateA.visibleCount = 10;
+    for (let i = 0; i < 10; i++) {
+      stateA.visibleIndices[i] = i;
+      stateA.visibleOffsets[i] = i * 50;
+      stateA.visibleSizes[i] = 50;
+    }
+    phase2Commit(stateA, poolA, contentA, simpleTemplate as any, () => items, renderedA, rc, hooks);
+    expect(renderedA.size).toBe(10);
+
+    // ── Instance B: renders items 10-19 ──
+    const stateB = createEngineState(20);
+    stateB.totalItems = 20;
+    const poolB = createPool("vlist");
+    const contentB = document.createElement("div");
+    const renderedB = new Map<number, HTMLElement>();
+
+    stateB.visibleCount = 10;
+    for (let i = 0; i < 10; i++) {
+      stateB.visibleIndices[i] = 10 + i;
+      stateB.visibleOffsets[i] = (10 + i) * 50;
+      stateB.visibleSizes[i] = 50;
+    }
+    phase2Commit(stateB, poolB, contentB, simpleTemplate as any, () => items, renderedB, rc, hooks);
+    expect(renderedB.size).toBe(10);
+
+    // ── Now scroll A to 5-14 and B to 15-19 in the same "frame" ──
+    stateA.visibleCount = 10;
+    for (let i = 0; i < 10; i++) {
+      stateA.visibleIndices[i] = 5 + i;
+      stateA.visibleOffsets[i] = (5 + i) * 50;
+      stateA.visibleSizes[i] = 50;
+    }
+
+    stateB.visibleCount = 5;
+    for (let i = 0; i < 5; i++) {
+      stateB.visibleIndices[i] = 15 + i;
+      stateB.visibleOffsets[i] = (15 + i) * 50;
+      stateB.visibleSizes[i] = 50;
+    }
+
+    // Both commit in sequence (same synchronous frame)
+    phase2Commit(stateA, poolA, contentA, simpleTemplate as any, () => items, renderedA, rc, hooks);
+    phase2Commit(stateB, poolB, contentB, simpleTemplate as any, () => items, renderedB, rc, hooks);
+
+    // A should have exactly items 5-14
+    expect(renderedA.size).toBe(10);
+    for (let i = 5; i <= 14; i++) {
+      expect(renderedA.has(i)).toBe(true);
+    }
+    for (let i = 0; i < 5; i++) {
+      expect(renderedA.has(i)).toBe(false);
+    }
+
+    // B should have exactly items 15-19
+    expect(renderedB.size).toBe(5);
+    for (let i = 15; i <= 19; i++) {
+      expect(renderedB.has(i)).toBe(true);
+    }
+    for (let i = 10; i < 15; i++) {
+      expect(renderedB.has(i)).toBe(false);
     }
   });
 });

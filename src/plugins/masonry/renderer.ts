@@ -135,8 +135,8 @@ const RELEASE_GRACE = 1;
 
 interface TrackedItem {
   element: HTMLElement;
-  /** Item id at last render (to detect data changes) */
-  lastItemId: string | number;
+  /** Item reference at last render (to detect data changes) */
+  lastItem: unknown;
   /** Selected state at last render */
   lastSelected: boolean;
   /** Focused state at last render */
@@ -330,7 +330,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
     return {
       element,
-      lastItemId: item.id,
+      lastItem: item,
       lastSelected: isSelected,
       lastFocused: isFocused,
       lastY: placement.y,
@@ -397,7 +397,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
       if (existing) {
         // ── Fast path: skip work when nothing changed ──
-        const idChanged = existing.lastItemId !== item.id;
+        const itemChanged = existing.lastItem !== item;
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
         const posChanged =
@@ -409,7 +409,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
         // Template re-evaluation only when item data actually changed
         // (NOT on selection/focus change — that would destroy loaded images)
-        if (idChanged) {
+        if (itemChanged) {
           const state = getItemState(isSelected, isFocused);
           const result = template(item, itemIndex, state);
           applyTemplate(existing.element, result);
@@ -417,7 +417,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           // Update data attributes
           existing.element.dataset.id = String(item.id);
 
-          existing.lastItemId = item.id;
+          existing.lastItem = item;
 
           // Refresh aria-posinset when element is reused for a different item
           const isGH = (item as any).__groupHeader;
@@ -428,7 +428,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         }
 
         // Class + aria updates only when selection/focus changed
-        if (idChanged || selectedChanged || focusedChanged) {
+        if (itemChanged || selectedChanged || focusedChanged) {
           applyClasses(existing.element, isSelected, isFocused);
           existing.element.ariaSelected = String(isSelected);
           existing.lastSelected = isSelected;

@@ -167,19 +167,6 @@ function isInVisible(indices: Int32Array, count: number, idx: number): boolean {
   return false;
 }
 
-/** Module-scope release state — avoids per-frame closure in rendered.forEach */
-let _relIndices: Int32Array;
-let _relCount: number;
-let _relPool: ElementPool;
-let _relRendered: Map<number, HTMLElement>;
-
-function releaseIfNotVisible(element: HTMLElement, idx: number): void {
-  if (!isInVisible(_relIndices, _relCount, idx)) {
-    element.remove();
-    _relPool.release(element);
-    _relRendered.delete(idx);
-  }
-}
 
 export function phase2Commit<T extends VListItem>(
   state: EngineState,
@@ -372,11 +359,13 @@ export function phase2Commit<T extends VListItem>(
 
   // Release nodes no longer visible (after acquire so new elements are in the
   // DOM before stale ones are removed — no single-frame gaps).
-  _relIndices = newIndices;
-  _relCount = count;
-  _relPool = pool;
-  _relRendered = rendered;
-  rendered.forEach(releaseIfNotVisible);
+  for (const [idx, element] of rendered) {
+    if (!isInVisible(newIndices, count, idx)) {
+      element.remove();
+      pool.release(element);
+      rendered.delete(idx);
+    }
+  }
 
   if (rc.interactive) state.prevAriaTotal = state.totalItems;
 
