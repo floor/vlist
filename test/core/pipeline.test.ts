@@ -525,3 +525,88 @@ describe("phase2Commit — multiple instances do not interfere", () => {
     }
   });
 });
+
+// =============================================================================
+// phase2Commit — Contiguous release fast path
+// =============================================================================
+
+describe("phase2Commit — contiguous release fast path", () => {
+  function setupCommitTest(totalItems: number) {
+    const items = createTestItems(totalItems);
+    const hooks = emptyHooks();
+    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0);
+    const state = createEngineState(totalItems + 20);
+    state.totalItems = totalItems;
+    const pool = createPool("vlist");
+    const content = document.createElement("div");
+    const rendered = new Map<number, HTMLElement>();
+    return { items, hooks, rc, state, pool, content, rendered };
+  }
+
+  function fillState(state: EngineState, start: number, count: number, itemSize: number): void {
+    state.visibleCount = count;
+    for (let i = 0; i < count; i++) {
+      state.visibleIndices[i] = start + i;
+      state.visibleOffsets[i] = (start + i) * itemSize;
+      state.visibleSizes[i] = itemSize;
+    }
+  }
+
+  it("releases out-of-range items via range check for contiguous indices", () => {
+    const { items, hooks, rc, state, pool, content, rendered } = setupCommitTest(30);
+
+    fillState(state, 0, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+    expect(rendered.size).toBe(10);
+
+    fillState(state, 5, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+
+    expect(rendered.size).toBe(10);
+    for (let i = 0; i < 5; i++) expect(rendered.has(i)).toBe(false);
+    for (let i = 5; i <= 14; i++) expect(rendered.has(i)).toBe(true);
+  });
+
+  it("releases correctly when scrolling backward", () => {
+    const { items, hooks, rc, state, pool, content, rendered } = setupCommitTest(30);
+
+    fillState(state, 10, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+    expect(rendered.size).toBe(10);
+
+    fillState(state, 5, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+
+    expect(rendered.size).toBe(10);
+    for (let i = 15; i <= 19; i++) expect(rendered.has(i)).toBe(false);
+    for (let i = 5; i <= 14; i++) expect(rendered.has(i)).toBe(true);
+  });
+
+  it("returns released elements to the pool", () => {
+    const { items, hooks, rc, state, pool, content, rendered } = setupCommitTest(30);
+
+    fillState(state, 0, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+    expect(pool.size).toBe(0);
+
+    fillState(state, 10, 10, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+
+    expect(pool.size).toBe(10);
+    expect(rendered.size).toBe(10);
+  });
+
+  it("handles visibleCount = 0 without errors", () => {
+    const { items, hooks, rc, state, pool, content, rendered } = setupCommitTest(20);
+
+    fillState(state, 0, 5, 50);
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+    expect(rendered.size).toBe(5);
+
+    state.visibleCount = 0;
+    phase2Commit(state, pool, content, simpleTemplate as any, () => items, rendered, rc, hooks);
+
+    expect(rendered.size).toBe(0);
+    expect(pool.size).toBe(5);
+  });
+});

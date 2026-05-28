@@ -33,7 +33,7 @@ export function createPool(classPrefix: string): ElementPool {
       element.removeAttribute("aria-setsize");
       element.removeAttribute("data-index");
       element.removeAttribute("data-id");
-      element.innerHTML = "";
+      element.textContent = "";
 
       if (pool.length < MAX_POOL_SIZE) {
         pool.push(element);
