@@ -102,7 +102,7 @@ export function autosize<T extends VListItem = VListItem>(
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
-        const firstVisible = engineState.startIndex;
+        const firstVisible = ctx.sizeCache.indexAtOffset(engineState.scrollPosition);
 
         for (const entry of entries) {
           const el = entry.target as HTMLElement;

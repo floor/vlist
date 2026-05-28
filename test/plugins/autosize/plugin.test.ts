@@ -724,6 +724,38 @@ describe("autosize anchor preservation", () => {
     mockCtx.cleanup();
   });
 
+  it("compensates scroll for overscan items above the visible viewport edge", () => {
+    const { mockCtx, plugin, triggerMeasurement } = setupAnchorTest();
+    const state = mockCtx.engineState;
+
+    // Step 1: item 3 is in the rendered range, observe it
+    state.startIndex = 0;
+    state.scrollPosition = 0;
+    state.visibleCount = 10;
+    for (let i = 0; i < 10; i++) state.visibleIndices[i] = i;
+
+    const el3 = addElement(mockCtx.dom.content, 3);
+    plugin.hooks!.onCommit!(state);
+
+    // Step 2: scroll down. startIndex=3 (includes overscan), but
+    // scrollPosition=250 means the first truly visible item is 5 (250/50).
+    // Item 3 is rendered via overscan but sits above the viewport edge.
+    state.startIndex = 3;
+    state.scrollPosition = 250;
+    state.visibleCount = 10;
+    for (let i = 0; i < 10; i++) state.visibleIndices[i] = 3 + i;
+
+    // Measure item 3 at 80px instead of estimated 50px → delta = +30
+    triggerMeasurement(el3, 80);
+
+    // Item 3 is above the true first visible (index 5), so scroll
+    // compensation fires: scrollTo(250 + 30 = 280)
+    expect(mockCtx.scrollCalls).toContain(280);
+
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
   it("accumulates deltas from multiple items above viewport", () => {
     const { mockCtx, plugin, triggerMeasurement } = setupAnchorTest();
     const state = mockCtx.engineState;
