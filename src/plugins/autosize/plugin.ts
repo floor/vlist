@@ -44,20 +44,22 @@ export function autosize<T extends VListItem = VListItem>(
 
   let pendingScrollDelta = 0;
   let pendingContentSizeUpdate = false;
+  let pinnedToEnd = false;
+  let animatingToEnd = false;
 
-  const BOTTOM_THRESHOLD = 2;
+  const END_THRESHOLD = 2;
 
   function sizeFn(index: number): number {
     return measuredSizes.get(index) ?? estimatedSize;
   }
 
-  function isAtBottom(): boolean {
+  function isAtEnd(): boolean {
     const viewport = storedCtx!.dom.viewport;
     const maxScroll = viewport.scrollHeight - viewport.clientHeight;
-    return maxScroll > 0 && engineState.scrollPosition >= maxScroll - BOTTOM_THRESHOLD;
+    return maxScroll > 0 && engineState.scrollPosition >= maxScroll - END_THRESHOLD;
   }
 
-  function snapToBottom(): void {
+  function snapToEnd(): void {
     const viewport = storedCtx!.dom.viewport;
     void viewport.scrollHeight;
     const maxScroll = viewport.scrollHeight - viewport.clientHeight;
@@ -140,7 +142,7 @@ export function autosize<T extends VListItem = VListItem>(
 
         if (!hasNewMeasurements) return;
 
-        const atBottom = isAtBottom();
+        const atEnd = isAtEnd();
 
         // Rebuild prefix sums with new measurements
         ctx.rebuildSizeCache();
@@ -154,19 +156,58 @@ export function autosize<T extends VListItem = VListItem>(
         const isScrolling = engineState.scrollDirection !== 0;
         const nearEnd = engineState.totalItems > 0
           && engineState.prevRangeEnd >= engineState.totalItems - 1;
+        const shouldPin = pinnedToEnd && !animatingToEnd;
 
-        if (atBottom || nearEnd || !isScrolling) {
+        if (shouldPin || atEnd || nearEnd || !isScrolling) {
           updateContentSize();
           pendingContentSizeUpdate = false;
 
-          if (atBottom) {
-            snapToBottom();
+          if (shouldPin || atEnd) {
+            snapToEnd();
           }
         } else {
           pendingContentSizeUpdate = true;
         }
 
         ctx.forceRender();
+      });
+
+      // End-pinning with dynamic scroll target: when scrollToIndex targets
+      // the last item with "end" alignment, use a dynamic target function so
+      // the smooth scroll tracks the real maxScroll as measurements change it.
+      // After the animation, pinnedToEnd keeps snapping on subsequent
+      // measurements until the user scrolls away.
+      ctx.setScrollToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
+        const isEndAligned = index >= engineState.totalItems - 1 && align === "end";
+        pinnedToEnd = isEndAligned;
+        animatingToEnd = false;
+
+        if (!isEndAligned) return false;
+
+        const mp = ctx.config.mainAxisPadding;
+        const dynamicTarget = (): number => {
+          const totalSize = ctx.sizeCache.getTotalSize();
+          return Math.max(0, totalSize + mp - engineState.containerSize);
+        };
+
+        if (behavior === "smooth") {
+          animatingToEnd = true;
+          ctx.smoothScrollTo(dynamicTarget, duration ?? 300, easing, () => {
+            animatingToEnd = false;
+          });
+        } else {
+          ctx.scrollTo(dynamicTarget());
+        }
+      });
+
+      const unpinOnUserScroll = (): void => { pinnedToEnd = false; };
+      const viewport = ctx.dom.viewport;
+      viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
+      viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
+
+      ctx.registerDestroyHandler((): void => {
+        viewport.removeEventListener("wheel", unpinOnUserScroll);
+        viewport.removeEventListener("touchstart", unpinOnUserScroll);
       });
 
       // Public methods
@@ -207,14 +248,14 @@ export function autosize<T extends VListItem = VListItem>(
       },
 
       onIdle(): void {
-        if (!pendingContentSizeUpdate || !storedCtx) return;
+        if (!storedCtx || !pendingContentSizeUpdate) return;
 
-        const atBottom = isAtBottom();
+        const atEnd = isAtEnd();
         updateContentSize();
         pendingContentSizeUpdate = false;
 
-        if (atBottom) {
-          snapToBottom();
+        if (atEnd) {
+          snapToEnd();
           storedCtx.forceRender();
         }
       },
@@ -226,6 +267,8 @@ export function autosize<T extends VListItem = VListItem>(
         observer = null;
       }
       measuredSizes.clear();
+      pinnedToEnd = false;
+      animatingToEnd = false;
       storedCtx = null;
     },
   };

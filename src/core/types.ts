@@ -132,7 +132,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
 
   scrollTo(position: number): void;
-  smoothScrollTo(position: number, duration: number, easing?: (t: number) => number): void;
+  smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
