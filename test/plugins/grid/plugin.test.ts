@@ -1056,3 +1056,48 @@ describe("grid - Layout Math", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// grid — Item identity by reference (issue 017)
+// =============================================================================
+
+describe("grid — item identity by reference", () => {
+  it("should re-render when item is replaced with new object with same id", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    const originalHTML = firstChild.innerHTML;
+
+    // Replace item 0 with a new object — same id, different name
+    items[0] = { id: 0, name: "Updated" };
+    ctx.forceRender();
+
+    const updatedHTML = firstChild.innerHTML;
+    expect(updatedHTML).not.toBe(originalHTML);
+    expect(updatedHTML).toContain("Updated");
+    cleanup();
+  });
+
+  it("should NOT re-render when same item reference is passed again", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const firstChild = dom.content.children[0] as HTMLElement;
+    // Mutate in place — same reference
+    firstChild.innerHTML = "<div>Manually changed</div>";
+    ctx.forceRender();
+
+    // Should skip re-render because reference hasn't changed
+    expect(firstChild.innerHTML).toBe("<div>Manually changed</div>");
+    cleanup();
+  });
+});

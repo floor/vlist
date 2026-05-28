@@ -161,8 +161,8 @@ const RELEASE_GRACE = 1;
 
 interface TrackedItem {
   element: HTMLElement;
-  /** Item id at last render (to detect data changes) */
-  lastItemId: string | number;
+  /** Item reference at last render (to detect data changes) */
+  lastItem: unknown;
   /** Selected state at last render */
   lastSelected: boolean;
   /** Focused state at last render */
@@ -447,7 +447,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
     return {
       element,
-      lastItemId: item.id,
+      lastItem: item,
       lastSelected: isSelected,
       lastFocused: isFocused,
       lastTransform: transform,
@@ -526,13 +526,13 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
       if (existing) {
         // ── Fast path: skip work when nothing changed ──
-        const idChanged = existing.lastItemId !== item.id;
+        const itemChanged = existing.lastItem !== item;
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
 
         // Template re-evaluation when item data changes
-        if (idChanged) {
-          const existingId = String(existing.lastItemId);
+        if (itemChanged) {
+          const existingId = existing.element.dataset.id ?? "";
           const newId = String(item.id);
           const wasPlaceholder = existingId.startsWith(PLACEHOLDER_ID_PREFIX);
           const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
@@ -559,7 +559,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
             setTimeout(() => existing.element.classList.remove(replacedClass), 300);
           }
 
-          existing.lastItemId = item.id;
+          existing.lastItem = item;
 
           // Refresh aria-posinset when element is reused for a different item
           const isGH = !!(item as any).__groupHeader;
@@ -570,7 +570,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         }
 
         // Class + aria updates only when selection/focus changed
-        if (idChanged || selectedChanged || focusedChanged) {
+        if (itemChanged || selectedChanged || focusedChanged) {
           applyClasses(existing.element, isSelected, isFocused);
           existing.element.ariaSelected = String(isSelected);
           existing.lastSelected = isSelected;
@@ -650,7 +650,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     existing.element.ariaSelected = String(isSelected);
     applySizeStyles(existing.element, index);
 
-    existing.lastItemId = item.id;
+    existing.lastItem = item;
     existing.lastSelected = isSelected;
     existing.lastFocused = isFocused;
   };
