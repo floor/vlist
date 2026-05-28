@@ -326,6 +326,7 @@ export function createVList<T extends VListItem = VListItem>(
         sizeCache.rebuild(state.totalItems);
       },
       updateContentSize(size: number): void {
+        state.totalSize = size;
         dom.content.style[isX ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
       },
       setRenderFn(renderFn: () => void, forceFn: () => void): void {

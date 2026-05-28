@@ -6,7 +6,7 @@ High-performance virtual scrolling library. Zero dependencies, plugin architectu
 
 **Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
 
-- **Package:** `@floor/vlist` on npm
+- **Package:** `vlist` on npm
 - **Repo:** `github.com/floor/vlist` (core) + separate repos for `vlist-react`, `vlist-vue`, `vlist-svelte`, `vlist-solidjs`
 - **Docs:** [vlist.io](https://vlist.io)
 
@@ -44,35 +44,37 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 ```
 src/
 ├── index.ts                # Public API — all exports
-├── internals.ts            # Low-level exports for advanced users (@floor/vlist/internals)
+├── internals.ts            # Low-level exports for advanced users (vlist/internals)
 ├── constants.ts            # All defaults and magic numbers
 ├── types.ts                # Public type definitions
-├── builder/                # Builder pattern + plugin system
-│   ├── core.ts             #   Builder factory (vlist function)
-│   ├── materialize.ts      #   .build() implementation
-│   ├── types.ts             #   BuilderConfig, BuilderContext, VListFeature, VList interfaces
-│   ├── context.ts           #   Context factory for features
-│   ├── api.ts               #   Public API surface assembly
-│   ├── dom.ts               #   DOM structure creation
-│   ├── data.ts              #   Simple data manager
-│   ├── pool.ts              #   Element pooling
-│   ├── range.ts             #   Range calculations
-│   ├── scroll.ts            #   Scroll controller
-│   ├── measurement.ts       #   Size measurement
-│   └── velocity.ts          #   Scroll velocity tracking
-├── features/               # Opt-in features via .use()
-│   ├── page/               #   Document/window scroll mode (priority 5)
-│   ├── grid/               #   2D grid layout (priority 10)
-│   ├── masonry/            #   Shortest-lane masonry (priority 10)
-│   ├── table/              #   Virtualized data table (priority 10)
-│   ├── groups/             #   Sticky group headers (priority 10)
-│   ├── scrollbar/          #   Custom scrollbar (priority 15)
-│   ├── async/              #   Async data adapter (priority 20)
-│   ├── scale/              #   Large-list compression, 1M+ items (priority 20)
-│   ├── selection/          #   Selection state (priority 50)
-│   └── snapshots/          #   Scroll save/restore (priority 50)
-├── rendering/              # Core rendering (not features)
+├── core/                   # Core engine
+│   ├── create.ts           #   createVList factory
+│   ├── types.ts            #   VList, VListPlugin, PluginContext, ResolvedConfig, AxisConfig
+│   ├── pipeline.ts         #   Render pipeline (phase1Diff / phase2Commit)
+│   ├── dom.ts              #   DOM structure creation
+│   ├── scroll.ts           #   Scroll handler (rAF loop)
+│   ├── pool.ts             #   Element pooling
 │   ├── sizes.ts            #   Size cache (prefix sums)
+│   ├── state.ts            #   Engine state
+│   ├── hooks.ts            #   Hook compilation
+│   ├── velocity.ts         #   Scroll velocity tracking
+│   └── index.ts            #   Core exports
+├── plugins/                # Opt-in plugins passed to createVList
+│   ├── a11y/               #   Keyboard nav + single-select
+│   ├── async/              #   Async data loading + pagination
+│   ├── autosize/           #   Dynamic item measurement
+│   ├── grid/               #   2D grid layout
+│   ├── groups/             #   Sticky group headers
+│   ├── masonry/            #   Pinterest-style layout
+│   ├── page/               #   Document/window scroll mode
+│   ├── scale/              #   1M+ items via scroll compression
+│   ├── scrollbar/          #   Custom scrollbar UI
+│   ├── selection/          #   Single/multi selection
+│   ├── snapshots/          #   Scroll save/restore
+│   ├── sortable/           #   Drag-and-drop reordering
+│   ├── table/              #   Virtualized data table
+│   └── transition/         #   FLIP-based enter/exit animations
+├── rendering/              # Core rendering (not plugins)
 │   ├── renderer.ts         #   DOM rendering with pooling
 │   ├── measured.ts         #   Auto-measurement for variable sizes
 │   ├── scale.ts            #   Compression/scale utilities
@@ -83,24 +85,25 @@ src/
 └── styles/                 # vlist.css, vlist-table.css, vlist-extras.css
 test/                       # Mirrors src/ structure
 ├── helpers/                #   setupDOM, createTestItems, createContainer, timer utils
-├── builder/
-├── features/               #   One folder per feature
+├── core/
+├── plugins/                #   One folder per plugin
 ├── rendering/
 ├── events/
 ├── utils/
-└── integration/            #   Cross-feature, memory, performance tests
+└── integration/            #   Cross-plugin, memory, performance tests
 ```
 
 ## Architecture
 
-Builder pattern with composable features: `vlist(config).use(withGrid(...)).use(withSelection(...)).build()`.
+Factory + plugin array: `createVList(config, [grid({ columns: 3 }), selection(), scrollbar()])`.
 
-- **Builder** (`src/builder/`): DOM structure, scroll handling, element pooling, virtual scrolling
-- **Features** (`src/features/`): Self-contained plugins composed via `.use()`, each implements `VListFeature<T>`
-- **BuilderContext**: Internal interface features receive in `setup()` — hooks, registration arrays, replacement methods. Read `src/builder/types.ts` for the full interface.
-- **Auto-detection**: Framework adapters (separate repos) translate convenience config fields into `.use()` calls
+- **Core** (`src/core/`): Factory, DOM structure, scroll handling, element pooling, render pipeline, size cache
+- **Plugins** (`src/plugins/`): Self-contained plugins passed as second argument to `createVList`, each implements `VListPlugin<T>`
+- **PluginContext**: Internal interface plugins receive in `setup()` — hooks, registration arrays, replacement methods. Read `src/core/types.ts` for the full interface.
+- **AxisConfig**: Internal geometry model — `{ primary: 'x' | 'y', cross?: 'x' | 'y' }`. Resolved from `orientation` + grid plugin presence. See RFC-005.
+- **Auto-detection**: Framework adapters (separate repos) translate convenience config fields into plugin arrays
 
-Key interfaces are in `src/builder/types.ts`: `BuilderConfig`, `BuilderContext`, `VListFeature`, `VList`, `ResolvedBuilderConfig`. Always read this file when working on features.
+Key interfaces are in `src/core/types.ts`: `VList`, `VListPlugin`, `PluginContext`, `CreateVListConfig`, `ResolvedConfig`, `AxisConfig`. Always read this file when working on plugins.
 
 ## TypeScript Rules
 
@@ -135,7 +138,8 @@ Use orientation-neutral terminology. The library supports both vertical and hori
 - `sizeCache.getSize(index)` not `getHeight(index)`
 - `state.scrollPosition` not `state.scrollTop`
 - `state.containerSize` not `state.height`
-- `ResolvedBuilderConfig` has `horizontal: boolean` to determine axis
+- `config.axis.primary` (`"x" | "y"`) determines the scroll axis; derive `const isX = config.axis.primary === "x"` locally where needed
+- No `horizontal` boolean — all axis logic flows from `AxisConfig`
 
 ## CSS Rules
 
@@ -153,15 +157,15 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 - DOM environment: `GlobalRegistrator.register()` in `beforeAll`, `unregister()` in `afterAll` — sets all browser globals
 - Shared helpers in `test/helpers/`: `setupDOM`, `teardownDOM`, `createTestItems`, `createContainer`, `simpleTemplate`, `useFakeTimers`
 - `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
-- Each feature tested by: factory/validation, setup/registration, public methods, cross-feature integration
-- Features are unit-tested via mock `BuilderContext` — see existing tests for the pattern
+- Each plugin tested by: factory/validation, setup/registration, public methods, cross-plugin integration
+- Plugins are unit-tested via mock `PluginContext` — see existing tests for the pattern
 - 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/plugin.test.ts)
 
-## Adding a New Feature
+## Adding a New Plugin
 
-1. Create `src/features/{name}/` with `feature.ts` and `index.ts`
-2. Implement `VListFeature<T>`: `name`, `priority`, `setup(ctx)`, optional `destroy()`
-3. Add tests in `test/features/{name}/`
+1. Create `src/plugins/{name}/` with `plugin.ts` and `index.ts`
+2. Implement `VListPlugin<T>`: `name`, `priority`, `setup(ctx)`, optional `destroy()`
+3. Add tests in `test/plugins/{name}/`
 4. Export from `src/index.ts`
 5. Add build entry in `build.ts`
 6. Add `package.json` export path if needed
@@ -172,7 +176,7 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 Conventional Commits: `type(scope): description`
 
 - **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
-- **Scopes:** `core`, `builder`, `render`, `styles`, or feature name (`grid`, `selection`, `table`, `async`, `scale`, `scrollbar`, `page`, `masonry`, `groups`, `snapshots`)
+- **Scopes:** `core`, `render`, `styles`, or plugin name (`grid`, `selection`, `table`, `async`, `scale`, `scrollbar`, `page`, `masonry`, `groups`, `snapshots`, `a11y`, `autosize`, `sortable`, `transition`)
 
 ## Git Workflow
 

@@ -10,7 +10,8 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
-import type { VList } from "../../src/core/types";
+import { grid } from "../../src/plugins/grid/plugin";
+import type { VList, VListPlugin, PluginContext, ResolvedConfig } from "../../src/core/types";
 
 // =============================================================================
 // DOM Setup
@@ -174,5 +175,89 @@ describe("horizontal — rendering", () => {
     const vlist = makeHList(0);
     const content = getContent(container);
     expect(content.children.length).toBe(0);
+  });
+});
+
+// =============================================================================
+// AxisConfig resolution (RFC-005)
+// =============================================================================
+
+function spyPlugin(): { plugin: VListPlugin<TestItem>; config: () => ResolvedConfig } {
+  let captured: ResolvedConfig;
+  const plugin: VListPlugin<TestItem> = {
+    name: "axis-spy",
+    priority: 99,
+    setup(ctx: PluginContext<TestItem>) {
+      captured = ctx.config;
+    },
+  };
+  return { plugin, config: () => captured };
+}
+
+describe("horizontal — AxisConfig resolution", () => {
+  it("vertical list resolves axis.primary = y", () => {
+    const spy = spyPlugin();
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(10),
+        item: { height: 50, template: simpleTemplate },
+      },
+      [spy.plugin],
+    );
+
+    expect(spy.config().axis.primary).toBe("y");
+    expect(spy.config().axis.cross).toBeUndefined();
+    expect(spy.config().hasCrossAxis).toBe(false);
+  });
+
+  it("horizontal list resolves axis.primary = x", () => {
+    const spy = spyPlugin();
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(10),
+        orientation: "horizontal",
+        item: { width: 80, template: simpleTemplate },
+      },
+      [spy.plugin],
+    );
+
+    expect(spy.config().axis.primary).toBe("x");
+    expect(spy.config().axis.cross).toBeUndefined();
+    expect(spy.config().hasCrossAxis).toBe(false);
+  });
+
+  it("vertical grid resolves axis { primary: y, cross: x }", () => {
+    const spy = spyPlugin();
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(20),
+        item: { height: 100, template: simpleTemplate },
+      },
+      [grid({ columns: 3 }), spy.plugin],
+    );
+
+    expect(spy.config().axis.primary).toBe("y");
+    expect(spy.config().axis.cross).toBe("x");
+    expect(spy.config().hasCrossAxis).toBe(true);
+  });
+
+  it("horizontal grid resolves axis { primary: x, cross: y }", () => {
+    const spy = spyPlugin();
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(20),
+        orientation: "horizontal",
+        item: { width: 100, height: 300, template: simpleTemplate },
+      },
+      [grid({ columns: 3 }), spy.plugin],
+    );
+
+    expect(spy.config().axis.primary).toBe("x");
+    expect(spy.config().axis.cross).toBe("y");
+    expect(spy.config().hasCrossAxis).toBe(true);
   });
 });

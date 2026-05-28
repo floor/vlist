@@ -210,6 +210,7 @@ export function createPluginMockContext<T extends VListItem>(
     getState: () => engineState,
     rebuildSizeCache: () => {},
     updateContentSize: (size: number) => {
+      engineState.totalSize = size;
       if (isX) {
         content.style.width = `${size}px`;
       } else {

@@ -14,7 +14,6 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
-import type { SizeCache } from "../../core/sizes";
 import { createScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
 
 // =============================================================================
@@ -34,7 +33,6 @@ export function scrollbar<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   let sb: Scrollbar | null = null;
   let engineState: EngineState;
-  let sizeCache: SizeCache;
   let lastBoundsTotal = 0;
   let lastBoundsContainer = 0;
 
@@ -48,7 +46,6 @@ export function scrollbar<T extends VListItem = VListItem>(
       const isX = resolvedConfig.axis.primary === "x";
 
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
 
       // Indirect callback — scale plugin can redirect via registerMethod
       let scrollCb = (position: number): void => {
@@ -78,7 +75,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       // Skip if compressed — the scale plugin owns bounds in that case.
       queueMicrotask(() => {
         if (!engineState.isCompressed) {
-          sb?.updateBounds(sizeCache.getTotalSize(), engineState.containerSize);
+          sb?.updateBounds(engineState.totalSize, engineState.containerSize);
         }
       });
 
@@ -98,7 +95,7 @@ export function scrollbar<T extends VListItem = VListItem>(
     hooks: {
       onAfterScroll(scrollPosition: number): void {
         if (!engineState.isCompressed) {
-          const total = sizeCache.getTotalSize();
+          const total = engineState.totalSize;
           const container = engineState.containerSize;
           if (total !== lastBoundsTotal || container !== lastBoundsContainer) {
             lastBoundsTotal = total;
@@ -112,7 +109,7 @@ export function scrollbar<T extends VListItem = VListItem>(
 
       onResize(): void {
         if (!engineState.isCompressed) {
-          const total = sizeCache.getTotalSize();
+          const total = engineState.totalSize;
           const container = engineState.containerSize;
           lastBoundsTotal = total;
           lastBoundsContainer = container;
