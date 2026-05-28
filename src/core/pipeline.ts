@@ -167,6 +167,18 @@ function isInVisible(indices: Int32Array, count: number, idx: number): boolean {
   return false;
 }
 
+/** Check if visibleIndices[0..count) form a strictly consecutive sequence. */
+function isContiguousWindow(indices: Int32Array, count: number): boolean {
+  if (count <= 1) return true;
+  let prev = indices[0]!;
+  for (let i = 1; i < count; i++) {
+    const next = indices[i]!;
+    if (next !== prev + 1) return false;
+    prev = next;
+  }
+  return true;
+}
+
 
 export function phase2Commit<T extends VListItem>(
   state: EngineState,
@@ -238,7 +250,7 @@ export function phase2Commit<T extends VListItem>(
         if (typeof result === "string") {
           acquired.innerHTML = result;
         } else {
-          acquired.innerHTML = "";
+          acquired.textContent = "";
           acquired.appendChild(result);
         }
       }
@@ -308,7 +320,7 @@ export function phase2Commit<T extends VListItem>(
         if (typeof result === "string") {
           element.innerHTML = result;
         } else {
-          element.innerHTML = "";
+          element.textContent = "";
           element.appendChild(result);
         }
         element.setAttribute("data-id", newId);
@@ -359,11 +371,23 @@ export function phase2Commit<T extends VListItem>(
 
   // Release nodes no longer visible (after acquire so new elements are in the
   // DOM before stale ones are removed — no single-frame gaps).
-  for (const [idx, element] of rendered) {
-    if (!isInVisible(newIndices, count, idx)) {
-      element.remove();
-      pool.release(element);
-      rendered.delete(idx);
+  if (count > 0 && isContiguousWindow(newIndices, count)) {
+    const rangeStart = newIndices[0]!;
+    const rangeEnd = newIndices[count - 1]!;
+    for (const [idx, element] of rendered) {
+      if (idx < rangeStart || idx > rangeEnd) {
+        element.remove();
+        pool.release(element);
+        rendered.delete(idx);
+      }
+    }
+  } else {
+    for (const [idx, element] of rendered) {
+      if (!isInVisible(newIndices, count, idx)) {
+        element.remove();
+        pool.release(element);
+        rendered.delete(idx);
+      }
     }
   }
 

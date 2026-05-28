@@ -21,7 +21,7 @@
  * - Template re-evaluation skipped when item id + selection/focus state unchanged
  * - Position update skipped when coordinates unchanged (position tracking)
  * - Cell widths are only updated when column layout changes (not every scroll frame)
- * - Released elements removed from DOM immediately, pooled for reuse
+ * - Stale elements released after new ones are in the DOM (no single-frame gaps)
  *
  * DOM structure per row:
  *   .vlist-item.vlist-table-row (position: absolute, translateY)
@@ -138,7 +138,10 @@ interface TrackedRow {
   /** Whether this row is a group header (fast flag — avoids DOM queries) */
   isGroupHeader: boolean;
 
-  /** Last rendered item ID (for change detection) */
+  /** Last rendered item reference (for change detection) */
+  _lastItem: unknown;
+
+  /** Last rendered item ID (for data-id attribute and placeholder transitions) */
   lastItemId: string | number;
 
   /** Last selected state */
@@ -432,6 +435,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       cells: [],  // No cells for group headers
       index,
       isGroupHeader: true,
+      _lastItem: item,
       lastItemId: item.id,
       lastSelected: false,
       lastFocused: false,
@@ -490,6 +494,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       cells,
       index,
       isGroupHeader: false,
+      _lastItem: item,
       lastItemId: item.id,
       lastSelected: isSelected,
       lastFocused: isFocused,
@@ -511,7 +516,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
    * - New rows: created and positioned
    * - Existing rows with same item: state/position update only
    * - Existing rows with different item: full template re-evaluation
-   * - Rows outside range: released after grace period
+   * - Rows outside range: released after new rows are in the DOM
    */
   const render = (
     items: T[],
@@ -520,17 +525,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
-    // Release items outside the new range immediately.
-    // Tables don't need a grace period — row hover is a simple background
-    // change with no CSS transitions to preserve, and each graced row
-    // carries N cell elements so the DOM cost is high.
-    for (const [index, tracked] of rendered) {
-      if (index < range.start || index > range.end) {
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
-
     // Check if aria-setsize changed
     let setSizeChanged = false;
     const total = getTotalItems();
@@ -578,8 +572,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
         if (isHeader) {
           // ── Group header fast path ──
-          const idChanged = existing.lastItemId !== item.id;
-          if (idChanged) {
+          const itemChanged = existing._lastItem !== item;
+          if (itemChanged) {
             // Different group header — re-render content
             const headerItem = item as unknown as GroupHeaderItem;
             const content = existing.element.firstElementChild as HTMLElement;
@@ -592,6 +586,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               }
             }
             existing.element.setAttribute("data-id", String(item.id));
+            existing._lastItem = item;
             existing.lastItemId = item.id;
           }
 
@@ -610,12 +605,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
         } else {
-          // ── Data row path (existing logic) ──
-          const idChanged = existing.lastItemId !== item.id;
+          // ── Data row path ──
+          const itemChanged = existing._lastItem !== item;
           const selectedChanged = existing.lastSelected !== isSelected;
           const focusedChanged = existing.lastFocused !== isFocused;
 
-          if (idChanged) {
+          if (itemChanged) {
             // Different item at this index — full re-render of cells
             const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
             const isPlaceholder = isPH(item.id);
@@ -639,10 +634,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               setTimeout(() => {
                 existing.element.classList.remove(replacedClass);
               }, 300);
-
-
             }
 
+            existing._lastItem = item;
             existing.lastItemId = item.id;
             existing.lastSelected = isSelected;
             existing.lastFocused = isFocused;
@@ -695,6 +689,17 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     if (fragment) {
       container.appendChild(fragment);
     }
+
+    // Release rows outside the new range AFTER new elements are in the DOM.
+    // This matches the core pipeline's approach: new elements are visible
+    // before stale ones are removed, preventing single-frame gaps during
+    // native scrollbar drag (compositor scrolls ahead of main-thread JS).
+    for (const [index, tracked] of rendered) {
+      if (index < range.start || index > range.end) {
+        pool.release(tracked.element);
+        rendered.delete(index);
+      }
+    }
   };
 
   // =========================================================================
@@ -745,6 +750,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       applyCellTemplate(existing.cells[c]!, item, cols[c]!, index);
     }
     existing.element.setAttribute("data-id", String(item.id));
+    existing._lastItem = item;
     existing.lastItemId = item.id;
 
     applyRowClasses(existing.element, index, isSelected, isFocused);

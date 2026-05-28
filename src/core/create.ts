@@ -345,7 +345,7 @@ export function createVList<T extends VListItem = VListItem>(
         else dom.viewport.scrollTop = position;
       },
       smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
-        if (smoothScrollFn) smoothScrollFn(target, duration, undefined, easing, onComplete);
+        if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
         else ctx.scrollTo(typeof target === "function" ? target() : target);
       },
       disableDefaultScroll(): void { skipDefaultScroll = true; },
