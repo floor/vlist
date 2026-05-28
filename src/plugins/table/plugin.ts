@@ -63,10 +63,6 @@ export function table<T extends VListItem = VListItem>(
   let focusedIndexGetter: (() => number) | null = null;
   let selectionResolved = false;
 
-  let lastScrollPosition = -1;
-  let lastContainerSize = -1;
-  let lastTotalItems = -1;
-  let forceNextRender = true;
   let lastAriaRowCount = -1;
 
   function resolveSelectionMethods(): void {
@@ -85,26 +81,15 @@ export function table<T extends VListItem = VListItem>(
   const range = { start: 0, end: 0 };
 
   function tableRenderIfNeeded(): void {
-    if (engineState.destroyed || !storedCtx || !tableRenderer || !tableLayout) return;
-
-    const scrollPos = engineState.scrollPosition;
-    const containerSize = engineState.containerSize;
-    const totalItems = engineState.totalItems;
-
-    if (
-      !forceNextRender &&
-      scrollPos === lastScrollPosition &&
-      containerSize === lastContainerSize &&
-      totalItems === lastTotalItems
-    ) {
+    if (engineState.destroyed || !storedCtx || !tableRenderer || !tableLayout) {
       return;
     }
-    lastScrollPosition = scrollPos;
-    lastContainerSize = containerSize;
-    lastTotalItems = totalItems;
-    forceNextRender = false;
 
-    if (containerSize <= 0 || totalItems === 0) return;
+    const containerSize = engineState.containerSize;
+    const totalItems = engineState.totalItems;
+    if (containerSize <= 0 || totalItems === 0) {
+      return;
+    }
 
     // Update aria-rowcount when item count changes (+1 for header row)
     const ariaRowCount = totalItems + 1;
@@ -114,6 +99,7 @@ export function table<T extends VListItem = VListItem>(
     }
 
     // Calculate visible range
+    const scrollPos = engineState.scrollPosition;
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
     if (visEnd < totalItems - 1) visEnd++;
@@ -172,7 +158,6 @@ export function table<T extends VListItem = VListItem>(
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
-    forceNextRender = true;
     tableRenderIfNeeded();
   }
 

@@ -21,7 +21,7 @@
  * - Template re-evaluation skipped when item id + selection/focus state unchanged
  * - Position update skipped when coordinates unchanged (position tracking)
  * - Cell widths are only updated when column layout changes (not every scroll frame)
- * - Released elements removed from DOM immediately, pooled for reuse
+ * - Stale elements released after new ones are in the DOM (no single-frame gaps)
  *
  * DOM structure per row:
  *   .vlist-item.vlist-table-row (position: absolute, translateY)
@@ -516,7 +516,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
    * - New rows: created and positioned
    * - Existing rows with same item: state/position update only
    * - Existing rows with different item: full template re-evaluation
-   * - Rows outside range: released after grace period
+   * - Rows outside range: released after new rows are in the DOM
    */
   const render = (
     items: T[],
@@ -525,17 +525,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     focusedIndex: number,
     compressionCtx?: CompressionContext,
   ): void => {
-    // Release items outside the new range immediately.
-    // Tables don't need a grace period — row hover is a simple background
-    // change with no CSS transitions to preserve, and each graced row
-    // carries N cell elements so the DOM cost is high.
-    for (const [index, tracked] of rendered) {
-      if (index < range.start || index > range.end) {
-        pool.release(tracked.element);
-        rendered.delete(index);
-      }
-    }
-
     // Check if aria-setsize changed
     let setSizeChanged = false;
     const total = getTotalItems();
@@ -699,6 +688,17 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     // Single DOM insertion for all new elements — minimizes reflows
     if (fragment) {
       container.appendChild(fragment);
+    }
+
+    // Release rows outside the new range AFTER new elements are in the DOM.
+    // This matches the core pipeline's approach: new elements are visible
+    // before stale ones are removed, preventing single-frame gaps during
+    // native scrollbar drag (compositor scrolls ahead of main-thread JS).
+    for (const [index, tracked] of rendered) {
+      if (index < range.start || index > range.end) {
+        pool.release(tracked.element);
+        rendered.delete(index);
+      }
     }
   };
 
