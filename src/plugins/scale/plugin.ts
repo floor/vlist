@@ -472,6 +472,7 @@ export function scale<T extends VListItem = VListItem>(
       storedCtx = ctx;
 
       ctx.registerMethod("_updateCompressionMode", () => updateCompression(ctx));
+      ctx.registerMethod("_scale:getCompression", () => compression);
 
       // Register scroll get/set so scrollToIndex routes through us
       ctx.setScrollFns(

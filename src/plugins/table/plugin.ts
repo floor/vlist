@@ -16,6 +16,9 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
+import type { CompressionContext } from "../../rendering/renderer";
+import type { CompressionState } from "../../rendering/scale";
+import { calculateCompressedVisibleRange } from "../../rendering/scale";
 
 import { createTableLayout } from "./layout";
 import { createTableHeader } from "./header";
@@ -64,12 +67,20 @@ export function table<T extends VListItem = VListItem>(
   let selectionResolved = false;
 
   let lastAriaRowCount = -1;
+  let getCompression: (() => CompressionState) | null = null;
+  let compressionResolved = false;
 
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
     selectedIdsGetter = (storedCtx.getMethod("_getSelectedIds") as (() => Set<string | number>)) ?? null;
     focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
+  }
+
+  function resolveCompression(): void {
+    if (compressionResolved || !storedCtx) return;
+    compressionResolved = true;
+    getCompression = (storedCtx.getMethod("_scale:getCompression") as (() => CompressionState)) ?? null;
   }
 
   // =========================================================================
@@ -79,6 +90,7 @@ export function table<T extends VListItem = VListItem>(
   // Persistent per-render buffers — hoisted to avoid per-frame allocation
   const rangeItems: T[] = [];
   const range = { start: 0, end: 0 };
+  const compRange = { start: 0, end: -1 };
 
   function tableRenderIfNeeded(): void {
     if (engineState.destroyed || !storedCtx || !tableRenderer || !tableLayout) {
@@ -98,17 +110,30 @@ export function table<T extends VListItem = VListItem>(
       storedCtx.dom.root.setAttribute("aria-rowcount", `${ariaRowCount}`);
     }
 
-    // Calculate visible range
+    // Calculate visible range — compression-aware when scale plugin is active
+    resolveCompression();
     const scrollPos = engineState.scrollPosition;
-    let visStart = sizeCache.indexAtOffset(scrollPos);
-    let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
-    if (visEnd < totalItems - 1) visEnd++;
-    visStart = Math.max(0, visStart);
-    visEnd = Math.min(totalItems - 1, visEnd);
-
+    const compression = getCompression?.() ?? null;
+    const isCompressed = compression !== null && compression.isCompressed;
     const overscan = storedCtx.config.overscan;
-    const renderStart = Math.max(0, visStart - overscan);
-    const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
+    let renderStart: number;
+    let renderEnd: number;
+
+    if (isCompressed) {
+      calculateCompressedVisibleRange(
+        scrollPos, containerSize, sizeCache, totalItems, compression, compRange,
+      );
+      renderStart = Math.max(0, compRange.start - overscan);
+      renderEnd = Math.min(totalItems - 1, compRange.end + overscan);
+    } else {
+      let visStart = sizeCache.indexAtOffset(scrollPos);
+      let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
+      if (visEnd < totalItems - 1) visEnd++;
+      visStart = Math.max(0, visStart);
+      visEnd = Math.min(totalItems - 1, visEnd);
+      renderStart = Math.max(0, visStart - overscan);
+      renderEnd = Math.min(totalItems - 1, visEnd + overscan);
+    }
 
     if (
       renderStart === engineState.prevRangeStart &&
@@ -130,7 +155,19 @@ export function table<T extends VListItem = VListItem>(
 
     range.start = renderStart;
     range.end = renderEnd;
-    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex);
+
+    let compressionCtx: CompressionContext | undefined;
+    if (isCompressed) {
+      compressionCtx = {
+        scrollPosition: scrollPos,
+        totalItems,
+        containerSize,
+        rangeStart: renderStart,
+        compression,
+      };
+    }
+
+    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex, compressionCtx);
 
     // Update engine state
     engineState.prevRangeStart = renderStart;
