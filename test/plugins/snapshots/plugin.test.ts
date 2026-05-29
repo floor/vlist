@@ -672,6 +672,27 @@ describe("snapshots - sizeCache Rebuild", () => {
     cleanup();
   });
 
+  it("should NOT rebuild sizeCache when grid plugin manages row-based total", () => {
+    // Grid plugin rebuilds sizeCache with row count (225 = ceil(900/4)).
+    // Snapshots must not "correct" this to state.totalItems (900).
+    const updateCompressionFn = mock(() => {});
+    const { ctx, methods, sizeCache, cleanup } = createMockContext({
+      totalItems: 900,
+      itemHeight: 116,
+      sizeCacheTotal: 225, // Grid row count, NOT item count
+      extraMethods: { _updateCompressionMode: updateCompressionFn },
+    });
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
+    restore({ index: 5, offsetInItem: 10 });
+
+    expect(sizeCache.rebuild).not.toHaveBeenCalled();
+    expect(updateCompressionFn).not.toHaveBeenCalled();
+    cleanup();
+  });
+
   it("should scroll to correct position after sizeCache rebuild", () => {
     // After rebuild, sizeCache knows the total → position calculated correctly
     // index=704, offset=10, itemHeight=72
