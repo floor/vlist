@@ -581,6 +581,35 @@ describe("tree plugin — parentId mode", () => {
     expect(newItem.parentId).toBe("1");
     cleanup();
   });
+
+  test("removeItem in parentId mode removes from raw items array", () => {
+    const items = [
+      { id: "1", name: "root", parentId: null },
+      { id: "2", name: "child", parentId: "1" },
+      { id: "3", name: "leaf", parentId: null },
+    ] as any[];
+
+    const { ctx, cleanup } = createPluginMockContext(items);
+    tree({ parentId: "parentId", expanded: true }).setup!(ctx);
+
+    ctx.removeItemById("2");
+    expect(items.find((i: any) => i.id === "2")).toBeUndefined();
+    cleanup();
+  });
+
+  test("parentId function returning undefined treats nodes as roots", () => {
+    const items = [
+      { id: "1", name: "root", pid: undefined },
+      { id: "2", name: "child", pid: "1" },
+    ] as any[];
+
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+    tree({ parentId: (item: any) => item.pid, expanded: true }).setup!(ctx);
+
+    const layout = (methods.get("getTreeLayout") as () => { totalVisible: number })();
+    expect(layout.totalVisible).toBe(2);
+    cleanup();
+  });
 });
 
 // =============================================================================

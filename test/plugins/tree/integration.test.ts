@@ -246,4 +246,50 @@ describe("tree integration — public API", () => {
 
     list.destroy();
   });
+
+  test("insertItem clamps to root array bounds", () => {
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items: makeTree(),
+    }, [tree({ expanded: ["src"] })]);
+
+    const before = list.total;
+    list.insertItem({ id: "new", name: "new.ts", children: [] } as TreeItem, 999);
+    expect(list.total).toBe(before + 1);
+    expect(list.getIndexById("new")).toBeGreaterThan(-1);
+
+    list.destroy();
+  });
+
+  test("async loadChildren with function accessor works via side map", async () => {
+    interface CustomItem extends VListItem {
+      id: string;
+      name: string;
+      subs?: CustomItem[];
+    }
+
+    const items: CustomItem[] = [
+      { id: "root", name: "root" },
+    ];
+
+    const list = createVList<CustomItem>({
+      container,
+      item: { height: 32, template: (item: CustomItem) => `<div>${item.name}</div>` },
+      items,
+    }, [tree<CustomItem>({
+      children: (item: CustomItem) => item.subs ?? [],
+      loadChildren: async () => [
+        { id: "c1", name: "child-1" },
+        { id: "c2", name: "child-2" },
+      ],
+    })]);
+
+    expect(list.total).toBe(1);
+    (list as any).expand("root");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(list.total).toBe(3);
+
+    list.destroy();
+  });
 });

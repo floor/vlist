@@ -323,4 +323,49 @@ describe("createTreeLayout — mutations", () => {
     const layout = createTreeLayout(getChildren, new Set());
     expect(() => layout.rebuild(items)).toThrow("duplicate id");
   });
+
+  test("addChild detects duplicate inside collapsed subtree", () => {
+    const layout = createTreeLayout(getChildren, new Set());
+    layout.rebuild(makeTree());
+
+    expect(() => {
+      layout.addChild("1", { id: "1.1.1", name: "dup", children: [] } as TreeItem);
+    }).toThrow("duplicate id");
+  });
+
+  test("expand does not mark node expanded when children are empty", () => {
+    const items: TreeItem[] = [
+      { id: "1", name: "parent", children: [] },
+    ];
+    const layout = createTreeLayout(getChildren, new Set());
+    layout.rebuild([
+      { id: "1", name: "parent", children: [
+        { id: "2", name: "child", children: [] },
+      ]} as TreeItem,
+    ]);
+
+    layout.flatNodes[0]!.hasChildren = true;
+    (layout.flatNodes[0]!.item as TreeItem).children = [];
+
+    const inserted = layout.expand("1");
+    expect(inserted).toBe(0);
+    expect(layout.expandedIds.has("1")).toBe(false);
+    expect(layout.flatNodes[0]!.expanded).toBe(false);
+  });
+
+  test("expand with large subtree does not throw RangeError", () => {
+    const bigChildren: TreeItem[] = [];
+    for (let i = 0; i < 100000; i++) {
+      bigChildren.push({ id: `c${i}`, name: `child-${i}`, children: [] });
+    }
+    const items: TreeItem[] = [
+      { id: "root", name: "root", children: bigChildren },
+    ];
+    const layout = createTreeLayout(getChildren, new Set());
+    layout.rebuild(items);
+
+    const count = layout.expand("root");
+    expect(count).toBe(100000);
+    expect(layout.totalVisible).toBe(100001);
+  });
 });
