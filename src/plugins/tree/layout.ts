@@ -134,18 +134,25 @@ export function createTreeLayout<T extends VListItem>(
 
   // ── Public API ──────────────────────────────────────────────────
 
+  function validateAllIds(items: readonly T[]): void {
+    const seen = new Set<string | number>();
+    function walk(children: readonly T[]): void {
+      for (const item of children) {
+        if (seen.has(item.id)) throw new Error(`[vlist] tree: duplicate id "${item.id}"`);
+        seen.add(item.id);
+        const ch = getChildren(item);
+        if (ch.length > 0) walk(ch);
+      }
+    }
+    walk(items);
+  }
+
   function rebuild(items: readonly T[]): void {
     storedRootItems = items;
+    validateAllIds(items);
     flatNodes.length = 0;
     walkAndCollect(items, null, 0, flatNodes);
     rebuildIdMap();
-    if (idToIndex.size !== flatNodes.length) {
-      const seen = new Set<string | number>();
-      for (const node of flatNodes) {
-        if (seen.has(node.id)) throw new Error(`[vlist] tree: duplicate id "${node.id}"`);
-        seen.add(node.id);
-      }
-    }
   }
 
   function expand(id: string | number): number {

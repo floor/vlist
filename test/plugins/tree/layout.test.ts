@@ -311,4 +311,16 @@ describe("createTreeLayout — mutations", () => {
     const layout = createTreeLayout(getChildren, new Set(["1"]));
     expect(() => layout.rebuild(items)).toThrow("duplicate id");
   });
+
+  test("rebuild detects duplicates inside collapsed subtrees", () => {
+    const items: TreeItem[] = [
+      { id: "1", name: "a", children: [
+        { id: "2", name: "b", children: [
+          { id: "2", name: "dup-inside-collapsed", children: [] },
+        ]},
+      ]},
+    ];
+    const layout = createTreeLayout(getChildren, new Set());
+    expect(() => layout.rebuild(items)).toThrow("duplicate id");
+  });
 });

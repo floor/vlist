@@ -474,6 +474,59 @@ describe("tree plugin — mutations", () => {
 });
 
 // =============================================================================
+// Core integration: removeItem returns -1 for missing IDs
+// =============================================================================
+
+describe("tree plugin — removeItem return value", () => {
+  test("returns -1 when node not found", () => {
+    const items = makeTree();
+    const { ctx, cleanup } = createPluginMockContext<TreeItem>(items);
+    tree<TreeItem>().setup!(ctx);
+
+    const result = ctx.removeItemById("nonexistent");
+    expect(result).toBe(-1);
+    cleanup();
+  });
+
+  test("returns positive count when node found", () => {
+    const items = makeTree();
+    const { ctx, cleanup } = createPluginMockContext<TreeItem>(items);
+    tree<TreeItem>({ expanded: true }).setup!(ctx);
+
+    const result = ctx.removeItemById("3");
+    expect(result).toBeGreaterThan(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Core integration: appendItems triggers tree rebuild
+// =============================================================================
+
+describe("tree plugin — appendItems detection", () => {
+  test("detects in-place array mutation via length change", () => {
+    const items = makeTree();
+    const { ctx, methods, engineState, cleanup } = createPluginMockContext<TreeItem>(items, {
+      containerHeight: 400,
+      itemSize: 32,
+    });
+    tree<TreeItem>().setup!(ctx);
+    engineState.containerSize = 400;
+    ctx.forceRender();
+
+    const layoutBefore = (methods.get("getTreeLayout") as () => { totalVisible: number })();
+    const countBefore = layoutBefore.totalVisible;
+
+    items.push({ id: "new-root", name: "new", children: [] } as TreeItem);
+    ctx.forceRender();
+
+    const layoutAfter = (methods.get("getTreeLayout") as () => { totalVisible: number })();
+    expect(layoutAfter.totalVisible).toBe(countBefore + 1);
+    cleanup();
+  });
+});
+
+// =============================================================================
 // parentId mode
 // =============================================================================
 

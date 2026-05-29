@@ -258,10 +258,13 @@ export function tree<T extends VListItem = VListItem>(
     rendered.clear();
   }
 
+  let lastItemsLength = 0;
+
   function syncLayoutIfNeeded(): void {
     const currentItems = ctxGetItems();
-    if (currentItems === lastItems) return;
+    if (currentItems === lastItems && currentItems.length === lastItemsLength) return;
     lastItems = currentItems;
+    lastItemsLength = currentItems.length;
     if (isParentIdMode) {
       const { roots, getChildren } = resolveParentIdMode(currentItems, cfg);
       layout = createTreeLayout(getChildren, layout.expandedIds);
@@ -513,7 +516,8 @@ export function tree<T extends VListItem = VListItem>(
         if (!fragment) fragment = document.createDocumentFragment();
         fragment.appendChild(element);
       } else {
-        if (element.getAttribute("data-id") !== String(flatNode.id)) {
+        if (element.getAttribute("data-id") !== String(flatNode.id)
+            || element.classList.contains(loadingClass) !== flatNode.loading) {
           renderNodeElement(element, flatNode, i, isf);
         }
       }
@@ -632,6 +636,7 @@ export function tree<T extends VListItem = VListItem>(
 
       const rawItems = ctx.getItems() as readonly T[];
       lastItems = rawItems;
+      lastItemsLength = rawItems.length;
 
       let getChildren: (item: T) => T[];
       let rootItemsArr: readonly T[];
@@ -679,12 +684,20 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Mutation interceptors ────────────────────────────────────
 
+      ctx.setInsertItemFn((item: T, index: number): void => {
+        const rawItems = ctxGetItems() as T[];
+        rawItems.splice(index, 0, item);
+        lastItemsLength = rawItems.length;
+        layout.rebuild(rawItems);
+        invalidateTree();
+      });
+
       ctx.setRemoveItemFn((id: string | number): number => {
         const removed = layout.removeNode(id);
-        if (removed > 0) {
-          invalidateTree();
-          emitter.emit("data:change", { type: "remove", id });
-        }
+        if (removed === 0) return -1;
+        lastItemsLength = (ctxGetItems()).length;
+        invalidateTree();
+        emitter.emit("data:change", { type: "remove", id });
         return removed;
       });
 
@@ -711,7 +724,7 @@ export function tree<T extends VListItem = VListItem>(
         const node = layout.flatNodes[idx];
         if (!node) return;
 
-        if (expandOnClick && node.hasChildren) {
+        if (expandOnClick && (node.hasChildren || (cfg.loadChildren && !node.loading))) {
           if (node.expanded) doCollapse(node.id);
           else doExpand(node.id);
         }
@@ -768,7 +781,7 @@ export function tree<T extends VListItem = VListItem>(
 
         switch (e.key) {
           case "ArrowRight": {
-            if (node.hasChildren) {
+            if (node.hasChildren || (cfg.loadChildren && !node.loading)) {
               if (!node.expanded) doExpand(node.id);
               else setFocusTo(fi + 1);
             }
