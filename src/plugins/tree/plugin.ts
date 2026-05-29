@@ -150,8 +150,6 @@ export function tree<T extends VListItem = VListItem>(
   const indent = cfg.indent ?? 24;
   const expandOnClick = cfg.expandOnClick ?? false;
   const isParentIdMode = cfg.parentId !== undefined;
-  const childKey = typeof cfg.children === "string" ? cfg.children : "children";
-
   let layout: TreeLayout<T>;
   let sizeCache: SizeCache;
   let engineState: EngineState;
@@ -299,6 +297,7 @@ export function tree<T extends VListItem = VListItem>(
 
   // ── Async children ───────────────────────────────────────────────
 
+  const loadedChildrenMap = new Map<string | number, T[]>();
   const loadingNodes = new Set<string | number>();
 
   async function loadChildrenFor(id: string | number): Promise<void> {
@@ -321,7 +320,7 @@ export function tree<T extends VListItem = VListItem>(
       const currentNode = layout.flatNodes[currentIdx]!;
       currentNode.loading = false;
 
-      (currentNode.item as Record<string, unknown>)[childKey] = children;
+      loadedChildrenMap.set(id, children);
 
       currentNode.hasChildren = children.length > 0;
       currentNode.childCount = children.length;
@@ -329,7 +328,7 @@ export function tree<T extends VListItem = VListItem>(
       if (children.length > 0) {
         currentNode.expanded = true;
         layout.expandedIds.add(id);
-        layout.rebuild(layout.rootItems as T[]);
+        layout.rebuild(layout.rootItems as T[], true);
       }
 
       invalidateTree();
@@ -360,8 +359,7 @@ export function tree<T extends VListItem = VListItem>(
     const node = layout.flatNodes[flatIdx]!;
 
     if (cfg.loadChildren && !node.hasChildren && !node.loading) {
-      const existing = (node.item as Record<string, unknown>)[childKey] as unknown[] | undefined;
-      if (!existing || existing.length === 0) {
+      if (!loadedChildrenMap.has(id)) {
         loadChildrenFor(id);
         return;
       }
@@ -384,6 +382,17 @@ export function tree<T extends VListItem = VListItem>(
 
     const count = layout.collapse(id);
     if (count === 0) return;
+
+    if (!hasExternalFocus && focusedIndex > flatIdx) {
+      if (focusedIndex <= flatIdx + count) {
+        focusedIndex = flatIdx;
+      } else {
+        focusedIndex -= count;
+      }
+      if (focusVisible) {
+        contentElement.setAttribute("aria-activedescendant", `${classPrefix}-item-${focusedIndex}`);
+      }
+    }
 
     invalidateTree();
 
@@ -597,7 +606,7 @@ export function tree<T extends VListItem = VListItem>(
       }
     }
     if (!anyAdded) return;
-    layout.rebuild(layout.rootItems as T[]);
+    layout.rebuild(layout.rootItems as T[], true);
     invalidateTree();
   }
 
@@ -638,17 +647,21 @@ export function tree<T extends VListItem = VListItem>(
       lastItems = rawItems;
       lastItemsLength = rawItems.length;
 
-      let getChildren: (item: T) => T[];
+      let baseGetChildren: (item: T) => T[];
       let rootItemsArr: readonly T[];
 
       if (isParentIdMode) {
         const resolved = resolveParentIdMode(rawItems, cfg);
-        getChildren = resolved.getChildren;
+        baseGetChildren = resolved.getChildren;
         rootItemsArr = resolved.roots;
       } else {
-        getChildren = resolveGetChildren(cfg);
+        baseGetChildren = resolveGetChildren(cfg);
         rootItemsArr = rawItems;
       }
+
+      const getChildren = cfg.loadChildren
+        ? (item: T): T[] => loadedChildrenMap.get(item.id) ?? baseGetChildren(item)
+        : baseGetChildren;
 
       getLabel = resolveGetLabel(cfg);
       const initialExpanded = resolveInitialExpanded(cfg, rootItemsArr, getChildren);
@@ -696,8 +709,12 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.setRemoveItemFn((id: string | number): number => {
+        const idx = layout.idToIndex.get(id);
         const removed = layout.removeNode(id);
         if (removed === 0) return -1;
+        if (!hasExternalFocus && idx !== undefined && focusedIndex >= idx) {
+          focusedIndex = Math.max(0, Math.min(focusedIndex - removed, layout.totalVisible - 1));
+        }
         lastItemsLength = (ctxGetItems()).length;
         invalidateTree();
         emitter.emit("data:change", { type: "remove", id });
@@ -862,13 +879,22 @@ export function tree<T extends VListItem = VListItem>(
       ctx.registerMethod("getExpanded", (): (string | number)[] => Array.from(layout.expandedIds));
       ctx.registerMethod("isExpanded", (id: string | number): boolean => layout.expandedIds.has(id));
 
+      const parentIdKey = isParentIdMode && typeof cfg.parentId === "string" ? cfg.parentId : null;
+
       ctx.registerMethod("addChild", (parentId: string | number | null, item: T, index?: number): void => {
+        if (parentIdKey) (item as Record<string, unknown>)[parentIdKey] = parentId;
         layout.addChild(parentId, item, index);
         invalidateTree();
         emitter.emit("data:change", { type: "add", id: item.id });
       });
 
       ctx.registerMethod("moveNode", (id: string | number, newParentId: string | number | null, index?: number): void => {
+        if (parentIdKey) {
+          const flatIdx = layout.idToIndex.get(id);
+          if (flatIdx !== undefined) {
+            (layout.flatNodes[flatIdx]!.item as Record<string, unknown>)[parentIdKey] = newParentId;
+          }
+        }
         layout.moveNode(id, newParentId, index);
         invalidateTree();
       });

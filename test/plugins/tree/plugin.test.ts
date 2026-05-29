@@ -546,4 +546,103 @@ describe("tree plugin — parentId mode", () => {
     expect(layout.totalVisible).toBe(4);
     cleanup();
   });
+
+  test("moveNode updates parentId property so re-sync preserves the move", () => {
+    const items = [
+      { id: "1", name: "root-a", parentId: null },
+      { id: "2", name: "child", parentId: "1" },
+      { id: "3", name: "root-b", parentId: null },
+    ] as any[];
+
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+    tree({ parentId: "parentId", expanded: true }).setup!(ctx);
+
+    const moveNode = methods.get("moveNode") as (id: string, newParentId: string) => void;
+    moveNode("2", "3");
+
+    const moved = items.find((i: any) => i.id === "2");
+    expect(moved.parentId).toBe("3");
+
+    cleanup();
+  });
+
+  test("addChild sets parentId property on new item", () => {
+    const items = [
+      { id: "1", name: "root", parentId: null },
+    ] as any[];
+
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+    tree({ parentId: "parentId", expanded: true }).setup!(ctx);
+
+    const addChild = methods.get("addChild") as (parentId: string, item: any) => void;
+    const newItem = { id: "2", name: "child" } as any;
+    addChild("1", newItem);
+
+    expect(newItem.parentId).toBe("1");
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Focus adjustment on collapse
+// =============================================================================
+
+describe("tree plugin — focus adjustment on collapse", () => {
+  test("focus moves to collapsed node when focused item was in subtree", () => {
+    const items = makeTree();
+    const { ctx, dom, engineState, keydownHandlers, methods, cleanup } = createPluginMockContext<TreeItem>(items, {
+      containerHeight: 400,
+      itemSize: 32,
+    });
+    tree<TreeItem>({ expanded: ["1", "1.1"] }).setup!(ctx);
+    engineState.containerSize = 400;
+    ctx.forceRender();
+
+    const handler = keydownHandlers[0]!;
+    const fireKey = (key: string) => handler(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+
+    fireKey("Home");
+    fireKey("ArrowDown");
+    fireKey("ArrowDown");
+    fireKey("ArrowDown");
+
+    const desc = dom.content.getAttribute("aria-activedescendant");
+    const focusedEl = desc ? dom.content.querySelector(`#${desc}`) as HTMLElement : null;
+    expect(focusedEl?.getAttribute("data-id")).toBe("1.1.2");
+
+    const collapse = methods.get("collapse") as (id: string) => void;
+    collapse("1.1");
+
+    const descAfter = dom.content.getAttribute("aria-activedescendant");
+    const focusedAfter = descAfter ? dom.content.querySelector(`#${descAfter}`) as HTMLElement : null;
+    expect(focusedAfter?.getAttribute("data-id")).toBe("1.1");
+
+    cleanup();
+  });
+
+  test("focus shifts back when collapsed subtree was before focused item", () => {
+    const items = makeTree();
+    const { ctx, dom, engineState, keydownHandlers, methods, cleanup } = createPluginMockContext<TreeItem>(items, {
+      containerHeight: 400,
+      itemSize: 32,
+    });
+    tree<TreeItem>({ expanded: ["1", "1.1"] }).setup!(ctx);
+    engineState.containerSize = 400;
+    ctx.forceRender();
+
+    const handler = keydownHandlers[0]!;
+    const fireKey = (key: string) => handler(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+
+    fireKey("Home");
+    fireKey("End");
+
+    const collapse = methods.get("collapse") as (id: string) => void;
+    collapse("1.1");
+
+    const descAfter = dom.content.getAttribute("aria-activedescendant");
+    const focusedAfter = descAfter ? dom.content.querySelector(`#${descAfter}`) as HTMLElement : null;
+    expect(focusedAfter?.getAttribute("data-id")).toBe("3");
+
+    cleanup();
+  });
 });

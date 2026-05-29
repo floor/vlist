@@ -18,7 +18,7 @@ export interface TreeLayout<T extends VListItem> {
   readonly expandedIds: Set<string | number>;
   readonly idToIndex: Map<string | number, number>;
 
-  rebuild(items: readonly T[]): void;
+  rebuild(items: readonly T[], skipValidation?: boolean): void;
   expand(id: string | number): number;
   collapse(id: string | number): number;
   expandAll(items: readonly T[]): void;
@@ -147,9 +147,9 @@ export function createTreeLayout<T extends VListItem>(
     walk(items);
   }
 
-  function rebuild(items: readonly T[]): void {
+  function rebuild(items: readonly T[], skipValidation?: boolean): void {
     storedRootItems = items;
-    validateAllIds(items);
+    if (!skipValidation) validateAllIds(items);
     flatNodes.length = 0;
     walkAndCollect(items, null, 0, flatNodes);
     rebuildIdMap();
@@ -208,7 +208,7 @@ export function createTreeLayout<T extends VListItem>(
 
   function collapseAll(): void {
     expandedIds.clear();
-    rebuild(storedRootItems);
+    rebuild(storedRootItems, true);
   }
 
   function expandTo(id: string | number): void {
@@ -217,7 +217,7 @@ export function createTreeLayout<T extends VListItem>(
     for (const ancestorId of ancestors) {
       expandedIds.add(ancestorId);
     }
-    rebuild(storedRootItems);
+    rebuild(storedRootItems, true);
   }
 
   function addChild(parentId: string | number | null, item: T, index?: number): void {
@@ -229,7 +229,7 @@ export function createTreeLayout<T extends VListItem>(
       const roots = storedRootItems as T[];
       const insertIdx = index ?? roots.length;
       roots.splice(insertIdx, 0, item);
-      rebuild(storedRootItems);
+      rebuild(storedRootItems, true);
       return;
     }
 
@@ -252,7 +252,7 @@ export function createTreeLayout<T extends VListItem>(
     }
 
     if (parentNode.expanded) {
-      rebuild(storedRootItems);
+      rebuild(storedRootItems, true);
     } else {
       rebuildIdMap();
     }
@@ -289,7 +289,7 @@ export function createTreeLayout<T extends VListItem>(
     const sibIdx = siblings.findIndex((s) => s.id === id);
     if (sibIdx >= 0) siblings.splice(sibIdx, 1);
 
-    rebuild(storedRootItems);
+    rebuild(storedRootItems, true);
     return totalRemoved;
   }
 
@@ -321,7 +321,7 @@ export function createTreeLayout<T extends VListItem>(
       newSiblings.splice(insertIdx, 0, node.item);
     }
 
-    rebuild(storedRootItems);
+    rebuild(storedRootItems, true);
   }
 
   return {
