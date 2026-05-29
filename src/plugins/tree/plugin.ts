@@ -668,6 +668,9 @@ export function tree<T extends VListItem = VListItem>(
         const node = layout.flatNodes[index];
         return node ? node.item : undefined;
       });
+      ctx.setGetIndexByIdFn((id: string | number): number => {
+        return layout.idToIndex.get(id) ?? -1;
+      });
       ctx.setRenderFn(treeRenderIfNeeded, treeForceRender);
 
       ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
