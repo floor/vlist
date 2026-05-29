@@ -17,7 +17,7 @@ import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
 import type { CompressionState } from "../../rendering/scale";
-import { calculateCompressedVisibleRange, calculateCompressedItemPosition, calculateCompressedScrollToIndex } from "../../rendering/scale";
+import { calculateCompressedVisibleRange, calculateCompressedItemPosition } from "../../rendering/scale";
 import { neutralizeFocusable } from "../../core/dom";
 import { createTreeLayout, type TreeLayout } from "./layout";
 import type { TreePluginConfig, FlatNode } from "./types";
@@ -858,71 +858,9 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.registerMethod("getTreeLayout", () => ({
-        totalNodes: countTotalNodes(layout.rootItems as T[]),
         totalVisible: layout.totalVisible,
         flatNodes: layout.flatNodes,
       }));
-
-      function countTotalNodes(items: readonly T[]): number {
-        let count = 0;
-        for (const item of items) {
-          count++;
-          const ch = getChildren(item);
-          if (ch.length > 0) count += countTotalNodes(ch);
-        }
-        return count;
-      }
-
-      ctx.registerMethod("scrollToIndex", (
-        index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: string; behavior?: string; duration?: number } = "start",
-      ) => {
-        resolveCompressionFn();
-        const compression = getCompression?.() ?? null;
-        const totalItems = layout.totalVisible;
-        if (totalItems === 0) return;
-
-        const clamped = Math.max(0, Math.min(index, totalItems - 1));
-        const isOpts = typeof alignOrOptions === "object";
-        const align = isOpts ? (alignOrOptions.align ?? "start") : alignOrOptions;
-        const behavior = isOpts ? alignOrOptions.behavior : undefined;
-        const duration = isOpts ? alignOrOptions.duration : undefined;
-
-        if (compression?.isCompressed) {
-          const virtualTarget = calculateCompressedScrollToIndex(
-            clamped, sizeCache, engineState.containerSize, totalItems,
-            compression, align as "start" | "center" | "end",
-          );
-          if (behavior === "smooth" && duration && duration > 0) {
-            const scaleEased = getMethod("_scale:easedScrollTo") as ((t: number, d: number) => void) | undefined;
-            if (scaleEased) scaleEased(virtualTarget, duration);
-            else scrollTo(virtualTarget);
-          } else {
-            scrollTo(virtualTarget);
-          }
-          return;
-        }
-
-        const offset = sizeCache.getOffset(clamped);
-        const itemSize = sizeCache.getSize(clamped);
-        const cs = engineState.containerSize;
-        const totalSize = sizeCache.getTotalSize();
-        const maxScroll = Math.max(0, totalSize - cs);
-
-        let pos: number;
-        switch (align) {
-          case "center": pos = offset - (cs - itemSize) / 2; break;
-          case "end": pos = offset - cs + itemSize; break;
-          default: pos = offset;
-        }
-        pos = Math.max(0, Math.min(pos, maxScroll));
-
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
-        } else {
-          scrollTo(pos);
-        }
-      });
 
       // ── Destroy ──────────────────────────────────────────────────
 

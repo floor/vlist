@@ -76,7 +76,6 @@ describe("tree plugin — setup", () => {
     expect(methods.has("addChild")).toBe(true);
     expect(methods.has("moveNode")).toBe(true);
     expect(methods.has("getTreeLayout")).toBe(true);
-    expect(methods.has("scrollToIndex")).toBe(true);
     cleanup();
   });
 
