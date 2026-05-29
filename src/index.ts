@@ -41,6 +41,8 @@ export type { SortablePluginConfig } from "./plugins/sortable";
 // Utils
 export { createStats } from "./utils/stats";
 export type { Stats, StatsConfig, StatsState } from "./utils/stats";
+export { rebuild } from "./utils/rebuild";
+export type { RebuildOptions } from "./utils/rebuild";
 
 // Core Types
 export type {
