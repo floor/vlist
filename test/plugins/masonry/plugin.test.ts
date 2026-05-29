@@ -1063,11 +1063,10 @@ describe("masonry - navigate", () => {
     cleanup();
   });
 
-  it("End goes to last item in tallest lane", () => {
+  it("End goes to last item in last column", () => {
     const { nav, cleanup } = setupWithNav();
     const result = nav.navigate(0, "End", 20);
-    // End navigates to the last item in the visually tallest lane,
-    // not necessarily the last data index (which lands in the shortest lane)
+    // End navigates to the last item in the last (rightmost) column
     expect(result).toBeGreaterThanOrEqual(0);
     expect(result).toBeLessThan(20);
     cleanup();

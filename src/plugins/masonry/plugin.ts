@@ -198,21 +198,8 @@ export function masonry<T extends VListItem = VListItem>(
       case "Home":
         return 0;
       case "End": {
-        let maxExtent = 0;
-        let lastItem = total - 1;
-        for (let c = 0; c < cols; c++) {
-          const lane = laneItems[c]!;
-          if (lane.length > 0) {
-            const idx = lane[lane.length - 1]!;
-            const p = cachedPlacements[idx]!;
-            const extent = p.y + p.size;
-            if (extent > maxExtent) {
-              maxExtent = extent;
-              lastItem = idx;
-            }
-          }
-        }
-        return lastItem;
+        const lastLane = laneItems[cols - 1]!;
+        return lastLane.length > 0 ? lastLane[lastLane.length - 1]! : total - 1;
       }
       case "PageDown": {
         const containerSize = engineState.containerSize;
@@ -446,7 +433,13 @@ export function masonry<T extends VListItem = VListItem>(
         if (itemTop - mainPadStart < scrollPos) {
           ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
         } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
-          ctx.scrollTo(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+          const lastLane = laneItems[layout.columns - 1];
+          const isEndTarget = lastLane && lastLane.length > 0 && index === lastLane[lastLane.length - 1];
+          if (isEndTarget && itemTop >= maxScroll) {
+            ctx.scrollTo(maxScroll);
+          } else {
+            ctx.scrollTo(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+          }
         }
       });
 
