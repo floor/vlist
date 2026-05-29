@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
-import { resolveContainer, createDOMStructure } from "../../src/core/dom";
+import { resolveContainer, createDOMStructure, neutralizeFocusable } from "../../src/core/dom";
 
 // =============================================================================
 // JSDOM Setup
@@ -55,7 +55,6 @@ describe("createDOMStructure", () => {
       container,
       "vlist",
       false,
-      true,
     );
 
     expect(root).toBeInstanceOf(HTMLElement);
@@ -69,7 +68,6 @@ describe("createDOMStructure", () => {
       container,
       "vlist",
       false,
-      true,
     );
 
     expect(root.parentElement).toBe(container);
@@ -83,7 +81,6 @@ describe("createDOMStructure", () => {
       container,
       "my-list",
       false,
-      true,
     );
 
     expect(root.className).toBe("my-list");
@@ -91,42 +88,26 @@ describe("createDOMStructure", () => {
     expect(content.className).toBe("my-list-content");
   });
 
-  it("should set listbox role and tabindex on content", () => {
+  it("should set list role and no tabindex on content by default", () => {
     const container = document.createElement("div");
-    const { root, content } = createDOMStructure(container, "vlist", false, true);
+    const { root, content } = createDOMStructure(container, "vlist", false);
 
     expect(root.getAttribute("role")).toBeNull();
     expect(root.getAttribute("tabindex")).toBeNull();
-    expect(content.getAttribute("role")).toBe("listbox");
-    expect(content.getAttribute("tabindex")).toBe("0");
-  });
-
-  it("should downgrade to list role when interactive is false", () => {
-    const container = document.createElement("div");
-    const { content } = createDOMStructure(container, "vlist", false, false);
-
     expect(content.getAttribute("role")).toBe("list");
     expect(content.hasAttribute("tabindex")).toBe(false);
   });
 
-  it("should use listbox role when interactive is true", () => {
-    const container = document.createElement("div");
-    const { content } = createDOMStructure(container, "vlist", false, true);
-
-    expect(content.getAttribute("role")).toBe("listbox");
-    expect(content.getAttribute("tabindex")).toBe("0");
-  });
-
   it("should add aria-label when provided", () => {
     const container = document.createElement("div");
-    const { content } = createDOMStructure(container, "vlist", false, true, "My List");
+    const { content } = createDOMStructure(container, "vlist", false, "My List");
 
     expect(content.getAttribute("aria-label")).toBe("My List");
   });
 
   it("should not add aria-label when not provided", () => {
     const container = document.createElement("div");
-    const { content } = createDOMStructure(container, "vlist", false, true);
+    const { content } = createDOMStructure(container, "vlist", false);
 
     expect(content.hasAttribute("aria-label")).toBe(false);
   });
@@ -137,7 +118,6 @@ describe("createDOMStructure", () => {
       container,
       "vlist",
       false,
-      true,
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(false);
@@ -153,12 +133,79 @@ describe("createDOMStructure", () => {
       container,
       "vlist",
       true,
-      true,
     );
 
     expect(root.classList.contains("vlist--horizontal")).toBe(true);
     expect(content.getAttribute("aria-orientation")).toBe("horizontal");
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
+  });
+});
+
+// =============================================================================
+// neutralizeFocusable
+// =============================================================================
+
+describe("neutralizeFocusable", () => {
+  it("should set tabindex=-1 on anchor elements with href", () => {
+    const el = document.createElement("div");
+    el.innerHTML = '<a href="https://example.com">Link</a>';
+    neutralizeFocusable(el);
+    expect(el.querySelector("a")!.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("should set tabindex=-1 on buttons", () => {
+    const el = document.createElement("div");
+    el.innerHTML = "<button>Click</button>";
+    neutralizeFocusable(el);
+    expect(el.querySelector("button")!.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("should set tabindex=-1 on form elements", () => {
+    const el = document.createElement("div");
+    el.innerHTML = '<input type="text"><select><option>A</option></select><textarea></textarea>';
+    neutralizeFocusable(el);
+    expect(el.querySelector("input")!.getAttribute("tabindex")).toBe("-1");
+    expect(el.querySelector("select")!.getAttribute("tabindex")).toBe("-1");
+    expect(el.querySelector("textarea")!.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("should set tabindex=-1 on elements with explicit tabindex", () => {
+    const el = document.createElement("div");
+    el.innerHTML = '<div tabindex="0">Focusable div</div>';
+    neutralizeFocusable(el);
+    expect(el.querySelector("[tabindex]")!.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("should handle multiple focusable descendants", () => {
+    const el = document.createElement("div");
+    el.innerHTML = '<a href="#">L1</a><button>B1</button><a href="#">L2</a><input>';
+    neutralizeFocusable(el);
+    const all = el.querySelectorAll("[tabindex]");
+    expect(all.length).toBe(4);
+    for (const node of all) {
+      expect(node.getAttribute("tabindex")).toBe("-1");
+    }
+  });
+
+  it("should not affect anchors without href", () => {
+    const el = document.createElement("div");
+    el.innerHTML = "<a>Not focusable</a>";
+    neutralizeFocusable(el);
+    expect(el.querySelector("a")!.hasAttribute("tabindex")).toBe(false);
+  });
+
+  it("should be a no-op when no focusable descendants exist", () => {
+    const el = document.createElement("div");
+    el.innerHTML = "<div><span>Text</span><p>Paragraph</p></div>";
+    neutralizeFocusable(el);
+    expect(el.querySelectorAll("[tabindex]").length).toBe(0);
+  });
+
+  it("should handle nested focusable elements", () => {
+    const el = document.createElement("div");
+    el.innerHTML = '<div><span><a href="#">Deep link</a></span></div>';
+    neutralizeFocusable(el);
+    expect(el.querySelector("a")!.getAttribute("tabindex")).toBe("-1");
   });
 });

@@ -299,6 +299,10 @@ describe("render", () => {
       defaultTemplate,
       "vlist",
       false,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     const items = createTestItems(1);
     const placements = [createPlacement(0)];
@@ -567,6 +571,10 @@ describe("render - selection and focus", () => {
       defaultTemplate,
       "vlist",
       false,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
@@ -627,6 +635,8 @@ describe("render - ARIA", () => {
       false,
       () => 50,
       "vlist-7",
+      undefined,
+      true,
     );
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
@@ -1601,6 +1611,8 @@ describe("masonry renderer — group header ARIA", () => {
       false,
       () => 10,
       "test",
+      undefined,
+      true,
     );
 
     const items: GroupedItem[] = [

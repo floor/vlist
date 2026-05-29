@@ -336,6 +336,11 @@ describe("createGridRenderer", () => {
         gridLayout,
         "vlist",
         800,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        true,
       );
 
       const items = createTestItems(4);
@@ -360,6 +365,11 @@ describe("createGridRenderer", () => {
         gridLayout,
         "vlist",
         800,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        true,
       );
 
       const items = createTestItems(4);
@@ -622,6 +632,9 @@ describe("createGridRenderer", () => {
         800,
         () => 50,
         "grid-test",
+        false,
+        undefined,
+        true,
       );
 
       const items = createTestItems(2);
@@ -1592,6 +1605,9 @@ describe("grid renderer — group header ARIA", () => {
       800,
       () => 10,
       "test",
+      false,
+      undefined,
+      true,
     );
 
     const items: GroupedItem[] = [

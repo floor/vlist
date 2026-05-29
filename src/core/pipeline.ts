@@ -16,6 +16,7 @@ import type { CompiledHooks, ElementPool } from "./types";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
+import { neutralizeFocusable } from "./dom";
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
 // =============================================================================
@@ -30,8 +31,8 @@ export interface RenderConfig {
   readonly replacedClass: string;
   readonly translateProp: "translateX(" | "translateY(";
   readonly sizeProp: "width" | "height";
-  readonly itemRole: "option" | "listitem";
-  readonly interactive: boolean;
+  itemRole: "option" | "listitem";
+  interactive: boolean;
   readonly startPadding: number;
   readonly gap: number;
   readonly hasCrossPad: boolean;
@@ -46,7 +47,6 @@ export interface RenderConfig {
 export function createRenderConfig(
   classPrefix: string,
   isX: boolean,
-  interactive: boolean,
   startPadding: number,
   crossPadStart: number,
   crossPadEnd: number,
@@ -63,8 +63,8 @@ export function createRenderConfig(
     replacedClass: `${classPrefix}-item--replaced`,
     translateProp: isX ? "translateX(" : "translateY(",
     sizeProp: isX ? "width" : "height",
-    itemRole: interactive ? "option" : "listitem",
-    interactive,
+    itemRole: "listitem",
+    interactive: false,
     startPadding,
     gap,
     hasCrossPad,
@@ -253,6 +253,7 @@ export function phase2Commit<T extends VListItem>(
           acquired.textContent = "";
           acquired.appendChild(result);
         }
+        neutralizeFocusable(acquired);
       }
 
       acquired.setAttribute("role", rc.itemRole);
@@ -323,6 +324,7 @@ export function phase2Commit<T extends VListItem>(
           element.textContent = "";
           element.appendChild(result);
         }
+        neutralizeFocusable(element);
         element.setAttribute("data-id", newId);
         el._lastItem = item;
 

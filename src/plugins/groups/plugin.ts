@@ -21,6 +21,7 @@ type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
+import { neutralizeFocusable } from "../../core/dom";
 
 import {
   createGroupLayout,
@@ -74,7 +75,7 @@ export function groups<T extends VListItem = VListItem>(
   let groupItemClass: string;
   let groupHeaderClass: string;
   let getMethod: ((name: string) => Function | undefined) | null = null;
-  let interactive: boolean;
+  let interactive: boolean | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -173,6 +174,9 @@ export function groups<T extends VListItem = VListItem>(
     isf: ItemStateFn | null,
     layoutIndex: number,
   ): boolean {
+    if (interactive === null) {
+      interactive = !!getMethod?.("_getSelectedIds");
+    }
     if (entry.type === "header") {
       const headerId = `__group_header_${entry.group.groupIndex}`;
       if (element.getAttribute("data-id") === headerId) {
@@ -217,7 +221,7 @@ export function groups<T extends VListItem = VListItem>(
     }
 
     element.className = groupItemClass;
-    element.setAttribute("role", "option");
+    element.setAttribute("role", interactive ? "option" : "listitem");
     element.setAttribute("data-id", itemId);
     if (interactive) {
       element.id = `${classPrefix}-item-${layoutIndex}`;
@@ -238,6 +242,7 @@ export function groups<T extends VListItem = VListItem>(
       element.innerHTML = "";
       element.appendChild(content);
     }
+    neutralizeFocusable(element);
     return !isPlaceholder;
   }
 
@@ -487,7 +492,7 @@ export function groups<T extends VListItem = VListItem>(
       ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
       getMethod = ctx.getMethod.bind(ctx);
-      interactive = ctx.config.interactive;
+      interactive = null;
       groupItemClass = `${classPrefix}-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
 

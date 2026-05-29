@@ -111,7 +111,6 @@ function resolveConfig<T extends VListItem>(
     overscan: raw.overscan ?? OVERSCAN,
     reverse: raw.reverse ?? false,
     classPrefix: raw.classPrefix ?? CLASS_PREFIX,
-    interactive: raw.interactive ?? true,
     mainAxisPadding: mainAxisPaddingFrom(pad, isX),
     crossAxisPadding: crossAxisPaddingFrom(pad, isX),
     startPadding: isX ? pad.left : pad.top,
@@ -190,7 +189,7 @@ export function createVList<T extends VListItem = VListItem>(
   const oddClass = config.striped ? `${config.classPrefix}-item--odd` : "";
   const emitter: Emitter<VListEvents<T>> = createEmitter<VListEvents<T>>();
   const rc = createRenderConfig(
-    config.classPrefix, isX, config.interactive,
+    config.classPrefix, isX,
     config.startPadding, config.crossPadStart, config.crossPadEnd,
     oddClass, gap, emitter as unknown as Emitter<VListEvents>,
   );
@@ -203,7 +202,7 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Create core components ──────────────────────────────────────
 
   const container = resolveContainer(rawConfig.container);
-  const dom = createDOMStructure(container, config.classPrefix, isX, config.interactive, rawConfig.ariaLabel);
+  const dom = createDOMStructure(container, config.classPrefix, isX, rawConfig.ariaLabel);
 
   // ── Scroll config: scrollbar & gutter CSS classes ──────────────
 
@@ -306,6 +305,15 @@ export function createVList<T extends VListItem = VListItem>(
       registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
       registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
       registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
+      enableListboxRole(): void {
+        const currentRole = dom.content.getAttribute("role");
+        if (!currentRole || currentRole === "list") {
+          dom.content.setAttribute("role", "listbox");
+          dom.content.setAttribute("tabindex", "0");
+        }
+        rc.itemRole = "option";
+        rc.interactive = true;
+      },
       setSizeConfig(sc: number | ((index: number) => number)): void {
         const newCache = createSizeCache(sc, state.totalItems);
         Object.assign(sizeCache, newCache);

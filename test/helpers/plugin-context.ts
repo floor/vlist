@@ -41,7 +41,6 @@ export function createPluginMockContext<T extends VListItem>(
     reverse?: boolean;
     classPrefix?: string;
     overscan?: number;
-    interactive?: boolean;
     itemSize?: number | ((index: number) => number);
     containerWidth?: number;
     containerHeight?: number;
@@ -136,7 +135,6 @@ export function createPluginMockContext<T extends VListItem>(
     overscan: options?.overscan ?? 2,
     reverse: options?.reverse ?? false,
     classPrefix,
-    interactive: options?.interactive ?? true,
     mainAxisPadding: 0,
     crossAxisPadding: 0,
     startPadding: 0,
@@ -274,6 +272,7 @@ export function createPluginMockContext<T extends VListItem>(
 
     setNavConfig: (cfg: any) => { _navConfig = cfg; },
     getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
+    enableListboxRole: () => {},
   };
 
   const cleanup = () => {

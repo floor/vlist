@@ -341,9 +341,6 @@ export function masonry<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         () => engineState.totalItems,
-        undefined,
-        undefined,
-        ctx.config.interactive,
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);

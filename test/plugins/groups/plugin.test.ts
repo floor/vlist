@@ -809,16 +809,15 @@ describe("groups — Edge Cases", () => {
     cleanup();
   });
 
-  it("data items have id, aria-posinset, aria-setsize when interactive", () => {
+  it("data items have id, aria-posinset, aria-setsize when selection plugin present", () => {
     const plugin = groups<TestItem>({
       getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
       header: { height: 32, template: (key) => `<h2>${key}</h2>` },
     });
     const items = createTestItems(10);
-    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      interactive: true,
-    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
+    ctx.registerMethod("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
     ctx.forceRender();
 
@@ -833,20 +832,18 @@ describe("groups — Edge Cases", () => {
     cleanup();
   });
 
-  it("data items do not have id or aria attributes when not interactive", () => {
+  it("data items do not have id or aria attributes when no selection plugin", () => {
     const plugin = groups<TestItem>({
       getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
       header: { height: 32, template: (key) => `<h2>${key}</h2>` },
     });
     const items = createTestItems(10);
-    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      interactive: false,
-    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const dataItems = Array.from(dom.content.querySelectorAll('[role="option"]'));
+    const dataItems = Array.from(dom.content.querySelectorAll('[role="listitem"]'));
     expect(dataItems.length).toBeGreaterThan(0);
 
     for (const el of dataItems) {
@@ -863,10 +860,9 @@ describe("groups — Edge Cases", () => {
       header: { height: 32, template: (key) => `<h2>${key}</h2>` },
     });
     const items = createTestItems(10);
-    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      interactive: true,
-    });
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
+    ctx.registerMethod("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
     ctx.forceRender();
 
@@ -1066,7 +1062,7 @@ describe("groups — Horizontal Mode", () => {
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const firstItem = dom.content.querySelector('[role="option"]') as HTMLElement;
+    const firstItem = dom.content.querySelector('[role="listitem"]') as HTMLElement;
     expect(firstItem).not.toBeNull();
     expect(firstItem.style.transform).toContain("translate(");
     expect(firstItem.style.width).toBeTruthy();
@@ -1154,12 +1150,12 @@ describe("groups — Render Lifecycle", () => {
     });
     const items = createTestItems(10);
     const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
-      interactive: true,
       itemSize: 50,
       containerHeight: 200,
       overscan: 0,
     });
 
+    ctx.registerMethod("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
     ctx.forceRender();
 
@@ -1224,7 +1220,7 @@ describe("groups — Render Lifecycle", () => {
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const option = dom.content.querySelector('[role="option"]') as HTMLElement;
+    const option = dom.content.querySelector('[role="listitem"]') as HTMLElement;
     expect(option).not.toBeNull();
     expect(option.querySelector("span")).not.toBeNull();
     cleanup();
@@ -1297,8 +1293,9 @@ describe("groups — Render Lifecycle", () => {
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const options = dom.content.querySelectorAll('[role="option"]');
-    for (const el of Array.from(options)) {
+    const items_els = dom.content.querySelectorAll('[role="listitem"]');
+    expect(items_els.length).toBeGreaterThan(0);
+    for (const el of Array.from(items_els)) {
       expect(el.getAttribute("aria-selected")).toBeNull();
     }
     cleanup();

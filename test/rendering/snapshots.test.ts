@@ -115,13 +115,13 @@ describe("DOM snapshots — base list", () => {
     container.remove();
   });
 
-  it("content has role=listbox and tabindex=0", () => {
+  it("content has role=list and no tabindex by default", () => {
     const { container, list } = createList();
 
     const content = container.querySelector(".vlist-content") as HTMLElement;
     expect(content).toBeTruthy();
-    expect(content.getAttribute("role")).toBe("listbox");
-    expect(content.getAttribute("tabindex")).toBe("0");
+    expect(content.getAttribute("role")).toBe("list");
+    expect(content.hasAttribute("tabindex")).toBe(false);
 
     list.destroy();
     container.remove();
@@ -147,7 +147,7 @@ describe("DOM snapshots — base list", () => {
     container.remove();
   });
 
-  it("rendered items have role=option", () => {
+  it("rendered items have role=listitem by default", () => {
     const { container, list } = createList();
 
     const content = container.querySelector(".vlist-content") as HTMLElement;
@@ -155,7 +155,7 @@ describe("DOM snapshots — base list", () => {
     expect(itemElements.length).toBeGreaterThan(0);
 
     for (const el of itemElements) {
-      expect(el.getAttribute("role")).toBe("option");
+      expect(el.getAttribute("role")).toBe("listitem");
     }
 
     list.destroy();
@@ -280,6 +280,99 @@ describe("DOM snapshots — custom classPrefix", () => {
     const liveRegion = container.querySelector(".mylist-live") as HTMLElement;
     expect(liveRegion).toBeTruthy();
     expect(liveRegion.getAttribute("aria-live")).toBe("polite");
+
+    list.destroy();
+    container.remove();
+  });
+});
+
+// =============================================================================
+// DOM snapshots — focusable descendant neutralization
+// =============================================================================
+
+describe("DOM snapshots — focusable neutralization", () => {
+  const linkTemplate = (item: TestItem): string =>
+    `<div class="item"><a href="https://example.com">${item.name}</a><button>Action</button></div>`;
+
+  it("links inside rendered items have tabindex=-1", () => {
+    const container = createContainer();
+    const items = createTestItems(20);
+    const list = createVList<TestItem>({
+      container,
+      item: { height: 40, template: linkTemplate },
+      items,
+    });
+
+    const links = container.querySelectorAll("a[href]");
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("tabindex")).toBe("-1");
+    }
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("buttons inside rendered items have tabindex=-1", () => {
+    const container = createContainer();
+    const items = createTestItems(20);
+    const list = createVList<TestItem>({
+      container,
+      item: { height: 40, template: linkTemplate },
+      items,
+    });
+
+    const buttons = container.querySelectorAll("button");
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const btn of buttons) {
+      expect(btn.getAttribute("tabindex")).toBe("-1");
+    }
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("items without focusable descendants are unaffected", () => {
+    const container = createContainer();
+    const items = createTestItems(20);
+    const list = createVList<TestItem>({
+      container,
+      item: { height: 40, template: simpleTemplate },
+      items,
+    });
+
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    const itemEls = content.querySelectorAll("[data-index]");
+    expect(itemEls.length).toBeGreaterThan(0);
+    for (const el of itemEls) {
+      expect(el.querySelectorAll("[tabindex]").length).toBe(0);
+    }
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("neutralization applies after setItems replaces content", () => {
+    const container = createContainer();
+    const items = createTestItems(10);
+    const list = createVList<TestItem>({
+      container,
+      item: { height: 40, template: linkTemplate },
+      items,
+    });
+
+    const newItems = createTestItems(10).map((item, i) => ({
+      ...item,
+      id: i + 100,
+      name: `New ${i}`,
+    }));
+    list.setItems(newItems);
+
+    const links = container.querySelectorAll("a[href]");
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("tabindex")).toBe("-1");
+    }
 
     list.destroy();
     container.remove();

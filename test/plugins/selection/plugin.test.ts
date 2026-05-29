@@ -114,27 +114,13 @@ describe("selection — Setup", () => {
     cleanup();
   });
 
-  it("should register a keydown handler when interactive", () => {
+  it("should register a keydown handler", () => {
     const plugin = selection<TestItem>();
-    const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
-    });
+    const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10));
 
     expect(keydownHandlers.length).toBe(0);
     plugin.setup!(ctx);
     expect(keydownHandlers.length).toBeGreaterThan(0);
-
-    cleanup();
-  });
-
-  it("should not register a keydown handler when non-interactive", () => {
-    const plugin = selection<TestItem>();
-    const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: false,
-    });
-
-    plugin.setup!(ctx);
-    expect(keydownHandlers.length).toBe(0);
 
     cleanup();
   });
@@ -797,7 +783,7 @@ describe("selection — Keyboard Handler", () => {
   it("ArrowDown should move focus and call forceRender", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -813,7 +799,7 @@ describe("selection — Keyboard Handler", () => {
   it("ArrowDown should not throw when items is empty", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext([], {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -827,7 +813,7 @@ describe("selection — Keyboard Handler", () => {
   it("ArrowUp should move focus up", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -850,7 +836,7 @@ describe("selection — Keyboard Handler", () => {
   it("Home should move focus to first item", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -869,7 +855,7 @@ describe("selection — Keyboard Handler", () => {
   it("End should move focus to last item", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -884,7 +870,7 @@ describe("selection — Keyboard Handler", () => {
   it("PageDown should move focus by 10", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(100), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -900,7 +886,7 @@ describe("selection — Keyboard Handler", () => {
   it("PageUp should move focus back by 10", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(100), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -916,7 +902,7 @@ describe("selection — Keyboard Handler", () => {
   it("Space should toggle focused item", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -934,7 +920,7 @@ describe("selection — Keyboard Handler", () => {
   it("Enter should toggle focused item", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -952,7 +938,7 @@ describe("selection — Keyboard Handler", () => {
   it("Ctrl+A should select all in multiple mode", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -968,7 +954,7 @@ describe("selection — Keyboard Handler", () => {
   it("Ctrl+A when all selected should deselect all", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -987,7 +973,7 @@ describe("selection — Keyboard Handler", () => {
   it("Ctrl+A should be no-op in single mode", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -1004,7 +990,7 @@ describe("selection — Keyboard Handler", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const items = createTestItems(10);
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(items, {
-      interactive: true,
+
     });
 
     const emitSpy = mock(() => {});
@@ -1028,7 +1014,7 @@ describe("selection — Keyboard Handler", () => {
   it("Backspace should emit delete event", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     const emitSpy = mock(() => {});
@@ -1050,7 +1036,7 @@ describe("selection — Keyboard Handler", () => {
   it("Delete with empty selection should not emit delete", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     const emitSpy = mock(() => {});
@@ -1069,7 +1055,7 @@ describe("selection — Keyboard Handler", () => {
   it("Space on no focused item should not select anything", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10), {
-      interactive: true,
+
     });
 
     plugin.setup!(ctx);
@@ -1093,7 +1079,7 @@ describe("selection — Shift+keyboard range selection", () => {
     const plugin = selection<TestItem>({ mode: "multiple" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(
       createTestItems(100),
-      { interactive: true },
+      {},
     );
 
     plugin.setup!(ctx);
@@ -1441,7 +1427,7 @@ describe("selection — Shift+keyboard range selection", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(
       createTestItems(10),
-      { interactive: true },
+      {},
     );
 
     plugin.setup!(ctx);
@@ -1481,7 +1467,7 @@ describe("selection — followFocus", () => {
     const plugin = selection<TestItem>({ mode: "single", followFocus: true });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(
       createTestItems(10),
-      { interactive: true },
+      {},
     );
 
     plugin.setup!(ctx);
@@ -1513,7 +1499,7 @@ describe("selection — followFocus", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, methods, cleanup } = createPluginMockContext(
       createTestItems(10),
-      { interactive: true },
+      {},
     );
 
     plugin.setup!(ctx);
@@ -1543,7 +1529,7 @@ describe("selection — followFocus", () => {
 
 describe("selection — Emitter Events", () => {
   function createContextWithEmitter(items: TestItem[]) {
-    const mock_context = createPluginMockContext(items, { interactive: true });
+    const mock_context = createPluginMockContext(items, {});
 
     const listeners = new Map<string, Array<(...args: any[]) => void>>();
     (mock_context.ctx.emitter as any).on = (
@@ -1703,7 +1689,7 @@ describe("selection — Internal Methods", () => {
     const plugin = selection<TestItem>();
 
     function createContextWithEmitter2(testItems: TestItem[]) {
-      const mock_context = createPluginMockContext(testItems, { interactive: true });
+      const mock_context = createPluginMockContext(testItems, {});
       const listeners = new Map<string, Array<(...args: any[]) => void>>();
       (mock_context.ctx.emitter as any).on = (
         event: string,
