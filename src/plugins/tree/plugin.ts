@@ -756,16 +756,20 @@ export function tree<T extends VListItem = VListItem>(
         if (!node) return;
 
         const clickedId = node.id;
+        let didExpand = false;
 
-        if (expandOnClick && (node.hasChildren || (cfg.loadChildren && !node.loading))) {
+        if (expandOnClick && node.hasChildren) {
           if (node.expanded) doCollapse(clickedId);
           else doExpand(clickedId);
+          didExpand = true;
         }
 
-        if (hasExternalFocus) {
-          const fn = getMethod("_focusById") as ((id: string | number) => void) | undefined;
-          if (fn) fn(clickedId);
-        } else {
+        if (hasExternalFocus && didExpand) {
+          const selectFn = getMethod("select") as ((...ids: (string | number)[]) => void) | undefined;
+          if (selectFn) selectFn(clickedId);
+          const focusFn = getMethod("_focusById") as ((id: string | number) => void) | undefined;
+          if (focusFn) focusFn(clickedId);
+        } else if (!hasExternalFocus) {
           focusedIndex = layout.idToIndex.get(clickedId) ?? idx;
           focusVisible = false;
           contentElement.focus({ preventScroll: true });
