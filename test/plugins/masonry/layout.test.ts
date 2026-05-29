@@ -730,3 +730,117 @@ describe("getVisibleItems - linear fallback", () => {
     expect(visible).toHaveLength(0);
   });
 });
+
+// =============================================================================
+// Padding offsets — crossOffset and mainOffset
+// =============================================================================
+
+describe("padding offsets", () => {
+  it("crossOffset shifts lane x positions", () => {
+    const layout = createMasonryLayout({
+      columns: 3,
+      containerSize: 300,
+      crossOffset: 10,
+    });
+
+    const placements = layout.calculateLayout(3, () => 100);
+
+    expect(placements[0]!.x).toBe(10);
+    expect(placements[1]!.x).toBe(110);
+    expect(placements[2]!.x).toBe(210);
+  });
+
+  it("crossOffset with gap shifts correctly", () => {
+    const layout = createMasonryLayout({
+      columns: 2,
+      gap: 10,
+      containerSize: 200,
+      crossOffset: 20,
+    });
+
+    const placements = layout.calculateLayout(2, () => 100);
+
+    // colWidth = (200 - 10) / 2 = 95
+    // lane 0: x = 20
+    // lane 1: x = 20 + 95 + 10 = 125
+    expect(placements[0]!.x).toBe(20);
+    expect(placements[1]!.x).toBe(125);
+  });
+
+  it("mainOffset shifts all y positions", () => {
+    const layout = createMasonryLayout({
+      columns: 2,
+      containerSize: 400,
+      mainOffset: 16,
+    });
+
+    const placements = layout.calculateLayout(4, () => 100);
+
+    expect(placements[0]!.y).toBe(16);
+    expect(placements[1]!.y).toBe(16);
+    expect(placements[2]!.y).toBe(116);
+    expect(placements[3]!.y).toBe(116);
+  });
+
+  it("mainOffset included in getTotalSize", () => {
+    const layout = createMasonryLayout({
+      columns: 1,
+      containerSize: 400,
+      mainOffset: 20,
+    });
+
+    const placements = layout.calculateLayout(2, () => 100);
+
+    // lane starts at 20, item0=100, gap=0, item1=100 → total = 20 + 200 = 220
+    expect(layout.getTotalSize(placements)).toBe(220);
+  });
+
+  it("mainOffset with gap", () => {
+    const layout = createMasonryLayout({
+      columns: 1,
+      gap: 10,
+      containerSize: 400,
+      mainOffset: 8,
+    });
+
+    const placements = layout.calculateLayout(2, () => 50);
+
+    // y0 = 8, y1 = 8 + 50 + 10 = 68
+    expect(placements[0]!.y).toBe(8);
+    expect(placements[1]!.y).toBe(68);
+    // total = max lane = 68 + 50 = 118
+    expect(layout.getTotalSize(placements)).toBe(118);
+  });
+
+  it("offsets updated via update()", () => {
+    const layout = createMasonryLayout({
+      columns: 2,
+      containerSize: 400,
+    });
+
+    let placements = layout.calculateLayout(2, () => 100);
+    expect(placements[0]!.x).toBe(0);
+    expect(placements[0]!.y).toBe(0);
+
+    layout.update({ crossOffset: 10, mainOffset: 5 });
+    placements = layout.calculateLayout(2, () => 100);
+    expect(placements[0]!.x).toBe(10);
+    expect(placements[0]!.y).toBe(5);
+  });
+
+  it("visibility check works with mainOffset", () => {
+    const layout = createMasonryLayout({
+      columns: 1,
+      containerSize: 400,
+      mainOffset: 50,
+    });
+
+    const placements = layout.calculateLayout(3, () => 100);
+
+    // Items at y=50, 150, 250. Viewport 0–200 should see items at y=50 and y=150
+    const visible = layout.getVisibleItems(placements, 0, 200);
+    expect(visible).toHaveLength(2);
+    expect(visible[0]!.index).toBe(0);
+    expect(visible[1]!.index).toBe(1);
+  });
+});

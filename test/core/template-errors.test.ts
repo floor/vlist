@@ -72,7 +72,7 @@ describe("phase2Commit — template error on new element (acquire path)", () => 
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     const items = createTestItems(5);
 
     const throwOnIndex2 = (item: TestItem, index: number): string => {
@@ -92,7 +92,7 @@ describe("phase2Commit — template error on new element (acquire path)", () => 
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     const items = createTestItems(5);
 
     const throwOnIndex2 = (item: TestItem, index: number): string => {
@@ -118,7 +118,7 @@ describe("phase2Commit — template error on new element (acquire path)", () => 
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     const items = createTestItems(5);
 
     const errors: Array<{ error: Error; context: string }> = [];
@@ -144,7 +144,7 @@ describe("phase2Commit — template error on new element (acquire path)", () => 
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     const items = createTestItems(3);
 
     const errors: Array<{ error: Error; context: string }> = [];
@@ -170,7 +170,7 @@ describe("phase2Commit — template error on new element (acquire path)", () => 
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     // No emitter passed — defaults to null
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0);
     const items = createTestItems(3);
 
     const throwOnIndex0 = (_item: TestItem, index: number): string => {
@@ -202,7 +202,7 @@ describe("phase2Commit — template error on re-render (update path)", () => {
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     let items = createTestItems(5);
 
     // First render succeeds for all items
@@ -248,7 +248,7 @@ describe("phase2Commit — template error on re-render (update path)", () => {
     const rendered = new Map<number, HTMLElement>();
     const hooks = compileHooks([]);
     const emitter = createEmitter<VListEvents>();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0, emitter);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0, emitter);
     let items = createTestItems(5);
 
     const callCounts = new Map<number, number>();

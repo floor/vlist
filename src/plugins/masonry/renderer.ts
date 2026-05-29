@@ -26,6 +26,7 @@ import type {
 } from "../../types";
 
 import type { ItemPlacement } from "./types";
+import { neutralizeFocusable } from "../../core/dom";
 import { sortRenderedDOM } from "../../rendering/sort";
 
 // =============================================================================
@@ -217,6 +218,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     } else {
       element.replaceChildren(result);
     }
+    neutralizeFocusable(element);
   };
 
   /**
@@ -286,7 +288,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else if (interactive !== false) {
+    } else if (interactive === true) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {

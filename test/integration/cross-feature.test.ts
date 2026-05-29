@@ -903,3 +903,42 @@ describe("cross-feature — ARIA with selection", () => {
     expect(typeof (list as any).selectAll).toBe("function");
   });
 });
+
+// =============================================================================
+// grid + snapshots — sizeCache must stay in row space
+// =============================================================================
+
+describe("grid + snapshots", () => {
+  it("should not rebuild sizeCache to item count when grid uses row count", () => {
+    const items = createTestItems(900);
+    const autoSaveKey = "__test_grid_snap";
+    sessionStorage.removeItem(autoSaveKey);
+
+    // First list: create, scroll, destroy — saves snapshot to sessionStorage
+    list = createVList<TestItem>(
+      { container, items, item: { height: 50, template: simpleTemplate } },
+      [grid({ columns: 4, gap: 8 }), snapshots({ autoSave: autoSaveKey })],
+    );
+    list.destroy();
+    list = null;
+
+    // Second list: recreates with snapshot in sessionStorage.
+    // The snapshots plugin must NOT rebuild the sizeCache from 225 (rows) to 900 (items).
+    container = createContainer({ width: 300, height: 500 });
+    list = createVList<TestItem>(
+      { container, items, item: { height: 50, template: simpleTemplate } },
+      [grid({ columns: 4, gap: 8 }), snapshots({ autoSave: autoSaveKey })],
+    );
+
+    const content = getContent(container);
+    const contentHeight = parseInt(content.style.height, 10);
+    const expectedRows = Math.ceil(900 / 4); // 225
+    const expectedHeight = expectedRows * (50 + 8) - 8; // 225 * 58 - 8 = 13042
+    // Allow some padding variance but must be in row space, not item space
+    // Item space would be 900 * 58 - 8 = 52192
+    expect(contentHeight).toBeLessThan(expectedRows * (50 + 8) * 2);
+    expect(contentHeight).toBeGreaterThan(0);
+
+    sessionStorage.removeItem(autoSaveKey);
+  });
+});

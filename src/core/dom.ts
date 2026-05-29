@@ -6,6 +6,19 @@
 import type { DOMStructure } from "./types";
 
 // =============================================================================
+// Focusable Descendant Neutralization
+// =============================================================================
+
+const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex]";
+
+export function neutralizeFocusable(el: HTMLElement): void {
+  const nodes = el.querySelectorAll<HTMLElement>(FOCUSABLE);
+  for (let i = 0; i < nodes.length; i++) {
+    nodes[i]!.setAttribute("tabindex", "-1");
+  }
+}
+
+// =============================================================================
 // Container Resolution
 // =============================================================================
 
@@ -26,7 +39,6 @@ export function createDOMStructure(
   container: HTMLElement,
   classPrefix: string,
   isX: boolean,
-  interactive: boolean,
   ariaLabel?: string,
 ): DOMStructure {
   const rootCls = isX ? `${classPrefix} ${classPrefix}--horizontal` : classPrefix;
@@ -35,8 +47,7 @@ export function createDOMStructure(
     : "overflow:auto;height:100%;width:100%";
   const cStyle = isX ? "position:relative;height:100%" : "position:relative;width:100%";
 
-  let cAttrs = ` role="${interactive ? "listbox" : "list"}"`;
-  if (interactive) cAttrs += ' tabindex="0"';
+  let cAttrs = ' role="list"';
   if (ariaLabel) cAttrs += ` aria-label="${ariaLabel.replace(/"/g, "&quot;")}"`;
   if (isX) cAttrs += ' aria-orientation="horizontal"';
 

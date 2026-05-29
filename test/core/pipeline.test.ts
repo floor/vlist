@@ -453,7 +453,7 @@ describe("phase2Commit — multiple instances do not interfere", () => {
   it("two instances releasing different items in the same frame produce correct results", () => {
     const items = createTestItems(20);
     const hooks = emptyHooks();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0);
 
     // ── Instance A: renders items 0-9, then scrolls to show 5-14 ──
     const stateA = createEngineState(20);
@@ -534,7 +534,7 @@ describe("phase2Commit — contiguous release fast path", () => {
   function setupCommitTest(totalItems: number) {
     const items = createTestItems(totalItems);
     const hooks = emptyHooks();
-    const rc = createRenderConfig("vlist", false, false, 0, 0, 0, "", 0);
+    const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0);
     const state = createEngineState(totalItems + 20);
     state.totalItems = totalItems;
     const pool = createPool("vlist");

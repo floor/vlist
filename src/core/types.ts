@@ -62,7 +62,6 @@ export interface ResolvedConfig {
   readonly overscan: number;
   readonly reverse: boolean;
   readonly classPrefix: string;
-  readonly interactive: boolean;
   readonly mainAxisPadding: number;
   readonly crossAxisPadding: number;
   readonly startPadding: number;
@@ -112,6 +111,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   registerClickHandler(handler: (event: MouseEvent) => void): void;
   registerKeydownHandler(handler: (event: KeyboardEvent) => void): void;
   registerDestroyHandler(handler: () => void): void;
+  enableListboxRole(): void;
 
   setSizeConfig(config: number | ((index: number) => number)): void;
   setScrollFns(get: () => number, set: (pos: number) => void): void;
@@ -245,7 +245,6 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
   classPrefix?: string;
   orientation?: "vertical" | "horizontal";
   padding?: number | [number, number] | [number, number, number, number];
-  interactive?: boolean;
   reverse?: boolean;
   ariaLabel?: string;
   scroll?: {

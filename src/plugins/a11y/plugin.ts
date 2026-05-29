@@ -19,6 +19,7 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
     setup(ctx: PluginContext<T>): void {
       if (ctx.getItemStateFn()) return;
 
+      ctx.enableListboxRole();
       const dom = ctx.dom;
       const config = ctx.config;
       const sizeCache = ctx.sizeCache;

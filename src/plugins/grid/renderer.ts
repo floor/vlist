@@ -31,6 +31,7 @@ import type {
 } from "../../types";
 
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
+import { neutralizeFocusable } from "../../core/dom";
 import { claimPlaceholderSelection } from "../selection/state";
 import {
   calculateCompressedItemPosition,
@@ -250,6 +251,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     } else {
       element.replaceChildren(result);
     }
+    neutralizeFocusable(element);
   };
 
   /**
@@ -399,7 +401,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else if (interactive !== false) {
+    } else if (interactive === true) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {

@@ -116,7 +116,6 @@ describe("selection + scrollbar integration", () => {
           container,
           items: createTestItems(100),
           item: { height: 40, template: simpleTemplate },
-          interactive: true,
         },
         [selection({ mode: "multiple" }), scrollbar()],
       );

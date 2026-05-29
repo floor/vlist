@@ -15,6 +15,7 @@ import type { CompressionState } from "./viewport";
 import type { SizeCache } from "./sizes";
 
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
+import { neutralizeFocusable } from "../core/dom";
 import { sortRenderedDOM } from "./sort";
 
 /**
@@ -307,10 +308,9 @@ export const createRenderer = <T extends VListItem = VListItem>(
     if (typeof result === "string") {
       element.innerHTML = result;
     } else {
-      // replaceChildren() is more efficient than innerHTML="" + appendChild()
-      // It's a single DOM operation instead of two
       element.replaceChildren(result);
     }
+    neutralizeFocusable(element);
   };
 
   /**
@@ -409,7 +409,7 @@ export const createRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else if (interactive !== false) {
+    } else if (interactive === true) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {
@@ -796,8 +796,8 @@ export const createDOMStructure = (
   // Items container (holds rendered items)
   const items = document.createElement("div");
   items.className = `${classPrefix}-items`;
-  items.setAttribute("role", interactive !== false ? "listbox" : "list");
-  if (interactive !== false) items.setAttribute("tabindex", "0");
+  items.setAttribute("role", interactive ? "listbox" : "list");
+  if (interactive) items.setAttribute("tabindex", "0");
   if (ariaLabel) items.setAttribute("aria-label", ariaLabel);
   if (isX) items.setAttribute("aria-orientation", "horizontal");
   items.style.position = "relative";

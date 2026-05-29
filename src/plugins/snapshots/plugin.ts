@@ -168,8 +168,11 @@ export function snapshots<T extends VListItem = VListItem>(
         if (effectiveTotal === 0) return;
         if (!Number.isFinite(index) || !Number.isFinite(offsetInItem)) return;
 
+        // Only rebuild if the cache is empty — a non-zero total that differs
+        // from state.totalItems means a layout plugin (grid/masonry) manages
+        // the cache in row/lane space and we must not overwrite it.
         const sizeCacheTotal = sizeCache.getTotal();
-        if (sizeCacheTotal !== effectiveTotal) {
+        if (sizeCacheTotal === 0) {
           sizeCache.rebuild(effectiveTotal);
           const updateCompression = ctx.getMethod("_updateCompressionMode") as
             | (() => void)

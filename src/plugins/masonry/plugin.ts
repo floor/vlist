@@ -73,6 +73,12 @@ export function masonry<T extends VListItem = VListItem>(
   let forceNextRender = true;
   let lastLayoutTotal = -1;
 
+  // Padding offsets (set in setup from resolved config)
+  let crossPadTotal = 0;
+  let crossPadStart = 0;
+  let mainPadStart = 0;
+  let mainPadEnd = 0;
+
   // Reusable masonry context for size function
   const masonryCtx: MasonryContext = {
     columnWidth: 0,
@@ -191,8 +197,10 @@ export function masonry<T extends VListItem = VListItem>(
       }
       case "Home":
         return 0;
-      case "End":
-        return total - 1;
+      case "End": {
+        const lastLane = laneItems[cols - 1]!;
+        return lastLane.length > 0 ? lastLane[lastLane.length - 1]! : total - 1;
+      }
       case "PageDown": {
         const containerSize = engineState.containerSize;
         const itemSize = placement.size > 0 ? placement.size : 150;
@@ -241,7 +249,7 @@ export function masonry<T extends VListItem = VListItem>(
     lastLayoutTotal = totalItems;
     rebuildLaneIndex();
 
-    const totalSize = layout.getTotalSize(cachedPlacements);
+    const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
     storedCtx.updateContentSize(totalSize);
   }
 
@@ -327,12 +335,18 @@ export function masonry<T extends VListItem = VListItem>(
         throw new Error("[vlist] masonry: cannot be combined with reverse mode");
       }
 
-      const containerCrossSize = engineState.crossSize;
+      crossPadTotal = ctx.config.crossAxisPadding;
+      crossPadStart = ctx.config.crossPadStart;
+      mainPadStart = ctx.config.startPadding;
+      mainPadEnd = ctx.config.endPadding;
+      const containerCrossSize = engineState.crossSize - crossPadTotal;
 
       layout = createMasonryLayout({
         columns: config.columns,
         gap: config.gap ?? 0,
         containerSize: containerCrossSize,
+        crossOffset: crossPadStart,
+        mainOffset: mainPadStart,
       });
 
       renderer = createMasonryRenderer<T>(
@@ -341,9 +355,6 @@ export function masonry<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         () => engineState.totalItems,
-        undefined,
-        undefined,
-        ctx.config.interactive,
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);
@@ -386,7 +397,7 @@ export function masonry<T extends VListItem = VListItem>(
         const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         const containerSize = engineState.containerSize;
-        const totalSize = layout.getTotalSize(cachedPlacements);
+        const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
 
         let pos = placement.y;
@@ -414,13 +425,21 @@ export function masonry<T extends VListItem = VListItem>(
 
         const scrollPos = engineState.scrollPosition;
         const containerSize = engineState.containerSize;
+        const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
+        const maxScroll = Math.max(0, totalSize - containerSize);
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
 
-        if (itemTop < scrollPos) {
-          ctx.scrollTo(Math.max(0, itemTop));
-        } else if (itemBottom > scrollPos + containerSize) {
-          ctx.scrollTo(itemBottom - containerSize);
+        if (itemTop - mainPadStart < scrollPos) {
+          ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
+        } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
+          const lastLane = laneItems[layout.columns - 1];
+          const isEndTarget = lastLane && lastLane.length > 0 && index === lastLane[lastLane.length - 1];
+          if (isEndTarget && itemTop >= maxScroll) {
+            ctx.scrollTo(maxScroll);
+          } else {
+            ctx.scrollTo(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+          }
         }
       });
 
@@ -444,7 +463,7 @@ export function masonry<T extends VListItem = VListItem>(
       onResize(_width: number, _height: number): void {
         if (!layout || !storedCtx) return;
 
-        const newCross = engineState.crossSize;
+        const newCross = engineState.crossSize - crossPadTotal;
         if (Math.abs(newCross - layout.containerSize) < 1) return;
 
         layout.update({ containerSize: newCross });

@@ -49,6 +49,11 @@ function runCommit(
 ): void {
   const pool = createPool("vlist");
   const hooks = compileHooks([]);
+  const rc = createRenderConfig("vlist", false, 0, 0, 0, "", 0);
+  if (interactive) {
+    rc.itemRole = "option";
+    rc.interactive = true;
+  }
   phase2Commit(
     state,
     pool,
@@ -56,7 +61,7 @@ function runCommit(
     simpleTemplate as any,
     () => items,
     rendered,
-    createRenderConfig("vlist", false, interactive, 0, 0, 0, "", 0),
+    rc,
     hooks,
     null,
     null,

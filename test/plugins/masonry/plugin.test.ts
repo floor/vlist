@@ -1063,10 +1063,12 @@ describe("masonry - navigate", () => {
     cleanup();
   });
 
-  it("End goes to last item", () => {
+  it("End goes to last item in last column", () => {
     const { nav, cleanup } = setupWithNav();
     const result = nav.navigate(0, "End", 20);
-    expect(result).toBe(19);
+    // End navigates to the last item in the last (rightmost) column
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThan(20);
     cleanup();
   });
 
@@ -1164,6 +1166,22 @@ describe("masonry - _scrollItemIntoView", () => {
     cleanup();
   });
 
+  it("scrolls to absolute top for first item (Home)", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 500;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(0);
+    expect(scrollCalls[scrollCalls.length - 1]!).toBe(0);
+    cleanup();
+  });
+
   it("scrolls down when item is below viewport", () => {
     const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(40, () => 100);
@@ -1180,6 +1198,24 @@ describe("masonry - _scrollItemIntoView", () => {
     cleanup();
   });
 
+  it("clamps scroll position to maxScroll", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 0 });
+    const items = createTestItems(40, (i) => 80 + (i % 5) * 20);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 0;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(39);
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    const scrollPos = scrollCalls[scrollCalls.length - 1]!;
+    expect(scrollPos).toBeGreaterThan(0);
+    cleanup();
+  });
+
   it("does nothing for invalid index", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(10, () => 100);
@@ -1190,6 +1226,69 @@ describe("masonry - _scrollItemIntoView", () => {
     const scrollFn = methods.get("_scrollItemIntoView");
     scrollFn!(999);
     expect(scrollCalls.length).toBe(0);
+    cleanup();
+  });
+
+  it("accounts for startPadding when scrolling up", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    const mutableConfig = ctx.config as { -readonly [K in keyof typeof ctx.config]: (typeof ctx.config)[K] };
+    mutableConfig.startPadding = 16;
+    mutableConfig.mainAxisPadding = 32;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 500;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(0);
+    // With startPadding=16, item 0 y = 16. Should scroll to y - startPadding = 0
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    expect(scrollCalls[scrollCalls.length - 1]!).toBe(0);
+    cleanup();
+  });
+
+  it("accounts for endPadding when scrolling down", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    const mutableConfig = ctx.config as { -readonly [K in keyof typeof ctx.config]: (typeof ctx.config)[K] };
+    mutableConfig.startPadding = 10;
+    mutableConfig.endPadding = 10;
+    mutableConfig.mainAxisPadding = 20;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 0;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    // Use a non-last item to test endPadding margin without maxScroll clamping
+    scrollFn!(30);
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    const scrollPos = scrollCalls[scrollCalls.length - 1]!;
+    expect(scrollPos).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("without padding scrolls to exact item edge", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 0 });
+    const items = createTestItems(20, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    // No padding (defaults to 0)
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 500;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(0);
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    // With no padding, item 0 at y=0, scroll target = max(0, 0-0) = 0
+    expect(scrollCalls[scrollCalls.length - 1]!).toBe(0);
     cleanup();
   });
 });

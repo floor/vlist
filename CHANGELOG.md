@@ -11,6 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-05-29
+
+### Changed
+
+- **Plugin-driven ARIA semantics** — removed `interactive` config option; ARIA roles are now set by `a11y()` or `selection()` plugins via `enableListboxRole()`. Default is `role="list"` / `role="listitem"`; plugins upgrade to `role="listbox"` / `role="option"` with full keyboard navigation
+
+### Added
+
+- **Focusable descendant neutralization** — automatically sets `tabindex="-1"` on `<a href>`, `<button>`, `<input>`, `<select>`, `<textarea>`, and `[tabindex]` inside rendered items, following the WAI-ARIA composite widget pattern
+
+### Fixed
+
+- **Grid/masonry padding** — `padding` config now correctly offsets item positions and reduces column widths in grid and masonry layouts; previously padding was ignored for 2D layout plugins
+
 ## [2.0.4] - 2026-05-28
 
 ### Added

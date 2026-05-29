@@ -193,6 +193,7 @@ export function selection<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
+      ctx.enableListboxRole();
       state = createSelectionState(config?.initial);
       getItem = ctx.getItem.bind(ctx);
       forceRender = ctx.forceRender.bind(ctx);
@@ -350,8 +351,7 @@ export function selection<T extends VListItem = VListItem>(
 
       // ── Keyboard handler ──────────────────────────────────────
 
-      if (resolvedConfig.interactive) {
-        ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
           resolveOnce(ctx);
           const total = getTotalFn();
           if (total === 0) return;
@@ -558,8 +558,7 @@ export function selection<T extends VListItem = VListItem>(
               }
             }
           }
-        });
-      }
+      });
 
       // ── Public methods ────────────────────────────────────────
 

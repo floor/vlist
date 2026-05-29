@@ -256,9 +256,11 @@ export function table<T extends VListItem = VListItem>(
       if (config.columnBorders) dom.root.classList.add(`${classPrefix}--table-col-borders`);
 
       // ── ARIA ────────────────────────────────────────────────────
-      if (resolvedConfig.interactive) {
-        dom.root.setAttribute("tabindex", "0");
-      }
+      queueMicrotask(() => {
+        if (ctx.getMethod("_getSelectedIds")) {
+          dom.root.setAttribute("tabindex", "0");
+        }
+      });
       dom.root.setAttribute("role", "grid");
       dom.root.setAttribute("aria-colcount", `${config.columns.length}`);
       dom.viewport.setAttribute("role", "none");

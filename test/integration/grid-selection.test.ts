@@ -247,7 +247,6 @@ describe("grid + selection integration", () => {
           container,
           items: createTestItems(20),
           item: { height: 40, template: simpleTemplate },
-          interactive: true,
         },
         [grid({ columns: 3 }), selection({ mode: "multiple" })],
       );
@@ -263,7 +262,6 @@ describe("grid + selection integration", () => {
           container,
           items: createTestItems(20),
           item: { height: 40, template: simpleTemplate },
-          interactive: true,
         },
         [grid({ columns: 3 }), selection({ mode: "multiple" })],
       );

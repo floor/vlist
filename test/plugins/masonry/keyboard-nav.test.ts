@@ -121,8 +121,10 @@ function navigate(state: NavState, currentIndex: number, key: string, total: num
     }
     case "Home":
       return 0;
-    case "End":
-      return total - 1;
+    case "End": {
+      const lastLane = state.laneItems[state.columns - 1]!;
+      return lastLane.length > 0 ? lastLane[lastLane.length - 1]! : total - 1;
+    }
     case "PageDown": {
       const itemSize = placement.size > 0 ? placement.size : 150;
       const jump = Math.max(1, Math.floor(state.containerSize / itemSize));
@@ -247,11 +249,20 @@ describe("masonry keyboard nav — Home/End", () => {
     expect(navigate(state, 4, "Home", 5)).toBe(0);
   });
 
-  it("End returns last index", () => {
+  it("End returns last item in last column", () => {
     const state = buildNavState(3, [100, 100, 100, 100, 100]);
+    // 3 cols, 5 equal items → lane 0: [0,3], lane 1: [1,4], lane 2: [2]
+    // Last column (2) has item 2
+    expect(navigate(state, 0, "End", 5)).toBe(2);
+    expect(navigate(state, 2, "End", 5)).toBe(2);
+  });
 
-    expect(navigate(state, 0, "End", 5)).toBe(4);
-    expect(navigate(state, 2, "End", 5)).toBe(4);
+  it("End returns last item in last column with more items", () => {
+    const state = buildNavState(2, [100, 200, 50, 100, 150, 80]);
+    // 2 cols → last column is lane 1
+    const lastLane = state.laneItems[1]!;
+    const expected = lastLane[lastLane.length - 1]!;
+    expect(navigate(state, 0, "End", 6)).toBe(expected);
   });
 });
 

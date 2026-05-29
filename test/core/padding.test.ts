@@ -124,7 +124,7 @@ describe("phase2Commit padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 16, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 16, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -143,7 +143,7 @@ describe("phase2Commit padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -160,7 +160,7 @@ describe("phase2Commit padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", true, true, 12, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", true, 12, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -182,7 +182,7 @@ describe("phase2Commit cross-axis padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 8, 8, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 8, 8, "", 0), HOOKS,
       null, null,
     );
 
@@ -200,7 +200,7 @@ describe("phase2Commit cross-axis padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", true, true, 0, 10, 5, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", true, 0, 10, 5, "", 0), HOOKS,
       null, null,
     );
 
@@ -218,7 +218,7 @@ describe("phase2Commit cross-axis padding", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -237,7 +237,7 @@ describe("phase2Commit cross-axis padding", () => {
     const state1 = makeState(20, 3);
     phase2Commit(
       state1, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 8, 12, 12, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 8, 12, 12, "", 0), HOOKS,
       null, null,
     );
     expect(rendered.get(0)!.style.left).toBe("12px");
@@ -254,7 +254,7 @@ describe("phase2Commit cross-axis padding", () => {
     }
     phase2Commit(
       state2, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 8, 12, 12, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 8, 12, 12, "", 0), HOOKS,
       null, null,
     );
 
@@ -336,7 +336,7 @@ describe("combined main + cross padding", () => {
     // padding: 8 → startPadding=8, crossPadStart=8, crossPadEnd=8
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 8, 8, 8, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 8, 8, 8, "", 0), HOOKS,
       null, null,
     );
 
@@ -362,7 +362,7 @@ describe("combined main + cross padding", () => {
     // padding: [10, 20, 30, 40] → startPad=10, crossPadStart=40, crossPadEnd=20
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 10, 40, 20, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 10, 40, 20, "", 0), HOOKS,
       null, null,
     );
 
@@ -387,7 +387,7 @@ describe("phase2Commit striped", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "vlist-item--odd", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "vlist-item--odd", 0), HOOKS,
       null, null,
     );
 
@@ -406,7 +406,7 @@ describe("phase2Commit striped", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -425,7 +425,7 @@ describe("phase2Commit striped", () => {
     const state1 = makeState(20, 3);
     phase2Commit(
       state1, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, oddClass, 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, oddClass, 0), HOOKS,
       null, null,
     );
     expect(rendered.get(1)!.classList.contains(oddClass)).toBe(true);
@@ -442,7 +442,7 @@ describe("phase2Commit striped", () => {
     }
     phase2Commit(
       state2, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, oddClass, 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, oddClass, 0), HOOKS,
       null, null,
     );
 
@@ -460,7 +460,7 @@ describe("phase2Commit striped", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("my", false, true, 0, 0, 0, "my-item--odd", 0), HOOKS,
+      () => items, rendered, createRenderConfig("my", false, 0, 0, 0, "my-item--odd", 0), HOOKS,
       null, null,
     );
 

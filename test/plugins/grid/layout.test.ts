@@ -835,3 +835,34 @@ describe("groups-aware layout with isHeaderFn", () => {
     });
   });
 });
+
+// =============================================================================
+// Padding integration — containerWidth reduced by cross padding
+// =============================================================================
+
+describe("padding — reduced containerWidth", () => {
+  it("column width computed from padding-reduced container", () => {
+    const layout = createGridLayout({ columns: 3, gap: 0 });
+
+    // Full width = 300, no padding
+    expect(layout.getColumnWidth(300)).toBe(100);
+
+    // Simulating padding: plugin passes 300 - 20 (10px each side) = 280
+    expect(layout.getColumnWidth(280)).toBeCloseTo(93.333, 2);
+  });
+
+  it("column offset computed from padding-reduced container", () => {
+    const layout = createGridLayout({ columns: 2, gap: 10 });
+
+    // Container 400, padding 20 (10 each side) → effective 380
+    const effective = 380;
+    const colWidth = layout.getColumnWidth(effective); // (380 - 10) / 2 = 185
+    expect(colWidth).toBe(185);
+
+    // Plugin adds crossPadStart=10 to offset
+    const offset0 = layout.getColumnOffset(0, effective) + 10;
+    const offset1 = layout.getColumnOffset(1, effective) + 10;
+    expect(offset0).toBe(10);
+    expect(offset1).toBe(205); // 10 + 185 + 10
+  });
+});

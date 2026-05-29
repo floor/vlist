@@ -61,7 +61,7 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", GAP), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", GAP), HOOKS,
       null, null,
     );
 
@@ -79,7 +79,7 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", true, true, 0, 0, 0, "", GAP), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", true, 0, 0, 0, "", GAP), HOOKS,
       null, null,
     );
 
@@ -105,7 +105,7 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", 0), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", 0), HOOKS,
       null, null,
     );
 
@@ -121,7 +121,7 @@ describe("phase2Commit gap", () => {
 
     phase2Commit(
       state, pool, content, simpleTemplate as any,
-      () => items, rendered, createRenderConfig("vlist", false, true, 0, 0, 0, "", GAP), HOOKS,
+      () => items, rendered, createRenderConfig("vlist", false, 0, 0, 0, "", GAP), HOOKS,
       null, null,
     );
 
