@@ -343,6 +343,7 @@ export function tree<T extends VListItem = VListItem>(
       } as never);
     } catch (error) {
       loadingNodes.delete(id);
+      loadedChildrenMap.set(id, []);
 
       const currentIdx = layout.idToIndex.get(id);
       if (currentIdx !== undefined) {
@@ -758,7 +759,7 @@ export function tree<T extends VListItem = VListItem>(
         const clickedId = node.id;
         let didExpand = false;
 
-        if (expandOnClick && node.hasChildren) {
+        if (expandOnClick && (node.hasChildren || (cfg.loadChildren && !node.loading && !loadedChildrenMap.has(clickedId)))) {
           if (node.expanded) doCollapse(clickedId);
           else doExpand(clickedId);
           didExpand = true;
