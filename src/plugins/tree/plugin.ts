@@ -99,10 +99,10 @@ function resolveParentIdMode<T extends VListItem>(
   const { parentId } = config;
   if (parentId === undefined) throw new Error("[vlist] tree: parentId not set");
 
-  const getParentId: (item: T) => string | number | null =
-    typeof parentId === "string"
-      ? (item: T) => (item as Record<string, unknown>)[parentId] as string | number | null ?? null
-      : parentId;
+  const rawGetPid = typeof parentId === "string"
+    ? (item: T) => (item as Record<string, unknown>)[parentId] as string | number | null ?? null
+    : parentId;
+  const getParentId = (item: T): string | number | null => rawGetPid(item) ?? null;
 
   const childrenMap = new Map<string | number | null, T[]>();
   const nodeMap = new Map<string | number, T>();
@@ -217,6 +217,8 @@ export function tree<T extends VListItem = VListItem>(
     if (hasExternalFocus) {
       const fn = getMethod("_focusById") as ((id: string | number) => void) | undefined;
       if (fn) fn(node.id);
+      scrollIntoView(index);
+      doForceRender();
     } else {
       focusedIndex = index;
       focusVisible = true;
@@ -264,8 +266,11 @@ export function tree<T extends VListItem = VListItem>(
     lastItems = currentItems;
     lastItemsLength = currentItems.length;
     if (isParentIdMode) {
-      const { roots, getChildren } = resolveParentIdMode(currentItems, cfg);
-      layout = createTreeLayout(getChildren, layout.expandedIds);
+      const { roots, getChildren: baseGC } = resolveParentIdMode(currentItems, cfg);
+      const wrappedGC = cfg.loadChildren
+        ? (item: T): T[] => loadedChildrenMap.get(item.id) ?? baseGC(item)
+        : baseGC;
+      layout = createTreeLayout(wrappedGC, layout.expandedIds);
       layout.rebuild(roots);
     } else {
       layout.rebuild(currentItems);
@@ -702,7 +707,8 @@ export function tree<T extends VListItem = VListItem>(
 
       ctx.setInsertItemFn((item: T, index: number): void => {
         const rawItems = ctxGetItems() as T[];
-        rawItems.splice(index, 0, item);
+        const clampedIdx = Math.min(index, rawItems.length);
+        rawItems.splice(clampedIdx, 0, item);
         lastItemsLength = rawItems.length;
         layout.rebuild(rawItems);
         invalidateTree();
@@ -714,6 +720,11 @@ export function tree<T extends VListItem = VListItem>(
         if (removed === 0) return -1;
         if (!hasExternalFocus && idx !== undefined && focusedIndex >= idx) {
           focusedIndex = Math.max(0, Math.min(focusedIndex - removed, layout.totalVisible - 1));
+        }
+        if (isParentIdMode) {
+          const rawItems = ctxGetItems() as T[];
+          const rawIdx = rawItems.findIndex((item) => item.id === id);
+          if (rawIdx >= 0) rawItems.splice(rawIdx, 1);
         }
         lastItemsLength = (ctxGetItems()).length;
         invalidateTree();

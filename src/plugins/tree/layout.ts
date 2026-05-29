@@ -161,17 +161,19 @@ export function createTreeLayout<T extends VListItem>(
     const node = flatNodes[index]!;
     if (!node.hasChildren || node.expanded) return 0;
 
-    node.expanded = true;
-    expandedIds.add(id);
-
     const toInsert: FlatNode<T>[] = [];
     const childItems = getChildren(node.item);
     walkAndCollect(childItems, id, node.depth + 1, toInsert);
 
     if (toInsert.length === 0) return 0;
 
+    node.expanded = true;
+    expandedIds.add(id);
+
     const insertPos = index + 1;
-    flatNodes.splice(insertPos, 0, ...toInsert);
+    const tail = flatNodes.splice(insertPos);
+    for (let i = 0; i < toInsert.length; i++) flatNodes.push(toInsert[i]!);
+    for (let i = 0; i < tail.length; i++) flatNodes.push(tail[i]!);
     rebuildIdMap();
 
     return toInsert.length;
@@ -221,7 +223,7 @@ export function createTreeLayout<T extends VListItem>(
   }
 
   function addChild(parentId: string | number | null, item: T, index?: number): void {
-    if (idToIndex.has(item.id)) {
+    if (idToIndex.has(item.id) || findInTree(storedRootItems, item.id)) {
       throw new Error(`[vlist] tree: duplicate id "${item.id}"`);
     }
 
