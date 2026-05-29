@@ -1235,8 +1235,9 @@ describe("masonry - _scrollItemIntoView", () => {
     const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
     engineState.containerSize = 300;
     engineState.crossSize = 400;
-    ctx.config.startPadding = 16;
-    ctx.config.mainAxisPadding = 32;
+    const mutableConfig = ctx.config as { -readonly [K in keyof typeof ctx.config]: (typeof ctx.config)[K] };
+    mutableConfig.startPadding = 16;
+    mutableConfig.mainAxisPadding = 32;
     plugin.setup!(ctx);
     ctx.forceRender();
 
@@ -1255,9 +1256,10 @@ describe("masonry - _scrollItemIntoView", () => {
     const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
     engineState.containerSize = 300;
     engineState.crossSize = 400;
-    ctx.config.startPadding = 10;
-    ctx.config.endPadding = 10;
-    ctx.config.mainAxisPadding = 20;
+    const mutableConfig = ctx.config as { -readonly [K in keyof typeof ctx.config]: (typeof ctx.config)[K] };
+    mutableConfig.startPadding = 10;
+    mutableConfig.endPadding = 10;
+    mutableConfig.mainAxisPadding = 20;
     plugin.setup!(ctx);
     ctx.forceRender();
 
