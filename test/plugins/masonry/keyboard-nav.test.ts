@@ -121,8 +121,23 @@ function navigate(state: NavState, currentIndex: number, key: string, total: num
     }
     case "Home":
       return 0;
-    case "End":
-      return total - 1;
+    case "End": {
+      let maxExtent = 0;
+      let lastItem = total - 1;
+      for (let c = 0; c < state.columns; c++) {
+        const laneArr = state.laneItems[c]!;
+        if (laneArr.length > 0) {
+          const idx = laneArr[laneArr.length - 1]!;
+          const p = state.placements[idx]!;
+          const extent = p.y + p.size;
+          if (extent > maxExtent) {
+            maxExtent = extent;
+            lastItem = idx;
+          }
+        }
+      }
+      return lastItem;
+    }
     case "PageDown": {
       const itemSize = placement.size > 0 ? placement.size : 150;
       const jump = Math.max(1, Math.floor(state.containerSize / itemSize));
@@ -247,11 +262,32 @@ describe("masonry keyboard nav — Home/End", () => {
     expect(navigate(state, 4, "Home", 5)).toBe(0);
   });
 
-  it("End returns last index", () => {
+  it("End returns last item in tallest lane", () => {
     const state = buildNavState(3, [100, 100, 100, 100, 100]);
+    // 3 cols, 5 equal items → lane 0: [0,3], lane 1: [1,4], lane 2: [2]
+    // Lanes 0 and 1 tie at extent 210; lane 0 wins (strict >)
+    expect(navigate(state, 0, "End", 5)).toBe(3);
+    expect(navigate(state, 2, "End", 5)).toBe(3);
+  });
 
-    expect(navigate(state, 0, "End", 5)).toBe(4);
-    expect(navigate(state, 2, "End", 5)).toBe(4);
+  it("End returns last item in the visually tallest lane with uneven heights", () => {
+    // Heights: 100, 200, 50, 100, 150 across 2 columns
+    // Lane 0: items 0 (h=100), 2 (h=50), 4 (h=150) → extents vary
+    // Lane 1: items 1 (h=200), 3 (h=100)
+    const state = buildNavState(2, [100, 200, 50, 100, 150]);
+    const result = navigate(state, 0, "End", 5);
+    // The result should be the last item in whichever lane extends furthest
+    const p = state.placements[result]!;
+    const resultExtent = p.y + p.size;
+    // Verify no other lane's last item extends further
+    for (let c = 0; c < state.columns; c++) {
+      const laneArr = state.laneItems[c]!;
+      if (laneArr.length > 0) {
+        const lastIdx = laneArr[laneArr.length - 1]!;
+        const lp = state.placements[lastIdx]!;
+        expect(resultExtent).toBeGreaterThanOrEqual(lp.y + lp.size);
+      }
+    }
   });
 });
 
