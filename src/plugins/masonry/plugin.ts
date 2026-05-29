@@ -423,13 +423,17 @@ export function masonry<T extends VListItem = VListItem>(
 
         const scrollPos = engineState.scrollPosition;
         const containerSize = engineState.containerSize;
+        const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
+        const maxScroll = Math.max(0, totalSize - containerSize);
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
 
         if (itemTop - mainPadStart < scrollPos) {
-          ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
+          ctx.scrollTo(index === 0 ? 0 : Math.max(0, itemTop - mainPadStart));
         } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
-          ctx.scrollTo(itemBottom + mainPadEnd - containerSize);
+          ctx.scrollTo(index >= engineState.totalItems - 1
+            ? maxScroll
+            : Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
         }
       });
 

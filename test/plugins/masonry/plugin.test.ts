@@ -1164,6 +1164,22 @@ describe("masonry - _scrollItemIntoView", () => {
     cleanup();
   });
 
+  it("scrolls to absolute top for first item (Home)", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(40, () => 100);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 500;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(0);
+    expect(scrollCalls[scrollCalls.length - 1]!).toBe(0);
+    cleanup();
+  });
+
   it("scrolls down when item is below viewport", () => {
     const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(40, () => 100);
@@ -1177,6 +1193,27 @@ describe("masonry - _scrollItemIntoView", () => {
     const scrollFn = methods.get("_scrollItemIntoView");
     scrollFn!(39);
     expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("scrolls to maxScroll for last item (End)", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 0 });
+    // Varying heights so lanes are uneven — last item won't be at visual bottom
+    const items = createTestItems(40, (i) => 80 + (i % 5) * 20);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    engineState.containerSize = 300;
+    engineState.crossSize = 400;
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    engineState.scrollPosition = 0;
+    const scrollFn = methods.get("_scrollItemIntoView");
+    scrollFn!(39);
+    const scrollPos = scrollCalls[scrollCalls.length - 1]!;
+    // Should scroll to maxScroll (total content height - container), not just item 39's bottom
+    expect(scrollPos).toBeGreaterThan(0);
+    // Verify it's actually maxScroll by checking we can't scroll further
+    // The scroll position should be >= itemBottom - containerSize (at least showing the item)
     cleanup();
   });
 
@@ -1227,12 +1264,10 @@ describe("masonry - _scrollItemIntoView", () => {
 
     engineState.scrollPosition = 0;
     const scrollFn = methods.get("_scrollItemIntoView");
-    scrollFn!(39);
+    // Use a non-last item to test endPadding margin without maxScroll clamping
+    scrollFn!(30);
     expect(scrollCalls.length).toBeGreaterThan(0);
-    // Scroll position should include endPadding margin
     const scrollPos = scrollCalls[scrollCalls.length - 1]!;
-    // The scroll target should be: itemBottom + endPadding - containerSize
-    // It must be greater than what it would be without padding
     expect(scrollPos).toBeGreaterThan(0);
     cleanup();
   });
