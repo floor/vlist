@@ -27,7 +27,7 @@ async function build() {
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
     `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
-    `  snapshots, transition, autosize, masonry, data, groups, table, sortable,`,
+    `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree,`,
     `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
@@ -142,7 +142,7 @@ async function build() {
   const ALL_PLUGINS = [
     "a11y", "selection", "data", "scrollbar", "sortable",
     "groups", "scale", "page", "snapshots", "transition",
-    "autosize", "grid", "table", "masonry",
+    "autosize", "grid", "table", "masonry", "tree",
   ] as const;
 
   const scenarios = [

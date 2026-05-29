@@ -544,7 +544,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (!itemEl) return null;
     const index = parseInt(itemEl.getAttribute("data-index")!, 10);
     if (Number.isNaN(index)) return null;
-    const item = items[index];
+    const item = getItemFn ? getItemFn(index) : items[index];
     if (item === undefined) return null;
     return { item, index };
   }
