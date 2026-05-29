@@ -28,7 +28,7 @@ async function build() {
   const wrapperCode = [
     `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
     `  snapshots, transition, autosize, masonry, data, groups, table, sortable,`,
-    `  createStats } from "${entryAbs}";`,
+    `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
   writeFileSync(wrapperPath, wrapperCode);
