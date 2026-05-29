@@ -73,6 +73,12 @@ export function masonry<T extends VListItem = VListItem>(
   let forceNextRender = true;
   let lastLayoutTotal = -1;
 
+  // Padding offsets (set in setup from resolved config)
+  let crossPadTotal = 0;
+  let crossPadStart = 0;
+  let mainPadStart = 0;
+  let mainPadEnd = 0;
+
   // Reusable masonry context for size function
   const masonryCtx: MasonryContext = {
     columnWidth: 0,
@@ -241,7 +247,7 @@ export function masonry<T extends VListItem = VListItem>(
     lastLayoutTotal = totalItems;
     rebuildLaneIndex();
 
-    const totalSize = layout.getTotalSize(cachedPlacements);
+    const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
     storedCtx.updateContentSize(totalSize);
   }
 
@@ -327,12 +333,18 @@ export function masonry<T extends VListItem = VListItem>(
         throw new Error("[vlist] masonry: cannot be combined with reverse mode");
       }
 
-      const containerCrossSize = engineState.crossSize;
+      crossPadTotal = ctx.config.crossAxisPadding;
+      crossPadStart = ctx.config.crossPadStart;
+      mainPadStart = ctx.config.startPadding;
+      mainPadEnd = ctx.config.endPadding;
+      const containerCrossSize = engineState.crossSize - crossPadTotal;
 
       layout = createMasonryLayout({
         columns: config.columns,
         gap: config.gap ?? 0,
         containerSize: containerCrossSize,
+        crossOffset: crossPadStart,
+        mainOffset: mainPadStart,
       });
 
       renderer = createMasonryRenderer<T>(
@@ -383,7 +395,7 @@ export function masonry<T extends VListItem = VListItem>(
         const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         const containerSize = engineState.containerSize;
-        const totalSize = layout.getTotalSize(cachedPlacements);
+        const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
 
         let pos = placement.y;
@@ -441,7 +453,7 @@ export function masonry<T extends VListItem = VListItem>(
       onResize(_width: number, _height: number): void {
         if (!layout || !storedCtx) return;
 
-        const newCross = engineState.crossSize;
+        const newCross = engineState.crossSize - crossPadTotal;
         if (Math.abs(newCross - layout.containerSize) < 1) return;
 
         layout.update({ containerSize: newCross });

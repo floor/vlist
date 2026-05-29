@@ -65,6 +65,11 @@ export function grid<T extends VListItem = VListItem>(
   let compressionResolved = false;
   let ctxGetMethod: ((name: string) => unknown) | null = null;
 
+  let crossPadStart = 0;
+  let crossPadTotal = 0;
+  let mainPadStart = 0;
+  let mainPadTotal = 0;
+
   interface TrackedElement { el: HTMLElement; lastItem: unknown; }
   const rendered = new Map<number, TrackedElement>();
   let containerWidth = 0;
@@ -88,8 +93,8 @@ export function grid<T extends VListItem = VListItem>(
   function buildTransform(itemIndex: number): string {
     const row = layout.getRow(itemIndex);
     const col = layout.getCol(itemIndex);
-    const x = layout.getColumnOffset(col, containerWidth);
-    const y = sizeCache.getOffset(row);
+    const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
+    const y = sizeCache.getOffset(row) + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
@@ -215,8 +220,8 @@ export function grid<T extends VListItem = VListItem>(
       if (isCompressed) {
         const row = layout.getRow(i);
         const col = layout.getCol(i);
-        const x = layout.getColumnOffset(col, containerWidth);
-        const y = calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression);
+        const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
+        const y = calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression) + mainPadStart;
         tracked.el.style.transform = isX
           ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
           : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
@@ -227,10 +232,10 @@ export function grid<T extends VListItem = VListItem>(
 
     // Content size — scale plugin manages it when compressed
     if (!isCompressed) {
-      const totalSize = sizeCache.getTotalSize();
+      const totalSize = sizeCache.getTotalSize() + mainPadTotal;
       contentElement.style[isX ? "width" : "height"] = totalSize + "px";
     }
-    engineState.totalSize = sizeCache.getTotalSize();
+    engineState.totalSize = sizeCache.getTotalSize() + mainPadTotal;
 
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
@@ -283,8 +288,14 @@ export function grid<T extends VListItem = VListItem>(
       resolveItemState = () => ctx.getItemStateFn();
       ctxGetMethod = ctx.getMethod.bind(ctx);
 
-      // Initialize container width
-      containerWidth = engineState.crossSize;
+      // Padding offsets for item positioning
+      crossPadStart = ctx.config.crossPadStart;
+      crossPadTotal = ctx.config.crossAxisPadding;
+      mainPadStart = ctx.config.startPadding;
+      mainPadTotal = ctx.config.mainAxisPadding;
+
+      // Initialize container width (subtract cross-axis padding)
+      containerWidth = engineState.crossSize - crossPadTotal;
 
       // Size cache in ROW space: each row = itemHeight + gap
       // Inject grid context into dynamic height functions
@@ -364,7 +375,7 @@ export function grid<T extends VListItem = VListItem>(
           ctx.setNavConfig({ ud: layout.columns });
         }
 
-        containerWidth = engineState.crossSize;
+        containerWidth = engineState.crossSize - crossPadTotal;
         gridForceRender();
       });
 
@@ -377,10 +388,10 @@ export function grid<T extends VListItem = VListItem>(
         const totalRows = getRowCount();
         if (totalRows === 0) return;
         const safeRow = Math.max(0, Math.min(rowIndex, totalRows - 1));
-        const offset = sizeCache.getOffset(safeRow);
+        const offset = sizeCache.getOffset(safeRow) + mainPadStart;
         const rowHeight = sizeCache.getSize(safeRow);
         const cs = engineState.containerSize;
-        const totalSize = sizeCache.getTotalSize();
+        const totalSize = sizeCache.getTotalSize() + mainPadTotal;
         const maxScroll = Math.max(0, totalSize - cs);
 
         const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
@@ -442,7 +453,7 @@ export function grid<T extends VListItem = VListItem>(
 
     hooks: {
       onResize(_width: number, _height: number): void {
-        const newCross = engineState.crossSize;
+        const newCross = engineState.crossSize - crossPadTotal;
         if (Math.abs(newCross - containerWidth) < 1) return;
         containerWidth = newCross;
 

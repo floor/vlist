@@ -62,7 +62,7 @@ export interface MasonryLayout {
   readonly containerSize: number;
 
   /** Update masonry configuration */
-  update: (config: Partial<MasonryConfig & { containerSize: number }>) => void;
+  update: (config: Partial<MasonryConfig & { containerSize: number; crossOffset?: number; mainOffset?: number }>) => void;
 
   /**
    * Calculate layout for all items.

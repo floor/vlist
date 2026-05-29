@@ -34,11 +34,13 @@ import type {
  * @returns MasonryLayout with placement algorithm
  */
 export const createMasonryLayout = (
-  config: MasonryConfig & { containerSize: number },
+  config: MasonryConfig & { containerSize: number; crossOffset?: number; mainOffset?: number },
 ): MasonryLayout => {
   let columns = Math.max(1, Math.floor(config.columns));
   let gap = config.gap ?? 0;
   let containerSize = config.containerSize;
+  let crossOffset = config.crossOffset ?? 0;
+  let mainOffset = config.mainOffset ?? 0;
 
   // ── Cached derived values ──
   // Recomputed when columns, gap, or containerSize change.
@@ -52,7 +54,7 @@ export const createMasonryLayout = (
     laneOffsets = new Array(columns);
     const stride = crossAxisSize + gap;
     for (let i = 0; i < columns; i++) {
-      laneOffsets[i] = i * stride;
+      laneOffsets[i] = crossOffset + i * stride;
     }
   };
 
@@ -90,7 +92,8 @@ export const createMasonryLayout = (
     }
 
     // Initialize lane sizes (accumulated height/width for each column/row)
-    const laneSizes: number[] = new Array(columns).fill(0);
+    // Start at mainOffset so items are pushed down by main-axis padding
+    const laneSizes: number[] = new Array(columns).fill(mainOffset);
 
     // Per-lane placement indices (for binary search later)
     const lanes: number[][] = new Array(columns);
@@ -274,7 +277,7 @@ export const createMasonryLayout = (
    * Update masonry configuration without recreating the layout.
    */
   const updateConfig = (
-    newConfig: Partial<MasonryConfig & { containerSize: number }>,
+    newConfig: Partial<MasonryConfig & { containerSize: number; crossOffset?: number; mainOffset?: number }>,
   ): void => {
     let changed = false;
 
@@ -291,6 +294,14 @@ export const createMasonryLayout = (
     }
     if (newConfig.containerSize !== undefined && newConfig.containerSize !== containerSize) {
       containerSize = newConfig.containerSize;
+      changed = true;
+    }
+    if (newConfig.crossOffset !== undefined && newConfig.crossOffset !== crossOffset) {
+      crossOffset = newConfig.crossOffset;
+      changed = true;
+    }
+    if (newConfig.mainOffset !== undefined && newConfig.mainOffset !== mainOffset) {
+      mainOffset = newConfig.mainOffset;
       changed = true;
     }
 
