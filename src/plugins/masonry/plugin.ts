@@ -426,10 +426,10 @@ export function masonry<T extends VListItem = VListItem>(
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
 
-        if (itemTop < scrollPos) {
-          ctx.scrollTo(Math.max(0, itemTop));
-        } else if (itemBottom > scrollPos + containerSize) {
-          ctx.scrollTo(itemBottom - containerSize);
+        if (itemTop - mainPadStart < scrollPos) {
+          ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
+        } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
+          ctx.scrollTo(itemBottom + mainPadEnd - containerSize);
         }
       });
 
