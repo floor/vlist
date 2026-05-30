@@ -824,8 +824,8 @@ export function tree<T extends VListItem = VListItem>(
 
         if (hasExternalFocus && domRebuilt) {
           resolveSelectionMethods();
-          if (cachedSelectFn) cachedSelectFn(clickedId);
           if (cachedFocusFn) cachedFocusFn(clickedId);
+          if (cachedSelectFn) cachedSelectFn(clickedId);
         } else if (!hasExternalFocus) {
           focusedIndex = layout.idToIndex.get(clickedId) ?? idx;
           focusVisible = false;
