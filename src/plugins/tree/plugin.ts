@@ -349,7 +349,7 @@ export function tree<T extends VListItem = VListItem>(
 
     loadingNodes.add(id);
     node.loading = true;
-    doForceRender();
+    queueMicrotask(() => doForceRender());
 
     try {
       const children = await cfg.loadChildren(node.item);
