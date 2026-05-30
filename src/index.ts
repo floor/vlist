@@ -37,6 +37,8 @@ export { table } from "./plugins/table";
 export type { TablePluginConfig } from "./plugins/table";
 export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
+export { tree } from "./plugins/tree";
+export type { TreePluginConfig, FlatNode } from "./plugins/tree";
 
 // Utils
 export { createStats } from "./utils/stats";
@@ -92,6 +94,9 @@ export type {
   // Grid (axis-neutral name + deprecated alias)
   GridSizeContext,
   GridHeightContext,
+
+  // Tree
+  TreeState,
 } from "./types";
 
 // v2 core types

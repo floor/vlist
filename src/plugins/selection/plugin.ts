@@ -624,6 +624,8 @@ export function selection<T extends VListItem = VListItem>(
         for (const id of ids) state.selected.add(id);
       });
 
+      ctx.registerMethod("_isFollowFocus", (): boolean => followFocus);
+
       ctx.registerMethod("_getFocusedId", (): string | number | undefined => {
         if (state.focusedIndex < 0) return undefined;
         return getItemAtLayout(state.focusedIndex)?.id;
