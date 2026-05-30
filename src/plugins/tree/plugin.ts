@@ -136,7 +136,7 @@ function resolveParentIdMode<T extends VListItem>(
 // =============================================================================
 
 const itemState: ItemState = { selected: false, focused: false };
-const treeState: TreeState = { depth: 0, expanded: false, hasChildren: false, isLeaf: true, loading: false };
+const treeState: TreeState = { depth: 0, expanded: false, hasChildren: false, isLeaf: true, isLastChild: false, loading: false };
 itemState.tree = treeState;
 
 // =============================================================================
@@ -149,6 +149,7 @@ export function tree<T extends VListItem = VListItem>(
   const cfg = config ?? {};
   const indent = cfg.indent ?? 24;
   const expandOnClick = cfg.expandOnClick ?? false;
+  const connectorLines = cfg.connectorLines ?? false;
   const isParentIdMode = cfg.parentId !== undefined;
   let layout: TreeLayout<T>;
   let sizeCache: SizeCache;
@@ -172,12 +173,14 @@ export function tree<T extends VListItem = VListItem>(
   let expandedClass: string;
   let leafClass: string;
   let loadingClass: string;
+  let lastChildClass: string;
   let selectedClass: string;
   let focusedClass: string;
 
   const rendered = new Map<number, HTMLElement>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
+  let lastTotalSize = -1;
   let forceNextRender = true;
   let lastItems: readonly T[] | null = null;
   let roleSet = false;
@@ -250,6 +253,13 @@ export function tree<T extends VListItem = VListItem>(
     return isX ? `translate(${Math.round(offset)}px, 0)` : `translate(0, ${Math.round(offset)}px)`;
   }
 
+  /** Write the content element's scroll size, skipping the DOM write when unchanged. */
+  function applyContentSize(totalSize: number): void {
+    if (totalSize === lastTotalSize) return;
+    lastTotalSize = totalSize;
+    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+  }
+
   function detachAll(): void {
     rendered.forEach((element) => {
       element.remove();
@@ -265,15 +275,17 @@ export function tree<T extends VListItem = VListItem>(
     if (currentItems === lastItems && currentItems.length === lastItemsLength) return;
     lastItems = currentItems;
     lastItemsLength = currentItems.length;
+    // Initial data is validated in setup(); runtime swaps skip the O(n)
+    // duplicate-id walk to keep data updates off the validation hot path.
     if (isParentIdMode) {
       const { roots, getChildren: baseGC } = resolveParentIdMode(currentItems, cfg);
       const wrappedGC = cfg.loadChildren
         ? (item: T): T[] => loadedChildrenMap.get(item.id) ?? baseGC(item)
         : baseGC;
       layout = createTreeLayout(wrappedGC, layout.expandedIds);
-      layout.rebuild(roots);
+      layout.rebuild(roots, true);
     } else {
-      layout.rebuild(currentItems);
+      layout.rebuild(currentItems, true);
     }
     syncTotals();
     detachAll();
@@ -285,7 +297,7 @@ export function tree<T extends VListItem = VListItem>(
     engineState.totalItems = layout.totalVisible;
     origSizeCacheRebuild(layout.totalVisible);
     const totalSize = sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+    applyContentSize(totalSize);
 
     const getSb = getMethod("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
     if (getSb) {
@@ -415,12 +427,13 @@ export function tree<T extends VListItem = VListItem>(
     flatIndex: number,
     isf: ItemStateFn | null,
   ): void {
-    const { depth, expanded, hasChildren, loading, siblingCount, positionInSiblings, id } = flatNode;
+    const { depth, expanded, hasChildren, loading, siblingCount, positionInSiblings, isLastChild, id } = flatNode;
 
     element.className = treeItemClass;
     if (expanded) element.classList.add(expandedClass);
     if (!hasChildren) element.classList.add(leafClass);
     if (loading) element.classList.add(loadingClass);
+    if (connectorLines && isLastChild) element.classList.add(lastChildClass);
 
     element.setAttribute("role", "treeitem");
     element.setAttribute("data-index", String(flatIndex));
@@ -437,6 +450,9 @@ export function tree<T extends VListItem = VListItem>(
 
     element.style.paddingLeft = `${depth * indent}px`;
     element.style.setProperty("--vlist-tree-depth", String(depth));
+    if (connectorLines) {
+      element.style.setProperty("--vlist-tree-indent", `${indent}px`);
+    }
 
     if (isf) isf(flatIndex, itemState);
     else { itemState.selected = false; itemState.focused = false; }
@@ -445,6 +461,7 @@ export function tree<T extends VListItem = VListItem>(
     treeState.expanded = expanded;
     treeState.hasChildren = hasChildren;
     treeState.isLeaf = !hasChildren;
+    treeState.isLastChild = isLastChild;
     treeState.loading = loading;
 
     const content = userTemplate(flatNode.item, flatIndex, itemState);
@@ -467,6 +484,7 @@ export function tree<T extends VListItem = VListItem>(
       contentElement.setAttribute("role", "tree");
       contentElement.setAttribute("tabindex", "0");
       rootElement.classList.add(`${classPrefix}--tree`);
+      if (connectorLines) rootElement.classList.add(`${classPrefix}--tree-lines`);
     }
 
     const scrollPos = engineState.scrollPosition;
@@ -555,8 +573,9 @@ export function tree<T extends VListItem = VListItem>(
 
     if (fragment) contentElement.appendChild(fragment);
 
-    const totalSize = sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+    // Total size only changes via layout mutations (syncTotals); the guard
+    // skips the DOM write + string alloc on the steady-state scroll path.
+    applyContentSize(sizeCache.getTotalSize());
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
@@ -646,6 +665,7 @@ export function tree<T extends VListItem = VListItem>(
       expandedClass = `${classPrefix}-tree-node--expanded`;
       leafClass = `${classPrefix}-tree-node--leaf`;
       loadingClass = `${classPrefix}-tree-node--loading`;
+      lastChildClass = `${classPrefix}-tree-node--last`;
       selectedClass = `${classPrefix}-item--selected`;
       focusedClass = `${classPrefix}-item--focused`;
 
@@ -932,6 +952,7 @@ export function tree<T extends VListItem = VListItem>(
         rootElement.removeEventListener("focusout", onFocusOut);
         detachAll();
         rootElement.classList.remove(`${classPrefix}--tree`);
+        rootElement.classList.remove(`${classPrefix}--tree-lines`);
         if (typeAheadTimer !== null) clearTimeout(typeAheadTimer);
       });
     },

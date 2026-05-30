@@ -454,6 +454,7 @@ export interface TreeState {
   expanded: boolean;
   hasChildren: boolean;
   isLeaf: boolean;
+  isLastChild: boolean;
   loading: boolean;
 }
 

@@ -89,6 +89,7 @@ export function createTreeLayout<T extends VListItem>(
         childCount: childItems.length,
         siblingCount: children.length,
         positionInSiblings: i,
+        isLastChild: i === children.length - 1,
         loading: false,
       });
 

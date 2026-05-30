@@ -1,0 +1,69 @@
+/* =============================================================================
+   vlist — Tree Connector Lines
+   ============================================================================= */
+
+/*
+ * Opt-in via: tree({ connectorLines: true })
+ * Requires: <link rel="stylesheet" href="vlist-tree.css" />
+ *
+ * CSS custom properties (set by the plugin per item):
+ *   --vlist-tree-depth   : nesting depth (0 = root)
+ *   --vlist-tree-indent  : indent size in px (e.g. 20px)
+ *
+ * Classes (set by the plugin):
+ *   .vlist--tree-lines           : root modifier when connectorLines is on
+ *   .vlist-tree-node--last       : last child at its level
+ */
+
+/* Only draw lines when the root modifier is present */
+.vlist--tree-lines .vlist-tree-node {
+    position: relative;
+}
+
+/* ── Vertical line (I-connector) ──────────────────────────────────────────────
+   A vertical line running down the left edge of each non-root node,
+   connecting it to its parent. Extends the full height of the item. */
+
+.vlist--tree-lines .vlist-tree-node::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent) + var(--vlist-tree-indent) / 2);
+    width: 1px;
+    background: var(--vlist-tree-line, var(--border, #d1d5db));
+    pointer-events: none;
+}
+
+/* Hide vertical line for root nodes (depth 0) */
+.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth: 0"]::before,
+.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth:0"]::before {
+    display: none;
+}
+
+/* ── Horizontal branch (L/T-connector) ────────────────────────────────────────
+   A horizontal line from the vertical line to the node content. */
+
+.vlist--tree-lines .vlist-tree-node::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent) + var(--vlist-tree-indent) / 2);
+    width: calc(var(--vlist-tree-indent) / 2 - 2px);
+    height: 1px;
+    background: var(--vlist-tree-line, var(--border, #d1d5db));
+    pointer-events: none;
+}
+
+/* Hide horizontal branch for root nodes */
+.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth: 0"]::after,
+.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth:0"]::after {
+    display: none;
+}
+
+/* ── Last child: L-shape ──────────────────────────────────────────────────────
+   For the last child, the vertical line stops at the midpoint (L-shape). */
+
+.vlist--tree-lines .vlist-tree-node--last::before {
+    bottom: 50%;
+}

@@ -27,6 +27,9 @@ export interface TreePluginConfig<T extends VListItem = VListItem> {
   /** Toggle expand/collapse on item click. Default: false. */
   expandOnClick?: boolean;
 
+  /** Show tree connector lines. Requires vlist-tree.css. Default: false. */
+  connectorLines?: boolean;
+
   /** Async child loader — called when expanding a node with no loaded children. */
   loadChildren?: (item: T) => Promise<T[]>;
 }
@@ -45,5 +48,6 @@ export interface FlatNode<T> {
   childCount: number;
   siblingCount: number;
   positionInSiblings: number;
+  isLastChild: boolean;
   loading: boolean;
 }
