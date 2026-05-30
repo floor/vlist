@@ -11,7 +11,7 @@ import {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
-import { data as dataPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { page } from "../../src/plugins/page/plugin";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
 import type { VListAdapter } from "../../src/types";

@@ -10,7 +10,7 @@ import {
   filterPlaceholders,
   countRealItems,
   type PlaceholderManager,
-} from "../../../src/plugins/async/placeholder";
+} from "../../../src/plugins/data/placeholder";
 import type { VListItem } from "../../../src/types";
 
 // =============================================================================

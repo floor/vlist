@@ -152,7 +152,7 @@ export {
   type DataManager as AsyncManager,
   type SparseStorage,
   type PlaceholderManager,
-} from "./plugins/async";
+} from "./plugins/data";
 
 // =============================================================================
 // Scrollbar domain
