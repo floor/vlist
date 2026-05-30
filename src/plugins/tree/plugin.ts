@@ -127,7 +127,14 @@ function resolveParentIdMode<T extends VListItem>(
 
   return {
     roots: childrenMap.get(null) ?? [],
-    getChildren: (item: T): T[] => childrenMap.get(item.id) ?? [],
+    getChildren: (item: T): T[] => {
+      let children = childrenMap.get(item.id);
+      if (!children) {
+        children = [];
+        childrenMap.set(item.id, children);
+      }
+      return children;
+    },
   };
 }
 
@@ -361,7 +368,7 @@ export function tree<T extends VListItem = VListItem>(
       if (children.length > 0) {
         currentNode.expanded = true;
         layout.expandedIds.add(id);
-        layout.rebuild(layout.rootItems as T[], true);
+        layout.rebuild(layout.rootItems as T[]);
       }
 
       invalidateTree();
@@ -754,15 +761,27 @@ export function tree<T extends VListItem = VListItem>(
 
       ctx.setRemoveItemFn((id: string | number): number => {
         const idx = layout.idToIndex.get(id);
+
+        let removedIds: Set<string | number> | null = null;
+        if (isParentIdMode && idx !== undefined) {
+          removedIds = new Set<string | number>();
+          removedIds.add(id);
+          const subtreeSize = layout.getSubtreeSize(idx);
+          for (let i = idx + 1; i <= idx + subtreeSize; i++) {
+            removedIds.add(layout.flatNodes[i]!.id);
+          }
+        }
+
         const removed = layout.removeNode(id);
         if (removed === 0) return -1;
         if (!hasExternalFocus && idx !== undefined && focusedIndex >= idx) {
           focusedIndex = Math.max(0, Math.min(focusedIndex - removed, layout.totalVisible - 1));
         }
-        if (isParentIdMode) {
+        if (isParentIdMode && removedIds) {
           const rawItems = ctxGetItems() as T[];
-          const rawIdx = rawItems.findIndex((item) => item.id === id);
-          if (rawIdx >= 0) rawItems.splice(rawIdx, 1);
+          for (let i = rawItems.length - 1; i >= 0; i--) {
+            if (removedIds.has(rawItems[i]!.id)) rawItems.splice(i, 1);
+          }
         }
         lastItemsLength = (ctxGetItems()).length;
         invalidateTree();
@@ -794,19 +813,19 @@ export function tree<T extends VListItem = VListItem>(
         if (!node) return;
 
         const clickedId = node.id;
-        let didExpand = false;
+        let domRebuilt = false;
 
         if (expandOnClick && (node.hasChildren || (cfg.loadChildren && !node.loading && !loadedChildrenMap.has(clickedId)))) {
+          const prevTotal = layout.totalVisible;
           if (node.expanded) doCollapse(clickedId);
           else doExpand(clickedId);
-          didExpand = true;
+          domRebuilt = layout.totalVisible !== prevTotal;
         }
 
-        if (hasExternalFocus && didExpand) {
-          const selectFn = getMethod("select") as ((...ids: (string | number)[]) => void) | undefined;
-          if (selectFn) selectFn(clickedId);
-          const focusFn = getMethod("_focusById") as ((id: string | number) => void) | undefined;
-          if (focusFn) focusFn(clickedId);
+        if (hasExternalFocus && domRebuilt) {
+          resolveSelectionMethods();
+          if (cachedFollowFn?.() && cachedSelectFn) cachedSelectFn(clickedId);
+          if (cachedFocusFn) cachedFocusFn(clickedId);
         } else if (!hasExternalFocus) {
           focusedIndex = layout.idToIndex.get(clickedId) ?? idx;
           focusVisible = false;
