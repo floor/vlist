@@ -213,16 +213,31 @@ export function tree<T extends VListItem = VListItem>(
     return focusVisible ? focusedIndex : -1;
   }
 
+  let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
+  let cachedFocusFn: ((id: string | number) => void) | null | undefined;
+  let cachedFollowFn: (() => boolean) | null | undefined;
+
+  function resolveSelectionMethods(): void {
+    if (cachedFocusFn !== undefined) return;
+    cachedSelectFn = (getMethod("select") as typeof cachedSelectFn) ?? null;
+    cachedFocusFn = (getMethod("_focusById") as typeof cachedFocusFn) ?? null;
+    cachedFollowFn = (getMethod("_isFollowFocus") as typeof cachedFollowFn) ?? null;
+  }
+
   function setFocusTo(index: number): void {
     if (index < 0 || index >= layout.totalVisible) return;
     const node = layout.flatNodes[index];
     if (!node) return;
 
     if (hasExternalFocus) {
-      const fn = getMethod("_focusById") as ((id: string | number) => void) | undefined;
-      if (fn) fn(node.id);
+      resolveSelectionMethods();
+      if (cachedFocusFn) cachedFocusFn(node.id);
+      if (cachedFollowFn?.() && cachedSelectFn) {
+        cachedSelectFn(node.id);
+      } else {
+        doForceRender();
+      }
       scrollIntoView(index);
-      doForceRender();
     } else {
       focusedIndex = index;
       focusVisible = true;

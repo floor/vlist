@@ -1,19 +1,49 @@
 /* =============================================================================
-   vlist — Tree Connector Lines (indent guides)
+   vlist — Tree Plugin Styles
    ============================================================================= */
 
 /*
- * Opt-in via: tree({ connectorLines: true })
- * Requires: <link rel="stylesheet" href="vlist-tree.css" />
+ * Base styles for the tree() plugin.
+ * Include: <link rel="stylesheet" href="vlist-tree.css" />
  *
  * CSS custom properties (set by the plugin per item):
- *   --vlist-tree-depth   : nesting depth (0 = root)
- *   --vlist-tree-indent  : indent size in px (e.g. 20px)
+ *   --vlist-tree-depth        : nesting depth (0 = root)
+ *   --vlist-tree-indent       : indent size in px (e.g. 20px)
  *
  * Theming:
- *   --vlist-tree-line         : line color (default: currentColor at 12%)
- *   --vlist-tree-guide-start  : left offset for first guide (default: indent/2)
+ *   --vlist-tree-line          : indent guide color (default: currentColor at 12%)
+ *   --vlist-tree-guide-start   : left offset for first guide (default: indent/2)
  */
+
+/* ── Base resets ──────────────────────────────────────────────────────────────
+   Tree items are tightly packed — no padding, no borders, instant transitions. */
+
+.vlist--tree {
+    --vlist-item-padding-x: 0;
+    --vlist-item-padding-y: 0;
+    --vlist-transition-duration: 0ms;
+}
+
+.vlist--tree .vlist-item {
+    border-bottom: none;
+}
+
+/* ── Loading spinner ──────────────────────────────────────────────────────────
+   Applied to nodes while async children are loading. */
+
+.vlist-tree-node--loading .vlist-tree-chevron,
+.vlist-tree-node--loading [class*="chevron"] {
+    animation: vlist-tree-spin 0.8s linear infinite;
+}
+
+@keyframes vlist-tree-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   Indent Guides (opt-in via connectorLines: true)
+   ============================================================================= */
 
 /* ── Vertical indent guides ─────────────────────────────────────────────────── */
 
