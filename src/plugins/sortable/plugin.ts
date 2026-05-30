@@ -729,7 +729,7 @@ export function sortable<T extends VListItem = VListItem>(
   return {
     name: "sortable",
     priority: 30,
-    conflicts: ["grid", "masonry", "table", "scale"],
+    conflicts: ["grid", "masonry", "table", "scale", "tree"],
 
     setup(ctx: PluginContext<T>): void {
       storedCtx = ctx;
