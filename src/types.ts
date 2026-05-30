@@ -448,10 +448,21 @@ export type ItemTemplate<T = VListItem> = (
   state: ItemState,
 ) => string | HTMLElement;
 
+/** Tree-specific state available in templates when the tree plugin is active */
+export interface TreeState {
+  depth: number;
+  expanded: boolean;
+  hasChildren: boolean;
+  isLeaf: boolean;
+  isLastChild: boolean;
+  loading: boolean;
+}
+
 /** State passed to template */
 export interface ItemState {
   selected: boolean;
   focused: boolean;
+  tree?: TreeState;
 }
 
 // =============================================================================
@@ -640,6 +651,18 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Sort cancelled — fired when keyboard reorder is cancelled via Escape.
    *  Contains the original items array so the consumer can restore order. */
   "sort:cancel": { originalItems: unknown[] };
+
+  /** Tree node expanded */
+  "tree:expand": { id: string | number; item: T; depth: number };
+
+  /** Tree node collapsed */
+  "tree:collapse": { id: string | number; item: T; depth: number };
+
+  /** Async tree children loaded */
+  "tree:load": { id: string | number; item: T; children: T[] };
+
+  /** Async tree children load failed */
+  "tree:load:error": { id: string | number; item: T; error: unknown };
 
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;

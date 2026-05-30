@@ -261,6 +261,7 @@ export function createPluginMockContext<T extends VListItem>(
     setRemoveItemFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
     setInsertItemFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
     setUpdateItemFn: (_fn: (id: string | number, updates: Partial<T>) => boolean) => {},
+    setGetIndexByIdFn: (_fn: (id: string | number) => number) => {},
     getRenderedElement: (index: number) => {
       const children = content.children;
       for (let i = 0; i < children.length; i++) {

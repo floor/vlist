@@ -31,7 +31,7 @@ import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
-import { data as dataPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { table } from "../../src/plugins/table/plugin";
 import type { VListAdapter } from "../../src/types";
 

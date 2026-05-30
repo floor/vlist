@@ -12,7 +12,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
-import { data as dataPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import type { VListAdapter } from "../../src/types";

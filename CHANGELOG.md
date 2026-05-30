@@ -11,6 +11,36 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-05-30
+
+### Added
+
+- **Tree plugin** — virtualized collapsible tree view with WAI-ARIA treeview keyboard navigation (`tree()`)
+  - Nested children and flat `parentId` data modes
+  - Expand/collapse with preserved state, async `loadChildren` for lazy loading
+  - Keyboard: ArrowRight/Left expand/collapse, `*` expand siblings, type-ahead search
+  - ARIA: `role="tree"`, `aria-level`, `aria-expanded`, `aria-setsize`/`aria-posinset`
+  - Data mutations: `addChild`, `removeNode`, `moveNode` with cycle detection
+  - Scale plugin compression support
+  - `connectorLines` option with Zed-style indent guides via `vlist-tree.css`
+  - `paddingStart` config for base indent
+  - `isLastChild` on FlatNode and TreeState
+- **`vlist-tree.css`** — opt-in stylesheet for tree indent guides and connector lines
+- **`./styles/tree`** export in package.json
+- **`setGetIndexByIdFn`** on PluginContext — layout-replacing plugins can override `getIndexById`
+- **`_isFollowFocus`** on selection plugin — cross-plugin query for `followFocus` state
+
+### Fixed
+
+- `getItemAt()` now uses `getItemFn` when set (was reading raw items array)
+- `getIndexById()` now delegates to plugin override when set
+- `resolveClickedItem` uses `getItemFn` for layout-replacing plugins (tree, groups, grid)
+
+### Changed
+
+- Renamed `src/plugins/async/` → `src/plugins/data/` to match public export name
+- Renamed `scripts/check-coverage.ts` → `coverage.ts`, `scripts/measure-size.ts` → `size.ts`
+
 ## [2.0.5] - 2026-05-29
 
 ### Changed

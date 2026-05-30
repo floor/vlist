@@ -146,6 +146,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setRemoveItemFn(fn: (id: string | number) => number): void;
   setInsertItemFn(fn: (item: T, index: number) => void): void;
   setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void;
+  setGetIndexByIdFn(fn: (id: string | number) => number): void;
   getRenderedElement(index: number): HTMLElement | null;
 
   setNavConfig(config: {

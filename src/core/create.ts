@@ -274,6 +274,7 @@ export function createVList<T extends VListItem = VListItem>(
   let removeItemByIdFn: ((id: string | number) => number) | null = null;
   let insertItemAtFn: ((item: T, index: number) => void) | null = null;
   let updateItemByIdFn: ((id: string | number, updates: Partial<T>) => boolean) | null = null;
+  let getIndexByIdFn: ((id: string | number) => number) | null = null;
   let skipDefaultScroll = false;
   let skipDefaultResize = false;
   let scrollTarget: EventTarget | null = null;
@@ -383,6 +384,7 @@ export function createVList<T extends VListItem = VListItem>(
       setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
       setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
       setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
+      setGetIndexByIdFn(fn: (id: string | number) => number): void { getIndexByIdFn = fn; },
       getRenderedElement(index: number): HTMLElement | null {
         const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
         if (override) return override(index);
@@ -544,7 +546,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (!itemEl) return null;
     const index = parseInt(itemEl.getAttribute("data-index")!, 10);
     if (Number.isNaN(index)) return null;
-    const item = items[index];
+    const item = getItemFn ? getItemFn(index) : items[index];
     if (item === undefined) return null;
     return { item, index };
   }
@@ -716,10 +718,11 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     getItemAt(index: number): T | undefined {
-      return items[index];
+      return getItemFn ? getItemFn(index) : items[index];
     },
 
     getIndexById(id: string | number): number {
+      if (getIndexByIdFn) return getIndexByIdFn(id);
       return items.findIndex((item) => item.id === id);
     },
 

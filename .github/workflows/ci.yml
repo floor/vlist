@@ -31,7 +31,7 @@ jobs:
         run: bun test
 
       - name: Coverage threshold
-        run: bun run scripts/check-coverage.ts --threshold 85
+        run: bun run scripts/coverage.ts --threshold 85
 
       - name: Build
         run: bun run build

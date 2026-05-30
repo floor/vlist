@@ -1,8 +1,8 @@
 # vlist
 
-The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.9 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 8.0 KB.
 
-**v2.0.5** — [Changelog](./CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
+**v2.1.0** — [Changelog](./CHANGELOG.md) · **New:** [`tree()`](https://vlist.io/docs/plugins/tree) plugin — virtualized collapsible trees with async loading, indent guides, and WAI-ARIA treeview keyboard nav.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,9 +11,9 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **7.9 KB gzipped** — composable plugins with perfect tree-shaking
+- **8.0 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
-- **Grid, masonry, table, groups, data, selection, sortable, transition, scale** — all opt-in
+- **Tree, grid, masonry, table, groups, data, selection, sortable, transition, scale** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
 **18 interactive examples, docs & benchmarks → [vlist.io](https://vlist.io)**
@@ -94,7 +94,7 @@ const list = createVList({
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 7.9 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| **Base** | 8.0 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `data()` | +4.6 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.4 KB | Single/multiple selection with 2D keyboard nav |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
@@ -104,6 +104,7 @@ const list = createVList({
 | `grid()` | +2.7 KB | 2D grid layout |
 | `masonry()` | +3.6 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +6.1 KB | Data table with columns, resize, sort |
+| `tree()` | +5.3 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
 | `snapshots()` | +1.3 KB | Scroll position save/restore |

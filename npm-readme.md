@@ -1,8 +1,8 @@
 # vlist
 
-The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 7.9 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 8.0 KB.
 
-**v2.0.5** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **v2 is a ground-up rewrite** with a new plugin API. Coming from v1? See [Migration Guide](https://vlist.io/docs/migration).
+**v2.1.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** [`tree()`](https://vlist.io/docs/plugins/tree) plugin — virtualized collapsible trees with async loading, indent guides, and WAI-ARIA treeview keyboard nav.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **7.9 KB gzipped** — composable plugins with perfect tree-shaking
+- **8.0 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 

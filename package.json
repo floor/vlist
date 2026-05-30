@@ -1,6 +1,6 @@
 {
   "name": "vlist",
-  "version": "2.0.5",
+  "version": "2.1.0",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -44,6 +44,7 @@
     "./styles/masonry": "./dist/vlist-masonry.css",
     "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
+    "./styles/tree": "./dist/vlist-tree.css",
     "./package.json": "./package.json"
   },
   "files": [
@@ -66,7 +67,7 @@
     "bench:quick": "bun run scripts/bench.ts --quick",
     "bench:full": "bun run scripts/bench.ts --full",
     "bench:compare": "bun run scripts/bench.ts --quick --compare",
-    "size": "bun run scripts/measure-size.ts",
+    "size": "bun run scripts/size.ts",
     "release": "bun run scripts/release.ts",
     "prepublishOnly": "bun run build -- --types && cp README.md README.github.md && cp npm-readme.md README.md",
     "postpublish": "cp README.github.md README.md && rm README.github.md"

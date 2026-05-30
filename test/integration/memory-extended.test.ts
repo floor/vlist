@@ -20,7 +20,7 @@ import {
 import { scale } from "../../src/plugins/scale/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
-import { data as dataPlugin } from "../../src/plugins/async/plugin";
+import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { grid } from "../../src/plugins/grid/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
