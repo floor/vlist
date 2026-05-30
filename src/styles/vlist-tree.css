@@ -1,48 +1,51 @@
 /* =============================================================================
-   vlist — Tree Connector Lines
+   vlist — Tree Connector Lines (indent guides)
    ============================================================================= */
 
 /*
  * Opt-in via: tree({ connectorLines: true })
  * Requires: <link rel="stylesheet" href="vlist-tree.css" />
  *
+ * Draws Zed/VS Code style vertical indent guides at every depth level
+ * using a repeating gradient. Each item's ::before covers the indent
+ * area (paddingLeft) and draws 1px lines at the center of each level.
+ *
  * CSS custom properties (set by the plugin per item):
  *   --vlist-tree-depth   : nesting depth (0 = root)
  *   --vlist-tree-indent  : indent size in px (e.g. 20px)
  *
- * Classes (set by the plugin):
- *   .vlist--tree-lines           : root modifier when connectorLines is on
- *   .vlist-tree-node--last       : last child at its level
+ * Theming:
+ *   --vlist-tree-line    : line color override (default: currentColor at 12%)
  */
 
-/* Only draw lines when the root modifier is present */
-.vlist--tree-lines .vlist-tree-node {
-    position: relative;
-}
-
-/* ── Vertical line (I-connector) ──────────────────────────────────────────────
-   A vertical line running down the left edge of each non-root node,
-   connecting it to its parent. Extends the full height of the item. */
+/* ── Vertical indent guides ───────────────────────────────────────────────────
+   A repeating gradient draws a 1px line at the center of each indent level.
+   Width = depth * indent → only draws guides up to the item's depth.
+   Expanded nodes extend +1 level to connect to their children. */
 
 .vlist--tree-lines .vlist-tree-node::before {
     content: "";
     position: absolute;
     top: 0;
     bottom: 0;
-    left: calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent) + var(--vlist-tree-indent) / 2);
-    width: 1px;
-    background: var(--vlist-tree-line, var(--border, #d1d5db));
+    left: 0;
+    width: calc(var(--vlist-tree-depth) * var(--vlist-tree-indent));
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(var(--vlist-tree-indent) / 2 - 0.5px),
+        var(--vlist-tree-line, currentColor) calc(var(--vlist-tree-indent) / 2 - 0.5px),
+        var(--vlist-tree-line, currentColor) calc(var(--vlist-tree-indent) / 2 + 0.5px),
+        transparent calc(var(--vlist-tree-indent) / 2 + 0.5px),
+        transparent var(--vlist-tree-indent)
+    );
+    opacity: 0.12;
     pointer-events: none;
 }
 
-/* Hide vertical line for root nodes (depth 0) */
-.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth: 0"]::before,
-.vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth:0"]::before {
-    display: none;
-}
-
-/* ── Horizontal branch (L/T-connector) ────────────────────────────────────────
-   A horizontal line from the vertical line to the node content. */
+/* ── Horizontal branch ────────────────────────────────────────────────────────
+   A horizontal line from the vertical guide to the node content.
+   Only shown on non-root nodes. */
 
 .vlist--tree-lines .vlist-tree-node::after {
     content: "";
@@ -51,7 +54,8 @@
     left: calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent) + var(--vlist-tree-indent) / 2);
     width: calc(var(--vlist-tree-indent) / 2 - 2px);
     height: 1px;
-    background: var(--vlist-tree-line, var(--border, #d1d5db));
+    background: var(--vlist-tree-line, currentColor);
+    opacity: 0.12;
     pointer-events: none;
 }
 
@@ -59,11 +63,4 @@
 .vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth: 0"]::after,
 .vlist--tree-lines .vlist-tree-node[style*="--vlist-tree-depth:0"]::after {
     display: none;
-}
-
-/* ── Last child: L-shape ──────────────────────────────────────────────────────
-   For the last child, the vertical line stops at the midpoint (L-shape). */
-
-.vlist--tree-lines .vlist-tree-node--last::before {
-    bottom: 50%;
 }
