@@ -6,8 +6,8 @@
  * below the threshold or if the overall average is too low.
  *
  * Usage:
- *   bun run scripts/check-coverage.ts
- *   bun run scripts/check-coverage.ts --threshold 95
+ *   bun run scripts/coverage.ts
+ *   bun run scripts/coverage.ts --threshold 95
  */
 
 const DEFAULT_THRESHOLD = 90;
