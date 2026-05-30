@@ -292,4 +292,132 @@ describe("tree integration — public API", () => {
 
     list.destroy();
   });
+
+  test("parentId addChild on empty parent persists in raw items", () => {
+    const items = [
+      { id: "1", name: "root", parentId: null },
+      { id: "2", name: "other", parentId: null },
+    ] as any[];
+
+    const list = createVList({
+      container,
+      item: { height: 32, template: (item: any) => `<div>${item.name}</div>` },
+      items,
+    }, [tree({ parentId: "parentId", expanded: true })]);
+
+    (list as any).addChild("2", { id: "3", name: "child" });
+    (list as any).expand("2");
+
+    expect(list.getIndexById("3")).toBeGreaterThan(-1);
+    expect(items.some((i: any) => i.id === "3")).toBe(true);
+
+    list.destroy();
+  });
+
+  test("parentId removeItem removes subtree from raw items", () => {
+    const items = [
+      { id: "1", name: "root", parentId: null },
+      { id: "2", name: "child", parentId: "1" },
+      { id: "3", name: "grandchild", parentId: "2" },
+    ] as any[];
+
+    const list = createVList({
+      container,
+      item: { height: 32, template: (item: any) => `<div>${item.name}</div>` },
+      items,
+    }, [tree({ parentId: "parentId", expanded: true })]);
+
+    list.removeItem("1");
+    expect(items.length).toBe(0);
+    expect(list.total).toBe(0);
+
+    list.destroy();
+  });
+
+  test("async loadChildren rejects duplicate IDs", async () => {
+    const errors: unknown[] = [];
+    const items: TreeItem[] = [
+      { id: "root", name: "root", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [tree<TreeItem>({
+      children: "children",
+      loadChildren: async () => [
+        { id: "dup", name: "a", children: [] },
+        { id: "dup", name: "b", children: [] },
+      ],
+    })]);
+
+    list.on("tree:load:error", ({ error }) => errors.push(error));
+
+    (list as any).expand("root");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(errors.length).toBe(1);
+
+    list.destroy();
+  });
+
+  test("expand + select via public API keeps selection consistent", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child.ts", children: [] },
+      ]},
+      { id: "c", name: "file.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>({ expandOnClick: true }),
+      selection({ mode: "single", followFocus: true }),
+    ]);
+
+    (list as any).expand("a");
+    (list as any).select("a");
+    expect((list as any).getSelected()).toContain("a");
+    expect((list as any).isExpanded("a")).toBe(true);
+
+    (list as any).collapse("a");
+    (list as any).select("a");
+    expect((list as any).getSelected()).toContain("a");
+    expect((list as any).isExpanded("a")).toBe(false);
+
+    list.destroy();
+  });
+
+  test("expand then collapse preserves selection on same folder", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child.ts", children: [] },
+      ]},
+      { id: "c", name: "other.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>(),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).expand("a");
+    (list as any).select("a");
+    expect(list.total).toBe(3);
+    expect((list as any).getSelected()).toContain("a");
+
+    (list as any).collapse("a");
+    expect(list.total).toBe(2);
+    expect((list as any).getSelected()).toContain("a");
+
+    list.destroy();
+  });
 });
