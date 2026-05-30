@@ -21,6 +21,9 @@ export interface TreePluginConfig<T extends VListItem = VListItem> {
   /** Indent per depth level in pixels. Default: 24. */
   indent?: number;
 
+  /** Base left padding in pixels applied to all items (including root). Default: 0. */
+  paddingStart?: number;
+
   /** Initial expand state: false (all collapsed), true (all expanded), ID array, or predicate. */
   expanded?: boolean | (string | number)[] | ((item: T) => boolean);
 

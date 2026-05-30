@@ -148,6 +148,7 @@ export function tree<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   const cfg = config ?? {};
   const indent = cfg.indent ?? 24;
+  const paddingStart = cfg.paddingStart ?? 0;
   const expandOnClick = cfg.expandOnClick ?? false;
   const connectorLines = cfg.connectorLines ?? false;
   const isParentIdMode = cfg.parentId !== undefined;
@@ -448,10 +449,11 @@ export function tree<T extends VListItem = VListItem>(
       element.removeAttribute("aria-expanded");
     }
 
-    element.style.paddingLeft = `${depth * indent}px`;
+    element.style.paddingLeft = `${paddingStart + depth * indent}px`;
     element.style.setProperty("--vlist-tree-depth", String(depth));
     if (connectorLines) {
       element.style.setProperty("--vlist-tree-indent", `${indent}px`);
+      element.style.setProperty("--vlist-tree-pad", `${paddingStart}px`);
     }
 
     if (isf) isf(flatIndex, itemState);
