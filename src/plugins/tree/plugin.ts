@@ -960,6 +960,11 @@ export function tree<T extends VListItem = VListItem>(
 
       ctx.registerMethod("addChild", (parentId: string | number | null, item: T, index?: number): void => {
         if (parentIdKey) (item as Record<string, unknown>)[parentIdKey] = parentId;
+        if (isParentIdMode) {
+          const rawItems = ctxGetItems() as T[];
+          rawItems.push(item);
+          lastItemsLength = rawItems.length;
+        }
         layout.addChild(parentId, item, index);
         invalidateTree();
         emitter.emit("data:change", { type: "add", id: item.id });
