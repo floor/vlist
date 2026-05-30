@@ -274,13 +274,13 @@ describe("selection — Method Registration", () => {
     cleanup();
   });
 
-  it("should register all 14 methods in single mode (9 public + 5 internal)", () => {
+  it("should register all 15 methods in single mode (9 public + 6 internal)", () => {
     const plugin = selection<TestItem>();
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
     plugin.setup!(ctx);
 
-    expect(methods.size).toBe(14);
+    expect(methods.size).toBe(15);
 
     cleanup();
   });
