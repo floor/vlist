@@ -591,6 +591,9 @@ export function groups<T extends VListItem = VListItem>(
 
       ctx.registerMethod("getGroupLayout", () => layout);
 
+      ctx.registerMethod("_getGroupHeaderTemplate", () => headerTemplate);
+      ctx.registerMethod("_getGroupHeaderHeight", () => headerHeightRaw);
+
       ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number =>
         layout.dataToLayoutIndex(dataIndex),
       );

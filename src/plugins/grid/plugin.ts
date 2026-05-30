@@ -70,6 +70,14 @@ export function grid<T extends VListItem = VListItem>(
   let mainPadStart = 0;
   let mainPadTotal = 0;
 
+  // Groups integration
+  let groupsActive = false;
+  let isGroupHeader: ((layoutIndex: number) => boolean) | null = null;
+  let groupHeaderTemplate: ((group: string, groupIndex: number) => string | HTMLElement) | null = null;
+  let groupHeaderHeight: number | ((group: string, groupIndex: number) => number) = 0;
+  let groupLayout: { getEntry: (i: number) => { type: string; dataIndex: number; group: { key: string; groupIndex: number } }; totalEntries: number } | null = null;
+  let groupHeaderClass = "";
+
   interface TrackedElement { el: HTMLElement; lastItem: unknown; }
   const rendered = new Map<number, TrackedElement>();
   let containerWidth = 0;
@@ -86,14 +94,18 @@ export function grid<T extends VListItem = VListItem>(
     getCompression = (ctxGetMethod("_scale:getCompression") as (() => CompressionState)) ?? null;
   }
 
+  function getItemCount(): number {
+    return groupsActive && groupLayout ? groupLayout.totalEntries : engineState.totalItems;
+  }
+
   function getRowCount(): number {
-    return layout.getTotalRows(engineState.totalItems);
+    return layout.getTotalRows(getItemCount());
   }
 
   function buildTransform(itemIndex: number): string {
     const row = layout.getRow(itemIndex);
     const col = layout.getCol(itemIndex);
-    const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
+    const x = (isGroupHeader?.(itemIndex)) ? crossPadStart : layout.getColumnOffset(col, containerWidth) + crossPadStart;
     const y = sizeCache.getOffset(row) + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
@@ -103,8 +115,20 @@ export function grid<T extends VListItem = VListItem>(
 
   function applySizeStyles(element: HTMLElement, itemIndex: number): void {
     const row = layout.getRow(itemIndex);
-    const colWidth = layout.getColumnWidth(containerWidth);
     const rowHeight = sizeCache.getSize(row) - layout.gap;
+
+    if (isGroupHeader?.(itemIndex)) {
+      if (isX) {
+        element.style.width = `${rowHeight}px`;
+        element.style.removeProperty("height");
+      } else {
+        element.style.height = `${rowHeight}px`;
+        element.style.removeProperty("width");
+      }
+      return;
+    }
+
+    const colWidth = layout.getColumnWidth(containerWidth);
     if (isX) {
       element.style.width = `${rowHeight}px`;
       element.style.height = `${colWidth}px`;
@@ -169,7 +193,8 @@ export function grid<T extends VListItem = VListItem>(
     }
 
     // Convert row range → flat item range
-    const itemRange = layout.getItemRange(renderStart, renderEnd, engineState.totalItems);
+    const totalItems = getItemCount();
+    const itemRange = layout.getItemRange(renderStart, renderEnd, totalItems);
 
     // Release items outside the new range
     rendered.forEach((tracked, idx) => {
@@ -187,27 +212,55 @@ export function grid<T extends VListItem = VListItem>(
     const focClass = isf ? `${classPrefix}-item--focused` : "";
 
     for (let i = itemRange.start; i <= itemRange.end; i++) {
-      const item = getItem(i);
-      if (!item) continue;
+      const isHeader = isGroupHeader?.(i) ?? false;
+
+      let item: T | undefined;
+      if (isHeader) {
+        item = undefined;
+      } else if (groupLayout) {
+        const entry = groupLayout.getEntry(i);
+        item = entry.type === "item" ? getItem(entry.dataIndex) : undefined;
+      } else {
+        item = getItem(i);
+      }
+
+      if (!isHeader && !item) continue;
 
       let tracked = rendered.get(i);
 
       if (tracked === undefined) {
         const el = pool.acquire();
-        el.className = gridItemClass;
-        el.setAttribute("data-index", String(i));
-        el.setAttribute("data-id", String(item.id));
-        applyTemplate(el, item, i, isf);
-        tracked = { el, lastItem: item };
+
+        if (isHeader && groupLayout && groupHeaderTemplate) {
+          const entry = groupLayout.getEntry(i);
+          el.className = groupHeaderClass;
+          el.setAttribute("role", "presentation");
+          el.setAttribute("data-index", String(i));
+          el.setAttribute("data-id", `__group_header_${entry.group.groupIndex}`);
+          const content = groupHeaderTemplate(entry.group.key, entry.group.groupIndex);
+          if (typeof content === "string") el.innerHTML = content;
+          else { el.innerHTML = ""; el.appendChild(content); }
+          tracked = { el, lastItem: null };
+        } else if (item) {
+          el.className = gridItemClass;
+          el.setAttribute("data-index", String(i));
+          el.setAttribute("data-id", String(item.id));
+          applyTemplate(el, item, i, isf);
+          tracked = { el, lastItem: item };
+        } else {
+          pool.release(el);
+          continue;
+        }
+
         rendered.set(i, tracked);
         contentElement.appendChild(el);
-      } else if (tracked.lastItem !== item) {
+      } else if (!isHeader && item && tracked.lastItem !== item) {
         tracked.el.setAttribute("data-id", String(item.id));
         tracked.lastItem = item;
         applyTemplate(tracked.el, item, i, isf);
       }
 
-      if (isf) {
+      if (!isHeader && isf) {
         isf(i, itemState);
         tracked.el.classList.toggle(selClass, itemState.selected);
         tracked.el.classList.toggle(focClass, itemState.focused);
@@ -219,8 +272,8 @@ export function grid<T extends VListItem = VListItem>(
 
       if (isCompressed) {
         const row = layout.getRow(i);
-        const col = layout.getCol(i);
-        const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
+        const col = isHeader ? 0 : layout.getCol(i);
+        const x = isHeader ? crossPadStart : layout.getColumnOffset(col, containerWidth) + crossPadStart;
         const y = calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression) + mainPadStart;
         tracked.el.style.transform = isX
           ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
@@ -275,7 +328,6 @@ export function grid<T extends VListItem = VListItem>(
     setup(ctx: PluginContext<T>): void {
       const gap = config.gap ?? 0;
 
-      layout = createGridLayout({ columns: config.columns, gap });
       sizeCache = ctx.sizeCache;
       engineState = ctx.getState();
       pool = ctx.pool;
@@ -287,6 +339,25 @@ export function grid<T extends VListItem = VListItem>(
       getItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
       ctxGetMethod = ctx.getMethod.bind(ctx);
+      groupHeaderClass = `${classPrefix}-group-header`;
+
+      // Detect groups plugin (runs at same priority, must be listed before grid)
+      const isGHFn = ctx.getMethod("_isGroupHeader") as ((i: number) => boolean) | undefined;
+      const glFn = ctx.getMethod("getGroupLayout") as (() => any) | undefined;
+      const htFn = ctx.getMethod("_getGroupHeaderTemplate") as (() => (g: string, i: number) => string | HTMLElement) | undefined;
+      const hhFn = ctx.getMethod("_getGroupHeaderHeight") as (() => number | ((g: string, i: number) => number)) | undefined;
+
+      if (isGHFn && glFn) {
+        groupsActive = true;
+        isGroupHeader = isGHFn;
+        groupLayout = glFn();
+        groupHeaderTemplate = htFn?.() ?? null;
+        groupHeaderHeight = hhFn?.() ?? 0;
+      }
+
+      const gridConfig: import("./layout").GridConfigWithGroups = { columns: config.columns, gap };
+      if (isGroupHeader) gridConfig.isHeaderFn = (i: number) => isGroupHeader!(i);
+      layout = createGridLayout(gridConfig);
 
       // Padding offsets for item positioning
       crossPadStart = ctx.config.crossPadStart;
@@ -298,21 +369,48 @@ export function grid<T extends VListItem = VListItem>(
       containerWidth = engineState.crossSize - crossPadTotal;
 
       // Size cache in ROW space: each row = itemHeight + gap
-      // Inject grid context into dynamic height functions
+      // When groups are active, header rows use header height
       const rawSpec = ctx.rawSizeSpec;
       let baseRowSize: number;
       if (typeof rawSpec === "function") {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
         baseRowSize = (rawSpec as Function)(0, gridCtx);
-        ctx.setSizeConfig((rowIndex: number): number => {
-          gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
-          const firstItem = rowIndex * config.columns;
-          return (rawSpec as Function)(firstItem, gridCtx) + gap;
-        });
+        if (groupsActive) {
+          ctx.setSizeConfig((rowIndex: number): number => {
+            const itemIdx = layout.getItemIndex(rowIndex, 0, getItemCount());
+            if (itemIdx >= 0 && isGroupHeader?.(itemIdx)) {
+              const entry = groupLayout!.getEntry(itemIdx);
+              const h = typeof groupHeaderHeight === "function"
+                ? groupHeaderHeight(entry.group.key, entry.group.groupIndex)
+                : groupHeaderHeight;
+              return h + gap;
+            }
+            gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
+            return (rawSpec as Function)(itemIdx >= 0 ? itemIdx : 0, gridCtx) + gap;
+          });
+        } else {
+          ctx.setSizeConfig((rowIndex: number): number => {
+            gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
+            const firstItem = rowIndex * config.columns;
+            return (rawSpec as Function)(firstItem, gridCtx) + gap;
+          });
+        }
       } else {
         baseRowSize = rawSpec;
-        if (gap > 0) {
+        if (groupsActive) {
+          ctx.setSizeConfig((rowIndex: number): number => {
+            const itemIdx = layout.getItemIndex(rowIndex, 0, getItemCount());
+            if (itemIdx >= 0 && isGroupHeader?.(itemIdx)) {
+              const entry = groupLayout!.getEntry(itemIdx);
+              const h = typeof groupHeaderHeight === "function"
+                ? groupHeaderHeight(entry.group.key, entry.group.groupIndex)
+                : groupHeaderHeight;
+              return h + gap;
+            }
+            return baseRowSize + gap;
+          });
+        } else if (gap > 0) {
           ctx.setSizeConfig(baseRowSize + gap);
         }
       }
