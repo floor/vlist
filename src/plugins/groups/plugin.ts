@@ -673,6 +673,21 @@ export function groups<T extends VListItem = VListItem>(
 
       ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
 
+      // If table plugin is active, tell its renderer about group headers.
+      // Table's setRenderFn (called in table's setup) overrides ours above.
+      queueMicrotask(() => {
+        const tableGroupsFn = getMethod?.("_updateTableForGroups") as ((
+          isHeaderFn: (item: T) => boolean,
+          ht: (key: string, groupIndex: number) => HTMLElement | string,
+        ) => void) | undefined;
+        if (tableGroupsFn) {
+          tableGroupsFn(
+            (item: T) => !!(item as Record<string, unknown>).__groupHeader,
+            headerTemplate,
+          );
+        }
+      });
+
       ctx.registerMethod("getGroupLayout", () => layout);
 
       ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number =>
