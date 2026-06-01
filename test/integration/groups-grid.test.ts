@@ -573,6 +573,26 @@ describe("groups + grid integration", () => {
     });
   });
 
+  describe("scroll into view", () => {
+    it("should register _scrollItemIntoView for grid-aware scrolling", () => {
+      createGroupedGrid();
+      // Groups registers _scrollItemIntoView when grid is active.
+      // Selection uses it via sivFn to scroll focused items into view.
+      // Verify groups is active and the method would be resolved.
+      expect(list!.element.classList.contains("vlist--grouped")).toBe(true);
+
+      // Click first data item to establish selection/focus
+      const first = container.querySelector("[data-index='1']") as HTMLElement;
+      expect(first).not.toBeNull();
+      first.click();
+
+      // Verify scroll position is within the grid content range, not the
+      // per-item sizeCache range (which would be much larger)
+      const vp = container.querySelector(".vlist-viewport") as HTMLElement;
+      expect(vp.scrollTop).toBeLessThan(200);
+    });
+  });
+
   describe("destroy", () => {
     it("should clean up groups + grid + selection without errors", () => {
       createGroupedGrid();

@@ -822,6 +822,22 @@ export function groups<T extends VListItem = VListItem>(
         return entry.type === "header";
       });
 
+      const mainPadEnd = mainAxisPadding - ctx.config.startPadding;
+      ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
+        if (layoutIndex < 0) return;
+        const pos = gridItemPositions?.get(layoutIndex);
+        const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
+        const size = sizeCache.getSize(layoutIndex);
+        const cs = engineState.containerSize;
+        const sp = engineState.scrollPosition;
+
+        if (offset < sp) {
+          ctx.scrollTo(offset);
+        } else if (offset + size + mainPadEnd > sp + cs) {
+          ctx.scrollTo(offset + size + mainPadEnd - cs);
+        }
+      });
+
       ctx.registerMethod("scrollToIndex", (
         index: number,
         alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
