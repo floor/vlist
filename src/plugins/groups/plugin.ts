@@ -615,11 +615,33 @@ export function groups<T extends VListItem = VListItem>(
 
       ctx.setSizeConfig(groupedSizeFn);
 
-      // Intercept sizeCache.rebuild: external callers (async plugin) pass
-      // data count, but groups needs layout count. Always use layout.totalEntries
-      // to keep prefix sums consistent with the grouped layout.
+      // Intercept sizeCache.rebuild so groups can map between data indices
+      // and layout indices (which include group header pseudo-entries).
+      // Called by: data plugin on total change, data plugin on items loaded,
+      // snapshots plugin on scroll restore, scale plugin on compression change.
+      let tableMode = false;
+      let lastTableLoadedCount = -1;
       origSizeCacheRebuild = sizeCache.rebuild;
-      sizeCache.rebuild = (_n: number): void => {
+      sizeCache.rebuild = (n: number): void => {
+        if (tableMode) {
+          if (!getLoadedCount) {
+            getLoadedCount = (getMethod?.("_getLoadedCount") as (() => number) | undefined) ?? null;
+          }
+          const loaded = getLoadedCount?.() ?? 0;
+          if (n !== lastDataCount || loaded !== lastTableLoadedCount) {
+            lastDataCount = n;
+            lastTableLoadedCount = loaded;
+            if (!getLoadedItem) {
+              getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
+            }
+            layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.getItems()[i] as T | undefined));
+            engineState.totalItems = layout.totalEntries;
+            if (stickyHeader) {
+              stickyHeader.refresh();
+              stickyHeader.update(engineState.scrollPosition);
+            }
+          }
+        }
         origSizeCacheRebuild(layout.totalEntries);
       };
 
@@ -671,22 +693,46 @@ export function groups<T extends VListItem = VListItem>(
         }
       }
 
-      ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
+      // Detect table plugin — if active, delegate rendering to table.
+      // Groups provides layout index → item mapping via setGetItemFn.
+      const hasTable = !!getMethod?.("_updateTableForGroups");
+      tableMode = hasTable;
 
-      // If table plugin is active, tell its renderer about group headers.
-      // Table's setRenderFn (called in table's setup) overrides ours above.
-      queueMicrotask(() => {
-        const tableGroupsFn = getMethod?.("_updateTableForGroups") as ((
-          isHeaderFn: (item: T) => boolean,
-          ht: (key: string, groupIndex: number) => HTMLElement | string,
-        ) => void) | undefined;
-        if (tableGroupsFn) {
-          tableGroupsFn(
-            (item: T) => !!(item as Record<string, unknown>).__groupHeader,
-            headerTemplate,
-          );
-        }
-      });
+      if (hasTable) {
+        // Deferred: data plugin (priority 20) runs after groups (priority 10)
+        // and overwrites getItemFn. Set ours in a microtask after all setups.
+        queueMicrotask(() => {
+          const loadedItemFn = (getMethod?.("_getLoadedItem") as ((i: number) => T | undefined)) ?? null;
+          const rawItems = ctx.getItems.bind(ctx);
+
+          ctx.setGetItemFn((layoutIndex: number): T | undefined => {
+            const entry = layout.getEntry(layoutIndex);
+            if (entry.type === "header") {
+              return {
+                id: `__group_header_${entry.group.groupIndex}`,
+                __groupHeader: true,
+                groupKey: entry.group.key,
+                groupIndex: entry.group.groupIndex,
+              } as unknown as T;
+            }
+            return loadedItemFn ? loadedItemFn(entry.dataIndex) : rawItems()[entry.dataIndex];
+          });
+
+          // Tell table renderer about group headers
+          const tableGroupsFn = getMethod?.("_updateTableForGroups") as ((
+            isHeaderFn: (item: T) => boolean,
+            ht: (key: string, groupIndex: number) => HTMLElement | string,
+          ) => void) | undefined;
+          if (tableGroupsFn) {
+            tableGroupsFn(
+              (item: T) => !!(item as Record<string, unknown>).__groupHeader,
+              headerTemplate,
+            );
+          }
+        });
+      } else {
+        ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
+      }
 
       ctx.registerMethod("getGroupLayout", () => layout);
 

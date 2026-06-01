@@ -192,6 +192,10 @@ export function data<T extends VListItem = VListItem>(
         },
         onItemsLoaded: (loadedItems) => {
           if (engineState.initialized) {
+            // Always rebuild sizeCache so layout interceptors (groups plugin)
+            // can detect newly loaded items and rebuild their layout.
+            sizeCache.rebuild(dataManager.getTotal());
+            ctx.updateContentSize(sizeCache.getTotalSize());
             forceRender();
             emitter.emit("load:end", { items: loadedItems, total: dataManager.getTotal() });
           }

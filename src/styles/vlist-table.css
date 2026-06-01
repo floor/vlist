@@ -333,16 +333,12 @@
 
 /* Group header content container */
 .vlist-table-group-header-content {
-    flex: 1;
-    min-width: 0;
-    /*padding-left: var(--vlist-item-padding-x);
-    padding-right: var(--vlist-item-padding-x);*/
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: var(--vlist-text-muted, #6b7280);
-    border-bottom: 1px solid var(--vlist-border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    height: 100%;
+    background: var(--vlist-group-header-bg, #f3f4f6);
 }
 
 /* Row borders — group headers already have a top border */
@@ -357,6 +353,16 @@
     order: 1;
     z-index: 4;
     border-bottom: none;
+}
+
+.vlist--table.vlist--grouped .vlist-sticky-header .sticky-group {
+    display: flex;
+    font-size: 0.8125rem;
+    padding: 0 16px;
+    align-items: center;
+    gap: 12px;
+    height: 100%;
+    color: var(--vlist-text-muted, #9ca3af);
 }
 
 .vlist--table.vlist--grouped .vlist-viewport {
