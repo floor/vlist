@@ -81,3 +81,28 @@
     outline-offset: -2px;
     z-index: 1;
 }
+
+/* =============================================================================
+   Horizontal Grid + Groups
+   ============================================================================= */
+
+/* In a horizontal grid, group headers are narrow vertical strips spanning
+   the full height. Rotate the label to read top-to-bottom, and move the
+   sticky overlay's divider to the trailing (right) edge. */
+.vlist--grid.vlist--horizontal .vlist-group-header,
+.vlist--grid.vlist--horizontal .vlist-sticky-header .sticky-group {
+    writing-mode: vertical-rl;
+}
+
+/* With vertical writing-mode the flex main axis becomes vertical, so
+   justify-content controls top/bottom placement. Anchor the label to the top
+   so every header reads from the same edge as the sticky overlay (which
+   defaults to flex-start), instead of floating in the middle of tall strips. */
+.vlist--grid.vlist--horizontal .vlist-group-header {
+    justify-content: flex-start;
+}
+
+.vlist--grid.vlist--horizontal .vlist-sticky-header {
+    border-bottom: none;
+    border-right: none;
+}

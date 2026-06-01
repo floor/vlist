@@ -865,9 +865,14 @@ export function groups<T extends VListItem = VListItem>(
         stickyHeader.update(engineState.scrollPosition);
 
         if (!isX) {
+          // Vertical: relative container occupies a top row via block flow;
+          // shrinking the viewport height lets it sit below.
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
         } else {
+          // Horizontal: absolute container is a left-edge bar (out of flow);
+          // shift the viewport right so it sits beside, not under, the bar.
           ctx.dom.viewport.style.width = `calc(100% - ${headerH}px)`;
+          ctx.dom.viewport.style.marginLeft = `${headerH}px`;
         }
       }
 

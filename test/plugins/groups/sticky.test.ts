@@ -24,7 +24,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { createStickyHeader } from "../../../src/plugins/groups/sticky";
+import { createStickyHeader, createStickyContainer } from "../../../src/plugins/groups/sticky";
 import { createSizeCache } from "../../../src/rendering/sizes";
 import type { GroupLayout } from "../../../src/plugins/groups/types";
 
@@ -627,6 +627,62 @@ describe("createStickyHeader — visibility and refresh", () => {
     expect(stickyEl.style.left).toBe("48px");
 
     sticky.destroy();
+    root.remove();
+  });
+});
+
+// =============================================================================
+// createStickyContainer — Orientation-specific positioning
+// =============================================================================
+
+describe("createStickyContainer positioning", () => {
+  it("vertical: relative block occupying a top row", () => {
+    const root = createTestRoot();
+    const container = createStickyContainer(root, "vlist", false, 40);
+
+    // Relative so it stays in normal block flow and the viewport stacks below.
+    expect(container.style.position).toBe("relative");
+    expect(container.style.height).toBe("40px");
+    expect(container.style.top).toBe("0px");
+    // Must NOT be pinned to the left edge in vertical mode.
+    expect(container.style.left).toBe("");
+
+    root.remove();
+  });
+
+  it("horizontal: absolute full-height bar pinned to the left edge", () => {
+    const root = createTestRoot();
+    const container = createStickyContainer(root, "vlist", true, 32);
+
+    // Absolute so the bar can sit beside the viewport — block flow only
+    // stacks vertically, so a relative container would not work horizontally.
+    expect(container.style.position).toBe("absolute");
+    expect(container.style.width).toBe("32px");
+    expect(container.style.top).toBe("0px");
+    expect(container.style.bottom).toBe("0px");
+    expect(container.style.left).toBe("0px");
+
+    root.remove();
+  });
+
+  it("horizontal: honors a stickyOffset on the left", () => {
+    const root = createTestRoot();
+    const container = createStickyContainer(root, "vlist", true, 32, 48);
+
+    expect(container.style.position).toBe("absolute");
+    expect(container.style.left).toBe("48px");
+
+    root.remove();
+  });
+
+  it("inserts the container as the first child of root", () => {
+    const root = createTestRoot();
+    const existing = document.createElement("div");
+    root.appendChild(existing);
+
+    const container = createStickyContainer(root, "vlist", true, 32);
+    expect(root.firstChild).toBe(container);
+
     root.remove();
   });
 });
