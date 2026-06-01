@@ -594,6 +594,100 @@ describe("grid - Render Functions", () => {
 });
 
 // =============================================================================
+// grid — Render correctness after hot-path optimizations
+// =============================================================================
+
+describe("grid - render correctness (optimized hot path)", () => {
+  function transformXY(el: HTMLElement): { x: number; y: number } {
+    const m = el.style.transform.match(/translate\((\d+)px,\s*(\d+)px\)/);
+    return { x: parseInt(m![1]!, 10), y: parseInt(m![2]!, 10) };
+  }
+
+  it("should place items at correct row/col positions across multiple rows", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(12);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      itemSize: 100,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    // columnWidth = (800 - 3*8) / 4 = 194; col offset = col*(194+8)=col*202
+    // row offset = row * 100 (itemSize)
+    const get = (i: number) =>
+      transformXY(dom.content.querySelector(`[data-index='${i}']`) as HTMLElement);
+
+    expect(get(0)).toEqual({ x: 0, y: 0 });    // row 0, col 0
+    expect(get(1)).toEqual({ x: 202, y: 0 });  // row 0, col 1
+    expect(get(3)).toEqual({ x: 606, y: 0 });  // row 0, col 3
+    expect(get(4)).toEqual({ x: 0, y: 100 });  // row 1, col 0
+    expect(get(5)).toEqual({ x: 202, y: 100 }); // row 1, col 1
+    expect(get(8)).toEqual({ x: 0, y: 200 });  // row 2, col 0
+    cleanup();
+  });
+
+  it("should recompute column width after updateGrid (cached value stays correct)", () => {
+    const plugin = grid<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(12);
+    const { ctx, dom, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    let w = parseInt((dom.content.querySelector("[data-index='0']") as HTMLElement).style.width, 10);
+    expect(w).toBe(194); // (800 - 24)/4
+
+    // Change to 2 columns — cached columnWidth must update
+    (methods.get("updateGrid") as Function)({ columns: 2 });
+
+    w = parseInt((dom.content.querySelector("[data-index='0']") as HTMLElement).style.width, 10);
+    expect(w).toBe(396); // (800 - 1*8)/2 = 396
+
+    // col 1 of the 2-col layout must be at the new offset
+    const x1 = transformXY(dom.content.querySelector("[data-index='1']") as HTMLElement).x;
+    expect(x1).toBe(404); // 1 * (396 + 8)
+    cleanup();
+  });
+
+  it("should not leak item-range state between renders at different scroll positions", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(200);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 100,
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+    const firstIndices = Array.from(dom.content.children).map(
+      (c) => (c as HTMLElement).getAttribute("data-index"),
+    );
+
+    // Scroll far down and re-render
+    ctx.getState().scrollPosition = 2000;
+    ctx.forceRender();
+    const laterIndices = Array.from(dom.content.children).map(
+      (c) => (c as HTMLElement).getAttribute("data-index"),
+    );
+
+    // The rendered set must have shifted (no stale range reuse)
+    expect(laterIndices).not.toEqual(firstIndices);
+    // All rendered items must be valid and within the data range
+    for (const idx of laterIndices) {
+      const n = parseInt(idx!, 10);
+      expect(n).toBeGreaterThanOrEqual(0);
+      expect(n).toBeLessThan(200);
+    }
+    cleanup();
+  });
+});
+
+// =============================================================================
 // grid — Resize Hook Tests
 // =============================================================================
 

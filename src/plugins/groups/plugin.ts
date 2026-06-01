@@ -81,6 +81,8 @@ export function groups<T extends VListItem = VListItem>(
   let gridCrossPadStart = 0;
   let gridCrossPadTotal = 0;
   let mainAxisPadding = 0;
+  let isMasonry = false;
+  let masonryItemSize: ((dataIndex: number) => number) | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -137,10 +139,13 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   let gridColWidth = 0;
-  let gridItemPositions: Map<number, { col: number; rowY: number }> | null = null;
+  let gridItemPositions: Map<number, { col: number; rowY: number; h?: number }> | null = null;
   // Parallel sorted array for O(log n) visible range lookup.
   // Each entry: [layoutIndex, rowY, rowY + itemHeight].
   let gridSorted: Array<[number, number, number]> | null = null;
+  // Masonry only: per-group bottom Y (tallest lane). Used by scrollToIndex
+  // align:end so the "scroll to last" reaches the true content bottom.
+  let masonryGroupBottoms: number[] | null = null;
 
   function rebuildGridPositions(): void {
     if (gridColumns <= 0) { gridItemPositions = null; gridSorted = null; return; }
@@ -152,45 +157,108 @@ export function groups<T extends VListItem = VListItem>(
     const total = layout.totalEntries;
     const sorted: Array<[number, number, number]> = new Array(total);
     let sortedLen = 0;
-    let groupY = 0;
-    let itemInGroup = 0;
-    let rowH = 0;
 
-    for (let i = 0; i < total; i++) {
-      const entry = layout.getEntry(i);
-      if (entry.type === "header") {
-        if (itemInGroup > 0 && rowH > 0) groupY += rowH;
-        const h = sizeCache.getSize(i);
-        gridItemPositions.set(i, { col: -1, rowY: groupY });
-        sorted[sortedLen++] = [i, groupY, groupY + h];
-        groupY += h;
-        itemInGroup = 0;
-        rowH = 0;
-      } else {
-        const col = itemInGroup % gridColumns;
-        const h = sizeCache.getSize(i);
-        if (col === 0) {
-          if (itemInGroup > 0 && rowH > 0) groupY += rowH + gridGap;
-          rowH = h;
+    if (isMasonry) {
+      // Masonry: shortest-lane placement per group.
+      // Item heights come from the raw size spec (not sizeCache, which
+      // stores fallback heights without the masonry context).
+      const getItemH = masonryItemSize ?? ((di: number) => sizeCache.getSize(di));
+      const laneSizes = new Float64Array(gridColumns);
+      const groupBottoms: number[] = [];
+      let groupY = 0;
+      let curGroupIdx = -1;
+
+      for (let i = 0; i < total; i++) {
+        const entry = layout.getEntry(i);
+        if (entry.type === "header") {
+          let tallest = 0;
+          for (let c = 0; c < gridColumns; c++) {
+            if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
+          }
+          if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + tallest;
+          groupY += tallest;
+          const h = sizeCache.getSize(i);
+          gridItemPositions.set(i, { col: -1, rowY: groupY });
+          sorted[sortedLen++] = [i, groupY, groupY + h];
+          groupY += h;
+          laneSizes.fill(0);
+          curGroupIdx = entry.group.groupIndex;
         } else {
-          if (h > rowH) rowH = h;
+          let lane = 0;
+          let shortest = laneSizes[0]!;
+          for (let c = 1; c < gridColumns; c++) {
+            if (laneSizes[c]! < shortest) { shortest = laneSizes[c]!; lane = c; }
+          }
+          const h = getItemH(entry.dataIndex);
+          const y = groupY + laneSizes[lane]!;
+          gridItemPositions.set(i, { col: lane, rowY: y, h });
+          sorted[sortedLen++] = [i, y, y + h];
+          laneSizes[lane] = laneSizes[lane]! + h + gridGap;
         }
-        gridItemPositions.set(i, { col, rowY: groupY });
-        sorted[sortedLen++] = [i, groupY, groupY + h];
-        itemInGroup++;
+      }
+      // Finalize the last group's bottom
+      if (curGroupIdx >= 0) {
+        let tallest = 0;
+        for (let c = 0; c < gridColumns; c++) {
+          if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
+        }
+        groupBottoms[curGroupIdx] = groupY + tallest;
+      }
+      masonryGroupBottoms = groupBottoms;
+    } else {
+      masonryGroupBottoms = null;
+      // Grid: row-based placement per group
+      let groupY = 0;
+      let itemInGroup = 0;
+      let rowH = 0;
+
+      for (let i = 0; i < total; i++) {
+        const entry = layout.getEntry(i);
+        if (entry.type === "header") {
+          if (itemInGroup > 0 && rowH > 0) groupY += rowH;
+          const h = sizeCache.getSize(i);
+          gridItemPositions.set(i, { col: -1, rowY: groupY });
+          sorted[sortedLen++] = [i, groupY, groupY + h];
+          groupY += h;
+          itemInGroup = 0;
+          rowH = 0;
+        } else {
+          const col = itemInGroup % gridColumns;
+          const h = sizeCache.getSize(i);
+          if (col === 0) {
+            if (itemInGroup > 0 && rowH > 0) groupY += rowH + gridGap;
+            rowH = h;
+          } else {
+            if (h > rowH) rowH = h;
+          }
+          gridItemPositions.set(i, { col, rowY: groupY });
+          sorted[sortedLen++] = [i, groupY, groupY + h];
+          itemInGroup++;
+        }
       }
     }
+
     sorted.length = sortedLen;
     gridSorted = sorted;
   }
 
   function getGridContentSize(): number {
     if (!gridItemPositions || gridItemPositions.size === 0) return sizeCache.getTotalSize();
-    let maxY = 0;
     const total = layout.totalEntries;
+
+    if (isMasonry) {
+      // Last group's bottom (tallest lane) is the content bottom — already
+      // computed during rebuild. Fall back to the header bottom for an
+      // empty trailing group.
+      const lastBottom = masonryGroupBottoms?.[masonryGroupBottoms.length - 1];
+      return lastBottom ?? 0;
+    }
+
+    // Grid: rows are aligned, last item bottom = content bottom.
+    let maxY = 0;
     for (let i = total - 1; i >= 0; i--) {
       const pos = gridItemPositions.get(i);
-      if (pos) { maxY = pos.rowY + sizeCache.getSize(i); break; }
+      if (pos) { maxY = pos.rowY + (pos.h ?? sizeCache.getSize(i)); break; }
       const entry = layout.getEntry(i);
       if (entry.type === "header") { maxY = sizeCache.getOffset(i) + sizeCache.getSize(i); break; }
     }
@@ -216,9 +284,9 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
-    const size = sizeCache.getSize(layoutIndex);
     const pos = gridItemPositions?.get(layoutIndex);
     if (pos) {
+      const size = pos.h ?? sizeCache.getSize(layoutIndex);
       if (pos.col < 0) {
         // Header: spans full width
         if (isX) {
@@ -239,10 +307,11 @@ export function groups<T extends VListItem = VListItem>(
       }
       return;
     }
+    const fallbackSize = sizeCache.getSize(layoutIndex);
     if (isX) {
-      element.style.width = `${size}px`;
+      element.style.width = `${fallbackSize}px`;
     } else {
-      element.style.height = `${size}px`;
+      element.style.height = `${fallbackSize}px`;
     }
   }
 
@@ -661,12 +730,26 @@ export function groups<T extends VListItem = VListItem>(
       // Resolve grid info synchronously — grid runs at same priority (10)
       // but may be listed before groups in the plugin array
       const gridLayoutFn = getMethod?.("getGridLayout") as (() => { columns: number; gap: number }) | undefined;
+      const masonryLayoutFn = getMethod?.("getMasonryLayout") as (() => { columns: number; gap: number; containerSize: number }) | undefined;
       if (gridLayoutFn) {
         const gl = gridLayoutFn();
         gridColumns = gl.columns;
         gridGap = gl.gap;
         gridCrossPadStart = ctx.config.crossPadStart;
         gridCrossPadTotal = ctx.config.crossAxisPadding;
+      } else if (masonryLayoutFn) {
+        const ml = masonryLayoutFn();
+        gridColumns = ml.columns;
+        gridGap = ml.gap;
+        gridCrossPadStart = ctx.config.crossPadStart;
+        gridCrossPadTotal = ctx.config.crossAxisPadding;
+        isMasonry = true;
+        const rawSpec = ctx.rawSizeSpec;
+        if (typeof rawSpec === "function") {
+          masonryItemSize = (dataIndex: number) => {
+            return rawSpec(dataIndex, { columnWidth: gridColWidth });
+          };
+        }
       }
 
       queueMicrotask(() => {
@@ -782,9 +865,14 @@ export function groups<T extends VListItem = VListItem>(
         stickyHeader.update(engineState.scrollPosition);
 
         if (!isX) {
+          // Vertical: relative container occupies a top row via block flow;
+          // shrinking the viewport height lets it sit below.
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
         } else {
+          // Horizontal: absolute container is a left-edge bar (out of flow);
+          // shift the viewport right so it sits beside, not under, the bar.
           ctx.dom.viewport.style.width = `calc(100% - ${headerH}px)`;
+          ctx.dom.viewport.style.marginLeft = `${headerH}px`;
         }
       }
 
@@ -872,15 +960,36 @@ export function groups<T extends VListItem = VListItem>(
         const totalLayout = layout.totalEntries;
         if (totalLayout === 0) return;
         const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
-        const offset = sizeCache.getOffset(clamped);
-        const itemSize = sizeCache.getSize(clamped);
         const cs = engineState.containerSize;
-        const totalSize = sizeCache.getTotalSize();
+
+        // Grid/masonry: use grid-aware Y positions and content size.
+        // sizeCache offsets are per-item (wrong for column layouts).
+        const gridPos = gridItemPositions?.get(clamped);
+        const offset = gridPos ? gridPos.rowY : sizeCache.getOffset(clamped);
+        const itemSize = gridPos
+          ? (gridPos.h ?? sizeCache.getSize(clamped))
+          : sizeCache.getSize(clamped);
+        const totalSize = gridItemPositions
+          ? getGridContentSize() + mainAxisPadding
+          : sizeCache.getTotalSize();
         const maxScroll = Math.max(0, totalSize - cs);
 
         const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
         const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
         const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
+
+        // Bottom padding to keep clear when aligning the last item to the end.
+        const endPad = gridItemPositions ? mainAxisPadding : 0;
+
+        // Masonry: align:end targets the group's tallest-lane bottom, not the
+        // target item's own bottom (which may be in a shorter lane). This lets
+        // "scroll to last" reach the true content bottom.
+        let endBottom = offset + itemSize;
+        if (isMasonry && masonryGroupBottoms) {
+          const gi = layout.getEntry(clamped).group.groupIndex;
+          const gb = masonryGroupBottoms[gi];
+          if (gb !== undefined) endBottom = gb;
+        }
 
         let pos: number;
         switch (align) {
@@ -888,7 +997,7 @@ export function groups<T extends VListItem = VListItem>(
             pos = offset - (cs - itemSize) / 2;
             break;
           case "end":
-            pos = offset - cs + itemSize;
+            pos = endBottom - cs + endPad;
             break;
           default:
             pos = offset;

@@ -35,11 +35,14 @@ export const createStickyContainer = (
   container.className = `${classPrefix}-sticky-header`;
   container.setAttribute("role", "presentation");
   container.setAttribute("aria-hidden", "true");
+  // Vertical: relative block occupying a top row (viewport flows below).
+  // Horizontal: absolute full-height bar on the left edge — block flow only
+  // stacks vertically, so it can't sit beside the viewport in normal flow.
   container.style.cssText =
-    `position:relative;z-index:5;pointer-events:none;overflow:hidden;` +
+    `z-index:5;pointer-events:none;overflow:hidden;` +
     (horizontal
-      ? `top:0;bottom:0;left:${stickyOffset || 0}px`
-      : `top:${stickyOffset || 0}px`);
+      ? `position:absolute;top:0;bottom:0;left:${stickyOffset || 0}px`
+      : `position:relative;top:${stickyOffset || 0}px`);
   container.style[mainProp] = `${headerHeight}px`;
   root.insertBefore(container, root.firstChild);
   return container;

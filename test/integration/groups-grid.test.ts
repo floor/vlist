@@ -591,6 +591,37 @@ describe("groups + grid integration", () => {
       const vp = container.querySelector(".vlist-viewport") as HTMLElement;
       expect(vp.scrollTop).toBeLessThan(200);
     });
+
+    it("scrollToIndex(last, align:end) reaches the content bottom", () => {
+      // 40 items, 4 cols, 100px rows, 4 groups with 30px headers,
+      // padding 16 (mainAxisPadding 32). Last item end-align must reach
+      // maxScroll (content bottom), accounting for bottom padding.
+      list = createVList(
+        {
+          container,
+          items: createTestItems(40),
+          padding: 16,
+          item: { height: ITEM_HEIGHT, template: simpleTemplate },
+        },
+        [
+          grid({ columns: COLUMNS, gap: GAP }),
+          groups({
+            getGroupForIndex: getGroupByTen,
+            header: { height: HEADER_HEIGHT, template: (key) => key },
+          }),
+        ],
+      );
+
+      const vp = container.querySelector(".vlist-viewport") as HTMLElement;
+      const content = container.querySelector(".vlist-content") as HTMLElement;
+      const contentH = parseFloat(content.style.height);
+
+      list.scrollToIndex(39, "end");
+
+      const maxScroll = contentH - vp.clientHeight;
+      // scrollToIndex should target maxScroll (clamped). Allow 1px rounding.
+      expect(Math.abs(vp.scrollTop - maxScroll)).toBeLessThan(2);
+    });
   });
 
   describe("resize", () => {

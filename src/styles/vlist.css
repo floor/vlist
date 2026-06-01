@@ -477,7 +477,6 @@
     align-items: center;
     justify-content: center;
     border-bottom: none;
-    border-right: 1px solid var(--vlist-border);
 }
 
 /* Horizontal custom scrollbar — track at bottom, thumb moves on X axis */
