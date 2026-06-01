@@ -241,7 +241,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const oddClass = `${classPrefix}-item--odd`;
   const placeholderClass = `${classPrefix}-item--placeholder`;
   const replacedClass = `${classPrefix}-item--replaced`;
-  const groupHeaderRowClass = `${classPrefix}-item ${classPrefix}-table-row ${classPrefix}-table-group-header`;
+  const groupHeaderRowClass = `${classPrefix}-table-row ${classPrefix}-table-group-header`;
   const groupHeaderContentClass = `${classPrefix}-table-group-header-content`;
 
   // =========================================================================
