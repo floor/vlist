@@ -647,7 +647,7 @@ describe("groups + grid integration", () => {
           container,
           items: createTestItems(40),
           item: {
-            height: (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100,
+            height: ((_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100) as any,
             template: simpleTemplate,
           },
         },
@@ -678,7 +678,7 @@ describe("groups + grid integration", () => {
           container,
           items: createTestItems(40),
           item: {
-            height: (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100,
+            height: ((_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100) as any,
             template: simpleTemplate,
           },
         },
@@ -729,7 +729,7 @@ describe("groups + grid integration", () => {
     });
 
     it("should update content height after resize with dynamic height", () => {
-      const dynamicHeight = (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100;
+      const dynamicHeight = ((_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100) as any;
 
       // Create at 300px
       list = createVList(

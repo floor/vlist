@@ -672,6 +672,98 @@ describe("ScrollHandler.smoothScrollTo() with custom easing", () => {
 });
 
 // =============================================================================
+// Idle after smooth scroll
+// =============================================================================
+
+describe("ScrollHandler — idle after smooth scroll", () => {
+  it("should fire onIdle after smooth scroll completes", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    let idleFired = false;
+    const config = {
+      state,
+      viewport,
+      isX: false,
+      wheelEnabled: false,
+      idleTimeout: 50,
+      onFrame: () => {},
+      onIdle: () => { idleFired = true; },
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(500, 100);
+
+    // After 100ms animation + 50ms idle timeout = 150ms
+    setTimeout(() => {
+      expect(viewport.scrollTop).toBe(500);
+      expect(idleFired).toBe(true);
+      handler.detach();
+      done();
+    }, 250);
+  });
+
+  it("should NOT fire onIdle during smooth scroll animation", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    let idleCount = 0;
+    const config = {
+      state,
+      viewport,
+      isX: false,
+      wheelEnabled: false,
+      idleTimeout: 50,
+      onFrame: () => {},
+      onIdle: () => { idleCount++; },
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(500, 200);
+
+    // At 100ms, animation is still running (200ms duration) — idle should not have fired
+    setTimeout(() => {
+      expect(idleCount).toBe(0);
+    }, 100);
+
+    // At 300ms, animation done (200ms) + idle timeout (50ms) passed — exactly 1 idle
+    setTimeout(() => {
+      expect(idleCount).toBe(1);
+      handler.detach();
+      done();
+    }, 350);
+  });
+
+  it("should fire onIdle with correct scroll position at end", (done) => {
+    const viewport = document.createElement("div");
+    const state = createEngineState(10);
+    state.scrollPosition = 0;
+    let idleScrollPos = -1;
+    const config = {
+      state,
+      viewport,
+      isX: false,
+      wheelEnabled: false,
+      idleTimeout: 30,
+      onFrame: () => {},
+      onIdle: () => { idleScrollPos = state.scrollPosition; },
+    };
+
+    const handler = createScrollHandler(config);
+    handler.attach();
+    handler.smoothScrollTo(1000, 100);
+
+    setTimeout(() => {
+      expect(idleScrollPos).toBe(1000);
+      handler.detach();
+      done();
+    }, 200);
+  });
+});
+
+// =============================================================================
 // onScroll Callback Tests
 // =============================================================================
 

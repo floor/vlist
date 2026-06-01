@@ -157,6 +157,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
         animationId = requestAnimationFrame(tick);
       } else {
         animationId = null;
+        scheduleIdle();
         onComplete?.();
       }
     }
