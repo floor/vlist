@@ -575,7 +575,7 @@ export function createVList<T extends VListItem = VListItem>(
   dom.content.addEventListener("click", onContentClick);
   dom.content.addEventListener("dblclick", onContentDblClick);
   dom.content.addEventListener("contextmenu", onContentContextMenu);
-  if (keydownHandlers.length > 0) dom.content.addEventListener("keydown", onContentKeydown);
+  if (keydownHandlers.length > 0) dom.root.addEventListener("keydown", onContentKeydown);
 
   // ── ResizeObserver ──────────────────────────────────────────────
 
@@ -800,7 +800,7 @@ export function createVList<T extends VListItem = VListItem>(
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("dblclick", onContentDblClick);
       dom.content.removeEventListener("contextmenu", onContentContextMenu);
-      dom.content.removeEventListener("keydown", onContentKeydown);
+      dom.root.removeEventListener("keydown", onContentKeydown);
 
       const destroyErrors: Error[] = [];
       for (const handler of destroyHandlers) {

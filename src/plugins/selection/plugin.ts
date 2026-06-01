@@ -345,7 +345,8 @@ export function selection<T extends VListItem = VListItem>(
         state.focusedIndex = hitIndex;
         state.focusVisible = focusOnClick;
         lastSelectedIndex = hitIndex;
-        dom.content.focus(focusPreventScroll);
+        const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
+        focusTarget.focus(focusPreventScroll);
         doToggle(hitItem!.id, hitItem!);
         emitSelectionChange();
       });
