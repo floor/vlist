@@ -259,6 +259,60 @@ describe("getItemRange", () => {
 });
 
 // =============================================================================
+// fillItemRange — mutating variant (hot-path, no per-frame allocation)
+// =============================================================================
+
+describe("fillItemRange", () => {
+  const layout = createGridLayout({ columns: 4 });
+
+  it("should write the same result as getItemRange into the out object", () => {
+    const out = { start: -99, end: -99 };
+    const cases: Array<[number, number, number]> = [
+      [0, 0, 100],
+      [0, 2, 100],
+      [5, 5, 100],
+      [0, 2, 10],
+      [1, 1, 6],
+      [0, 0, 0],
+      [-1, 2, 100],
+      [0, 249, 1000],
+    ];
+    for (const [rs, re, total] of cases) {
+      const expected = layout.getItemRange(rs, re, total);
+      layout.fillItemRange(rs, re, total, out);
+      expect(out.start).toBe(expected.start);
+      expect(out.end).toBe(expected.end);
+    }
+  });
+
+  it("should reuse the same object across calls (no allocation)", () => {
+    const out = { start: 0, end: -1 };
+    layout.fillItemRange(0, 0, 100, out);
+    const first = out;
+    layout.fillItemRange(5, 5, 100, out);
+    // Same object reference, fresh values
+    expect(out).toBe(first);
+    expect(out.start).toBe(20);
+    expect(out.end).toBe(23);
+  });
+
+  it("should overwrite stale values from a previous frame", () => {
+    const out = { start: 999, end: 999 };
+    layout.fillItemRange(0, 0, 0, out);
+    expect(out.start).toBe(0);
+    expect(out.end).toBe(-1);
+  });
+
+  it("should match getItemRange in the single-column case", () => {
+    const singleCol = createGridLayout({ columns: 1 });
+    const out = { start: 0, end: -1 };
+    singleCol.fillItemRange(3, 7, 100, out);
+    expect(out.start).toBe(3);
+    expect(out.end).toBe(7);
+  });
+});
+
+// =============================================================================
 // getItemIndex
 // =============================================================================
 
