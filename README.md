@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 8.0 KB.
 
-**v2.1.1** — [Changelog](./CHANGELOG.md) · Groups + masonry integration, grid render hot-path optimization, horizontal sticky group headers.
+**v2.1.2** — [Changelog](./CHANGELOG.md) · Groups + masonry integration, grid render hot-path optimization, horizontal sticky group headers.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
