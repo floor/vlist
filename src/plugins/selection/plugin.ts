@@ -79,8 +79,7 @@ export function selection<T extends VListItem = VListItem>(
     l2dFn ? l2dFn(layoutIdx) : layoutIdx;
 
   const getItemAtLayout = (layoutIdx: number): T | undefined => {
-    const di = toDataIndex(layoutIdx);
-    return di >= 0 ? getItem(di) : undefined;
+    return getItem(layoutIdx);
   };
 
   const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
@@ -128,10 +127,11 @@ export function selection<T extends VListItem = VListItem>(
     selectedItemCache.delete(id);
   }
 
-  function doSelectRange(from: number, to: number): void {
-    const start = Math.min(from, to);
-    const end = Math.max(from, to);
+  function doSelectRange(fromLayout: number, toLayout: number): void {
+    const start = Math.min(fromLayout, toLayout);
+    const end = Math.max(fromLayout, toLayout);
     for (let i = start; i <= end; i++) {
+      if (isGHFn?.(i)) continue;
       const item = getItem(i);
       if (item) {
         state.selected.add(item.id);
@@ -227,7 +227,7 @@ export function selection<T extends VListItem = VListItem>(
         resolveOnce(ctx);
         if (state.selected.size > 0) {
           const di = toDataIndex(index);
-          const item = di >= 0 ? getItem(di) : undefined;
+          const item = di >= 0 ? getItemAtLayout(index) : undefined;
           const id = item?.id;
           if (id !== undefined) {
             if (state.selected.has(id)) {
@@ -262,9 +262,10 @@ export function selection<T extends VListItem = VListItem>(
         if (!el) return false;
         const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
         if (layoutIdx < 0) return false;
+        if (isGHFn?.(layoutIdx)) return false;
         const di = toDataIndex(layoutIdx);
         if (di < 0) return false;
-        const item = getItem(di);
+        const item = getItemAtLayout(layoutIdx);
         if (!item) return false;
         hitItem = item;
         hitIndex = layoutIdx;
@@ -332,7 +333,7 @@ export function selection<T extends VListItem = VListItem>(
           const anchorData = toDataIndex(anchor);
           const hitData = toDataIndex(hitIndex);
           if (anchorData >= 0 && hitData >= 0) {
-            doSelectRange(anchorData, hitData);
+            doSelectRange(anchor, hitIndex);
           }
           state.focusedIndex = hitIndex;
           state.focusVisible = focusOnClick;
@@ -455,7 +456,7 @@ export function selection<T extends VListItem = VListItem>(
                   const fromData = toDataIndex(lastSelectedIndex);
                   const toData = toDataIndex(state.focusedIndex);
                   if (fromData >= 0 && toData >= 0) {
-                    doSelectRange(fromData, toData);
+                    doSelectRange(lastSelectedIndex, state.focusedIndex);
                   }
                 }
                 state.focusVisible = true;
@@ -521,10 +522,11 @@ export function selection<T extends VListItem = VListItem>(
             const isCtrlHomeEnd = (event.ctrlKey || event.metaKey)
               && (event.key === "Home" || event.key === "End");
             if (isCtrlHomeEnd) {
-              const fromData = toDataIndex(prevFocus >= 0 ? prevFocus : state.focusedIndex);
+              const fromLayout = prevFocus >= 0 ? prevFocus : state.focusedIndex;
+              const fromData = toDataIndex(fromLayout);
               const toData = toDataIndex(state.focusedIndex);
               if (fromData >= 0 && toData >= 0) {
-                doSelectRange(fromData, toData);
+                doSelectRange(fromLayout, state.focusedIndex);
               }
               lastSelectedIndex = state.focusedIndex;
               selectionChanged = true;
@@ -636,9 +638,8 @@ export function selection<T extends VListItem = VListItem>(
         for (let i = 0; i < total; i++) {
           const item = getItem(i);
           if (item && item.id === id) {
-            const layoutIdx = d2lFn ? d2lFn(i) : i;
-            state.focusedIndex = layoutIdx;
-            emitter.emit("focus:change", { id, index: layoutIdx });
+            state.focusedIndex = i;
+            emitter.emit("focus:change", { id, index: i });
             return;
           }
         }

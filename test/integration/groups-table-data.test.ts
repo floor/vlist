@@ -353,7 +353,7 @@ describe("groups + table + data", () => {
       const firstLoadCount = headersFirstLoad.length;
 
       // Save snapshot (simulates browser session)
-      const snap = list.getScrollSnapshot();
+      const snap = (list as any).getScrollSnapshot();
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
 
       // Destroy and recreate (simulates page reload with saved snapshot)
