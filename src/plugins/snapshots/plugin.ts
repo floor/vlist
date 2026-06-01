@@ -219,9 +219,6 @@ export function snapshots<T extends VListItem = VListItem>(
           }
         } else if (snapshot.scrollTop !== undefined && totalMatch) {
           scrollPosition = snapshot.scrollTop;
-          } else {
-            scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
-          }
         } else {
           scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
         }

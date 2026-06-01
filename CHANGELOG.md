@@ -11,6 +11,32 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-06-01
+
+### Added
+
+- **Groups + Table + Data integration** — groups plugin works natively with table and async data plugins
+  - `setGetItemFn` deferred via microtask for correct plugin ordering
+  - `sizeCache.rebuild` interceptor with loaded-count guard for snapshots restore race
+  - Sticky headers in table mode
+- **Groups + Grid integration** — groups plugin renders grid items with correct column layout
+  - Binary search on sorted position array for O(log n) visible range lookup
+  - Grid-aware header positioning (full width, correct Y offsets)
+  - Sticky header uses grid-aware offsets for correct group transitions
+  - Padding support (crossAxisPadding, mainAxisPadding, startPadding)
+  - Resize handling: rebuilds grid positions on container width change
+- **Data plugin `_getItem` method** — returns placeholder objects for unloaded items (vs `_getLoadedItem` which returns undefined)
+
+### Fixed
+
+- **Selection with groups** — all item lookups use `getDataItemAtLayout` which resolves by data index via `getItems()[di]` or `_getLoadedItem(di)`, consistent across table, grid, and list modes
+- **Keyboard navigation in table mode** — keydown listener moved from `dom.content` to `dom.root`; selection click handler focuses correct element when content has no tabindex
+- **Smooth scroll idle** — `scheduleIdle()` called on final animation frame so data plugin loads visible range after scrollToIndex with smooth behavior
+- **Snapshots `_suppressSave`** — removed permanently-blocking flag that prevented all saves after restore with `dataIndex`; pixel-perfect scroll restore via raw `scrollTop` when data total matches
+- **Placeholders in table+groups+data** — groups' table-mode `getItemFn` uses `_getItem` (includes placeholders) instead of `_getLoadedItem` (returns undefined)
+- **Groups grid content size** — includes `mainAxisPadding` for correct bottom padding
+- **Groups scroll-into-view** — uses grid-aware Y positions with padding for keyboard navigation
+
 ## [2.1.0] - 2026-05-30
 
 ### Added
