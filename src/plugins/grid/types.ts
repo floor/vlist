@@ -77,6 +77,17 @@ export interface GridLayout {
   ) => ItemRange;
 
   /**
+   * Mutating variant of getItemRange — writes into `out` to avoid
+   * per-frame allocation on the render hot path.
+   */
+  fillItemRange: (
+    rowStart: number,
+    rowEnd: number,
+    totalItems: number,
+    out: ItemRange,
+  ) => void;
+
+  /**
    * Get the flat item index from a row and column.
    * Returns -1 if out of bounds.
    */

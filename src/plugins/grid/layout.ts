@@ -184,6 +184,28 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
    * The returned end is clamped to totalItems - 1.
    * When isHeaderFn is provided, this accounts for headers disrupting the grid flow.
    */
+  /**
+   * Mutating variant of getItemRange — writes into `out` instead of
+   * allocating a new object. Hot-path safe (no per-frame allocation).
+   */
+  const fillItemRange = (
+    rowStart: number,
+    rowEnd: number,
+    totalItems: number,
+    out: ItemRange,
+  ): void => {
+    if (totalItems <= 0) { out.start = 0; out.end = -1; return; }
+    if (!isHeaderFn) {
+      out.start = Math.max(0, rowStart * columns);
+      out.end = Math.min(totalItems - 1, (rowEnd + 1) * columns - 1);
+      return;
+    }
+    // Header-aware path is not on the standalone-grid hot path.
+    const r = getItemRange(rowStart, rowEnd, totalItems);
+    out.start = r.start;
+    out.end = r.end;
+  };
+
   const getItemRange = (
     rowStart: number,
     rowEnd: number,
@@ -312,6 +334,7 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
     getRow,
     getCol,
     getItemRange,
+    fillItemRange,
     getItemIndex,
     getColumnWidth,
     getColumnOffset,

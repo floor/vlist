@@ -74,11 +74,30 @@ export function grid<T extends VListItem = VListItem>(
   const rendered = new Map<number, TrackedElement>();
   let containerWidth = 0;
 
+  // Cached layout values — recomputed only on resize/config change, never per frame
+  let columns = 0;
+  let gap = 0;
+  let columnWidth = 0;
+  let isf: ItemStateFn | null = null;
+  let isfResolved = false;
+
+  // Hoisted class strings — built once in setup, not per frame
+  let gridItemClass = "";
+  let selClass = "";
+  let focClass = "";
+
   // Mutable range objects — reused across frames
   const compRange = { start: 0, end: -1 };
+  const itemRange = { start: 0, end: -1 };
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let forceNextRender = true;
+
+  // Recompute the cached column width — call on resize/config change.
+  function recomputeColumnWidth(): void {
+    const totalGap = (columns - 1) * gap;
+    columnWidth = Math.max(0, (containerWidth - totalGap) / columns);
+  }
 
   function resolveCompression(): void {
     if (compressionResolved || !ctxGetMethod) return;
@@ -86,14 +105,22 @@ export function grid<T extends VListItem = VListItem>(
     getCompression = (ctxGetMethod("_scale:getCompression") as (() => CompressionState)) ?? null;
   }
 
+  // Resolve the selection state fn once. Selection (priority 50) sets it
+  // during setup, before grid's first render (priority 10 setup + rAF render).
+  function resolveItemStateFn(): void {
+    if (isfResolved) return;
+    isfResolved = true;
+    isf = resolveItemState?.() ?? null;
+  }
+
   function getRowCount(): number {
     return layout.getTotalRows(engineState.totalItems);
   }
 
   function buildTransform(itemIndex: number): string {
-    const row = layout.getRow(itemIndex);
-    const col = layout.getCol(itemIndex);
-    const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
+    const row = (itemIndex / columns) | 0;
+    const col = itemIndex - row * columns;
+    const x = col * (columnWidth + gap) + crossPadStart;
     const y = sizeCache.getOffset(row) + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
@@ -101,20 +128,18 @@ export function grid<T extends VListItem = VListItem>(
     return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
-  function applySizeStyles(element: HTMLElement, itemIndex: number): void {
-    const row = layout.getRow(itemIndex);
-    const colWidth = layout.getColumnWidth(containerWidth);
-    const rowHeight = sizeCache.getSize(row) - layout.gap;
+  function applySizeStyles(element: HTMLElement, row: number): void {
+    const rowHeight = sizeCache.getSize(row) - gap;
     if (isX) {
       element.style.width = `${rowHeight}px`;
-      element.style.height = `${colWidth}px`;
+      element.style.height = `${columnWidth}px`;
     } else {
-      element.style.width = `${colWidth}px`;
+      element.style.width = `${columnWidth}px`;
       element.style.height = `${rowHeight}px`;
     }
   }
 
-  function applyTemplate(el: HTMLElement, item: T, index: number, isf: ItemStateFn | null): void {
+  function applyTemplate(el: HTMLElement, item: T, index: number): void {
     if (isf) isf(index, itemState);
     else { itemState.selected = false; itemState.focused = false; }
     const result = template(item, index, itemState);
@@ -144,7 +169,8 @@ export function grid<T extends VListItem = VListItem>(
 
     // Visible row range — compression-aware when scale plugin is active
     resolveCompression();
-    const compression = getCompression?.() ?? null;
+    resolveItemStateFn();
+    const compression = getCompression !== null ? getCompression() : null;
     const isCompressed = compression !== null && compression.isCompressed;
     let renderStart: number;
     let renderEnd: number;
@@ -168,27 +194,28 @@ export function grid<T extends VListItem = VListItem>(
       return;
     }
 
-    // Convert row range → flat item range
-    const itemRange = layout.getItemRange(renderStart, renderEnd, engineState.totalItems);
+    // Convert row range → flat item range (reuse object, no per-frame alloc)
+    layout.fillItemRange(renderStart, renderEnd, engineState.totalItems, itemRange);
+    const rangeStart = itemRange.start;
+    const rangeEnd = itemRange.end;
 
     // Release items outside the new range
-    rendered.forEach((tracked, idx) => {
-      if (idx < itemRange.start || idx > itemRange.end) {
+    for (const [idx, tracked] of rendered) {
+      if (idx < rangeStart || idx > rangeEnd) {
         tracked.el.remove();
         pool.release(tracked.el);
         rendered.delete(idx);
       }
-    });
+    }
 
-    // Render items in range
-    const gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
-    const isf = resolveItemState?.() ?? null;
-    const selClass = isf ? `${classPrefix}-item--selected` : "";
-    const focClass = isf ? `${classPrefix}-item--focused` : "";
-
-    for (let i = itemRange.start; i <= itemRange.end; i++) {
+    for (let i = rangeStart; i <= rangeEnd; i++) {
       const item = getItem(i);
       if (!item) continue;
+
+      // Row/col computed once — grid path has no group headers, so the
+      // mapping is the simple sequential floor/mod.
+      const row = (i / columns) | 0;
+      const col = i - row * columns;
 
       let tracked = rendered.get(i);
 
@@ -197,45 +224,44 @@ export function grid<T extends VListItem = VListItem>(
         el.className = gridItemClass;
         el.setAttribute("data-index", String(i));
         el.setAttribute("data-id", String(item.id));
-        applyTemplate(el, item, i, isf);
+        applyTemplate(el, item, i);
         tracked = { el, lastItem: item };
         rendered.set(i, tracked);
         contentElement.appendChild(el);
       } else if (tracked.lastItem !== item) {
         tracked.el.setAttribute("data-id", String(item.id));
         tracked.lastItem = item;
-        applyTemplate(tracked.el, item, i, isf);
+        applyTemplate(tracked.el, item, i);
+      } else if (isf) {
+        // Existing element, same item — refresh selection state only.
+        isf(i, itemState);
       }
 
       if (isf) {
-        isf(i, itemState);
+        // itemState was populated by applyTemplate or the refresh above.
         tracked.el.classList.toggle(selClass, itemState.selected);
         tracked.el.classList.toggle(focClass, itemState.focused);
         if (itemState.selected) tracked.el.setAttribute("aria-selected", "true");
         else tracked.el.removeAttribute("aria-selected");
       }
 
-      applySizeStyles(tracked.el, i);
+      applySizeStyles(tracked.el, row);
 
-      if (isCompressed) {
-        const row = layout.getRow(i);
-        const col = layout.getCol(i);
-        const x = layout.getColumnOffset(col, containerWidth) + crossPadStart;
-        const y = calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression) + mainPadStart;
-        tracked.el.style.transform = isX
-          ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
-          : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-      } else {
-        tracked.el.style.transform = buildTransform(i);
-      }
+      const x = col * (columnWidth + gap) + crossPadStart;
+      const y = isCompressed
+        ? calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression) + mainPadStart
+        : sizeCache.getOffset(row) + mainPadStart;
+      tracked.el.style.transform = isX
+        ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
+        : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     }
 
     // Content size — scale plugin manages it when compressed
+    const totalSize = sizeCache.getTotalSize() + mainPadTotal;
     if (!isCompressed) {
-      const totalSize = sizeCache.getTotalSize() + mainPadTotal;
       contentElement.style[isX ? "width" : "height"] = totalSize + "px";
     }
-    engineState.totalSize = sizeCache.getTotalSize() + mainPadTotal;
+    engineState.totalSize = totalSize;
 
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
@@ -243,12 +269,12 @@ export function grid<T extends VListItem = VListItem>(
     engineState.renderPending = false;
 
     // Fill EngineState buffers for plugins that read them
-    const count = itemRange.end - itemRange.start + 1;
+    const count = rangeEnd - rangeStart + 1;
     engineState.visibleCount = Math.min(count, engineState.capacity);
-    engineState.startIndex = itemRange.start;
+    engineState.startIndex = rangeStart;
     for (let i = 0; i < engineState.visibleCount; i++) {
-      const idx = itemRange.start + i;
-      const row = layout.getRow(idx);
+      const idx = rangeStart + i;
+      const row = (idx / columns) | 0;
       engineState.visibleIndices[i] = idx;
       engineState.visibleOffsets[i] = isCompressed
         ? calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression)
@@ -273,7 +299,8 @@ export function grid<T extends VListItem = VListItem>(
     conflicts: ["masonry", "table"],
 
     setup(ctx: PluginContext<T>): void {
-      const gap = config.gap ?? 0;
+      columns = Math.max(1, Math.floor(config.columns));
+      gap = config.gap ?? 0;
 
       layout = createGridLayout({ columns: config.columns, gap });
       sizeCache = ctx.sizeCache;
@@ -288,6 +315,11 @@ export function grid<T extends VListItem = VListItem>(
       resolveItemState = () => ctx.getItemStateFn();
       ctxGetMethod = ctx.getMethod.bind(ctx);
 
+      // Hoist class strings — built once, reused every frame
+      gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
+      selClass = `${classPrefix}-item--selected`;
+      focClass = `${classPrefix}-item--focused`;
+
       // Padding offsets for item positioning
       crossPadStart = ctx.config.crossPadStart;
       crossPadTotal = ctx.config.crossAxisPadding;
@@ -296,6 +328,7 @@ export function grid<T extends VListItem = VListItem>(
 
       // Initialize container width (subtract cross-axis padding)
       containerWidth = engineState.crossSize - crossPadTotal;
+      recomputeColumnWidth();
 
       // Size cache in ROW space: each row = itemHeight + gap
       // Inject grid context into dynamic height functions
@@ -355,6 +388,8 @@ export function grid<T extends VListItem = VListItem>(
         }
 
         layout.update(newConfig);
+        if (newConfig.columns !== undefined) columns = Math.max(1, Math.floor(newConfig.columns));
+        if (newConfig.gap !== undefined) gap = newConfig.gap;
 
         if (newConfig.gap !== undefined || newConfig.columns !== undefined) {
           const newGap = layout.gap;
@@ -376,6 +411,7 @@ export function grid<T extends VListItem = VListItem>(
         }
 
         containerWidth = engineState.crossSize - crossPadTotal;
+        recomputeColumnWidth();
         gridForceRender();
       });
 
@@ -456,15 +492,17 @@ export function grid<T extends VListItem = VListItem>(
         const newCross = engineState.crossSize - crossPadTotal;
         if (Math.abs(newCross - containerWidth) < 1) return;
         containerWidth = newCross;
+        recomputeColumnWidth();
 
         const compression = getCompression?.() ?? null;
         if (compression?.isCompressed) {
           gridForceRender();
         } else {
-          rendered.forEach((tracked, index) => {
-            applySizeStyles(tracked.el, index);
+          for (const [index, tracked] of rendered) {
+            const row = (index / columns) | 0;
+            applySizeStyles(tracked.el, row);
             tracked.el.style.transform = buildTransform(index);
-          });
+          }
         }
       },
     },
