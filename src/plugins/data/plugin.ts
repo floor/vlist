@@ -279,6 +279,10 @@ export function data<T extends VListItem = VListItem>(
         return dataManager.getStorage().get(index) as T | undefined;
       });
 
+      ctx.registerMethod("_getItem", (index: number): T | undefined => {
+        return dataManager.getItem(index) as T | undefined;
+      });
+
       ctx.registerMethod("_getLoadedCount", (): number => dataManager.getCached());
 
       // ARIA: aria-busy for loading state

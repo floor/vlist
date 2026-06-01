@@ -797,7 +797,10 @@ export function groups<T extends VListItem = VListItem>(
         // Deferred: data plugin (priority 20) runs after groups (priority 10)
         // and overwrites getItemFn. Set ours in a microtask after all setups.
         queueMicrotask(() => {
-          const loadedItemFn = (getMethod?.("_getLoadedItem") as ((i: number) => T | undefined)) ?? null;
+          // Use _getItem (includes placeholders) rather than _getLoadedItem
+          // (returns undefined for unloaded items). Placeholders let the
+          // table renderer show shimmer rows while data loads.
+          const asyncGetItem = (getMethod?.("_getItem") as ((i: number) => T | undefined)) ?? null;
           const rawItems = ctx.getItems.bind(ctx);
 
           ctx.setGetItemFn((layoutIndex: number): T | undefined => {
@@ -810,7 +813,7 @@ export function groups<T extends VListItem = VListItem>(
                 groupIndex: entry.group.groupIndex,
               } as unknown as T;
             }
-            return loadedItemFn ? loadedItemFn(entry.dataIndex) : rawItems()[entry.dataIndex];
+            return asyncGetItem ? asyncGetItem(entry.dataIndex) : rawItems()[entry.dataIndex];
           });
 
           // Tell table renderer about group headers

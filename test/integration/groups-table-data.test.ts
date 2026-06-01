@@ -481,6 +481,108 @@ describe("groups + table + data", () => {
     });
   });
 
+  // ── Placeholders ─────────────────────────────────────────────────
+
+  describe("placeholders with groups", () => {
+    it("should render placeholder rows for unloaded items", async () => {
+      // Adapter with large total but small chunk — most items are unloaded
+      const adapter: VListAdapter<CityItem> = {
+        read: mock(async ({ offset, limit }: { offset: number; limit: number }) => {
+          const end = Math.min(offset + limit, 500);
+          const items = createCities(offset, end - offset);
+          return { items, total: 500, hasMore: end < 500 };
+        }),
+      };
+
+      list = createVList<CityItem>(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: 10 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+          groups({
+            getGroupForIndex: getPopTier,
+            header: { height: 28, template: (key) => key },
+          }),
+        ],
+      );
+
+      await waitForLoad(list);
+
+      // With chunkSize=10, only ~10 items loaded initially.
+      // The table should still render rows beyond the loaded range as placeholders.
+      const allRows = container.querySelectorAll(".vlist-table-row");
+      expect(allRows.length).toBeGreaterThan(0);
+
+      // Total rendered items (rows + headers) should fill the viewport
+      const allItems = container.querySelectorAll("[data-index]");
+      expect(allItems.length).toBeGreaterThan(5);
+    });
+
+    it("should render same number of rows with and without groups", async () => {
+      const adapter = createCityAdapter(200);
+
+      // Without groups
+      list = createVList<CityItem>(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+        ],
+      );
+      await waitForLoad(list);
+      const rowsWithout = container.querySelectorAll(".vlist-table-row").length;
+      list.destroy();
+      container.innerHTML = "";
+
+      // With groups
+      list = createVList<CityItem>(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+          groups({
+            getGroupForIndex: getPopTier,
+            header: { height: 28, template: (key) => key },
+          }),
+        ],
+      );
+      await waitForLoad(list);
+      const rowsWith = container.querySelectorAll(".vlist-table-row:not(.vlist-table-group-header)").length;
+      const headers = container.querySelectorAll(".vlist-table-group-header").length;
+
+      // With groups: data rows + headers ≈ rows without groups
+      // (headers take space so slightly fewer data rows fit)
+      expect(rowsWith + headers).toBeGreaterThanOrEqual(rowsWithout - 2);
+    });
+
+    it("data plugin should register _getItem method", async () => {
+      const adapter = createCityAdapter(50);
+      list = createVList<CityItem>(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+          groups({
+            getGroupForIndex: getPopTier,
+            header: { height: 28, template: (key) => key },
+          }),
+        ],
+      );
+
+      await waitForLoad(list);
+
+      // getItemAt(0) should return a group header (not undefined)
+      const item0 = list.getItemAt(0);
+      expect(item0).toBeDefined();
+      expect((item0 as any).__groupHeader).toBe(true);
+
+      // getItemAt(1) should return a data item (not undefined)
+      const item1 = list.getItemAt(1);
+      expect(item1).toBeDefined();
+      expect((item1 as any).__groupHeader).toBeUndefined();
+    });
+  });
+
   // ── Without groups (baseline) ───────────────────────────────────
 
   describe("without groups (baseline)", () => {
