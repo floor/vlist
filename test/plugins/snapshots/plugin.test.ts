@@ -1410,6 +1410,97 @@ describe("snapshots - autoSave", () => {
 });
 
 // =============================================================================
+// snapshots — Save not blocked after restore with dataIndex
+// =============================================================================
+
+describe("snapshots - saves after restore with dataIndex", () => {
+  const AUTO_SAVE_KEY = "test-suppress-fix";
+
+  function clearAutoSave() {
+    try { sessionStorage.removeItem(AUTO_SAVE_KEY); } catch {}
+  }
+
+  it("should save after restore even when snapshot has dataIndex", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = {
+      index: 50, offsetInItem: 0, total: 100,
+      dataIndex: 50, dataTotal: 100, scrollTop: 2400,
+    };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const { ctx, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
+    const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    plugin.setup(ctx);
+
+    await flushAsync();
+
+    // After restore settles, selection:change should save
+    ctx.emitter.emit("selection:change", { selected: [42], items: [] as TestItem[] });
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    const parsed = JSON.parse(stored!);
+    // Must reflect current state, not the old snapshot
+    expect(parsed.total).toBe(100);
+    cleanup();
+  });
+
+  it("should save on idle after restore with dataIndex", async () => {
+    clearAutoSave();
+    const savedSnapshot: ScrollSnapshot = {
+      index: 10, offsetInItem: 5, total: 50,
+      dataIndex: 10, dataTotal: 50, scrollTop: 485,
+    };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
+    const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    plugin.setup(ctx);
+
+    await flushAsync();
+
+    plugin.hooks!.onIdle!();
+
+    const stored = sessionStorage.getItem(AUTO_SAVE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!).total).toBe(50);
+    cleanup();
+  });
+
+  it("should not permanently block saves regardless of snapshot content", async () => {
+    clearAutoSave();
+    // Snapshot with every optional field set
+    const savedSnapshot: ScrollSnapshot = {
+      index: 25, offsetInItem: 12, total: 200,
+      dataIndex: 25, dataTotal: 200, scrollTop: 1212,
+      selectedIds: [99], focusedId: 99, offsetRatio: 0.25,
+    };
+    sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
+
+    const { ctx, cleanup } = createMockContext({ totalItems: 200, scrollTop: 0, itemHeight: 48 });
+    const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
+    plugin.setup(ctx);
+
+    await flushAsync();
+
+    // Multiple saves should all work
+    ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
+    const snap1 = JSON.parse(sessionStorage.getItem(AUTO_SAVE_KEY)!);
+    expect(snap1.total).toBe(200);
+
+    ctx.emitter.emit("focus:change", { id: 5, index: 4 });
+    const snap2 = JSON.parse(sessionStorage.getItem(AUTO_SAVE_KEY)!);
+    expect(snap2.total).toBe(200);
+
+    plugin.hooks!.onIdle!();
+    const snap3 = JSON.parse(sessionStorage.getItem(AUTO_SAVE_KEY)!);
+    expect(snap3.total).toBe(200);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
 // snapshots — Selection Seeding
 // =============================================================================
 

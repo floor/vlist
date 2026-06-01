@@ -203,18 +203,24 @@ export function snapshots<T extends VListItem = VListItem>(
           ? snapshot.offsetRatio * currentItemSize
           : Math.min(offsetInItem, currentItemSize);
 
+        const currentDataTotal = (ctx.getMethod("_getTotal") as (() => number) | undefined)?.();
+        const totalMatch = snapshot.total === effectiveTotal
+          || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal);
+
         let scrollPosition: number;
 
         if (state.isCompressed && state.compressionRatio !== 1) {
-          const currentDataTotal = (ctx.getMethod("_getTotal") as (() => number) | undefined)?.();
-          const dataTotalMatch = currentDataTotal !== undefined
-            && snapshot.dataTotal === currentDataTotal;
-          if (snapshot.scrollTop !== undefined && (snapshot.total === effectiveTotal || dataTotalMatch)) {
+          if (snapshot.scrollTop !== undefined && totalMatch) {
             scrollPosition = snapshot.scrollTop;
           } else {
             const fraction = currentItemSize ? resolvedOffset / currentItemSize : 0;
             scrollPosition =
               ((safeIndex + fraction) / effectiveTotal) * state.totalSize;
+          }
+        } else if (snapshot.scrollTop !== undefined && totalMatch) {
+          scrollPosition = snapshot.scrollTop;
+          } else {
+            scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
           }
         } else {
           scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
@@ -222,17 +228,6 @@ export function snapshots<T extends VListItem = VListItem>(
 
         const maxScroll = Math.max(0, state.totalSize - state.containerSize);
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
-
-        const usedShortcut = scrollPosition === snapshot.scrollTop;
-        if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
-          const fraction = currentItemSize ? resolvedOffset / currentItemSize : 0;
-          ctx.registerMethod("_restoreAnchor", {
-            dataIndex: snapshot.dataIndex,
-            fraction,
-            skipAdjust: usedShortcut,
-          } as unknown as Function);
-          ctx.registerMethod("_suppressSave", 1 as unknown as Function);
-        }
 
         ctx.scrollTo(scrollPosition);
 
@@ -290,7 +285,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
       if (autoSaveKey) {
         saveToStorage = (): void => {
-          if (disposed || restoreGuard || ctx.getMethod("_suppressSave")) return;
+          if (disposed || restoreGuard) return;
           const snap = getScrollSnapshot();
           try {
             sessionStorage.setItem(autoSaveKey, JSON.stringify(snap));
