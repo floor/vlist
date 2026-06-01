@@ -154,6 +154,8 @@ Use orientation-neutral terminology. The library supports both vertical and hori
 
 Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `src/` structure.
 
+**Every code change MUST include its tests in the same step.** Never split a fix and its tests into separate commits. Write the tests before reporting the work as done.
+
 - DOM environment: `GlobalRegistrator.register()` in `beforeAll`, `unregister()` in `afterAll` — sets all browser globals
 - Shared helpers in `test/helpers/`: `setupDOM`, `teardownDOM`, `createTestItems`, `createContainer`, `simpleTemplate`, `useFakeTimers`
 - `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
