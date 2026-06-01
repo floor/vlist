@@ -43,7 +43,7 @@ export function selection<T extends VListItem = VListItem>(
   const focusOnClick = config?.focusOnClick ?? false;
 
   let state: SelectionState;
-  let getItem: (index: number) => T | undefined;
+  let getItems: () => readonly T[];
   let forceRender: () => void;
   let emitter: PluginContext<T>["emitter"];
   let dom: PluginContext<T>["dom"];
@@ -68,6 +68,7 @@ export function selection<T extends VListItem = VListItem>(
     d2lFn = (ctx.getMethod("_dataToLayoutIndex") as typeof d2lFn) ?? null;
     isGHFn = (ctx.getMethod("_isGroupHeader") as typeof isGHFn) ?? null;
     sivFn = (ctx.getMethod("_scrollItemIntoView") as typeof sivFn) ?? null;
+    loadedItemFn = (ctx.getMethod("_getLoadedItem") as typeof loadedItemFn) ?? null;
     const gl = ctx.getMethod("getGroupLayout") as (() => { totalEntries: number }) | undefined;
     if (gl) {
       const layout = gl();
@@ -78,9 +79,15 @@ export function selection<T extends VListItem = VListItem>(
   const toDataIndex = (layoutIdx: number): number =>
     l2dFn ? l2dFn(layoutIdx) : layoutIdx;
 
-  const getItemAtLayout = (layoutIdx: number): T | undefined => {
+  let loadedItemFn: ((i: number) => T | undefined) | null = null;
+  const getItemByDataIndex = (dataIndex: number): T | undefined => {
+    if (loadedItemFn) return loadedItemFn(dataIndex);
+    return getItems()[dataIndex];
+  };
+
+  const getDataItemAtLayout = (layoutIdx: number): T | undefined => {
     const di = toDataIndex(layoutIdx);
-    return di >= 0 ? getItem(di) : undefined;
+    return di >= 0 ? getItemByDataIndex(di) : undefined;
   };
 
   const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
@@ -128,11 +135,12 @@ export function selection<T extends VListItem = VListItem>(
     selectedItemCache.delete(id);
   }
 
-  function doSelectRange(from: number, to: number): void {
-    const start = Math.min(from, to);
-    const end = Math.max(from, to);
+  function doSelectRange(fromLayout: number, toLayout: number): void {
+    const start = Math.min(fromLayout, toLayout);
+    const end = Math.max(fromLayout, toLayout);
     for (let i = start; i <= end; i++) {
-      const item = getItem(i);
+      if (isGHFn?.(i)) continue;
+      const item = getDataItemAtLayout(i);
       if (item) {
         state.selected.add(item.id);
         selectedItemCache.set(item.id, item);
@@ -143,7 +151,8 @@ export function selection<T extends VListItem = VListItem>(
   function doSelectAll(): void {
     const total = engineState.totalItems;
     for (let i = 0; i < total; i++) {
-      const item = getItem(i);
+      if (isGHFn?.(i)) continue;
+      const item = getDataItemAtLayout(i);
       if (item) {
         state.selected.add(item.id);
         selectedItemCache.set(item.id, item);
@@ -167,7 +176,8 @@ export function selection<T extends VListItem = VListItem>(
     const remaining = new Set(state.selected);
     const total = engineState.totalItems;
     for (let i = 0; i < total && remaining.size > 0; i++) {
-      const item = getItem(i);
+      if (isGHFn?.(i)) continue;
+      const item = getDataItemAtLayout(i);
       if (item && remaining.has(item.id)) {
         result.push(item);
         selectedItemCache.set(item.id, item);
@@ -195,7 +205,7 @@ export function selection<T extends VListItem = VListItem>(
     setup(ctx: PluginContext<T>): void {
       ctx.enableListboxRole();
       state = createSelectionState(config?.initial);
-      getItem = ctx.getItem.bind(ctx);
+      getItems = ctx.getItems.bind(ctx);
       forceRender = ctx.forceRender.bind(ctx);
       emitter = ctx.emitter;
       dom = ctx.dom;
@@ -227,7 +237,7 @@ export function selection<T extends VListItem = VListItem>(
         resolveOnce(ctx);
         if (state.selected.size > 0) {
           const di = toDataIndex(index);
-          const item = di >= 0 ? getItem(di) : undefined;
+          const item = di >= 0 ? getDataItemAtLayout(index) : undefined;
           const id = item?.id;
           if (id !== undefined) {
             if (state.selected.has(id)) {
@@ -262,9 +272,10 @@ export function selection<T extends VListItem = VListItem>(
         if (!el) return false;
         const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
         if (layoutIdx < 0) return false;
+        if (isGHFn?.(layoutIdx)) return false;
         const di = toDataIndex(layoutIdx);
         if (di < 0) return false;
-        const item = getItem(di);
+        const item = getDataItemAtLayout(layoutIdx);
         if (!item) return false;
         hitItem = item;
         hitIndex = layoutIdx;
@@ -332,7 +343,7 @@ export function selection<T extends VListItem = VListItem>(
           const anchorData = toDataIndex(anchor);
           const hitData = toDataIndex(hitIndex);
           if (anchorData >= 0 && hitData >= 0) {
-            doSelectRange(anchorData, hitData);
+            doSelectRange(anchor, hitIndex);
           }
           state.focusedIndex = hitIndex;
           state.focusVisible = focusOnClick;
@@ -344,7 +355,8 @@ export function selection<T extends VListItem = VListItem>(
         state.focusedIndex = hitIndex;
         state.focusVisible = focusOnClick;
         lastSelectedIndex = hitIndex;
-        dom.content.focus(focusPreventScroll);
+        const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
+        focusTarget.focus(focusPreventScroll);
         doToggle(hitItem!.id, hitItem!);
         emitSelectionChange();
       });
@@ -455,7 +467,7 @@ export function selection<T extends VListItem = VListItem>(
                   const fromData = toDataIndex(lastSelectedIndex);
                   const toData = toDataIndex(state.focusedIndex);
                   if (fromData >= 0 && toData >= 0) {
-                    doSelectRange(fromData, toData);
+                    doSelectRange(lastSelectedIndex, state.focusedIndex);
                   }
                 }
                 state.focusVisible = true;
@@ -464,7 +476,7 @@ export function selection<T extends VListItem = VListItem>(
                 break;
               }
               if (state.focusedIndex >= 0) {
-                const item = getItemAtLayout(state.focusedIndex);
+                const item = getDataItemAtLayout(state.focusedIndex);
                 if (item) {
                   doToggle(item.id, item);
                   lastSelectedIndex = state.focusedIndex;
@@ -512,7 +524,7 @@ export function selection<T extends VListItem = VListItem>(
           if (event.shiftKey && mode === "multiple" && !selectionChanged && focusMoved) {
             const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight";
             if (isArrow) {
-              const destItem = getItemAtLayout(state.focusedIndex);
+              const destItem = getDataItemAtLayout(state.focusedIndex);
               if (destItem) doToggle(destItem.id, destItem);
               lastSelectedIndex = state.focusedIndex;
               selectionChanged = true;
@@ -521,10 +533,11 @@ export function selection<T extends VListItem = VListItem>(
             const isCtrlHomeEnd = (event.ctrlKey || event.metaKey)
               && (event.key === "Home" || event.key === "End");
             if (isCtrlHomeEnd) {
-              const fromData = toDataIndex(prevFocus >= 0 ? prevFocus : state.focusedIndex);
+              const fromLayout = prevFocus >= 0 ? prevFocus : state.focusedIndex;
+              const fromData = toDataIndex(fromLayout);
               const toData = toDataIndex(state.focusedIndex);
               if (fromData >= 0 && toData >= 0) {
-                doSelectRange(fromData, toData);
+                doSelectRange(fromLayout, state.focusedIndex);
               }
               lastSelectedIndex = state.focusedIndex;
               selectionChanged = true;
@@ -533,7 +546,7 @@ export function selection<T extends VListItem = VListItem>(
 
           // Follow focus: auto-select on movement
           if (followFocus && mode === "single" && !selectionChanged && focusMoved && state.focusedIndex >= 0) {
-            const item = getItemAtLayout(state.focusedIndex);
+            const item = getDataItemAtLayout(state.focusedIndex);
             if (item) doSelect(item.id, item);
             selectionChanged = true;
           }
@@ -551,7 +564,7 @@ export function selection<T extends VListItem = VListItem>(
             } else if (focusMoved) {
               forceRender();
               if (state.focusedIndex >= 0) {
-                const item = getItemAtLayout(state.focusedIndex);
+                const item = getDataItemAtLayout(state.focusedIndex);
                 if (item) {
                   emitter.emit("focus:change", { id: item.id, index: state.focusedIndex });
                 }
@@ -602,7 +615,7 @@ export function selection<T extends VListItem = VListItem>(
         if (total === 0) return;
         moveFocus(state, 1, total, resolvedConfig.reverse);
         if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, 1, total);
-        const item = getItemAtLayout(state.focusedIndex);
+        const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
         emitSelectionChange();
       });
@@ -613,7 +626,7 @@ export function selection<T extends VListItem = VListItem>(
         if (total === 0) return;
         moveFocus(state, -1, total, resolvedConfig.reverse);
         if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, -1, total);
-        const item = getItemAtLayout(state.focusedIndex);
+        const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
         emitSelectionChange();
       });
@@ -628,17 +641,17 @@ export function selection<T extends VListItem = VListItem>(
 
       ctx.registerMethod("_getFocusedId", (): string | number | undefined => {
         if (state.focusedIndex < 0) return undefined;
-        return getItemAtLayout(state.focusedIndex)?.id;
+        return getDataItemAtLayout(state.focusedIndex)?.id;
       });
 
       ctx.registerMethod("_focusById", (id: string | number): void => {
         const total = engineState.totalItems;
         for (let i = 0; i < total; i++) {
-          const item = getItem(i);
+          if (isGHFn?.(i)) continue;
+          const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
-            const layoutIdx = d2lFn ? d2lFn(i) : i;
-            state.focusedIndex = layoutIdx;
-            emitter.emit("focus:change", { id, index: layoutIdx });
+            state.focusedIndex = i;
+            emitter.emit("focus:change", { id, index: i });
             return;
           }
         }

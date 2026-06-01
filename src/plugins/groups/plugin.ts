@@ -76,6 +76,11 @@ export function groups<T extends VListItem = VListItem>(
   let groupHeaderClass: string;
   let getMethod: ((name: string) => Function | undefined) | null = null;
   let interactive: boolean | null = null;
+  let gridColumns = 0;
+  let gridGap = 0;
+  let gridCrossPadStart = 0;
+  let gridCrossPadTotal = 0;
+  let mainAxisPadding = 0;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -110,8 +115,9 @@ export function groups<T extends VListItem = VListItem>(
     lastDataCount = dataCount;
     layout.rebuild(dataCount, getLoadedItem ?? ctxGetItem);
     origSizeCacheRebuild(layout.totalEntries);
-    const totalSize = sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+    rebuildGridPositions();
+    const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
+    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
@@ -130,7 +136,78 @@ export function groups<T extends VListItem = VListItem>(
     }
   }
 
+  let gridColWidth = 0;
+  let gridItemPositions: Map<number, { col: number; rowY: number }> | null = null;
+  // Parallel sorted array for O(log n) visible range lookup.
+  // Each entry: [layoutIndex, rowY, rowY + itemHeight].
+  let gridSorted: Array<[number, number, number]> | null = null;
+
+  function rebuildGridPositions(): void {
+    if (gridColumns <= 0) { gridItemPositions = null; gridSorted = null; return; }
+    const rawCross = engineState.crossSize || contentElement.clientWidth;
+    const containerW = rawCross - gridCrossPadTotal;
+    gridColWidth = (containerW - (gridColumns - 1) * gridGap) / gridColumns;
+    gridItemPositions = new Map();
+
+    const total = layout.totalEntries;
+    const sorted: Array<[number, number, number]> = new Array(total);
+    let sortedLen = 0;
+    let groupY = 0;
+    let itemInGroup = 0;
+    let rowH = 0;
+
+    for (let i = 0; i < total; i++) {
+      const entry = layout.getEntry(i);
+      if (entry.type === "header") {
+        if (itemInGroup > 0 && rowH > 0) groupY += rowH;
+        const h = sizeCache.getSize(i);
+        gridItemPositions.set(i, { col: -1, rowY: groupY });
+        sorted[sortedLen++] = [i, groupY, groupY + h];
+        groupY += h;
+        itemInGroup = 0;
+        rowH = 0;
+      } else {
+        const col = itemInGroup % gridColumns;
+        const h = sizeCache.getSize(i);
+        if (col === 0) {
+          if (itemInGroup > 0 && rowH > 0) groupY += rowH + gridGap;
+          rowH = h;
+        } else {
+          if (h > rowH) rowH = h;
+        }
+        gridItemPositions.set(i, { col, rowY: groupY });
+        sorted[sortedLen++] = [i, groupY, groupY + h];
+        itemInGroup++;
+      }
+    }
+    sorted.length = sortedLen;
+    gridSorted = sorted;
+  }
+
+  function getGridContentSize(): number {
+    if (!gridItemPositions || gridItemPositions.size === 0) return sizeCache.getTotalSize();
+    let maxY = 0;
+    const total = layout.totalEntries;
+    for (let i = total - 1; i >= 0; i--) {
+      const pos = gridItemPositions.get(i);
+      if (pos) { maxY = pos.rowY + sizeCache.getSize(i); break; }
+      const entry = layout.getEntry(i);
+      if (entry.type === "header") { maxY = sizeCache.getOffset(i) + sizeCache.getSize(i); break; }
+    }
+    return maxY;
+  }
+
   function buildTransform(layoutIndex: number): string {
+    if (gridItemPositions) {
+      const pos = gridItemPositions.get(layoutIndex);
+      if (pos) {
+        const x = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
+        const y = pos.rowY;
+        if (isX) return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
+        return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+      }
+    }
+
     const offset = sizeCache.getOffset(layoutIndex);
     if (isX) {
       return `translate(${Math.round(offset)}px, 0)`;
@@ -140,12 +217,35 @@ export function groups<T extends VListItem = VListItem>(
 
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
     const size = sizeCache.getSize(layoutIndex);
+    const pos = gridItemPositions?.get(layoutIndex);
+    if (pos) {
+      if (pos.col < 0) {
+        // Header: spans full width
+        if (isX) {
+          element.style.width = `${size}px`;
+          element.style.height = "";
+        } else {
+          element.style.height = `${size}px`;
+          element.style.width = "100%";
+        }
+      } else {
+        if (isX) {
+          element.style.width = `${size}px`;
+          element.style.height = `${gridColWidth}px`;
+        } else {
+          element.style.height = `${size}px`;
+          element.style.width = `${gridColWidth}px`;
+        }
+      }
+      return;
+    }
     if (isX) {
       element.style.width = `${size}px`;
     } else {
       element.style.height = `${size}px`;
     }
   }
+
 
   function detachAll(): void {
     rendered.forEach((element) => {
@@ -246,10 +346,28 @@ export function groups<T extends VListItem = VListItem>(
     return !isPlaceholder;
   }
 
+  let lastCrossSize = 0;
+
+  function syncGridIfResized(): void {
+    if (gridColumns <= 0) return;
+    const cross = engineState.crossSize;
+    if (cross === lastCrossSize) return;
+    lastCrossSize = cross;
+    rebuildGridPositions();
+    const totalSize = getGridContentSize();
+    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+    if (stickyHeader) {
+      stickyHeader.refresh();
+      stickyHeader.update(engineState.scrollPosition);
+    }
+    forceNextRender = true;
+  }
+
   function groupsRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
     syncLayoutIfNeeded();
+    syncGridIfResized();
 
     const scrollPos = engineState.scrollPosition;
     const cs = engineState.containerSize;
@@ -275,14 +393,48 @@ export function groups<T extends VListItem = VListItem>(
       return;
     }
 
-    let visStart = sizeCache.indexAtOffset(scrollPos);
-    let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
-    if (visEnd < totalItems - 1) visEnd++;
-    visStart = Math.max(0, visStart);
-    visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
+    let renderStart: number;
+    let renderEnd: number;
 
-    const renderStart = Math.max(0, visStart - overscan);
-    const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
+    if (gridSorted) {
+      // Grid mode: binary search the sorted position array for the
+      // first entry whose bottom edge > scrollPos and the last entry
+      // whose top edge < scrollPos + containerSize.
+      const gs = gridSorted;
+      const len = gs.length;
+      let lo = 0, hi = len - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (gs[mid]![2] <= scrollPos) lo = mid + 1;
+        else hi = mid;
+      }
+      const firstSorted = lo;
+      hi = len - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (gs[mid]![1] >= scrollPos + cs) hi = mid - 1;
+        else lo = mid;
+      }
+      const lastSorted = lo;
+
+      let first = gs[firstSorted]![0];
+      let last = gs[lastSorted]![0];
+      // Include the group header preceding the first visible item
+      for (let i = first - 1; i >= 0; i--) {
+        if (layout.getEntry(i).type === "header") { first = i; break; }
+      }
+      const gridOverscan = overscan * gridColumns;
+      renderStart = Math.max(0, first - gridOverscan);
+      renderEnd = Math.min(totalItems - 1, last + gridOverscan);
+    } else {
+      let visStart = sizeCache.indexAtOffset(scrollPos);
+      let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
+      if (visEnd < totalItems - 1) visEnd++;
+      visStart = Math.max(0, visStart);
+      visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
+      renderStart = Math.max(0, visStart - overscan);
+      renderEnd = Math.min(totalItems - 1, visEnd + overscan);
+    }
 
     if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) {
       return;
@@ -357,6 +509,10 @@ export function groups<T extends VListItem = VListItem>(
       } else {
         // ── Existing unchanged element — fast path ──
         isHeader = element.classList.contains(groupHeaderClass);
+        if (isForced) {
+          applySizeStyles(element, i);
+          element.style.transform = buildTransform(i);
+        }
       }
 
       if (!isHeader && isf) {
@@ -374,8 +530,8 @@ export function groups<T extends VListItem = VListItem>(
 
     drainDetached();
 
-    const totalSize = sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+    const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
+    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
@@ -402,6 +558,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function groupsForceRender(): void {
     if (engineState.destroyed) return;
+    syncGridIfResized();
 
     if (DEBUG) {
       console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
@@ -432,7 +589,8 @@ export function groups<T extends VListItem = VListItem>(
 
       if (boundariesChanged) {
         origSizeCacheRebuild(layout.totalEntries);
-        const totalSize = sizeCache.getTotalSize();
+        rebuildGridPositions();
+        const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
         contentElement.style[isX ? "width" : "height"] = totalSize + "px";
         if (stickyHeader) {
           stickyHeader.refresh();
@@ -489,6 +647,7 @@ export function groups<T extends VListItem = VListItem>(
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
+      mainAxisPadding = ctx.config.mainAxisPadding;
       ctxGetItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
       getMethod = ctx.getMethod.bind(ctx);
@@ -499,6 +658,17 @@ export function groups<T extends VListItem = VListItem>(
       // Resolve raw storage accessor (async plugin) — returns undefined for
       // unloaded items without generating placeholder objects. Used in
       // buildGroups to skip unloaded items efficiently.
+      // Resolve grid info synchronously — grid runs at same priority (10)
+      // but may be listed before groups in the plugin array
+      const gridLayoutFn = getMethod?.("getGridLayout") as (() => { columns: number; gap: number }) | undefined;
+      if (gridLayoutFn) {
+        const gl = gridLayoutFn();
+        gridColumns = gl.columns;
+        gridGap = gl.gap;
+        gridCrossPadStart = ctx.config.crossPadStart;
+        gridCrossPadTotal = ctx.config.crossAxisPadding;
+      }
+
       queueMicrotask(() => {
         const fn = getMethod?.("_getLoadedItem") as ((i: number) => T | undefined) | undefined;
         if (fn) getLoadedItem = fn;
@@ -532,15 +702,38 @@ export function groups<T extends VListItem = VListItem>(
 
       ctx.setSizeConfig(groupedSizeFn);
 
-      // Intercept sizeCache.rebuild: external callers (async plugin) pass
-      // data count, but groups needs layout count. Always use layout.totalEntries
-      // to keep prefix sums consistent with the grouped layout.
+      // Intercept sizeCache.rebuild so groups can map between data indices
+      // and layout indices (which include group header pseudo-entries).
+      // Called by: data plugin on total change, data plugin on items loaded,
+      // snapshots plugin on scroll restore, scale plugin on compression change.
+      let tableMode = false;
+      let lastTableLoadedCount = -1;
       origSizeCacheRebuild = sizeCache.rebuild;
-      sizeCache.rebuild = (_n: number): void => {
+      sizeCache.rebuild = (n: number): void => {
+        if (tableMode) {
+          if (!getLoadedCount) {
+            getLoadedCount = (getMethod?.("_getLoadedCount") as (() => number) | undefined) ?? null;
+          }
+          const loaded = getLoadedCount?.() ?? 0;
+          if (n !== lastDataCount || loaded !== lastTableLoadedCount) {
+            lastDataCount = n;
+            lastTableLoadedCount = loaded;
+            if (!getLoadedItem) {
+              getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
+            }
+            layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.getItems()[i] as T | undefined));
+            engineState.totalItems = layout.totalEntries;
+            if (stickyHeader) {
+              stickyHeader.refresh();
+              stickyHeader.update(engineState.scrollPosition);
+            }
+          }
+        }
         origSizeCacheRebuild(layout.totalEntries);
       };
 
       sizeCache.rebuild(layout.totalEntries);
+      rebuildGridPositions();
       ctx.setVirtualTotalFn(() => layout.totalEntries);
 
       rootElement.classList.add(`${classPrefix}--grouped`);
@@ -566,6 +759,13 @@ export function groups<T extends VListItem = VListItem>(
           headerH,
         );
 
+        const gridHeaderOffset = gridColumns > 0
+          ? (headerLayoutIndex: number): number => {
+              const pos = gridItemPositions?.get(headerLayoutIndex);
+              return pos ? pos.rowY : sizeCache.getOffset(headerLayoutIndex);
+            }
+          : undefined;
+
         stickyHeader = createStickyHeader(
           rootElement,
           layout,
@@ -576,6 +776,7 @@ export function groups<T extends VListItem = VListItem>(
           0,
           undefined,
           stickyContainer,
+          gridHeaderOffset,
         );
 
         stickyHeader.update(engineState.scrollPosition);
@@ -587,7 +788,49 @@ export function groups<T extends VListItem = VListItem>(
         }
       }
 
-      ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
+      // Detect table plugin — if active, delegate rendering to table.
+      // Groups provides layout index → item mapping via setGetItemFn.
+      const hasTable = !!getMethod?.("_updateTableForGroups");
+      tableMode = hasTable;
+
+      if (hasTable) {
+        // Deferred: data plugin (priority 20) runs after groups (priority 10)
+        // and overwrites getItemFn. Set ours in a microtask after all setups.
+        queueMicrotask(() => {
+          // Use _getItem (includes placeholders) rather than _getLoadedItem
+          // (returns undefined for unloaded items). Placeholders let the
+          // table renderer show shimmer rows while data loads.
+          const asyncGetItem = (getMethod?.("_getItem") as ((i: number) => T | undefined)) ?? null;
+          const rawItems = ctx.getItems.bind(ctx);
+
+          ctx.setGetItemFn((layoutIndex: number): T | undefined => {
+            const entry = layout.getEntry(layoutIndex);
+            if (entry.type === "header") {
+              return {
+                id: `__group_header_${entry.group.groupIndex}`,
+                __groupHeader: true,
+                groupKey: entry.group.key,
+                groupIndex: entry.group.groupIndex,
+              } as unknown as T;
+            }
+            return asyncGetItem ? asyncGetItem(entry.dataIndex) : rawItems()[entry.dataIndex];
+          });
+
+          // Tell table renderer about group headers
+          const tableGroupsFn = getMethod?.("_updateTableForGroups") as ((
+            isHeaderFn: (item: T) => boolean,
+            ht: (key: string, groupIndex: number) => HTMLElement | string,
+          ) => void) | undefined;
+          if (tableGroupsFn) {
+            tableGroupsFn(
+              (item: T) => !!(item as Record<string, unknown>).__groupHeader,
+              headerTemplate,
+            );
+          }
+        });
+      } else {
+        ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
+      }
 
       ctx.registerMethod("getGroupLayout", () => layout);
 
@@ -603,6 +846,22 @@ export function groups<T extends VListItem = VListItem>(
       ctx.registerMethod("_isGroupHeader", (layoutIndex: number): boolean => {
         const entry = layout.getEntry(layoutIndex);
         return entry.type === "header";
+      });
+
+      const mainPadEnd = mainAxisPadding - ctx.config.startPadding;
+      ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
+        if (layoutIndex < 0) return;
+        const pos = gridItemPositions?.get(layoutIndex);
+        const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
+        const size = sizeCache.getSize(layoutIndex);
+        const cs = engineState.containerSize;
+        const sp = engineState.scrollPosition;
+
+        if (offset < sp) {
+          ctx.scrollTo(offset);
+        } else if (offset + size + mainPadEnd > sp + cs) {
+          ctx.scrollTo(offset + size + mainPadEnd - cs);
+        }
       });
 
       ctx.registerMethod("scrollToIndex", (
@@ -662,6 +921,23 @@ export function groups<T extends VListItem = VListItem>(
         if (stickyHeader) {
           stickyHeader.update(scrollPosition);
         }
+      },
+      onResize(_w: number, _h: number): void {
+        if (gridColumns <= 0) return;
+        // Grid plugin's onResize runs first (same priority, earlier in array)
+        // and updates its internal columnWidth. Now sizeCache sizes will
+        // reflect the new column width. Rebuild positions and re-render.
+        origSizeCacheRebuild(layout.totalEntries);
+        lastCrossSize = engineState.crossSize;
+        rebuildGridPositions();
+        const totalSize = getGridContentSize();
+        contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+        if (stickyHeader) {
+          stickyHeader.refresh();
+          stickyHeader.update(engineState.scrollPosition);
+        }
+        forceNextRender = true;
+        groupsRenderIfNeeded();
       },
     },
 

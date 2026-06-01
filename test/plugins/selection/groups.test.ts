@@ -161,7 +161,7 @@ describe("selection + groups — focus navigation skips headers", () => {
 // =============================================================================
 
 describe("selection + groups — shift+click range selection", () => {
-  it("shift+click range includes headers in data range (doSelectRange uses data indices)", () => {
+  it("shift+click range skips group headers", () => {
     const { plugin, mockCtx, getSelected } = setupWithGroups();
 
     const handler = mockCtx.clickHandlers[0]!;
@@ -174,17 +174,15 @@ describe("selection + groups — shift+click range selection", () => {
     handler(makeClickEvent(makeItemElement(6), { shiftKey: true }));
 
     const selected = getSelected();
-    // doSelectRange(1, 6) selects data indices 1..6
-    // Items: id=1 (idx=1), id=2 (idx=2), id=3 (idx=3),
-    //        id=200 header (idx=4), id=5 (idx=5), id=6 (idx=6)
+    // Layout range 1..6: id=1, id=2, id=3, header(idx=4), id=5, id=6
+    // Group headers are skipped — only data items selected
     expect(selected).toContain(1);
     expect(selected).toContain(2);
     expect(selected).toContain(3);
     expect(selected).toContain(5);
     expect(selected).toContain(6);
-    // Header (id=200) is included in range since doSelectRange doesn't filter headers
-    expect(selected).toContain(200);
-    expect(selected.length).toBe(6);
+    expect(selected).not.toContain(200);
+    expect(selected.length).toBe(5);
 
     plugin.destroy!();
     mockCtx.cleanup();
@@ -202,13 +200,15 @@ describe("selection + groups — shift+click range selection", () => {
     handler(makeClickEvent(makeItemElement(2), { shiftKey: true }));
 
     const selected = getSelected();
-    // Range 2..7: ids 2, 3, 200, 5, 6, 7
+    // Layout range 2..7: id=2, id=3, header(idx=4), id=5, id=6, id=7
+    // Group headers skipped
     expect(selected).toContain(2);
     expect(selected).toContain(3);
     expect(selected).toContain(5);
     expect(selected).toContain(6);
     expect(selected).toContain(7);
-    expect(selected.length).toBe(6);
+    expect(selected).not.toContain(200);
+    expect(selected.length).toBe(5);
 
     plugin.destroy!();
     mockCtx.cleanup();
@@ -414,6 +414,264 @@ describe("selection + groups — followFocus=false desync", () => {
     handler(makeKeyEvent("ArrowDown")); // → 2, auto-selects (replaces 1)
     expect(getSelected()).toEqual([2]);
     expect(getSelected()).not.toContain(1);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});
+
+// =============================================================================
+// Click selects correct item with layout/data index offset
+// =============================================================================
+
+describe("selection + groups — click with layout/data offset", () => {
+  // When groups are active, layout indices include headers so they diverge
+  // from data indices. The items array only contains DATA items (no headers).
+  // Headers are virtual — _isGroupHeader tells the selection plugin which
+  // layout indices are headers.
+  //
+  //   Layout: [H0, D0(1), D1(2), D2(3), H1(4), D3(5), D4(6), D5(7)]
+  //   Data:   [Alpha(0), Beta(1), Gamma(2), Delta(3), Epsilon(4), Zeta(5)]
+  //   layoutToData(1)=0, layoutToData(5)=3, layoutToData(6)=4
+  function setupWithRealOffset(mode: "single" | "multiple" = "single") {
+    const dataItems: TestItem[] = [
+      { id: 1, name: "Alpha" },
+      { id: 2, name: "Beta" },
+      { id: 3, name: "Gamma" },
+      { id: 4, name: "Delta" },
+      { id: 5, name: "Epsilon" },
+      { id: 6, name: "Zeta" },
+    ];
+
+    // Layout has 8 entries (6 data + 2 headers) but ctx.getItems() returns
+    // only the 6 data items — headers are virtual.
+    const mockCtx = createPluginMockContext<TestItem>(dataItems, {
+      itemSize: 40,
+      containerHeight: 500,
+    });
+    // engineState.totalItems must reflect layout count (data + headers)
+    mockCtx.engineState.totalItems = 8;
+
+    mockCtx.ctx.registerMethod("_isGroupHeader", (layoutIdx: number): boolean =>
+      layoutIdx === 0 || layoutIdx === 4);
+
+    mockCtx.ctx.registerMethod("_layoutToDataIndex", (layoutIdx: number): number => {
+      if (layoutIdx === 0 || layoutIdx === 4) return -1;
+      return layoutIdx < 4 ? layoutIdx - 1 : layoutIdx - 2;
+    });
+    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (dataIdx: number): number => {
+      return dataIdx < 3 ? dataIdx + 1 : dataIdx + 2;
+    });
+
+    const plugin = selection<TestItem>({ mode });
+    plugin.setup(mockCtx.ctx);
+
+    const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
+
+    return { plugin, mockCtx, dataItems, getSelected };
+  }
+
+  it("click on first group item selects correct item", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(1)));
+    expect(getSelected()).toEqual([1]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("click on second group item selects correct item", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(5)));
+    expect(getSelected()).toEqual([4]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("click after two headers selects correct item (offset=2)", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(7)));
+    expect(getSelected()).toEqual([6]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("click on group header does not select", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(0)));
+    expect(getSelected()).toEqual([]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("click on header between groups does not select", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(4)));
+    expect(getSelected()).toEqual([]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("sequential clicks across groups select correct items", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(2)));
+    expect(getSelected()).toEqual([2]);
+
+    handler(makeClickEvent(makeItemElement(6)));
+    expect(getSelected()).toEqual([5]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("itemStateFn marks correct item as selected with offset", () => {
+    const { plugin, mockCtx } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(3)));
+
+    const stateFn = mockCtx.ctx.getItemStateFn();
+    expect(stateFn).not.toBeNull();
+
+    const state3 = { selected: false, focused: false };
+    stateFn!(3, state3);
+    expect(state3.selected).toBe(true);
+
+    const state2 = { selected: false, focused: false };
+    stateFn!(2, state2);
+    expect(state2.selected).toBe(false);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("shift+click range with offset skips headers", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset("multiple");
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(1)));
+    handler(makeClickEvent(makeItemElement(6), { shiftKey: true }));
+
+    const selected = getSelected();
+    expect(selected).toContain(1);
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected).toContain(5);
+    expect(selected).not.toContain(100);
+    expect(selected).not.toContain(200);
+    expect(selected.length).toBe(5);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("getSelectedItems returns correct item after click with offset", () => {
+    const { plugin, mockCtx } = setupWithRealOffset();
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(5)));
+
+    const getSelectedItems = mockCtx.methods.get("getSelectedItems") as () => any[];
+    const items = getSelectedItems();
+    expect(items.length).toBe(1);
+    expect(items[0].id).toBe(4);
+    expect(items[0].name).toBe("Delta");
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("focus:change event reports correct item with offset", () => {
+    const { plugin, mockCtx } = setupWithRealOffset();
+    const keyHandler = mockCtx.keydownHandlers[0]!;
+    const getSelectedItems = mockCtx.methods.get("getSelectedItems") as () => any[];
+    const getFocused = mockCtx.methods.get("_getFocusedIndex") as () => number;
+
+    // ArrowDown from -1 → skips header 0 → layout 1 (data 0, id=1)
+    keyHandler(makeKeyEvent("ArrowDown"));
+    expect(getFocused()).toBe(1);
+
+    // ArrowDown across header → layout 5 via 2→3→5
+    keyHandler(makeKeyEvent("ArrowDown")); // → 2
+    keyHandler(makeKeyEvent("ArrowDown")); // → 3
+    keyHandler(makeKeyEvent("ArrowDown")); // → 5 (skip header 4)
+    expect(getFocused()).toBe(5);
+
+    // Select via Space, verify correct item
+    keyHandler(makeKeyEvent(" "));
+    const items = getSelectedItems();
+    expect(items.length).toBe(1);
+    expect(items[0].id).toBe(4);
+    expect(items[0].name).toBe("Delta");
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("selectAll skips headers and selects only data items", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset("multiple");
+
+    (mockCtx.methods.get("selectAll") as () => void)();
+
+    const selected = getSelected();
+    expect(selected).toContain(1);
+    expect(selected).toContain(2);
+    expect(selected).toContain(3);
+    expect(selected).toContain(4);
+    expect(selected).toContain(5);
+    expect(selected).toContain(6);
+    expect(selected.length).toBe(6);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("getSelectedItems returns correct items after click with offset", () => {
+    const { plugin, mockCtx } = setupWithRealOffset("multiple");
+    const handler = mockCtx.clickHandlers[0]!;
+
+    handler(makeClickEvent(makeItemElement(6)));
+
+    const getSelectedItems = mockCtx.methods.get("getSelectedItems") as () => any[];
+    const items = getSelectedItems();
+    expect(items.length).toBe(1);
+    expect(items[0].id).toBe(5);
+    expect(items[0].name).toBe("Epsilon");
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("keyboard Space selects correct item with offset", () => {
+    const { plugin, mockCtx, getSelected } = setupWithRealOffset("multiple");
+    const keyHandler = mockCtx.keydownHandlers[0]!;
+
+    keyHandler(makeKeyEvent("ArrowDown"));
+    keyHandler(makeKeyEvent("ArrowDown"));
+    keyHandler(makeKeyEvent("ArrowDown"));
+    keyHandler(makeKeyEvent("ArrowDown"));
+
+    keyHandler(makeKeyEvent(" "));
+
+    const selected = getSelected();
+    expect(selected).toEqual([4]);
 
     plugin.destroy!();
     mockCtx.cleanup();

@@ -55,6 +55,7 @@ export const createStickyHeader = (
   stickyOffset: number = 0,
   getCompressionRatio?: () => number,
   existingContainer?: HTMLElement,
+  getHeaderOffset?: (headerLayoutIndex: number) => number,
 ): StickyHeader => {
   // Orientation helpers — resolved once
   const mainProp = horizontal ? "width" : "height";
@@ -102,7 +103,7 @@ export const createStickyHeader = (
     vSizes = new Array(groupCount);
     const ratio = getCompressionRatio ? getCompressionRatio() : 1;
     for (let i = 0; i < groupCount; i++) {
-      offsets[i] = sizeCache.getOffset(groups[i]!.headerLayoutIndex) * ratio;
+      offsets[i] = (getHeaderOffset ? getHeaderOffset(groups[i]!.headerLayoutIndex) : sizeCache.getOffset(groups[i]!.headerLayoutIndex)) * ratio;
       sizes[i] = layout.getHeaderHeight(i);
       vSizes[i] = sizes[i]! * ratio;
     }

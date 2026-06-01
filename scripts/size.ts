@@ -34,6 +34,8 @@ const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
   scale: ["scrollbar"],
   // selection does a dynamic getMethod("getGroupLayout") lookup — string only, no import
   selection: ["groups"],
+  // groups does a dynamic getMethod("getGridLayout") lookup — string only, no import
+  groups: ["grid"],
 };
 
 // ── Unique string markers per plugin ─────────────────────────────
