@@ -186,7 +186,7 @@ export function groups<T extends VListItem = VListItem>(
           const y = groupY + laneSizes[lane]!;
           gridItemPositions.set(i, { col: lane, rowY: y, h });
           sorted[sortedLen++] = [i, y, y + h];
-          laneSizes[lane] += h + gridGap;
+          laneSizes[lane] = laneSizes[lane]! + h + gridGap;
         }
       }
     } else {
@@ -227,8 +227,30 @@ export function groups<T extends VListItem = VListItem>(
 
   function getGridContentSize(): number {
     if (!gridItemPositions || gridItemPositions.size === 0) return sizeCache.getTotalSize();
-    let maxY = 0;
     const total = layout.totalEntries;
+
+    if (isMasonry) {
+      // Masonry: the last layout item may be in a shorter lane.
+      // Scan the last group (back to its header) for the tallest bottom.
+      let maxY = 0;
+      for (let i = total - 1; i >= 0; i--) {
+        const entry = layout.getEntry(i);
+        if (entry.type === "header") {
+          const headerBottom = (gridItemPositions.get(i)?.rowY ?? 0) + sizeCache.getSize(i);
+          if (headerBottom > maxY) maxY = headerBottom;
+          break;
+        }
+        const pos = gridItemPositions.get(i);
+        if (pos) {
+          const bottom = pos.rowY + (pos.h ?? sizeCache.getSize(i));
+          if (bottom > maxY) maxY = bottom;
+        }
+      }
+      return maxY;
+    }
+
+    // Grid: rows are aligned, last item bottom = content bottom.
+    let maxY = 0;
     for (let i = total - 1; i >= 0; i--) {
       const pos = gridItemPositions.get(i);
       if (pos) { maxY = pos.rowY + (pos.h ?? sizeCache.getSize(i)); break; }
@@ -928,15 +950,26 @@ export function groups<T extends VListItem = VListItem>(
         const totalLayout = layout.totalEntries;
         if (totalLayout === 0) return;
         const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
-        const offset = sizeCache.getOffset(clamped);
-        const itemSize = sizeCache.getSize(clamped);
         const cs = engineState.containerSize;
-        const totalSize = sizeCache.getTotalSize();
+
+        // Grid/masonry: use grid-aware Y positions and content size.
+        // sizeCache offsets are per-item (wrong for column layouts).
+        const gridPos = gridItemPositions?.get(clamped);
+        const offset = gridPos ? gridPos.rowY : sizeCache.getOffset(clamped);
+        const itemSize = gridPos
+          ? (gridPos.h ?? sizeCache.getSize(clamped))
+          : sizeCache.getSize(clamped);
+        const totalSize = gridItemPositions
+          ? getGridContentSize() + mainAxisPadding
+          : sizeCache.getTotalSize();
         const maxScroll = Math.max(0, totalSize - cs);
 
         const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
         const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
         const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
+
+        // Bottom padding to keep clear when aligning the last item to the end.
+        const endPad = gridItemPositions ? mainAxisPadding : 0;
 
         let pos: number;
         switch (align) {
@@ -944,7 +977,7 @@ export function groups<T extends VListItem = VListItem>(
             pos = offset - (cs - itemSize) / 2;
             break;
           case "end":
-            pos = offset - cs + itemSize;
+            pos = offset - cs + itemSize + endPad;
             break;
           default:
             pos = offset;
