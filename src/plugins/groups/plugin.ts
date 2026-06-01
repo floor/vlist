@@ -247,23 +247,11 @@ export function groups<T extends VListItem = VListItem>(
     const total = layout.totalEntries;
 
     if (isMasonry) {
-      // Masonry: the last layout item may be in a shorter lane.
-      // Scan the last group (back to its header) for the tallest bottom.
-      let maxY = 0;
-      for (let i = total - 1; i >= 0; i--) {
-        const entry = layout.getEntry(i);
-        if (entry.type === "header") {
-          const headerBottom = (gridItemPositions.get(i)?.rowY ?? 0) + sizeCache.getSize(i);
-          if (headerBottom > maxY) maxY = headerBottom;
-          break;
-        }
-        const pos = gridItemPositions.get(i);
-        if (pos) {
-          const bottom = pos.rowY + (pos.h ?? sizeCache.getSize(i));
-          if (bottom > maxY) maxY = bottom;
-        }
-      }
-      return maxY;
+      // Last group's bottom (tallest lane) is the content bottom — already
+      // computed during rebuild. Fall back to the header bottom for an
+      // empty trailing group.
+      const lastBottom = masonryGroupBottoms?.[masonryGroupBottoms.length - 1];
+      return lastBottom ?? 0;
     }
 
     // Grid: rows are aligned, last item bottom = content bottom.
