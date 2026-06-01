@@ -143,6 +143,9 @@ export function groups<T extends VListItem = VListItem>(
   // Parallel sorted array for O(log n) visible range lookup.
   // Each entry: [layoutIndex, rowY, rowY + itemHeight].
   let gridSorted: Array<[number, number, number]> | null = null;
+  // Masonry only: per-group bottom Y (tallest lane). Used by scrollToIndex
+  // align:end so the "scroll to last" reaches the true content bottom.
+  let masonryGroupBottoms: number[] | null = null;
 
   function rebuildGridPositions(): void {
     if (gridColumns <= 0) { gridItemPositions = null; gridSorted = null; return; }
@@ -161,7 +164,9 @@ export function groups<T extends VListItem = VListItem>(
       // stores fallback heights without the masonry context).
       const getItemH = masonryItemSize ?? ((di: number) => sizeCache.getSize(di));
       const laneSizes = new Float64Array(gridColumns);
+      const groupBottoms: number[] = [];
       let groupY = 0;
+      let curGroupIdx = -1;
 
       for (let i = 0; i < total; i++) {
         const entry = layout.getEntry(i);
@@ -170,12 +175,14 @@ export function groups<T extends VListItem = VListItem>(
           for (let c = 0; c < gridColumns; c++) {
             if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
           }
+          if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + tallest;
           groupY += tallest;
           const h = sizeCache.getSize(i);
           gridItemPositions.set(i, { col: -1, rowY: groupY });
           sorted[sortedLen++] = [i, groupY, groupY + h];
           groupY += h;
           laneSizes.fill(0);
+          curGroupIdx = entry.group.groupIndex;
         } else {
           let lane = 0;
           let shortest = laneSizes[0]!;
@@ -189,7 +196,17 @@ export function groups<T extends VListItem = VListItem>(
           laneSizes[lane] = laneSizes[lane]! + h + gridGap;
         }
       }
+      // Finalize the last group's bottom
+      if (curGroupIdx >= 0) {
+        let tallest = 0;
+        for (let c = 0; c < gridColumns; c++) {
+          if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
+        }
+        groupBottoms[curGroupIdx] = groupY + tallest;
+      }
+      masonryGroupBottoms = groupBottoms;
     } else {
+      masonryGroupBottoms = null;
       // Grid: row-based placement per group
       let groupY = 0;
       let itemInGroup = 0;
@@ -971,13 +988,23 @@ export function groups<T extends VListItem = VListItem>(
         // Bottom padding to keep clear when aligning the last item to the end.
         const endPad = gridItemPositions ? mainAxisPadding : 0;
 
+        // Masonry: align:end targets the group's tallest-lane bottom, not the
+        // target item's own bottom (which may be in a shorter lane). This lets
+        // "scroll to last" reach the true content bottom.
+        let endBottom = offset + itemSize;
+        if (isMasonry && masonryGroupBottoms) {
+          const gi = layout.getEntry(clamped).group.groupIndex;
+          const gb = masonryGroupBottoms[gi];
+          if (gb !== undefined) endBottom = gb;
+        }
+
         let pos: number;
         switch (align) {
           case "center":
             pos = offset - (cs - itemSize) / 2;
             break;
           case "end":
-            pos = offset - cs + itemSize + endPad;
+            pos = endBottom - cs + endPad;
             break;
           default:
             pos = offset;

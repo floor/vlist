@@ -295,6 +295,23 @@ describe("groups + masonry integration", () => {
     });
   });
 
+  describe("scroll to last", () => {
+    it("scrollToIndex(last, align:end) reaches the content bottom", () => {
+      // In masonry, the last-indexed item may be in a shorter lane.
+      // align:end must target the group's tallest-lane bottom so the
+      // scroll reaches the true content bottom (maxScroll).
+      createGroupedMasonry(40);
+      const vp = container.querySelector(".vlist-viewport") as HTMLElement;
+      const content = container.querySelector(".vlist-content") as HTMLElement;
+      const contentH = parseFloat(content.style.height);
+
+      list!.scrollToIndex(39, "end");
+
+      const maxScroll = contentH - vp.clientHeight;
+      expect(Math.abs(vp.scrollTop - maxScroll)).toBeLessThan(2);
+    });
+  });
+
   describe("destroy", () => {
     it("should clean up without errors", () => {
       createGroupedMasonry();
