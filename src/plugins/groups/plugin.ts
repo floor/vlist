@@ -346,10 +346,28 @@ export function groups<T extends VListItem = VListItem>(
     return !isPlaceholder;
   }
 
+  let lastCrossSize = 0;
+
+  function syncGridIfResized(): void {
+    if (gridColumns <= 0) return;
+    const cross = engineState.crossSize;
+    if (cross === lastCrossSize) return;
+    lastCrossSize = cross;
+    rebuildGridPositions();
+    const totalSize = getGridContentSize();
+    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+    if (stickyHeader) {
+      stickyHeader.refresh();
+      stickyHeader.update(engineState.scrollPosition);
+    }
+    forceNextRender = true;
+  }
+
   function groupsRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
     syncLayoutIfNeeded();
+    syncGridIfResized();
 
     const scrollPos = engineState.scrollPosition;
     const cs = engineState.containerSize;
@@ -491,6 +509,10 @@ export function groups<T extends VListItem = VListItem>(
       } else {
         // ── Existing unchanged element — fast path ──
         isHeader = element.classList.contains(groupHeaderClass);
+        if (isForced) {
+          applySizeStyles(element, i);
+          element.style.transform = buildTransform(i);
+        }
       }
 
       if (!isHeader && isf) {
@@ -536,6 +558,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function groupsForceRender(): void {
     if (engineState.destroyed) return;
+    syncGridIfResized();
 
     if (DEBUG) {
       console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
@@ -895,6 +918,23 @@ export function groups<T extends VListItem = VListItem>(
         if (stickyHeader) {
           stickyHeader.update(scrollPosition);
         }
+      },
+      onResize(_w: number, _h: number): void {
+        if (gridColumns <= 0) return;
+        // Grid plugin's onResize runs first (same priority, earlier in array)
+        // and updates its internal columnWidth. Now sizeCache sizes will
+        // reflect the new column width. Rebuild positions and re-render.
+        origSizeCacheRebuild(layout.totalEntries);
+        lastCrossSize = engineState.crossSize;
+        rebuildGridPositions();
+        const totalSize = getGridContentSize();
+        contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+        if (stickyHeader) {
+          stickyHeader.refresh();
+          stickyHeader.update(engineState.scrollPosition);
+        }
+        forceNextRender = true;
+        groupsRenderIfNeeded();
       },
     },
 

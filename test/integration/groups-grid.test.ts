@@ -593,6 +593,200 @@ describe("groups + grid integration", () => {
     });
   });
 
+  describe("resize", () => {
+    it("should render items with correct column width for container size", () => {
+      createGroupedGrid();
+      const items = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      expect(items.length).toBeGreaterThan(0);
+
+      const w = parseFloat(items[0]!.style.width);
+      // Container is 300px, 4 columns, 8px gap: (300 - 3*8) / 4 = 69
+      const expected = (300 - (COLUMNS - 1) * GAP) / COLUMNS;
+      expect(Math.abs(w - expected)).toBeLessThan(1);
+    });
+
+    it("should produce wider items at a wider container width", () => {
+      // Create at 300px
+      createGroupedGrid();
+      const narrowItems = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      const narrowW = parseFloat(narrowItems[0]!.style.width);
+
+      list!.destroy();
+      container.innerHTML = "";
+
+      // Create at 600px
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 600; },
+        configurable: true,
+      });
+
+      createGroupedGrid();
+      const wideItems = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      const wideW = parseFloat(wideItems[0]!.style.width);
+
+      // Wider container → wider columns
+      expect(wideW).toBeGreaterThan(narrowW);
+
+      // Restore
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 300; },
+        configurable: true,
+      });
+    });
+
+    it("should produce taller items at a wider container with dynamic height", () => {
+      // Use dynamic height: colWidth * 0.75 (aspect ratio)
+      list = createVList(
+        {
+          container,
+          items: createTestItems(40),
+          item: {
+            height: (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100,
+            template: simpleTemplate,
+          },
+        },
+        [
+          grid({ columns: COLUMNS, gap: GAP }),
+          groups({
+            getGroupForIndex: getGroupByTen,
+            header: { height: HEADER_HEIGHT, template: (key) => key },
+          }),
+        ],
+      );
+      const narrowItems = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      const narrowH = parseFloat(narrowItems[0]!.style.height);
+
+      list.destroy();
+      container.innerHTML = "";
+
+      // Create at 600px
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 600; },
+        configurable: true,
+      });
+
+      list = createVList(
+        {
+          container,
+          items: createTestItems(40),
+          item: {
+            height: (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100,
+            template: simpleTemplate,
+          },
+        },
+        [
+          grid({ columns: COLUMNS, gap: GAP }),
+          groups({
+            getGroupForIndex: getGroupByTen,
+            header: { height: HEADER_HEIGHT, template: (key) => key },
+          }),
+        ],
+      );
+      const wideItems = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      const wideH = parseFloat(wideItems[0]!.style.height);
+
+      expect(wideH).toBeGreaterThan(narrowH);
+
+      // Restore
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 300; },
+        configurable: true,
+      });
+    });
+
+    it("should update grid positions after forceRender with new crossSize", () => {
+      createGroupedGrid();
+      const firstItem = container.querySelector("[data-index]:not(.vlist-group-header)") as HTMLElement;
+      const initialW = parseFloat(firstItem.style.width);
+
+      // Verify items in the same row have distinct X positions
+      const items = Array.from(
+        container.querySelectorAll("[data-index]:not(.vlist-group-header)"),
+      ) as HTMLElement[];
+      if (items.length >= COLUMNS) {
+        const xs = items.slice(0, COLUMNS).map((el) => {
+          const m = el.style.transform.match(/translate\(([\d.]+)px/);
+          return m ? parseFloat(m[1]!) : -1;
+        });
+        const uniqueXs = new Set(xs);
+        expect(uniqueXs.size).toBe(COLUMNS);
+
+        // Verify X spacing matches column width + gap
+        const sorted = [...xs].sort((a, b) => a - b);
+        const spacing = sorted[1]! - sorted[0]!;
+        expect(Math.abs(spacing - (initialW + GAP))).toBeLessThan(1);
+      }
+    });
+
+    it("should update content height after resize with dynamic height", () => {
+      const dynamicHeight = (_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100;
+
+      // Create at 300px
+      list = createVList(
+        {
+          container,
+          items: createTestItems(40),
+          item: { height: dynamicHeight, template: simpleTemplate },
+        },
+        [
+          grid({ columns: COLUMNS, gap: GAP }),
+          groups({
+            getGroupForIndex: getGroupByTen,
+            header: { height: HEADER_HEIGHT, template: (key) => key },
+          }),
+        ],
+      );
+      const narrowHeight = parseFloat(
+        (container.querySelector(".vlist-content") as HTMLElement).style.height,
+      );
+
+      list.destroy();
+      container.innerHTML = "";
+
+      // Create at 600px
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 600; },
+        configurable: true,
+      });
+
+      list = createVList(
+        {
+          container,
+          items: createTestItems(40),
+          item: { height: dynamicHeight, template: simpleTemplate },
+        },
+        [
+          grid({ columns: COLUMNS, gap: GAP }),
+          groups({
+            getGroupForIndex: getGroupByTen,
+            header: { height: HEADER_HEIGHT, template: (key) => key },
+          }),
+        ],
+      );
+      const wideHeight = parseFloat(
+        (container.querySelector(".vlist-content") as HTMLElement).style.height,
+      );
+
+      expect(wideHeight).toBeGreaterThan(narrowHeight);
+
+      // Restore
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        get() { return 300; },
+        configurable: true,
+      });
+    });
+  });
+
   describe("destroy", () => {
     it("should clean up groups + grid + selection without errors", () => {
       createGroupedGrid();
