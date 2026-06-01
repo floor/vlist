@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 8.0 KB.
 
-**v2.1.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** [`tree()`](https://vlist.io/docs/plugins/tree) plugin — virtualized collapsible trees with async loading, indent guides, and WAI-ARIA treeview keyboard nav.
+**v2.1.2** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** groups + masonry integration, grid render hot-path optimization, and horizontal sticky group headers.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -56,19 +56,19 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 7.9 KB | Virtualization, ARIA, keyboard nav, gap, padding |
-| `data()` | +4.6 KB | Lazy loading with velocity-aware fetching |
-| `selection()` | +2.4 KB | Single/multiple selection with 2D keyboard nav |
+| **Base** | 8.0 KB | Virtualization, ARIA, keyboard nav, gap, padding |
+| `data()` | +4.7 KB | Lazy loading with velocity-aware fetching |
+| `selection()` | +2.5 KB | Single/multiple selection with 2D keyboard nav |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
-| `groups()` | +3.7 KB | Sticky/inline headers with async group discovery |
+| `groups()` | +5.2 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
-| `grid()` | +2.7 KB | 2D grid layout |
-| `masonry()` | +3.6 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `grid()` | +2.9 KB | 2D grid layout |
+| `masonry()` | +3.7 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +6.1 KB | Data table with columns, resize, sort |
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
-| `snapshots()` | +1.3 KB | Scroll position save/restore |
+| `snapshots()` | +1.2 KB | Scroll position save/restore |
 | `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Framework Adapters

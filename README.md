@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 8.0 KB.
 
-**v2.1.1** — [Changelog](./CHANGELOG.md) · Native groups + table + data + grid cross-plugin integration, pixel-perfect snapshot restore, keyboard nav fixes.
+**v2.1.1** — [Changelog](./CHANGELOG.md) · Groups + masonry integration, grid render hot-path optimization, horizontal sticky group headers.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -98,16 +98,16 @@ const list = createVList({
 | `data()` | +4.7 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.5 KB | Single/multiple selection with 2D keyboard nav |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
-| `groups()` | +4.8 KB | Sticky/inline headers with grid + table + data integration |
+| `groups()` | +5.2 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
-| `grid()` | +2.8 KB | 2D grid layout |
+| `grid()` | +2.9 KB | 2D grid layout |
 | `masonry()` | +3.7 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `table()` | +6.1 KB | Data table with columns, resize, sort |
 | `tree()` | +5.3 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
-| `snapshots()` | +1.3 KB | Scroll position save/restore |
+| `snapshots()` | +1.2 KB | Scroll position save/restore |
 | `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Examples

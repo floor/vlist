@@ -11,6 +11,25 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-06-02
+
+### Added
+
+- **Groups + Masonry integration** — groups plugin renders masonry items with shortest-lane placement
+  - Per-item heights from the raw size spec with column-width context (true masonry, not uniform rows)
+  - Lane reset at group boundaries
+  - Sticky group header support in masonry mode
+
+### Performance
+
+- **Grid hot-path** — eliminated per-frame allocations and redundant work in the render loop: hoisted class strings, cached column width/gap, reused the item-range object, and inlined row/column math
+- **Groups masonry content size** — O(1) lookup via precomputed per-group lane bottoms instead of a backward lane scan
+
+### Fixed
+
+- **Groups grid/masonry scroll-to-last** — `scrollToIndex` uses grid-aware offsets and content size; masonry `align: end` now reaches the true content bottom
+- **Horizontal sticky group header** — renders as a full-height bar beside the content instead of a collapsed strip overlapping the first column; rotated labels are anchored to the top to match the sticky overlay
+
 ## [2.1.1] - 2026-06-01
 
 ### Added
