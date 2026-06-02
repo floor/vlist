@@ -31,6 +31,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - **Table placeholder cells** — cells whose template returns an empty string (or whose default accessor has no value yet) no longer render as solid full-width boxes; the renderer injects a `.vlist-table-cell-skeleton` bar so every placeholder cell shows a clean loading skeleton
 - **Data reload no longer empties the list** — `reload()` (e.g. on a server-side sort/filter) keeps the last-known total so the list shows placeholders for the full range while reloading, instead of collapsing to an empty list when the refetch is slow or fails
 - **Data auto-retry on failed loads** — failed chunk loads now retry the visible range with exponential backoff (2s→30s), replacing placeholders automatically once the network recovers; a `window` `online` event resets the backoff and retries immediately. No longer dependent solely on the `online` event (covers server errors, timeouts, and blocked requests)
+- **Sticky group header during all-placeholder reloads** — when a reload (e.g. a server-side sort) leaves the visible range as placeholders, an enabled sticky header now stays displayed but empty instead of leaving a blank band; it fills in with the group label on recovery without a layout shift. The data plugin also rebuilds the size cache on loaded-count change (not just total change), so the grouped layout recomputes correctly after a reload that preserves the total
 
 ## [2.1.2] - 2026-06-02
 
