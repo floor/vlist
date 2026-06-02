@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-02
+
 ### Added
 
 - **Table `fillWidth`** — make rows span the full container width when columns don't (`table({ fillWidth })`), default `"spacer"`
