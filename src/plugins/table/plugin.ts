@@ -226,13 +226,14 @@ export function table<T extends VListItem = VListItem>(
       const resizable = config.resizable ?? true;
       const minColumnWidth = config.minColumnWidth ?? 50;
       const maxColumnWidth = config.maxColumnWidth ?? Infinity;
-      // `fillWidth: true` is shorthand for the proportional "stretch" mode.
+      // Default to "spacer": fill the container while preserving column
+      // widths. `false` opts out; `true` is shorthand for "stretch".
       const fillMode =
-        config.fillWidth === true
-          ? "stretch"
-          : config.fillWidth === false || config.fillWidth === undefined
-            ? "none"
-            : config.fillWidth;
+        config.fillWidth === false
+          ? "none"
+          : config.fillWidth === true
+            ? "stretch"
+            : (config.fillWidth ?? "spacer");
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 

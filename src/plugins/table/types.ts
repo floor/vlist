@@ -136,14 +136,17 @@ export interface TableConfig<T extends VListItem = VListItem> {
 
   /**
    * Make rows span the full container width when the columns don't (default:
-   * `false`). A no-op once columns already overflow the container — the table
-   * scrolls horizontally as usual.
+   * `"spacer"`). A no-op once columns already overflow the container — the
+   * table scrolls horizontally as usual.
    *
+   * - `"spacer"` (default) — keep every column's exact width and extend the row
+   *   with empty trailing space, so column widths stay meaningful while rows
+   *   still reach the container edge (background, row borders, striping
+   *   included).
    * - `"stretch"` (or `true`) — grow columns proportionally to their current
    *   width (respecting `maxWidth`) so the columns themselves fill the width.
-   * - `"spacer"` — keep every column's exact width and extend the row with
-   *   empty trailing space, so column widths stay meaningful while rows still
-   *   reach the container edge (background, row borders, and striping included).
+   * - `false` — opt out: the table is exactly as wide as the sum of its
+   *   columns, leaving empty space to the right when they don't fill it.
    */
   fillWidth?: boolean | TableFillMode;
 

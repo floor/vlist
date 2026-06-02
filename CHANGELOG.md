@@ -13,9 +13,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Added
 
-- **Table `fillWidth`** — make rows span the full container width when columns don't (`table({ fillWidth })`)
+- **Table `fillWidth`** — make rows span the full container width when columns don't (`table({ fillWidth })`), default `"spacer"`
+  - `"spacer"` (default) — keep every column's exact width and extend rows with empty trailing space, so column widths stay meaningful while backgrounds, row borders, and striping still reach the edge
   - `"stretch"` (or `true`) — grow columns proportionally to their current width (respecting `maxWidth`)
-  - `"spacer"` — keep every column's exact width and extend rows with empty trailing space, so column widths stay meaningful while backgrounds, row borders, and striping still reach the edge
+  - `false` — opt out: rows are exactly as wide as the sum of the columns
   - A no-op once columns overflow the container; recomputed on container resize and column-preset changes; `"spacer"` re-absorbs slack after a manual column resize
   - Exposes the `TableFillMode` type
 - **Data `loadInitial()`** — load page 1 deterministically regardless of container dimensions (`loadVisibleRange` stays a no-op until the viewport is measured)

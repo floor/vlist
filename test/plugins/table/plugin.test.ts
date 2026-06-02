@@ -272,13 +272,27 @@ describe("table - Setup", () => {
   });
 
   it("should set content min-width to total column width", () => {
-    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    // fillWidth: false opts out of the default "spacer" fill so the content
+    // width is exactly the sum of the columns.
+    const plugin = table({ columns: testColumns, rowHeight: 40, fillWidth: false });
     const { ctx, dom, cleanup } = createTableMockContext();
 
     plugin.setup!(ctx);
 
     // 200 + 300 + 100 = 600
     expect(dom.content.style.minWidth).toBe("600px");
+    cleanup();
+  });
+
+  it("defaults fillWidth to 'spacer' (fills the container width)", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, cleanup } = createTableMockContext();
+
+    plugin.setup!(ctx);
+
+    // Columns sum to 600 but the container is wider — the default spacer fill
+    // extends the content to the full container width.
+    expect(dom.content.style.minWidth).toBe("800px");
     cleanup();
   });
 
@@ -700,7 +714,7 @@ describe("table - Public Methods", () => {
   });
 
   it("updateColumns should rebuild header and re-render", () => {
-    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const plugin = table({ columns: testColumns, rowHeight: 40, fillWidth: false });
     const { ctx, methods, dom, engineState, cleanup } = createTableMockContext();
     engineState.containerSize = 600;
 
