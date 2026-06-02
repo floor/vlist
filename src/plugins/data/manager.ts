@@ -59,6 +59,10 @@ export interface DataManagerConfig<T extends VListItem = VListItem> {
   /** Callback when items are loaded */
   onItemsLoaded?: (items: T[], offset: number, total: number) => void;
 
+  /** Callback when a chunk load fails (not for intentional aborts). Receives
+   *  the error and the range that failed, so callers can schedule a retry. */
+  onLoadError?: (error: Error, range: Range) => void;
+
   /** Callback when items are evicted */
   onItemsEvicted?: (count: number) => void;
 }
@@ -200,6 +204,7 @@ export const createDataManager = <T extends VListItem = VListItem>(
     onDataChange,
     onItemsLoaded,
     onItemsEvicted,
+    onLoadError,
   } = config;
 
   // Create sparse storage
@@ -662,6 +667,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
           // AbortError is intentional cancellation — don't surface as an error
           if ((err as Error)?.name === "AbortError") return;
           error = err instanceof Error ? err : new Error(String(err));
+          // Surface the failure (with its range) so callers can retry. The
+          // range stays unloaded and out of activeLoads, so a later retry or
+          // scroll re-attempts it.
+          onLoadError?.(error, chunk);
         } finally {
           activeLoads.delete(key);
           const prIdx = pendingRanges.findIndex(
@@ -730,7 +739,10 @@ export const createDataManager = <T extends VListItem = VListItem>(
     // which avoids a wasted request to offset=0 when the viewport
     // is scrolled elsewhere.
     storage.clear();
-    storage.setTotal(0); // Reset total to 0 so scrollbar updates correctly
+    // Keep the last-known total so the list shows placeholders for the full
+    // range while the new data loads (and stays as placeholders if the reload
+    // fails) instead of collapsing to an empty list. setItems corrects the
+    // total once the first chunk of the new query arrives.
     idToIndex.clear();
     if (placeholders) placeholders.clear();
     abortAndClearLoads();

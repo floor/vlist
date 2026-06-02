@@ -45,6 +45,13 @@ export const LOAD_VELOCITY_THRESHOLD = 15;
 /** Maximum concurrent chunk requests (0 = unlimited) */
 export const MAX_CONCURRENT_LOADS = 6;
 
+/** Initial delay before auto-retrying a failed load (ms) */
+export const LOAD_RETRY_BASE_DELAY = 2000;
+
+/** Maximum delay between auto-retries of a failed load (ms) — caps the
+ *  exponential backoff so recovery stays responsive once the network returns */
+export const LOAD_RETRY_MAX_DELAY = 30000;
+
 // =============================================================================
 // Scale
 // =============================================================================
