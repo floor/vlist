@@ -238,6 +238,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const cellClass = `${classPrefix}-table-cell`;
   const cellCenterClass = `${classPrefix}-table-cell--center`;
   const cellRightClass = `${classPrefix}-table-cell--right`;
+  const cellSkeletonClass = `${classPrefix}-table-cell-skeleton`;
   const oddClass = `${classPrefix}-item--odd`;
   const placeholderClass = `${classPrefix}-item--placeholder`;
   const replacedClass = `${classPrefix}-item--replaced`;
@@ -276,6 +277,19 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       } else {
         cell.textContent = text;
       }
+    }
+
+    // Placeholder skeleton invariant: a cell must contain an element for the
+    // skeleton CSS to target. When a cell template returns an empty string (a
+    // common "no data yet" path) or the default accessor has no value, the
+    // cell would be a bare leaf — and the generic placeholder rule paints the
+    // whole fixed-width cell as a solid box. Inject a skeleton bar so every
+    // placeholder cell renders a clean, consistent loading bar instead.
+    if (isPlaceholder && cell.firstElementChild === null) {
+      cell.replaceChildren();
+      const bar = document.createElement("span");
+      bar.className = cellSkeletonClass;
+      cell.appendChild(bar);
     }
   };
 

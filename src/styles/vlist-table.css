@@ -443,7 +443,9 @@
    Placeholder Rows
    ============================================================================= */
 
-/* Hide text — all placeholder cells have child elements (renderer wraps bare text) */
+/* Hide text — the renderer guarantees every placeholder cell has an element
+   child (a template result or an injected .vlist-table-cell-skeleton), so the
+   cell itself is never a bare leaf painted as a box. */
 .vlist-table-row.vlist-item--placeholder .vlist-table-cell {
     color: transparent;
 }
@@ -456,6 +458,15 @@
     animation: vlist-placeholder-pulse 2s ease-in-out infinite;
     line-height: 1;
     min-width: 1em;
+}
+
+/* Injected skeleton bar for cells whose template produced no element (empty
+   string / bare value). Sized to a fraction of the cell so it reads as loading
+   text rather than a tiny nub; honours the column's flex alignment. */
+.vlist-table-row.vlist-item--placeholder .vlist-table-cell > .vlist-table-cell-skeleton {
+    display: inline-block;
+    width: 60%;
+    height: 0.8em;
 }
 
 /* Nested children (e.g. spans inside a wrapper div) — invisible so only parent bar shows */
