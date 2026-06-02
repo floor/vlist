@@ -341,7 +341,10 @@ export function search<T extends VListItem = VListItem>(
 
   return {
     name: "search",
-    priority: 25,
+    // Run after selection (50) so its item-state fn is captured and composed
+    // (state.search alongside state.selected), and so a filter override is the
+    // outermost item transform.
+    priority: 55,
 
     setup(context: PluginContext<T>): void {
       ctx = context;
