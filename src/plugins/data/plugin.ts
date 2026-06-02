@@ -107,6 +107,12 @@ export function data<T extends VListItem = VListItem>(
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let retryDelay = LOAD_RETRY_BASE_DELAY;
 
+  // Track the inputs to the last size-cache rebuild so onDataChange can rebuild
+  // whenever the total OR the loaded count changes (a reload clears loaded
+  // items without changing the total).
+  let lastRebuildTotal = -1;
+  let lastRebuildCached = -1;
+
   // Track last requested chunk range to skip redundant ensure() calls
   let lastFirstChunk = -1;
   let lastLastChunk = -1;
@@ -228,9 +234,17 @@ export function data<T extends VListItem = VListItem>(
         onDataChange: () => {
           if (engineState.initialized) {
             const newTotal = dataManager.getTotal();
+            const newCached = dataManager.getCached();
             engineState.totalItems = newTotal;
-            const oldTotal = sizeCache.getTotal();
-            if (newTotal !== oldTotal) {
+            // Rebuild when the total OR the loaded count changed. A reload
+            // clears loaded items without changing the total — layout
+            // interceptors (groups) must then recompute boundaries from the
+            // now-placeholder data, otherwise a stale group header / sticky
+            // lingers over the placeholders. Tracking both also dedupes the
+            // rebuild that previously lived in onItemsLoaded.
+            if (newTotal !== lastRebuildTotal || newCached !== lastRebuildCached) {
+              lastRebuildTotal = newTotal;
+              lastRebuildCached = newCached;
               sizeCache.rebuild(newTotal);
             }
             ctx.updateContentSize(sizeCache.getTotalSize());
@@ -242,9 +256,8 @@ export function data<T extends VListItem = VListItem>(
           // retry and reset the backoff window.
           resetRetry();
           if (engineState.initialized) {
-            // Always rebuild sizeCache so layout interceptors (groups plugin)
-            // can detect newly loaded items and rebuild their layout.
-            sizeCache.rebuild(dataManager.getTotal());
+            // onDataChange fires first and already rebuilt the size cache (the
+            // loaded count changed) — just commit the size and render.
             ctx.updateContentSize(sizeCache.getTotalSize());
             forceRender();
             emitter.emit("load:end", { items: loadedItems, total: dataManager.getTotal() });

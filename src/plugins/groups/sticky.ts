@@ -211,7 +211,16 @@ export const createStickyHeader = (
 
   // Scroll handler — hot path
   const update = (scroll: number): void => {
-    if (groupCount === 0) { hide(); return; }
+    if (groupCount === 0) {
+      // No resolvable groups (e.g. an all-placeholder range while data loads).
+      // Keep an enabled sticky header displayed but empty rather than hiding
+      // it — the bar stays in place and fills in once groups resolve, avoiding
+      // a layout shift on recovery.
+      if (transitioning) cancel();
+      if (!visible) show();
+      setCurrent(-1);
+      return;
+    }
     if (scroll < offsets[0]!) { hide(); return; }
 
     // Binary search — pure array reads, no function calls
