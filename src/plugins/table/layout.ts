@@ -5,15 +5,17 @@
  * Column width resolution strategy:
  * 1. Columns with explicit `width` get their requested width (clamped to min/max)
  * 2. Remaining container space is distributed equally among columns without `width`
- * 3. If all columns have explicit widths and total < container, no stretching occurs
- * 4. If total column width > container, the table scrolls horizontally
+ * 3. If all columns have explicit widths and total < container, the leftover is
+ *    handled by the `fillMode`: `none` leaves a gap, `stretch` grows columns
+ *    proportionally, `spacer` extends the row with empty trailing space
+ * 4. If total column width > container, the table scrolls horizontally (fill is a no-op)
  *
  * All offset calculations are O(n) where n = number of columns (typically small).
  * Resize operations recalculate offsets for columns after the resized one.
  */
 
 import type { VListItem } from "../../types";
-import type { TableColumn, ResolvedColumn, TableLayout } from "./types";
+import type { TableColumn, ResolvedColumn, TableLayout, TableFillMode } from "./types";
 
 // =============================================================================
 // Defaults
@@ -40,10 +42,14 @@ export const createTableLayout = <T extends VListItem = VListItem>(
   globalMinWidth: number = MIN_COLUMN_WIDTH,
   globalMaxWidth: number = MAX_COLUMN_WIDTH,
   globalResizable: boolean = true,
+  fillMode: "none" | TableFillMode = "none",
 ): TableLayout<T> => {
   let defs = columnDefs;
   let resolved: ResolvedColumn<T>[] = [];
   let totalWidth = 0;
+  // Remembered so a column resize can re-apply the fill without the plugin
+  // having to thread the container width back through.
+  let lastContainerWidth = 0;
 
   // =========================================================================
   // Column Resolution
@@ -74,7 +80,38 @@ export const createTableLayout = <T extends VListItem = VListItem>(
    * - If no columns lack a width, total is just the sum of assigned widths
    * - Widths are always clamped to [minWidth, maxWidth]
    */
+  /**
+   * Make the table span the full container width when columns leave a gap.
+   * A no-op once columns already overflow the container.
+   *
+   * - `stretch` — grow columns proportionally to their current width
+   *   (preserves relative proportions), clamped to maxWidth
+   * - `spacer` — keep column widths and extend the rendered width, leaving
+   *   the trailing space empty
+   */
+  const applyFill = (): void => {
+    if (fillMode === "none" || totalWidth <= 0 || totalWidth >= lastContainerWidth) {
+      return;
+    }
+
+    if (fillMode === "spacer") {
+      totalWidth = lastContainerWidth;
+      return;
+    }
+
+    // stretch
+    const extra = lastContainerWidth - totalWidth;
+    const base = totalWidth;
+    for (let i = 0; i < resolved.length; i++) {
+      const c = resolved[i]!;
+      c.width = clamp(c.width + extra * (c.width / base), c.minWidth, c.maxWidth);
+    }
+    recalculateOffsets();
+  };
+
   const resolve = (containerWidth: number): void => {
+    lastContainerWidth = containerWidth;
+
     if (resolved.length === 0) {
       totalWidth = 0;
       return;
@@ -111,6 +148,9 @@ export const createTableLayout = <T extends VListItem = VListItem>(
 
     // Third pass: compute cumulative offsets and total width
     recalculateOffsets();
+
+    // Optional fourth pass: fill leftover container width (stretch or spacer).
+    applyFill();
   };
 
   /**
@@ -149,6 +189,10 @@ export const createTableLayout = <T extends VListItem = VListItem>(
 
     // Recalculate offsets from this column onward
     recalculateOffsets();
+
+    // Spacer mode keeps rows spanning the container after a manual resize by
+    // re-absorbing the slack. Stretch mode leaves the user's widths as-is.
+    if (fillMode === "spacer") applyFill();
 
     return clamped;
   };

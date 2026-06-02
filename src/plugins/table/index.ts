@@ -19,6 +19,7 @@ export { createTableRenderer, type TableRendererInstance } from "./renderer";
 export type {
   TableConfig,
   TableColumn,
+  TableFillMode,
   TableLayout,
   TableHeader,
   TableRenderer,

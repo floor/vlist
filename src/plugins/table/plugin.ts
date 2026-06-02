@@ -226,6 +226,13 @@ export function table<T extends VListItem = VListItem>(
       const resizable = config.resizable ?? true;
       const minColumnWidth = config.minColumnWidth ?? 50;
       const maxColumnWidth = config.maxColumnWidth ?? Infinity;
+      // `fillWidth: true` is shorthand for the proportional "stretch" mode.
+      const fillMode =
+        config.fillWidth === true
+          ? "stretch"
+          : config.fillWidth === false || config.fillWidth === undefined
+            ? "none"
+            : config.fillWidth;
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 
@@ -242,6 +249,7 @@ export function table<T extends VListItem = VListItem>(
         minColumnWidth,
         maxColumnWidth,
         resizable,
+        fillMode,
       );
 
       // ── Set row height ──────────────────────────────────────────
