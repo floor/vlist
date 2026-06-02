@@ -257,6 +257,16 @@ export function data<T extends VListItem = VListItem>(
         }
       });
 
+      // Load the first page deterministically, independent of container
+      // dimensions. Use when you need data loaded from the top regardless of
+      // layout state (e.g. an explicit reload before the viewport is measured);
+      // loadVisibleRange is a no-op until the container has a measured height.
+      ctx.registerMethod("loadInitial", async (): Promise<void> => {
+        emitLoadStart(0);
+        await dataManager.loadInitial();
+        ctx.forceRender();
+      });
+
       ctx.registerMethod("getTotal", (): number => {
         return dataManager.getTotal();
       });
@@ -417,6 +427,27 @@ export function data<T extends VListItem = VListItem>(
         lastLastChunk = -1;
         loadPendingRange();
         resetDeceleration();
+      },
+
+      onResize(): void {
+        if (engineState.destroyed) return;
+
+        // A resize changes the visible window — like a scroll. When the
+        // container gains dimensions (e.g. first layout after mount) and a
+        // total is already declared, ensure the now-visible range loads.
+        // ensure() dedupes against cached/in-flight chunks, so this is a
+        // no-op when the range is already loading or loaded.
+        const total = dataManager.getTotal();
+        if (total <= 0) return;
+        if (engineState.visibleCount <= 0 || engineState.startIndex >= total) return;
+
+        const end = Math.min(
+          engineState.startIndex + engineState.visibleCount - 1,
+          total - 1,
+        );
+        if (end < engineState.startIndex) return;
+        emitLoadStart(engineState.startIndex, end - engineState.startIndex + 1);
+        ensure(engineState.startIndex, end).catch(onEnsureError);
       },
     },
 

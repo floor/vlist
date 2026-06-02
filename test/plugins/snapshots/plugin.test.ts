@@ -2237,3 +2237,103 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     gridCtx.cleanup();
   });
 });
+
+// =============================================================================
+// restoreScroll — Promise return (awaitable restore)
+// =============================================================================
+
+describe("snapshots - restoreScroll returns a Promise", () => {
+  it("should return a thenable", () => {
+    const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    const result = restore({ index: 5, offsetInItem: 0, total: 100 });
+
+    expect(result).toBeInstanceOf(Promise);
+    cleanup();
+  });
+
+  it("should resolve after loadVisibleRange completes", async () => {
+    let loadResolved = false;
+    const loadVisibleFn = mock(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+      loadResolved = true;
+    });
+
+    const { ctx, methods, cleanup } = createMockContext({
+      totalItems: 100,
+      itemHeight: 48,
+      containerSize: 500,
+    });
+    methods.set("loadVisibleRange", loadVisibleFn);
+
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    await restore({ index: 5, offsetInItem: 0, total: 100 });
+
+    // The awaited restore must not resolve before the data load finished.
+    expect(loadVisibleFn).toHaveBeenCalled();
+    expect(loadResolved).toBe(true);
+    cleanup();
+  });
+
+  it("should resolve immediately when there is no data to restore (total 0)", async () => {
+    const { ctx, methods, cleanup } = createMockContext({ totalItems: 0, itemHeight: 48 });
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    // Should settle without hanging.
+    await restore({ index: 0, offsetInItem: 0, total: 0 });
+
+    expect(true).toBe(true); // reached here ⇒ promise resolved
+    cleanup();
+  });
+
+  it("should resolve even when loadVisibleRange rejects (best-effort)", async () => {
+    const loadVisibleFn = mock(async () => {
+      throw new Error("network down");
+    });
+
+    const { ctx, methods, cleanup } = createMockContext({
+      totalItems: 100,
+      itemHeight: 48,
+      containerSize: 500,
+    });
+    methods.set("loadVisibleRange", loadVisibleFn);
+
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+
+    // Must settle (resolve, not reject) so awaiting callers never hang or throw.
+    await expect(restore({ index: 5, offsetInItem: 0, total: 100 })).resolves.toBeUndefined();
+    cleanup();
+  });
+
+  it("should resolve via reload when loadVisibleRange is absent", async () => {
+    const reloadFn = mock(async () => {});
+
+    const { ctx, methods, cleanup } = createMockContext({
+      totalItems: 100,
+      itemHeight: 48,
+      containerSize: 500,
+    });
+    // No loadVisibleRange registered — falls back to reload.
+    methods.set("reload", reloadFn);
+
+    const plugin = snapshots<TestItem>();
+    plugin.setup(ctx);
+
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    await restore({ index: 5, offsetInItem: 0, total: 100 });
+
+    expect(reloadFn).toHaveBeenCalled();
+    cleanup();
+  });
+});

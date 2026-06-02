@@ -506,6 +506,163 @@ describe("async - loadVisibleRange Method", () => {
 });
 
 // =============================================================================
+// loadInitial Method
+// =============================================================================
+
+describe("async - loadInitial Method", () => {
+  it("should register the loadInitial method", () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({ visibleCount: 0 });
+
+    plugin.setup!(ctx);
+
+    expect(methods.get("loadInitial")).toBeInstanceOf(Function);
+  });
+
+  it("should load page 1 from offset 0 even when visibleCount is 0", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0, // container not laid out yet
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    // Unlike loadVisibleRange (a no-op at visibleCount=0), loadInitial fetches.
+    expect(adapter.read).toHaveBeenCalled();
+    expect((adapter.read as any).mock.calls[0][0].offset).toBe(0);
+
+    const getLoadedCount = methods.get("_getLoadedCount")!;
+    expect(getLoadedCount()).toBeGreaterThan(0);
+  });
+
+  it("should emit load:start and load:end around the fetch", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods, emitter } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    // load:end fires from onItemsLoaded only once the engine is initialized.
+    // Set after setup so construction-time notifyDataChange isn't affected.
+    ctx.getState().initialized = true;
+
+    let startEmitted = false;
+    let endEmitted = false;
+    emitter.on("load:start", () => { startEmitted = true; });
+    emitter.on("load:end", () => { endEmitted = true; });
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    expect(startEmitted).toBe(true);
+    expect(endEmitted).toBe(true);
+  });
+
+  it("should call forceRender after loading", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods, getForceRenderCallCount } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    const countBefore = getForceRenderCallCount();
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    expect(getForceRenderCallCount()).toBeGreaterThan(countBefore);
+  });
+});
+
+// =============================================================================
+// onResize Hook — load visible range when the container gains dimensions
+// =============================================================================
+
+describe("async - onResize Hook", () => {
+  it("should ensure the visible range when total is set and container has dimensions", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).toHaveBeenCalled();
+    expect((adapter.read as any).mock.calls[0][0].offset).toBe(0);
+  });
+
+  it("should be a no-op when no total is declared", async () => {
+    const adapter = createMockAdapter(100);
+    // No `total` provided → dataManager.getTotal() stays 0 after setup.
+    const plugin = dataPlugin({ adapter, autoLoad: false });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+
+  it("should be a no-op when visibleCount is 0", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+
+  it("should be a no-op when destroyed", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+      destroyed: true,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    expect(() => plugin.hooks!.onResize!(800, 600)).not.toThrow();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
 // Network Recovery — online event
 // =============================================================================
 
