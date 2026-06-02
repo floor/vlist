@@ -21,13 +21,53 @@ import type { ItemState } from "../../types";
 import { makeGetText, textMatches, highlightElement, type FieldAccessor } from "./match";
 import { createSearchBar, type SearchBar } from "./searchbar";
 
+/**
+ * Consumer-facing UI text for the search bar (RFC-010 — Externalized UI Text).
+ * This is the plugin's entire human-language surface: static accessible names
+ * plus the dynamic counter formatters. All fields are optional; unset fields
+ * fall back to {@link DEFAULT_SEARCH_TEXT} (English). Consumers localizing for a
+ * non-English document should override these *and* set `lang` on the page.
+ */
+export interface SearchText {
+  /** Input placeholder + accessible name. */
+  placeholder?: string;
+  /** Accessible name for the clear (×) button. */
+  clear?: string;
+  /** Accessible name for the previous-match button (navigate mode). */
+  previous?: string;
+  /** Accessible name for the next-match button (navigate mode). */
+  next?: string;
+  /** Counter text when there are no matches. */
+  noResults?: string;
+  /** Counter text in filter mode — total match count. */
+  results?: (count: number) => string;
+  /** Counter text in navigate mode — current position within matches. */
+  position?: (current: number, total: number) => string;
+  /** Accessible name for the `role="search"` landmark. Unnamed when omitted. */
+  region?: string;
+}
+
+/**
+ * Default English UI text for the search plugin. The single, documented,
+ * fully-overridable language surface (RFC-010): the only place human-readable
+ * strings live in the library.
+ */
+export const DEFAULT_SEARCH_TEXT: Required<SearchText> = {
+  placeholder: "Search…",
+  clear: "Clear search",
+  previous: "Previous match",
+  next: "Next match",
+  noResults: "No results",
+  results: (count) => `${count} result${count === 1 ? "" : "s"}`,
+  position: (current, total) => `${current} of ${total}`,
+  region: "",
+};
+
 export interface SearchPluginConfig<T extends VListItem = VListItem> {
   /** Hide non-matching items ("filter") or jump between matches ("navigate"). Default "filter". */
   mode?: "filter" | "navigate";
   /** Where to place the search bar. "none" = invisible, keyboard-only. Default "top". */
   position?: "top" | "bottom" | "none";
-  /** Input placeholder. Default "Search…". */
-  placeholder?: string;
   /** Field(s) to search — a property key, accessor, or (default) all string values. */
   field?: FieldAccessor<T>;
   /** Case-sensitive matching. Default false. */
@@ -38,6 +78,11 @@ export interface SearchPluginConfig<T extends VListItem = VListItem> {
   minLength?: number;
   /** Auto-close the search bar after N ms of inactivity (0 = never). Default 0. */
   cancelTimeout?: number;
+  /** Visual style of the search bar. `"md3"` applies a Material Design 3 pill
+   *  (requires the search stylesheet). Default `"default"`. */
+  variant?: "default" | "md3";
+  /** Consumer-supplied UI text / localization. Falls back to {@link DEFAULT_SEARCH_TEXT}. */
+  text?: SearchText;
 }
 
 export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T> {}
@@ -47,11 +92,12 @@ export function search<T extends VListItem = VListItem>(
 ): SearchPluginInstance<T> {
   const mode = config.mode ?? "filter";
   const position = config.position ?? "top";
-  const placeholder = config.placeholder ?? "Search…";
+  const text: Required<SearchText> = { ...DEFAULT_SEARCH_TEXT, ...config.text };
   const caseSensitive = config.caseSensitive ?? false;
   const doHighlight = config.highlight !== false;
   const minLength = config.minLength ?? 1;
   const cancelTimeout = config.cancelTimeout ?? 0;
+  const variant = config.variant ?? "default";
   const getText = makeGetText<T>(config.field);
 
   let ctx: PluginContext<T>;
@@ -162,11 +208,11 @@ export function search<T extends VListItem = VListItem>(
     if (query.length < minLength) {
       bar.setCounter("");
     } else if (matches.length === 0) {
-      bar.setCounter("No results");
+      bar.setCounter(text.noResults);
     } else if (mode === "navigate") {
-      bar.setCounter(`${current + 1} of ${matches.length}`);
+      bar.setCounter(text.position(current + 1, matches.length));
     } else {
-      bar.setCounter(`${matches.length} result${matches.length === 1 ? "" : "s"}`);
+      bar.setCounter(text.results(matches.length));
     }
   };
 
@@ -360,17 +406,29 @@ export function search<T extends VListItem = VListItem>(
           ctx.dom.viewport,
           classPrefix,
           position,
-          placeholder,
+          {
+            placeholder: text.placeholder,
+            clear: text.clear,
+            previous: text.previous,
+            next: text.next,
+            region: text.region,
+          },
           listId,
           {
             onInput: (value) => applyQuery(value),
+            onClear: () => applyQuery(""),
             onPrev: () => step(-1),
             onNext: () => step(1),
-            onClose: () => closeSearch(),
             onKeydown: onBarKeydown,
           },
         );
         bar.showNav(mode === "navigate");
+        if (variant !== "default") {
+          bar.root.classList.add(`${classPrefix}-search--${variant}`);
+        }
+        // Lay the root out as a column so the bar reserves space and the
+        // viewport fills the rest (any bar height) instead of overflowing.
+        ctx.dom.root.classList.add(`${classPrefix}--has-search`);
       }
 
       // Compose search state into the template state.
@@ -414,7 +472,11 @@ export function search<T extends VListItem = VListItem>(
         restoreItems();
         bar?.destroy();
         bar = null;
-        ctx.dom.root.classList.remove(`${classPrefix}--search-open`, `${classPrefix}--searching`);
+        ctx.dom.root.classList.remove(
+          `${classPrefix}--search-open`,
+          `${classPrefix}--searching`,
+          `${classPrefix}--has-search`,
+        );
       });
     },
 

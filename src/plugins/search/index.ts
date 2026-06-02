@@ -4,5 +4,11 @@
  * and `<mark>` highlighting.
  */
 
-export { search, type SearchPluginConfig, type SearchPluginInstance } from "./plugin";
+export {
+  search,
+  DEFAULT_SEARCH_TEXT,
+  type SearchPluginConfig,
+  type SearchPluginInstance,
+  type SearchText,
+} from "./plugin";
 export { makeGetText, type FieldAccessor } from "./match";

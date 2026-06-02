@@ -84,7 +84,30 @@ describe("search bar", () => {
     expect(bar!.classList.contains("vlist-search--top")).toBe(true);
     // Top bar precedes the viewport in DOM order.
     expect(bar!.compareDocumentPosition(viewport!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(container.querySelector(".vlist-search-input")).not.toBeNull();
+    expect(container.querySelector(".vlist-search__input")).not.toBeNull();
+  });
+
+  it("uses the modular BEM structure (container / leading-icon / input / clear)", () => {
+    const { container } = makeList();
+    const bar = container.querySelector(".vlist-search")!;
+    expect(bar.getAttribute("role")).toBe("search");
+    expect(bar.classList.contains("vlist-search--bar")).toBe(true);
+    expect(container.querySelector(".vlist-search__container")).not.toBeNull();
+    expect(container.querySelector(".vlist-search__leading-icon")).not.toBeNull();
+    expect(
+      container.querySelector(".vlist-search__input-wrapper .vlist-search__input"),
+    ).not.toBeNull();
+    expect(container.querySelector(".vlist-search__clear-button")).not.toBeNull();
+  });
+
+  it("toggles the clear button --hidden based on the query", () => {
+    const { container, list } = makeList();
+    const clear = container.querySelector(".vlist-search__clear-button")!;
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(true);
+    q(list, "setQuery")("ap");
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(false);
+    q(list, "setQuery")("");
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(true);
   });
 
   it("positions the bar at the bottom when configured", () => {
@@ -112,6 +135,64 @@ describe("search bar", () => {
     list.destroy();
     lists = lists.filter((l) => l !== list);
     expect(container.querySelector(".vlist-search")).toBeNull();
+  });
+});
+
+// =============================================================================
+// Externalized UI text (RFC-010)
+// =============================================================================
+
+describe("externalized text (RFC-010)", () => {
+  it("renders the leading magnifier as a decorative, non-focusable element", () => {
+    const { container } = makeList();
+    const icon = container.querySelector(".vlist-search__leading-icon")!;
+    expect(icon.tagName).toBe("SPAN"); // not a <button>
+    expect(icon.getAttribute("aria-hidden")).toBe("true");
+    expect(icon.hasAttribute("tabindex")).toBe(false);
+  });
+
+  it("leaves the search landmark unnamed by default", () => {
+    const { container } = makeList();
+    const bar = container.querySelector(".vlist-search")!;
+    expect(bar.getAttribute("role")).toBe("search");
+    expect(bar.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("names the landmark only when text.region is provided", () => {
+    const { container } = makeList({ text: { region: "Recherche" } });
+    expect(container.querySelector(".vlist-search")!.getAttribute("aria-label")).toBe("Recherche");
+  });
+
+  it("uses consumer-supplied placeholder and button labels", () => {
+    const { container } = makeList({
+      mode: "navigate",
+      text: { placeholder: "Filtrer…", clear: "Effacer", previous: "Précédent", next: "Suivant" },
+    });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    expect(input.placeholder).toBe("Filtrer…");
+    expect(input.getAttribute("aria-label")).toBe("Filtrer…");
+    expect(container.querySelector(".vlist-search__clear-button")!.getAttribute("aria-label")).toBe("Effacer");
+    expect(container.querySelector(".vlist-search__nav-prev")!.getAttribute("aria-label")).toBe("Précédent");
+    expect(container.querySelector(".vlist-search__nav-next")!.getAttribute("aria-label")).toBe("Suivant");
+  });
+
+  it("formats filter-mode counter text via consumer-supplied functions", () => {
+    const { container, list } = makeList({
+      text: { noResults: "Aucun résultat", results: (n) => `${n} trouvé${n === 1 ? "" : "s"}` },
+    });
+    q(list, "setQuery")("ap"); // 3 matches
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("3 trouvés");
+    q(list, "setQuery")("zzz"); // none
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("Aucun résultat");
+  });
+
+  it("formats the navigate-mode position via text.position", () => {
+    const { container, list } = makeList({
+      mode: "navigate",
+      text: { position: (c, t) => `${c}/${t}` },
+    });
+    q(list, "setQuery")("ap");
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1/3");
   });
 });
 
@@ -290,28 +371,28 @@ describe("events", () => {
 describe("search bar input", () => {
   it("typing in the input filters and updates the counter", () => {
     const { container, list } = makeList({ mode: "filter" });
-    const input = container.querySelector(".vlist-search-input") as HTMLInputElement;
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
     input.value = "ap";
     input.dispatchEvent(new Event("input"));
     expect(list.total).toBe(3);
-    const counter = container.querySelector(".vlist-search-counter");
+    const counter = container.querySelector(".vlist-search__counter");
     expect(counter!.textContent).toBe("3 results");
   });
 
   it("shows 'No results' when nothing matches", () => {
     const { container, list } = makeList();
-    const input = container.querySelector(".vlist-search-input") as HTMLInputElement;
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
     input.value = "zzz";
     input.dispatchEvent(new Event("input"));
-    const counter = container.querySelector(".vlist-search-counter");
+    const counter = container.querySelector(".vlist-search__counter");
     expect(counter!.textContent).toBe("No results");
   });
 
   it("navigate-mode counter shows 'n of m'", () => {
     const { container, list } = makeList({ mode: "navigate" });
     q(list, "setQuery")("ap");
-    expect(container.querySelector(".vlist-search-counter")!.textContent).toBe("1 of 3");
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1 of 3");
     q(list, "nextMatch")();
-    expect(container.querySelector(".vlist-search-counter")!.textContent).toBe("2 of 3");
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 3");
   });
 });

@@ -39,8 +39,8 @@ export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
 export { tree } from "./plugins/tree";
 export type { TreePluginConfig, FlatNode } from "./plugins/tree";
-export { search } from "./plugins/search";
-export type { SearchPluginConfig } from "./plugins/search";
+export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
+export type { SearchPluginConfig, SearchText } from "./plugins/search";
 
 // Utils
 export { createStats } from "./utils/stats";
