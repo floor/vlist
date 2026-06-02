@@ -59,6 +59,7 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 | **Base** | 8.0 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.5 KB | Single/multiple selection with 2D keyboard nav |
+| `search()` | +2.4 KB | Search bar: filter/navigate modes, match highlighting |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
 | `groups()` | +5.2 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |

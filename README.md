@@ -13,7 +13,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
 - **8.0 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
-- **Tree, grid, masonry, table, groups, data, selection, sortable, transition, scale** — all opt-in
+- **Tree, grid, masonry, table, groups, data, selection, search, sortable, transition, scale** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
 **18 interactive examples, docs & benchmarks → [vlist.io](https://vlist.io)**
@@ -97,6 +97,7 @@ const list = createVList({
 | **Base** | 8.0 KB | Virtualization, ARIA, keyboard nav, gap, padding |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.5 KB | Single/multiple selection with 2D keyboard nav |
+| `search()` | +2.4 KB | Search bar: filter/navigate modes, match highlighting |
 | `scale()` | +3.9 KB | 1M+ items via scroll compression |
 | `groups()` | +5.2 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |
@@ -212,6 +213,24 @@ const list = createVList({
       },
     },
   }),
+])
+```
+
+### Search
+
+```typescript
+import { createVList, search } from 'vlist'
+import 'vlist/styles/search'
+
+const list = createVList({
+  container: '#app',
+  items: people,
+  item: { height: 48, template: renderPerson },
+}, [
+  // Zero-config: a search bar at the top, Ctrl/⌘+F to focus, type to filter,
+  // matches highlighted with <mark>. Use mode: 'navigate' to jump between
+  // matches instead of hiding non-matches.
+  search(),
 ])
 ```
 
