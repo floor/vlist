@@ -11,6 +11,25 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- **Table `fillWidth`** — make rows span the full container width when columns don't (`table({ fillWidth })`)
+  - `"stretch"` (or `true`) — grow columns proportionally to their current width (respecting `maxWidth`)
+  - `"spacer"` — keep every column's exact width and extend rows with empty trailing space, so column widths stay meaningful while backgrounds, row borders, and striping still reach the edge
+  - A no-op once columns overflow the container; recomputed on container resize and column-preset changes; `"spacer"` re-absorbs slack after a manual column resize
+  - Exposes the `TableFillMode` type
+- **Data `loadInitial()`** — load page 1 deterministically regardless of container dimensions (`loadVisibleRange` stays a no-op until the viewport is measured)
+- **Data `onResize` hook** — loads the visible range when the container first gains dimensions
+
+### Changed
+
+- **Snapshots `restoreScroll()`** now returns `Promise<void>` that resolves once the visible data has loaded, so callers can `await` the full restore instead of relying on fire-and-forget rAF
+
+### Fixed
+
+- **Click resolution with groups** — `resolveClickedItem` maps the layout index to the data index when the groups plugin is active, fixing clicks resolving to the wrong item past a group header
+- **Table placeholder cells** — cells whose template returns an empty string (or whose default accessor has no value yet) no longer render as solid full-width boxes; the renderer injects a `.vlist-table-cell-skeleton` bar so every placeholder cell shows a clean loading skeleton
+
 ## [2.1.2] - 2026-06-02
 
 ### Added
