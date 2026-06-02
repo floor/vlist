@@ -428,6 +428,57 @@ describe("groups + table + data", () => {
       const headersAfter = container.querySelectorAll(".vlist-table-group-header").length;
       expect(headersAfter).toBeGreaterThan(0);
     });
+
+    it("keeps the sticky header displayed (empty) when a reload leaves only placeholders", async () => {
+      const adapter = createCityAdapter(50);
+      list = createVList<CityItem>(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+          groups({
+            getGroupForIndex: getPopTier,
+            header: { height: 28, template: (key) => key },
+            sticky: true,
+          }),
+        ],
+      );
+
+      await waitForLoad(list);
+
+      const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement;
+      expect(sticky).not.toBeNull();
+      // With groups resolved, the sticky is shown with a label.
+      expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
+
+      // Reload with a failing adapter → the new range is all placeholders →
+      // no resolvable groups. An enabled sticky header stays displayed but
+      // empty (it must NOT collapse or hide — it fills in on recovery without
+      // a layout shift).
+      (adapter.read as any).mockImplementation(async () => {
+        throw new Error("offline");
+      });
+      await (list as any).reload();
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(container.querySelectorAll(".vlist-table-group-header").length).toBe(0);
+      expect(sticky.style.display).not.toBe("none"); // not collapsed
+      expect(sticky.style.visibility).not.toBe("hidden"); // shown, not hidden
+      expect((sticky.textContent ?? "").trim()).toBe(""); // empty
+
+      // Recover: data loads again → groups return → the label fills in.
+      (adapter.read as any).mockImplementation(async ({ offset, limit }: { offset: number; limit: number }) => {
+        const end = Math.min(offset + limit, 50);
+        const items = createCities(offset, end - offset);
+        return { items, total: 50, hasMore: end < 50 };
+      });
+      const reloaded = waitForLoad(list);
+      await (list as any).loadVisibleRange();
+      await reloaded;
+
+      expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
+      expect((sticky.textContent ?? "").trim().length).toBeGreaterThan(0);
+    });
   });
 
   // ── Table rendering ─────────────────────────────────────────────

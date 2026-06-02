@@ -284,6 +284,175 @@ describe("resolve with min/max clamping", () => {
 });
 
 // =============================================================================
+// resolve — fillWidth
+// =============================================================================
+
+describe("resolve with fillWidth: stretch", () => {
+  const fillLayout = (columns: TableColumn[]) =>
+    createTableLayout(columns, 50, Infinity, true, "stretch");
+
+  it("does not stretch by default (all explicit widths leave a gap)", () => {
+    const layout = createTableLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    // No fillWidth: total is just the sum of column widths.
+    expect(layout.totalWidth).toBe(420);
+  });
+
+  it("stretches columns to fill the full container width", () => {
+    const layout = fillLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    expect(layout.totalWidth).toBeCloseTo(1000, 5);
+  });
+
+  it("distributes leftover space proportionally to column width", () => {
+    const layout = fillLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    // extra = 580, base = 420 → each col grows by extra * (width / base)
+    expect(layout.columns[0]!.width).toBeCloseTo(200 + 580 * (200 / 420), 4);
+    expect(layout.columns[1]!.width).toBeCloseTo(100 + 580 * (100 / 420), 4);
+    expect(layout.columns[2]!.width).toBeCloseTo(120 + 580 * (120 / 420), 4);
+  });
+
+  it("recomputes contiguous offsets after stretching", () => {
+    const layout = fillLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    expect(layout.columns[0]!.offset).toBe(0);
+    expect(layout.columns[1]!.offset).toBeCloseTo(layout.columns[0]!.width, 5);
+    expect(layout.columns[2]!.offset).toBeCloseTo(
+      layout.columns[0]!.width + layout.columns[1]!.width,
+      5,
+    );
+  });
+
+  it("is a no-op when columns already overflow the container", () => {
+    const layout = fillLayout([
+      col("a", { width: 600 }),
+      col("b", { width: 600 }),
+    ]);
+
+    layout.resolve(800);
+
+    // Already wider than the container → table scrolls, no shrink.
+    expect(layout.totalWidth).toBe(1200);
+  });
+
+  it("respects maxWidth while stretching", () => {
+    const layout = fillLayout([
+      col("a", { width: 200, maxWidth: 220 }),
+      col("b", { width: 200 }),
+    ]);
+
+    layout.resolve(1000);
+
+    // Column a is capped at 220 even though its proportional share is larger.
+    expect(layout.columns[0]!.width).toBe(220);
+  });
+
+  it("recomputes on re-resolve when the container shrinks", () => {
+    const layout = fillLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+    ]);
+
+    layout.resolve(900);
+    expect(layout.totalWidth).toBeCloseTo(900, 5);
+
+    layout.resolve(600);
+    expect(layout.totalWidth).toBeCloseTo(600, 5);
+  });
+});
+
+// =============================================================================
+// resolve — fillWidth: spacer
+// =============================================================================
+
+describe("resolve with fillWidth: spacer", () => {
+  const spacerLayout = (columns: TableColumn[]) =>
+    createTableLayout(columns, 50, Infinity, true, "spacer");
+
+  it("extends total width to the container while keeping column widths", () => {
+    const layout = spacerLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    // Columns keep their exact widths…
+    expect(layout.columns[0]!.width).toBe(200);
+    expect(layout.columns[1]!.width).toBe(100);
+    expect(layout.columns[2]!.width).toBe(120);
+    // …but the rendered total spans the full container (trailing space empty).
+    expect(layout.totalWidth).toBe(1000);
+  });
+
+  it("leaves column offsets untouched", () => {
+    const layout = spacerLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+      col("c", { width: 120 }),
+    ]);
+
+    layout.resolve(1000);
+
+    expect(layout.columns[0]!.offset).toBe(0);
+    expect(layout.columns[1]!.offset).toBe(200);
+    expect(layout.columns[2]!.offset).toBe(300);
+  });
+
+  it("is a no-op when columns already overflow the container", () => {
+    const layout = spacerLayout([
+      col("a", { width: 600 }),
+      col("b", { width: 600 }),
+    ]);
+
+    layout.resolve(800);
+
+    expect(layout.totalWidth).toBe(1200);
+  });
+
+  it("re-absorbs the slack after a column resize (rows stay full width)", () => {
+    const layout = spacerLayout([
+      col("a", { width: 200 }),
+      col("b", { width: 100 }),
+    ]);
+
+    layout.resolve(1000);
+    expect(layout.totalWidth).toBe(1000);
+
+    // Shrink column a — the trailing spacer grows to keep the row full width.
+    layout.resizeColumn(0, 150);
+    expect(layout.columns[0]!.width).toBe(150);
+    expect(layout.totalWidth).toBe(1000);
+  });
+});
+
+// =============================================================================
 // resolve — Resizable Flag
 // =============================================================================
 

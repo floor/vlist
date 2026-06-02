@@ -11,6 +11,31 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-02
+
+### Added
+
+- **Table `fillWidth`** — make rows span the full container width when columns don't (`table({ fillWidth })`), default `"spacer"`
+  - `"spacer"` (default) — keep every column's exact width and extend rows with empty trailing space, so column widths stay meaningful while backgrounds, row borders, and striping still reach the edge
+  - `"stretch"` (or `true`) — grow columns proportionally to their current width (respecting `maxWidth`)
+  - `false` — opt out: rows are exactly as wide as the sum of the columns
+  - A no-op once columns overflow the container; recomputed on container resize and column-preset changes; `"spacer"` re-absorbs slack after a manual column resize
+  - Exposes the `TableFillMode` type
+- **Data `loadInitial()`** — load page 1 deterministically regardless of container dimensions (`loadVisibleRange` stays a no-op until the viewport is measured)
+- **Data `onResize` hook** — loads the visible range when the container first gains dimensions
+
+### Changed
+
+- **Snapshots `restoreScroll()`** now returns `Promise<void>` that resolves once the visible data has loaded, so callers can `await` the full restore instead of relying on fire-and-forget rAF
+
+### Fixed
+
+- **Click resolution with groups** — `resolveClickedItem` maps the layout index to the data index when the groups plugin is active, fixing clicks resolving to the wrong item past a group header
+- **Table placeholder cells** — cells whose template returns an empty string (or whose default accessor has no value yet) no longer render as solid full-width boxes; the renderer injects a `.vlist-table-cell-skeleton` bar so every placeholder cell shows a clean loading skeleton
+- **Data reload no longer empties the list** — `reload()` (e.g. on a server-side sort/filter) keeps the last-known total so the list shows placeholders for the full range while reloading, instead of collapsing to an empty list when the refetch is slow or fails
+- **Data auto-retry on failed loads** — failed chunk loads now retry the visible range with exponential backoff (2s→30s), replacing placeholders automatically once the network recovers; a `window` `online` event resets the backoff and retries immediately. No longer dependent solely on the `online` event (covers server errors, timeouts, and blocked requests)
+- **Sticky group header during all-placeholder reloads** — when a reload (e.g. a server-side sort) leaves the visible range as placeholders, an enabled sticky header now stays displayed but empty instead of leaving a blank band; it fills in with the group label on recovery without a layout shift. The data plugin also rebuilds the size cache on loaded-count change (not just total change), so the grouped layout recomputes correctly after a reload that preserves the total
+
 ## [2.1.2] - 2026-06-02
 
 ### Added

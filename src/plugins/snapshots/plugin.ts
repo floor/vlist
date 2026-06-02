@@ -138,7 +138,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
       // ── restoreScroll ──────────────────────────────────────────
 
-      const restoreScroll = (snapshot: ScrollSnapshot, restoreSelection = true): void => {
+      const restoreScroll = (snapshot: ScrollSnapshot, restoreSelection = true): Promise<void> => {
         const { index, offsetInItem, selectedIds, focusedId } = snapshot;
         let effectiveTotal = state.totalItems;
 
@@ -165,8 +165,8 @@ export function snapshots<T extends VListItem = VListItem>(
           }
         }
 
-        if (effectiveTotal === 0) return;
-        if (!Number.isFinite(index) || !Number.isFinite(offsetInItem)) return;
+        if (effectiveTotal === 0) return Promise.resolve();
+        if (!Number.isFinite(index) || !Number.isFinite(offsetInItem)) return Promise.resolve();
 
         // Only rebuild if the cache is empty — a non-zero total that differs
         // from state.totalItems means a layout plugin (grid/masonry) manages
@@ -247,29 +247,45 @@ export function snapshots<T extends VListItem = VListItem>(
           if (focusByIdFn) focusByIdFn(focusedId);
         };
 
-        if (loadVisibleFn) {
-          let polls = 0;
-          const pollUntilReady = (): void => {
-            if (state.containerSize > 0) {
-              if (Math.abs(state.scrollPosition - scrollPosition) > 1) {
-                ctx.scrollTo(scrollPosition);
-              }
-              loadVisibleFn().then(restoreFocus);
-            } else if (++polls < 10) {
-              requestAnimationFrame(pollUntilReady);
-            }
+        // Resolve once data has loaded and focus restored, so callers can
+        // await the full restore. Rejections from the load (e.g. AbortError)
+        // settle the promise too — the restore is best-effort, never throws.
+        return new Promise<void>((resolve) => {
+          const settle = (run: boolean): void => {
+            if (run) restoreFocus();
+            resolve();
           };
-          requestAnimationFrame(pollUntilReady);
-        } else {
-          const reloadFn = ctx.getMethod("reload") as
-            | (() => Promise<void>)
-            | undefined;
-          if (reloadFn) {
-            requestAnimationFrame(() => { reloadFn().then(restoreFocus); });
+
+          if (loadVisibleFn) {
+            let polls = 0;
+            const pollUntilReady = (): void => {
+              if (state.containerSize > 0) {
+                if (Math.abs(state.scrollPosition - scrollPosition) > 1) {
+                  ctx.scrollTo(scrollPosition);
+                }
+                loadVisibleFn().then(() => settle(true), () => settle(false));
+              } else if (++polls < 10) {
+                requestAnimationFrame(pollUntilReady);
+              } else {
+                // Container never gained dimensions — settle so awaiters
+                // don't hang. Data loads later via the scroll/resize hooks.
+                settle(false);
+              }
+            };
+            requestAnimationFrame(pollUntilReady);
           } else {
-            requestAnimationFrame(restoreFocus);
+            const reloadFn = ctx.getMethod("reload") as
+              | (() => Promise<void>)
+              | undefined;
+            if (reloadFn) {
+              requestAnimationFrame(() => {
+                reloadFn().then(() => settle(true), () => settle(false));
+              });
+            } else {
+              requestAnimationFrame(() => settle(true));
+            }
           }
-        }
+        });
       };
 
       ctx.registerMethod("restoreScroll", restoreScroll);

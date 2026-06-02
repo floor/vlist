@@ -12,6 +12,7 @@ import { data as dataPlugin } from "../../../src/plugins/data/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { createEmitter } from "../../../src/events/emitter";
+import { useFakeTimers } from "../../helpers/dom";
 import type { VListEvents } from "../../../src/types";
 
 // =============================================================================
@@ -506,6 +507,163 @@ describe("async - loadVisibleRange Method", () => {
 });
 
 // =============================================================================
+// loadInitial Method
+// =============================================================================
+
+describe("async - loadInitial Method", () => {
+  it("should register the loadInitial method", () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({ visibleCount: 0 });
+
+    plugin.setup!(ctx);
+
+    expect(methods.get("loadInitial")).toBeInstanceOf(Function);
+  });
+
+  it("should load page 1 from offset 0 even when visibleCount is 0", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0, // container not laid out yet
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    // Unlike loadVisibleRange (a no-op at visibleCount=0), loadInitial fetches.
+    expect(adapter.read).toHaveBeenCalled();
+    expect((adapter.read as any).mock.calls[0][0].offset).toBe(0);
+
+    const getLoadedCount = methods.get("_getLoadedCount")!;
+    expect(getLoadedCount()).toBeGreaterThan(0);
+  });
+
+  it("should emit load:start and load:end around the fetch", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods, emitter } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    // load:end fires from onItemsLoaded only once the engine is initialized.
+    // Set after setup so construction-time notifyDataChange isn't affected.
+    ctx.getState().initialized = true;
+
+    let startEmitted = false;
+    let endEmitted = false;
+    emitter.on("load:start", () => { startEmitted = true; });
+    emitter.on("load:end", () => { endEmitted = true; });
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    expect(startEmitted).toBe(true);
+    expect(endEmitted).toBe(true);
+  });
+
+  it("should call forceRender after loading", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods, getForceRenderCallCount } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    const countBefore = getForceRenderCallCount();
+
+    const loadInitialFn = methods.get("loadInitial")!;
+    await loadInitialFn();
+
+    expect(getForceRenderCallCount()).toBeGreaterThan(countBefore);
+  });
+});
+
+// =============================================================================
+// onResize Hook — load visible range when the container gains dimensions
+// =============================================================================
+
+describe("async - onResize Hook", () => {
+  it("should ensure the visible range when total is set and container has dimensions", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx, methods } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).toHaveBeenCalled();
+    expect((adapter.read as any).mock.calls[0][0].offset).toBe(0);
+  });
+
+  it("should be a no-op when no total is declared", async () => {
+    const adapter = createMockAdapter(100);
+    // No `total` provided → dataManager.getTotal() stays 0 after setup.
+    const plugin = dataPlugin({ adapter, autoLoad: false });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+
+  it("should be a no-op when visibleCount is 0", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 0,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    plugin.hooks!.onResize!(800, 600);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+
+  it("should be a no-op when destroyed", async () => {
+    const adapter = createMockAdapter(100);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
+    const { ctx } = createContextWithRealEmitter({
+      startIndex: 0,
+      visibleCount: 10,
+      destroyed: true,
+    });
+
+    plugin.setup!(ctx);
+    (adapter.read as any).mockClear();
+
+    expect(() => plugin.hooks!.onResize!(800, 600)).not.toThrow();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(adapter.read).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
 // Network Recovery — online event
 // =============================================================================
 
@@ -568,6 +726,87 @@ describe("async - Network Recovery", () => {
     expect(() => {
       window.dispatchEvent(new Event("online"));
     }).not.toThrow();
+  });
+
+  it("emits an error event with context 'load' when a load fails", async () => {
+    const adapter: VListAdapter<TestItem> = {
+      read: mock(async () => {
+        throw new Error("net down");
+      }),
+    };
+    const plugin = dataPlugin({ adapter, total: 100 });
+    const { ctx, emitter } = createContextWithRealEmitter({ startIndex: 0, visibleCount: 10 });
+    const errors: Array<{ context?: string }> = [];
+    emitter.on("error", (e: { context?: string }) => errors.push(e));
+
+    plugin.setup!(ctx);
+    for (let i = 0; i < 5; i++) await new Promise((r) => queueMicrotask(r));
+
+    expect(adapter.read).toHaveBeenCalled();
+    expect(errors.some((e) => e.context === "load")).toBe(true);
+  });
+
+  it("auto-retries the visible range after backoff and recovers", async () => {
+    const ft = useFakeTimers();
+    try {
+      let calls = 0;
+      const adapter: VListAdapter<TestItem> = {
+        read: mock(async ({ offset, limit }) => {
+          calls++;
+          if (calls === 1) throw new Error("net down");
+          const items: TestItem[] = [];
+          const end = Math.min(offset + limit, 100);
+          for (let i = offset; i < end; i++) items.push({ id: i, name: `Item ${i}`, value: i });
+          return { items, total: 100, hasMore: end < 100 };
+        }),
+      };
+      const plugin = dataPlugin({ adapter, total: 100 });
+      const { ctx } = createContextWithRealEmitter({ startIndex: 0, visibleCount: 10 });
+
+      plugin.setup!(ctx);
+      for (let i = 0; i < 5; i++) await new Promise((r) => queueMicrotask(r));
+      expect(calls).toBe(1); // initial load failed
+
+      // No retry before the backoff delay elapses
+      ft.tick(1999);
+      for (let i = 0; i < 3; i++) await new Promise((r) => queueMicrotask(r));
+      expect(calls).toBe(1);
+
+      // After the base delay, the visible range is retried — and recovers
+      ft.tick(1);
+      for (let i = 0; i < 5; i++) await new Promise((r) => queueMicrotask(r));
+      expect(calls).toBeGreaterThanOrEqual(2);
+    } finally {
+      ft.restore();
+    }
+  });
+
+  it("cancels the retry timer on destroy", async () => {
+    const ft = useFakeTimers();
+    try {
+      let calls = 0;
+      const adapter: VListAdapter<TestItem> = {
+        read: mock(async () => {
+          calls++;
+          throw new Error("net down");
+        }),
+      };
+      const plugin = dataPlugin({ adapter, total: 100 });
+      const { ctx, destroyHandlers } = createContextWithRealEmitter({ startIndex: 0, visibleCount: 10 });
+
+      plugin.setup!(ctx);
+      for (let i = 0; i < 5; i++) await new Promise((r) => queueMicrotask(r));
+      const afterInitial = calls;
+
+      // Destroy before the retry fires — the scheduled retry must not run.
+      for (const handler of destroyHandlers) handler();
+      ft.tick(60000);
+      for (let i = 0; i < 3; i++) await new Promise((r) => queueMicrotask(r));
+
+      expect(calls).toBe(afterInitial);
+    } finally {
+      ft.restore();
+    }
   });
 });
 

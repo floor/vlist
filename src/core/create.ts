@@ -544,11 +544,23 @@ export function createVList<T extends VListItem = VListItem>(
     const target = e.target as HTMLElement;
     const itemEl = target.closest("[data-index]") as HTMLElement | null;
     if (!itemEl) return null;
-    const index = parseInt(itemEl.getAttribute("data-index")!, 10);
-    if (Number.isNaN(index)) return null;
-    const item = getItemFn ? getItemFn(index) : items[index];
+    const layoutIndex = parseInt(itemEl.getAttribute("data-index")!, 10);
+    if (Number.isNaN(layoutIndex)) return null;
+
+    // When groups plugin is active, data-index is a layout index (includes
+    // group headers). Map it to the data index so getItemFn returns the
+    // correct item. Group headers map to -1 → ignore the click.
+    const layoutToData = methods.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
+    let itemIndex = layoutIndex;
+    if (layoutToData) {
+      const dataIndex = layoutToData(layoutIndex);
+      if (dataIndex < 0) return null;
+      itemIndex = dataIndex;
+    }
+
+    const item = getItemFn ? getItemFn(itemIndex) : items[itemIndex];
     if (item === undefined) return null;
-    return { item, index };
+    return { item, index: layoutIndex };
   }
 
   function onContentClick(e: MouseEvent): void {

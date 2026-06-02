@@ -895,6 +895,80 @@ describe("null and undefined cell values", () => {
 });
 
 // =============================================================================
+// Placeholder skeleton invariant
+// =============================================================================
+
+describe("placeholder skeleton", () => {
+  // A placeholder row's cells must always contain an element so the skeleton
+  // CSS has a target — otherwise a bare leaf cell is painted as a solid box by
+  // the generic .vlist-item--placeholder *:not(:has(*)) rule.
+  const placeholder = (id: string): TestItem =>
+    ({ id } as unknown as TestItem);
+
+  it("injects a skeleton bar when the default accessor has no value", () => {
+    const { renderer, container } = createTestRenderer({ totalItems: 1 });
+
+    renderer.render([placeholder("__placeholder_0")], { start: 0, end: 0 }, EMPTY_SET, -1);
+
+    const cells = container.querySelectorAll(".vlist-table-cell");
+    expect(cells.length).toBe(3);
+    for (const cell of cells) {
+      // Never a bare leaf — always has an element child.
+      expect(cell.firstElementChild).not.toBeNull();
+      expect(cell.querySelector(".vlist-table-cell-skeleton")).not.toBeNull();
+    }
+
+    container.remove();
+  });
+
+  it("injects a skeleton bar when a cell template returns an empty string", () => {
+    const columns: TableColumn<TestItem>[] = [
+      // Mimics populationCell/continentCell returning "" for placeholder data.
+      col("name", { width: 200, cell: (item) => (item.name ? `<span>${item.name}</span>` : "") }),
+    ];
+    const { renderer, container } = createTestRenderer({ columns, totalItems: 1 });
+
+    renderer.render([placeholder("__placeholder_0")], { start: 0, end: 0 }, EMPTY_SET, -1);
+
+    const cell = container.querySelector(".vlist-table-cell") as HTMLElement;
+    expect(cell.firstElementChild).not.toBeNull();
+    expect(cell.querySelector(".vlist-table-cell-skeleton")).not.toBeNull();
+
+    container.remove();
+  });
+
+  it("does not inject when a template already provides an element", () => {
+    const columns: TableColumn<TestItem>[] = [
+      col("name", { width: 200, cell: () => `<div class="wrap"><span>x</span></div>` }),
+    ];
+    const { renderer, container } = createTestRenderer({ columns, totalItems: 1 });
+
+    renderer.render([placeholder("__placeholder_0")], { start: 0, end: 0 }, EMPTY_SET, -1);
+
+    const cell = container.querySelector(".vlist-table-cell") as HTMLElement;
+    expect(cell.querySelector(".vlist-table-cell-skeleton")).toBeNull();
+    expect(cell.querySelector(".wrap")).not.toBeNull();
+
+    container.remove();
+  });
+
+  it("does not inject skeleton bars for real (non-placeholder) rows", () => {
+    const { renderer, container } = createTestRenderer({ totalItems: 1 });
+
+    renderer.render(
+      [{ id: 0, name: "Ada", email: "ada@x.com", role: "admin" }],
+      { start: 0, end: 0 },
+      EMPTY_SET,
+      -1,
+    );
+
+    expect(container.querySelector(".vlist-table-cell-skeleton")).toBeNull();
+
+    container.remove();
+  });
+});
+
+// =============================================================================
 // Multiple render cycles
 // =============================================================================
 

@@ -28,6 +28,8 @@ import {
   PRELOAD_VELOCITY_THRESHOLD,
   PRELOAD_AHEAD,
   MAX_CONCURRENT_LOADS,
+  LOAD_RETRY_BASE_DELAY,
+  LOAD_RETRY_MAX_DELAY,
 } from "../../constants";
 
 // =============================================================================
@@ -99,6 +101,18 @@ export function data<T extends VListItem = VListItem>(
   let currentVelocity = 0;
   let autoLoadCancelled = false;
 
+  // Auto-retry failed loads with exponential backoff, so placeholders are
+  // replaced once a transient failure (e.g. network drop) recovers — without
+  // requiring the user to scroll. Reset on any successful load or `online`.
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryDelay = LOAD_RETRY_BASE_DELAY;
+
+  // Track the inputs to the last size-cache rebuild so onDataChange can rebuild
+  // whenever the total OR the loaded count changes (a reload clears loaded
+  // items without changing the total).
+  let lastRebuildTotal = -1;
+  let lastRebuildCached = -1;
+
   // Track last requested chunk range to skip redundant ensure() calls
   let lastFirstChunk = -1;
   let lastLastChunk = -1;
@@ -146,6 +160,45 @@ export function data<T extends VListItem = VListItem>(
     ensure(currentRange.start, currentRange.end).catch(onEnsureError);
   };
 
+  // ── Retry-with-backoff for failed loads ─────────────────────────────────────
+
+  const clearRetry = (): void => {
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+
+  /** Re-attempt the currently visible range. Failed chunks are not cached and
+   *  not in-flight, so ensure() re-requests them; another failure re-arms the
+   *  backoff via onLoadError. */
+  const retryVisibleRange = (): void => {
+    if (engineState.destroyed) return;
+    const total = dataManager.getTotal();
+    if (engineState.visibleCount <= 0 || engineState.startIndex >= total) return;
+    const end = Math.min(
+      engineState.startIndex + engineState.visibleCount - 1,
+      total - 1,
+    );
+    if (end < engineState.startIndex) return;
+    ensure(engineState.startIndex, end).catch(onEnsureError);
+  };
+
+  const scheduleRetry = (): void => {
+    if (retryTimer !== null || engineState.destroyed) return;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      retryVisibleRange();
+    }, retryDelay);
+    // Back off for the next attempt; reset to base on any success or `online`.
+    retryDelay = Math.min(retryDelay * 2, LOAD_RETRY_MAX_DELAY);
+  };
+
+  const resetRetry = (): void => {
+    clearRetry();
+    retryDelay = LOAD_RETRY_BASE_DELAY;
+  };
+
   // ============================================================================
   // Plugin Definition
   // ============================================================================
@@ -181,9 +234,17 @@ export function data<T extends VListItem = VListItem>(
         onDataChange: () => {
           if (engineState.initialized) {
             const newTotal = dataManager.getTotal();
+            const newCached = dataManager.getCached();
             engineState.totalItems = newTotal;
-            const oldTotal = sizeCache.getTotal();
-            if (newTotal !== oldTotal) {
+            // Rebuild when the total OR the loaded count changed. A reload
+            // clears loaded items without changing the total — layout
+            // interceptors (groups) must then recompute boundaries from the
+            // now-placeholder data, otherwise a stale group header / sticky
+            // lingers over the placeholders. Tracking both also dedupes the
+            // rebuild that previously lived in onItemsLoaded.
+            if (newTotal !== lastRebuildTotal || newCached !== lastRebuildCached) {
+              lastRebuildTotal = newTotal;
+              lastRebuildCached = newCached;
               sizeCache.rebuild(newTotal);
             }
             ctx.updateContentSize(sizeCache.getTotalSize());
@@ -191,14 +252,23 @@ export function data<T extends VListItem = VListItem>(
           }
         },
         onItemsLoaded: (loadedItems) => {
+          // A successful load means connectivity is back — drop any pending
+          // retry and reset the backoff window.
+          resetRetry();
           if (engineState.initialized) {
-            // Always rebuild sizeCache so layout interceptors (groups plugin)
-            // can detect newly loaded items and rebuild their layout.
-            sizeCache.rebuild(dataManager.getTotal());
+            // onDataChange fires first and already rebuilt the size cache (the
+            // loaded count changed) — just commit the size and render.
             ctx.updateContentSize(sizeCache.getTotalSize());
             forceRender();
             emitter.emit("load:end", { items: loadedItems, total: dataManager.getTotal() });
           }
+        },
+        onLoadError: (error) => {
+          emitter.emit("error", { error, context: "load" });
+          // Re-render so the failed range shows placeholders, then schedule a
+          // backoff retry that replaces them once the load succeeds.
+          if (engineState.initialized) ctx.renderIfNeeded();
+          scheduleRetry();
         },
       });
 
@@ -228,6 +298,7 @@ export function data<T extends VListItem = VListItem>(
         pendingRange = null;
         lastFirstChunk = -1;
         lastLastChunk = -1;
+        resetRetry();
 
         ctx.forceRender();
 
@@ -255,6 +326,16 @@ export function data<T extends VListItem = VListItem>(
           emitLoadStart(engineState.startIndex, end - engineState.startIndex + 1);
           await ensure(engineState.startIndex, end);
         }
+      });
+
+      // Load the first page deterministically, independent of container
+      // dimensions. Use when you need data loaded from the top regardless of
+      // layout state (e.g. an explicit reload before the viewport is measured);
+      // loadVisibleRange is a no-op until the container has a measured height.
+      ctx.registerMethod("loadInitial", async (): Promise<void> => {
+        emitLoadStart(0);
+        await dataManager.loadInitial();
+        ctx.forceRender();
       });
 
       ctx.registerMethod("getTotal", (): number => {
@@ -299,6 +380,7 @@ export function data<T extends VListItem = VListItem>(
           idleTimer = null;
         }
         resetDeceleration();
+        clearRetry();
       });
 
       // Track velocity for load gating
@@ -306,18 +388,12 @@ export function data<T extends VListItem = VListItem>(
         currentVelocity = Math.abs(velocity);
       });
 
-      // Network recovery
+      // Network recovery — retry immediately and reset the backoff window.
       const handleOnline = (): void => {
         if (engineState.destroyed) return;
 
-        if (engineState.visibleCount > 0 && engineState.startIndex < dataManager.getTotal()) {
-          const end = Math.min(
-            engineState.startIndex + engineState.visibleCount - 1,
-            dataManager.getTotal() - 1,
-          );
-          ensure(engineState.startIndex, end).catch(onEnsureError);
-        }
-
+        resetRetry();
+        retryVisibleRange();
         loadPendingRange();
       };
 
@@ -418,6 +494,27 @@ export function data<T extends VListItem = VListItem>(
         loadPendingRange();
         resetDeceleration();
       },
+
+      onResize(): void {
+        if (engineState.destroyed) return;
+
+        // A resize changes the visible window — like a scroll. When the
+        // container gains dimensions (e.g. first layout after mount) and a
+        // total is already declared, ensure the now-visible range loads.
+        // ensure() dedupes against cached/in-flight chunks, so this is a
+        // no-op when the range is already loading or loaded.
+        const total = dataManager.getTotal();
+        if (total <= 0) return;
+        if (engineState.visibleCount <= 0 || engineState.startIndex >= total) return;
+
+        const end = Math.min(
+          engineState.startIndex + engineState.visibleCount - 1,
+          total - 1,
+        );
+        if (end < engineState.startIndex) return;
+        emitLoadStart(engineState.startIndex, end - engineState.startIndex + 1);
+        ensure(engineState.startIndex, end).catch(onEnsureError);
+      },
     },
 
     destroy(): void {
@@ -425,6 +522,7 @@ export function data<T extends VListItem = VListItem>(
         clearTimeout(idleTimer);
       }
       resetDeceleration();
+      clearRetry();
     },
   };
 }

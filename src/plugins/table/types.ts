@@ -12,6 +12,15 @@
 
 import type { VListItem } from "../../types";
 
+/**
+ * How a table fills leftover horizontal space when its columns are narrower
+ * than the container.
+ *
+ * - `"stretch"` — grow columns proportionally to fill the width
+ * - `"spacer"` — keep column widths, extend the row with empty trailing space
+ */
+export type TableFillMode = "stretch" | "spacer";
+
 // =============================================================================
 // Column Definition
 // =============================================================================
@@ -125,6 +134,22 @@ export interface TableConfig<T extends VListItem = VListItem> {
   /** Default maximum column width in pixels (default: Infinity) */
   maxColumnWidth?: number;
 
+  /**
+   * Make rows span the full container width when the columns don't (default:
+   * `"spacer"`). A no-op once columns already overflow the container — the
+   * table scrolls horizontally as usual.
+   *
+   * - `"spacer"` (default) — keep every column's exact width and extend the row
+   *   with empty trailing space, so column widths stay meaningful while rows
+   *   still reach the container edge (background, row borders, striping
+   *   included).
+   * - `"stretch"` (or `true`) — grow columns proportionally to their current
+   *   width (respecting `maxWidth`) so the columns themselves fill the width.
+   * - `false` — opt out: the table is exactly as wide as the sum of its
+   *   columns, leaving empty space to the right when they don't fill it.
+   */
+  fillWidth?: boolean | TableFillMode;
+
   /** Show vertical borders between columns (default: false) */
   columnBorders?: boolean;
 
@@ -187,7 +212,8 @@ export interface TableLayout<T extends VListItem = VListItem> {
   /** Current resolved columns (with computed widths and offsets) */
   readonly columns: readonly ResolvedColumn<T>[];
 
-  /** Total width of all columns in pixels */
+  /** Total rendered width in pixels — the sum of column widths, or the
+   *  container width when a `fillWidth` mode extends rows to span it */
   readonly totalWidth: number;
 
   /** Resolve column widths given available container width */

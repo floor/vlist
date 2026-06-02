@@ -226,6 +226,14 @@ export function table<T extends VListItem = VListItem>(
       const resizable = config.resizable ?? true;
       const minColumnWidth = config.minColumnWidth ?? 50;
       const maxColumnWidth = config.maxColumnWidth ?? Infinity;
+      // Default to "spacer": fill the container while preserving column
+      // widths. `false` opts out; `true` is shorthand for "stretch".
+      const fillMode =
+        config.fillWidth === false
+          ? "none"
+          : config.fillWidth === true
+            ? "stretch"
+            : (config.fillWidth ?? "spacer");
       const rowBorders = config.rowBorders ?? true;
       const rowHeight = config.rowHeight;
 
@@ -242,6 +250,7 @@ export function table<T extends VListItem = VListItem>(
         minColumnWidth,
         maxColumnWidth,
         resizable,
+        fillMode,
       );
 
       // ── Set row height ──────────────────────────────────────────

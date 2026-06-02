@@ -526,6 +526,24 @@ describe("createDataManager", () => {
       expect(manager.getState().cached).toBeGreaterThanOrEqual(50);
       expect(manager.isItemLoaded(0)).toBe(true);
     });
+
+    it("should preserve the known total so placeholders stay during reload", async () => {
+      const items = createTestItems(100);
+      const adapter = createMockAdapter(items);
+      const manager = createDataManager({ adapter, pageSize: 50 });
+
+      await manager.loadInitial();
+      expect(manager.getTotal()).toBe(100);
+
+      await manager.reload();
+
+      // Data is cleared, but the total is kept so the list renders placeholders
+      // for the full range (rather than collapsing to an empty list) — and
+      // stays that way if the reload's first load fails.
+      expect(manager.getState().cached).toBe(0);
+      expect(manager.getTotal()).toBe(100);
+      expect(manager.isItemLoaded(0)).toBe(false);
+    });
   });
 
   describe("clear", () => {
@@ -1028,6 +1046,46 @@ describe("createDataManager", () => {
 
       expect(manager.getState().error).toBeDefined();
       expect(manager.getState().error!.message).toBe("string error");
+    });
+
+    it("should invoke onLoadError with the failed range", async () => {
+      const adapter: VListAdapter = {
+        read: async () => {
+          throw new Error("Network failure");
+        },
+      };
+      const onLoadError = mock((_error: Error, _range: { start: number; end: number }) => {});
+      const manager = createDataManager({ adapter, onLoadError });
+
+      await manager.loadRange(0, 19);
+
+      expect(onLoadError).toHaveBeenCalled();
+      const [err, range] = onLoadError.mock.calls[0]!;
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toBe("Network failure");
+      // The failed range is chunk-aligned but must cover the requested span.
+      expect(range.start).toBeLessThanOrEqual(0);
+      expect(range.end).toBeGreaterThanOrEqual(19);
+    });
+
+    it("should NOT invoke onLoadError when a load is aborted", async () => {
+      let resolveRead: (() => void) | null = null;
+      const adapter: VListAdapter = {
+        read: ({ signal }) =>
+          new Promise((_resolve, reject) => {
+            resolveRead = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            signal?.addEventListener("abort", () => resolveRead!());
+          }),
+      };
+      const onLoadError = mock(() => {});
+      const manager = createDataManager({ adapter, onLoadError });
+
+      const loadP = manager.loadRange(0, 19);
+      // Aborting in-flight loads is intentional cancellation, not an error.
+      manager.reload();
+      await loadP;
+
+      expect(onLoadError).not.toHaveBeenCalled();
     });
 
     it("should deduplicate concurrent loads of the same range", async () => {
