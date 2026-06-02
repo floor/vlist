@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- **`search()` plugin** (RFC-008 Phase 1) — a ready-to-use search bar that works with every layout (+2.4 KB gzipped)
+  - **filter** mode (default): virtually hides non-matching items (non-destructive — clearing restores)
+  - **navigate** mode: keeps all items, scrolls between matches, highlights the current one
+  - `<mark>` match highlighting for string templates; `state.search` exposed to templates
+  - Keyboard: `Ctrl/Cmd+F` to focus, `Escape` to clear, `Enter`/`↑`/`↓` to navigate; invisible (`position: "none"`) type-ahead mode
+  - Match counter, `role="search"` + `aria-live`, methods (`openSearch`/`closeSearch`/`setQuery`/`getQuery`/`nextMatch`/`prevMatch`/`getMatches`), events (`search:open`/`search:close`/`search:change`/`search:match`)
+  - Field accessor (`field`), `caseSensitive`, `minLength`, `cancelTimeout` options; delegates to the tree plugin's ancestor-preserving filter when present
+  - Stylesheet: `import "vlist/styles/search"`
+
 ## [2.2.0] - 2026-06-02
 
 ### Added

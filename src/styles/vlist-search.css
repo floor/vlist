@@ -1,0 +1,103 @@
+/**
+ * vlist - Search Plugin Styles
+ * Optional styles for the search() plugin.
+ * Import separately: import 'vlist/styles/search'
+ */
+
+/* =============================================================================
+   Search bar
+   ============================================================================= */
+
+.vlist-search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    background-color: var(--vlist-bg, #fff);
+    border-bottom: 1px solid var(--vlist-border, #e5e7eb);
+}
+
+.vlist-search--bottom {
+    border-bottom: none;
+    border-top: 1px solid var(--vlist-border, #e5e7eb);
+}
+
+.vlist-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 4px 8px;
+    font: inherit;
+    color: var(--vlist-text, #111827);
+    background-color: var(--vlist-bg, #fff);
+    border: 1px solid var(--vlist-border, #e5e7eb);
+    border-radius: 4px;
+    outline: none;
+}
+
+.vlist-search-input:focus {
+    border-color: var(--vlist-focus-ring, #3b82f6);
+}
+
+.vlist-search-counter {
+    flex: 0 0 auto;
+    min-width: 4em;
+    text-align: right;
+    font-size: 0.75rem;
+    color: var(--vlist-text-muted, #9ca3af);
+    white-space: nowrap;
+}
+
+.vlist-search-prev,
+.vlist-search-next,
+.vlist-search-close {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font: inherit;
+    line-height: 1;
+    color: var(--vlist-text-muted, #9ca3af);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.vlist-search-prev:hover,
+.vlist-search-next:hover,
+.vlist-search-close:hover {
+    color: var(--vlist-text, #111827);
+    background-color: var(--vlist-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+/* =============================================================================
+   Match highlighting
+   ============================================================================= */
+
+.vlist-search-match {
+    color: inherit;
+    background-color: var(--vlist-search-match-bg, #fde047);
+    border-radius: 2px;
+}
+
+.vlist-search-match--current {
+    background-color: var(--vlist-search-match-current-bg, #f59e0b);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme-mode="light"]) {
+        --vlist-search-match-bg: #92710b;
+        --vlist-search-match-current-bg: #b45309;
+    }
+}
+
+[data-theme-mode="dark"],
+.dark {
+    --vlist-search-match-bg: #92710b;
+    --vlist-search-match-current-bg: #b45309;
+}

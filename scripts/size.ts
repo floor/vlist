@@ -18,7 +18,7 @@ const entry = `${root}/src/index.ts`;
 const ALL_PLUGINS = [
   "a11y", "selection", "data", "scrollbar", "sortable",
   "groups", "scale", "page", "snapshots", "transition",
-  "autosize", "grid", "table", "masonry", "tree",
+  "autosize", "grid", "table", "masonry", "tree", "search",
 ] as const;
 
 type PluginName = (typeof ALL_PLUGINS)[number];
@@ -59,6 +59,7 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   masonry:    ["--masonry", "getMasonryLayout", "updateMasonry"],
   sortable:   ["sort:start", "sort:end", "--sorting"],
   tree:       ["--tree", "tree-node", "treeitem"],
+  search:     ["-search-match", "search:change", "openSearch"],
 };
 
 // ── Scenarios ─────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ const scenarios: Scenario[] = [
   { name: "table",             imports: ["createVList", "table"] },
   { name: "masonry",           imports: ["createVList", "masonry"] },
   { name: "tree",              imports: ["createVList", "tree"] },
+  { name: "search",            imports: ["createVList", "search"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────

@@ -45,6 +45,7 @@
     "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
     "./styles/tree": "./dist/vlist-tree.css",
+    "./styles/search": "./dist/vlist-search.css",
     "./package.json": "./package.json"
   },
   "files": [

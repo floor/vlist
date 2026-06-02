@@ -27,7 +27,7 @@ async function build() {
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
     `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
-    `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree,`,
+    `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree, search,`,
     `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
@@ -123,6 +123,7 @@ async function build() {
   minifyCss("./src/styles/vlist-table.css", "./dist/vlist-table.css");
   minifyCss("./src/styles/vlist-extras.css", "./dist/vlist-extras.css");
   minifyCss("./src/styles/vlist-tree.css", "./dist/vlist-tree.css");
+  minifyCss("./src/styles/vlist-search.css", "./dist/vlist-search.css");
   const cssTime = performance.now() - cssStart;
   const cssFile = Bun.file("./dist/vlist.css");
   const cssSize = (cssFile.size / 1024).toFixed(1);
@@ -143,7 +144,7 @@ async function build() {
   const ALL_PLUGINS = [
     "a11y", "selection", "data", "scrollbar", "sortable",
     "groups", "scale", "page", "snapshots", "transition",
-    "autosize", "grid", "table", "masonry", "tree",
+    "autosize", "grid", "table", "masonry", "tree", "search",
   ] as const;
 
   const scenarios = [
