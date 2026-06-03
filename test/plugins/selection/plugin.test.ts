@@ -125,6 +125,23 @@ describe("selection — Setup", () => {
     cleanup();
   });
 
+  it("should not register a keydown handler when keyboard:false", () => {
+    const plugin = selection<TestItem>({ keyboard: false });
+    const { ctx, keydownHandlers, clickHandlers, methods, cleanup } =
+      createPluginMockContext(createTestItems(10));
+
+    plugin.setup!(ctx);
+
+    // No internal keyboard navigation...
+    expect(keydownHandlers.length).toBe(0);
+    // ...but click-selection and the selection model stay intact.
+    expect(clickHandlers.length).toBeGreaterThan(0);
+    expect(methods.get("select")).toBeFunction();
+    expect(methods.get("getSelected")).toBeFunction();
+
+    cleanup();
+  });
+
   it("should add selectable class to root", () => {
     const plugin = selection<TestItem>();
     const { ctx, dom, cleanup } = createPluginMockContext(createTestItems(10));
@@ -538,6 +555,24 @@ describe("selection — Methods Behavior", () => {
     selectPrevious();
     expect(getSelected()).toEqual([1]);
 
+    cleanup();
+  });
+
+  it("selectNext should not scroll (scroll glitch open issue)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(100),
+      { itemSize: 100, containerHeight: 600 },
+    );
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+
+    for (let i = 0; i < 10; i++) selectNext();
+
+    // selectNext currently does not scroll — the scroll-at-edge behaviour
+    // for programmatic navigation is an open issue.
+    expect(scrollCalls.length).toBe(0);
     cleanup();
   });
 
