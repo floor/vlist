@@ -54,7 +54,6 @@ beforeAll(() => {
     configurable: true,
   });
 });
-
 afterAll(() => {
   if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
   if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
@@ -114,6 +113,12 @@ const COLUMNS = [
   { key: "continent", label: "Continent", width: 100 },
 ];
 
+function createList<T extends CityItem>(
+  ...args: Parameters<typeof createVList<T>>
+): ReturnType<typeof createVList<T>> {
+  return createVList<T>(...args);
+}
+
 function waitForLoad(list: VList<CityItem>): Promise<void> {
   return new Promise((resolve) => {
     const unsub = (list as any).on("load:end", () => {
@@ -149,7 +154,7 @@ describe("groups + table + data", () => {
   describe("initialization", () => {
     it("should set up all three plugins without errors", async () => {
       const adapter = createCityAdapter();
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -171,7 +176,7 @@ describe("groups + table + data", () => {
 
     it("should produce group headers in the DOM", async () => {
       const adapter = createCityAdapter();
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -195,7 +200,7 @@ describe("groups + table + data", () => {
   describe("getItemFn ordering", () => {
     it("should map layout indices through groups despite data plugin running later", async () => {
       const adapter = createCityAdapter(50);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -227,7 +232,7 @@ describe("groups + table + data", () => {
   describe("totalItems", () => {
     it("should include group header count in aria-rowcount", async () => {
       const adapter = createCityAdapter(50);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -254,7 +259,7 @@ describe("groups + table + data", () => {
   describe("sticky header", () => {
     it("should create a sticky header container", async () => {
       const adapter = createCityAdapter();
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -279,7 +284,7 @@ describe("groups + table + data", () => {
   describe("group content", () => {
     it("should create groups based on population tiers", async () => {
       const adapter = createCityAdapter(30);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -300,7 +305,7 @@ describe("groups + table + data", () => {
 
     it("should use different group keys based on grouping function", async () => {
       const adapter = createCityAdapter(30);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -325,15 +330,13 @@ describe("groups + table + data", () => {
 
   describe("snapshots restore race", () => {
     it("should show correct groups after snapshot restore + data load", async () => {
-      // This test creates, destroys, and recreates a vlist within one test
-      // to simulate a page reload with a saved snapshot. Under --concurrent
-      // mode, the HTMLElement.prototype.clientHeight override may be stomped
-      // by another file between destroy and recreate. In sequential mode
-      // this test is fully deterministic.
+      // NOTE: flaky under --concurrent — Bun shares the JS heap across
+      // file threads, so another file's afterAll can stomp the prototype
+      // override during async waits.
       const adapter = createCityAdapter(100);
       const STORAGE_KEY = "test-gtd-snap-" + Math.random().toString(36).slice(2, 8);
 
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -356,11 +359,16 @@ describe("groups + table + data", () => {
       const snap = (list as any).getScrollSnapshot();
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
 
-      // Destroy and recreate (simulates page reload with saved snapshot)
+      // Destroy and recreate (simulates page reload with saved snapshot).
+      // Re-install dimension overrides — in --concurrent mode, another
+      // file's afterAll may have reset HTMLElement.prototype.clientHeight
+      // during the async gap above.
       list.destroy();
+      list = null;
       container.innerHTML = "";
 
-      // Re-install prototype override (defend against concurrent stomp)
+      // Re-install prototype overrides (may have been stomped during await
+      // by another file's afterAll in --concurrent mode).
       Object.defineProperty(HTMLElement.prototype, "clientHeight", {
         get() { return 500; },
         configurable: true,
@@ -370,7 +378,7 @@ describe("groups + table + data", () => {
         configurable: true,
       });
 
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -401,7 +409,7 @@ describe("groups + table + data", () => {
   describe("data reload", () => {
     it("should rebuild groups after reload", async () => {
       const adapter = createCityAdapter(50);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -430,8 +438,10 @@ describe("groups + table + data", () => {
     });
 
     it("keeps the sticky header displayed (empty) when a reload leaves only placeholders", async () => {
+      // NOTE: flaky under --concurrent — prototype override can be stomped
+      // during async waits (reload, setTimeout). See snapshot test comment.
       const adapter = createCityAdapter(50);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -486,7 +496,7 @@ describe("groups + table + data", () => {
   describe("table rendering", () => {
     it("should render data rows with table cells, not just group headers", async () => {
       const adapter = createCityAdapter(30);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -511,7 +521,7 @@ describe("groups + table + data", () => {
 
     it("should not apply vlist-item class to group header rows", async () => {
       const adapter = createCityAdapter(30);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -545,7 +555,7 @@ describe("groups + table + data", () => {
         }),
       };
 
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 10 } }),
@@ -573,7 +583,7 @@ describe("groups + table + data", () => {
       const adapter = createCityAdapter(200);
 
       // Without groups
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -586,7 +596,7 @@ describe("groups + table + data", () => {
       container.innerHTML = "";
 
       // With groups
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -608,7 +618,7 @@ describe("groups + table + data", () => {
 
     it("data plugin should register _getItem method", async () => {
       const adapter = createCityAdapter(50);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),
@@ -639,7 +649,7 @@ describe("groups + table + data", () => {
   describe("without groups (baseline)", () => {
     it("should render a plain table with no group headers", async () => {
       const adapter = createCityAdapter(30);
-      list = createVList<CityItem>(
+      list = createList(
         { container, item: { height: 36, template: () => "" } },
         [
           dataPlugin({ adapter, storage: { chunkSize: 50 } }),

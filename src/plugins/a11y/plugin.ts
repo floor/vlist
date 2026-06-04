@@ -11,7 +11,20 @@
 import type { VListItem, ItemState } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 
-export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
+export interface A11yPluginConfig {
+  /**
+   * Whether this plugin handles arrow/Home/End/PageUp-Down/Enter/Space
+   * keyboard navigation. Default true. Set false to keep click-selection,
+   * focus management, and ARIA while letting an outer system own keyboard
+   * navigation (e.g. a global, focus-independent hotkey layer).
+   */
+  keyboard?: boolean;
+}
+
+export function a11y<T extends VListItem = VListItem>(
+  config?: A11yPluginConfig,
+): VListPlugin<T> {
+  const keyboard = config?.keyboard ?? true;
   return {
     name: "a11y",
     priority: 55,
@@ -157,8 +170,10 @@ export function a11y<T extends VListItem = VListItem>(): VListPlugin<T> {
       dom.content.addEventListener("focusout", onFocusOut);
 
       // ── Keyboard handler ────────────────────────────────────────
+      // Skipped when keyboard:false — click-selection, focus, and ARIA stay
+      // active, but keyboard navigation is left to an outer system.
 
-      ctx.registerKeydownHandler((e: KeyboardEvent): void => {
+      if (keyboard) ctx.registerKeydownHandler((e: KeyboardEvent): void => {
         if (engineState.destroyed) return;
         const total = getTotal();
         if (total === 0) return;

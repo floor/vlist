@@ -196,6 +196,17 @@ Performance is critical in a virtual scrolling library. The scroll handler runs 
 - Keep specificity low
 - Support dark mode via `prefers-color-scheme` and `.dark` class
 
+### UI Text (no inline human language)
+
+vlist is a UI library, not an application — it ships **no inline human-language strings** (see [RFC-010: Externalized UI Text](https://vlist.io/docs/rfcs/RFC-010-Externalized-UI-Text)). All consumer-facing text is either supplied by the consumer or isolated to a single, documented, overridable default constant per plugin.
+
+- **Never inline human text** in a plugin — no literal accessible names, button labels, status messages, or copy in `*.ts`.
+- If a plugin needs text, expose a single flat `text` config object and one `DEFAULT_*_TEXT` constant (the lone language surface). Use formatter functions (`(n) => string`) for any dynamic/pluralized text — never build sentences from concatenation.
+- Prefer **removing** the need for a string over adding one: make purely decorative icons `aria-hidden` (not labeled controls), reuse `role`, and leave landmarks unnamed unless the consumer names them.
+- Visible copy always comes from the consumer's `template`.
+
+The `search` plugin is the reference implementation (`SearchText` + `DEFAULT_SEARCH_TEXT`).
+
 ### Zero Dependencies
 
 vlist has **zero runtime dependencies** by design. Do not add external packages. Everything is built from scratch — this keeps the bundle small and eliminates supply chain risk.

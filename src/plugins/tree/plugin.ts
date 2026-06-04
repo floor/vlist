@@ -738,6 +738,10 @@ export function tree<T extends VListItem = VListItem>(
 
       ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
       ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number => dataIndex);
+      ctx.registerMethod("_getLoadedItem", (index: number): T | undefined => {
+        const node = layout.flatNodes[index];
+        return node ? node.item : undefined;
+      });
       ctx.registerMethod("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
         rendered.get(layoutIndex) ?? null,
       );

@@ -458,11 +458,24 @@ export interface TreeState {
   loading: boolean;
 }
 
+/** Search-specific state available in templates when the search plugin is active */
+export interface SearchState {
+  /** Whether this item matches the current query */
+  matched: boolean;
+  /** Current search query (empty string when no search is active) */
+  query: string;
+  /** This item's position in the match list (-1 if not matched) */
+  matchIndex: number;
+  /** Whether this is the currently focused match (navigate mode) */
+  isCurrent: boolean;
+}
+
 /** State passed to template */
 export interface ItemState {
   selected: boolean;
   focused: boolean;
   tree?: TreeState;
+  search?: SearchState;
 }
 
 // =============================================================================
@@ -663,6 +676,18 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Async tree children load failed */
   "tree:load:error": { id: string | number; item: T; error: unknown };
+
+  /** Search bar opened / focused */
+  "search:open": undefined;
+
+  /** Search bar closed and query cleared */
+  "search:close": undefined;
+
+  /** Query or results changed */
+  "search:change": { query: string; matches: number; total: number };
+
+  /** Navigated to a match (navigate mode) */
+  "search:match": { index: number; item: T | undefined; matchIndex: number; matches: number };
 
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;

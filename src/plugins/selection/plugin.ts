@@ -27,6 +27,13 @@ export interface SelectionPluginConfig {
   initial?: Array<string | number>;
   followFocus?: boolean;
   focusOnClick?: boolean;
+  /**
+   * Whether this plugin handles arrow/Home/End/PageUp-Down/Enter/Space
+   * keyboard navigation. Default true. Set false to keep click-selection and
+   * the selection model while letting an outer system own keyboard navigation
+   * (e.g. a global, focus-independent hotkey layer).
+   */
+  keyboard?: boolean;
 }
 
 // =============================================================================
@@ -41,6 +48,7 @@ export function selection<T extends VListItem = VListItem>(
   const mode: SelectionMode = config?.mode ?? "single";
   const followFocus = config?.followFocus ?? false;
   const focusOnClick = config?.focusOnClick ?? false;
+  const keyboard = config?.keyboard ?? true;
 
   let state: SelectionState;
   let getItems: () => readonly T[];
@@ -357,13 +365,20 @@ export function selection<T extends VListItem = VListItem>(
         lastSelectedIndex = hitIndex;
         const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
         focusTarget.focus(focusPreventScroll);
-        doToggle(hitItem!.id, hitItem!);
+        if (mode === "single") {
+          doSelect(hitItem!.id, hitItem!);
+        } else {
+          doToggle(hitItem!.id, hitItem!);
+        }
         emitSelectionChange();
       });
 
       // ── Keyboard handler ──────────────────────────────────────
+      // Skipped when keyboard:false — click-selection and the selection
+      // model stay active, but arrow/Home/End/PageUp-Down/Enter/Space
+      // navigation is left to an outer system (e.g. a global hotkey layer).
 
-      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      if (keyboard) ctx.registerKeydownHandler((event: KeyboardEvent): void => {
           resolveOnce(ctx);
           const total = getTotalFn();
           if (total === 0) return;
@@ -651,6 +666,7 @@ export function selection<T extends VListItem = VListItem>(
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
+            state.focusVisible = focusOnClick;
             emitter.emit("focus:change", { id, index: i });
             return;
           }

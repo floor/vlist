@@ -581,6 +581,14 @@ export function createVList<T extends VListItem = VListItem>(
   }
 
   function onContentKeydown(e: KeyboardEvent): void {
+    // Don't intercept keystrokes aimed at embedded form controls (e.g. the
+    // search input). Those elements handle their own keyboard input; only
+    // Ctrl/Cmd+F (open search) should pass through.
+    const tag = (e.target as HTMLElement)?.tagName;
+    if ((tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") &&
+        !((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F"))) {
+      return;
+    }
     for (let i = 0; i < keydownHandlers.length; i++) keydownHandlers[i]!(e);
   }
 
