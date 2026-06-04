@@ -211,17 +211,18 @@
     display: flex;
     align-items: center;
     box-sizing: border-box;
-    height: 56px;            /* MD3 search bar row */
-    padding: 0 12px;         /* horizontal float */
+    height: 56px; /* MD3 search bar row */
+    padding: 0 12px; /* horizontal float */
+    border-bottom: 1px solid var(--vlist-border);
 }
 
 .vlist-search--md3 .vlist-search__container {
     flex: 1 1 auto;
-    height: 40px;            /* the pill / input container */
+    height: 40px; /* the pill / input container */
     padding: 0 16px;
-    gap: 0;                  /* items use margins, like mtrl */
+    gap: 0; /* items use margins, like mtrl */
     border: none;
-    border-radius: 20px;     /* pill (40 / 2) */
+    border-radius: 20px; /* pill (40 / 2) */
     overflow: hidden;
     background-color: var(--vlist-search-md3-surface);
     transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);

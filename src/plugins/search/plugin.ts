@@ -72,8 +72,16 @@ export interface SearchPluginConfig<T extends VListItem = VListItem> {
   field?: FieldAccessor<T>;
   /** Case-sensitive matching. Default false. */
   caseSensitive?: boolean;
-  /** Wrap matched text in `<mark>`. Default true. */
-  highlight?: boolean;
+  /**
+   * Highlight matched substrings in rendered rows by wrapping them in
+   * `<mark class="{prefix}-search-match">`. Default `true`.
+   *
+   * - `false` — disable highlighting.
+   * - `{ within }` — restrict highlighting to descendants matching the CSS
+   *   selector (e.g. `".person__name"`) instead of the whole row. Useful when
+   *   the query can coincidentally appear in fields you didn't search.
+   */
+  highlight?: boolean | { within?: string };
   /** Minimum query length to trigger search. Default 1. */
   minLength?: number;
   /** Auto-close the search bar after N ms of inactivity (0 = never). Default 0. */
@@ -95,6 +103,11 @@ export function search<T extends VListItem = VListItem>(
   const text: Required<SearchText> = { ...DEFAULT_SEARCH_TEXT, ...config.text };
   const caseSensitive = config.caseSensitive ?? false;
   const doHighlight = config.highlight !== false;
+  // Optional CSS selector that scopes highlighting to matching descendants.
+  const highlightWithin =
+    typeof config.highlight === "object" && config.highlight !== null
+      ? config.highlight.within
+      : undefined;
   const minLength = config.minLength ?? 1;
   const cancelTimeout = config.cancelTimeout ?? 0;
   const variant = config.variant ?? "default";
@@ -310,7 +323,15 @@ export function search<T extends VListItem = VListItem>(
     for (let i = start; i <= end; i++) {
       const el = ctx.getRenderedElement(i);
       if (!el) continue;
-      highlightElement(el, query, caseSensitive, matchClass);
+      if (highlightWithin) {
+        // Scope marking to the matching descendants only.
+        const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+        for (let s = 0; s < scoped.length; s++) {
+          highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+        }
+      } else {
+        highlightElement(el, query, caseSensitive, matchClass);
+      }
       if (mode === "navigate") {
         // Toggle the current-match class on this row's marks.
         const isCurrentRow = i === currentOriginal;

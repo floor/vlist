@@ -315,6 +315,27 @@ describe("highlighting", () => {
     q(list, "setQuery")("");
     expect(container.querySelector(".vlist-search-match")).toBeNull();
   });
+
+  it("scopes marks to highlight.within and leaves other fields unmarked", () => {
+    // Template splits name and kind into separate elements. The query "err"
+    // appears in both Cherry's name and the "berry" kind — but `within: .name`
+    // should mark only the name.
+    const tpl = (item: Fruit) =>
+      `<span class="name">${item.name}</span><span class="kind">${item.kind}</span>`;
+    const { container, list } = makeList({ highlight: { within: ".name" } }, tpl);
+    q(list, "setQuery")("err");
+    expect(container.querySelector(".name .vlist-search-match")).not.toBeNull();
+    expect(container.querySelector(".kind .vlist-search-match")).toBeNull();
+  });
+
+  it("marks both fields without a scope (whole-row default)", () => {
+    const tpl = (item: Fruit) =>
+      `<span class="name">${item.name}</span><span class="kind">${item.kind}</span>`;
+    const { container, list } = makeList({}, tpl);
+    q(list, "setQuery")("err");
+    expect(container.querySelector(".name .vlist-search-match")).not.toBeNull();
+    expect(container.querySelector(".kind .vlist-search-match")).not.toBeNull();
+  });
 });
 
 // =============================================================================
