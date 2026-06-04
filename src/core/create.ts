@@ -548,17 +548,21 @@ export function createVList<T extends VListItem = VListItem>(
     if (Number.isNaN(layoutIndex)) return null;
 
     // When groups plugin is active, data-index is a layout index (includes
-    // group headers). Map it to the data index so getItemFn returns the
-    // correct item. Group headers map to -1 → ignore the click.
+    // group headers). Map it to the data index so we return the correct item.
+    // Group headers map to -1 → ignore the click.
+    // Use _getItem (data plugin, always takes data indices) when available
+    // to avoid double-mapping — getItemFn may already be layout-aware
+    // (groups plugin in table mode).
     const layoutToData = methods.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
-    let itemIndex = layoutIndex;
+    let item: T | undefined;
     if (layoutToData) {
       const dataIndex = layoutToData(layoutIndex);
       if (dataIndex < 0) return null;
-      itemIndex = dataIndex;
+      const getDataItem = methods.get("_getItem") as ((i: number) => T | undefined) | undefined;
+      item = getDataItem ? getDataItem(dataIndex) : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+    } else {
+      item = getItemFn ? getItemFn(layoutIndex) : items[layoutIndex];
     }
-
-    const item = getItemFn ? getItemFn(itemIndex) : items[itemIndex];
     if (item === undefined) return null;
     return { item, index: layoutIndex };
   }

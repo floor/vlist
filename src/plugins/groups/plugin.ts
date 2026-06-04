@@ -791,6 +791,8 @@ export function groups<T extends VListItem = VListItem>(
       // snapshots plugin on scroll restore, scale plugin on compression change.
       let tableMode = false;
       let lastTableLoadedCount = -1;
+      // Store the base rebuild indirectly so it can be updated if setSizeConfig
+      // replaces sizeCache methods (Object.assign overwrites our hook).
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
         if (tableMode) {
@@ -883,7 +885,10 @@ export function groups<T extends VListItem = VListItem>(
 
       if (hasTable) {
         // Deferred: data plugin (priority 20) runs after groups (priority 10)
-        // and overwrites getItemFn. Set ours in a microtask after all setups.
+        // and overwrites getItemFn. The table plugin (same priority 10, later
+        // in the array) calls setSizeConfig which Object.assigns a new cache,
+        // overwriting our sizeCache.rebuild hook. Re-hook in a microtask after
+        // all same-priority setups have completed.
         queueMicrotask(() => {
           // Use _getItem (includes placeholders) rather than _getLoadedItem
           // (returns undefined for unloaded items). Placeholders let the
@@ -915,6 +920,7 @@ export function groups<T extends VListItem = VListItem>(
               headerTemplate,
             );
           }
+
         });
       } else {
         ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
