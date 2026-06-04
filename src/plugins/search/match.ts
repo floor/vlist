@@ -50,11 +50,30 @@ export const textMatches = (
 };
 
 /**
+ * Remove all `<mark>` elements with `matchClass` inside `root`, replacing
+ * each with its text content. Adjacent text nodes are merged so the DOM
+ * returns to its pre-highlight state.
+ */
+export const clearHighlights = (
+  root: HTMLElement,
+  matchClass: string,
+): void => {
+  const marks = root.querySelectorAll(`mark.${matchClass}`);
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const mark = marks[i]!;
+    const parent = mark.parentNode;
+    if (!parent) continue;
+    const text = document.createTextNode(mark.textContent ?? "");
+    parent.replaceChild(text, mark);
+    parent.normalize();
+  }
+};
+
+/**
  * Wrap every occurrence of `query` inside `root`'s text nodes in
- * `<mark class="${matchClass}">`. Idempotent for a given query: text already
- * inside a match mark is skipped, so re-running on the same element (e.g. on a
- * scroll commit) does not double-wrap. Callers re-render the template (fresh
- * innerHTML) when the query changes, so stale marks never linger.
+ * `<mark class="${matchClass}">`. Existing marks are cleared first so
+ * the function is safe to call on every render commit — stale marks from
+ * a previous query are replaced, not accumulated.
  */
 export const highlightElement = (
   root: HTMLElement,
@@ -63,17 +82,14 @@ export const highlightElement = (
   matchClass: string,
 ): void => {
   if (!query) return;
+
+  clearHighlights(root, matchClass);
+
   const needle = caseSensitive ? query : query.toLowerCase();
   const qlen = query.length;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
-      // Skip text already wrapped in a match mark.
-      let p = (node as Text).parentElement;
-      while (p && p !== root) {
-        if (p.classList.contains(matchClass)) return NodeFilter.FILTER_REJECT;
-        p = p.parentElement;
-      }
       const value = node.nodeValue ?? "";
       const hay = caseSensitive ? value : value.toLowerCase();
       return hay.includes(needle) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;

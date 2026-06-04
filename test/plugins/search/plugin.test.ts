@@ -336,6 +336,57 @@ describe("highlighting", () => {
     expect(container.querySelector(".name .vlist-search-match")).not.toBeNull();
     expect(container.querySelector(".kind .vlist-search-match")).not.toBeNull();
   });
+
+  it("progressive typing highlights the full query, not stale partial marks", () => {
+    const { container, list } = makeList({ mode: "filter", field: "name" });
+
+    // Simulate typing "cherry" one character at a time
+    q(list, "setQuery")("c");
+    q(list, "setQuery")("ch");
+    q(list, "setQuery")("che");
+    q(list, "setQuery")("cher");
+    q(list, "setQuery")("cherr");
+    q(list, "setQuery")("cherry");
+
+    const marks = container.querySelectorAll(".vlist-search-match");
+    expect(marks.length).toBe(1);
+    expect(marks[0]!.textContent).toBe("Cherry");
+  });
+
+  it("clears stale marks when query changes to a different match", () => {
+    const { container, list } = makeList({ mode: "filter", field: "name" });
+
+    q(list, "setQuery")("app");
+    let marks = container.querySelectorAll(".vlist-search-match");
+    expect(marks.length).toBeGreaterThan(0);
+    const firstMarkText = marks[0]!.textContent;
+    expect(firstMarkText).toBe("App");
+
+    q(list, "setQuery")("grape");
+    marks = container.querySelectorAll(".vlist-search-match");
+    expect(marks.length).toBe(1);
+    expect(marks[0]!.textContent).toBe("Grape");
+  });
+
+  it("does not leave marks from a shorter query inside longer-match text", () => {
+    const tpl = (item: Fruit) => `<span class="name">${item.name}</span>`;
+    const { container, list } = makeList({ mode: "navigate", field: "name" }, tpl);
+
+    q(list, "setQuery")("a");
+    q(list, "setQuery")("ap");
+    q(list, "setQuery")("apr");
+
+    // "Apricot" matches "apr" — the mark should wrap "Apr", not have
+    // leftover single-char marks from "a" or "ap" queries.
+    const nameEl = container.querySelector(".name .vlist-search-match");
+    expect(nameEl).not.toBeNull();
+    expect(nameEl!.textContent!.toLowerCase()).toBe("apr");
+
+    const allMarks = container.querySelectorAll(".name .vlist-search-match");
+    for (const m of Array.from(allMarks)) {
+      expect(m.textContent!.length).toBeGreaterThanOrEqual(3);
+    }
+  });
 });
 
 // =============================================================================
