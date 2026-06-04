@@ -701,7 +701,7 @@ describe("selection — Click Handler", () => {
     cleanup();
   });
 
-  it("should deselect on second click in single mode", () => {
+  it("should keep selection on second click in single mode", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, clickHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
@@ -710,10 +710,10 @@ describe("selection — Click Handler", () => {
     const getSelected = methods.get("getSelected") as () => Array<string | number>;
 
     clickHandlers[0]!(makeClickEvent(makeItemElement(2)));
-    expect(getSelected()).toContain(2);
+    expect(getSelected()).toEqual([2]);
 
     clickHandlers[0]!(makeClickEvent(makeItemElement(2)));
-    expect(getSelected()).toEqual([]);
+    expect(getSelected()).toEqual([2]);
 
     cleanup();
   });
@@ -1780,6 +1780,49 @@ describe("selection — Internal Methods", () => {
     );
     expect(focusChangeCalls.length).toBe(1);
     expect(focusChangeCalls[0]![1]).toEqual({ id: 5, index: 5 });
+
+    cleanup();
+  });
+
+  it("_focusById should set focusVisible when focusOnClick is true", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>({ focusOnClick: true });
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    const itemStateFn = ctx.getItemStateFn?.();
+    expect(itemStateFn).toBeDefined();
+
+    focusByIdFn(3);
+
+    const state = { selected: false, focused: false };
+    itemStateFn!(3, state);
+    expect(state.focused).toBe(true);
+
+    const other = { selected: false, focused: false };
+    itemStateFn!(0, other);
+    expect(other.focused).toBe(false);
+
+    cleanup();
+  });
+
+  it("_focusById should not set focusVisible when focusOnClick is false", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>({ focusOnClick: false });
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    const itemStateFn = ctx.getItemStateFn?.();
+
+    focusByIdFn(3);
+
+    const state = { selected: false, focused: false };
+    itemStateFn!(3, state);
+    expect(state.focused).toBe(false);
 
     cleanup();
   });

@@ -365,7 +365,11 @@ export function selection<T extends VListItem = VListItem>(
         lastSelectedIndex = hitIndex;
         const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
         focusTarget.focus(focusPreventScroll);
-        doToggle(hitItem!.id, hitItem!);
+        if (mode === "single") {
+          doSelect(hitItem!.id, hitItem!);
+        } else {
+          doToggle(hitItem!.id, hitItem!);
+        }
         emitSelectionChange();
       });
 
@@ -662,6 +666,7 @@ export function selection<T extends VListItem = VListItem>(
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
+            state.focusVisible = focusOnClick;
             emitter.emit("focus:change", { id, index: i });
             return;
           }
