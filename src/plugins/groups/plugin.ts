@@ -941,6 +941,10 @@ export function groups<T extends VListItem = VListItem>(
         const entry = layout.getEntry(layoutIndex);
         return entry.type === "header";
       });
+      ctx.registerMethod("_getItemLane", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos ? pos.col : -1;
+      });
 
       const mainPadEnd = mainAxisPadding - ctx.config.startPadding;
       ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
