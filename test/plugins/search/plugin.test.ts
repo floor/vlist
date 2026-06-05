@@ -468,3 +468,115 @@ describe("search bar input", () => {
     expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 3");
   });
 });
+
+// =============================================================================
+// Keyboard handler
+// =============================================================================
+
+describe("keyboard", () => {
+  function pressKey(root: HTMLElement, key: string, opts?: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) {
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: opts?.ctrlKey,
+      metaKey: opts?.metaKey,
+      shiftKey: opts?.shiftKey,
+    });
+    (event as any).preventDefault = () => {};
+    root.dispatchEvent(event);
+  }
+
+  const isOpen = (list: VList<Fruit>) => list.element.classList.contains("vlist--searching");
+
+  it("openSearch/closeSearch toggle the searching class", () => {
+    const { list } = makeList();
+    q(list, "openSearch")();
+    q(list, "setQuery")("a");
+    expect(isOpen(list)).toBe(true);
+    q(list, "closeSearch")();
+    expect(isOpen(list)).toBe(false);
+  });
+
+  it("Enter steps to next match in navigate mode", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    const counter = container.querySelector(".vlist-search__counter");
+    expect(counter!.textContent).toBe("1 of 3");
+    pressKey(list.element, "Enter");
+    expect(counter!.textContent).toBe("2 of 3");
+  });
+
+  it("Shift+Enter steps to previous match", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    q(list, "nextMatch")();
+    const counter = container.querySelector(".vlist-search__counter");
+    expect(counter!.textContent).toBe("2 of 3");
+    pressKey(list.element, "Enter", { shiftKey: true });
+    expect(counter!.textContent).toBe("1 of 3");
+  });
+
+  it("ArrowDown/ArrowUp step through matches when open", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    const counter = container.querySelector(".vlist-search__counter");
+    pressKey(list.element, "ArrowDown");
+    expect(counter!.textContent).toBe("2 of 3");
+    pressKey(list.element, "ArrowUp");
+    expect(counter!.textContent).toBe("1 of 3");
+  });
+});
+
+// =============================================================================
+// Cancel timeout
+// =============================================================================
+
+describe("cancelTimeout", () => {
+  it("auto-closes search after timeout", async () => {
+    const { list } = makeList({ cancelTimeout: 100 });
+    q(list, "setQuery")("a");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(list.element.classList.contains("vlist--searching")).toBe(false);
+  });
+});
+
+// =============================================================================
+// Type-ahead (position: "none")
+// =============================================================================
+
+describe("type-ahead (invisible mode)", () => {
+  function pressKey(root: HTMLElement, key: string, opts?: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) {
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: opts?.ctrlKey,
+      metaKey: opts?.metaKey,
+      shiftKey: opts?.shiftKey,
+    });
+    (event as any).preventDefault = () => {};
+    root.dispatchEvent(event);
+  }
+
+  it("printable key opens search and applies query in position:none", () => {
+    const { list } = makeList({ position: "none" as any, mode: "filter", field: "name" });
+    const root = list.element;
+    pressKey(root, "a");
+    expect(q(list, "getQuery")()).toBe("a");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+  });
+
+  it("Backspace removes last char and closes when empty", () => {
+    const { list } = makeList({ position: "none" as any, mode: "filter", field: "name" });
+    const root = list.element;
+    pressKey(root, "c");
+    pressKey(root, "h");
+    expect(q(list, "getQuery")()).toBe("ch");
+    pressKey(root, "Backspace");
+    expect(q(list, "getQuery")()).toBe("c");
+    pressKey(root, "Backspace");
+    expect(q(list, "getQuery")()).toBe("");
+  });
+});
