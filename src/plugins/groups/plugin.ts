@@ -946,17 +946,18 @@ export function groups<T extends VListItem = VListItem>(
         return pos ? pos.col : -1;
       });
 
-      const mainPadEnd = mainAxisPadding - ctx.config.startPadding;
+      const mainPadStart = ctx.config.startPadding;
+      const mainPadEnd = mainAxisPadding - mainPadStart;
       ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
         const pos = gridItemPositions?.get(layoutIndex);
         const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
-        const size = sizeCache.getSize(layoutIndex);
+        const size = pos?.h ?? sizeCache.getSize(layoutIndex);
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
 
-        if (offset < sp) {
-          ctx.scrollTo(offset);
+        if (offset < sp + mainPadStart) {
+          ctx.scrollTo(Math.max(0, offset - mainPadStart));
         } else if (offset + size + mainPadEnd > sp + cs) {
           ctx.scrollTo(offset + size + mainPadEnd - cs);
         }

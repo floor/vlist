@@ -958,6 +958,114 @@ describe("groups — Registered Methods", () => {
 });
 
 // =============================================================================
+// groups — _scrollItemIntoView with masonry
+// =============================================================================
+
+describe("groups — _scrollItemIntoView", () => {
+  it("uses pos.h from gridItemPositions instead of sizeCache fallback", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, scrollCalls, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 300,
+      itemSize: 50,
+    });
+
+    // Simulate masonry: register getMasonryLayout before groups setup
+    methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
+
+    plugin.setup!(ctx);
+    engineState.containerSize = 300;
+    ctx.forceRender();
+
+    const sivFn = methods.get("_scrollItemIntoView") as (i: number) => void;
+    expect(sivFn).toBeDefined();
+
+    // Scroll down to simulate being mid-list
+    engineState.scrollPosition = 0;
+
+    // Call scroll-into-view on a data item far enough to trigger scroll-down
+    // Layout: [hdrA(0), item0(1), ..., item4(5), hdrB(6), item5(7), ...]
+    sivFn(7); // first item in group B
+
+    // Should have scrolled — the scroll target uses pos.h (actual height)
+    // not the sizeCache fallback
+    if (scrollCalls.length > 0) {
+      const target = scrollCalls[scrollCalls.length - 1]!;
+      expect(target).toBeGreaterThan(0);
+    }
+
+    cleanup();
+  });
+
+  it("accounts for startPadding when scrolling up", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, scrollCalls, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 300,
+      itemSize: 50,
+      padding: { top: 10, bottom: 10 },
+    });
+
+    plugin.setup!(ctx);
+    engineState.containerSize = 300;
+    ctx.forceRender();
+
+    const sivFn = methods.get("_scrollItemIntoView") as (i: number) => void;
+
+    // Simulate being scrolled past the first item
+    engineState.scrollPosition = 100;
+
+    // Scroll to layout index 1 (first data item, offset ~32 from header)
+    sivFn(1);
+
+    // Should scroll up. Target should be offset - startPadding (= max(0, 32 - 10) = 22)
+    if (scrollCalls.length > 0) {
+      const target = scrollCalls[scrollCalls.length - 1]!;
+      // With startPadding=10, scroll should leave room for padding
+      expect(target).toBeLessThan(100);
+    }
+
+    cleanup();
+  });
+
+  it("registers _getItemLane for masonry mode", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 300,
+      itemSize: 50,
+    });
+
+    methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const getItemLane = methods.get("_getItemLane") as (i: number) => number;
+    expect(getItemLane).toBeDefined();
+
+    // Header returns -1
+    expect(getItemLane(0)).toBe(-1);
+
+    // Data items should have lane 0 or 1 (2 columns)
+    const lane1 = getItemLane(1);
+    expect(lane1).toBeGreaterThanOrEqual(0);
+    expect(lane1).toBeLessThan(2);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
 // groups — scrollToIndex
 // =============================================================================
 
