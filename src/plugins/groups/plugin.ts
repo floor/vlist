@@ -357,12 +357,17 @@ export function groups<T extends VListItem = VListItem>(
       element.removeAttribute("aria-selected");
       element.setAttribute("data-id", headerId);
 
-      const content = headerTemplate(entry.group.key, entry.group.groupIndex);
-      if (typeof content === "string") {
-        element.innerHTML = content;
+      if (isX && stickyHeader && entry.group.groupIndex === 0) {
+        element.style.display = "none";
       } else {
-        element.innerHTML = "";
-        element.appendChild(content);
+        element.style.display = "";
+        const content = headerTemplate(entry.group.key, entry.group.groupIndex);
+        if (typeof content === "string") {
+          element.innerHTML = content;
+        } else {
+          element.innerHTML = "";
+          element.appendChild(content);
+        }
       }
       return true;
     }
