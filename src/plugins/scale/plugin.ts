@@ -478,22 +478,28 @@ export function scale<T extends VListItem = VListItem>(
       ctx.registerMethod("_scale:easedScrollTo", (target: number, duration: number) => easedScrollTo(target, duration));
       ctx.registerMethod("_scale:setVirtualPosition", (pos: number) => setVirtualPosition(pos));
 
+      let gridGap = 0;
       ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+        if (!gridGap) {
+          const gl = ctx.getMethod("getGridLayout") as (() => { gap: number }) | undefined;
+          gridGap = gl ? gl().gap : 0;
+        }
         const nav = ctx.getNavConfig();
         const si = nav.scrollIndex ? nav.scrollIndex(index) : index;
         const sp0 = ctx.config.startPadding;
         const sp1 = ctx.config.endPadding;
+        const rowGap = gridGap;
 
         if (!compression.isCompressed || !compressedActive) {
           const offset = sizeCache.getOffset(si);
-          const size = sizeCache.getSize(si);
+          const size = sizeCache.getSize(si) - rowGap;
           const cs = engineState.containerSize;
           const sp = engineState.scrollPosition;
           const prop = isX ? "scrollLeft" : "scrollTop";
           if (offset < sp) {
             (viewport as any)[prop] = offset;
-          } else if (offset + size > sp + cs - mainAxisPadding) {
-            (viewport as any)[prop] = offset + size + mainAxisPadding - cs;
+          } else if (sp0 + offset + size + sp1 > sp + cs) {
+            (viewport as any)[prop] = sp0 + offset + size + sp1 - cs;
           }
           return;
         }
@@ -502,17 +508,14 @@ export function scale<T extends VListItem = VListItem>(
         const itemPos = calculateCompressedItemPosition(
           si, virtualScrollPosition, sizeCache, cacheTotal, cs, compression,
         );
-        const itemSize = sizeCache.getSize(si);
+        const itemSize = sizeCache.getSize(si) - rowGap;
 
         if (itemPos < 0) {
-          setVirtualPosition(Math.max(0, calculateCompressedScrollToIndex(
-            si, sizeCache, cs, cacheTotal, compression, "start",
-          )));
-        } else if (itemPos + itemSize + mainAxisPadding > cs) {
-          const scaledPad = mainAxisPadding * compression.ratio;
-          setVirtualPosition(calculateCompressedScrollToIndex(
-            si, sizeCache, cs, cacheTotal, compression, "end",
-          ) + scaledPad);
+          const delta = -itemPos;
+          setVirtualPosition(Math.max(0, virtualScrollPosition - delta * compression.ratio));
+        } else if (sp0 + itemPos + itemSize + sp1 > cs) {
+          const delta = sp0 + itemPos + itemSize + sp1 - cs;
+          setVirtualPosition(Math.min(getMaxScroll(), virtualScrollPosition + delta * compression.ratio));
         }
       });
 

@@ -1789,5 +1789,32 @@ describe("scale touch scrolling", () => {
 
       expect(list.getScrollPosition()).toBe(endPos);
     });
+
+    it("End then ArrowDown should not overshoot max scroll (compressed)", () => {
+      const items = createTestItems(500_000);
+      list = createVList<TestItem>(
+        {
+          container,
+          padding: [8, 0, 8, 0],
+          item: { height: 40, template },
+          items,
+        },
+        [selection({ mode: "single" }), scale()],
+      );
+
+      const root = list.element;
+
+      pressKey(root, "End");
+      flushAllRAF();
+      const endPos = list.getScrollPosition();
+
+      // Multiple ArrowDown at the end shouldn't push past maxScroll
+      for (let i = 0; i < 5; i++) {
+        pressKey(root, "ArrowDown");
+        flushAllRAF();
+      }
+
+      expect(list.getScrollPosition()).toBeLessThanOrEqual(endPos);
+    });
   });
 });

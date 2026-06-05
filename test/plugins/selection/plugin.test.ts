@@ -1116,7 +1116,7 @@ describe("selection — scroll padding", () => {
     return event;
   }
 
-  it("should include endPadding when scrolling to last item", () => {
+  it("should include startPadding and endPadding when scrolling to last item", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
       createTestItems(20),
@@ -1125,17 +1125,14 @@ describe("selection — scroll padding", () => {
 
     plugin.setup!(ctx);
 
-    // Move focus to the last item
     for (let i = 0; i < 20; i++) {
       keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
     }
 
-    // The scroll should account for padding — the target should include
-    // mainAxisPadding (20) so the last item doesn't touch the viewport edge.
+    // target = startPadding + offset(19) + size(50) + endPadding - containerSize
+    //        = 10 + 950 + 50 + 10 - 200 = 820
     const lastScroll = scrollCalls[scrollCalls.length - 1];
     if (lastScroll !== undefined) {
-      // offset(19) + size(50) + mainAxisPadding(20) - containerSize(200)
-      // = 950 + 50 + 20 - 200 = 820
       expect(lastScroll).toBe(820);
     }
 
@@ -1151,11 +1148,62 @@ describe("selection — scroll padding", () => {
 
     plugin.setup!(ctx);
 
-    // 5 items × 30px = 150px + 20px padding = 170px — all fit in 300px viewport
     keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
     keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
 
     expect(scrollCalls.length).toBe(0);
+
+    cleanup();
+  });
+
+  it("should subtract grid gap from item size for scroll-down target", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 128, containerHeight: 578, padding: { top: 8, bottom: 8 } },
+    );
+
+    // Simulate grid: register getGridLayout with gap
+    methods.set("getGridLayout", () => ({ gap: 8 }));
+
+    plugin.setup!(ctx);
+
+    for (let i = 0; i < 8; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // size used = 128 - 8 (grid gap) = 120
+    // target = startPadding + offset + 120 + endPadding - containerSize
+    //        = 8 + 7*128 + 120 + 8 - 578 = 454
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      expect(lastScroll).toBe(454);
+    }
+
+    cleanup();
+  });
+
+  it("should not subtract gap when grid is not active", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 48, containerHeight: 578, padding: { top: 8, bottom: 8 } },
+    );
+
+    // No getGridLayout registered — gap = 0
+
+    plugin.setup!(ctx);
+
+    for (let i = 0; i < 15; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // size = 48 (no gap subtracted)
+    // target = 8 + 14*48 + 48 + 8 - 578 = 158
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      expect(lastScroll).toBe(158);
+    }
 
     cleanup();
   });

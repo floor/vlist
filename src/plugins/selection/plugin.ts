@@ -290,21 +290,27 @@ export function selection<T extends VListItem = VListItem>(
         return true;
       };
 
+      let selGridGap = 0;
       const scrollFocusIntoView = (index: number): void => {
         if (index < 0) return;
         if (sivFn) { sivFn(index); return; }
+        if (!selGridGap) {
+          const gl = ctx.getMethod("getGridLayout") as (() => { gap: number }) | undefined;
+          selGridGap = gl ? gl().gap : 0;
+        }
         const nav = ctx.getNavConfig();
         const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;
         const offset = sizeCache.getOffset(ci);
-        const size = sizeCache.getSize(ci);
+        const size = sizeCache.getSize(ci) - selGridGap;
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
-        const pad = resolvedConfig.mainAxisPadding;
+        const sp0 = resolvedConfig.startPadding;
+        const sp1 = resolvedConfig.endPadding;
 
         if (offset < sp) {
           scrollTo(offset);
-        } else if (offset + size > sp + cs - pad) {
-          scrollTo(offset + size + pad - cs);
+        } else if (sp0 + offset + size + sp1 > sp + cs) {
+          scrollTo(sp0 + offset + size + sp1 - cs);
         }
       };
 
