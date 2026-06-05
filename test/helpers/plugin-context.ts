@@ -45,6 +45,7 @@ export function createPluginMockContext<T extends VListItem>(
     containerWidth?: number;
     containerHeight?: number;
     template?: ItemTemplate<T>;
+    padding?: { top?: number; bottom?: number; left?: number; right?: number };
   },
 ): PluginTestContext<T> {
   const isX = options?.isX ?? false;
@@ -129,18 +130,23 @@ export function createPluginMockContext<T extends VListItem>(
   };
 
   // ── Config ──────────────────────────────────────────────────────
+  const pad = options?.padding ?? {};
+  const padTop = pad.top ?? 0;
+  const padBottom = pad.bottom ?? 0;
+  const padLeft = pad.left ?? 0;
+  const padRight = pad.right ?? 0;
   const config: ResolvedConfig = {
     axis: { primary: isX ? "x" : "y" },
     hasCrossAxis: false,
     overscan: options?.overscan ?? 2,
     reverse: options?.reverse ?? false,
     classPrefix,
-    mainAxisPadding: 0,
-    crossAxisPadding: 0,
-    startPadding: 0,
-    endPadding: 0,
-    crossPadStart: 0,
-    crossPadEnd: 0,
+    mainAxisPadding: isX ? padLeft + padRight : padTop + padBottom,
+    crossAxisPadding: isX ? padTop + padBottom : padLeft + padRight,
+    startPadding: isX ? padLeft : padTop,
+    endPadding: isX ? padRight : padBottom,
+    crossPadStart: isX ? padTop : padLeft,
+    crossPadEnd: isX ? padBottom : padRight,
     striped: false,
     gap: 0,
   };

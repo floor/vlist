@@ -299,11 +299,12 @@ export function selection<T extends VListItem = VListItem>(
         const size = sizeCache.getSize(ci);
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
+        const pad = resolvedConfig.mainAxisPadding;
 
         if (offset < sp) {
           scrollTo(offset);
-        } else if (offset + size > sp + cs) {
-          scrollTo(offset - cs + size);
+        } else if (offset + size > sp + cs - pad) {
+          scrollTo(offset + size + pad - cs);
         }
       };
 

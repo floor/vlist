@@ -1106,6 +1106,62 @@ describe("selection — Keyboard Handler", () => {
 });
 
 // =============================================================================
+// selection — scrollFocusIntoView with padding
+// =============================================================================
+
+describe("selection — scroll padding", () => {
+  function makeKeyEvent(key: string): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true });
+    (event as any).preventDefault = mock(() => {});
+    return event;
+  }
+
+  it("should include endPadding when scrolling to last item", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200, padding: { top: 10, bottom: 10 } },
+    );
+
+    plugin.setup!(ctx);
+
+    // Move focus to the last item
+    for (let i = 0; i < 20; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // The scroll should account for padding — the target should include
+    // mainAxisPadding (20) so the last item doesn't touch the viewport edge.
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      // offset(19) + size(50) + mainAxisPadding(20) - containerSize(200)
+      // = 950 + 50 + 20 - 200 = 820
+      expect(lastScroll).toBe(820);
+    }
+
+    cleanup();
+  });
+
+  it("should not scroll when item is within padded viewport", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(5),
+      { itemSize: 30, containerHeight: 300, padding: { top: 10, bottom: 10 } },
+    );
+
+    plugin.setup!(ctx);
+
+    // 5 items × 30px = 150px + 20px padding = 170px — all fit in 300px viewport
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+
+    expect(scrollCalls.length).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
 // selection — Keyboard Shift Range Selection (multiple mode)
 // =============================================================================
 

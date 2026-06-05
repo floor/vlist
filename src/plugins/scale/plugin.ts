@@ -64,6 +64,7 @@ export function scale<T extends VListItem = VListItem>(
   let viewport: HTMLElement;
   let isX: boolean;
   let overscan: number;
+  let mainAxisPadding = 0;
 
   let compression: CompressionState = {
     isCompressed: false,
@@ -101,7 +102,7 @@ export function scale<T extends VListItem = VListItem>(
   let storedCtx: PluginContext<T> | null = null;
 
   function getMaxScroll(): number {
-    return Math.max(0, compression.virtualSize + slack - engineState.containerSize);
+    return Math.max(0, compression.virtualSize + slack + mainAxisPadding * compression.ratio - engineState.containerSize);
   }
 
   function computeSlack(): number {
@@ -127,7 +128,7 @@ export function scale<T extends VListItem = VListItem>(
 
       if (fallbackScrollbar) {
         fallbackScrollbar.updateBounds(
-          compression.virtualSize + slack,
+          compression.virtualSize + slack + mainAxisPadding * compression.ratio,
           engineState.containerSize,
         );
       }
@@ -389,7 +390,7 @@ export function scale<T extends VListItem = VListItem>(
         fallbackScrollbar = existing;
         ownsScrollbar = false;
         fallbackScrollbar.updateBounds(
-          compression.virtualSize + slack,
+          compression.virtualSize + slack + mainAxisPadding * compression.ratio,
           engineState.containerSize,
         );
       }
@@ -468,6 +469,7 @@ export function scale<T extends VListItem = VListItem>(
       viewport = ctx.dom.viewport;
       isX = ctx.config.axis.primary === "x";
       overscan = ctx.config.overscan;
+      mainAxisPadding = ctx.config.mainAxisPadding;
 
       storedCtx = ctx;
 
@@ -479,22 +481,24 @@ export function scale<T extends VListItem = VListItem>(
       ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
         const nav = ctx.getNavConfig();
         const si = nav.scrollIndex ? nav.scrollIndex(index) : index;
+        const sp0 = ctx.config.startPadding;
+        const sp1 = ctx.config.endPadding;
 
         if (!compression.isCompressed || !compressedActive) {
           const offset = sizeCache.getOffset(si);
           const size = sizeCache.getSize(si);
           const cs = engineState.containerSize;
           const sp = engineState.scrollPosition;
+          const prop = isX ? "scrollLeft" : "scrollTop";
           if (offset < sp) {
-            const prop = isX ? "scrollLeft" : "scrollTop";
             (viewport as any)[prop] = offset;
-          } else if (offset + size > sp + cs) {
-            const prop = isX ? "scrollLeft" : "scrollTop";
-            (viewport as any)[prop] = offset - cs + size;
+          } else if (offset + size > sp + cs - mainAxisPadding) {
+            (viewport as any)[prop] = offset + size + mainAxisPadding - cs;
           }
           return;
         }
         const cacheTotal = sizeCache.getTotal();
+        const scaledPad = mainAxisPadding * compression.ratio;
         const posStart = calculateCompressedScrollToIndex(
           si, sizeCache, engineState.containerSize, cacheTotal,
           compression, "start",
@@ -505,8 +509,8 @@ export function scale<T extends VListItem = VListItem>(
         );
         if (posStart < virtualScrollPosition) {
           setVirtualPosition(posStart);
-        } else if (posEnd > virtualScrollPosition) {
-          setVirtualPosition(posEnd);
+        } else if (posEnd + scaledPad > virtualScrollPosition + engineState.containerSize) {
+          setVirtualPosition(posEnd + scaledPad);
         }
       });
 
