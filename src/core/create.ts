@@ -317,10 +317,17 @@ export function createVList<T extends VListItem = VListItem>(
       },
       setSizeConfig(sc: number | ((index: number) => number)): void {
         const newCache = createSizeCache(sc, state.totalItems);
-        // Assign all new cache methods. Any plugin that hooked rebuild
-        // (grid, groups) must re-install its hook after calling setSizeConfig
-        // — see grid/plugin.ts installRebuildHook().
-        Object.assign(sizeCache, newCache);
+        const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
+        if (setBase) {
+          // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
+          // hook and update its delegate to the new cache's internal rebuild.
+          const hooked = sizeCache.rebuild;
+          Object.assign(sizeCache, newCache);
+          sizeCache.rebuild = hooked;
+          setBase(newCache.rebuild);
+        } else {
+          Object.assign(sizeCache, newCache);
+        }
       },
       setScrollFns(get: () => number, set: (pos: number) => void): void {
         scrollGetFn = get;

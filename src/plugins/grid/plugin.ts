@@ -360,15 +360,22 @@ export function grid<T extends VListItem = VListItem>(
       // Must be re-installed after every setSizeConfig call (which
       // Object.assigns a new cache, destroying the hook).
       let currentHook: ((n: number) => void) | null = null;
+      let baseRebuild: (n: number) => void = sizeCache.rebuild;
       function installRebuildHook(): void {
         if (sizeCache.rebuild === currentHook) return;
-        const base = sizeCache.rebuild;
-        rebuildAsRows = (rowCount: number): void => base(rowCount);
+        baseRebuild = sizeCache.rebuild;
+        rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
         currentHook = (n: number): void => {
           rebuildAsRows(Math.ceil(n / columns));
         };
         sizeCache.rebuild = currentHook;
       }
+
+      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+        baseRebuild = fn;
+        rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
+      });
+
       installRebuildHook();
       rebuildAsRows(getRowCount());
 

@@ -792,12 +792,12 @@ export function groups<T extends VListItem = VListItem>(
 
       // Intercept sizeCache.rebuild so groups can map between data indices
       // and layout indices (which include group header pseudo-entries).
-      // Called by: data plugin on total change, data plugin on items loaded,
-      // snapshots plugin on scroll restore, scale plugin on compression change.
       let tableMode = false;
       let lastTableLoadedCount = -1;
-      // Store the base rebuild indirectly so it can be updated if setSizeConfig
-      // replaces sizeCache methods (Object.assign overwrites our hook).
+      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+        origSizeCacheRebuild = fn;
+      });
+
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
         if (tableMode) {

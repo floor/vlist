@@ -1131,6 +1131,90 @@ describe("groups — _scrollItemIntoView", () => {
 // groups — scrollToIndex
 // =============================================================================
 
+// =============================================================================
+// groups — sizeCache.rebuild hook resilience (issue 022)
+// =============================================================================
+
+describe("groups — rebuild hook survives setSizeConfig", () => {
+  it("rebuild hook updates totalItems through sizeCache.rebuild", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 50,
+    });
+
+    // Simulate table mode: register _updateTableForGroups so groups
+    // enters tableMode and updates engineState.totalItems on rebuild
+    methods.set("_updateTableForGroups", () => {});
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    // In table mode, rebuild calls layout.rebuild → totalItems = layout.totalEntries
+    // Layout: [hdrA, 5 items, hdrB, 5 items] = 12 entries
+    ctx.sizeCache.rebuild(10);
+    expect(engineState.totalItems).toBe(12);
+
+    cleanup();
+  });
+
+  it("rebuild hook survives sizeCache replacement via _setSizeCacheBase", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 50,
+    });
+
+    methods.set("_updateTableForGroups", () => {});
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    ctx.sizeCache.rebuild(10);
+    expect(engineState.totalItems).toBe(12);
+
+    // Simulate setSizeConfig updating the base via _setSizeCacheBase
+    const setBase = methods.get("_setSizeCacheBase") as Function;
+    expect(setBase).toBeDefined();
+    const mockNewBase = (n: number): void => { /* new cache rebuild */ };
+    setBase(mockNewBase);
+
+    // The hook should still work with the updated base
+    ctx.sizeCache.rebuild(10);
+    expect(engineState.totalItems).toBe(12);
+
+    cleanup();
+  });
+
+  it("_setSizeCacheBase method is registered", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const setBase = methods.get("_setSizeCacheBase");
+    expect(setBase).toBeDefined();
+    expect(typeof setBase).toBe("function");
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// groups — scrollToIndex
+// =============================================================================
+
 describe("groups — scrollToIndex", () => {
   const makePlugin = () => groups<TestItem>({
     getGroupForIndex: (i) => (i < 5 ? "A" : "B"),

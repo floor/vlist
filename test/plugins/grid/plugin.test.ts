@@ -1277,4 +1277,18 @@ describe("grid - sizeCache.rebuild hook", () => {
 
     cleanup();
   });
+
+  it("should register _setSizeCacheBase to update rebuild delegate", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(100);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const setBase = methods.get("_setSizeCacheBase");
+    expect(setBase).toBeDefined();
+    expect(typeof setBase).toBe("function");
+
+    cleanup();
+  });
 });
