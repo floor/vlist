@@ -474,6 +474,41 @@ export function scale<T extends VListItem = VListItem>(
       ctx.registerMethod("_updateCompressionMode", () => updateCompression(ctx));
       ctx.registerMethod("_scale:getCompression", () => compression);
       ctx.registerMethod("_scale:easedScrollTo", (target: number, duration: number) => easedScrollTo(target, duration));
+      ctx.registerMethod("_scale:setVirtualPosition", (pos: number) => setVirtualPosition(pos));
+
+      ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+        const nav = ctx.getNavConfig();
+        const si = nav.scrollIndex ? nav.scrollIndex(index) : index;
+
+        if (!compression.isCompressed || !compressedActive) {
+          const offset = sizeCache.getOffset(si);
+          const size = sizeCache.getSize(si);
+          const cs = engineState.containerSize;
+          const sp = engineState.scrollPosition;
+          if (offset < sp) {
+            const prop = isX ? "scrollLeft" : "scrollTop";
+            (viewport as any)[prop] = offset;
+          } else if (offset + size > sp + cs) {
+            const prop = isX ? "scrollLeft" : "scrollTop";
+            (viewport as any)[prop] = offset - cs + size;
+          }
+          return;
+        }
+        const cacheTotal = sizeCache.getTotal();
+        const posStart = calculateCompressedScrollToIndex(
+          si, sizeCache, engineState.containerSize, cacheTotal,
+          compression, "start",
+        );
+        const posEnd = calculateCompressedScrollToIndex(
+          si, sizeCache, engineState.containerSize, cacheTotal,
+          compression, "end",
+        );
+        if (posStart < virtualScrollPosition) {
+          setVirtualPosition(posStart);
+        } else if (posEnd > virtualScrollPosition) {
+          setVirtualPosition(posEnd);
+        }
+      });
 
       // Register scroll get/set so scrollToIndex routes through us
       ctx.setScrollFns(
@@ -494,7 +529,7 @@ export function scale<T extends VListItem = VListItem>(
       ctx.setScrollToIndexFn((index, align, behavior, duration, easing): void | false => {
         if (!compression.isCompressed || !compressedActive) return false;
         const virtualPos = calculateCompressedScrollToIndex(
-          index, sizeCache, engineState.containerSize, engineState.totalItems,
+          index, sizeCache, engineState.containerSize, sizeCache.getTotal(),
           compression, align as "start" | "center" | "end",
         );
         if (behavior === "smooth") {
