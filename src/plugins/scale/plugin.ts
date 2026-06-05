@@ -64,6 +64,7 @@ export function scale<T extends VListItem = VListItem>(
   let viewport: HTMLElement;
   let isX: boolean;
   let overscan: number;
+  let mainAxisPadding = 0;
 
   let compression: CompressionState = {
     isCompressed: false,
@@ -101,7 +102,7 @@ export function scale<T extends VListItem = VListItem>(
   let storedCtx: PluginContext<T> | null = null;
 
   function getMaxScroll(): number {
-    return Math.max(0, compression.virtualSize + slack - engineState.containerSize);
+    return Math.max(0, compression.virtualSize + slack + mainAxisPadding * compression.ratio - engineState.containerSize);
   }
 
   function computeSlack(): number {
@@ -127,7 +128,7 @@ export function scale<T extends VListItem = VListItem>(
 
       if (fallbackScrollbar) {
         fallbackScrollbar.updateBounds(
-          compression.virtualSize + slack,
+          compression.virtualSize + slack + mainAxisPadding * compression.ratio,
           engineState.containerSize,
         );
       }
@@ -389,7 +390,7 @@ export function scale<T extends VListItem = VListItem>(
         fallbackScrollbar = existing;
         ownsScrollbar = false;
         fallbackScrollbar.updateBounds(
-          compression.virtualSize + slack,
+          compression.virtualSize + slack + mainAxisPadding * compression.ratio,
           engineState.containerSize,
         );
       }
@@ -468,12 +469,55 @@ export function scale<T extends VListItem = VListItem>(
       viewport = ctx.dom.viewport;
       isX = ctx.config.axis.primary === "x";
       overscan = ctx.config.overscan;
+      mainAxisPadding = ctx.config.mainAxisPadding;
 
       storedCtx = ctx;
 
       ctx.registerMethod("_updateCompressionMode", () => updateCompression(ctx));
       ctx.registerMethod("_scale:getCompression", () => compression);
       ctx.registerMethod("_scale:easedScrollTo", (target: number, duration: number) => easedScrollTo(target, duration));
+      ctx.registerMethod("_scale:setVirtualPosition", (pos: number) => setVirtualPosition(pos));
+
+      let gridGap = 0;
+      ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+        if (!gridGap) {
+          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          gridGap = gapFn ? gapFn() : 0;
+        }
+        const nav = ctx.getNavConfig();
+        const si = nav.scrollIndex ? nav.scrollIndex(index) : index;
+        const sp0 = ctx.config.startPadding;
+        const sp1 = ctx.config.endPadding;
+        const rowGap = gridGap;
+
+        if (!compression.isCompressed || !compressedActive) {
+          const offset = sizeCache.getOffset(si);
+          const size = sizeCache.getSize(si) - rowGap;
+          const cs = engineState.containerSize;
+          const sp = engineState.scrollPosition;
+          const prop = isX ? "scrollLeft" : "scrollTop";
+          if (offset < sp) {
+            (viewport as any)[prop] = offset;
+          } else if (sp0 + offset + size + sp1 > sp + cs) {
+            (viewport as any)[prop] = sp0 + offset + size + sp1 - cs;
+          }
+          return;
+        }
+        const cacheTotal = sizeCache.getTotal();
+        const cs = engineState.containerSize;
+        const itemPos = calculateCompressedItemPosition(
+          si, virtualScrollPosition, sizeCache, cacheTotal, cs, compression,
+        );
+        const itemSize = sizeCache.getSize(si) - rowGap;
+
+        if (itemPos < 0) {
+          const delta = -itemPos;
+          setVirtualPosition(Math.max(0, virtualScrollPosition - delta * compression.ratio));
+        } else if (sp0 + itemPos + itemSize + sp1 > cs) {
+          const delta = sp0 + itemPos + itemSize + sp1 - cs;
+          setVirtualPosition(Math.min(getMaxScroll(), virtualScrollPosition + delta * compression.ratio));
+        }
+      });
 
       // Register scroll get/set so scrollToIndex routes through us
       ctx.setScrollFns(
@@ -494,7 +538,7 @@ export function scale<T extends VListItem = VListItem>(
       ctx.setScrollToIndexFn((index, align, behavior, duration, easing): void | false => {
         if (!compression.isCompressed || !compressedActive) return false;
         const virtualPos = calculateCompressedScrollToIndex(
-          index, sizeCache, engineState.containerSize, engineState.totalItems,
+          index, sizeCache, engineState.containerSize, sizeCache.getTotal(),
           compression, align as "start" | "center" | "end",
         );
         if (behavior === "smooth") {

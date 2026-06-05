@@ -421,3 +421,208 @@ describe("tree integration — public API", () => {
     list.destroy();
   });
 });
+
+describe("tree + selection — click selection (API)", () => {
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    container = createContainer({ width: 300, height: 400 });
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  function getSelected(list: ReturnType<typeof createVList>): (string | number)[] {
+    return (list as any).getSelected() as (string | number)[];
+  }
+
+  test("clicking same item twice keeps it selected (no toggle-off in single mode)", () => {
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items: makeTree(),
+    }, [
+      tree({ expanded: ["src"] }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("core");
+    expect(getSelected(list)).toEqual(["core"]);
+
+    (list as any).select("core");
+    expect(getSelected(list)).toEqual(["core"]);
+
+    list.destroy();
+  });
+
+  test("clicking different items replaces selection in single mode", () => {
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items: makeTree(),
+    }, [
+      tree({ expanded: ["src"] }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("core");
+    expect(getSelected(list)).toEqual(["core"]);
+
+    (list as any).select("plugins");
+    expect(getSelected(list)).toEqual(["plugins"]);
+
+    list.destroy();
+  });
+
+  test("folder expand then select keeps selection after collapse", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child.ts", children: [] },
+      ]},
+      { id: "c", name: "file.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>({ expandOnClick: true }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).expand("a");
+    (list as any).select("a");
+    expect(getSelected(list)).toContain("a");
+    expect((list as any).isExpanded("a")).toBe(true);
+
+    (list as any).collapse("a");
+    expect(getSelected(list)).toContain("a");
+
+    list.destroy();
+  });
+
+  test("repeated expand/collapse preserves selection", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child.ts", children: [] },
+      ]},
+      { id: "c", name: "file.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>({ expandOnClick: true }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("a");
+
+    for (let i = 0; i < 6; i++) {
+      (list as any).toggle("a");
+      expect(getSelected(list)).toContain("a");
+    }
+
+    list.destroy();
+  });
+
+  test("selecting deep nested item returns correct ID", () => {
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items: makeTree(),
+    }, [
+      tree({ expanded: ["src", "core"] }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("create");
+    expect(getSelected(list)).toEqual(["create"]);
+
+    (list as any).select("pipeline");
+    expect(getSelected(list)).toEqual(["pipeline"]);
+
+    list.destroy();
+  });
+
+  test("selecting item beyond root array works (tree _getLoadedItem)", () => {
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items: makeTree(),
+    }, [
+      tree({ expanded: ["src", "core"] }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("test");
+    expect(getSelected(list)).toEqual(["test"]);
+
+    (list as any).select("readme");
+    expect(getSelected(list)).toEqual(["readme"]);
+
+    list.destroy();
+  });
+
+  test("async loadChildren folder select works after load", async () => {
+    const items: TreeItem[] = [
+      { id: "root", name: "root", children: [] },
+      { id: "leaf", name: "leaf.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>({
+        expandOnClick: true,
+        loadChildren: async () => [
+          { id: "c1", name: "child-1", children: [] },
+          { id: "c2", name: "child-2", children: [] },
+        ],
+      }),
+      selection({ mode: "single" }),
+    ]);
+
+    (list as any).select("root");
+    expect(getSelected(list)).toContain("root");
+
+    (list as any).expand("root");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(list.total).toBe(4);
+    expect(getSelected(list)).toContain("root");
+
+    list.destroy();
+  });
+
+  test("alternating selections always reflect the last selected", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child.ts", children: [] },
+      ]},
+      { id: "c", name: "file.ts", children: [] },
+    ];
+
+    const list = createVList<TreeItem>({
+      container,
+      item: { height: 32, template },
+      items,
+    }, [
+      tree<TreeItem>({ expanded: ["a"] }),
+      selection({ mode: "single" }),
+    ]);
+
+    for (const id of ["a", "c", "b", "a", "c", "a"]) {
+      (list as any).select(id);
+      expect(getSelected(list)).toEqual([id]);
+    }
+
+    list.destroy();
+  });
+});

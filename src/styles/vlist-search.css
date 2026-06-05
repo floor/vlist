@@ -1,0 +1,290 @@
+/**
+ * vlist - Search Plugin Styles
+ * Optional styles for the search() plugin.
+ * Import separately: import 'vlist/styles/search'
+ *
+ * Theming follows vlist.css: colors come from CSS custom properties — the base
+ * --vlist-* tokens (defined in vlist.css) are reused directly, and the few
+ * search-specific colors are declared below and overridden for dark mode via
+ * the same three selectors vlist.css uses.
+ *
+ * DOM (BEM, mirrors mtrl _search.scss):
+ *   .vlist-search.--bar.--{top|bottom}[.--md3]
+ *   └── .vlist-search__container
+ *       ├── button.vlist-search__leading-icon
+ *       ├── .vlist-search__input-wrapper > input.vlist-search__input
+ *       ├── span.vlist-search__counter
+ *       ├── button.vlist-search__nav-prev / __nav-next
+ *       └── button.vlist-search__clear-button
+ */
+
+/* =============================================================================
+   Search-specific tokens (light)
+   Everything else reuses the base --vlist-* tokens from vlist.css.
+   ============================================================================= */
+
+:root {
+    /* Match highlighting */
+    --vlist-search-match-bg: #fde047;
+    --vlist-search-match-current-bg: #f59e0b;
+
+    /* MD3 variant — surface-container-high + state-layer */
+    --vlist-search-md3-surface: #ececf1;
+    --vlist-search-md3-state: rgba(0, 0, 0, 0.08);
+}
+
+/* Dark — explicit attribute */
+[data-theme-mode="dark"] {
+    --vlist-search-match-bg: #92710b;
+    --vlist-search-match-current-bg: #b45309;
+    --vlist-search-md3-surface: #2b3039;
+    --vlist-search-md3-state: rgba(255, 255, 255, 0.08);
+}
+
+/* Dark — OS preference (skipped when explicit light/dark is set) */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"]) {
+        --vlist-search-match-bg: #92710b;
+        --vlist-search-match-current-bg: #b45309;
+        --vlist-search-md3-surface: #2b3039;
+        --vlist-search-md3-state: rgba(255, 255, 255, 0.08);
+    }
+}
+
+/* Dark — .dark class (Tailwind convention) */
+.dark {
+    --vlist-search-match-bg: #92710b;
+    --vlist-search-match-current-bg: #b45309;
+    --vlist-search-md3-surface: #2b3039;
+    --vlist-search-md3-state: rgba(255, 255, 255, 0.08);
+}
+
+/* =============================================================================
+   Layout — reserve space for the bar so the viewport fills the rest
+   ============================================================================= */
+
+.vlist--has-search {
+    display: flex;
+    flex-direction: column;
+}
+
+.vlist--has-search .vlist-viewport {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* =============================================================================
+   Search bar (default style)
+   ============================================================================= */
+
+.vlist-search {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    display: flex;
+}
+
+.vlist-search__container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    background-color: var(--vlist-bg);
+    border-bottom: 1px solid var(--vlist-border);
+}
+
+.vlist-search--bottom .vlist-search__container {
+    border-bottom: none;
+    border-top: 1px solid var(--vlist-border);
+}
+
+/* Icon buttons (leading / nav / clear) */
+.vlist-search__leading-icon,
+.vlist-search__nav-prev,
+.vlist-search__nav-next,
+.vlist-search__clear-button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--vlist-text-muted);
+    cursor: pointer;
+}
+
+.vlist-search__leading-icon svg,
+.vlist-search__nav-prev svg,
+.vlist-search__nav-next svg,
+.vlist-search__clear-button svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.vlist-search__leading-icon:hover,
+.vlist-search__nav-prev:hover,
+.vlist-search__nav-next:hover,
+.vlist-search__clear-button:hover {
+    color: var(--vlist-text);
+    background-color: var(--vlist-bg-hover);
+}
+
+.vlist-search__clear-button--hidden,
+.vlist-search__nav-prev--hidden,
+.vlist-search__nav-next--hidden {
+    display: none;
+}
+
+.vlist-search__input-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.vlist-search__input {
+    width: 100%;
+    min-width: 0;
+    padding: 4px 8px;
+    font: inherit;
+    color: var(--vlist-text);
+    background-color: var(--vlist-bg);
+    border: 1px solid var(--vlist-border);
+    border-radius: 4px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.vlist-search__input:focus {
+    border-color: var(--vlist-focus-ring);
+}
+
+/* The input never shows a boxed focus ring (it matches :focus-visible even on
+   mouse click, which looks wrong inside the bar). Focus is shown by the caret
+   — and, in the default style, the border above. */
+.vlist-search__input:focus,
+.vlist-search__input:focus-visible {
+    outline: none;
+}
+
+.vlist-search__counter {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    color: var(--vlist-text-muted);
+    white-space: nowrap;
+}
+
+.vlist-search__counter:empty {
+    display: none;
+}
+
+/* =============================================================================
+   Match highlighting
+   ============================================================================= */
+
+.vlist-search-match {
+    color: inherit;
+    background-color: var(--vlist-search-match-bg);
+    border-radius: 2px;
+}
+
+.vlist-search-match--current {
+    background-color: var(--vlist-search-match-current-bg);
+}
+
+/* =============================================================================
+   MD3 variant — search({ variant: "md3" })
+   Material Design 3 search bar (after mtrl _search.scss): a 40px pill
+   (__container) centered in a 56px row, surface-container background, leading
+   magnifier, on-surface text, and circular state-layer icon buttons.
+   Colors reuse the base --vlist-* tokens; only the pill surface and state-layer
+   are search-specific tokens (see top of file).
+   ============================================================================= */
+
+.vlist-search--md3 {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 56px; /* MD3 search bar row */
+    padding: 0 12px; /* horizontal float */
+    border-bottom: 1px solid var(--vlist-border);
+}
+
+.vlist-search--md3 .vlist-search__container {
+    flex: 1 1 auto;
+    height: 40px; /* the pill / input container */
+    padding: 0 16px;
+    gap: 0; /* items use margins, like mtrl */
+    border: none;
+    border-radius: 20px; /* pill (40 / 2) */
+    overflow: hidden;
+    background-color: var(--vlist-search-md3-surface);
+    transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.vlist-search--md3 .vlist-search__leading-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 16px;
+    border-radius: 50%;
+    color: var(--vlist-text);
+}
+
+.vlist-search--md3 .vlist-search__leading-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.vlist-search--md3 .vlist-search__input {
+    width: 100%;
+    height: 100%;
+    padding: 8px 0;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--vlist-text);
+    caret-color: var(--vlist-focus-ring);
+}
+
+.vlist-search--md3 .vlist-search__input::placeholder {
+    color: var(--vlist-text-muted);
+}
+
+.vlist-search--md3 .vlist-search__counter {
+    margin-left: 16px;
+    font-size: 12px;
+    color: var(--vlist-text-muted);
+}
+
+.vlist-search--md3 .vlist-search__nav-prev,
+.vlist-search--md3 .vlist-search__nav-next,
+.vlist-search--md3 .vlist-search__clear-button {
+    width: 24px;
+    height: 24px;
+    margin-left: 16px;
+    border-radius: 50%;
+    color: var(--vlist-text-muted);
+    transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.vlist-search--md3 .vlist-search__nav-prev svg,
+.vlist-search--md3 .vlist-search__nav-next svg,
+.vlist-search--md3 .vlist-search__clear-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+.vlist-search--md3 .vlist-search__leading-icon:hover,
+.vlist-search--md3 .vlist-search__nav-prev:hover,
+.vlist-search--md3 .vlist-search__nav-next:hover,
+.vlist-search--md3 .vlist-search__clear-button:hover {
+    background-color: var(--vlist-search-md3-state);
+}

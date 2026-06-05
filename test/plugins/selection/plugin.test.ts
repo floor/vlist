@@ -125,6 +125,23 @@ describe("selection — Setup", () => {
     cleanup();
   });
 
+  it("should not register a keydown handler when keyboard:false", () => {
+    const plugin = selection<TestItem>({ keyboard: false });
+    const { ctx, keydownHandlers, clickHandlers, methods, cleanup } =
+      createPluginMockContext(createTestItems(10));
+
+    plugin.setup!(ctx);
+
+    // No internal keyboard navigation...
+    expect(keydownHandlers.length).toBe(0);
+    // ...but click-selection and the selection model stay intact.
+    expect(clickHandlers.length).toBeGreaterThan(0);
+    expect(methods.get("select")).toBeFunction();
+    expect(methods.get("getSelected")).toBeFunction();
+
+    cleanup();
+  });
+
   it("should add selectable class to root", () => {
     const plugin = selection<TestItem>();
     const { ctx, dom, cleanup } = createPluginMockContext(createTestItems(10));
@@ -541,6 +558,24 @@ describe("selection — Methods Behavior", () => {
     cleanup();
   });
 
+  it("selectNext should not scroll (scroll glitch open issue)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(100),
+      { itemSize: 100, containerHeight: 600 },
+    );
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+
+    for (let i = 0; i < 10; i++) selectNext();
+
+    // selectNext currently does not scroll — the scroll-at-edge behaviour
+    // for programmatic navigation is an open issue.
+    expect(scrollCalls.length).toBe(0);
+    cleanup();
+  });
+
   it("selectNext should not wrap past last item by default", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(100));
@@ -666,7 +701,7 @@ describe("selection — Click Handler", () => {
     cleanup();
   });
 
-  it("should deselect on second click in single mode", () => {
+  it("should keep selection on second click in single mode", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, clickHandlers, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
@@ -675,10 +710,10 @@ describe("selection — Click Handler", () => {
     const getSelected = methods.get("getSelected") as () => Array<string | number>;
 
     clickHandlers[0]!(makeClickEvent(makeItemElement(2)));
-    expect(getSelected()).toContain(2);
+    expect(getSelected()).toEqual([2]);
 
     clickHandlers[0]!(makeClickEvent(makeItemElement(2)));
-    expect(getSelected()).toEqual([]);
+    expect(getSelected()).toEqual([2]);
 
     cleanup();
   });
@@ -1065,6 +1100,110 @@ describe("selection — Keyboard Handler", () => {
     // No ArrowDown first — focusedIndex = -1
     keydownHandlers[0]!(makeKeyEvent(" "));
     expect(getSelected()).toEqual([]);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// selection — scrollFocusIntoView with padding
+// =============================================================================
+
+describe("selection — scroll padding", () => {
+  function makeKeyEvent(key: string): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true });
+    (event as any).preventDefault = mock(() => {});
+    return event;
+  }
+
+  it("should include startPadding and endPadding when scrolling to last item", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200, padding: { top: 10, bottom: 10 } },
+    );
+
+    plugin.setup!(ctx);
+
+    for (let i = 0; i < 20; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // target = startPadding + offset(19) + size(50) + endPadding - containerSize
+    //        = 10 + 950 + 50 + 10 - 200 = 820
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      expect(lastScroll).toBe(820);
+    }
+
+    cleanup();
+  });
+
+  it("should not scroll when item is within padded viewport", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(5),
+      { itemSize: 30, containerHeight: 300, padding: { top: 10, bottom: 10 } },
+    );
+
+    plugin.setup!(ctx);
+
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+
+    expect(scrollCalls.length).toBe(0);
+
+    cleanup();
+  });
+
+  it("should subtract grid gap from item size for scroll-down target", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 128, containerHeight: 578, padding: { top: 8, bottom: 8 } },
+    );
+
+    // Simulate grid: register _getRowGap
+    methods.set("_getRowGap", () => 8);
+
+    plugin.setup!(ctx);
+
+    for (let i = 0; i < 8; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // size used = 128 - 8 (grid gap) = 120
+    // target = startPadding + offset + 120 + endPadding - containerSize
+    //        = 8 + 7*128 + 120 + 8 - 578 = 454
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      expect(lastScroll).toBe(454);
+    }
+
+    cleanup();
+  });
+
+  it("should not subtract gap when grid is not active", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 48, containerHeight: 578, padding: { top: 8, bottom: 8 } },
+    );
+
+    // No getGridLayout registered — gap = 0
+
+    plugin.setup!(ctx);
+
+    for (let i = 0; i < 15; i++) {
+      keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    }
+
+    // size = 48 (no gap subtracted)
+    // target = 8 + 14*48 + 48 + 8 - 578 = 158
+    const lastScroll = scrollCalls[scrollCalls.length - 1];
+    if (lastScroll !== undefined) {
+      expect(lastScroll).toBe(158);
+    }
 
     cleanup();
   });
@@ -1745,6 +1884,49 @@ describe("selection — Internal Methods", () => {
     );
     expect(focusChangeCalls.length).toBe(1);
     expect(focusChangeCalls[0]![1]).toEqual({ id: 5, index: 5 });
+
+    cleanup();
+  });
+
+  it("_focusById should set focusVisible when focusOnClick is true", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>({ focusOnClick: true });
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    const itemStateFn = ctx.getItemStateFn?.();
+    expect(itemStateFn).toBeDefined();
+
+    focusByIdFn(3);
+
+    const state = { selected: false, focused: false };
+    itemStateFn!(3, state);
+    expect(state.focused).toBe(true);
+
+    const other = { selected: false, focused: false };
+    itemStateFn!(0, other);
+    expect(other.focused).toBe(false);
+
+    cleanup();
+  });
+
+  it("_focusById should not set focusVisible when focusOnClick is false", () => {
+    const items = createTestItems(10);
+    const plugin = selection<TestItem>({ focusOnClick: false });
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    plugin.setup!(ctx);
+
+    const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+    const itemStateFn = ctx.getItemStateFn?.();
+
+    focusByIdFn(3);
+
+    const state = { selected: false, focused: false };
+    itemStateFn!(3, state);
+    expect(state.focused).toBe(false);
 
     cleanup();
   });

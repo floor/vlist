@@ -107,23 +107,51 @@ export function masonry<T extends VListItem = VListItem>(
   let laneItems: number[][] = [];
   let itemLanePos: Int32Array = new Int32Array(0);
   let laneYCenters: Float64Array[] = [];
+  let getItemLaneFn: ((i: number) => number) | null = null;
+  let getItemYFn: ((i: number) => number) | null = null;
+  let getItemHFn: ((i: number) => number) | null = null;
+  let isGroupHeaderFn: ((i: number) => boolean) | null = null;
+  let navFnsResolved = false;
+  let laneIndexDirty = true;
+
+  function resolveNavFns(): void {
+    if (navFnsResolved || !storedCtx) return;
+    getItemLaneFn = (storedCtx.getMethod("_getItemLane") as typeof getItemLaneFn) ?? null;
+    getItemYFn = (storedCtx.getMethod("_getItemY") as typeof getItemYFn) ?? null;
+    getItemHFn = (storedCtx.getMethod("_getItemH") as typeof getItemHFn) ?? null;
+    isGroupHeaderFn = (storedCtx.getMethod("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
+    if (getItemLaneFn || isGroupHeaderFn) navFnsResolved = true;
+  }
 
   function rebuildLaneIndex(): void {
+    resolveNavFns();
     const cols = layout.columns;
-    const total = cachedPlacements.length;
+    const useGroups = !!getItemLaneFn;
 
-    laneItems = new Array(cols);
-    for (let c = 0; c < cols; c++) laneItems[c] = [];
+    if (useGroups) {
+      const total = engineState.totalItems;
+      laneItems = new Array(cols);
+      for (let c = 0; c < cols; c++) laneItems[c] = [];
+      if (itemLanePos.length < total) itemLanePos = new Int32Array(total);
 
-    if (itemLanePos.length < total) {
-      itemLanePos = new Int32Array(total);
-    }
+      for (let i = 0; i < total; i++) {
+        if (isGroupHeaderFn?.(i)) continue;
+        const lane = getItemLaneFn!(i);
+        if (lane < 0 || lane >= cols) continue;
+        itemLanePos[i] = laneItems[lane]!.length;
+        laneItems[lane]!.push(i);
+      }
+    } else {
+      const total = cachedPlacements.length;
+      laneItems = new Array(cols);
+      for (let c = 0; c < cols; c++) laneItems[c] = [];
+      if (itemLanePos.length < total) itemLanePos = new Int32Array(total);
 
-    for (let i = 0; i < total; i++) {
-      const p = cachedPlacements[i]!;
-      const pos = laneItems[p.lane]!.length;
-      laneItems[p.lane]!.push(i);
-      itemLanePos[i] = pos;
+      for (let i = 0; i < total; i++) {
+        const p = cachedPlacements[i]!;
+        itemLanePos[i] = laneItems[p.lane]!.length;
+        laneItems[p.lane]!.push(i);
+      }
     }
 
     laneYCenters = new Array(cols);
@@ -131,8 +159,15 @@ export function masonry<T extends VListItem = VListItem>(
       const items = laneItems[c]!;
       const yc = new Float64Array(items.length);
       for (let j = 0; j < items.length; j++) {
-        const p = cachedPlacements[items[j]!]!;
-        yc[j] = p.y + p.size * 0.5;
+        const idx = items[j]!;
+        if (useGroups && getItemYFn && getItemHFn) {
+          const y = getItemYFn(idx);
+          const h = getItemHFn(idx);
+          yc[j] = y >= 0 ? y + (h > 0 ? h * 0.5 : 0) : 0;
+        } else {
+          const p = cachedPlacements[idx]!;
+          yc[j] = p.y + p.size * 0.5;
+        }
       }
       laneYCenters[c] = yc;
     }
@@ -154,12 +189,28 @@ export function masonry<T extends VListItem = VListItem>(
     return lo;
   }
 
-  function navigate(currentIndex: number, key: string, total: number): number {
-    const placement = cachedPlacements[currentIndex];
-    if (!placement) return currentIndex;
-    const lane = placement.lane;
+  function navigate(currentIndex: number, key: string, _total: number): number {
+    if (laneIndexDirty) {
+      rebuildLaneIndex();
+      laneIndexDirty = false;
+    }
+    const useGroups = !!getItemLaneFn;
+    let lane: number;
+    let posInLane: number;
+
+    if (useGroups) {
+      if (isGroupHeaderFn?.(currentIndex)) return currentIndex;
+      lane = getItemLaneFn!(currentIndex);
+      if (lane < 0) return currentIndex;
+      posInLane = itemLanePos[currentIndex]!;
+    } else {
+      const placement = cachedPlacements[currentIndex];
+      if (!placement) return currentIndex;
+      lane = placement.lane;
+      posInLane = itemLanePos[currentIndex]!;
+    }
+
     const cols = layout.columns;
-    const posInLane = itemLanePos[currentIndex]!;
     const myLane = laneItems[lane]!;
 
     const k = isX
@@ -180,37 +231,37 @@ export function masonry<T extends VListItem = VListItem>(
       case "ArrowRight": {
         if (lane >= cols - 1) return currentIndex;
         const targetLane = lane + 1;
-        const yCenter = placement.y + placement.size * 0.5;
         const targetItems = laneItems[targetLane]!;
         if (!targetItems.length) return currentIndex;
-        const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+        const pos = bsNearest(laneYCenters[targetLane]!, laneYCenters[lane]?.[posInLane] ?? 0);
         return pos >= 0 ? targetItems[pos]! : currentIndex;
       }
       case "ArrowLeft": {
         if (lane <= 0) return currentIndex;
         const targetLane = lane - 1;
-        const yCenter = placement.y + placement.size * 0.5;
         const targetItems = laneItems[targetLane]!;
         if (!targetItems.length) return currentIndex;
-        const pos = bsNearest(laneYCenters[targetLane]!, yCenter);
+        const pos = bsNearest(laneYCenters[targetLane]!, laneYCenters[lane]?.[posInLane] ?? 0);
         return pos >= 0 ? targetItems[pos]! : currentIndex;
       }
       case "Home":
         return 0;
       case "End": {
         const lastLane = laneItems[cols - 1]!;
-        return lastLane.length > 0 ? lastLane[lastLane.length - 1]! : total - 1;
+        return lastLane.length > 0 ? lastLane[lastLane.length - 1]! : currentIndex;
       }
       case "PageDown": {
         const containerSize = engineState.containerSize;
-        const itemSize = placement.size > 0 ? placement.size : 150;
+        const p = useGroups ? null : cachedPlacements[currentIndex];
+        const itemSize = p && p.size > 0 ? p.size : 150;
         const jump = Math.max(1, Math.floor(containerSize / itemSize));
         const target = Math.min(posInLane + jump, myLane.length - 1);
         return myLane[target]!;
       }
       case "PageUp": {
         const containerSize = engineState.containerSize;
-        const itemSize = placement.size > 0 ? placement.size : 150;
+        const p = useGroups ? null : cachedPlacements[currentIndex];
+        const itemSize = p && p.size > 0 ? p.size : 150;
         const jump = Math.max(1, Math.floor(containerSize / itemSize));
         const target = Math.max(0, posInLane - jump);
         return myLane[target]!;
@@ -247,7 +298,7 @@ export function masonry<T extends VListItem = VListItem>(
     const totalItems = engineState.totalItems;
     cachedPlacements = layout.calculateLayout(totalItems, getSizeFn());
     lastLayoutTotal = totalItems;
-    rebuildLaneIndex();
+    laneIndexDirty = true;
 
     const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
     storedCtx.updateContentSize(totalSize);

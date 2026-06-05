@@ -92,6 +92,7 @@ export function grid<T extends VListItem = VListItem>(
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let forceNextRender = true;
+  let rebuildAsRows: (rowCount: number) => void = (n) => sizeCache.rebuild(n);
 
   // Recompute the cached column width — call on resize/config change.
   function recomputeColumnWidth(): void {
@@ -285,7 +286,7 @@ export function grid<T extends VListItem = VListItem>(
 
   function gridForceRender(): void {
     if (engineState.destroyed) return;
-    sizeCache.rebuild(getRowCount());
+    rebuildAsRows(getRowCount());
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -351,8 +352,32 @@ export function grid<T extends VListItem = VListItem>(
       }
 
       // Size cache must have rowCount entries, not totalItems.
-      // setSizeConfig creates with state.totalItems — fix immediately.
-      sizeCache.rebuild(getRowCount());
+      // Hook sizeCache.rebuild so that when the data plugin calls
+      // rebuild(itemCount), it's converted to rebuild(rowCount).
+      // Without this, data's onDataChange/onItemsLoaded overwrites
+      // the row-based total with the raw item count.
+      // Hook sizeCache.rebuild to convert item count → row count.
+      // Must be re-installed after every setSizeConfig call (which
+      // Object.assigns a new cache, destroying the hook).
+      let currentHook: ((n: number) => void) | null = null;
+      let baseRebuild: (n: number) => void = sizeCache.rebuild;
+      function installRebuildHook(): void {
+        if (sizeCache.rebuild === currentHook) return;
+        baseRebuild = sizeCache.rebuild;
+        rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
+        currentHook = (n: number): void => {
+          rebuildAsRows(Math.ceil(n / columns));
+        };
+        sizeCache.rebuild = currentHook;
+      }
+
+      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+        baseRebuild = fn;
+        rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
+      });
+
+      installRebuildHook();
+      rebuildAsRows(getRowCount());
 
       // Fix trailing gap: last row's cached size includes gap that
       // shouldn't add empty space at the bottom.
@@ -376,6 +401,7 @@ export function grid<T extends VListItem = VListItem>(
       // ── Public methods ─────────────────────────────────────────
 
       ctx.registerMethod("getGridLayout", () => layout);
+      ctx.registerMethod("_getRowGap", () => layout.gap);
 
       ctx.registerMethod("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
         if (newConfig.columns !== undefined) {
@@ -403,7 +429,8 @@ export function grid<T extends VListItem = VListItem>(
           } else {
             ctx.setSizeConfig(baseRowSize + newGap);
           }
-          sizeCache.rebuild(getRowCount());
+          installRebuildHook();
+          rebuildAsRows(getRowCount());
         }
 
         if (newConfig.columns !== undefined) {

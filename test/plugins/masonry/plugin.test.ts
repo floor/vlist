@@ -1100,6 +1100,97 @@ describe("masonry - navigate", () => {
     expect(result).toBe(999);
     cleanup();
   });
+
+  it("ArrowRight uses Y-center from groups when _getItemY/_getItemH are available", () => {
+    // Simulate masonry + groups: register group methods that provide
+    // lane and Y positions, then verify ArrowRight picks a nearby item
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, (i) => 100 + (i % 3) * 50);
+    const mock = createPluginMockContext<TestItem>(items);
+    mock.engineState.containerSize = 500;
+    mock.engineState.crossSize = 400;
+    mock.engineState.totalItems = 22; // 20 items + 2 headers
+
+    // Register group-like methods that map layout→data
+    // Layout: [H0, item0(1), item1(2), ..., item9(10), H1, item10(12), ...]
+    mock.methods.set("_isGroupHeader", (i: number) => i === 0 || i === 11);
+    mock.methods.set("_getItemLane", (i: number) => {
+      if (i === 0 || i === 11) return -1; // headers
+      const di = i < 11 ? i - 1 : i - 2; // data index
+      return di % 4;
+    });
+    mock.methods.set("_getItemY", (i: number) => {
+      if (i === 0 || i === 11) return -1;
+      const di = i < 11 ? i - 1 : i - 2;
+      const row = Math.floor(di / 4);
+      return 32 + row * 120; // header 32px + rows
+    });
+    mock.methods.set("_getItemH", (i: number) => {
+      if (i === 0 || i === 11) return -1;
+      return 100;
+    });
+
+    plugin.setup!(mock.ctx);
+    mock.ctx.forceRender();
+    const nav = mock.navConfig;
+
+    // Navigate: ArrowDown from layout 1 (lane 0) to layout 5 (lane 0, next row)
+    const down1 = nav.navigate(1, "ArrowDown", 22);
+
+    // ArrowRight from that position should go to lane 1 at similar Y
+    const right = nav.navigate(down1, "ArrowRight", 22);
+    expect(right).not.toBe(down1);
+
+    // The right item should be in lane 1
+    const rightLane = mock.methods.get("_getItemLane")(right);
+    const downLane = mock.methods.get("_getItemLane")(down1);
+    expect(rightLane).toBe(downLane + 1);
+
+    mock.cleanup();
+  });
+
+  it("ArrowDown stays in same lane with groups active", () => {
+    const plugin = masonry<TestItem>({ columns: 2, gap: 8 });
+    const items = createTestItems(10, (i) => 100 + (i % 2) * 50);
+    const mock = createPluginMockContext<TestItem>(items);
+    mock.engineState.containerSize = 500;
+    mock.engineState.crossSize = 400;
+    mock.engineState.totalItems = 12; // 10 items + 2 headers
+
+    // Layout: [H0, item0(1), item1(2), ..., item4(5), H1, item5(7), ...]
+    mock.methods.set("_isGroupHeader", (i: number) => i === 0 || i === 6);
+    mock.methods.set("_getItemLane", (i: number) => {
+      if (i === 0 || i === 6) return -1;
+      const di = i < 6 ? i - 1 : i - 2;
+      return di % 2;
+    });
+    mock.methods.set("_getItemY", (i: number) => {
+      if (i === 0 || i === 6) return -1;
+      const di = i < 6 ? i - 1 : i - 2;
+      const row = Math.floor(di / 2);
+      return 32 + row * 120;
+    });
+    mock.methods.set("_getItemH", (i: number) => {
+      if (i === 0 || i === 6) return -1;
+      return 100;
+    });
+
+    plugin.setup!(mock.ctx);
+    mock.ctx.forceRender();
+    const nav = mock.navConfig;
+
+    // Start at layout 1 (lane 0), ArrowDown should stay in lane 0
+    const getLane = mock.methods.get("_getItemLane") as (i: number) => number;
+    const startLane = getLane(1);
+
+    const d1 = nav.navigate(1, "ArrowDown", 12);
+    expect(getLane(d1)).toBe(startLane);
+
+    const d2 = nav.navigate(d1, "ArrowDown", 12);
+    expect(getLane(d2)).toBe(startLane);
+
+    mock.cleanup();
+  });
 });
 
 // =============================================================================

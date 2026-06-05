@@ -214,10 +214,12 @@ export function data<T extends VListItem = VListItem>(
       dom = ctx.dom;
       forceRender = ctx.forceRender.bind(ctx);
 
-      // Create data manager — but first wire up virtualTotalFn
-      // so scrollToIndex and api.total reflect the async data total
+      // Create data manager — but first wire up virtualTotalFn and
+      // getIndexByIdFn so scrollToIndex, api.total, and api.getIndexById
+      // all reflect the async data store (not the empty static items array).
       let dataManagerRef: DataManager<T> | null = null;
       ctx.setVirtualTotalFn(() => dataManagerRef?.getTotal() ?? 0);
+      ctx.setGetIndexByIdFn((id: string | number) => dataManagerRef?.getIndexById(id) ?? -1);
 
       dataManager = dataManagerRef = createDataManager({
         adapter,

@@ -1,6 +1,6 @@
 {
   "name": "vlist",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -45,6 +45,7 @@
     "./styles/table": "./dist/vlist-table.css",
     "./styles/extras": "./dist/vlist-extras.css",
     "./styles/tree": "./dist/vlist-tree.css",
+    "./styles/search": "./dist/vlist-search.css",
     "./package.json": "./package.json"
   },
   "files": [

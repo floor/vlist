@@ -27,6 +27,13 @@ export interface SelectionPluginConfig {
   initial?: Array<string | number>;
   followFocus?: boolean;
   focusOnClick?: boolean;
+  /**
+   * Whether this plugin handles arrow/Home/End/PageUp-Down/Enter/Space
+   * keyboard navigation. Default true. Set false to keep click-selection and
+   * the selection model while letting an outer system own keyboard navigation
+   * (e.g. a global, focus-independent hotkey layer).
+   */
+  keyboard?: boolean;
 }
 
 // =============================================================================
@@ -41,6 +48,7 @@ export function selection<T extends VListItem = VListItem>(
   const mode: SelectionMode = config?.mode ?? "single";
   const followFocus = config?.followFocus ?? false;
   const focusOnClick = config?.focusOnClick ?? false;
+  const keyboard = config?.keyboard ?? true;
 
   let state: SelectionState;
   let getItems: () => readonly T[];
@@ -282,20 +290,27 @@ export function selection<T extends VListItem = VListItem>(
         return true;
       };
 
+      let selGridGap = 0;
       const scrollFocusIntoView = (index: number): void => {
         if (index < 0) return;
         if (sivFn) { sivFn(index); return; }
+        if (!selGridGap) {
+          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          selGridGap = gapFn ? gapFn() : 0;
+        }
         const nav = ctx.getNavConfig();
         const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;
         const offset = sizeCache.getOffset(ci);
-        const size = sizeCache.getSize(ci);
+        const size = sizeCache.getSize(ci) - selGridGap;
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
+        const sp0 = resolvedConfig.startPadding;
+        const sp1 = resolvedConfig.endPadding;
 
         if (offset < sp) {
           scrollTo(offset);
-        } else if (offset + size > sp + cs) {
-          scrollTo(offset - cs + size);
+        } else if (sp0 + offset + size + sp1 > sp + cs) {
+          scrollTo(sp0 + offset + size + sp1 - cs);
         }
       };
 
@@ -357,13 +372,20 @@ export function selection<T extends VListItem = VListItem>(
         lastSelectedIndex = hitIndex;
         const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
         focusTarget.focus(focusPreventScroll);
-        doToggle(hitItem!.id, hitItem!);
+        if (mode === "single") {
+          doSelect(hitItem!.id, hitItem!);
+        } else {
+          doToggle(hitItem!.id, hitItem!);
+        }
         emitSelectionChange();
       });
 
       // ── Keyboard handler ──────────────────────────────────────
+      // Skipped when keyboard:false — click-selection and the selection
+      // model stay active, but arrow/Home/End/PageUp-Down/Enter/Space
+      // navigation is left to an outer system (e.g. a global hotkey layer).
 
-      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      if (keyboard) ctx.registerKeydownHandler((event: KeyboardEvent): void => {
           resolveOnce(ctx);
           const total = getTotalFn();
           if (total === 0) return;
@@ -651,6 +673,7 @@ export function selection<T extends VListItem = VListItem>(
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
+            state.focusVisible = focusOnClick;
             emitter.emit("focus:change", { id, index: i });
             return;
           }

@@ -462,6 +462,67 @@ describe("baseline a11y — interactive: false", () => {
 });
 
 // =============================================================================
+// a11y({ keyboard: false }) — opt out of keyboard nav, keep ARIA + click
+// =============================================================================
+
+describe("baseline a11y — keyboard: false", () => {
+  function createListNoKeyboard(count = 10) {
+    const container = createContainer({ width: 300, height: 500 });
+    const items = createTestItems(count);
+    const vlist = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: 50, template: simpleTemplate },
+      },
+      [a11y({ keyboard: false })],
+    );
+    return { vlist, container, items };
+  }
+
+  it("does not move focus on ArrowDown", async () => {
+    const { vlist, container } = createListNoKeyboard();
+    await flush();
+
+    const focusEvents: Array<unknown> = [];
+    vlist.on("focus:change", (e) => focusEvents.push(e));
+
+    fireKey(getContent(container), "ArrowDown");
+    await flush();
+
+    expect(focusEvents.length).toBe(0);
+
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("still selects on click (ARIA navigation only is disabled)", async () => {
+    const { vlist, container } = createListNoKeyboard();
+    await flush();
+
+    const selectionEvents: Array<unknown> = [];
+    vlist.on("selection:change", (e) => selectionEvents.push(e));
+
+    const content = getContent(container);
+    const item = content.querySelector<HTMLElement>('[data-index="0"]');
+    item?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
+
+    expect(selectionEvents.length).toBeGreaterThan(0);
+
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("keeps role=listbox (ARIA unaffected by keyboard opt-out)", () => {
+    const { vlist, container } = createListNoKeyboard();
+    expect(getContent(container).getAttribute("role")).toBe("listbox");
+    vlist.destroy();
+    container.remove();
+  });
+});
+
+// =============================================================================
 // aria-activedescendant Cleanup on focusout
 // =============================================================================
 

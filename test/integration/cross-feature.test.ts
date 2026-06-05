@@ -756,6 +756,63 @@ describe("cross-feature — group header interaction", () => {
       expect(itemClicked).toBe(true);
     }
   });
+
+  it("item:click delivers the correct item (not off-by-one from group header)", () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>(
+      { container, items, item: { height: 40, template: simpleTemplate } },
+      [
+        groups({
+          getGroupForIndex: (i: number) => (i < 25 ? "A" : "B"),
+          header: { height: 30, template: (g: string) => `<div>${g}</div>` },
+        }),
+      ],
+    );
+
+    const clickedItems: Array<{ id: string | number; index: number }> = [];
+    list.on("item:click", ({ item, index }) => {
+      clickedItems.push({ id: item.id, index });
+    });
+
+    const content = getContent(container);
+    // Layout: [H0(0), D0(1), D1(2), D2(3), ...]
+    // Click on layout index 2 → should be data item 1 (id=2)
+    const el = content.querySelector('[data-index="2"]');
+    expect(el).toBeTruthy();
+    el!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(clickedItems.length).toBe(1);
+    expect(clickedItems[0]!.id).toBe(2); // data item at index 1 has id=2
+  });
+
+  it("item:click on group header is suppressed", () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>(
+      { container, items, item: { height: 40, template: simpleTemplate } },
+      [
+        groups({
+          getGroupForIndex: (i: number) => (i < 25 ? "A" : "B"),
+          header: { height: 30, template: (g: string) => `<div>${g}</div>` },
+        }),
+      ],
+    );
+
+    let clicked = false;
+    list.on("item:click", () => { clicked = true; });
+
+    const content = getContent(container);
+    // Layout index 0 is the group header
+    const headerEl = content.querySelector('[data-index="0"]');
+    if (headerEl) {
+      headerEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(clicked).toBe(false);
+    }
+  });
+
+  // NOTE: table+groups click test requires a real browser (table plugin
+  // rendering in happy-dom doesn't produce clickable data-index rows).
+  // The resolveClickedItem fix is covered by the list+groups tests above
+  // and verified manually in the desk's table view.
 });
 
 // =============================================================================

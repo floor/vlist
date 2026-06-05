@@ -1,0 +1,510 @@
+/**
+ * vlist — Search Plugin (RFC-008, Phase 1)
+ *
+ * A ready-to-use search bar with client-side filtering, match navigation, and
+ * `<mark>` highlighting. Operates at the data layer (no `setRenderFn`), so it
+ * composes with any layout.
+ *
+ * - **filter** mode (default): virtually hides non-matching items via
+ *   `setGetItemFn` + `setVirtualTotalFn` (non-destructive — clear restores).
+ * - **navigate** mode: keeps all items, scrolls between matches, highlights
+ *   the current one.
+ *
+ * Phase 2 (server-side search via `data()`, column-aware, fuzzy, query syntax)
+ * is out of scope here.
+ */
+
+import type { VListItem } from "../../types";
+import type { VListPlugin, PluginContext } from "../../core/types";
+import type { EngineState } from "../../core/state";
+import type { ItemState } from "../../types";
+import { makeGetText, textMatches, highlightElement, type FieldAccessor } from "./match";
+import { createSearchBar, type SearchBar } from "./searchbar";
+
+/**
+ * Consumer-facing UI text for the search bar (RFC-010 — Externalized UI Text).
+ * This is the plugin's entire human-language surface: static accessible names
+ * plus the dynamic counter formatters. All fields are optional; unset fields
+ * fall back to {@link DEFAULT_SEARCH_TEXT} (English). Consumers localizing for a
+ * non-English document should override these *and* set `lang` on the page.
+ */
+export interface SearchText {
+  /** Input placeholder + accessible name. */
+  placeholder?: string;
+  /** Accessible name for the clear (×) button. */
+  clear?: string;
+  /** Accessible name for the previous-match button (navigate mode). */
+  previous?: string;
+  /** Accessible name for the next-match button (navigate mode). */
+  next?: string;
+  /** Counter text when there are no matches. */
+  noResults?: string;
+  /** Counter text in filter mode — total match count. */
+  results?: (count: number) => string;
+  /** Counter text in navigate mode — current position within matches. */
+  position?: (current: number, total: number) => string;
+  /** Accessible name for the `role="search"` landmark. Unnamed when omitted. */
+  region?: string;
+}
+
+/**
+ * Default English UI text for the search plugin. The single, documented,
+ * fully-overridable language surface (RFC-010): the only place human-readable
+ * strings live in the library.
+ */
+export const DEFAULT_SEARCH_TEXT: Required<SearchText> = {
+  placeholder: "Search…",
+  clear: "Clear search",
+  previous: "Previous match",
+  next: "Next match",
+  noResults: "No results",
+  results: (count) => `${count} result${count === 1 ? "" : "s"}`,
+  position: (current, total) => `${current} of ${total}`,
+  region: "",
+};
+
+export interface SearchPluginConfig<T extends VListItem = VListItem> {
+  /** Hide non-matching items ("filter") or jump between matches ("navigate"). Default "filter". */
+  mode?: "filter" | "navigate";
+  /** Where to place the search bar. "none" = invisible, keyboard-only. Default "top". */
+  position?: "top" | "bottom" | "none";
+  /** Field(s) to search — a property key, accessor, or (default) all string values. */
+  field?: FieldAccessor<T>;
+  /** Case-sensitive matching. Default false. */
+  caseSensitive?: boolean;
+  /**
+   * Highlight matched substrings in rendered rows by wrapping them in
+   * `<mark class="{prefix}-search-match">`. Default `true`.
+   *
+   * - `false` — disable highlighting.
+   * - `{ within }` — restrict highlighting to descendants matching the CSS
+   *   selector (e.g. `".person__name"`) instead of the whole row. Useful when
+   *   the query can coincidentally appear in fields you didn't search.
+   */
+  highlight?: boolean | { within?: string };
+  /** Minimum query length to trigger search. Default 1. */
+  minLength?: number;
+  /** Auto-close the search bar after N ms of inactivity (0 = never). Default 0. */
+  cancelTimeout?: number;
+  /** Visual style of the search bar. `"md3"` applies a Material Design 3 pill
+   *  (requires the search stylesheet). Default `"default"`. */
+  variant?: "default" | "md3";
+  /** Consumer-supplied UI text / localization. Falls back to {@link DEFAULT_SEARCH_TEXT}. */
+  text?: SearchText;
+}
+
+export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T> {}
+
+export function search<T extends VListItem = VListItem>(
+  config: SearchPluginConfig<T> = {},
+): SearchPluginInstance<T> {
+  const mode = config.mode ?? "filter";
+  const position = config.position ?? "top";
+  const text: Required<SearchText> = { ...DEFAULT_SEARCH_TEXT, ...config.text };
+  const caseSensitive = config.caseSensitive ?? false;
+  const doHighlight = config.highlight !== false;
+  // Optional CSS selector that scopes highlighting to matching descendants.
+  const highlightWithin =
+    typeof config.highlight === "object" && config.highlight !== null
+      ? config.highlight.within
+      : undefined;
+  const minLength = config.minLength ?? 1;
+  const cancelTimeout = config.cancelTimeout ?? 0;
+  const variant = config.variant ?? "default";
+  const getText = makeGetText<T>(config.field);
+
+  let ctx: PluginContext<T>;
+  let engineState: EngineState;
+  let classPrefix: string;
+  let matchClass: string;
+  let currentClass: string;
+
+  let bar: SearchBar | null = null;
+  let open = false;
+  let query = "";
+  /** Original-index list of matching items. */
+  let matches: number[] = [];
+  let matchSet = new Set<number>();
+  /** Position within `matches` of the focused match (navigate mode). */
+  let current = 0;
+  /** Whether a virtual filter is currently applied (filter mode). */
+  let filtered = false;
+  let cancelTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Lazily-resolved cross-plugin methods.
+  let resolved = false;
+  let scrollToIndexFn: ((index: number, align?: string) => void) | null = null;
+  let filterTreeFn: ((predicate: (item: T) => boolean) => void) | null = null;
+  let clearFilterTreeFn: (() => void) | null = null;
+
+  const resolveOnce = (): void => {
+    if (resolved) return;
+    resolved = true;
+    scrollToIndexFn = (ctx.getMethod("scrollToIndex") as typeof scrollToIndexFn) ?? null;
+    filterTreeFn = (ctx.getMethod("filterTree") as typeof filterTreeFn) ?? null;
+    clearFilterTreeFn = (ctx.getMethod("clearTreeFilter") as typeof clearFilterTreeFn) ?? null;
+  };
+
+  // ── Matching ────────────────────────────────────────────────────────────
+
+  const computeMatches = (): void => {
+    matches = [];
+    matchSet.clear();
+    if (query.length < minLength) return;
+    const needle = caseSensitive ? query : query.toLowerCase();
+    const items = ctx.getItems();
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item !== undefined && textMatches(getText(item), needle, caseSensitive)) {
+        matches.push(i);
+        matchSet.add(i);
+      }
+    }
+  };
+
+  // ── Filter mode (virtual filter) ──────────────────────────────────────────
+
+  const applyFilter = (): void => {
+    resolveOnce();
+    // Delegate to the tree plugin (ancestor-preserving filter) when present.
+    if (filterTreeFn) {
+      const needle = caseSensitive ? query : query.toLowerCase();
+      filterTreeFn((item) => textMatches(getText(item), needle, caseSensitive));
+      filtered = true;
+      return;
+    }
+    const base = ctx.getItems();
+    const idx = matches;
+    ctx.setGetItemFn((i: number): T | undefined => base[idx[i]!]);
+    ctx.setVirtualTotalFn(() => idx.length);
+    engineState.totalItems = idx.length;
+    ctx.rebuildSizeCache();
+    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+    filtered = true;
+  };
+
+  const restoreItems = (): void => {
+    if (!filtered) return;
+    filtered = false;
+    if (clearFilterTreeFn) {
+      clearFilterTreeFn();
+      return;
+    }
+    ctx.setGetItemFn((i: number): T | undefined => ctx.getItems()[i]);
+    ctx.setVirtualTotalFn(() => ctx.getItems().length);
+    engineState.totalItems = ctx.getItems().length;
+    ctx.rebuildSizeCache();
+    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+  };
+
+  // ── Navigate mode ─────────────────────────────────────────────────────────
+
+  const scrollToMatch = (): void => {
+    resolveOnce();
+    const original = matches[current];
+    if (original === undefined) return;
+    if (scrollToIndexFn) scrollToIndexFn(original, "center");
+    else ctx.scrollTo(Math.max(0, ctx.sizeCache.getOffset(original) - ctx.getState().containerSize / 2));
+    const item = ctx.getItem(original);
+    ctx.emitter.emit("search:match", {
+      index: original,
+      item,
+      matchIndex: current,
+      matches: matches.length,
+    });
+  };
+
+  // ── Counter + state class ──────────────────────────────────────────────────
+
+  const updateCounter = (): void => {
+    if (!bar) return;
+    if (query.length < minLength) {
+      bar.setCounter("");
+    } else if (matches.length === 0) {
+      bar.setCounter(text.noResults);
+    } else if (mode === "navigate") {
+      bar.setCounter(text.position(current + 1, matches.length));
+    } else {
+      bar.setCounter(text.results(matches.length));
+    }
+  };
+
+  const setSearchingClass = (): void => {
+    const active = open && query.length >= minLength;
+    ctx.dom.root.classList.toggle(`${classPrefix}--searching`, active);
+  };
+
+  // ── Query application ───────────────────────────────────────────────────────
+
+  const applyQuery = (next: string): void => {
+    query = next;
+    bar?.setValue(query);
+    computeMatches();
+    current = 0;
+
+    if (mode === "filter") {
+      if (query.length >= minLength) applyFilter();
+      else restoreItems();
+    }
+
+    setSearchingClass();
+    updateCounter();
+    ctx.forceRender(); // fresh innerHTML so highlight re-applies for the new query
+
+    if (mode === "navigate" && matches.length > 0) scrollToMatch();
+
+    ctx.emitter.emit("search:change", {
+      query,
+      matches: matches.length,
+      total: ctx.getItems().length,
+    });
+    armCancelTimer();
+  };
+
+  // ── Open / close ────────────────────────────────────────────────────────────
+
+  const openSearch = (): void => {
+    if (!open) {
+      open = true;
+      ctx.dom.root.classList.add(`${classPrefix}--search-open`);
+      ctx.emitter.emit("search:open", undefined);
+    }
+    bar?.focus();
+    armCancelTimer();
+  };
+
+  const closeSearch = (): void => {
+    clearCancelTimer();
+    const wasOpen = open || query.length > 0;
+    open = false;
+    if (query.length > 0) applyQuery("");
+    ctx.dom.root.classList.remove(`${classPrefix}--search-open`);
+    setSearchingClass();
+    if (wasOpen) ctx.emitter.emit("search:close", undefined);
+  };
+
+  // ── Match navigation ────────────────────────────────────────────────────────
+
+  const step = (delta: number): void => {
+    if (matches.length === 0) return;
+    current = (current + delta + matches.length) % matches.length;
+    updateCounter();
+    if (mode === "navigate") {
+      scrollToMatch();
+      ctx.forceRender(); // re-evaluate the --current mark
+    }
+  };
+
+  // ── Cancel timer (invisible / inactivity auto-close) ─────────────────────────
+
+  const clearCancelTimer = (): void => {
+    if (cancelTimer !== null) {
+      clearTimeout(cancelTimer);
+      cancelTimer = null;
+    }
+  };
+  const armCancelTimer = (): void => {
+    clearCancelTimer();
+    if (cancelTimeout > 0 && open) {
+      cancelTimer = setTimeout(() => {
+        cancelTimer = null;
+        closeSearch();
+      }, cancelTimeout);
+    }
+  };
+
+  // ── Highlight pass (after each commit) ────────────────────────────────────────
+
+  const highlightVisible = (state: EngineState): void => {
+    if (!doHighlight || query.length < minLength) return;
+    const start = state.startIndex;
+    const end = start + Math.max(0, state.visibleCount - 1);
+    const currentOriginal = mode === "navigate" ? matches[current] : -1;
+    for (let i = start; i <= end; i++) {
+      const el = ctx.getRenderedElement(i);
+      if (!el) continue;
+      if (highlightWithin) {
+        // Scope marking to the matching descendants only.
+        const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+        for (let s = 0; s < scoped.length; s++) {
+          highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+        }
+      } else {
+        highlightElement(el, query, caseSensitive, matchClass);
+      }
+      if (mode === "navigate") {
+        // Toggle the current-match class on this row's marks.
+        const isCurrentRow = i === currentOriginal;
+        const marks = el.querySelectorAll(`.${matchClass}`);
+        for (let m = 0; m < marks.length; m++) {
+          marks[m]!.classList.toggle(currentClass, isCurrentRow);
+        }
+      }
+    }
+  };
+
+  // ── Keyboard ─────────────────────────────────────────────────────────────────
+
+  const isPrintable = (e: KeyboardEvent): boolean =>
+    e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+
+  const onKeydown = (e: KeyboardEvent): void => {
+    // Ctrl/Cmd+F opens regardless of state.
+    if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+    if (!open) {
+      // Invisible mode: a printable key starts type-ahead search.
+      if (position === "none" && isPrintable(e)) {
+        e.preventDefault();
+        openSearch();
+        applyQuery(query + e.key);
+      }
+      return;
+    }
+    // Open: handle navigation/close keys. (Printable input in visible mode is
+    // handled by the input element's own `input` event.)
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        closeSearch();
+        break;
+      case "Enter":
+        e.preventDefault();
+        step(e.shiftKey ? -1 : 1);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        step(1);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        step(-1);
+        break;
+      default:
+        if (position === "none") {
+          if (e.key === "Backspace") {
+            e.preventDefault();
+            applyQuery(query.slice(0, -1));
+            if (query.length === 0) closeSearch();
+          } else if (isPrintable(e)) {
+            e.preventDefault();
+            applyQuery(query + e.key);
+          }
+        }
+    }
+  };
+
+  // ── Bar input callbacks ─────────────────────────────────────────────────────
+
+  const onBarKeydown = (e: KeyboardEvent): void => {
+    // The input is focused; route nav/close keys, let text input through.
+    if (e.key === "Escape" || e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
+      onKeydown(e);
+    }
+  };
+
+  return {
+    name: "search",
+    // Run after selection (50) so its item-state fn is captured and composed
+    // (state.search alongside state.selected), and so a filter override is the
+    // outermost item transform.
+    priority: 55,
+
+    setup(context: PluginContext<T>): void {
+      ctx = context;
+      engineState = ctx.getState();
+      classPrefix = ctx.config.classPrefix;
+      matchClass = `${classPrefix}-search-match`;
+      currentClass = `${classPrefix}-search-match--current`;
+
+      if (position !== "none") {
+        const listId = ctx.dom.root.id || undefined;
+        bar = createSearchBar(
+          ctx.dom.root,
+          ctx.dom.viewport,
+          classPrefix,
+          position,
+          {
+            placeholder: text.placeholder,
+            clear: text.clear,
+            previous: text.previous,
+            next: text.next,
+            region: text.region,
+          },
+          listId,
+          {
+            onInput: (value) => applyQuery(value),
+            onClear: () => applyQuery(""),
+            onPrev: () => step(-1),
+            onNext: () => step(1),
+            onKeydown: onBarKeydown,
+          },
+        );
+        bar.showNav(mode === "navigate");
+        if (variant !== "default") {
+          bar.root.classList.add(`${classPrefix}-search--${variant}`);
+        }
+        // Lay the root out as a column so the bar reserves space and the
+        // viewport fills the rest (any bar height) instead of overflowing.
+        ctx.dom.root.classList.add(`${classPrefix}--has-search`);
+      }
+
+      // Compose search state into the template state.
+      const prevStateFn = ctx.getItemStateFn();
+      ctx.setItemStateFn((index: number, is: ItemState): void => {
+        if (prevStateFn) prevStateFn(index, is);
+        if (query.length < minLength) {
+          delete is.search;
+          return;
+        }
+        if (mode === "filter") {
+          // index is the filtered (virtual) position — all visible rows match.
+          is.search = { matched: true, query, matchIndex: index, isCurrent: false };
+        } else {
+          const matchIndex = matches.indexOf(index);
+          is.search = {
+            matched: matchSet.has(index),
+            query,
+            matchIndex,
+            isCurrent: matchIndex !== -1 && matchIndex === current,
+          };
+        }
+      });
+
+      // Public methods.
+      ctx.registerMethod("openSearch", openSearch);
+      ctx.registerMethod("closeSearch", closeSearch);
+      ctx.registerMethod("setQuery", (q: string) => {
+        if (!open) openSearch();
+        applyQuery(q);
+      });
+      ctx.registerMethod("getQuery", () => query);
+      ctx.registerMethod("nextMatch", () => step(1));
+      ctx.registerMethod("prevMatch", () => step(-1));
+      ctx.registerMethod("getMatches", () => matches.slice());
+
+      ctx.registerKeydownHandler(onKeydown);
+
+      ctx.registerDestroyHandler(() => {
+        clearCancelTimer();
+        restoreItems();
+        bar?.destroy();
+        bar = null;
+        ctx.dom.root.classList.remove(
+          `${classPrefix}--search-open`,
+          `${classPrefix}--searching`,
+          `${classPrefix}--has-search`,
+        );
+      });
+    },
+
+    hooks: {
+      onCommit(state: EngineState): void {
+        highlightVisible(state);
+      },
+    },
+  };
+}

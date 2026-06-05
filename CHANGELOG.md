@@ -11,6 +11,34 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-05
+
+### Added
+
+- **`search()` plugin** (RFC-008 Phase 1) — a ready-to-use search bar that works with every layout (+3.2 KB gzipped)
+  - **filter** mode (default): virtually hides non-matching items (non-destructive — clearing restores)
+  - **navigate** mode: keeps all items, scrolls between matches, highlights the current one
+  - `<mark>` match highlighting with scoped `highlight.within` selector; `state.search` exposed to templates
+  - Keyboard: `Ctrl/Cmd+F` to focus, `Escape` to clear, `Enter`/`↑`/`↓` to navigate; invisible (`position: "none"`) type-ahead mode
+  - Match counter, `role="search"` + `aria-live`, methods (`openSearch`/`closeSearch`/`setQuery`/`getQuery`/`nextMatch`/`prevMatch`/`getMatches`), events (`search:open`/`search:close`/`search:change`/`search:match`)
+  - Field accessor (`field`), `caseSensitive`, `minLength`, `cancelTimeout` options; delegates to the tree plugin's ancestor-preserving filter when present
+  - Stylesheet: `import "vlist/styles/search"`
+- **`selection({ keyboard: false })`** — disable the plugin's own keyboard handler while keeping click-selection and the selection model active (for outer hotkey layers)
+
+### Fixed
+
+- **Selection click toggle in single mode** — clicking a selected item no longer deselects it; `doSelect` replaces `doToggle` for single-mode bare clicks
+- **Tree + selection click consistency** — tree plugin registers `_getLoadedItem` so selection resolves items from the flat layout; `_focusById` now sets `focusVisible` for proper `--focused` CSS class; tree delegates focus/select to selection on every click (not only `domRebuilt`)
+- **Search highlight on keystroke** — `highlightElement` clears stale `<mark>` tags before re-highlighting; fixes partial/broken highlights when the pooled element's innerHTML isn't refreshed by `forceRender`
+- **Scale keyboard navigation** — new `_scrollItemIntoView` method uses `calculateCompressedItemPosition` for actual rendered-position checks; `scrollToIndexFn` uses `sizeCache.getTotal()` (row count in grid mode) instead of `engineState.totalItems`
+- **Scale + padding** — `getMaxScroll` and scrollbar bounds include `mainAxisPadding * ratio`; scroll-into-view uses `startPadding`/`endPadding` individually; grid row gap subtracted via `_getRowGap`
+- **Grid `sizeCache.rebuild` hook** — `installRebuildHook` detects an already-hooked rebuild via `currentHook` guard, preventing infinite recursion on `updateGrid`; uses the mutable `columns` variable instead of the stale initial config
+- **Groups `sizeCache.rebuild` hook** — the hook now survives `setSizeConfig` via `_setSizeCacheBase`: the core preserves the hook after `Object.assign` and updates the delegate to the new cache's internal rebuild
+- **Groups + masonry keyboard nav** — masonry `navigate()` converts between layout and data index spaces; groups exposes `_getItemLane`/`_getItemY`/`_getItemH` for lane-aware navigation; lane index built lazily after groups computes positions
+- **Groups horizontal inline headers** — first group header hidden in horizontal mode when sticky header is active (redundant label)
+- **Groups masonry scroll-into-view** — uses `pos.h` from `gridItemPositions` instead of sizeCache fallback; accounts for `startPadding`
+- **Groups + table + data** — flaky concurrent test improved with `beforeEach` prototype re-install
+
 ## [2.2.0] - 2026-06-02
 
 ### Added

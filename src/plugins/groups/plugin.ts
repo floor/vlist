@@ -357,12 +357,17 @@ export function groups<T extends VListItem = VListItem>(
       element.removeAttribute("aria-selected");
       element.setAttribute("data-id", headerId);
 
-      const content = headerTemplate(entry.group.key, entry.group.groupIndex);
-      if (typeof content === "string") {
-        element.innerHTML = content;
+      if (isX && stickyHeader && entry.group.groupIndex === 0) {
+        element.style.display = "none";
       } else {
-        element.innerHTML = "";
-        element.appendChild(content);
+        element.style.display = "";
+        const content = headerTemplate(entry.group.key, entry.group.groupIndex);
+        if (typeof content === "string") {
+          element.innerHTML = content;
+        } else {
+          element.innerHTML = "";
+          element.appendChild(content);
+        }
       }
       return true;
     }
@@ -787,10 +792,12 @@ export function groups<T extends VListItem = VListItem>(
 
       // Intercept sizeCache.rebuild so groups can map between data indices
       // and layout indices (which include group header pseudo-entries).
-      // Called by: data plugin on total change, data plugin on items loaded,
-      // snapshots plugin on scroll restore, scale plugin on compression change.
       let tableMode = false;
       let lastTableLoadedCount = -1;
+      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+        origSizeCacheRebuild = fn;
+      });
+
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
         if (tableMode) {
@@ -883,7 +890,10 @@ export function groups<T extends VListItem = VListItem>(
 
       if (hasTable) {
         // Deferred: data plugin (priority 20) runs after groups (priority 10)
-        // and overwrites getItemFn. Set ours in a microtask after all setups.
+        // and overwrites getItemFn. The table plugin (same priority 10, later
+        // in the array) calls setSizeConfig which Object.assigns a new cache,
+        // overwriting our sizeCache.rebuild hook. Re-hook in a microtask after
+        // all same-priority setups have completed.
         queueMicrotask(() => {
           // Use _getItem (includes placeholders) rather than _getLoadedItem
           // (returns undefined for unloaded items). Placeholders let the
@@ -915,6 +925,7 @@ export function groups<T extends VListItem = VListItem>(
               headerTemplate,
             );
           }
+
         });
       } else {
         ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
@@ -935,18 +946,31 @@ export function groups<T extends VListItem = VListItem>(
         const entry = layout.getEntry(layoutIndex);
         return entry.type === "header";
       });
+      ctx.registerMethod("_getItemLane", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos ? pos.col : -1;
+      });
+      ctx.registerMethod("_getItemY", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos ? pos.rowY : -1;
+      });
+      ctx.registerMethod("_getItemH", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos?.h ?? -1;
+      });
 
-      const mainPadEnd = mainAxisPadding - ctx.config.startPadding;
+      const mainPadStart = ctx.config.startPadding;
+      const mainPadEnd = mainAxisPadding - mainPadStart;
       ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
         const pos = gridItemPositions?.get(layoutIndex);
         const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
-        const size = sizeCache.getSize(layoutIndex);
+        const size = pos?.h ?? sizeCache.getSize(layoutIndex);
         const cs = engineState.containerSize;
         const sp = engineState.scrollPosition;
 
-        if (offset < sp) {
-          ctx.scrollTo(offset);
+        if (offset < sp + mainPadStart) {
+          ctx.scrollTo(Math.max(0, offset - mainPadStart));
         } else if (offset + size + mainPadEnd > sp + cs) {
           ctx.scrollTo(offset + size + mainPadEnd - cs);
         }

@@ -2,6 +2,9 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { tree } from "../../../src/plugins/tree/plugin";
+import type { TreePluginConfig } from "../../../src/plugins/tree/types";
+import { selection } from "../../../src/plugins/selection/plugin";
+import type { SelectionPluginConfig } from "../../../src/plugins/selection/plugin";
 import type { VListItem } from "../../../src/types";
 
 interface TreeItem extends VListItem {
@@ -671,6 +674,185 @@ describe("tree plugin — focus adjustment on collapse", () => {
     const descAfter = dom.content.getAttribute("aria-activedescendant");
     const focusedAfter = descAfter ? dom.content.querySelector(`#${descAfter}`) as HTMLElement : null;
     expect(focusedAfter?.getAttribute("data-id")).toBe("3");
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// tree + selection — click handler interaction
+// =============================================================================
+
+describe("tree + selection — click handler", () => {
+  function setup(
+    items: TreeItem[],
+    treeOpts: TreePluginConfig<TreeItem> = {},
+    selOpts: SelectionPluginConfig = { mode: "single" },
+  ) {
+    const mock = createPluginMockContext<TreeItem>(items, {
+      containerHeight: 400,
+      itemSize: 32,
+    });
+
+    tree<TreeItem>(treeOpts).setup!(mock.ctx);
+    selection<TreeItem>(selOpts).setup!(mock.ctx);
+
+    mock.engineState.containerSize = 400;
+    mock.ctx.forceRender();
+
+    function clickItem(id: string): void {
+      const el = mock.dom.content.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+      if (!el) throw new Error(`[data-id="${id}"] not found`);
+      const event = new MouseEvent("click", { bubbles: true });
+      Object.defineProperty(event, "target", { value: el });
+      for (const handler of mock.clickHandlers) handler(event);
+    }
+
+    const getSelected = mock.methods.get("getSelected") as () => (string | number)[];
+    const selectedEls = () =>
+      Array.from(mock.dom.content.querySelectorAll(".vlist-item--selected"))
+        .map((el) => el.getAttribute("data-id"));
+    const focusedEls = () =>
+      Array.from(mock.dom.content.querySelectorAll(".vlist-item--focused"))
+        .map((el) => el.getAttribute("data-id"));
+
+    return { mock, clickItem, getSelected, selectedEls, focusedEls };
+  }
+
+  test("click selects item at correct flat index, not root-array index", () => {
+    // With expanded: ["1","1.1"], flat layout is:
+    //   0:"1", 1:"1.1", 2:"1.1.1", 3:"1.1.2", 4:"1.2", 5:"2", 6:"2.1", 7:"3"
+    // Root array is: [0:"1", 1:"2", 2:"3"]
+    // Clicking "1.1.2" (flat idx 3) must select "1.1.2", not root[3] (undefined).
+    // Clicking "2" (flat idx 5) must select "2", not root[5] (undefined).
+    const { mock, clickItem, getSelected, selectedEls } = setup(
+      makeTree(), { expanded: ["1", "1.1"] },
+    );
+
+    clickItem("1.1.2");
+    expect(getSelected()).toEqual(["1.1.2"]);
+    expect(selectedEls()).toContain("1.1.2");
+
+    clickItem("2");
+    expect(getSelected()).toEqual(["2"]);
+    expect(selectedEls()).toContain("2");
+
+    mock.cleanup();
+  });
+
+  test("click on deep nested node selects it, not its root-index alias", () => {
+    const { mock, clickItem, getSelected, selectedEls } = setup(
+      makeTree(), { expanded: ["1", "1.1"] },
+    );
+
+    // "1.1.1" is at flat index 2, root[2] is "3" (README)
+    clickItem("1.1.1");
+    expect(getSelected()).toEqual(["1.1.1"]);
+    expect(selectedEls()).toContain("1.1.1");
+
+    mock.cleanup();
+  });
+
+  test("clicking same node twice in single mode keeps it selected", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "a", children: [] },
+      { id: "b", name: "b", children: [] },
+    ];
+
+    const { mock, clickItem, getSelected } = setup(items);
+
+    clickItem("a");
+    expect(getSelected()).toEqual(["a"]);
+
+    clickItem("a");
+    expect(getSelected()).toEqual(["a"]);
+
+    mock.cleanup();
+  });
+
+  test("expandOnClick folder toggles keep it selected every click", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child", children: [] },
+      ]},
+      { id: "c", name: "file", children: [] },
+    ];
+
+    const { mock, clickItem, getSelected, selectedEls } = setup(
+      items, { expandOnClick: true },
+    );
+
+    for (let i = 0; i < 4; i++) {
+      clickItem("a");
+      expect(getSelected()).toContain("a");
+      expect(selectedEls()).toContain("a");
+    }
+
+    mock.cleanup();
+  });
+
+  test("collapsing pre-expanded folder applies focused CSS class", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child", children: [] },
+      ]},
+      { id: "c", name: "file", children: [] },
+    ];
+
+    const { mock, clickItem, selectedEls, focusedEls } = setup(
+      items,
+      { expandOnClick: true, expanded: ["a"] },
+      { mode: "single", followFocus: true, focusOnClick: true },
+    );
+
+    clickItem("a");
+    expect(selectedEls()).toContain("a");
+    expect(focusedEls()).toContain("a");
+
+    mock.cleanup();
+  });
+
+  test("alternating clicks between folder and leaf always select clicked item", () => {
+    const items: TreeItem[] = [
+      { id: "a", name: "folder", children: [
+        { id: "b", name: "child", children: [] },
+      ]},
+      { id: "c", name: "file", children: [] },
+    ];
+
+    const { mock, clickItem, getSelected } = setup(
+      items, { expandOnClick: true },
+    );
+
+    // Click "a" first to expand it, making "b" visible
+    clickItem("a");
+    expect(getSelected()).toEqual(["a"]);
+
+    clickItem("c");
+    expect(getSelected()).toEqual(["c"]);
+
+    clickItem("b");
+    expect(getSelected()).toEqual(["b"]);
+
+    clickItem("a");
+    expect(getSelected()).toEqual(["a"]);
+
+    mock.cleanup();
+  });
+
+  test("registers _getLoadedItem method", () => {
+    const items = makeTree();
+    const { ctx, methods, cleanup } = createPluginMockContext<TreeItem>(items);
+    tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
+
+    expect(methods.has("_getLoadedItem")).toBe(true);
+
+    const getItem = methods.get("_getLoadedItem") as (i: number) => TreeItem | undefined;
+    expect(getItem(0)?.id).toBe("1");
+    expect(getItem(1)?.id).toBe("1.1");
+    expect(getItem(2)?.id).toBe("1.2");
+    expect(getItem(3)?.id).toBe("2");
+    expect(getItem(4)?.id).toBe("3");
 
     cleanup();
   });
