@@ -359,12 +359,15 @@ export function grid<T extends VListItem = VListItem>(
       // Hook sizeCache.rebuild to convert item count → row count.
       // Must be re-installed after every setSizeConfig call (which
       // Object.assigns a new cache, destroying the hook).
+      let currentHook: ((n: number) => void) | null = null;
       function installRebuildHook(): void {
+        if (sizeCache.rebuild === currentHook) return;
         const base = sizeCache.rebuild;
         rebuildAsRows = (rowCount: number): void => base(rowCount);
-        sizeCache.rebuild = (n: number): void => {
-          rebuildAsRows(Math.ceil(n / config.columns));
+        currentHook = (n: number): void => {
+          rebuildAsRows(Math.ceil(n / columns));
         };
+        sizeCache.rebuild = currentHook;
       }
       installRebuildHook();
       rebuildAsRows(getRowCount());
