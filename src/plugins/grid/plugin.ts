@@ -394,6 +394,7 @@ export function grid<T extends VListItem = VListItem>(
       // ── Public methods ─────────────────────────────────────────
 
       ctx.registerMethod("getGridLayout", () => layout);
+      ctx.registerMethod("_getRowGap", () => layout.gap);
 
       ctx.registerMethod("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
         if (newConfig.columns !== undefined) {

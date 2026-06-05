@@ -1163,8 +1163,8 @@ describe("selection — scroll padding", () => {
       { itemSize: 128, containerHeight: 578, padding: { top: 8, bottom: 8 } },
     );
 
-    // Simulate grid: register getGridLayout with gap
-    methods.set("getGridLayout", () => ({ gap: 8 }));
+    // Simulate grid: register _getRowGap
+    methods.set("_getRowGap", () => 8);
 
     plugin.setup!(ctx);
 

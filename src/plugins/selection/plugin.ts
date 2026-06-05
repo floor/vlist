@@ -295,8 +295,8 @@ export function selection<T extends VListItem = VListItem>(
         if (index < 0) return;
         if (sivFn) { sivFn(index); return; }
         if (!selGridGap) {
-          const gl = ctx.getMethod("getGridLayout") as (() => { gap: number }) | undefined;
-          selGridGap = gl ? gl().gap : 0;
+          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          selGridGap = gapFn ? gapFn() : 0;
         }
         const nav = ctx.getNavConfig();
         const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;

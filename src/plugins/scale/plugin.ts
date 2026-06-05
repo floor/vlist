@@ -481,8 +481,8 @@ export function scale<T extends VListItem = VListItem>(
       let gridGap = 0;
       ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
         if (!gridGap) {
-          const gl = ctx.getMethod("getGridLayout") as (() => { gap: number }) | undefined;
-          gridGap = gl ? gl().gap : 0;
+          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          gridGap = gapFn ? gapFn() : 0;
         }
         const nav = ctx.getNavConfig();
         const si = nav.scrollIndex ? nav.scrollIndex(index) : index;
