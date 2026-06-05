@@ -945,6 +945,14 @@ export function groups<T extends VListItem = VListItem>(
         const pos = gridItemPositions?.get(layoutIndex);
         return pos ? pos.col : -1;
       });
+      ctx.registerMethod("_getItemY", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos ? pos.rowY : -1;
+      });
+      ctx.registerMethod("_getItemH", (layoutIndex: number): number => {
+        const pos = gridItemPositions?.get(layoutIndex);
+        return pos?.h ?? -1;
+      });
 
       const mainPadStart = ctx.config.startPadding;
       const mainPadEnd = mainAxisPadding - mainPadStart;

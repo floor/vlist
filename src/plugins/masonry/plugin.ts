@@ -108,6 +108,8 @@ export function masonry<T extends VListItem = VListItem>(
   let itemLanePos: Int32Array = new Int32Array(0);
   let laneYCenters: Float64Array[] = [];
   let getItemLaneFn: ((i: number) => number) | null = null;
+  let getItemYFn: ((i: number) => number) | null = null;
+  let getItemHFn: ((i: number) => number) | null = null;
   let isGroupHeaderFn: ((i: number) => boolean) | null = null;
   let navFnsResolved = false;
   let laneIndexDirty = true;
@@ -115,6 +117,8 @@ export function masonry<T extends VListItem = VListItem>(
   function resolveNavFns(): void {
     if (navFnsResolved || !storedCtx) return;
     getItemLaneFn = (storedCtx.getMethod("_getItemLane") as typeof getItemLaneFn) ?? null;
+    getItemYFn = (storedCtx.getMethod("_getItemY") as typeof getItemYFn) ?? null;
+    getItemHFn = (storedCtx.getMethod("_getItemH") as typeof getItemHFn) ?? null;
     isGroupHeaderFn = (storedCtx.getMethod("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
     if (getItemLaneFn || isGroupHeaderFn) navFnsResolved = true;
   }
@@ -156,8 +160,14 @@ export function masonry<T extends VListItem = VListItem>(
       const yc = new Float64Array(items.length);
       for (let j = 0; j < items.length; j++) {
         const idx = items[j]!;
-        const p = useGroups ? null : cachedPlacements[idx];
-        yc[j] = p ? p.y + p.size * 0.5 : 0;
+        if (useGroups && getItemYFn && getItemHFn) {
+          const y = getItemYFn(idx);
+          const h = getItemHFn(idx);
+          yc[j] = y >= 0 ? y + (h > 0 ? h * 0.5 : 0) : 0;
+        } else {
+          const p = cachedPlacements[idx]!;
+          yc[j] = p.y + p.size * 0.5;
+        }
       }
       laneYCenters[c] = yc;
     }

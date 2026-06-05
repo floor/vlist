@@ -1063,6 +1063,68 @@ describe("groups — _scrollItemIntoView", () => {
 
     cleanup();
   });
+
+  it("registers _getItemY returning masonry Y position", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 300,
+      itemSize: 50,
+    });
+
+    methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const getItemY = methods.get("_getItemY") as (i: number) => number;
+    expect(getItemY).toBeDefined();
+
+    // Header at Y=0 (top of the layout)
+    expect(getItemY(0)).toBe(0);
+
+    // First data item should be placed after the header (Y >= 32)
+    const y1 = getItemY(1);
+    expect(y1).toBeGreaterThanOrEqual(32);
+
+    // Second data item should be in the same row or below
+    const y2 = getItemY(2);
+    expect(y2).toBeGreaterThanOrEqual(32);
+
+    cleanup();
+  });
+
+  it("registers _getItemH returning masonry item height", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 300,
+      itemSize: 50,
+    });
+
+    methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    const getItemH = methods.get("_getItemH") as (i: number) => number;
+    expect(getItemH).toBeDefined();
+
+    // Header returns -1 (no h property on header positions)
+    expect(getItemH(0)).toBe(-1);
+
+    // Data items should have height > 0
+    const h1 = getItemH(1);
+    expect(h1).toBeGreaterThan(0);
+
+    cleanup();
+  });
 });
 
 // =============================================================================
