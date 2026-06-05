@@ -498,19 +498,21 @@ export function scale<T extends VListItem = VListItem>(
           return;
         }
         const cacheTotal = sizeCache.getTotal();
-        const scaledPad = mainAxisPadding * compression.ratio;
-        const posStart = calculateCompressedScrollToIndex(
-          si, sizeCache, engineState.containerSize, cacheTotal,
-          compression, "start",
+        const cs = engineState.containerSize;
+        const itemPos = calculateCompressedItemPosition(
+          si, virtualScrollPosition, sizeCache, cacheTotal, cs, compression,
         );
-        const posEnd = calculateCompressedScrollToIndex(
-          si, sizeCache, engineState.containerSize, cacheTotal,
-          compression, "end",
-        );
-        if (posStart < virtualScrollPosition) {
-          setVirtualPosition(posStart);
-        } else if (posEnd + scaledPad > virtualScrollPosition + engineState.containerSize) {
-          setVirtualPosition(posEnd + scaledPad);
+        const itemSize = sizeCache.getSize(si);
+
+        if (itemPos < 0) {
+          setVirtualPosition(Math.max(0, calculateCompressedScrollToIndex(
+            si, sizeCache, cs, cacheTotal, compression, "start",
+          )));
+        } else if (itemPos + itemSize + mainAxisPadding > cs) {
+          const scaledPad = mainAxisPadding * compression.ratio;
+          setVirtualPosition(calculateCompressedScrollToIndex(
+            si, sizeCache, cs, cacheTotal, compression, "end",
+          ) + scaledPad);
         }
       });
 
