@@ -766,7 +766,9 @@ export function createVList<T extends VListItem = VListItem>(
     ): void {
       const total = virtualTotalFn ? virtualTotalFn() : items.length;
       if (total === 0) return;
-      const clamped = Math.max(0, Math.min(index, total - 1));
+      const clamped = rawConfig.scroll?.wrap
+        ? ((index % total) + total) % total
+        : Math.max(0, Math.min(index, total - 1));
 
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
