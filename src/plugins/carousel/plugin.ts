@@ -40,6 +40,7 @@ export interface CarouselPluginConfig {
   focalAlign?: "center" | "start";
   initialIndex?: number;
   cornerRadius?: number;
+  gap?: number;
 }
 
 export interface CarouselState {
@@ -188,43 +189,32 @@ export function carousel<T extends VListItem = VListItem>(
     const focalVi = Math.floor(pos / stepSize);
     const frac = stepSize > 0 ? (pos / stepSize) - focalVi : 0;
     const prop = isX ? "width" : "height";
-    const anchor = pos;
+    const anchor = pos + layoutEngine!.getAnchorOffset(focalVi, frac);
 
     for (let i = 0; i < children.length; i++) {
       const el = children[i] as HTMLElement;
       const idx = el.dataset.index;
       if (idx === undefined) continue;
       const vi = parseInt(idx, 10);
-      const rel = vi - focalVi;
 
-      if (layoutEngine) {
-        const layout = layoutEngine.getItemLayout(vi, focalVi, frac, anchor);
-        const roundedSize = Math.max(0, Math.round(layout.size));
-        const roundedOffset = Math.round(layout.offset);
+      const layout = layoutEngine!.getItemLayout(vi, focalVi, frac, anchor);
+      const roundedSize = Math.max(0, Math.round(layout.size));
+      const roundedOffset = Math.round(layout.offset);
 
-        if (roundedSize <= 0) {
-          el.style.display = "none";
-        } else {
-          el.style.display = "";
-          el.style[prop] = roundedSize + "px";
-          el.style.transform = isX
-            ? `translateX(${roundedOffset}px)`
-            : `translateY(${roundedOffset}px)`;
-        }
-
-        el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
-        el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
-        el.style.setProperty("--vlist-carousel-role", layout.role);
-        el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
+      if (roundedSize <= 0) {
+        el.style.display = "none";
       } else {
-        // No engine (full variant) — set CSS variables only
-        const progress = rel === 0 ? frac : rel === 1 ? 1 - frac : 1;
-        const role = progress < 0.5 ? "large" : "small";
-        el.style.setProperty("--vlist-carousel-progress", progress.toFixed(3));
-        el.style.setProperty("--vlist-carousel-offset", String(rel));
-        el.style.setProperty("--vlist-carousel-role", role);
-        el.style.setProperty("--vlist-carousel-width", stepSize + "px");
+        el.style.display = "";
+        el.style[prop] = roundedSize + "px";
+        el.style.transform = isX
+          ? `translateX(${roundedOffset}px)`
+          : `translateY(${roundedOffset}px)`;
       }
+
+      el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
+      el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
+      el.style.setProperty("--vlist-carousel-role", layout.role);
+      el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
     }
   }
 
@@ -266,17 +256,14 @@ export function carousel<T extends VListItem = VListItem>(
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
       const peekResolved = resolvePeekSize(containerSize);
-      if (variant !== "full") {
-        const variantSlots = resolveVariantSlots(variant, containerSize, peekResolved);
-        layoutEngine = createLayoutEngine({
-          slots: variantSlots.slots,
-          focalSlot: variantSlots.focalSlot,
-          containerSize,
-        });
-        stepSize = layoutEngine.stepSize || baseItemSize;
-      } else {
-        stepSize = baseItemSize;
-      }
+      const variantSlots = resolveVariantSlots(variant, containerSize, peekResolved);
+      layoutEngine = createLayoutEngine({
+        slots: variantSlots.slots,
+        focalSlot: variantSlots.focalSlot,
+        containerSize,
+        gap: config?.gap ?? 0,
+      });
+      stepSize = layoutEngine.stepSize;
       lapSize = stepSize * realTotal;
       virtualTotal = realTotal * CYCLES;
       currentIndex = resolveIndex(initialIndex);

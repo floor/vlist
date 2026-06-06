@@ -29,6 +29,8 @@ export interface LayoutConfig {
   focalSlot: number;
   /** Container size in pixels along the primary axis. */
   containerSize: number;
+  /** Gap between items in pixels (default: 0). Applied as visual spacing — does not affect step size. */
+  gap?: number;
 }
 
 export interface ItemLayout {
@@ -53,25 +55,35 @@ export function createLayoutEngine(config: LayoutConfig): {
   slotWidths: number[];
   /** Scroll distance to advance one item. */
   stepSize: number;
+  /** Index of the focal slot. */
+  focalSlot: number;
   /** Compute the layout for a single item given the scroll state. */
   getItemLayout(vi: number, focalVi: number, frac: number, anchor: number): ItemLayout;
   /** Compute the dynamic size of a single item (no offset calculation). */
   getItemSize(vi: number, focalVi: number, frac: number): number;
+  /** Compute the anchor offset for pre-focal slots (centering). */
+  getAnchorOffset(focalVi: number, frac: number): number;
 } {
-  const { slots, focalSlot, containerSize } = config;
+  const { slots, focalSlot, containerSize, gap: gapPx = 0 } = config;
   const slotCount = slots.length;
 
-  // Resolve slot ratios to pixel widths
-  const slotWidths = slots.map(r => Math.round(r * containerSize));
+  // Resolve slot ratios to pixel widths.
+  // The gap is distributed: each visible item is reduced by gapPx,
+  // and the total gap space is (visibleItems - 1) * gapPx.
+  // We account for this by resolving ratios against the available
+  // space (containerSize minus total gap).
+  const totalGap = Math.max(0, slotCount - 1) * gapPx;
+  const availableSize = containerSize - totalGap;
+  const slotWidths = slots.map(r => Math.round(r * availableSize));
 
   // Correct rounding errors — distribute remainder to the focal slot
-  const roundingError = containerSize - slotWidths.reduce((a, b) => a + b, 0);
+  const roundingError = availableSize - slotWidths.reduce((a, b) => a + b, 0);
   slotWidths[focalSlot] += roundingError;
 
   // The step size is how much you scroll to advance one item.
-  // It equals the focal slot width — when you scroll by one step,
+  // It equals the focal slot width + gap — when you scroll by one step,
   // the focal item exits and the next item becomes focal.
-  const stepSize = slotWidths[focalSlot];
+  const stepSize = slotWidths[focalSlot] + gapPx;
 
   // Number of slots before and after the focal
   const slotsBefore = focalSlot;
@@ -127,15 +139,18 @@ export function createLayoutEngine(config: LayoutConfig): {
     const rel = vi - focalVi;
     const size = getItemSize(vi, focalVi, frac);
 
-    // Accumulate offset from the focal anchor outward
+    // Accumulate offset from the focal anchor outward.
+    // Gap is added between each pair of visible items.
     let offset = anchor;
     if (rel > 0) {
       for (let r = 0; r < rel; r++) {
-        offset += getItemSize(focalVi + r, focalVi, frac);
+        const s = getItemSize(focalVi + r, focalVi, frac);
+        offset += s + (s > 0 ? gapPx : 0);
       }
     } else if (rel < 0) {
       for (let r = -1; r >= rel; r--) {
-        offset -= getItemSize(focalVi + r, focalVi, frac);
+        const s = getItemSize(focalVi + r, focalVi, frac);
+        offset -= s + (s > 0 ? gapPx : 0);
       }
     }
 
@@ -160,7 +175,17 @@ export function createLayoutEngine(config: LayoutConfig): {
     return { size, offset, progress, relOffset: rel, role };
   }
 
-  return { slotWidths, stepSize, getItemLayout, getItemSize };
+  function getAnchorOffset(focalVi: number, frac: number): number {
+    if (focalSlot === 0) return 0;
+    let offset = 0;
+    for (let r = -1; r >= -focalSlot; r--) {
+      const s = getItemSize(focalVi + r, focalVi, frac);
+      offset += s + (s > 0 ? gapPx : 0);
+    }
+    return offset;
+  }
+
+  return { slotWidths, stepSize, focalSlot, getItemLayout, getItemSize, getAnchorOffset };
 }
 
 // =============================================================================

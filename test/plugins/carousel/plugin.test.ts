@@ -889,6 +889,54 @@ describeCarousel("carousel — Variant: hero-center — layout", () => {
 
     cleanup();
   });
+
+  it("focal should be centered with peeks on both sides", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "hero-center", peek: 100 });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart - 1, middleStart, middleStart + 1]);
+
+    // stepSize = focalSlotWidth = containerSize - 2*peek = 600
+    const es = ctx.getState();
+    es.scrollPosition = middleStart * 600;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    // Left peek at viewport position 0
+    const leftVpLeft = Math.round(parseFloat(els[0].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+    // Focal at viewport position 100 (after left peek)
+    const focalVpLeft = Math.round(parseFloat(els[1].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+    // Right peek after focal
+    const rightVpLeft = Math.round(parseFloat(els[2].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+
+    const leftW = parseInt(els[0].style.width);
+    const focalW = parseInt(els[1].style.width);
+    const rightW = parseInt(els[2].style.width);
+
+    // Left peek starts at 0
+    expect(leftVpLeft).toBe(0);
+    // Focal starts after left peek
+    expect(focalVpLeft).toBe(leftW);
+    // Right peek starts after focal
+    expect(rightVpLeft).toBe(leftW + focalW);
+    // Sizes: left=peek, focal=large, right=peek
+    expect(leftW).toBe(100);
+    expect(focalW).toBe(600);
+    expect(rightW).toBe(100);
+    // Sum = container
+    expect(leftW + focalW + rightW).toBe(800);
+
+    cleanup();
+  });
 });
 
 // =============================================================================
@@ -1090,9 +1138,9 @@ describeCarousel("carousel — CSS Variables", () => {
   it("should update CSS variables when scroll position changes", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      containerWidth: 800,
-      containerHeight: 400,
-      itemSize: 400,
+      containerWidth: 600,
+      containerHeight: 600,
+      itemSize: 600,
       isX: true,
     });
 
@@ -1106,13 +1154,13 @@ describeCarousel("carousel — CSS Variables", () => {
     const es = ctx.getState();
 
     // At item 0 — els[0] is focal
-    es.scrollPosition = middleStart * 400;
+    es.scrollPosition = middleStart * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition);
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
 
     // Scroll to item 1 — els[1] is now focal
-    es.scrollPosition = (middleStart + 1) * 400;
+    es.scrollPosition = (middleStart + 1) * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition);
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
@@ -1149,12 +1197,12 @@ describeCarousel("carousel — CSS Variables", () => {
     cleanup();
   });
 
-  it("full variant should not set --vlist-carousel-width (no peek)", () => {
+  it("full variant: focal fills container, adjacent has zero width", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      containerWidth: 800,
-      containerHeight: 400,
-      itemSize: 400,
+      containerWidth: 600,
+      containerHeight: 600,
+      itemSize: 600,
       isX: true,
     });
 
@@ -1165,22 +1213,24 @@ describeCarousel("carousel — CSS Variables", () => {
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
 
-    ctx.getState().scrollPosition = middleStart * 400;
+    ctx.getState().scrollPosition = middleStart * 600;
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
 
-    // Full variant: no peek, width = stepSize for all
-    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("400px");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-width")).toBe("400px");
+    // Full: focal = containerSize, next = 0 (no peek at rest)
+    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("600px");
+    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
+    // Next item has 0 width — hidden
+    expect(els[1].style.display).toBe("none");
 
     cleanup();
   });
 
-  it("full variant should assign role large to focal and small to others", () => {
+  it("full variant: mid-scroll shows two items sharing container", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
-      containerWidth: 800,
-      containerHeight: 400,
-      itemSize: 400,
+      containerWidth: 600,
+      containerHeight: 600,
+      itemSize: 600,
       isX: true,
     });
 
@@ -1191,10 +1241,122 @@ describeCarousel("carousel — CSS Variables", () => {
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
 
-    plugin.hooks!.onAfterScroll!(middleStart * 400);
+    // Scroll 50% between items
+    const es = ctx.getState();
+    es.scrollPosition = middleStart * 600 + 300;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
 
-    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-role")).toBe("small");
+    // Both items visible, sharing the container
+    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
+    const w1 = parseInt(els[1].style.getPropertyValue("--vlist-carousel-width"));
+    expect(w0).toBe(300); // outgoing shrinks to 50%
+    expect(w1).toBe(300); // incoming grows to 50%
+    expect(w0 + w1).toBe(600); // sum = container
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Gap — spacing between items, handled by the engine
+// =============================================================================
+
+describeCarousel("carousel — Gap", () => {
+  function commitPlugin(plugin: any): void {
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+  }
+
+  it("hero with gap should reduce item sizes and add spacing", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "hero", peek: 120, gap: 8 });
+    plugin.setup!(ctx);
+    commitPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    const es = ctx.getState();
+    // availableSize = 800 - 8 = 792 (1 gap for 2 slots)
+    // focalRatio = (800-120)/800 = 0.85
+    // focalSlotWidth = round(792 * 0.85) = 673
+    // smallSlotWidth = 792 - 673 = 119
+    // stepSize = 673 + 8 = 681
+    es.scrollPosition = middleStart * 681;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
+    const w1 = parseInt(els[1].style.getPropertyValue("--vlist-carousel-width"));
+
+    expect(w0).toBeLessThan(800 - 120);
+    expect(w1).toBeGreaterThan(0);
+    expect(w0 + w1 + 8).toBe(800);
+
+    cleanup();
+  });
+
+  it("full with gap should still fill container at rest", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 600,
+      containerHeight: 600,
+      itemSize: 600,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full", gap: 8 });
+    plugin.setup!(ctx);
+    commitPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    const es = ctx.getState();
+    // full: 1 slot, 0 gaps at rest → availableSize = 600
+    // stepSize = 600 + 8 = 608
+    es.scrollPosition = middleStart * 608;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
+    expect(w0).toBe(600);
+
+    cleanup();
+  });
+
+  it("gap should work in vertical orientation", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 400,
+      containerHeight: 600,
+      itemSize: 300,
+      isX: false,
+    });
+
+    const plugin = carousel({ variant: "hero", peek: 100, gap: 12 });
+    plugin.setup!(ctx);
+    commitPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    const es = ctx.getState();
+    // containerSize=600, availableSize=600-12=588
+    // focalRatio=(600-100)/600=0.833, focalSlot=round(588*0.833)=490
+    // smallSlot=588-490=98, stepSize=490+12=502
+    es.scrollPosition = middleStart * 502;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const h0 = parseInt(els[0].style.height);
+    const h1 = parseInt(els[1].style.height);
+
+    expect(h0).toBeGreaterThan(h1);
+    expect(h0 + h1 + 12).toBe(600);
 
     cleanup();
   });
