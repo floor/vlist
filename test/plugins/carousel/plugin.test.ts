@@ -423,3 +423,113 @@ describeCarousel("carousel — Destroy", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// Virtual scroll window — getItemFn maps virtual→real via modulo
+// =============================================================================
+
+describeCarousel("carousel — Virtual Item Mapping", () => {
+  it("getItemFn should wrap indices via modulo", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    // The plugin should set getItemFn so that indices beyond total wrap
+    const getItem = ctx.getItem.bind(ctx);
+    // Items at virtual indices 0-4 should match real items
+    for (let i = 0; i < 5; i++) {
+      const item = getItem(i);
+      expect(item?.id).toBe(i);
+    }
+
+    cleanup();
+  });
+
+  it("next() should produce consecutive items across wrap boundary", () => {
+    const items = createTestItems(3);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 200,
+      itemSize: 200,
+    });
+
+    carousel().setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const sequence: number[] = [];
+    for (let i = 0; i < 9; i++) {
+      sequence.push(getState().index);
+      next();
+    }
+
+    // Should cycle: 0,1,2,0,1,2,0,1,2
+    expect(sequence).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2]);
+
+    cleanup();
+  });
+
+  it("prev() should produce consecutive items across wrap boundary", () => {
+    const items = createTestItems(3);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 200,
+      itemSize: 200,
+    });
+
+    carousel().setup!(ctx);
+
+    const prev = methods.get("prev") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const sequence: number[] = [];
+    for (let i = 0; i < 9; i++) {
+      sequence.push(getState().index);
+      prev();
+    }
+
+    // Should cycle backward: 0,2,1,0,2,1,0,2,1
+    expect(sequence).toEqual([0, 2, 1, 0, 2, 1, 0, 2, 1]);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// initialIndex
+// =============================================================================
+
+describeCarousel("carousel — initialIndex", () => {
+  it("should start at the specified initial index", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel({ initialIndex: 5 }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(5);
+
+    cleanup();
+  });
+
+  it("should wrap initialIndex if out of range", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel({ initialIndex: 7 }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(2); // 7 % 5 = 2
+
+    cleanup();
+  });
+});

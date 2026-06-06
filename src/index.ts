@@ -41,6 +41,8 @@ export { tree } from "./plugins/tree";
 export type { TreePluginConfig, FlatNode } from "./plugins/tree";
 export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
 export type { SearchPluginConfig, SearchText } from "./plugins/search";
+export { carousel } from "./plugins/carousel";
+export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState } from "./plugins/carousel";
 
 // Utils
 export { createStats } from "./utils/stats";
