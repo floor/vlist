@@ -316,6 +316,17 @@ export function selection<T extends VListItem = VListItem>(
 
       // ── Focus In/Out ──────────────────────────────────────────
 
+      const setActiveDescendant = (index: number): void => {
+        const all = dom.content.querySelectorAll(`[data-index="${index}"]`);
+        let el: HTMLElement | null = null;
+        for (let i = 0; i < all.length; i++) {
+          const candidate = all[i] as HTMLElement;
+          if (candidate.style.display !== "none") { el = candidate; break; }
+        }
+        if (!el && all.length > 0) el = all[0] as HTMLElement;
+        dom.content.setAttribute("aria-activedescendant", el?.id ?? `${classPrefix}-item-${index}`);
+      };
+
       const onFocusIn = (): void => {
         if (engineState.destroyed) return;
         resolveOnce(ctx);
@@ -326,7 +337,7 @@ export function selection<T extends VListItem = VListItem>(
         tgt = skipHeaders(tgt, 1, t);
         state.focusedIndex = tgt;
         state.focusVisible = true;
-        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${tgt}`);
+        setActiveDescendant(tgt);
         scrollFocusIntoView(tgt);
         forceRender();
       };
@@ -396,9 +407,10 @@ export function selection<T extends VListItem = VListItem>(
           let selectionChanged = false;
 
           if (nav.navigate && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End")) {
-            const next = nav.navigate(state.focusedIndex, event.key, total);
+            const navTotal = nav.total ? nav.total() : total;
+            const next = nav.navigate(state.focusedIndex, event.key, navTotal);
             if (next !== state.focusedIndex) {
-              state.focusedIndex = Math.max(0, Math.min(next, total - 1));
+              state.focusedIndex = Math.max(0, Math.min(next, navTotal - 1));
             }
             state.focusVisible = true;
             handled = true;
@@ -577,8 +589,8 @@ export function selection<T extends VListItem = VListItem>(
             event.preventDefault();
 
             if (focusMoved && state.focusedIndex >= 0) {
-              scrollFocusIntoView(state.focusedIndex);
-              dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${state.focusedIndex}`);
+              if (!nav.navigate) scrollFocusIntoView(state.focusedIndex);
+              setActiveDescendant(state.focusedIndex);
             }
 
             if (selectionChanged) {

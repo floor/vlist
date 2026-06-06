@@ -216,7 +216,7 @@ export function phase2Commit<T extends VListItem>(
     const item = getItemFn ? getItemFn(dataIndex) : items![dataIndex];
 
     if (itemStateFn) {
-      itemStateFn(dataIndex, itemState);
+      itemStateFn(publicIndex, itemState);
     } else {
       itemState.selected = false;
       itemState.focused = false;
@@ -267,7 +267,7 @@ export function phase2Commit<T extends VListItem>(
       acquired.setAttribute("role", rc.itemRole);
       acquired.setAttribute("data-index", String(publicIndex));
       if (rc.interactive) {
-        acquired.id = rc.prefix + "-item-" + publicIndex;
+        acquired.id = rc.prefix + "-item-" + dataIndex;
         acquired.setAttribute("aria-posinset", String(publicIndex + 1));
         acquired.setAttribute("aria-setsize", ariaTotal);
       }

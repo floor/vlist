@@ -162,6 +162,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
     lr: number;
     scrollIndex: ((itemIndex: number) => number) | null;
     navigate: ((currentIndex: number, key: string, total: number) => number) | null;
+    total: (() => number) | null;
   };
 }
 

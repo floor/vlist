@@ -92,6 +92,7 @@ export function carousel<T extends VListItem = VListItem>(
   let animId: number | null = null;
   let snapTimerId: ReturnType<typeof setTimeout> | null = null;
   let initialScrollPending = false;
+  let prefix = "vlist";
 
   function resolveIndex(index: number): number {
     if (realTotal <= 0) return 0;
@@ -171,6 +172,7 @@ export function carousel<T extends VListItem = VListItem>(
     const from = engineState.scrollPosition;
     if (Math.abs(target - from) < 1) {
       storedCtx.scrollTo(target);
+      updateItemLayout();
       return;
     }
     const start = performance.now();
@@ -178,13 +180,34 @@ export function carousel<T extends VListItem = VListItem>(
       const t = Math.min((now - start) / duration, 1);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
       storedCtx!.scrollTo(from + (target - from) * eased);
+      updateItemLayout();
       if (t < 1) animId = requestAnimationFrame(tick);
-      else { animId = null; rebaseIfNeeded(); }
+      else { animId = null; rebaseIfNeeded(); storedCtx!.forceRender(); updateItemLayout(); }
     };
     animId = requestAnimationFrame(tick);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
+
+  function syncItemCount(): void {
+    if (!storedCtx) return;
+    const currentTotal = storedCtx.getItems().length;
+    if (currentTotal === realTotal) return;
+    const savedIndex = currentIndex;
+    realTotal = currentTotal;
+    virtualTotal = realTotal * CYCLES;
+    lapSize = stepSize * realTotal;
+    engineState.totalItems = virtualTotal;
+    if (realTotal > 1) {
+      const safeIndex = savedIndex < realTotal ? savedIndex : 0;
+      currentIndex = safeIndex;
+      const targetVi = MIDDLE_CYCLE * realTotal + safeIndex;
+      const newPos = targetVi * stepSize;
+      engineState.scrollPosition = newPos;
+      engineState.prevScrollPosition = newPos;
+      (viewport as any)[isX ? "scrollLeft" : "scrollTop"] = newPos;
+    }
+  }
 
   function updateItemLayout(): void {
     if (!storedCtx || realTotal <= 0 || !layoutEngine) return;
@@ -213,6 +236,8 @@ export function carousel<T extends VListItem = VListItem>(
 
       if (roundedSize <= 0) {
         el.style.display = "none";
+        el.classList.remove(`${prefix}-item--focused`, `${prefix}-item--selected`);
+        el.removeAttribute("aria-selected");
       } else {
         el.style.display = "";
         el.style[prop] = roundedSize + "px";
@@ -248,6 +273,7 @@ export function carousel<T extends VListItem = VListItem>(
     } else {
       storedCtx.scrollTo(nearestPos);
       rebaseIfNeeded();
+      updateItemLayout();
     }
   }
 
@@ -262,6 +288,7 @@ export function carousel<T extends VListItem = VListItem>(
       storedCtx = ctx;
       viewport = ctx.dom.viewport;
       isX = ctx.config.axis.primary === "x";
+      prefix = ctx.config.classPrefix;
       realTotal = engineState.totalItems;
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
@@ -316,6 +343,18 @@ export function carousel<T extends VListItem = VListItem>(
         ctx.setIndexMapFn(logicalIndexOf);
         ctx.registerMethod("_layoutToDataIndex", logicalIndexOf);
 
+        // Normalize getScrollPosition to return within one lap
+        ctx.setScrollFns(
+          () => {
+            const raw = engineState.scrollPosition;
+            return lapSize > 0 ? ((raw % lapSize) + lapSize) % lapSize : 0;
+          },
+          (pos: number) => {
+            engineState.scrollPosition = pos;
+            (viewport as any)[isX ? "scrollLeft" : "scrollTop"] = pos;
+          },
+        );
+
         initialScrollPending = true;
       }
 
@@ -324,6 +363,7 @@ export function carousel<T extends VListItem = VListItem>(
       ctx.registerMethod("next", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
+        const prevIndex = currentIndex;
         currentIndex = resolveIndex(currentIndex + s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
@@ -337,12 +377,17 @@ export function carousel<T extends VListItem = VListItem>(
         } else {
           storedCtx!.scrollTo(nearestPos);
           rebaseIfNeeded();
+          updateItemLayout();
+        }
+        if (currentIndex !== prevIndex) {
+          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: engineState.scrollPosition });
         }
       });
 
       ctx.registerMethod("prev", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
+        const prevIndex = currentIndex;
         currentIndex = resolveIndex(currentIndex - s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
@@ -356,6 +401,10 @@ export function carousel<T extends VListItem = VListItem>(
         } else {
           storedCtx!.scrollTo(nearestPos);
           rebaseIfNeeded();
+          updateItemLayout();
+        }
+        if (currentIndex !== prevIndex) {
+          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: engineState.scrollPosition });
         }
       });
 
@@ -389,6 +438,7 @@ export function carousel<T extends VListItem = VListItem>(
           } else {
             storedCtx!.scrollTo(nearestPos);
             rebaseIfNeeded();
+            updateItemLayout();
           }
         } else {
           navigateTo(target, smooth, dur);
@@ -422,6 +472,57 @@ export function carousel<T extends VListItem = VListItem>(
         navigateTo(target, smooth, dur);
       });
 
+      // ── Keyboard nav integration with selection ─────────────────
+
+      ctx.setNavConfig({
+        total: () => realTotal,
+        navigate: (current: number, key: string, total: number): number => {
+          let target = current;
+          if (key === "ArrowRight" || key === "ArrowDown") {
+            target = (current + 1) % total;
+          } else if (key === "ArrowLeft" || key === "ArrowUp") {
+            target = (current - 1 + total) % total;
+          } else if (key === "Home") {
+            target = 0;
+          } else if (key === "End") {
+            target = total - 1;
+          }
+          if (target !== current) {
+            navigateTo(target, false, 0);
+            storedCtx?.forceRender();
+            updateItemLayout();
+          }
+          return target;
+        },
+      });
+
+      // ── Built-in keyboard navigation ──────────────────────────
+
+      if (!ctx.dom.content.getAttribute("tabindex")) {
+        ctx.dom.content.setAttribute("tabindex", "0");
+      }
+
+      const navNext = ctx.getMethod("next") as Function;
+      const navPrev = ctx.getMethod("prev") as Function;
+      const navGoTo = ctx.getMethod("goTo") as Function;
+
+      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+        const key = event.key;
+        if (key === "ArrowRight" || key === "ArrowDown") {
+          event.preventDefault();
+          navNext(1, { behavior: "smooth", duration: snapDuration });
+        } else if (key === "ArrowLeft" || key === "ArrowUp") {
+          event.preventDefault();
+          navPrev(1, { behavior: "smooth", duration: snapDuration });
+        } else if (key === "Home") {
+          event.preventDefault();
+          navGoTo(0, { behavior: "smooth", duration: snapDuration });
+        } else if (key === "End") {
+          event.preventDefault();
+          navGoTo(realTotal - 1, { behavior: "smooth", duration: snapDuration });
+        }
+      });
+
       // ── Destroy handler ─────────────────────────────────────────
 
       ctx.registerDestroyHandler(() => {
@@ -452,16 +553,19 @@ export function carousel<T extends VListItem = VListItem>(
         updateItemLayout();
       },
 
-      onAfterScroll(scrollPosition: number): void {
-        if (realTotal <= 1 || initialScrollPending || !storedCtx) return;
-        const vi = virtualIndexAtScroll(scrollPosition);
+      onAfterScroll(_scrollPosition: number): void {
+        if (initialScrollPending || !storedCtx) return;
+        syncItemCount();
+        if (realTotal <= 1) return;
+        const pos = engineState.scrollPosition;
+        const vi = virtualIndexAtScroll(pos);
         const newIndex = logicalIndexOf(vi);
 
         if (newIndex !== currentIndex) {
           currentIndex = newIndex;
           storedCtx.emitter.emit("carousel:change" as any, {
             index: currentIndex,
-            scrollPosition,
+            scrollPosition: pos,
           });
         }
 
