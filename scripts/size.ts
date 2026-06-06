@@ -99,6 +99,7 @@ const scenarios: Scenario[] = [
   { name: "masonry",           imports: ["createVList", "masonry"] },
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
+  { name: "carousel",          imports: ["createVList", "carousel"] },
 ].map((s) => ({ ...s, mustNotContain: excluded(s.imports) }));
 
 // ── Build & measure ───────────────────────────────────────────────

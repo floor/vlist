@@ -207,6 +207,7 @@ export function createPluginMockContext<T extends VListItem>(
     setSizeConfig: () => {},
     setScrollFns: () => {},
     setVirtualTotalFn: () => {},
+    setIndexMapFn: () => {},
 
     getItems: () => items,
     getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],
@@ -278,7 +279,7 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     setNavConfig: (cfg: any) => { _navConfig = cfg; },
-    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
+    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
     enableListboxRole: () => {},
   };
 

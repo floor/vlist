@@ -282,6 +282,7 @@ export function createVList<T extends VListItem = VListItem>(
   let navLr = 0;
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
+  let navTotalFn: (() => number) | null = null;
   let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
@@ -333,7 +334,8 @@ export function createVList<T extends VListItem = VListItem>(
         scrollGetFn = get;
         scrollSetFn = set;
       },
-      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
+      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
+      setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
       getItems,
       getItem(index: number): T | undefined {
         return getItemFn ? getItemFn(index) : items[index];
@@ -405,14 +407,16 @@ export function createVList<T extends VListItem = VListItem>(
         if (cfg.lr !== undefined) navLr = cfg.lr;
         if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
         if (cfg.navigate) navNavigateFn = cfg.navigate;
+        if (cfg.total) navTotalFn = cfg.total;
       },
       getNavConfig: (() => {
-        const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null };
+        const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null };
         return (): typeof _nav => {
           _nav.ud = navUd;
           _nav.lr = navLr;
           _nav.scrollIndex = navScrollIndexFn;
           _nav.navigate = navNavigateFn;
+          _nav.total = navTotalFn;
           return _nav;
         };
       })(),
@@ -752,6 +756,7 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     getItemAt(index: number): T | undefined {
+      if (rc.indexMap) return items[index];
       return getItemFn ? getItemFn(index) : items[index];
     },
 
@@ -766,9 +771,7 @@ export function createVList<T extends VListItem = VListItem>(
     ): void {
       const total = virtualTotalFn ? virtualTotalFn() : items.length;
       if (total === 0) return;
-      const clamped = rawConfig.scroll?.wrap
-        ? ((index % total) + total) % total
-        : Math.max(0, Math.min(index, total - 1));
+      const clamped = Math.max(0, Math.min(index, total - 1));
 
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;

@@ -38,13 +38,8 @@ import type { VListAdapter } from "../../src/types";
 // Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
-
 beforeAll(() => {
   GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
     configurable: true,
@@ -54,11 +49,7 @@ beforeAll(() => {
     configurable: true,
   });
 });
-afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
-});
+afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
 // Helpers
@@ -116,16 +107,26 @@ const COLUMNS = [
 function createList<T extends CityItem>(
   ...args: Parameters<typeof createVList<T>>
 ): ReturnType<typeof createVList<T>> {
-  return createVList<T>(...args);
+  ensureDimensions();
+  const list = createVList<T>(...args);
+  const vp = (args[0] as any).container?.querySelector?.(".vlist-viewport") ??
+    document.querySelector(".vlist-viewport");
+  if (vp) {
+    Object.defineProperty(vp, "clientWidth", { value: 300, configurable: true });
+    Object.defineProperty(vp, "clientHeight", { value: 500, configurable: true });
+  }
+  return list;
 }
 
 function waitForLoad(list: VList<CityItem>): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     const unsub = (list as any).on("load:end", () => {
       unsub();
       resolve();
     });
     setTimeout(resolve, 200);
+  }).then(() => {
+    ensureDimensions();
   });
 }
 
@@ -136,7 +137,19 @@ function waitForLoad(list: VList<CityItem>): Promise<void> {
 let container: HTMLElement;
 let list: VList<CityItem> | null = null;
 
+function ensureDimensions(): void {
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    get() { return 500; },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    get() { return 300; },
+    configurable: true,
+  });
+}
+
 beforeEach(() => {
+  ensureDimensions();
   container = createContainer({ width: 300, height: 500 });
 });
 
@@ -330,9 +343,6 @@ describe("groups + table + data", () => {
 
   describe("snapshots restore race", () => {
     it("should show correct groups after snapshot restore + data load", async () => {
-      // NOTE: flaky under --concurrent — Bun shares the JS heap across
-      // file threads, so another file's afterAll can stomp the prototype
-      // override during async waits.
       const adapter = createCityAdapter(100);
       const STORAGE_KEY = "test-gtd-snap-" + Math.random().toString(36).slice(2, 8);
 
@@ -359,24 +369,10 @@ describe("groups + table + data", () => {
       const snap = (list as any).getScrollSnapshot();
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
 
-      // Destroy and recreate (simulates page reload with saved snapshot).
-      // Re-install dimension overrides — in --concurrent mode, another
-      // file's afterAll may have reset HTMLElement.prototype.clientHeight
-      // during the async gap above.
       list.destroy();
       list = null;
       container.innerHTML = "";
-
-      // Re-install prototype overrides (may have been stomped during await
-      // by another file's afterAll in --concurrent mode).
-      Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-        get() { return 500; },
-        configurable: true,
-      });
-      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
-        get() { return 300; },
-        configurable: true,
-      });
+      ensureDimensions();
 
       list = createList(
         { container, item: { height: 36, template: () => "" } },
