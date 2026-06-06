@@ -69,7 +69,7 @@ describeCarousel("carousel — Factory", () => {
   });
 
   it("should accept all variant configs", () => {
-    for (const variant of ["full", "hero", "multi", "free"] as const) {
+    for (const variant of ["full", "hero", "hero-center", "multi", "uncontained", "free"] as const) {
       const plugin = carousel({ variant });
       expect(plugin).toBeDefined();
     }
@@ -147,6 +147,8 @@ describeCarousel("carousel — Registered Methods", () => {
     expect(state).toHaveProperty("progress");
     expect(state).toHaveProperty("offset");
     expect(state).toHaveProperty("scrollPosition");
+    expect(state).toHaveProperty("role");
+    expect(["large", "medium", "small"]).toContain(state.role);
 
     cleanup();
   });
@@ -334,6 +336,11 @@ describeCarousel("carousel — Snap", () => {
     const plugin = carousel({ variant: "free", snap: false });
     expect(plugin).toBeDefined();
   });
+
+  it("snap should be optional for uncontained variant", () => {
+    const plugin = carousel({ variant: "uncontained" });
+    expect(plugin).toBeDefined();
+  });
 });
 
 // =============================================================================
@@ -502,6 +509,63 @@ describeCarousel("carousel — Virtual Item Mapping", () => {
 });
 
 // =============================================================================
+// Variant: hero-center
+// =============================================================================
+
+describeCarousel("carousel — Variant: hero-center", () => {
+  it("should accept hero-center variant", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel({ variant: "hero-center" }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// MD3-aligned config options
+// =============================================================================
+
+describeCarousel("carousel — MD3 Config", () => {
+  it("should accept largeItemMaxWidth config", () => {
+    const plugin = carousel({ largeItemMaxWidth: 600 });
+    expect(plugin).toBeDefined();
+  });
+
+  it("should accept parallax config", () => {
+    const plugin = carousel({ parallax: 0.5 });
+    expect(plugin).toBeDefined();
+  });
+
+  it("should accept cornerRadius config", () => {
+    const plugin = carousel({ cornerRadius: 28 });
+    expect(plugin).toBeDefined();
+  });
+
+  it("should accept peek as number", () => {
+    const plugin = carousel({ peek: 56 });
+    expect(plugin).toBeDefined();
+  });
+
+  it("should accept peek as percentage string", () => {
+    const plugin = carousel({ peek: "20%" });
+    expect(plugin).toBeDefined();
+  });
+
+  it("should accept peek as auto", () => {
+    const plugin = carousel({ peek: "auto" });
+    expect(plugin).toBeDefined();
+  });
+});
+
+// =============================================================================
 // initialIndex
 // =============================================================================
 
@@ -532,6 +596,550 @@ describeCarousel("carousel — initialIndex", () => {
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(2); // 7 % 5 = 2
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Phase 2: Hero variant — one large item + one small peek item
+//
+// Model: all items have the same step size in the sizeCache.
+// stepSize = containerSize - peekSize (hero) or containerSize - 2*peekSize (hero-center).
+// The peek is visible because the container is wider than stepSize.
+// Visual item widths (large/small roles) are handled via CSS variables, not sizeCache.
+// =============================================================================
+
+describeCarousel("carousel — Variant: hero — step size", () => {
+  it("stepSize should be containerSize minus peekSize", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    // All items have the same step size = 800 - 56 = 744
+    const size0 = ctx.sizeCache.getSize(0);
+    const size1 = ctx.sizeCache.getSize(1);
+    expect(size0).toBe(800 - 56);
+    expect(size1).toBe(800 - 56);
+
+    cleanup();
+  });
+
+  it("getOffset should use uniform step size", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    const stepSize = 800 - 56;
+    expect(ctx.sizeCache.getOffset(0)).toBe(0);
+    expect(ctx.sizeCache.getOffset(1)).toBe(stepSize);
+    expect(ctx.sizeCache.getOffset(3)).toBe(stepSize * 3);
+
+    cleanup();
+  });
+
+  it("lap cycle should traverse all items correctly", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const indices: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      indices.push(getState().index);
+      next();
+    }
+    expect(indices).toEqual([0, 1, 2, 3, 4]);
+
+    cleanup();
+  });
+});
+
+describeCarousel("carousel — Variant: hero — state", () => {
+  it("getCarouselState should report role 'large' for focal item", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().role).toBe("large");
+
+    cleanup();
+  });
+
+  it("next/prev should cycle correctly with hero step size", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const prev = methods.get("prev") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    // Forward cycle
+    const fwd: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      fwd.push(getState().index);
+      next();
+    }
+    expect(fwd).toEqual([0, 1, 2, 3, 4, 0, 1]);
+
+    // Backward from current position
+    const bwd: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      bwd.push(getState().index);
+      prev();
+    }
+    expect(bwd).toEqual([2, 1, 0, 4]);
+
+    cleanup();
+  });
+
+  it("goTo should work with hero step size and shortest path", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(7);
+    expect(getState().index).toBe(7);
+
+    goTo(2, { direction: "forward" });
+    expect(getState().index).toBe(2);
+
+    goTo(9, { direction: "backward" });
+    expect(getState().index).toBe(9);
+
+    cleanup();
+  });
+});
+
+describeCarousel("carousel — Variant: hero — peek config", () => {
+  it("peek: number should set step size to containerSize - peek", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 48 }).setup!(ctx);
+
+    expect(ctx.sizeCache.getSize(0)).toBe(800 - 48);
+
+    cleanup();
+  });
+
+  it("peek: percentage should compute from container size", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: "10%" }).setup!(ctx);
+
+    // 10% of 800 = 80 → stepSize = 800 - 80 = 720
+    expect(ctx.sizeCache.getSize(0)).toBe(720);
+
+    cleanup();
+  });
+
+  it("peek: auto should default to 56dp (MD3 max small item width)", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
+
+    expect(ctx.sizeCache.getSize(0)).toBe(800 - 56);
+
+    cleanup();
+  });
+
+  it("peek: auto on small container should clamp to 40dp minimum", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 200,
+      containerHeight: 400,
+      itemSize: 100,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
+
+    // auto peek = 56, but step = 200-56=144 — peek is clamped to keep items visible
+    const stepSize = ctx.sizeCache.getSize(0);
+    const peekSize = 200 - stepSize;
+    expect(peekSize).toBeGreaterThanOrEqual(40);
+    expect(peekSize).toBeLessThanOrEqual(56);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Phase 2: Hero-center variant — large centered + two small peek items
+// =============================================================================
+
+describeCarousel("carousel — Variant: hero-center — layout", () => {
+  it("should default focalAlign to center", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero-center" }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+    expect(getState().role).toBe("large");
+
+    cleanup();
+  });
+
+  it("step size should account for two peek items", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero-center", peek: 56 }).setup!(ctx);
+
+    // hero-center: stepSize = containerSize - 2*peek = 800 - 112 = 688
+    expect(ctx.sizeCache.getSize(0)).toBe(688);
+    expect(ctx.sizeCache.getSize(1)).toBe(688);
+
+    cleanup();
+  });
+
+  it("next/prev should cycle correctly", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero-center" }).setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const sequence: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      sequence.push(getState().index);
+      next();
+    }
+    expect(sequence).toEqual([0, 1, 2, 3, 4, 0, 1]);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Phase 2: Hero vertical orientation
+// =============================================================================
+
+describeCarousel("carousel — Variant: hero — vertical", () => {
+  it("should use containerHeight for step size in vertical orientation", () => {
+    const items = createTestItems(10);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 400,
+      containerHeight: 600,
+      itemSize: 300,
+      isX: false,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    // Vertical: containerSize = 600, stepSize = 600 - 56 = 544
+    expect(ctx.sizeCache.getSize(0)).toBe(544);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Phase 2: Hero with infinite loop — core behavior preserved
+// =============================================================================
+
+describeCarousel("carousel — Variant: hero — infinite loop", () => {
+  it("next from last item wraps to first", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as Function;
+    const next = methods.get("next") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(4);
+    expect(getState().index).toBe(4);
+
+    next();
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("prev from first item wraps to last", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    const prev = methods.get("prev") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    expect(getState().index).toBe(0);
+    prev();
+    expect(getState().index).toBe(4);
+
+    cleanup();
+  });
+
+  it("logical totals stay at real count", () => {
+    const items = createTestItems(8);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero" }).setup!(ctx);
+
+    expect(ctx.getItems().length).toBe(8);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// CSS Variables — per-element visual state updated on scroll
+// =============================================================================
+
+function addRenderedItems(content: HTMLElement, indices: number[]): HTMLElement[] {
+  const els: HTMLElement[] = [];
+  for (const idx of indices) {
+    const el = document.createElement("div");
+    el.dataset.index = String(idx);
+    el.className = "vlist-item";
+    content.appendChild(el);
+    els.push(el);
+  }
+  return els;
+}
+
+describeCarousel("carousel — CSS Variables", () => {
+  // Helper: clear initialScrollPending by calling onCommit
+  function initPlugin(plugin: any): void {
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+  }
+
+  it("should set --vlist-carousel-progress on rendered elements", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full" });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    // Simulate rendered elements near the focal index in the middle cycle
+    const middleStart = 50 * 10; // MIDDLE_CYCLE * realTotal
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1, middleStart + 2]);
+
+    // Trigger onAfterScroll at the initial position (middle cycle, item 0)
+    const scrollPos = middleStart * 400;
+    plugin.hooks!.onAfterScroll!(scrollPos);
+
+    // Focal element (offset 0) should have progress = 0
+    expect(els[0].style.getPropertyValue("--vlist-carousel-progress")).toBe("0");
+    // Adjacent elements should have progress > 0
+    const p1 = parseFloat(els[1].style.getPropertyValue("--vlist-carousel-progress"));
+    expect(p1).toBeGreaterThan(0);
+
+    cleanup();
+  });
+
+  it("should set --vlist-carousel-offset as signed integer", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full" });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart - 1, middleStart, middleStart + 1, middleStart + 2]);
+
+    const scrollPos = middleStart * 400;
+    plugin.hooks!.onAfterScroll!(scrollPos);
+
+    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+    expect(els[3].style.getPropertyValue("--vlist-carousel-offset")).toBe("2");
+
+    cleanup();
+  });
+
+  it("should set --vlist-carousel-role to large for focal, small for distant items", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "hero", peek: 56 });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    const stepSz = 800 - 56;
+    const scrollPos = middleStart * stepSz;
+    plugin.hooks!.onAfterScroll!(scrollPos);
+
+    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-role")).toBe("small");
+
+    cleanup();
+  });
+
+  it("should update CSS variables when scroll position changes", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full" });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1, middleStart + 2]);
+
+    const es = ctx.getState();
+
+    // At item 0 — els[0] is focal
+    es.scrollPosition = middleStart * 400;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+
+    // Scroll to item 1 — els[1] is now focal
+    es.scrollPosition = (middleStart + 1) * 400;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+
+    cleanup();
+  });
+
+  it("full variant should assign role large to focal and small to others", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full" });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    plugin.hooks!.onAfterScroll!(middleStart * 400);
+
+    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-role")).toBe("small");
 
     cleanup();
   });

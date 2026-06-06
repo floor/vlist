@@ -25,7 +25,7 @@ import type { SizeCache } from "../../core/sizes";
 // Config
 // =============================================================================
 
-export type CarouselVariant = "full" | "hero" | "multi" | "free";
+export type CarouselVariant = "full" | "hero" | "hero-center" | "multi" | "uncontained" | "free";
 export type CarouselDirection = "auto" | "forward" | "backward";
 
 export interface CarouselPluginConfig {
@@ -33,11 +33,12 @@ export interface CarouselPluginConfig {
   snap?: boolean;
   snapDuration?: number;
   peek?: number | string | "auto";
-  focalScale?: number;
-  focalOpacity?: number;
+  largeItemMaxWidth?: number | "auto";
+  parallax?: number;
   visibleCount?: number;
   focalAlign?: "center" | "start";
   initialIndex?: number;
+  cornerRadius?: number;
 }
 
 export interface CarouselState {
@@ -45,6 +46,7 @@ export interface CarouselState {
   progress: number;
   offset: number;
   scrollPosition: number;
+  role: "large" | "medium" | "small";
 }
 
 // =============================================================================
@@ -66,6 +68,7 @@ export function carousel<T extends VListItem = VListItem>(
   const snapEnabled = config?.snap ?? (variant !== "free");
   const snapDuration = config?.snapDuration ?? 400;
   const initialIndex = config?.initialIndex ?? 0;
+  const peekConfig = config?.peek ?? "auto";
 
   let engineState: EngineState;
   let sizeCache: SizeCache;
@@ -75,7 +78,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   let currentIndex = initialIndex;
   let realTotal = 0;
-  let itemSize = 0;
+  let stepSize = 0;
   let lapSize = 0;
   let virtualTotal = 0;
 
@@ -106,13 +109,32 @@ export function carousel<T extends VListItem = VListItem>(
     return ((virtualIndex % realTotal) + realTotal) % realTotal;
   }
 
+  function resolvePeekSize(containerSize: number): number {
+    if (variant === "full" || variant === "uncontained" || variant === "free") return 0;
+    if (typeof peekConfig === "number") return peekConfig;
+    if (typeof peekConfig === "string" && peekConfig.endsWith("%")) {
+      return Math.round(containerSize * parseFloat(peekConfig) / 100);
+    }
+    // "auto" — MD3 default: 56dp, clamped to [40, 56]
+    return Math.min(56, Math.max(40, Math.min(56, Math.floor(containerSize * 0.1))));
+  }
+
+  function computeStepSize(baseItemSize: number, containerSize: number): number {
+    if (variant === "full" || variant === "uncontained" || variant === "free") {
+      return baseItemSize;
+    }
+    const peek = resolvePeekSize(containerSize);
+    const peekCount = variant === "hero-center" ? 2 : 1;
+    return containerSize - peek * peekCount;
+  }
+
   function scrollPositionForVirtual(vi: number): number {
-    return vi * itemSize;
+    return vi * stepSize;
   }
 
   function virtualIndexAtScroll(pos: number): number {
-    if (itemSize <= 0) return 0;
-    return Math.round(pos / itemSize);
+    if (stepSize <= 0) return 0;
+    return Math.round(pos / stepSize);
   }
 
   function rebaseIfNeeded(): void {
@@ -124,8 +146,8 @@ export function carousel<T extends VListItem = VListItem>(
     if (cycle < REBASE_THRESHOLD || cycle >= CYCLES - REBASE_THRESHOLD) {
       const logical = logicalIndexOf(currentVi);
       const targetVi = virtualIndexOf(logical);
-      const offset = pos - currentVi * itemSize;
-      const newPos = targetVi * itemSize + offset;
+      const offset = pos - currentVi * stepSize;
+      const newPos = targetVi * stepSize + offset;
 
       engineState.scrollPosition = newPos;
       engineState.prevScrollPosition = newPos;
@@ -158,6 +180,28 @@ export function carousel<T extends VListItem = VListItem>(
       else { animId = null; rebaseIfNeeded(); }
     };
     animId = requestAnimationFrame(tick);
+  }
+
+  function updateCSSVariables(): void {
+    if (!storedCtx || realTotal <= 0) return;
+    const content = storedCtx.dom.content;
+    const children = content.children;
+    const focalVi = virtualIndexAtScroll(engineState.scrollPosition);
+
+    for (let i = 0; i < children.length; i++) {
+      const el = children[i] as HTMLElement;
+      const idx = el.dataset.index;
+      if (idx === undefined) continue;
+      const vi = parseInt(idx, 10);
+      const offset = vi - focalVi;
+      const absOffset = Math.abs(offset);
+      const progress = realTotal > 1 ? Math.min(absOffset / (realTotal * 0.5), 1) : 0;
+      const role = absOffset === 0 ? "large" : "small";
+
+      el.style.setProperty("--vlist-carousel-progress", String(progress));
+      el.style.setProperty("--vlist-carousel-offset", String(offset));
+      el.style.setProperty("--vlist-carousel-role", role);
+    }
   }
 
   function navigateTo(logicalTarget: number, smooth: boolean, duration: number): void {
@@ -195,8 +239,10 @@ export function carousel<T extends VListItem = VListItem>(
       viewport = ctx.dom.viewport;
       isX = ctx.config.axis.primary === "x";
       realTotal = engineState.totalItems;
-      itemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
-      lapSize = sizeCache.getTotalSize();
+      const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
+      const containerSize = engineState.containerSize;
+      stepSize = computeStepSize(baseItemSize, containerSize);
+      lapSize = stepSize * realTotal;
       virtualTotal = realTotal * CYCLES;
       currentIndex = resolveIndex(initialIndex);
 
@@ -213,21 +259,12 @@ export function carousel<T extends VListItem = VListItem>(
           return ctx.getItems()[logical];
         });
 
-        // Hook sizeCache to report virtual dimensions without
-        // changing engineState.totalItems (which stays at realTotal).
-        const origGetTotalSize = sizeCache.getTotalSize;
-        const origGetOffset = sizeCache.getOffset;
-        const origGetSize = sizeCache.getSize;
-        const origIndexAtOffset = sizeCache.indexAtOffset;
-        const origGetTotal = sizeCache.getTotal;
-        const origRebuild = sizeCache.rebuild;
-
-        sizeCache.getTotalSize = (): number => virtualTotal * itemSize;
-        sizeCache.getOffset = (index: number): number => index * itemSize;
-        sizeCache.getSize = (_index: number): number => itemSize;
+        sizeCache.getTotalSize = (): number => virtualTotal * stepSize;
+        sizeCache.getOffset = (index: number): number => index * stepSize;
+        sizeCache.getSize = (_index: number): number => stepSize;
         sizeCache.indexAtOffset = (offset: number): number => {
-          if (itemSize <= 0) return 0;
-          return Math.max(0, Math.min(Math.floor(offset / itemSize), virtualTotal - 1));
+          if (stepSize <= 0) return 0;
+          return Math.max(0, Math.min(Math.floor(offset / stepSize), virtualTotal - 1));
         };
         sizeCache.getTotal = (): number => virtualTotal;
 
@@ -255,7 +292,7 @@ export function carousel<T extends VListItem = VListItem>(
 
         cancelAnim();
         const currentPos = engineState.scrollPosition;
-        const nearestPos = currentPos + s * itemSize;
+        const nearestPos = currentPos + s * stepSize;
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -274,7 +311,7 @@ export function carousel<T extends VListItem = VListItem>(
 
         cancelAnim();
         const currentPos = engineState.scrollPosition;
-        const nearestPos = currentPos - s * itemSize;
+        const nearestPos = currentPos - s * stepSize;
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -307,7 +344,7 @@ export function carousel<T extends VListItem = VListItem>(
             direction === "forward" ? "forward" : "backward");
           currentIndex = target;
           const currentPos = engineState.scrollPosition;
-          const nearestPos = currentPos + delta * itemSize;
+          const nearestPos = currentPos + delta * stepSize;
 
           if (smooth) {
             smoothScrollTo(nearestPos, dur);
@@ -333,12 +370,13 @@ export function carousel<T extends VListItem = VListItem>(
           progress: 0,
           offset: 0,
           scrollPosition: normalizedPos,
+          role: "large",
         };
       });
 
       // ── Override scrollToIndex for wrap ──────────────────────────
 
-      ctx.setScrollToIndexFn((index, align, behavior, duration, _easing): void | false => {
+      ctx.setScrollToIndexFn((index, _align, behavior, duration, _easing): void | false => {
         if (realTotal <= 1) return false;
         const target = resolveIndex(index);
         const smooth = behavior === "smooth";
@@ -387,6 +425,8 @@ export function carousel<T extends VListItem = VListItem>(
             scrollPosition,
           });
         }
+
+        updateCSSVariables();
 
         if (snapEnabled && animId === null) {
           rebaseIfNeeded();
