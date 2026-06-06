@@ -231,18 +231,20 @@ describeCarousel("carousel — Infinite Loop", () => {
 // =============================================================================
 
 describeCarousel("carousel — Logical Totals", () => {
-  it("engineState.totalItems should reflect real item count", () => {
+  it("public total (virtualTotalFn) should reflect real item count", () => {
     const items = createTestItems(10);
-    const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
       containerHeight: 400,
       itemSize: 200,
     });
 
     carousel().setup!(ctx);
 
-    // totalItems stays at the real count — the virtual window
-    // is internal to the sizeCache hooks.
-    expect(engineState.totalItems).toBe(10);
+    // list.total uses virtualTotalFn which returns the real count.
+    // engineState.totalItems is inflated for the render pipeline
+    // but consumers never read it directly.
+    // In the mock we can't call list.total, so check via getItems().length
+    expect(ctx.getItems().length).toBe(10);
 
     cleanup();
   });

@@ -231,19 +231,15 @@ export function carousel<T extends VListItem = VListItem>(
         };
         sizeCache.getTotal = (): number => virtualTotal;
 
-        // Keep the real rebuild — we don't want plugins inflating it
-        sizeCache.rebuild = (n: number): void => {
-          realTotal = n;
-          itemSize = n > 0 ? origGetSize(0) : 0;
-          lapSize = n * itemSize;
-          virtualTotal = n * CYCLES;
-        };
+        // Don't hook rebuild — the engine may call rebuild(virtualTotal)
+        // internally, and we don't want that to corrupt realTotal.
+        // The hooked getters (getOffset, getSize, etc.) are stable
+        // regardless of the internal prefix-sum state.
 
-        // Tell the engine to render the virtual range
-        ctx.setVirtualTotalFn(() => virtualTotal);
-
-        // Preserve the real totalItems for public API
-        engineState.totalItems = realTotal;
+        // Engine needs virtualTotal for rendering at virtual indices.
+        // Public API (list.total) returns realTotal via virtualTotalFn.
+        engineState.totalItems = virtualTotal;
+        ctx.setVirtualTotalFn(() => realTotal);
 
         initialScrollPending = true;
       }
@@ -373,6 +369,10 @@ export function carousel<T extends VListItem = VListItem>(
         const prop = isX ? "scrollLeft" : "scrollTop";
         void viewport.scrollHeight;
         (viewport as any)[prop] = startPos;
+
+        // The first render used scrollPosition=0. Now that we've set
+        // the real position, force a re-render at the correct offset.
+        storedCtx.forceRender();
       },
 
       onAfterScroll(scrollPosition: number): void {
