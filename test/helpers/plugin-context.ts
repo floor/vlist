@@ -207,6 +207,7 @@ export function createPluginMockContext<T extends VListItem>(
     setSizeConfig: () => {},
     setScrollFns: () => {},
     setVirtualTotalFn: () => {},
+    setIndexMapFn: () => {},
 
     getItems: () => items,
     getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],

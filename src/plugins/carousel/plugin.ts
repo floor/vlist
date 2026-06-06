@@ -20,17 +20,19 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
-import { createLayoutEngine, resolveVariantSlots } from "./engine";
+import { createLayoutEngine } from "./engine";
+import type { SlotConfig } from "./presets";
+import { resolvePreset } from "./presets";
 
 // =============================================================================
 // Config
 // =============================================================================
 
-export type CarouselVariant = "full" | "hero" | "hero-center" | "multi" | "uncontained" | "free";
+export type CarouselVariant = "static" | "full" | "hero" | "hero-center" | "multi" | "uncontained" | "free";
 export type CarouselDirection = "auto" | "forward" | "backward";
 
 export interface CarouselPluginConfig {
-  variant?: CarouselVariant;
+  variant?: CarouselVariant | SlotConfig;
   snap?: boolean;
   snapDuration?: number;
   peek?: number | string | "auto";
@@ -66,7 +68,10 @@ const REBASE_THRESHOLD = 10;
 export function carousel<T extends VListItem = VListItem>(
   config?: CarouselPluginConfig,
 ): VListPlugin<T> {
-  const variant: CarouselVariant = config?.variant ?? "full";
+  const variantConfig = config?.variant ?? "full";
+  const isCustomPreset = typeof variantConfig === "object";
+  const variant: string = isCustomPreset ? "custom" : variantConfig;
+  const customSlots: SlotConfig | null = isCustomPreset ? variantConfig : null;
   const snapEnabled = config?.snap ?? (variant !== "free");
   const snapDuration = config?.snapDuration ?? 400;
   const initialIndex = config?.initialIndex ?? 0;
@@ -182,7 +187,7 @@ export function carousel<T extends VListItem = VListItem>(
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
 
   function updateItemLayout(): void {
-    if (!storedCtx || realTotal <= 0) return;
+    if (!storedCtx || realTotal <= 0 || !layoutEngine) return;
     const content = storedCtx.dom.content;
     const children = content.children;
     const pos = engineState.scrollPosition;
@@ -191,11 +196,16 @@ export function carousel<T extends VListItem = VListItem>(
     const prop = isX ? "width" : "height";
     const anchor = pos + layoutEngine!.getAnchorOffset(focalVi, frac);
 
+    const baseCycle = focalVi - (focalVi % realTotal);
+
     for (let i = 0; i < children.length; i++) {
       const el = children[i] as HTMLElement;
       const idx = el.dataset.index;
       if (idx === undefined) continue;
-      const vi = parseInt(idx, 10);
+      const logical = parseInt(idx, 10);
+      let vi = baseCycle + logical;
+      if (vi - focalVi > realTotal / 2) vi -= realTotal;
+      if (focalVi - vi > realTotal / 2) vi += realTotal;
 
       const layout = layoutEngine!.getItemLayout(vi, focalVi, frac, anchor);
       const roundedSize = Math.max(0, Math.round(layout.size));
@@ -256,14 +266,18 @@ export function carousel<T extends VListItem = VListItem>(
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
       const peekResolved = resolvePeekSize(containerSize);
-      const variantSlots = resolveVariantSlots(variant, containerSize, peekResolved);
-      layoutEngine = createLayoutEngine({
-        slots: variantSlots.slots,
-        focalSlot: variantSlots.focalSlot,
-        containerSize,
-        gap: config?.gap ?? 0,
-      });
-      stepSize = layoutEngine.stepSize;
+      const variantSlots = customSlots ?? resolvePreset(variant, containerSize, peekResolved);
+      if (variantSlots) {
+        layoutEngine = createLayoutEngine({
+          slots: variantSlots.slots,
+          focalSlot: variantSlots.focalSlot,
+          containerSize,
+          gap: config?.gap ?? 0,
+        });
+        stepSize = layoutEngine.stepSize;
+      } else {
+        stepSize = baseItemSize;
+      }
       lapSize = stepSize * realTotal;
       virtualTotal = realTotal * CYCLES;
       currentIndex = resolveIndex(initialIndex);
@@ -299,6 +313,8 @@ export function carousel<T extends VListItem = VListItem>(
         // Public API (list.total) returns realTotal via virtualTotalFn.
         engineState.totalItems = virtualTotal;
         ctx.setVirtualTotalFn(() => realTotal);
+        ctx.setIndexMapFn(logicalIndexOf);
+        ctx.registerMethod("_layoutToDataIndex", logicalIndexOf);
 
         initialScrollPending = true;
       }

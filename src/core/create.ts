@@ -333,7 +333,8 @@ export function createVList<T extends VListItem = VListItem>(
         scrollGetFn = get;
         scrollSetFn = set;
       },
-      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; },
+      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
+      setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
       getItems,
       getItem(index: number): T | undefined {
         return getItemFn ? getItemFn(index) : items[index];

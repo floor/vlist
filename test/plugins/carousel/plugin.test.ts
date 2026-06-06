@@ -904,7 +904,7 @@ describeCarousel("carousel — Variant: hero-center — layout", () => {
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart - 1, middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [9, 0, 1]);
 
     // stepSize = focalSlotWidth = containerSize - 2*peek = 600
     const es = ctx.getState();
@@ -1066,7 +1066,7 @@ describeCarousel("carousel — CSS Variables", () => {
 
     // Simulate rendered elements near the focal index in the middle cycle
     const middleStart = 50 * 10; // MIDDLE_CYCLE * realTotal
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1, middleStart + 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2]);
 
     // Trigger onAfterScroll at the initial position (middle cycle, item 0)
     const scrollPos = middleStart * 400;
@@ -1096,7 +1096,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart - 1, middleStart, middleStart + 1, middleStart + 2]);
+    const els = addRenderedItems(dom.content, [9, 0, 1, 2]);
 
     const scrollPos = middleStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos);
@@ -1123,7 +1123,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
     const scrollPos = middleStart * stepSz;
@@ -1149,7 +1149,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1, middleStart + 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2]);
 
     const es = ctx.getState();
 
@@ -1183,7 +1183,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
     ctx.getState().scrollPosition = middleStart * stepSz;
@@ -1211,7 +1211,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     ctx.getState().scrollPosition = middleStart * 600;
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
@@ -1239,7 +1239,7 @@ describeCarousel("carousel — CSS Variables", () => {
     initPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     // Scroll 50% between items
     const es = ctx.getState();
@@ -1280,7 +1280,7 @@ describeCarousel("carousel — Gap", () => {
     commitPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
     // availableSize = 800 - 8 = 792 (1 gap for 2 slots)
@@ -1315,7 +1315,7 @@ describeCarousel("carousel — Gap", () => {
     commitPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
     // full: 1 slot, 0 gaps at rest → availableSize = 600
@@ -1343,7 +1343,7 @@ describeCarousel("carousel — Gap", () => {
     commitPlugin(plugin);
 
     const middleStart = 50 * 10;
-    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+    const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
     // containerSize=600, availableSize=600-12=588

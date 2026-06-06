@@ -116,6 +116,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setSizeConfig(config: number | ((index: number) => number)): void;
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   setVirtualTotalFn(fn: () => number): void;
+  setIndexMapFn(fn: (renderIndex: number) => number): void;
 
   getItems(): readonly T[];
   getItem(index: number): T | undefined;

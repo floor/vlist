@@ -78,16 +78,9 @@ export function createLayoutEngine(config: LayoutConfig): {
 
   // Correct rounding errors — distribute remainder to the focal slot
   const roundingError = availableSize - slotWidths.reduce((a, b) => a + b, 0);
-  slotWidths[focalSlot] += roundingError;
+  if (focalSlot < slotWidths.length) slotWidths[focalSlot]! += roundingError;
 
-  // The step size is how much you scroll to advance one item.
-  // It equals the focal slot width + gap — when you scroll by one step,
-  // the focal item exits and the next item becomes focal.
-  const stepSize = slotWidths[focalSlot] + gapPx;
-
-  // Number of slots before and after the focal
-  const slotsBefore = focalSlot;
-  const slotsAfter = slotCount - focalSlot - 1;
+  const stepSize = (slotWidths[focalSlot] ?? 0) + gapPx;
 
   /**
    * Compute the dynamic size of a single item based on its
@@ -106,7 +99,7 @@ export function createLayoutEngine(config: LayoutConfig): {
     // rel=0 is the outgoing focal, rel=1 is the incoming focal
     //
     // At rest (frac=0):
-    //   rel = -slotsBefore..-1 → leading peek slots
+    //   rel = -focalSlot..-1 → leading peek slots
     //   rel = 0                → focal slot
     //   rel = 1..slotsAfter    → trailing peek slots
     //
@@ -127,7 +120,7 @@ export function createLayoutEngine(config: LayoutConfig): {
 
   function getSlotSize(slotIndex: number): number {
     if (slotIndex < 0 || slotIndex >= slotCount) return 0;
-    return slotWidths[slotIndex];
+    return slotWidths[slotIndex] ?? 0;
   }
 
   function getItemLayout(
@@ -167,7 +160,7 @@ export function createLayoutEngine(config: LayoutConfig): {
     }
 
     // Role based on size relative to the largest slot
-    const maxSlotSize = slotWidths[focalSlot];
+    const maxSlotSize = slotWidths[focalSlot] ?? 0;
     const sizeRatio = maxSlotSize > 0 ? size / maxSlotSize : 0;
     const role: "large" | "medium" | "small" =
       sizeRatio > 0.6 ? "large" : sizeRatio > 0.3 ? "medium" : "small";
@@ -188,54 +181,3 @@ export function createLayoutEngine(config: LayoutConfig): {
   return { slotWidths, stepSize, focalSlot, getItemLayout, getItemSize, getAnchorOffset };
 }
 
-// =============================================================================
-// Variant presets
-// =============================================================================
-
-export function resolveVariantSlots(
-  variant: string,
-  containerSize: number,
-  peek: number,
-): { slots: number[]; focalSlot: number } {
-  switch (variant) {
-    case "hero":
-      return {
-        slots: [(containerSize - peek) / containerSize, peek / containerSize],
-        focalSlot: 0,
-      };
-
-    case "hero-center":
-      return {
-        slots: [
-          peek / containerSize,
-          (containerSize - 2 * peek) / containerSize,
-          peek / containerSize,
-        ],
-        focalSlot: 1,
-      };
-
-    case "multi": {
-      const large = 0.4;
-      const medium = 0.3;
-      const small = 0.2;
-      const tiny = 1 - large - medium - small;
-      return {
-        slots: [large, medium, small, tiny],
-        focalSlot: 0,
-      };
-    }
-
-    case "uncontained": {
-      const count = Math.max(2, Math.floor(containerSize / (containerSize * 0.33)));
-      const ratio = 1 / count;
-      return {
-        slots: Array.from({ length: count }, () => ratio),
-        focalSlot: 0,
-      };
-    }
-
-    case "full":
-    default:
-      return { slots: [1.0], focalSlot: 0 };
-  }
-}

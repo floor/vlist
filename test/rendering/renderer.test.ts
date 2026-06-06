@@ -672,6 +672,8 @@ describe("getContainerDimensions", () => {
 
   it("should handle elements not yet attached to DOM", () => {
     const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientWidth", { value: 0, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 0, configurable: true });
 
     const dimensions = getContainerDimensions(viewport);
 

@@ -1,4 +1,6 @@
 export { carousel } from "./plugin";
 export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState } from "./plugin";
-export { createLayoutEngine, resolveVariantSlots } from "./engine";
+export { createLayoutEngine } from "./engine";
 export type { LayoutConfig, ItemLayout } from "./engine";
+export { resolvePreset, full, hero, heroCenter, multi, uncontained } from "./presets";
+export type { SlotConfig } from "./presets";
