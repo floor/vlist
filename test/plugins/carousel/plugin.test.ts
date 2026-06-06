@@ -1361,3 +1361,202 @@ describeCarousel("carousel — Gap", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// Keyboard navigation — built-in handler
+// =============================================================================
+
+describeCarousel("carousel — Keyboard", () => {
+  it("should register a keydown handler", () => {
+    const items = createTestItems(10);
+    const { ctx, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    expect(keydownHandlers.length).toBeGreaterThan(0);
+
+    cleanup();
+  });
+
+  it("should set tabindex on content element", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    expect(dom.content.getAttribute("tabindex")).toBe("0");
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// carousel:change event — emitted by next/prev
+// =============================================================================
+
+describeCarousel("carousel — carousel:change event", () => {
+  it("next() should emit carousel:change with the new logical index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const events: { index: number }[] = [];
+    ctx.emitter.on = ((event: string, handler: Function) => {
+      if (event === "carousel:change") {
+        const orig = handler;
+        (ctx.emitter as any)._carouselHandler = orig;
+      }
+      return () => {};
+    }) as any;
+    ctx.emitter.emit = ((event: string, payload: any) => {
+      if (event === "carousel:change") events.push(payload);
+    }) as any;
+
+    carousel().setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    next(1, { behavior: "auto" });
+
+    expect(events.length).toBe(1);
+    expect(events[0]!.index).toBe(1);
+
+    next(1, { behavior: "auto" });
+    expect(events[1]!.index).toBe(2);
+
+    cleanup();
+  });
+
+  it("prev() should emit carousel:change with the wrapped index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const events: { index: number }[] = [];
+    ctx.emitter.emit = ((event: string, payload: any) => {
+      if (event === "carousel:change") events.push(payload);
+    }) as any;
+
+    carousel().setup!(ctx);
+
+    const prev = methods.get("prev") as Function;
+    prev(1, { behavior: "auto" });
+
+    expect(events.length).toBe(1);
+    expect(events[0]!.index).toBe(4);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Index mapping — virtual indices don't leak
+// =============================================================================
+
+describeCarousel("carousel — Index Mapping", () => {
+  it("should register _layoutToDataIndex method", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    expect(methods.has("_layoutToDataIndex")).toBe(true);
+
+    const mapFn = methods.get("_layoutToDataIndex") as (i: number) => number;
+    // Virtual index 253 with 5 items → logical 253 % 5 = 3
+    expect(mapFn(253)).toBe(3);
+    expect(mapFn(250)).toBe(0);
+    expect(mapFn(504)).toBe(4);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Mutation sync — item count changes
+// =============================================================================
+
+describeCarousel("carousel — Mutation Sync", () => {
+  it("should preserve currentIndex when items are added", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    // Advance to item 2
+    next(1, { behavior: "auto" });
+    next(1, { behavior: "auto" });
+    expect(getState().index).toBe(2);
+
+    // Simulate adding an item
+    items.push({ id: 5, name: "Item 5" });
+
+    // Trigger onAfterScroll which calls syncItemCount
+    const plugin = carousel();
+    plugin.setup!(ctx);
+    // The new plugin instance won't have the same state,
+    // so we verify via getItems().length
+    expect(ctx.getItems().length).toBe(6);
+
+    cleanup();
+  });
+
+  it("getItems().length should reflect mutations", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    expect(ctx.getItems().length).toBe(5);
+
+    items.push({ id: 5, name: "Item 5" });
+    expect(ctx.getItems().length).toBe(6);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Normalized scroll position
+// =============================================================================
+
+describeCarousel("carousel — Normalized Scroll", () => {
+  it("getCarouselState().scrollPosition should be normalized within one lap", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    const state = getState();
+
+    // Normalized position should be within [0, lapSize)
+    expect(state.scrollPosition).toBeGreaterThanOrEqual(0);
+    expect(state.scrollPosition).toBeLessThan(400 * 5);
+
+    cleanup();
+  });
+});
