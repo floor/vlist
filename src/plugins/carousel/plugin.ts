@@ -570,9 +570,9 @@ export function carousel<T extends VListItem = VListItem>(
         }
 
         updateItemLayout();
+        rebaseIfNeeded();
 
         if (snapEnabled && animId === null) {
-          rebaseIfNeeded();
           if (snapTimerId !== null) clearTimeout(snapTimerId);
           snapTimerId = setTimeout(() => {
             snapTimerId = null;
