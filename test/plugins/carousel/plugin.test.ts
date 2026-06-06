@@ -788,7 +788,7 @@ describeCarousel("carousel — Variant: hero — peek config", () => {
     cleanup();
   });
 
-  it("peek: auto should default to 56dp (MD3 max small item width)", () => {
+  it("peek: auto should scale to 15% of container, capped at 120", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
       containerWidth: 800,
@@ -799,7 +799,8 @@ describeCarousel("carousel — Variant: hero — peek config", () => {
 
     carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
 
-    expect(ctx.sizeCache.getSize(0)).toBe(800 - 56);
+    // 15% of 800 = 120, capped at 120
+    expect(ctx.sizeCache.getSize(0)).toBe(800 - 120);
 
     cleanup();
   });
@@ -815,11 +816,10 @@ describeCarousel("carousel — Variant: hero — peek config", () => {
 
     carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
 
-    // auto peek = 56, but step = 200-56=144 — peek is clamped to keep items visible
+    // 15% of 200 = 30, clamped to min 40
     const stepSize = ctx.sizeCache.getSize(0);
     const peekSize = 200 - stepSize;
-    expect(peekSize).toBeGreaterThanOrEqual(40);
-    expect(peekSize).toBeLessThanOrEqual(56);
+    expect(peekSize).toBe(40);
 
     cleanup();
   });
@@ -1024,8 +1024,9 @@ describeCarousel("carousel — CSS Variables", () => {
     const scrollPos = middleStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos);
 
-    // Focal element (offset 0) should have progress = 0
-    expect(els[0].style.getPropertyValue("--vlist-carousel-progress")).toBe("0");
+    // Focal element (offset 0) should have progress ~0
+    const p0 = parseFloat(els[0].style.getPropertyValue("--vlist-carousel-progress"));
+    expect(p0).toBeLessThanOrEqual(0.001);
     // Adjacent elements should have progress > 0
     const p1 = parseFloat(els[1].style.getPropertyValue("--vlist-carousel-progress"));
     expect(p1).toBeGreaterThan(0);
@@ -1116,6 +1117,60 @@ describeCarousel("carousel — CSS Variables", () => {
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
     expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+
+    cleanup();
+  });
+
+  it("should set --vlist-carousel-width interpolated between stepSize and peekSize", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "hero", peek: 56 });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    const stepSz = 800 - 56;
+    ctx.getState().scrollPosition = middleStart * stepSz;
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    // Focal item should have width = stepSize (744)
+    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("744px");
+    // Peek item should have width = peekSize (56)
+    expect(els[1].style.getPropertyValue("--vlist-carousel-width")).toBe("56px");
+
+    cleanup();
+  });
+
+  it("full variant should not set --vlist-carousel-width (no peek)", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "full" });
+    plugin.setup!(ctx);
+    initPlugin(plugin);
+
+    const middleStart = 50 * 10;
+    const els = addRenderedItems(dom.content, [middleStart, middleStart + 1]);
+
+    ctx.getState().scrollPosition = middleStart * 400;
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    // Full variant: no peek, width = stepSize for all
+    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("400px");
+    expect(els[1].style.getPropertyValue("--vlist-carousel-width")).toBe("400px");
 
     cleanup();
   });

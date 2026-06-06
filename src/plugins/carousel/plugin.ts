@@ -20,6 +20,7 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
+import { createLayoutEngine, resolveVariantSlots } from "./engine";
 
 // =============================================================================
 // Config
@@ -83,6 +84,7 @@ export function carousel<T extends VListItem = VListItem>(
   let virtualTotal = 0;
 
   let animId: number | null = null;
+  let snapTimerId: ReturnType<typeof setTimeout> | null = null;
   let initialScrollPending = false;
 
   function resolveIndex(index: number): number {
@@ -110,22 +112,12 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function resolvePeekSize(containerSize: number): number {
-    if (variant === "full" || variant === "uncontained" || variant === "free") return 0;
+    if (variant === "full") return 0;
     if (typeof peekConfig === "number") return peekConfig;
     if (typeof peekConfig === "string" && peekConfig.endsWith("%")) {
       return Math.round(containerSize * parseFloat(peekConfig) / 100);
     }
-    // "auto" — MD3 default: 56dp, clamped to [40, 56]
-    return Math.min(56, Math.max(40, Math.min(56, Math.floor(containerSize * 0.1))));
-  }
-
-  function computeStepSize(baseItemSize: number, containerSize: number): number {
-    if (variant === "full" || variant === "uncontained" || variant === "free") {
-      return baseItemSize;
-    }
-    const peek = resolvePeekSize(containerSize);
-    const peekCount = variant === "hero-center" ? 2 : 1;
-    return containerSize - peek * peekCount;
+    return Math.max(40, Math.min(Math.round(containerSize * 0.15), 120));
   }
 
   function scrollPositionForVirtual(vi: number): number {
@@ -161,6 +153,10 @@ export function carousel<T extends VListItem = VListItem>(
       cancelAnimationFrame(animId);
       animId = null;
     }
+    if (snapTimerId !== null) {
+      clearTimeout(snapTimerId);
+      snapTimerId = null;
+    }
   }
 
   function smoothScrollTo(target: number, duration: number): void {
@@ -182,25 +178,53 @@ export function carousel<T extends VListItem = VListItem>(
     animId = requestAnimationFrame(tick);
   }
 
-  function updateCSSVariables(): void {
+  let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
+
+  function updateItemLayout(): void {
     if (!storedCtx || realTotal <= 0) return;
     const content = storedCtx.dom.content;
     const children = content.children;
-    const focalVi = virtualIndexAtScroll(engineState.scrollPosition);
+    const pos = engineState.scrollPosition;
+    const focalVi = Math.floor(pos / stepSize);
+    const frac = stepSize > 0 ? (pos / stepSize) - focalVi : 0;
+    const prop = isX ? "width" : "height";
+    const anchor = pos;
 
     for (let i = 0; i < children.length; i++) {
       const el = children[i] as HTMLElement;
       const idx = el.dataset.index;
       if (idx === undefined) continue;
       const vi = parseInt(idx, 10);
-      const offset = vi - focalVi;
-      const absOffset = Math.abs(offset);
-      const progress = realTotal > 1 ? Math.min(absOffset / (realTotal * 0.5), 1) : 0;
-      const role = absOffset === 0 ? "large" : "small";
+      const rel = vi - focalVi;
 
-      el.style.setProperty("--vlist-carousel-progress", String(progress));
-      el.style.setProperty("--vlist-carousel-offset", String(offset));
-      el.style.setProperty("--vlist-carousel-role", role);
+      if (layoutEngine) {
+        const layout = layoutEngine.getItemLayout(vi, focalVi, frac, anchor);
+        const roundedSize = Math.max(0, Math.round(layout.size));
+        const roundedOffset = Math.round(layout.offset);
+
+        if (roundedSize <= 0) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "";
+          el.style[prop] = roundedSize + "px";
+          el.style.transform = isX
+            ? `translateX(${roundedOffset}px)`
+            : `translateY(${roundedOffset}px)`;
+        }
+
+        el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
+        el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
+        el.style.setProperty("--vlist-carousel-role", layout.role);
+        el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
+      } else {
+        // No engine (full variant) — set CSS variables only
+        const progress = rel === 0 ? frac : rel === 1 ? 1 - frac : 1;
+        const role = progress < 0.5 ? "large" : "small";
+        el.style.setProperty("--vlist-carousel-progress", progress.toFixed(3));
+        el.style.setProperty("--vlist-carousel-offset", String(rel));
+        el.style.setProperty("--vlist-carousel-role", role);
+        el.style.setProperty("--vlist-carousel-width", stepSize + "px");
+      }
     }
   }
 
@@ -241,7 +265,18 @@ export function carousel<T extends VListItem = VListItem>(
       realTotal = engineState.totalItems;
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
-      stepSize = computeStepSize(baseItemSize, containerSize);
+      const peekResolved = resolvePeekSize(containerSize);
+      if (variant !== "full") {
+        const variantSlots = resolveVariantSlots(variant, containerSize, peekResolved);
+        layoutEngine = createLayoutEngine({
+          slots: variantSlots.slots,
+          focalSlot: variantSlots.focalSlot,
+          containerSize,
+        });
+        stepSize = layoutEngine.stepSize || baseItemSize;
+      } else {
+        stepSize = baseItemSize;
+      }
       lapSize = stepSize * realTotal;
       virtualTotal = realTotal * CYCLES;
       currentIndex = resolveIndex(initialIndex);
@@ -291,8 +326,8 @@ export function carousel<T extends VListItem = VListItem>(
         const dur = options?.duration ?? snapDuration;
 
         cancelAnim();
-        const currentPos = engineState.scrollPosition;
-        const nearestPos = currentPos + s * stepSize;
+        const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
+        const nearestPos = currentSnap + s * stepSize;
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -310,8 +345,8 @@ export function carousel<T extends VListItem = VListItem>(
         const dur = options?.duration ?? snapDuration;
 
         cancelAnim();
-        const currentPos = engineState.scrollPosition;
-        const nearestPos = currentPos - s * stepSize;
+        const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
+        const nearestPos = currentSnap - s * stepSize;
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -411,6 +446,7 @@ export function carousel<T extends VListItem = VListItem>(
         // The first render used scrollPosition=0. Now that we've set
         // the real position, force a re-render at the correct offset.
         storedCtx.forceRender();
+        updateItemLayout();
       },
 
       onAfterScroll(scrollPosition: number): void {
@@ -426,10 +462,22 @@ export function carousel<T extends VListItem = VListItem>(
           });
         }
 
-        updateCSSVariables();
+        updateItemLayout();
 
         if (snapEnabled && animId === null) {
           rebaseIfNeeded();
+          if (snapTimerId !== null) clearTimeout(snapTimerId);
+          snapTimerId = setTimeout(() => {
+            snapTimerId = null;
+            if (animId !== null || !storedCtx || realTotal <= 1) return;
+            const p = engineState.scrollPosition;
+            const nearestVi = Math.round(p / stepSize);
+            const snapTarget = nearestVi * stepSize;
+            if (Math.abs(p - snapTarget) > 1) {
+              currentIndex = logicalIndexOf(nearestVi);
+              smoothScrollTo(snapTarget, snapDuration);
+            }
+          }, 200);
         }
       },
     },
