@@ -376,9 +376,17 @@ export function carousel<T extends VListItem = VListItem>(
       },
 
       onAfterScroll(scrollPosition: number): void {
-        if (realTotal <= 1 || initialScrollPending) return;
+        if (realTotal <= 1 || initialScrollPending || !storedCtx) return;
         const vi = virtualIndexAtScroll(scrollPosition);
-        currentIndex = logicalIndexOf(vi);
+        const newIndex = logicalIndexOf(vi);
+
+        if (newIndex !== currentIndex) {
+          currentIndex = newIndex;
+          storedCtx.emitter.emit("carousel:change" as any, {
+            index: currentIndex,
+            scrollPosition,
+          });
+        }
 
         if (snapEnabled && animId === null) {
           rebaseIfNeeded();
