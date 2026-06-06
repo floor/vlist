@@ -8,16 +8,18 @@
  * Priority 10 — layout tier (replaces scroll contract).
  *
  * Implementation: the content size is `lapSize * CYCLES`. Items are
- * mapped via modulo so virtual index 17 with 5 real items → item 2.
+ * mapped via modulo so virtual index 817 with 16 real items → item 1.
  * The scroll starts in the middle cycle. When approaching the edges,
  * the position is silently rebased to the middle cycle.
+ *
+ * Public API (list.total, ARIA, selection, click events) stays at the
+ * real item count. The inflated virtual window is strictly internal.
  */
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
-import { SCROLL_EASING, SCROLL_DURATION } from "../../constants";
 
 // =============================================================================
 // Config
@@ -77,7 +79,6 @@ export function carousel<T extends VListItem = VListItem>(
   let lapSize = 0;
   let virtualTotal = 0;
 
-  // Smooth scroll state
   let animId: number | null = null;
   let initialScrollPending = false;
 
@@ -103,10 +104,6 @@ export function carousel<T extends VListItem = VListItem>(
   function logicalIndexOf(virtualIndex: number): number {
     if (realTotal <= 0) return 0;
     return ((virtualIndex % realTotal) + realTotal) % realTotal;
-  }
-
-  function currentVirtualIndex(): number {
-    return virtualIndexOf(currentIndex);
   }
 
   function scrollPositionForVirtual(vi: number): number {
@@ -169,20 +166,14 @@ export function carousel<T extends VListItem = VListItem>(
 
     if (realTotal <= 1) return;
 
-    const targetVi = virtualIndexOf(logicalTarget);
-    const targetPos = scrollPositionForVirtual(targetVi);
-
-    // Find the nearest virtual position (could be in a different cycle)
     const currentPos = engineState.scrollPosition;
     const currentVi = virtualIndexAtScroll(currentPos);
     const currentLogical = logicalIndexOf(currentVi);
 
-    // Calculate steps in item space — choose shortest path
     const forward = ((logicalTarget - currentLogical) % realTotal + realTotal) % realTotal;
     const backward = realTotal - forward;
     const delta = forward <= backward ? forward : -backward;
-    const nearestTargetVi = currentVi + delta;
-    const nearestPos = scrollPositionForVirtual(nearestTargetVi);
+    const nearestPos = scrollPositionForVirtual(currentVi + delta);
 
     if (smooth) {
       smoothScrollTo(nearestPos, duration);
@@ -210,42 +201,63 @@ export function carousel<T extends VListItem = VListItem>(
       currentIndex = resolveIndex(initialIndex);
 
       // ── Virtual scroll window ─────────────────────────────────────
+      // Map virtual indices to real items via modulo. The render
+      // pipeline sees virtualTotal items but public API stays at
+      // realTotal. We hook getTotalSize and getOffset on the sizeCache
+      // so content height reflects the virtual window, and we override
+      // getItemFn so virtual indices resolve to real items.
 
       if (realTotal > 1) {
-        // Map virtual indices to real items via modulo
         ctx.setGetItemFn((i: number): T | undefined => {
           const logical = logicalIndexOf(i);
           return ctx.getItems()[logical];
         });
 
-        // Inflate the total so the sizeCache and content size reflect
-        // the virtual window. This makes scrolling past the real total
-        // possible — the render pipeline sees virtualTotal items.
-        ctx.setVirtualTotalFn(() => virtualTotal);
-        engineState.totalItems = virtualTotal;
-        sizeCache.rebuild(virtualTotal);
+        // Hook sizeCache to report virtual dimensions without
+        // changing engineState.totalItems (which stays at realTotal).
+        const origGetTotalSize = sizeCache.getTotalSize;
+        const origGetOffset = sizeCache.getOffset;
+        const origGetSize = sizeCache.getSize;
+        const origIndexAtOffset = sizeCache.indexAtOffset;
+        const origGetTotal = sizeCache.getTotal;
+        const origRebuild = sizeCache.rebuild;
 
-        // Start in the middle cycle — deferred until first render
-        // so the content height is applied in DOM before scrolling.
+        sizeCache.getTotalSize = (): number => virtualTotal * itemSize;
+        sizeCache.getOffset = (index: number): number => index * itemSize;
+        sizeCache.getSize = (_index: number): number => itemSize;
+        sizeCache.indexAtOffset = (offset: number): number => {
+          if (itemSize <= 0) return 0;
+          return Math.max(0, Math.min(Math.floor(offset / itemSize), virtualTotal - 1));
+        };
+        sizeCache.getTotal = (): number => virtualTotal;
+
+        // Keep the real rebuild — we don't want plugins inflating it
+        sizeCache.rebuild = (n: number): void => {
+          realTotal = n;
+          itemSize = n > 0 ? origGetSize(0) : 0;
+          lapSize = n * itemSize;
+          virtualTotal = n * CYCLES;
+        };
+
+        // Tell the engine to render the virtual range
+        ctx.setVirtualTotalFn(() => virtualTotal);
+
+        // Preserve the real totalItems for public API
+        engineState.totalItems = realTotal;
+
         initialScrollPending = true;
       }
-
-      // ── Snap on idle ──────────────────────────────────────────────
-
-      // (snap logic will be handled via hooks)
 
       // ── next / prev / goTo ──────────────────────────────────────
 
       ctx.registerMethod("next", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
-        const target = resolveIndex(currentIndex + s);
+        currentIndex = resolveIndex(currentIndex + s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        // Navigate forward by delta — don't use shortest path, always go forward
         cancelAnim();
-        currentIndex = target;
         const currentPos = engineState.scrollPosition;
         const nearestPos = currentPos + s * itemSize;
 
@@ -260,12 +272,11 @@ export function carousel<T extends VListItem = VListItem>(
       ctx.registerMethod("prev", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
-        const target = resolveIndex(currentIndex - s);
+        currentIndex = resolveIndex(currentIndex - s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
         cancelAnim();
-        currentIndex = target;
         const currentPos = engineState.scrollPosition;
         const nearestPos = currentPos - s * itemSize;
 
@@ -296,10 +307,10 @@ export function carousel<T extends VListItem = VListItem>(
         cancelAnim();
 
         if (direction === "forward" || direction === "backward") {
-          const currentPos = engineState.scrollPosition;
           const delta = shortestPath(currentIndex, target,
             direction === "forward" ? "forward" : "backward");
           currentIndex = target;
+          const currentPos = engineState.scrollPosition;
           const nearestPos = currentPos + delta * itemSize;
 
           if (smooth) {
@@ -309,7 +320,6 @@ export function carousel<T extends VListItem = VListItem>(
             rebaseIfNeeded();
           }
         } else {
-          currentIndex = target;
           navigateTo(target, smooth, dur);
         }
       });
