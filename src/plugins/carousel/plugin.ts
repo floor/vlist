@@ -79,6 +79,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   // Smooth scroll state
   let animId: number | null = null;
+  let initialScrollPending = false;
 
   function resolveIndex(index: number): number {
     if (realTotal <= 0) return 0;
@@ -211,26 +212,22 @@ export function carousel<T extends VListItem = VListItem>(
       // ── Virtual scroll window ─────────────────────────────────────
 
       if (realTotal > 1) {
-        ctx.setVirtualTotalFn(() => virtualTotal);
+        // Map virtual indices to real items via modulo
         ctx.setGetItemFn((i: number): T | undefined => {
           const logical = logicalIndexOf(i);
           return ctx.getItems()[logical];
         });
 
-        // Start in the middle cycle
-        const startPos = scrollPositionForVirtual(virtualIndexOf(currentIndex));
-        engineState.scrollPosition = startPos;
-        engineState.prevScrollPosition = startPos;
+        // Inflate the total so the sizeCache and content size reflect
+        // the virtual window. This makes scrolling past the real total
+        // possible — the render pipeline sees virtualTotal items.
+        ctx.setVirtualTotalFn(() => virtualTotal);
+        engineState.totalItems = virtualTotal;
+        sizeCache.rebuild(virtualTotal);
 
-        // Set content size for the virtual window
-        ctx.updateContentSize(virtualTotal * itemSize);
-
-        // Set initial scroll position after render
-        setTimeout(() => {
-          if (!storedCtx) return;
-          const prop = isX ? "scrollLeft" : "scrollTop";
-          (viewport as any)[prop] = startPos;
-        }, 0);
+        // Start in the middle cycle — deferred until first render
+        // so the content height is applied in DOM before scrolling.
+        initialScrollPending = true;
       }
 
       // ── Snap on idle ──────────────────────────────────────────────
@@ -356,8 +353,20 @@ export function carousel<T extends VListItem = VListItem>(
     },
 
     hooks: {
+      onCommit(): void {
+        if (!initialScrollPending || !storedCtx) return;
+        initialScrollPending = false;
+
+        const startPos = scrollPositionForVirtual(virtualIndexOf(currentIndex));
+        engineState.scrollPosition = startPos;
+        engineState.prevScrollPosition = startPos;
+        const prop = isX ? "scrollLeft" : "scrollTop";
+        void viewport.scrollHeight;
+        (viewport as any)[prop] = startPos;
+      },
+
       onAfterScroll(scrollPosition: number): void {
-        if (realTotal <= 1) return;
+        if (realTotal <= 1 || initialScrollPending) return;
         const vi = virtualIndexAtScroll(scrollPosition);
         currentIndex = logicalIndexOf(vi);
 
