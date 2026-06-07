@@ -33,6 +33,7 @@ export function scrollbar<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   let sb: Scrollbar | null = null;
   let engineState: EngineState;
+  let mainAxisPadding = 0;
   let lastBoundsTotal = 0;
   let lastBoundsContainer = 0;
 
@@ -46,14 +47,14 @@ export function scrollbar<T extends VListItem = VListItem>(
       const isX = resolvedConfig.axis.primary === "x";
 
       engineState = ctx.getState();
+      mainAxisPadding = resolvedConfig.mainAxisPadding;
 
       // Indirect callback — scale plugin can redirect via registerMethod.
-      // Route through the scroll adapter (not raw scrollTop) so the thumb works
-      // under bounded mode (RFC-012), where the position is a logical pixel that
-      // the adapter maps onto the runway. In native mode this is equivalent to
-      // writing scrollTop directly (clamped to the scrollable range).
+      // Route through ctx.scrollTo so the position reaches the bounded handler's
+      // setLogical (which clamps using maxLogical that includes padding) rather
+      // than the adapter's clampPixel (which only knows sizeCache, no padding).
       let scrollCb = (position: number): void => {
-        ctx.scroll.setPixelEquivalent(position);
+        ctx.scrollTo(position);
       };
       ctx.registerMethod("_scrollbar:setCallback", (cb: (pos: number) => void) => { scrollCb = cb; });
 
@@ -76,7 +77,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       // since the viewport hasn't been laid out yet. The resize observer
       // will fire with the correct size after first paint.
       queueMicrotask(() => {
-        sb?.updateBounds(engineState.totalSize, engineState.containerSize);
+        sb?.updateBounds(engineState.totalSize + mainAxisPadding, engineState.containerSize);
       });
 
       // Expose scrollbar instance for cross-plugin bounds coordination
@@ -94,7 +95,7 @@ export function scrollbar<T extends VListItem = VListItem>(
 
     hooks: {
       onAfterScroll(scrollPosition: number): void {
-        const total = engineState.totalSize;
+        const total = engineState.totalSize + mainAxisPadding;
         const container = engineState.containerSize;
         if (total !== lastBoundsTotal || container !== lastBoundsContainer) {
           lastBoundsTotal = total;
@@ -106,7 +107,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       },
 
       onResize(): void {
-        const total = engineState.totalSize;
+        const total = engineState.totalSize + mainAxisPadding;
         const container = engineState.containerSize;
         lastBoundsTotal = total;
         lastBoundsContainer = container;

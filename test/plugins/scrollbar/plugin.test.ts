@@ -378,6 +378,74 @@ describe("scrollbar — Gutter", () => {
 });
 
 // =============================================================================
+// scrollbar — Main axis padding included in bounds
+// =============================================================================
+
+describe("scrollbar — padding in max scroll", () => {
+  it("should include mainAxisPadding in scrollbar bounds so thumb reaches the very end", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, dom, engineState, scrollCalls, cleanup } =
+      createPluginMockContext<TestItem>(items, {
+        itemSize: 50,
+        containerHeight: 600,
+        padding: { top: 8, bottom: 8 },
+      });
+
+    engineState.totalSize = 5000; // 100 items × 50px
+    plugin.setup!(ctx);
+    plugin.hooks!.onResize!(600, 800);
+
+    // Simulate dragging thumb to the very bottom.
+    const thumb = dom.root.querySelector<HTMLElement>(".vlist-scrollbar__thumb");
+    expect(thumb).not.toBeNull();
+
+    // The track length ≈ containerSize - scrollbar padding (default 2 + 2).
+    // Drag a large distance that would put us at 100% of the track.
+    thumb!.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientY: 1000, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    // Max scroll should be totalSize + mainAxisPadding - containerSize = 5000 + 16 - 600 = 4416.
+    // Without the fix, max would be 5000 - 600 = 4400 (missing 16px of padding).
+    const maxCall = scrollCalls[scrollCalls.length - 1]!;
+    expect(maxCall).toBe(5000 + 16 - 600);
+    cleanup();
+  });
+
+  it("should position thumb correctly at maxLogical when padding is present", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100);
+    const { ctx, dom, engineState, cleanup } =
+      createPluginMockContext<TestItem>(items, {
+        itemSize: 50,
+        containerHeight: 600,
+        padding: { top: 8, bottom: 8 },
+      });
+
+    engineState.totalSize = 5000;
+    plugin.setup!(ctx);
+    plugin.hooks!.onResize!(600, 800);
+
+    // Scroll to max logical position (includes padding)
+    const maxLogical = 5000 + 16 - 600; // 4416
+    plugin.hooks!.onAfterScroll!(maxLogical, 1);
+
+    // Thumb should be at the very bottom (scroll ratio = 1.0)
+    const thumb = dom.root.querySelector<HTMLElement>(".vlist-scrollbar__thumb");
+    const transform = thumb!.style.transform;
+    // Extract pixel value from translateY(Xpx)
+    const match = transform.match(/translateY\(([0-9.]+)px\)/);
+    expect(match).not.toBeNull();
+    // The thumb position should equal maxThumbTravel (track - thumb size)
+    // when scrollRatio = 1.0, meaning thumb is at the very end.
+    const thumbPos = parseFloat(match![1]!);
+    expect(thumbPos).toBeGreaterThan(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
 // scrollbar — Uses engineState.totalSize (not sizeCache)
 // =============================================================================
 
