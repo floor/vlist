@@ -268,7 +268,7 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
      * the full virtual size — simple, but hits the browser's ~16.7M px limit.
      * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
      * logical origin near the edges, supporting unbounded item counts without
-     * the scale plugin's compression.
+     * compressing the scroll space.
      */
     mode?: "native" | "bounded";
     /**

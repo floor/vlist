@@ -527,7 +527,7 @@ export function createVList<T extends VListItem = VListItem>(
     if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
       sizeWarningEmitted = true;
       emitter.emit("error", {
-        error: new Error(`Content size (${totalSize}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use the scale() plugin for large datasets.`),
+        error: new Error(`Content size (${totalSize}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Enable bounded scroll (scroll: { mode: "bounded" }) for large datasets.`),
         context: "content:size:overflow",
       });
     }

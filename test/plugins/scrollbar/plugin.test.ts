@@ -6,7 +6,6 @@
  * Adapted from v1 withScrollbar feature tests to v2 PluginContext API.
  *
  * NOTE: The underlying scrollbar components are tested separately:
- * - scrollbar/controller.test.ts — scroll controller modes
  * - scrollbar/scrollbar.test.ts — custom scrollbar UI
  *
  * This file tests the plugin integration layer that wires the scrollbar into

@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- **Bounded logical scroll model (RFC-012)** — large lists (1M+ items) are now handled by an opt-in bounded scroll mode (`scroll: { mode: "bounded" }`) that sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, instead of compressing the scroll space. This lives in core (+1.1 KB base), replacing the +4.2 KB `scale()` plugin — large-list bundles shrink by ~2.9 KB. The `MAX_VIRTUAL_SIZE` overflow warning now points at bounded mode.
+
+### Removed
+
+- **`scale()` plugin** — removed entirely (superseded by bounded scroll). Migrate `scale()` to `scroll: { mode: "bounded" }`.
+- **Compression internals** — deleted the dead legacy rendering/compression modules that the live `src/core/` engine had already superseded. These were reachable only via `vlist/internals`, never on the runtime path, so the main bundle is unaffected.
+  - Removed `vlist/internals` exports: `createRenderer`, `createMeasuredSizeCache` (+ `MeasuredSizeCache`), `createViewportState` and the viewport range helpers (`simpleVisibleRange`, `calculateRenderRange`, `calculateTotalSize`, `calculateActualSize`, `calculateItemOffset`, `calculateScrollToIndex`, `clampScrollPosition`, `rangesEqual`, `isInRange`, `getRangeCount`, `diffRanges`), the scale re-exports (`getScaleState`, `getScale`, `needsScaling`, `getMaxItemsWithoutScaling`, `getScaleInfo`, `calculateScaledVisibleRange`, `calculateScaledRenderRange`, `calculateScaledItemPosition`, `calculateScaledScrollToIndex`, `calculateIndexFromScrollPosition`, `ScaleState`), `MAX_VIRTUAL_SIZE` (still exported from `vlist`/constants), and the scroll controller (`createScrollController`, `rafThrottle`, `isAtBottom`, `isAtTop`, `getScrollPercentage`, `isRangeVisible`, `ScrollController`).
+  - Removed the `isCompressed`, `compressionRatio`, and `actualSize` fields from `ViewportState`, and `isCompressed` from the error event's viewport snapshot.
+
 ## [2.3.0] - 2026-06-05
 
 ### Added

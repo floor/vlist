@@ -36,8 +36,6 @@ import type {
 } from "../../types";
 
 import type { SizeCache } from "../../rendering/sizes";
-import type { CompressionContext } from "../../rendering/renderer";
-import { calculateCompressedItemPosition } from "../../rendering/scale";
 import { claimPlaceholderSelection } from "../../plugins/selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
@@ -54,11 +52,7 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
-    compressionCtx?: CompressionContext,
   ) => void;
-
-  /** Update item positions (for compressed scrolling) */
-  updatePositions: (compressionCtx: CompressionContext) => void;
 
   /** Update a single row (e.g., after selection change) */
   updateItem: (
@@ -319,33 +313,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   };
 
   // =========================================================================
-  // Row Positioning (compression-aware)
-  // =========================================================================
-
-  /**
-   * Calculate the Y offset for a row.
-   * Uses compression-aware positioning for large datasets (withScale).
-   */
-  const calculateRowOffset = (
-    index: number,
-    sc: SizeCache,
-    compressionCtx?: CompressionContext,
-  ): number => {
-    if (compressionCtx?.compression?.isCompressed) {
-      return Math.round(calculateCompressedItemPosition(
-        index,
-        compressionCtx.scrollPosition,
-        sc,
-        compressionCtx.totalItems,
-        compressionCtx.containerSize,
-        compressionCtx.compression,
-        compressionCtx.rangeStart,
-      ));
-    }
-    return sc.getOffset(index);
-  };
-
-  // =========================================================================
   // Cell Sizing & Positioning
   // =========================================================================
 
@@ -410,12 +377,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     item: T,
     index: number,
     sc: SizeCache,
-    compressionCtx?: CompressionContext,
   ): TrackedRow => {
     const element = pool.acquire();
     const headerItem = item as unknown as GroupHeaderItem;
     const height = sc.getSize(index);
-    const offset = calculateRowOffset(index, sc, compressionCtx);
+    const offset = sc.getOffset(index);
 
     // Set all styles in one operation (element was reset by pool.release)
     element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
@@ -468,11 +434,10 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
     sc: SizeCache,
-    compressionCtx?: CompressionContext,
   ): TrackedRow => {
     const element = pool.acquire();
     const height = sc.getSize(index);
-    const offset = calculateRowOffset(index, sc, compressionCtx);
+    const offset = sc.getOffset(index);
     const isPlaceholder = isPH(item.id);
 
     // Set all row styles in one operation (element was reset by pool.release)
@@ -537,7 +502,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
-    compressionCtx?: CompressionContext,
   ): void => {
     // Check if aria-setsize changed
     let setSizeChanged = false;
@@ -576,8 +540,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           pool.release(existing.element);
           rendered.delete(i);
           const tracked = isHeader
-            ? renderGroupHeaderRow(item, i, sc, compressionCtx)
-            : renderRow(item, i, isSelected, isFocused, sc, compressionCtx);
+            ? renderGroupHeaderRow(item, i, sc)
+            : renderRow(item, i, isSelected, isFocused, sc);
           rendered.set(i, tracked);
           if (!fragment) fragment = document.createDocumentFragment();
           fragment.appendChild(tracked.element);
@@ -604,8 +568,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.lastItemId = item.id;
           }
 
-          // Position update (compression-aware)
-          const offset = calculateRowOffset(i, sc, compressionCtx);
+          // Position update
+          const offset = sc.getOffset(i);
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
@@ -662,8 +626,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
             existing.lastFocused = isFocused;
           }
 
-          // Position update only when offset changed (compression-aware)
-          const offset = calculateRowOffset(i, sc, compressionCtx);
+          // Position update only when offset changed
+          const offset = sc.getOffset(i);
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
@@ -690,8 +654,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
         // New row — create and collect in fragment for batched insertion
         const tracked = isHeader
-          ? renderGroupHeaderRow(item, i, sc, compressionCtx)
-          : renderRow(item, i, isSelected, isFocused, sc, compressionCtx);
+          ? renderGroupHeaderRow(item, i, sc)
+          : renderRow(item, i, isSelected, isFocused, sc);
         rendered.set(i, tracked);
 
         if (!fragment) fragment = document.createDocumentFragment();
@@ -712,27 +676,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       if (index < range.start || index > range.end) {
         pool.release(tracked.element);
         rendered.delete(index);
-      }
-    }
-  };
-
-  // =========================================================================
-  // Position Update (compressed scrolling)
-  // =========================================================================
-
-  /**
-   * Update positions of all rendered rows (for compressed scrolling).
-   * Called when the scroll position changed but the visible range didn't —
-   * in compressed mode, items are positioned relative to the viewport so
-   * they must be repositioned on every scroll frame.
-   */
-  const updatePositions = (compressionCtx: CompressionContext): void => {
-    const sc = getSizeCache();
-    for (const [index, tracked] of rendered) {
-      const offset = calculateRowOffset(index, sc, compressionCtx);
-      if (tracked.lastOffset !== offset) {
-        tracked.lastOffset = offset;
-        tracked.element.style.transform = `translateY(${offset}px)`;
       }
     }
   };
@@ -866,7 +809,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
-    updatePositions,
     updateItem,
     updateItemClasses,
     getElement,

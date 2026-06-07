@@ -359,7 +359,7 @@ export interface ScrollConfig {
    * Scrollbar mode (default: custom scrollbar).
    *
    * - *omitted* — Custom scrollbar (default), native scrollbar hidden via CSS
-   * - `'native'` — Browser native scrollbar (falls back to custom in compressed mode)
+   * - `'native'` — Browser native scrollbar
    * - `'none'` — No scrollbar at all (native hidden, custom not created)
    * - `ScrollbarOptions` — Custom scrollbar with fine-tuning options
    */
@@ -569,17 +569,8 @@ export interface ViewportState {
   /** Container size along main axis (height for vertical, width for horizontal) */
   containerSize: number;
 
-  /** Total content size (may be capped for compression) */
+  /** Total content size */
   totalSize: number;
-
-  /** Actual total size without compression */
-  actualSize: number;
-
-  /** Whether compression is active */
-  isCompressed: boolean;
-
-  /** Compression ratio (1 = no compression, <1 = compressed) */
-  compressionRatio: number;
 
   /** Visible item range */
   visibleRange: Range;
@@ -599,7 +590,6 @@ export interface ErrorViewportSnapshot {
   visibleRange: { start: number; end: number };
   renderRange: { start: number; end: number };
   totalItems: number;
-  isCompressed: boolean;
 }
 
 /** Event types and their payloads */
