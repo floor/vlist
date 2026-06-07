@@ -17,7 +17,7 @@ import type {
 import type { SizeCache } from "../../src/core/sizes";
 import { createEngineState } from "../../src/core/state";
 import type { EngineState } from "../../src/core/state";
-import { createScrollAdapter } from "../../src/core/scroll-model";
+import { createScrollAdapter } from "../../src/core/adapter";
 
 export interface PluginTestContext<T extends VListItem> {
   ctx: PluginContext<T>;

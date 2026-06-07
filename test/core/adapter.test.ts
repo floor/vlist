@@ -12,7 +12,7 @@ import {
   logicalToPixel,
   normalizeLogical,
   createScrollAdapter,
-} from "../../src/core/scroll-model";
+} from "../../src/core/adapter";
 
 // =============================================================================
 // pixelToLogical

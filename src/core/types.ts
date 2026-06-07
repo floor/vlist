@@ -7,7 +7,7 @@
 
 import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { SizeCache } from "./sizes";
-import type { ScrollAdapter } from "./scroll-model";
+import type { ScrollAdapter } from "./adapter";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 
@@ -124,7 +124,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setSizeConfig(config: number | ((index: number) => number)): void;
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
-  setBoundedWrap(config: import("./bounded-scroll").WrapConfig): void;
+  setBoundedWrap(config: import("./runway").WrapConfig): void;
   setVirtualTotalFn(fn: () => number): void;
   setIndexMapFn(fn: (renderIndex: number) => number): void;
 
