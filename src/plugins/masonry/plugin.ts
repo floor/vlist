@@ -72,6 +72,7 @@ export function masonry<T extends VListItem = VListItem>(
   let lastContainerSize = -1;
   let forceNextRender = true;
   let lastLayoutTotal = -1;
+  let lastContentTotalSize = -1;
 
   // Padding offsets (set in setup from resolved config)
   let crossPadTotal = 0;
@@ -300,7 +301,18 @@ export function masonry<T extends VListItem = VListItem>(
     lastLayoutTotal = totalItems;
     laneIndexDirty = true;
 
+    syncContentSize();
+  }
+
+  // RFC-013: route content sizing through the engine so bounded mode caps it to
+  // the runway. At setup the core's bounded handler does not exist yet, so this
+  // writes the full physical size; the first render re-syncs once the handler is
+  // installed (masonryRenderIfNeeded clears the guard while forceNextRender holds).
+  function syncContentSize(): void {
+    if (!storedCtx) return;
     const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
+    if (totalSize === lastContentTotalSize) return;
+    lastContentTotalSize = totalSize;
     storedCtx.updateContentSize(totalSize);
   }
 
@@ -310,6 +322,13 @@ export function masonry<T extends VListItem = VListItem>(
     // Recalculate layout if data changed
     if (engineState.totalItems !== lastLayoutTotal) {
       calculateLayout();
+    }
+
+    // The initial render is the first point at which the bounded handler exists,
+    // so re-size content through it (setup sized against the native path).
+    if (forceNextRender) {
+      lastContentTotalSize = -1;
+      syncContentSize();
     }
 
     resolveSelectionMethods();
@@ -361,6 +380,7 @@ export function masonry<T extends VListItem = VListItem>(
 
   function masonryForceRender(): void {
     if (engineState.destroyed) return;
+    lastContentTotalSize = -1;
     calculateLayout();
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
@@ -406,6 +426,10 @@ export function masonry<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         () => engineState.totalItems,
+        undefined,
+        undefined,
+        undefined,
+        () => engineState.baseOffset,
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);

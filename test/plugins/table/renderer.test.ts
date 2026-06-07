@@ -102,6 +102,78 @@ describe("createTableRenderer", () => {
   });
 });
 
+// =============================================================================
+// RFC-013 — bounded scroll: row transforms shifted by baseOffset
+// =============================================================================
+
+describe("bounded baseOffset", () => {
+  const ty = (el: Element): number => {
+    const m = (el as HTMLElement).style.transform.match(/translateY\((-?\d+)px\)/);
+    return parseInt(m![1]!, 10);
+  };
+
+  it("subtracts baseOffset from row translateY", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const sizeCache = createSizeCache(40, 100);
+    const layout = createTableLayout<TestItem>([col("name", { width: 200 })], 50, Infinity, true);
+    layout.resolve(800);
+
+    let baseOffset = 200;
+    const renderer = createTableRenderer<TestItem>(
+      container, () => sizeCache as any, layout, [col("name", { width: 200 })],
+      "vlist", "vlist", () => 100, undefined, undefined, () => baseOffset,
+    );
+
+    const items = makeItems(100);
+    // Rows 5..7 (offsets 200/240/280). baseOffset 200 maps row 5 to y=0.
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+
+    expect(ty(renderer.getElement(5)!)).toBe(0);
+    expect(ty(renderer.getElement(6)!)).toBe(40);
+    expect(ty(renderer.getElement(7)!)).toBe(80);
+
+    container.remove();
+  });
+
+  it("recomputes transforms for surviving rows when baseOffset shifts", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const sizeCache = createSizeCache(40, 100);
+    const layout = createTableLayout<TestItem>([col("name", { width: 200 })], 50, Infinity, true);
+    layout.resolve(800);
+
+    let baseOffset = 200;
+    const renderer = createTableRenderer<TestItem>(
+      container, () => sizeCache as any, layout, [col("name", { width: 200 })],
+      "vlist", "vlist", () => 100, undefined, undefined, () => baseOffset,
+    );
+
+    const items = makeItems(100);
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+    expect(ty(renderer.getElement(5)!)).toBe(0);
+
+    // A rebase shifts baseOffset while the same rows stay rendered — the
+    // adjusted offset changes, so transforms must update (lastOffset tracks
+    // the adjusted value, mirroring the core pipeline).
+    baseOffset = 100;
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+    expect(ty(renderer.getElement(5)!)).toBe(100); // 200 - 100
+
+    container.remove();
+  });
+
+  it("leaves transforms at the absolute offset in native mode (baseOffset = 0)", () => {
+    const { renderer, container } = createTestRenderer({ rowHeight: 40 });
+    const items = makeItems(100);
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+
+    // No baseOffset accessor → defaults to 0 → absolute offset preserved.
+    expect(ty(renderer.getElement(5)!)).toBe(200);
+    container.remove();
+  });
+});
+
 describe("render", () => {
   it("should render rows for a range of items", () => {
     const { renderer, container } = createTestRenderer();

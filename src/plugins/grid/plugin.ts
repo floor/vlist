@@ -52,6 +52,7 @@ export function grid<T extends VListItem = VListItem>(
   let sizeCache: SizeCache;
   let engineState: EngineState;
   let pool: ElementPool;
+  let storedCtx: PluginContext<T> | null = null;
   let contentElement: HTMLElement;
   let template: ItemTemplate<T>;
   let getItem: (index: number) => T | undefined;
@@ -85,6 +86,7 @@ export function grid<T extends VListItem = VListItem>(
   const itemRange = { start: 0, end: -1 };
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
+  let lastContentTotalSize = -1;
   let forceNextRender = true;
   let rebuildAsRows: (rowCount: number) => void = (n) => sizeCache.rebuild(n);
 
@@ -110,7 +112,9 @@ export function grid<T extends VListItem = VListItem>(
     const row = (itemIndex / columns) | 0;
     const col = itemIndex - row * columns;
     const x = col * (columnWidth + gap) + crossPadStart;
-    const y = sizeCache.getOffset(row) + mainPadStart;
+    // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+    // bounded runway. baseOffset is 0 in native mode (byte-identical).
+    const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
@@ -225,15 +229,23 @@ export function grid<T extends VListItem = VListItem>(
       applySizeStyles(tracked.el, row);
 
       const x = col * (columnWidth + gap) + crossPadStart;
-      const y = sizeCache.getOffset(row) + mainPadStart;
+      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+      // bounded runway. baseOffset is 0 in native mode (byte-identical).
+      const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
       tracked.el.style.transform = isX
         ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
         : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     }
 
-    const totalSize = sizeCache.getTotalSize() + mainPadTotal;
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
-    engineState.totalSize = totalSize;
+    // Route content sizing through the engine so bounded mode caps the content
+    // element to the runway (RFC-013). Only resize when the total changes — the
+    // bounded handler's refresh() re-derives the split, so calling it per frame
+    // would be wasteful. Core re-refreshes centrally on resize.
+    const totalSize = sizeCache.getTotalSize();
+    if (totalSize !== lastContentTotalSize) {
+      lastContentTotalSize = totalSize;
+      storedCtx?.updateContentSize(totalSize);
+    }
 
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
@@ -256,6 +268,7 @@ export function grid<T extends VListItem = VListItem>(
   function gridForceRender(): void {
     if (engineState.destroyed) return;
     rebuildAsRows(getRowCount());
+    lastContentTotalSize = -1;
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -276,6 +289,7 @@ export function grid<T extends VListItem = VListItem>(
       sizeCache = ctx.sizeCache;
       engineState = ctx.getState();
       pool = ctx.pool;
+      storedCtx = ctx;
       contentElement = ctx.dom.content;
       template = ctx.template;
       isX = ctx.config.axis.primary === "x";

@@ -22,6 +22,9 @@ import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";
+import { grid } from "../../src/plugins/grid";
+import { table } from "../../src/plugins/table";
+import { masonry } from "../../src/plugins/masonry";
 
 // =============================================================================
 // DOM Setup — viewport reports a fixed 500px main-axis size
@@ -455,6 +458,62 @@ describe("bounded scroll — resize", () => {
     } finally {
       globalThis.ResizeObserver = saved;
     }
+  });
+});
+
+// =============================================================================
+// Renderer plugins — grid / table / masonry install setRenderFn and own content
+// sizing, so they must route through ctx.updateContentSize to respect the
+// bounded runway instead of writing the full physical size (RFC-013 Phase A).
+// =============================================================================
+
+describe("bounded scroll — renderer plugins", () => {
+  // 50k items keeps the test light while still producing a physical size far
+  // larger than the runway (e.g. 50k/4 cols × 50px = 625,000px ≫ 1000px runway).
+  const HUGE = 50_000;
+
+  it("grid caps content to the runway for a huge item count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [grid({ columns: 4 })],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("table caps content to the runway for a huge row count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [
+        table({
+          columns: [{ key: "name", label: "Name", width: 200 }],
+          rowHeight: ITEM,
+        }),
+      ],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("masonry caps content to the runway for a huge item count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [masonry({ columns: 3 })],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBeLessThanOrEqual(RUNWAY);
   });
 });
 

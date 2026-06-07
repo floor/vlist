@@ -174,6 +174,66 @@ describe("createMasonryRenderer", () => {
 });
 
 // =============================================================================
+// RFC-013 — bounded scroll: main-axis transform shifted by baseOffset
+// =============================================================================
+
+describe("bounded baseOffset", () => {
+  let container: HTMLElement;
+  beforeEach(() => { container = createItemsContainer(); });
+  afterEach(() => { container.remove(); });
+
+  const xy = (el: Element): { x: number; y: number } => {
+    const m = (el as HTMLElement).style.transform.match(/translate\((-?\d+)px,\s*(-?\d+)px\)/);
+    return { x: parseInt(m![1]!, 10), y: parseInt(m![2]!, 10) };
+  };
+
+  it("subtracts baseOffset from the vertical (main-axis) translate", () => {
+    let baseOffset = 200;
+    const renderer = createMasonryRenderer<TestItem>(
+      container, defaultTemplate, "vlist", false,
+      undefined, undefined, undefined, undefined, () => baseOffset,
+    );
+    const items = createTestItems(3);
+    const placements = [
+      createPlacement(0, { lane: 0, x: 0, y: 200 }),
+      createPlacement(1, { lane: 1, x: 200, y: 240 }),
+    ];
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+
+    expect(xy(renderer.getElement(0)!)).toEqual({ x: 0, y: 0 });   // 200 - 200
+    expect(xy(renderer.getElement(1)!)).toEqual({ x: 200, y: 40 }); // 240 - 200
+  });
+
+  it("recomputes transforms for surviving items when baseOffset shifts", () => {
+    let baseOffset = 200;
+    const renderer = createMasonryRenderer<TestItem>(
+      container, defaultTemplate, "vlist", false,
+      undefined, undefined, undefined, undefined, () => baseOffset,
+    );
+    const items = createTestItems(1);
+    const placements = [createPlacement(0, { lane: 0, x: 0, y: 200 })];
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+    expect(xy(renderer.getElement(0)!).y).toBe(0);
+
+    // A rebase shifts baseOffset while the placement stays the same — the
+    // adjusted offset changes so the transform must update.
+    baseOffset = 100;
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+    expect(xy(renderer.getElement(0)!).y).toBe(100); // 200 - 100
+  });
+
+  it("leaves the transform at the absolute offset in native mode (baseOffset = 0)", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container, defaultTemplate, "vlist", false,
+    );
+    const items = createTestItems(1);
+    const placements = [createPlacement(0, { lane: 0, x: 0, y: 200 })];
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+    expect(xy(renderer.getElement(0)!)).toEqual({ x: 0, y: 200 });
+  });
+});
+
+// =============================================================================
 // render — basic rendering
 // =============================================================================
 

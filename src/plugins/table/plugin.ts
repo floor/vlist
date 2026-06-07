@@ -64,6 +64,7 @@ export function table<T extends VListItem = VListItem>(
   let selectionResolved = false;
 
   let lastAriaRowCount = -1;
+  let lastContentTotalSize = -1;
 
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
@@ -147,14 +148,21 @@ export function table<T extends VListItem = VListItem>(
       engineState.visibleSizes[i] = sizeCache.getSize(idx);
     }
 
-    // Update content size (also sync engineState for scrollbar plugin)
+    // Route content sizing through the engine so bounded mode (RFC-013) caps the
+    // content element to the runway instead of the full virtual height. Only
+    // resize when the total changes — the bounded handler's refresh() re-derives
+    // the split, so calling it per frame would be wasteful. Core re-refreshes
+    // centrally on resize.
     const totalSize = sizeCache.getTotalSize();
-    engineState.totalSize = totalSize;
-    storedCtx.dom.content.style.height = totalSize + "px";
+    if (totalSize !== lastContentTotalSize) {
+      lastContentTotalSize = totalSize;
+      storedCtx.updateContentSize(totalSize);
+    }
   }
 
   function tableForceRender(): void {
     if (engineState.destroyed) return;
+    lastContentTotalSize = -1;
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
@@ -297,6 +305,8 @@ export function table<T extends VListItem = VListItem>(
         classPrefix,
         () => engineState.totalItems,
         resolvedConfig.striped || undefined,
+        undefined,
+        () => engineState.baseOffset,
       );
 
       // ── Wire render pipeline ────────────────────────────────────

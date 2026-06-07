@@ -628,6 +628,76 @@ describe("grid - render correctness (optimized hot path)", () => {
     cleanup();
   });
 
+  // ── RFC-013: bounded scroll routing ──────────────────────────────
+  // Under bounded mode the engine renders items at `getOffset - baseOffset`
+  // so absolute virtual offsets land inside the runway. baseOffset is 0 in
+  // native mode, so the subtraction is a no-op there.
+
+  it("subtracts baseOffset from item transforms (bounded mode)", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(200);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 600,
+      itemSize: 100,
+    });
+
+    plugin.setup!(ctx);
+
+    // Logical position 300 (== baseOffset, scrollTop 0) renders rows around
+    // index 12 (row 3, getOffset 300). With baseOffset subtracted, row 3 lands
+    // at y=0 inside the runway.
+    engineState.scrollPosition = 300;
+    engineState.baseOffset = 300;
+    ctx.forceRender();
+
+    const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
+    expect(transformXY(row3)).toEqual({ x: 0, y: 0 });
+
+    const row4 = dom.content.querySelector("[data-index='16']") as HTMLElement;
+    expect(transformXY(row4)).toEqual({ x: 0, y: 100 });
+    cleanup();
+  });
+
+  it("does not shift transforms in native mode (baseOffset = 0)", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(200);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 600,
+      itemSize: 100,
+    });
+
+    plugin.setup!(ctx);
+
+    engineState.scrollPosition = 300; // baseOffset stays 0 (native)
+    ctx.forceRender();
+
+    // Native: absolute offset is used directly, so row 3 keeps y = getOffset(3) = 300.
+    const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
+    expect(transformXY(row3)).toEqual({ x: 0, y: 300 });
+    cleanup();
+  });
+
+  it("routes content sizing through the engine without padding (totalSize)", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(40);
+    const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 600,
+      itemSize: 100,
+      padding: { bottom: 50 },
+    });
+
+    plugin.setup!(ctx);
+    ctx.forceRender();
+
+    // Grid passes the bare total (no main-axis padding) to updateContentSize,
+    // matching the core list pipeline (pipeline.ts: state.totalSize = getTotalSize()).
+    expect(engineState.totalSize).toBe(ctx.sizeCache.getTotalSize());
+    cleanup();
+  });
+
   it("should recompute column width after updateGrid (cached value stays correct)", () => {
     const plugin = grid<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(12);
