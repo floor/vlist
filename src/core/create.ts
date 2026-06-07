@@ -595,6 +595,14 @@ export function createVList<T extends VListItem = VListItem>(
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
+  // page() (the only caller of disableDefaultScroll) installs window-based scroll
+  // fns; the bounded handler below would overwrite them with a viewport handler,
+  // silently breaking both. Bounded page-mode scrolling is not implemented yet.
+  if (skipDefaultScroll && (boundedMode || boundedWrap)) {
+    throw new Error(
+      `vlist: page() is not compatible with ${boundedWrap ? "the carousel plugin" : 'scroll: { mode: "bounded" }'} — bounded page-mode scrolling is not implemented yet.`,
+    );
+  }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
   if (boundedMode || boundedWrap) {
     boundedHandler = createBoundedScrollHandler({
@@ -716,6 +724,10 @@ export function createVList<T extends VListItem = VListItem>(
           state.containerSize = size;
           state.crossSize = cross;
           state.resizeCapacity(size, minItemSize, config.overscan);
+          // Bounded runway geometry (maxScrollTop/maxLogical/content size) is
+          // derived from containerSize — recompute it before rendering, or the
+          // runway stays sized to the old viewport.
+          if (boundedHandler) boundedHandler.refresh(sizeCache.getTotalSize());
           doForceRender();
           runResizeHooks(hooks.resize, width, height);
           emitter.emit("resize", { width, height });

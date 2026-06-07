@@ -20,6 +20,8 @@ import { createTestItems, createContainer, simpleTemplate } from "../helpers/fac
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
+import { page } from "../../src/plugins/page";
+import { carousel } from "../../src/plugins/carousel";
 
 // =============================================================================
 // DOM Setup — viewport reports a fixed 500px main-axis size
@@ -417,5 +419,74 @@ describe("bounded scroll — wrap mode", () => {
 
     // Drifted two laps forward, not folded.
     expect(list.getScrollPosition()).toBe(home + 2 * lapSize);
+  });
+});
+
+// =============================================================================
+// Resize — bounded runway geometry must track the container size
+// =============================================================================
+
+describe("bounded scroll — resize", () => {
+  it("refreshes the runway when the container resizes", async () => {
+    const saved = globalThis.ResizeObserver;
+    let cb: ResizeObserverCallback | null = null;
+    // Capture the observer callback without auto-firing on observe.
+    globalThis.ResizeObserver = class {
+      constructor(c: ResizeObserverCallback) { cb = c; }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver;
+
+    try {
+      list = makeBounded(1_000_000);
+      // The observer is installed on a 0ms timer.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY); // 500 × 2
+
+      // Resize the viewport to 700px (vertical → contentRect.height is the main axis).
+      cb!(
+        [{ contentRect: { width: 300, height: 700 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+
+      // Runway tracks the new viewport: 700 × FACTOR, not the stale 1000.
+      expect(parseInt(getContent(container).style.height, 10)).toBe(700 * FACTOR);
+    } finally {
+      globalThis.ResizeObserver = saved;
+    }
+  });
+});
+
+// =============================================================================
+// Page mode guard — bounded page-mode scrolling is not implemented
+// =============================================================================
+
+describe("bounded scroll — page mode guard", () => {
+  it("throws when page() is combined with scroll: { mode: 'bounded' }", () => {
+    expect(() =>
+      createVList<TestItem>(
+        {
+          container,
+          items: createTestItems(10),
+          item: { height: ITEM, template: simpleTemplate },
+          scroll: { mode: "bounded" },
+        },
+        [page()],
+      ),
+    ).toThrow(/page\(\) is not compatible with scroll: \{ mode: "bounded" \}/);
+  });
+
+  it("throws when page() is combined with the carousel plugin (bounded wrap)", () => {
+    expect(() =>
+      createVList<TestItem>(
+        {
+          container,
+          items: createTestItems(10),
+          item: { height: ITEM, template: simpleTemplate },
+        },
+        [page(), carousel()],
+      ),
+    ).toThrow(/page\(\) is not compatible with the carousel plugin/);
   });
 });
