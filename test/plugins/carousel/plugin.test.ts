@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
+import { resolvePreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
 
 // Import will fail until plugin is created — that's expected for TDD
 let carousel: any;
@@ -1556,6 +1557,565 @@ describeCarousel("carousel — Normalized Scroll", () => {
     // Normalized position should be within [0, lapSize)
     expect(state.scrollPosition).toBeGreaterThanOrEqual(0);
     expect(state.scrollPosition).toBeLessThan(400 * 5);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Presets — multi, uncontained, resolvePreset branches
+// =============================================================================
+
+describeCarousel("carousel — Presets", () => {
+  it("multi() returns 4 slots summing to 1.0", () => {
+    const cfg = multi();
+    expect(cfg.slots).toHaveLength(4);
+    const sum = cfg.slots.reduce((a, b) => a + b, 0);
+    expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
+    expect(cfg.focalSlot).toBe(0);
+  });
+
+  it("uncontained() derives slot count from container size", () => {
+    const cfg = uncontained(900);
+    expect(cfg.slots.length).toBeGreaterThanOrEqual(2);
+    const sum = cfg.slots.reduce((a, b) => a + b, 0);
+    expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
+    expect(cfg.focalSlot).toBe(0);
+  });
+
+  it("resolvePreset returns correct configs for all named variants", () => {
+    expect(resolvePreset("multi", 800, 56)).not.toBeNull();
+    expect(resolvePreset("uncontained", 800, 56)).not.toBeNull();
+    expect(resolvePreset("full", 800, 56)).not.toBeNull();
+    expect(resolvePreset("hero", 800, 56)).not.toBeNull();
+    expect(resolvePreset("hero-center", 800, 56)).not.toBeNull();
+  });
+
+  it("resolvePreset returns null for static and unknown variants", () => {
+    expect(resolvePreset("static", 800, 56)).toBeNull();
+    expect(resolvePreset("unknown-thing", 800, 56)).toBeNull();
+  });
+
+  it("multi variant sets up a carousel", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "multi" }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("uncontained variant sets up a carousel", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "uncontained" }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// syncItemCount — item mutations trigger resync on scroll
+// =============================================================================
+
+describeCarousel("carousel — syncItemCount", () => {
+  it("onAfterScroll detects added items and resyncs virtual total", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel();
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const getState = methods.get("getCarouselState") as Function;
+    const next = methods.get("next") as Function;
+    next(1, { behavior: "auto" });
+    expect(getState().index).toBe(1);
+
+    items.push({ id: 5, name: "Item 5" });
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    expect(ctx.getItems().length).toBe(6);
+    expect(getState().index).toBe(1);
+
+    cleanup();
+  });
+
+  it("syncItemCount resets index to 0 when savedIndex >= new total", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel();
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const goTo = methods.get("goTo") as Function;
+    goTo(4);
+
+    items.splice(2);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Built-in keyboard handler — fires actual key events
+// =============================================================================
+
+describeCarousel("carousel — Keyboard Handler", () => {
+  function fireKey(handlers: ((e: KeyboardEvent) => void)[], key: string): void {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true });
+    let prevented = false;
+    Object.defineProperty(event, "preventDefault", { value: () => { prevented = true; } });
+    for (const h of handlers) h(event);
+  }
+
+  it("ArrowRight advances index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+
+    fireKey(keydownHandlers, "ArrowRight");
+    expect(getState().index).toBe(1);
+
+    cleanup();
+  });
+
+  it("ArrowDown advances index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+
+    fireKey(keydownHandlers, "ArrowDown");
+    expect(getState().index).toBe(1);
+
+    cleanup();
+  });
+
+  it("ArrowLeft goes to last item from index 0", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+
+    fireKey(keydownHandlers, "ArrowLeft");
+    expect(getState().index).toBe(4);
+
+    cleanup();
+  });
+
+  it("ArrowUp goes to last item from index 0", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+
+    fireKey(keydownHandlers, "ArrowUp");
+    expect(getState().index).toBe(4);
+
+    cleanup();
+  });
+
+  it("Home goes to index 0", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const goTo = methods.get("goTo") as Function;
+    goTo(3);
+
+    fireKey(keydownHandlers, "Home");
+    expect((methods.get("getCarouselState") as Function)().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("End goes to last index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    fireKey(keydownHandlers, "End");
+    expect((methods.get("getCarouselState") as Function)().index).toBe(4);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// onIdle — snap to nearest item
+// =============================================================================
+
+describeCarousel("carousel — onIdle snap", () => {
+  it("snaps to nearest item when position is misaligned", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    es.scrollPosition = 50 * 5 * 400 + 150;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    plugin.hooks!.onIdle!();
+
+    cleanup();
+  });
+
+  it("does not snap when already aligned", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    es.scrollPosition = 50 * 5 * 400;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    plugin.hooks!.onIdle!();
+
+    cleanup();
+  });
+
+  it("does not snap when snap is disabled", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ variant: "free", snap: false });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    plugin.hooks!.onIdle!();
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// scrollToIndexFn override
+// =============================================================================
+
+describeCarousel("carousel — scrollToIndexFn", () => {
+  it("scrollToIndex navigates to the resolved index", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    let scrollToIndexCalled = false;
+    let capturedFn: Function | null = null;
+    const origSetFn = ctx.setScrollToIndexFn.bind(ctx);
+    ctx.setScrollToIndexFn = (fn: any) => {
+      capturedFn = fn;
+      origSetFn(fn);
+    };
+
+    carousel().setup!(ctx);
+    expect(capturedFn).not.toBeNull();
+
+    const result = capturedFn!(3, "start", "smooth", 300);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(3);
+
+    cleanup();
+  });
+
+  it("scrollToIndexFn returns false for single-item list", () => {
+    const items = createTestItems(1);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    let capturedFn: Function | null = null;
+    const origSetFn = ctx.setScrollToIndexFn.bind(ctx);
+    ctx.setScrollToIndexFn = (fn: any) => {
+      capturedFn = fn;
+      origSetFn(fn);
+    };
+
+    carousel().setup!(ctx);
+    expect(capturedFn).not.toBeNull();
+
+    const result = capturedFn!(0, "start");
+    expect(result).toBe(false);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// goTo direction — non-smooth (instant) paths
+// =============================================================================
+
+describeCarousel("carousel — goTo direction instant", () => {
+  it("goTo with direction: forward, behavior: auto (instant)", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(2);
+    goTo(4, { direction: "forward", behavior: "auto" });
+    expect(getState().index).toBe(4);
+
+    cleanup();
+  });
+
+  it("goTo with direction: backward, behavior: auto (instant)", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(3);
+    goTo(1, { direction: "backward", behavior: "auto" });
+    expect(getState().index).toBe(1);
+
+    cleanup();
+  });
+
+  it("goTo with direction: forward, behavior: smooth", () => {
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(1);
+    goTo(4, { direction: "forward", behavior: "smooth", duration: 200 });
+    expect(getState().index).toBe(4);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Destroy handler
+// =============================================================================
+
+describeCarousel("carousel — Destroy Handler", () => {
+  it("registerDestroyHandler is called during setup", () => {
+    const items = createTestItems(5);
+    const { ctx, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    expect(destroyHandlers.length).toBeGreaterThan(0);
+    expect(() => destroyHandlers.forEach(h => h())).not.toThrow();
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// NavConfig — navigate function
+// =============================================================================
+
+describeCarousel("carousel — NavConfig navigate", () => {
+  it("navigate ArrowRight advances and returns new index", () => {
+    const items = createTestItems(5);
+    const { ctx, dom, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const navCfg = ctx.getNavConfig();
+    expect(navCfg.navigate).not.toBeNull();
+
+    const result = navCfg.navigate!(0, "ArrowRight", 5);
+    expect(result).toBe(1);
+
+    cleanup();
+  });
+
+  it("navigate ArrowLeft wraps from 0 to last", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const navCfg = ctx.getNavConfig();
+
+    const result = navCfg.navigate!(0, "ArrowLeft", 5);
+    expect(result).toBe(4);
+
+    cleanup();
+  });
+
+  it("navigate Home returns 0", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const navCfg = ctx.getNavConfig();
+
+    const result = navCfg.navigate!(3, "Home", 5);
+    expect(result).toBe(0);
+
+    cleanup();
+  });
+
+  it("navigate End returns last index", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const navCfg = ctx.getNavConfig();
+
+    const result = navCfg.navigate!(0, "End", 5);
+    expect(result).toBe(4);
+
+    cleanup();
+  });
+
+  it("navigate with same target returns current (no-op)", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const navCfg = ctx.getNavConfig();
+
+    const result = navCfg.navigate!(2, "Tab", 5);
+    expect(result).toBe(2);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// sizeCache.indexAtOffset override
+// =============================================================================
+
+describeCarousel("carousel — sizeCache.indexAtOffset", () => {
+  it("indexAtOffset maps pixel offset to virtual index", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+
+    const idx = ctx.sizeCache.indexAtOffset(1200);
+    expect(idx).toBe(3);
+    expect(ctx.sizeCache.indexAtOffset(0)).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// goTo on single-item list
+// =============================================================================
+
+describeCarousel("carousel — goTo single item", () => {
+  it("goTo on single-item list sets index without scrolling", () => {
+    const items = createTestItems(1);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel().setup!(ctx);
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(0);
+    expect(getState().index).toBe(0);
 
     cleanup();
   });
