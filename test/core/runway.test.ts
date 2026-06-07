@@ -627,6 +627,26 @@ describe("bounded scroll — wheel", () => {
     fireWheel(viewport, 10, 100);
     expect(list.getScrollPosition()).toBe(before);
   });
+
+  it("intercepts deltaX-dominant wheel in horizontal wrap mode (carousel trackpad swipe)", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(24),
+        item: { height: ITEM, template: simpleTemplate },
+        orientation: "horizontal",
+      },
+      [carousel({ variant: "hero" })],
+    );
+    const viewport = getViewport(container);
+    const before = list.getScrollPosition();
+
+    // Simulate trackpad horizontal swipe: deltaX dominant, deltaY = 0
+    const event = fireWheel(viewport, 0, 100);
+
+    expect(list.getScrollPosition()).not.toBe(before);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });
 
 // =============================================================================
