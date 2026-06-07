@@ -11,8 +11,6 @@
 
 // v2 factory + plugins
 export { createVList } from "./core/create";
-export { scale } from "./plugins/scale";
-export type { ScalePluginConfig } from "./plugins/scale";
 export { scrollbar } from "./plugins/scrollbar";
 export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 export { grid } from "./plugins/grid";

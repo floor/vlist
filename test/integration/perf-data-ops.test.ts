@@ -17,7 +17,6 @@ import {
   type TestItem,
 } from "../helpers/factory";
 import { grid } from "../../src/plugins/grid/plugin";
-import { scale } from "../../src/plugins/scale/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
@@ -172,25 +171,6 @@ describe("performance — initialization with plugins", () => {
     list!.destroy();
   });
 
-  it("1M compressed items with scale inits in under 2000ms", () => {
-    const items = createTestItems(1_000_000);
-    let list: VList<TestItem> | null = null;
-
-    const elapsed = measure(() => {
-      list = createVList(
-        {
-          container,
-          items,
-          item: { height: 50, template: simpleTemplate },
-        },
-        [scale({ force: true })],
-      );
-    });
-
-    expect(elapsed).toBeLessThan(2000 * CI_MULT);
-    list!.destroy();
-  });
-
   it("10K with all features inits in under 200ms", () => {
     const items = createTestItems(10_000);
     let list: VList<TestItem> | null = null;
@@ -340,27 +320,6 @@ describe("performance — render cycles", () => {
     list.destroy();
   });
 
-  it("rapid scrolling with compression under 200ms", () => {
-    const list = createVList(
-      {
-        container,
-        items: createTestItems(100_000),
-        item: { height: 50, template: simpleTemplate },
-      },
-      [scale({ force: true })],
-    );
-
-    const viewport = getViewport(container);
-
-    const start = performance.now();
-    for (let i = 1; i <= 100; i++) {
-      simulateScroll(viewport, i * 100);
-    }
-    const elapsed = performance.now() - start;
-
-    expect(elapsed).toBeLessThan(200 * CI_MULT);
-    list.destroy();
-  });
 });
 
 // =============================================================================
@@ -486,23 +445,6 @@ describe("performance — destroy with plugins", () => {
   });
   afterEach(() => {
     container.remove();
-  });
-
-  it("1M compressed destroy under 20ms", () => {
-    const list = createVList(
-      {
-        container,
-        items: createTestItems(1_000_000),
-        item: { height: 50, template: simpleTemplate },
-      },
-      [scale({ force: true })],
-    );
-
-    const elapsed = measure(() => {
-      list.destroy();
-    });
-
-    expect(elapsed).toBeLessThan(20 * CI_MULT);
   });
 
   it("destroy with all features under 20ms", () => {

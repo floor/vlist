@@ -59,11 +59,6 @@ export interface EngineState {
   initialized: boolean;
   destroyed: boolean;
 
-  // ── Compression state ────────────────────────────────────────────
-
-  isCompressed: boolean;
-  compressionRatio: number;
-
   // ── ARIA tracking (for aria-setsize freshness) ───────────────────
 
   prevAriaTotal: number;
@@ -102,9 +97,6 @@ export function createEngineState(initialCapacity: number): EngineState {
     renderPending: false,
     initialized: false,
     destroyed: false,
-
-    isCompressed: false,
-    compressionRatio: 1,
 
     prevAriaTotal: -1,
 

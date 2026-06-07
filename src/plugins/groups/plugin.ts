@@ -864,7 +864,6 @@ export function groups<T extends VListItem = VListItem>(
           classPrefix,
           isX,
           0,
-          undefined,
           stickyContainer,
           gridHeaderOffset,
         );

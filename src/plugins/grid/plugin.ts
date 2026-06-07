@@ -18,8 +18,6 @@ import type { VListItem, ItemTemplate, ItemState } from "../../types";
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
-import type { CompressionState } from "../../rendering/scale";
-import { calculateCompressedVisibleRange, calculateCompressedItemPosition, calculateCompressedScrollToIndex } from "../../rendering/scale";
 import { createGridLayout } from "./layout";
 import type { GridLayout } from "./types";
 type ItemStateFn = (index: number, state: ItemState) => void;
@@ -61,9 +59,6 @@ export function grid<T extends VListItem = VListItem>(
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
-  let getCompression: (() => CompressionState) | null = null;
-  let compressionResolved = false;
-  let ctxGetMethod: ((name: string) => unknown) | null = null;
 
   let crossPadStart = 0;
   let crossPadTotal = 0;
@@ -87,7 +82,6 @@ export function grid<T extends VListItem = VListItem>(
   let focClass = "";
 
   // Mutable range objects — reused across frames
-  const compRange = { start: 0, end: -1 };
   const itemRange = { start: 0, end: -1 };
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
@@ -98,12 +92,6 @@ export function grid<T extends VListItem = VListItem>(
   function recomputeColumnWidth(): void {
     const totalGap = (columns - 1) * gap;
     columnWidth = Math.max(0, (containerWidth - totalGap) / columns);
-  }
-
-  function resolveCompression(): void {
-    if (compressionResolved || !ctxGetMethod) return;
-    compressionResolved = true;
-    getCompression = (ctxGetMethod("_scale:getCompression") as (() => CompressionState)) ?? null;
   }
 
   // Resolve the selection state fn once. Selection (priority 50) sets it
@@ -168,27 +156,15 @@ export function grid<T extends VListItem = VListItem>(
     const totalRows = getRowCount();
     if (cs <= 0 || totalRows === 0) return;
 
-    // Visible row range — compression-aware when scale plugin is active
-    resolveCompression();
+    // Visible row range
     resolveItemStateFn();
-    const compression = getCompression !== null ? getCompression() : null;
-    const isCompressed = compression !== null && compression.isCompressed;
-    let renderStart: number;
-    let renderEnd: number;
-
-    if (isCompressed) {
-      calculateCompressedVisibleRange(scrollPos, cs, sizeCache, totalRows, compression, compRange);
-      renderStart = Math.max(0, compRange.start - overscan);
-      renderEnd = Math.min(totalRows - 1, compRange.end + overscan);
-    } else {
-      let visStart = sizeCache.indexAtOffset(scrollPos);
-      let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
-      if (visEnd < totalRows - 1) visEnd++;
-      visStart = Math.max(0, visStart);
-      visEnd = Math.min(totalRows - 1, Math.max(0, visEnd));
-      renderStart = Math.max(0, visStart - overscan);
-      renderEnd = Math.min(totalRows - 1, visEnd + overscan);
-    }
+    let visStart = sizeCache.indexAtOffset(scrollPos);
+    let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
+    if (visEnd < totalRows - 1) visEnd++;
+    visStart = Math.max(0, visStart);
+    visEnd = Math.min(totalRows - 1, Math.max(0, visEnd));
+    const renderStart = Math.max(0, visStart - overscan);
+    const renderEnd = Math.min(totalRows - 1, visEnd + overscan);
 
     // Range-unchanged fast path
     if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) {
@@ -249,19 +225,14 @@ export function grid<T extends VListItem = VListItem>(
       applySizeStyles(tracked.el, row);
 
       const x = col * (columnWidth + gap) + crossPadStart;
-      const y = isCompressed
-        ? calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression) + mainPadStart
-        : sizeCache.getOffset(row) + mainPadStart;
+      const y = sizeCache.getOffset(row) + mainPadStart;
       tracked.el.style.transform = isX
         ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
         : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     }
 
-    // Content size — scale plugin manages it when compressed
     const totalSize = sizeCache.getTotalSize() + mainPadTotal;
-    if (!isCompressed) {
-      contentElement.style[isX ? "width" : "height"] = totalSize + "px";
-    }
+    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
     engineState.totalSize = totalSize;
 
     // Update engine state for other hooks/plugins
@@ -277,9 +248,7 @@ export function grid<T extends VListItem = VListItem>(
       const idx = rangeStart + i;
       const row = (idx / columns) | 0;
       engineState.visibleIndices[i] = idx;
-      engineState.visibleOffsets[i] = isCompressed
-        ? calculateCompressedItemPosition(row, scrollPos, sizeCache, totalRows, cs, compression)
-        : sizeCache.getOffset(row);
+      engineState.visibleOffsets[i] = sizeCache.getOffset(row);
       engineState.visibleSizes[i] = sizeCache.getSize(row);
     }
   }
@@ -314,7 +283,6 @@ export function grid<T extends VListItem = VListItem>(
       overscan = ctx.config.overscan;
       getItem = ctx.getItem.bind(ctx);
       resolveItemState = () => ctx.getItemStateFn();
-      ctxGetMethod = ctx.getMethod.bind(ctx);
 
       // Hoist class strings — built once, reused every frame
       gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
@@ -474,20 +442,7 @@ export function grid<T extends VListItem = VListItem>(
         }
         pos = Math.max(0, Math.min(pos, maxScroll));
 
-        resolveCompression();
-        const compression = getCompression?.() ?? null;
-
-        if (compression?.isCompressed && behavior === "smooth" && duration && duration > 0) {
-          const virtualTarget = calculateCompressedScrollToIndex(
-            safeRow, sizeCache, cs, totalRows, compression, align,
-          );
-          const scaleEased = ctxGetMethod?.("_scale:easedScrollTo") as ((t: number, d: number) => void) | undefined;
-          if (scaleEased) {
-            scaleEased(virtualTarget, duration);
-          } else {
-            ctx.scrollTo(pos);
-          }
-        } else if (behavior === "smooth" && duration && duration > 0) {
+        if (behavior === "smooth" && duration && duration > 0) {
           ctx.smoothScrollTo(pos, duration);
         } else {
           ctx.scrollTo(pos);
@@ -521,15 +476,10 @@ export function grid<T extends VListItem = VListItem>(
         containerWidth = newCross;
         recomputeColumnWidth();
 
-        const compression = getCompression?.() ?? null;
-        if (compression?.isCompressed) {
-          gridForceRender();
-        } else {
-          for (const [index, tracked] of rendered) {
-            const row = (index / columns) | 0;
-            applySizeStyles(tracked.el, row);
-            tracked.el.style.transform = buildTransform(index);
-          }
+        for (const [index, tracked] of rendered) {
+          const row = (index / columns) | 0;
+          applySizeStyles(tracked.el, row);
+          tracked.el.style.transform = buildTransform(index);
         }
       },
     },

@@ -75,14 +75,11 @@ export function scrollbar<T extends VListItem = VListItem>(
       // Defer initial bounds update — containerSize may be 0 during setup
       // since the viewport hasn't been laid out yet. The resize observer
       // will fire with the correct size after first paint.
-      // Skip if compressed — the scale plugin owns bounds in that case.
       queueMicrotask(() => {
-        if (!engineState.isCompressed) {
-          sb?.updateBounds(engineState.totalSize, engineState.containerSize);
-        }
+        sb?.updateBounds(engineState.totalSize, engineState.containerSize);
       });
 
-      // Expose scrollbar instance for cross-plugin coordination (scale plugin)
+      // Expose scrollbar instance for cross-plugin bounds coordination
       ctx.registerMethod("_scrollbar:getInstance", () => sb);
 
       ctx.registerDestroyHandler(() => {
@@ -97,27 +94,23 @@ export function scrollbar<T extends VListItem = VListItem>(
 
     hooks: {
       onAfterScroll(scrollPosition: number): void {
-        if (!engineState.isCompressed) {
-          const total = engineState.totalSize;
-          const container = engineState.containerSize;
-          if (total !== lastBoundsTotal || container !== lastBoundsContainer) {
-            lastBoundsTotal = total;
-            lastBoundsContainer = container;
-            sb?.updateBounds(total, container);
-          }
+        const total = engineState.totalSize;
+        const container = engineState.containerSize;
+        if (total !== lastBoundsTotal || container !== lastBoundsContainer) {
+          lastBoundsTotal = total;
+          lastBoundsContainer = container;
+          sb?.updateBounds(total, container);
         }
         sb?.updatePosition(scrollPosition);
         sb?.show();
       },
 
       onResize(): void {
-        if (!engineState.isCompressed) {
-          const total = engineState.totalSize;
-          const container = engineState.containerSize;
-          lastBoundsTotal = total;
-          lastBoundsContainer = container;
-          sb?.updateBounds(total, container);
-        }
+        const total = engineState.totalSize;
+        const container = engineState.containerSize;
+        lastBoundsTotal = total;
+        lastBoundsContainer = container;
+        sb?.updateBounds(total, container);
       },
     },
 

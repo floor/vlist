@@ -55,10 +55,8 @@ interface MockOptions {
   containerSize?: number;
   scrollTop?: number;
   itemHeight?: number;
-  isCompressed?: boolean;
   virtualSize?: number;
   actualSize?: number;
-  compressionRatio?: number;
   sizeCacheTotal?: number;
   /** Pre-register methods on ctx before setup runs */
   extraMethods?: Record<string, Function>;
@@ -85,9 +83,7 @@ function createMockContext(options: MockOptions = {}): {
     containerSize = 500,
     scrollTop = 0,
     itemHeight = 48,
-    isCompressed = false,
     virtualSize,
-    compressionRatio = 1,
     sizeCacheTotal,
     extraMethods = {},
   } = options;
@@ -113,8 +109,6 @@ function createMockContext(options: MockOptions = {}): {
   engineState.totalItems = totalItems;
   engineState.containerSize = containerSize;
   engineState.totalSize = computedVirtualSize;
-  engineState.isCompressed = isCompressed;
-  engineState.compressionRatio = compressionRatio;
 
   // Override sizeCache with a more faithful mock that respects sizeCacheTotal
   const contentSizeHistory: number[] = [];
@@ -375,35 +369,6 @@ describe("snapshots - getScrollSnapshot", () => {
     cleanup();
   });
 
-  it("should handle compressed mode", () => {
-    // Compressed: index = scrollRatio * totalItems
-    // scrollTop=5000, virtualSize=16700000, totalItems=1000000
-    // scrollRatio = 5000/16700000 ≈ 0.000299
-    // exactIndex ≈ 299.4 → index = 299
-    const totalItems = 1000000;
-    const virtualSize = 16700000;
-    const actualSize = totalItems * 48;
-    const { ctx, methods, cleanup } = createMockContext({
-      totalItems,
-      scrollTop: 5000,
-      itemHeight: 48,
-      isCompressed: true,
-      virtualSize,
-      actualSize,
-      compressionRatio: virtualSize / actualSize,
-    });
-    const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
-
-    const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
-    const snapshot = getSnapshot();
-
-    expect(snapshot.index).toBeGreaterThan(0);
-    expect(snapshot.index).toBeLessThan(totalItems);
-    expect(snapshot.offsetInItem).toBeGreaterThanOrEqual(0);
-    expect(snapshot.total).toBe(totalItems);
-    cleanup();
-  });
 });
 
 // =============================================================================
@@ -450,11 +415,6 @@ describe("snapshots - restoreScroll", () => {
       engineState.totalItems = t;
     });
     methods.set("_setTotal", setTotalFn);
-
-    // _updateCompressionMode must update engineState.totalSize so maxScroll is correct
-    methods.set("_updateCompressionMode", () => {
-      engineState.totalSize = engineState.totalItems * itemHeight;
-    });
 
     const plugin = snapshots<TestItem>();
     plugin.setup(ctx);
@@ -633,13 +593,11 @@ describe("snapshots - sizeCache Rebuild", () => {
   it("should rebuild sizeCache when stale (total mismatch)", () => {
     // Simulate autoLoad:false scenario:
     // engineState.totalItems = 1000000 but sizeCache.getTotal() = 0
-    const updateCompressionFn = mock(() => {});
     const { ctx, methods, sizeCache, contentSizeHistory, cleanup } = createMockContext({
       totalItems: 1000000,
       itemHeight: 72,
       containerSize: 600,
       sizeCacheTotal: 0, // Stale!
-      extraMethods: { _updateCompressionMode: updateCompressionFn },
     });
     const plugin = snapshots<TestItem>();
     plugin.setup(ctx);
@@ -648,18 +606,15 @@ describe("snapshots - sizeCache Rebuild", () => {
     restore({ index: 704, offsetInItem: 10 });
 
     expect(sizeCache.rebuild).toHaveBeenCalledWith(1000000);
-    expect(updateCompressionFn).toHaveBeenCalled();
     expect(contentSizeHistory.length).toBeGreaterThan(0);
     cleanup();
   });
 
   it("should NOT rebuild sizeCache when already correct", () => {
-    const updateCompressionFn = mock(() => {});
     const { ctx, methods, sizeCache, cleanup } = createMockContext({
       totalItems: 100,
       itemHeight: 48,
       sizeCacheTotal: 100, // Already correct
-      extraMethods: { _updateCompressionMode: updateCompressionFn },
     });
     const plugin = snapshots<TestItem>();
     plugin.setup(ctx);
@@ -668,19 +623,16 @@ describe("snapshots - sizeCache Rebuild", () => {
     restore({ index: 5, offsetInItem: 10 });
 
     expect(sizeCache.rebuild).not.toHaveBeenCalled();
-    expect(updateCompressionFn).not.toHaveBeenCalled();
     cleanup();
   });
 
   it("should NOT rebuild sizeCache when grid plugin manages row-based total", () => {
     // Grid plugin rebuilds sizeCache with row count (225 = ceil(900/4)).
     // Snapshots must not "correct" this to state.totalItems (900).
-    const updateCompressionFn = mock(() => {});
     const { ctx, methods, sizeCache, cleanup } = createMockContext({
       totalItems: 900,
       itemHeight: 116,
       sizeCacheTotal: 225, // Grid row count, NOT item count
-      extraMethods: { _updateCompressionMode: updateCompressionFn },
     });
     const plugin = snapshots<TestItem>();
     plugin.setup(ctx);
@@ -689,7 +641,6 @@ describe("snapshots - sizeCache Rebuild", () => {
     restore({ index: 5, offsetInItem: 10 });
 
     expect(sizeCache.rebuild).not.toHaveBeenCalled();
-    expect(updateCompressionFn).not.toHaveBeenCalled();
     cleanup();
   });
 
@@ -721,91 +672,6 @@ describe("snapshots - sizeCache Rebuild", () => {
     cleanup();
   });
 
-  it("should not over-clamp last items when scale plugin sets totalSize with slack (regression #30)", () => {
-    // Repro: scale plugin sets engineState.totalSize = virtualSize + slack after
-    // updateCompressionMode(). restoreScroll used to clamp maxScroll to
-    // virtualSize - containerSize (ignoring slack), putting the scroll position
-    // ~466px short — enough to hide the last ~37 items.
-    const totalItems = 1_000_000;
-    const itemHeight = 72;
-    const containerSize = 600;
-    const actualSize = totalItems * itemHeight; // 72,000,000
-    const virtualSize = 16_000_000; // compressed (MAX_VIRTUAL_SIZE)
-    const ratio = virtualSize / actualSize; // ≈ 0.2222
-    const slack = Math.round(containerSize * (1 - ratio)); // ≈ 466
-    const totalSizeWithSlack = virtualSize + slack;
-
-    // _updateCompressionMode sets engineState.totalSize = virtualSize + slack
-    const { ctx, methods, engineState, scrollCalls, cleanup } = createMockContext({
-      totalItems,
-      itemHeight,
-      containerSize,
-      isCompressed: true,
-      virtualSize,
-      actualSize,
-      compressionRatio: ratio,
-      sizeCacheTotal: 0, // stale — triggers sizeCache rebuild path
-      extraMethods: {
-        _updateCompressionMode: () => {
-          engineState.totalSize = totalSizeWithSlack;
-        },
-      },
-    });
-
-    const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
-
-    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
-    restore({ index: 999_999, offsetInItem: 0, total: totalItems });
-
-    expect(scrollCalls.length).toBe(1);
-
-    const buggyMaxScroll = virtualSize - containerSize; // 15,999,400
-    const correctMaxScroll = totalSizeWithSlack - containerSize; // 15,999,866
-    expect(scrollCalls[0]).toBeGreaterThan(buggyMaxScroll);
-    expect(scrollCalls[0]).toBeLessThanOrEqual(correctMaxScroll);
-    cleanup();
-  });
-
-  it("should not call updateContentSize with slack-less virtualSize when compressed (regression #30)", () => {
-    // restoreScroll must not call updateContentSize(freshCompression.virtualSize) after
-    // updateCompressionMode(), which would overwrite the scale-set content size
-    // (virtualSize + slack) with just virtualSize.
-    const totalItems = 1_000_000;
-    const itemHeight = 72;
-    const containerSize = 600;
-    const actualSize = totalItems * itemHeight;
-    const virtualSize = 16_000_000;
-    const ratio = virtualSize / actualSize;
-    const slack = Math.round(containerSize * (1 - ratio));
-    const totalSizeWithSlack = virtualSize + slack;
-
-    const { ctx, methods, engineState, contentSizeHistory, cleanup } = createMockContext({
-      totalItems,
-      itemHeight,
-      containerSize,
-      isCompressed: true,
-      virtualSize,
-      actualSize,
-      compressionRatio: ratio,
-      sizeCacheTotal: 0, // stale
-      extraMethods: {
-        _updateCompressionMode: () => {
-          engineState.totalSize = totalSizeWithSlack;
-        },
-      },
-    });
-
-    const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
-
-    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
-    restore({ index: 500_000, offsetInItem: 0, total: totalItems });
-
-    // updateContentSize must NOT be called with the slack-less virtualSize
-    expect(contentSizeHistory).not.toContain(virtualSize);
-    cleanup();
-  });
 });
 
 // =============================================================================
@@ -909,13 +775,11 @@ describe("snapshots - Auto-Restore", () => {
   });
 
   it("should trigger sizeCache rebuild during auto-restore if stale", async () => {
-    const updateCompressionFn = mock(() => {});
     const { ctx, sizeCache, cleanup } = createMockContext({
       totalItems: 1000000,
       itemHeight: 72,
       containerSize: 600,
       sizeCacheTotal: 0, // Stale
-      extraMethods: { _updateCompressionMode: updateCompressionFn },
     });
 
     const snapshot: ScrollSnapshot = {
@@ -929,7 +793,6 @@ describe("snapshots - Auto-Restore", () => {
     await new Promise((resolve) => queueMicrotask(resolve));
 
     expect(sizeCache.rebuild).toHaveBeenCalledWith(1000000);
-    expect(updateCompressionFn).toHaveBeenCalled();
     cleanup();
   });
 

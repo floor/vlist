@@ -167,22 +167,6 @@ describe("wheel handler — vertical mode", () => {
     handler.detach();
   });
 
-  it("vertical wheel does not fire when isCompressed is true", () => {
-    const viewport = createViewport();
-    viewport.scrollTop = 100;
-    const state = createEngineState(10);
-    state.scrollPosition = 100;
-    state.isCompressed = true;
-    const onFrame = mock(() => {});
-    const { handler } = makeHandler({ viewport, state, onFrame });
-
-    fireWheel(viewport, 50);
-
-    expect(onFrame).not.toHaveBeenCalled();
-    expect(state.scrollPosition).toBe(100);
-    handler.detach();
-  });
-
   it("vertical wheel with cross-axis overflow forwards deltaX to scrollLeft", () => {
     // Cross-axis overflow: scrollWidth > clientWidth
     const viewport = createViewport({ scrollWidth: 800, clientWidth: 300 });
@@ -323,22 +307,6 @@ describe("wheel handler — horizontal mode", () => {
     const event = fireWheel(viewport, 50);
 
     expect(event.defaultPrevented).toBe(true);
-    handler.detach();
-  });
-
-  it("horizontal wheel does not fire when isCompressed is true", () => {
-    const viewport = createViewport({ scrollWidth: 5000, clientWidth: 500 });
-    viewport.scrollLeft = 100;
-    const state = createEngineState(10);
-    state.scrollPosition = 100;
-    state.isCompressed = true;
-    const onFrame = mock(() => {});
-    const { handler } = makeHandler({ viewport, state, isX: true, onFrame });
-
-    fireWheel(viewport, 50);
-
-    expect(onFrame).not.toHaveBeenCalled();
-    expect(state.scrollPosition).toBe(100);
     handler.detach();
   });
 
