@@ -170,6 +170,41 @@ describe("scrollbar — Setup", () => {
 });
 
 // =============================================================================
+// scrollbar — Scroll callback routing (RFC-012 bounded mode)
+// =============================================================================
+
+describe("scrollbar — scroll callback", () => {
+  it("routes thumb drags through the scroll adapter, not raw scrollTop", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(100); // 100 × 100px = 10000px content, 600px viewport
+    const { ctx, dom, engineState, scrollCalls, cleanup } =
+      createPluginMockContext<TestItem>(items);
+
+    engineState.totalSize = 10000;
+
+    plugin.setup!(ctx);
+    // Establish bounds so the thumb has travel.
+    plugin.hooks!.onResize!(600, 800);
+
+    const thumb = dom.root.querySelector<HTMLElement>(".vlist-scrollbar__thumb");
+    expect(thumb).not.toBeNull();
+
+    // Simulate a downward thumb drag.
+    thumb!.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientY: 100, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    // The mock adapter's setPixel records every write into scrollCalls. The
+    // pre-RFC-012 callback wrote dom.viewport.scrollTop directly (untracked).
+    // Routing through ctx.scroll is what makes the scrollbar correct under
+    // bounded mode, where setPixel maps the logical pixel onto the runway.
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    expect(scrollCalls[scrollCalls.length - 1]!).toBeGreaterThan(0);
+    cleanup();
+  });
+});
+
+// =============================================================================
 // scrollbar — Resize Handler
 // =============================================================================
 

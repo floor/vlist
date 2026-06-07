@@ -47,10 +47,13 @@ export function scrollbar<T extends VListItem = VListItem>(
 
       engineState = ctx.getState();
 
-      // Indirect callback — scale plugin can redirect via registerMethod
+      // Indirect callback — scale plugin can redirect via registerMethod.
+      // Route through the scroll adapter (not raw scrollTop) so the thumb works
+      // under bounded mode (RFC-012), where the position is a logical pixel that
+      // the adapter maps onto the runway. In native mode this is equivalent to
+      // writing scrollTop directly (clamped to the scrollable range).
       let scrollCb = (position: number): void => {
-        if (isX) dom.viewport.scrollLeft = position;
-        else dom.viewport.scrollTop = position;
+        ctx.scroll.setPixelEquivalent(position);
       };
       ctx.registerMethod("_scrollbar:setCallback", (cb: (pos: number) => void) => { scrollCb = cb; });
 

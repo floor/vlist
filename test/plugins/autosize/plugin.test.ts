@@ -899,7 +899,6 @@ describe("autosize end-pinning", () => {
   it("snaps to end in ResizeObserver when pinned and not scrolling", () => {
     const { mockCtx, plugin, triggerMeasurement, simulateScrollToIndex } = setupPinTest();
     const state = mockCtx.engineState;
-    const viewport = mockCtx.dom.viewport;
 
     // Render item 18 and observe it
     state.startIndex = 14;
@@ -916,14 +915,12 @@ describe("autosize end-pinning", () => {
     // Activate pin
     simulateScrollToIndex(19, "end");
 
-    let fakeScrollHeight = 1050;
-    Object.defineProperty(viewport, "scrollHeight", {
-      get: () => fakeScrollHeight,
-      configurable: true,
-    });
-    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
-
-    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1050; };
+    // End detection reads the size cache (the virtual source of truth), not the
+    // native scrollHeight — so under bounded mode the runway edge is never
+    // mistaken for the list end. Grow the cache total when content size updates.
+    let total = 1000;
+    mockCtx.ctx.sizeCache.getTotalSize = () => total;
+    mockCtx.ctx.updateContentSize = () => { total = 1050; };
 
     // Measure item 18 at 80px (bigger than 50px estimated)
     triggerMeasurement(el, 80);

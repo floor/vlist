@@ -38,6 +38,13 @@ export interface EngineState {
   /** 1 = forward, -1 = backward, 0 = idle */
   scrollDirection: number;
 
+  /**
+   * Bounded logical-scroll origin (RFC-012). The virtual offset that maps to
+   * native scrollTop=0. Items render at `getOffset(index) - baseOffset`.
+   * Defaults to 0, which makes native mode byte-identical (`offset - 0`).
+   */
+  baseOffset: number;
+
   // ── Container state (updated on resize, cold path) ───────────────
 
   containerSize: number;
@@ -84,6 +91,7 @@ export function createEngineState(initialCapacity: number): EngineState {
     scrollPosition: 0,
     prevScrollPosition: 0,
     scrollDirection: 0,
+    baseOffset: 0,
 
     containerSize: 0,
     crossSize: 0,

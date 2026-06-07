@@ -277,6 +277,34 @@ describe("scroll events — getScrollPosition", () => {
 
     expect(list.getScrollPosition()).toBe(250);
   });
+
+  it("getScrollPosition, scroll, and scroll:idle agree on the pixel equivalent (RFC-012 G4)", async () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(100),
+        item: { height: 50, template: simpleTemplate },
+        scroll: { idleTimeout: 50 },
+      },
+      [],
+    );
+
+    let scrollPos = -1;
+    let idlePos = -1;
+    list.on("scroll", (e) => { scrollPos = e.scrollPosition; });
+    list.on("scroll:idle", (e) => { idlePos = e.scrollPosition; });
+
+    const viewport = getViewport(container);
+    simulateScroll(viewport, 250);
+
+    // The public API surface (G4) is pixel-equivalent during migration: all
+    // three views derive from the same scroll adapter, so they must match.
+    expect(scrollPos).toBe(250);
+    expect(list.getScrollPosition()).toBe(250);
+
+    await wait(100);
+    expect(idlePos).toBe(250);
+  });
 });
 
 // =============================================================================

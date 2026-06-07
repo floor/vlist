@@ -140,6 +140,14 @@ describe("createDOMStructure", () => {
     expect(viewport.style.overflowX).toBe("auto");
     expect(viewport.style.overflowY).toBe("hidden");
   });
+
+  it("should disable native scroll anchoring on content (RFC-012 G3)", () => {
+    const vertical = createDOMStructure(document.createElement("div"), "vlist", false);
+    const horizontal = createDOMStructure(document.createElement("div"), "vlist", true);
+
+    expect(vertical.content.style.overflowAnchor).toBe("none");
+    expect(horizontal.content.style.overflowAnchor).toBe("none");
+  });
 });
 
 // =============================================================================

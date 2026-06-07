@@ -16,7 +16,7 @@ import type {
   Axis,
   AxisConfig,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE, BOUNDED_RUNWAY_MIN } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -25,6 +25,9 @@ import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollHandler } from "./scroll";
+import { createBoundedScrollHandler, type BoundedScrollHandler } from "./bounded-scroll";
+import type { ScrollHandler } from "./scroll";
+import { createScrollAdapter, type ScrollAdapter } from "./scroll-model";
 import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
 import { render, createRenderConfig } from "./pipeline";
 import { createEmitter, type Emitter } from "../events";
@@ -77,6 +80,13 @@ function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
   if (raw.overscan !== undefined) {
     if (typeof raw.overscan !== "number" || !Number.isFinite(raw.overscan) || raw.overscan < 0) {
       throw new Error(`vlist: overscan must be a non-negative number, got ${raw.overscan}`);
+    }
+  }
+
+  // Validate scroll.runway (bounded mode runway multiple, only if provided)
+  if (raw.scroll?.runway !== undefined) {
+    if (typeof raw.scroll.runway !== "number" || !Number.isFinite(raw.scroll.runway) || raw.scroll.runway <= 0) {
+      throw new Error(`vlist: scroll.runway must be a positive number, got ${raw.scroll.runway}`);
     }
   }
 }
@@ -177,6 +187,7 @@ export function createVList<T extends VListItem = VListItem>(
 
   const config = resolveConfig(rawConfig, plugins);
   const isX = config.axis.primary === "x";
+  const boundedMode = rawConfig.scroll?.mode === "bounded";
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
   const gappedSizeSpec: number | ((index: number) => number) = gap > 0
@@ -286,11 +297,31 @@ export function createVList<T extends VListItem = VListItem>(
   let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
+  let boundedHandler: BoundedScrollHandler | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
   state.containerSize = isX ? dom.viewport.clientWidth : dom.viewport.clientHeight;
   state.crossSize = isX ? dom.viewport.clientHeight : dom.viewport.clientWidth;
+
+  // ── Scroll adapter (RFC-012) ────────────────────────────────────
+  // The logical scroll model's translation boundary: plugins read and write
+  // scroll position through this adapter rather than touching state.scrollPosition
+  // or raw scrollTop/scrollLeft. During migration its pixel-equivalent is the
+  // engine's existing scroll position (or the active scroll source's, e.g. page
+  // mode), so the public surface is unchanged (G4). scrollGetFn/scrollSetFn
+  // overrides installed during plugin setup are picked up lazily through the
+  // closures below, so this can be created before setup runs.
+  const scrollAdapter: ScrollAdapter = createScrollAdapter({
+    sizeCache,
+    getPixel: () => (scrollGetFn ? scrollGetFn() : state.scrollPosition),
+    setPixel: (px) => {
+      if (scrollSetFn) scrollSetFn(px);
+      else if (isX) dom.viewport.scrollLeft = px;
+      else dom.viewport.scrollTop = px;
+    },
+    getContainerSize: () => state.containerSize,
+  });
 
   // ── Run plugin setup (cold path) ────────────────────────────────
 
@@ -298,6 +329,7 @@ export function createVList<T extends VListItem = VListItem>(
     const ctx: PluginContext<T> = {
       dom,
       sizeCache,
+      scroll: scrollAdapter,
       pool,
       config,
       emitter,
@@ -345,6 +377,14 @@ export function createVList<T extends VListItem = VListItem>(
         sizeCache.rebuild(state.totalItems);
       },
       updateContentSize(size: number): void {
+        // Bounded mode (RFC-012): the content element is sized to the runway, not
+        // the full virtual size. Delegate to the handler so plugins that grow the
+        // virtual total (autosize, masonry, data, snapshots, search) never blow the
+        // runway. refresh() sets state.totalSize and re-derives the runway split.
+        if (boundedHandler) {
+          boundedHandler.refresh(size);
+          return;
+        }
         state.totalSize = size;
         dom.content.style[isX ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
       },
@@ -446,7 +486,7 @@ export function createVList<T extends VListItem = VListItem>(
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
 
   function emitScrollEvents(): void {
-    _scrollEvt.scrollPosition = state.scrollPosition;
+    _scrollEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
     if (isX) {
       _scrollEvt.direction = state.scrollDirection > 0 ? "right" : "left";
     } else {
@@ -473,6 +513,15 @@ export function createVList<T extends VListItem = VListItem>(
   function syncContentSize(): void {
     if (customRenderIfNeeded) return;
     const totalSize = sizeCache.getTotalSize();
+
+    // Bounded mode (RFC-012): the content element is sized to a viewport-multiple
+    // runway, not the full virtual size, so the browser's element-size limit is
+    // never reached and no MAX_VIRTUAL_SIZE warning applies.
+    if (boundedHandler) {
+      boundedHandler.refresh(totalSize);
+      return;
+    }
+
     dom.content.style[isX ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
 
     if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
@@ -515,7 +564,7 @@ export function createVList<T extends VListItem = VListItem>(
     _velEvt.velocity = 0;
     _velEvt.reliable = false;
     emitter.emit("velocity:change", _velEvt);
-    _idleEvt.scrollPosition = state.scrollPosition;
+    _idleEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
     emitter.emit("scroll:idle", _idleEvt);
   }
 
@@ -539,16 +588,44 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Scroll handler ──────────────────────────────────────────────
 
-  const scrollHandler = createScrollHandler({
-    state,
-    viewport: dom.viewport,
-    isX,
-    wheelEnabled: skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false,
-    idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
-    ...(scrollTarget ? { scrollTarget } : {}),
-    onFrame: doScrollFrame,
-    onIdle: doScrollIdle,
-  });
+  const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
+  let scrollHandler: ScrollHandler;
+  if (boundedMode) {
+    boundedHandler = createBoundedScrollHandler({
+      state,
+      viewport: dom.viewport,
+      content: dom.content,
+      isX,
+      wheelEnabled,
+      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      ...(scrollTarget ? { scrollTarget } : {}),
+      mainAxisPadding: config.mainAxisPadding,
+      // Clamp the user runway multiple up to the floor so native scroll always
+      // has room; undefined lets the handler use its BOUNDED_RUNWAY_FACTOR default.
+      ...(rawConfig.scroll?.runway !== undefined
+        ? { runwayFactor: Math.max(BOUNDED_RUNWAY_MIN, rawConfig.scroll.runway) }
+        : {}),
+      onFrame: doScrollFrame,
+      onIdle: doScrollIdle,
+    });
+    scrollHandler = boundedHandler;
+    // Route every scroll write (ctx.scrollTo, scrollToIndex, adapter.setPixel)
+    // through the logical setter so the runway split stays consistent. The
+    // pixel-equivalent (read) is the logical position, matching native mode (G4).
+    scrollGetFn = () => state.scrollPosition;
+    scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
+  } else {
+    scrollHandler = createScrollHandler({
+      state,
+      viewport: dom.viewport,
+      isX,
+      wheelEnabled,
+      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      ...(scrollTarget ? { scrollTarget } : {}),
+      onFrame: doScrollFrame,
+      onIdle: doScrollIdle,
+    });
+  }
 
   smoothScrollFn = scrollHandler.smoothScrollTo;
 
@@ -818,7 +895,7 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     getScrollPosition(): number {
-      return scrollGetFn ? scrollGetFn() : state.scrollPosition;
+      return scrollAdapter.getPixelEquivalent();
     },
 
     on: emitter.on.bind(emitter) as VList<T>["on"],

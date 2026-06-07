@@ -7,6 +7,7 @@
 
 import type { VListItem, ItemTemplate, ItemState } from "../types";
 import type { SizeCache } from "./sizes";
+import type { ScrollAdapter } from "./scroll-model";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 
@@ -101,6 +102,13 @@ export interface ElementPool {
 export interface PluginContext<T extends VListItem = VListItem> {
   readonly dom: DOMStructure;
   readonly sizeCache: SizeCache;
+  /**
+   * Logical scroll model boundary (RFC-012). Plugins read and write scroll
+   * position through this adapter rather than touching `getState().scrollPosition`
+   * or raw `scrollTop`/`scrollLeft`. Its pixel-equivalent view keeps existing
+   * pixel-based code paths working during the migration.
+   */
+  readonly scroll: ScrollAdapter;
   readonly pool: ElementPool;
   readonly config: ResolvedConfig;
   readonly emitter: Emitter<import("../types").VListEvents<T>>;
@@ -255,6 +263,23 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
     scrollbar?: "none";
     gutter?: "auto" | "stable";
     idleTimeout?: number;
+    /**
+     * Scroll model (RFC-012). `"native"` (default) sizes the content element to
+     * the full virtual size — simple, but hits the browser's ~16.7M px limit.
+     * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
+     * logical origin near the edges, supporting unbounded item counts without
+     * the scale plugin's compression.
+     */
+    mode?: "native" | "bounded";
+    /**
+     * Runway size as a multiple of the viewport, used only with
+     * `mode: "bounded"` (default 2). The bounded content element is sized to
+     * `viewport × runway` (capped at the real virtual size). Larger values mean
+     * more native-scroll headroom and less frequent rebasing, at the cost of a
+     * bigger content element. Clamped up to a minimum of 1.5 so native scroll and
+     * touch momentum always have some room.
+     */
+    runway?: number;
   };
   /** Defer initial render to the next animation frame. */
   defer?: boolean;

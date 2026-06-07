@@ -17,6 +17,7 @@ import type {
 import type { SizeCache } from "../../src/core/sizes";
 import { createEngineState } from "../../src/core/state";
 import type { EngineState } from "../../src/core/state";
+import { createScrollAdapter } from "../../src/core/scroll-model";
 
 export interface PluginTestContext<T extends VListItem> {
   ctx: PluginContext<T>;
@@ -171,6 +172,18 @@ export function createPluginMockContext<T extends VListItem>(
   const keydownHandlers: ((event: KeyboardEvent) => void)[] = [];
   const scrollCalls: number[] = [];
 
+  // Functional scroll adapter over the mock's sizeCache + engineState, so
+  // plugins exercising ctx.scroll behave as they would in createVList().
+  const scroll = createScrollAdapter({
+    sizeCache,
+    getPixel: () => engineState.scrollPosition,
+    setPixel: (px) => {
+      engineState.scrollPosition = px;
+      scrollCalls.push(px);
+    },
+    getContainerSize: () => engineState.containerSize,
+  });
+
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let _renderFnReplaced = false;
@@ -185,6 +198,7 @@ export function createPluginMockContext<T extends VListItem>(
   const ctx: PluginContext<T> = {
     dom,
     sizeCache,
+    scroll,
     pool,
     config,
     emitter,

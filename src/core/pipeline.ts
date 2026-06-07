@@ -295,7 +295,9 @@ export function phase2Commit<T extends VListItem>(
 
       if (rc.oddClass) acquired.classList.toggle(rc.oddClass, (dataIndex & 1) === 1);
 
-      const transformOffset = offset + rc.startPadding;
+      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+      // bounded runway. baseOffset is 0 in native mode (byte-identical).
+      const transformOffset = offset - state.baseOffset + rc.startPadding;
       acquired.style.transform = rc.translateProp + transformOffset + "px)";
       acquired._lastOffset = transformOffset;
 
@@ -362,7 +364,7 @@ export function phase2Commit<T extends VListItem>(
         }
       }
 
-      const transformOffset = offset + rc.startPadding;
+      const transformOffset = offset - state.baseOffset + rc.startPadding;
       if (el._lastOffset !== transformOffset) {
         element.style.transform = rc.translateProp + transformOffset + "px)";
         el._lastOffset = transformOffset;
