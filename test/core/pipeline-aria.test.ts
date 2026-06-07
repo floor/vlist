@@ -98,8 +98,6 @@ describe("createEngineState", () => {
     expect(state.renderPending).toBe(false);
     expect(state.initialized).toBe(false);
     expect(state.destroyed).toBe(false);
-    expect(state.isCompressed).toBe(false);
-    expect(state.compressionRatio).toBe(1);
     expect(state.prevAriaTotal).toBe(-1);
   });
 

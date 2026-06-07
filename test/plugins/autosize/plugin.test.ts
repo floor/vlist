@@ -776,13 +776,14 @@ describe("autosize anchor preservation", () => {
     state.visibleCount = 6;
     for (let i = 0; i < 6; i++) state.visibleIndices[i] = 10 + i;
 
-    // Each measurement fires the observer callback independently.
-    // Mock doesn't update engineState.scrollPosition, so each uses 500 as base.
+    // Each measurement fires the observer callback independently. A scroll
+    // write updates engineState.scrollPosition (matching the real adapter), so
+    // compensations accumulate off the running position.
     triggerMeasurement(el2, 80); // +30 → scrollTo(500 + 30 = 530)
-    triggerMeasurement(el4, 90); // +40 → scrollTo(500 + 40 = 540)
+    triggerMeasurement(el4, 90); // +40 → scrollTo(530 + 40 = 570)
 
     expect(mockCtx.scrollCalls).toContain(530);
-    expect(mockCtx.scrollCalls).toContain(540);
+    expect(mockCtx.scrollCalls).toContain(570);
 
     plugin.destroy();
     mockCtx.cleanup();
@@ -899,7 +900,6 @@ describe("autosize end-pinning", () => {
   it("snaps to end in ResizeObserver when pinned and not scrolling", () => {
     const { mockCtx, plugin, triggerMeasurement, simulateScrollToIndex } = setupPinTest();
     const state = mockCtx.engineState;
-    const viewport = mockCtx.dom.viewport;
 
     // Render item 18 and observe it
     state.startIndex = 14;
@@ -916,14 +916,12 @@ describe("autosize end-pinning", () => {
     // Activate pin
     simulateScrollToIndex(19, "end");
 
-    let fakeScrollHeight = 1050;
-    Object.defineProperty(viewport, "scrollHeight", {
-      get: () => fakeScrollHeight,
-      configurable: true,
-    });
-    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
-
-    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1050; };
+    // End detection reads the size cache (the virtual source of truth), not the
+    // native scrollHeight — so under bounded mode the runway edge is never
+    // mistaken for the list end. Grow the cache total when content size updates.
+    let total = 1000;
+    mockCtx.ctx.sizeCache.getTotalSize = () => total;
+    mockCtx.ctx.updateContentSize = () => { total = 1050; };
 
     // Measure item 18 at 80px (bigger than 50px estimated)
     triggerMeasurement(el, 80);

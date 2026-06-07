@@ -26,7 +26,6 @@ import {
   type TestItem,
 } from "../helpers/factory";
 import { grid } from "../../src/plugins/grid/plugin";
-import { scale } from "../../src/plugins/scale/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
@@ -118,38 +117,6 @@ function waitForLoad(vlist: VList<TestItem>): Promise<void> {
 // =============================================================================
 
 describe("cross-feature — three-way combos", () => {
-  it("grid + selection + scale initializes without error", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(10000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 3 }), selection(), scale({ force: true })],
-    );
-
-    expect(list.items.length).toBe(10000);
-    expect(list.element.querySelectorAll("[data-index]").length).toBeGreaterThan(0);
-  });
-
-  it("grid + selection + scale supports programmatic selection", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(10000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 3 }), selection(), scale({ force: true })],
-    );
-
-    (list as any).select(5);
-    expect((list as any).getSelected()).toContain(5);
-  });
-
-  it("grid + selection + scale destroys cleanly", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(10000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 3 }), selection(), scale({ force: true })],
-    );
-
-    expect(() => {
-      list!.destroy();
-      list = null;
-    }).not.toThrow();
-  });
-
   it("grid + selection + scrollbar renders all components", () => {
     list = createVList<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate } },
@@ -184,55 +151,6 @@ describe("cross-feature — three-way combos", () => {
     expect(container.querySelector(".vlist-scrollbar")).not.toBeNull();
   });
 
-  it("scale + scrollbar + snapshots initializes and destroys", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(100000), item: { height: 50, template: simpleTemplate } },
-      [scale({ force: true }), scrollbar(), snapshots()],
-    );
-
-    expect(list.items.length).toBe(100000);
-    expect(() => {
-      list!.destroy();
-      list = null;
-    }).not.toThrow();
-  });
-});
-
-// =============================================================================
-// Grid + Scale
-// =============================================================================
-
-describe("cross-feature — grid + scale", () => {
-  it("grid + scale renders items for large dataset", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(100000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 4 }), scale({ force: true })],
-    );
-
-    expect(list.items.length).toBe(100000);
-    expect(list.element.querySelectorAll("[data-index]").length).toBeGreaterThan(0);
-  });
-
-  it("grid + scale handles scrollToIndex", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(100000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 4 }), scale({ force: true })],
-    );
-
-    expect(() => list!.scrollToIndex(50000)).not.toThrow();
-  });
-
-  it("grid + scale destroys without leaks", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(100000), item: { height: 50, template: simpleTemplate } },
-      [grid({ columns: 4 }), scale({ force: true })],
-    );
-
-    expect(() => {
-      list!.destroy();
-      list = null;
-    }).not.toThrow();
-  });
 });
 
 // =============================================================================
@@ -852,30 +770,6 @@ describe("cross-feature — grid with variable height", () => {
 
     expect(list.items.length).toBe(100);
     expect(list.element.querySelectorAll("[data-index]").length).toBeGreaterThan(0);
-  });
-});
-
-// =============================================================================
-// Velocity Events with Scale
-// =============================================================================
-
-describe("cross-feature — velocity events with scale", () => {
-  it("velocity:change handler is registered with scale plugin", () => {
-    list = createVList<TestItem>(
-      { container, items: createTestItems(100000), item: { height: 50, template: simpleTemplate } },
-      [scale({ force: true })],
-    );
-
-    const velocities: number[] = [];
-    list.on("velocity:change", (e) => velocities.push(e.velocity));
-
-    const viewport = getViewport(container);
-
-    // Simulate two scroll events with time gap via distinct scrollTop values
-    simulateScroll(viewport, 1000);
-
-    // Velocity may or may not fire depending on timing — verify no crash
-    expect(list.total).toBe(100000);
   });
 });
 

@@ -17,7 +17,6 @@ import {
   simpleTemplate,
   type TestItem,
 } from "../helpers/factory";
-import { scale } from "../../src/plugins/scale/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
@@ -129,25 +128,6 @@ const getGroup = (index: number): string => {
 // =============================================================================
 
 describe("memory — DOM leak detection per plugin", () => {
-  it("scale create/destroy leaves no DOM nodes", () => {
-    const childrenBefore = container.children.length;
-
-    list = createVList(
-      {
-        container,
-        items: createTestItems(1000),
-        item: { height: 40, template: simpleTemplate },
-      },
-      [scale({ force: true })],
-    );
-
-    expect(container.children.length).toBeGreaterThan(childrenBefore);
-
-    list.destroy();
-    list = null;
-    expect(container.children.length).toBe(childrenBefore);
-  });
-
   it("groups create/destroy leaves no DOM nodes", () => {
     const childrenBefore = container.children.length;
 
@@ -590,30 +570,6 @@ describe("memory — timer cleanup", () => {
     expect(true).toBe(true);
   });
 
-  it("deceleration timer cleared on destroy", () => {
-    list = createVList(
-      {
-        container,
-        items: createTestItems(1000),
-        item: { height: 40, template: simpleTemplate },
-      },
-      [scale({ force: true })],
-    );
-
-    const viewport = getViewport(container);
-    const wheelEvent = new WheelEvent("wheel", {
-      deltaY: 100,
-      bubbles: true,
-      cancelable: true,
-    });
-    viewport.dispatchEvent(wheelEvent);
-
-    list.destroy();
-    list = null;
-
-    // Deceleration rAF should have been cancelled
-    expect(true).toBe(true);
-  });
 });
 
 // =============================================================================

@@ -42,6 +42,8 @@ export interface RenderConfig {
   readonly crossEndVal: string;
   readonly oddClass: string;
   readonly emitter: Emitter<VListEvents> | null;
+  indexMap: ((renderIndex: number) => number) | null;
+  ariaTotalFn: (() => number) | null;
 }
 
 export function createRenderConfig(
@@ -74,6 +76,8 @@ export function createRenderConfig(
     crossEndVal: hasCrossPad ? crossPadEnd + "px" : "",
     oddClass,
     emitter: emitter ?? null,
+    indexMap: null,
+    ariaTotalFn: null,
   };
 }
 
@@ -196,19 +200,23 @@ export function phase2Commit<T extends VListItem>(
   const count = state.visibleCount;
   const newIndices = state.visibleIndices;
 
-  const ariaTotal = rc.interactive ? String(state.totalItems) : "";
-  const totalChanged = rc.interactive && state.totalItems !== state.prevAriaTotal;
+  const ariaCount = rc.ariaTotalFn ? rc.ariaTotalFn() : state.totalItems;
+  const ariaTotal = rc.interactive ? String(ariaCount) : "";
+  const totalChanged = rc.interactive && ariaCount !== state.prevAriaTotal;
 
   let fragment: DocumentFragment | null = null;
 
+  const mapIdx = rc.indexMap;
+
   for (let i = 0; i < count; i++) {
     const dataIndex = newIndices[i]!;
+    const publicIndex = mapIdx ? mapIdx(dataIndex) : dataIndex;
     const offset = state.visibleOffsets[i]!;
     const size = state.visibleSizes[i]!;
     const item = getItemFn ? getItemFn(dataIndex) : items![dataIndex];
 
     if (itemStateFn) {
-      itemStateFn(dataIndex, itemState);
+      itemStateFn(publicIndex, itemState);
     } else {
       itemState.selected = false;
       itemState.focused = false;
@@ -236,12 +244,12 @@ export function phase2Commit<T extends VListItem>(
       if (item !== undefined) {
         let result: string | HTMLElement;
         try {
-          result = template(item, dataIndex, itemState);
+          result = template(item, publicIndex, itemState);
         } catch (err: unknown) {
           if (rc.emitter) {
             rc.emitter.emit("error", {
               error: err instanceof Error ? err : new Error(String(err)),
-              context: `template:render:${dataIndex}`,
+              context: `template:render:${publicIndex}`,
             });
           }
           pool.release(acquired);
@@ -257,10 +265,10 @@ export function phase2Commit<T extends VListItem>(
       }
 
       acquired.setAttribute("role", rc.itemRole);
-      acquired.setAttribute("data-index", String(dataIndex));
+      acquired.setAttribute("data-index", String(publicIndex));
       if (rc.interactive) {
         acquired.id = rc.prefix + "-item-" + dataIndex;
-        acquired.setAttribute("aria-posinset", String(dataIndex + 1));
+        acquired.setAttribute("aria-posinset", String(publicIndex + 1));
         acquired.setAttribute("aria-setsize", ariaTotal);
       }
       if (item !== undefined) {
@@ -287,7 +295,9 @@ export function phase2Commit<T extends VListItem>(
 
       if (rc.oddClass) acquired.classList.toggle(rc.oddClass, (dataIndex & 1) === 1);
 
-      const transformOffset = offset + rc.startPadding;
+      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+      // bounded runway. baseOffset is 0 in native mode (byte-identical).
+      const transformOffset = offset - state.baseOffset + rc.startPadding;
       acquired.style.transform = rc.translateProp + transformOffset + "px)";
       acquired._lastOffset = transformOffset;
 
@@ -308,12 +318,12 @@ export function phase2Commit<T extends VListItem>(
         const newId = String(item.id);
         let result: string | HTMLElement;
         try {
-          result = template(item, dataIndex, itemState);
+          result = template(item, publicIndex, itemState);
         } catch (err: unknown) {
           if (rc.emitter) {
             rc.emitter.emit("error", {
               error: err instanceof Error ? err : new Error(String(err)),
-              context: `template:render:${dataIndex}`,
+              context: `template:render:${publicIndex}`,
             });
           }
           continue;
@@ -354,7 +364,7 @@ export function phase2Commit<T extends VListItem>(
         }
       }
 
-      const transformOffset = offset + rc.startPadding;
+      const transformOffset = offset - state.baseOffset + rc.startPadding;
       if (el._lastOffset !== transformOffset) {
         element.style.transform = rc.translateProp + transformOffset + "px)";
         el._lastOffset = transformOffset;

@@ -45,7 +45,13 @@ export function createDOMStructure(
   const vpStyle = isX
     ? "overflow-x:auto;overflow-y:hidden;height:100%;width:100%"
     : "overflow:auto;height:100%;width:100%";
-  const cStyle = isX ? "position:relative;height:100%" : "position:relative;width:100%";
+  // overflow-anchor:none is a non-negotiable constraint for the logical scroll
+  // model (RFC-012 G3): it stops the browser's native scroll anchoring from
+  // fighting our own anchor-preservation when item sizes change above the
+  // viewport. Inline so it holds regardless of class prefix or CSS loading.
+  const cStyle = isX
+    ? "position:relative;height:100%;overflow-anchor:none"
+    : "position:relative;width:100%;overflow-anchor:none";
 
   let cAttrs = ' role="list"';
   if (ariaLabel) cAttrs += ` aria-label="${ariaLabel.replace(/"/g, "&quot;")}"`;

@@ -75,21 +75,8 @@ export function snapshots<T extends VListItem = VListItem>(
           return snap;
         }
 
-        let index: number;
-        let offsetInItem: number;
-
-        if (state.isCompressed && state.compressionRatio !== 1) {
-          const virtualSize = state.totalSize;
-          const scrollRatio = scrollTop / virtualSize;
-          const exactIndex = scrollRatio * totalItems;
-          index = Math.max(0, Math.min(Math.floor(exactIndex), totalItems - 1));
-          const fraction = exactIndex - index;
-          offsetInItem = fraction * sizeCache.getSize(index);
-        } else {
-          index = sizeCache.indexAtOffset(scrollTop);
-          offsetInItem = scrollTop - sizeCache.getOffset(index);
-        }
-
+        const index = sizeCache.indexAtOffset(scrollTop);
+        let offsetInItem = scrollTop - sizeCache.getOffset(index);
         offsetInItem = Math.max(0, offsetInItem);
 
         const snap: ScrollSnapshot = {
@@ -153,16 +140,8 @@ export function snapshots<T extends VListItem = VListItem>(
           }
 
           sizeCache.rebuild(effectiveTotal);
-
-          const updateCompression = ctx.getMethod("_updateCompressionMode") as
-            | (() => void)
-            | undefined;
-          if (updateCompression) updateCompression();
-
-          if (!state.isCompressed) {
-            ctx.updateContentSize(sizeCache.getTotalSize());
-            state.totalSize = sizeCache.getTotalSize();
-          }
+          ctx.updateContentSize(sizeCache.getTotalSize());
+          state.totalSize = sizeCache.getTotalSize();
         }
 
         if (effectiveTotal === 0) return Promise.resolve();
@@ -174,14 +153,8 @@ export function snapshots<T extends VListItem = VListItem>(
         const sizeCacheTotal = sizeCache.getTotal();
         if (sizeCacheTotal === 0) {
           sizeCache.rebuild(effectiveTotal);
-          const updateCompression = ctx.getMethod("_updateCompressionMode") as
-            | (() => void)
-            | undefined;
-          if (updateCompression) updateCompression();
-          if (!state.isCompressed) {
-            ctx.updateContentSize(sizeCache.getTotalSize());
-            state.totalSize = sizeCache.getTotalSize();
-          }
+          ctx.updateContentSize(sizeCache.getTotalSize());
+          state.totalSize = sizeCache.getTotalSize();
         }
 
         const dataToLayout = ctx.getMethod("_dataToLayoutIndex") as
@@ -209,15 +182,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
         let scrollPosition: number;
 
-        if (state.isCompressed && state.compressionRatio !== 1) {
-          if (snapshot.scrollTop !== undefined && totalMatch) {
-            scrollPosition = snapshot.scrollTop;
-          } else {
-            const fraction = currentItemSize ? resolvedOffset / currentItemSize : 0;
-            scrollPosition =
-              ((safeIndex + fraction) / effectiveTotal) * state.totalSize;
-          }
-        } else if (snapshot.scrollTop !== undefined && totalMatch) {
+        if (snapshot.scrollTop !== undefined && totalMatch) {
           scrollPosition = snapshot.scrollTop;
         } else {
           scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;

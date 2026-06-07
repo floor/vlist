@@ -11,8 +11,6 @@
 
 // v2 factory + plugins
 export { createVList } from "./core/create";
-export { scale } from "./plugins/scale";
-export type { ScalePluginConfig } from "./plugins/scale";
 export { scrollbar } from "./plugins/scrollbar";
 export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 export { grid } from "./plugins/grid";
@@ -41,6 +39,11 @@ export { tree } from "./plugins/tree";
 export type { TreePluginConfig, FlatNode } from "./plugins/tree";
 export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
 export type { SearchPluginConfig, SearchText } from "./plugins/search";
+export { carousel } from "./plugins/carousel";
+export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState } from "./plugins/carousel";
+/** @deprecated Use `scroll: { mode: "bounded" }` instead. Will be removed in vlist 3.0. */
+export { scale } from "./plugins/scale";
+export type { ScalePluginConfig } from "./plugins/scale";
 
 // Utils
 export { createStats } from "./utils/stats";

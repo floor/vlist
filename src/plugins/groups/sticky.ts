@@ -56,7 +56,6 @@ export const createStickyHeader = (
   classPrefix: string,
   horizontal: boolean = false,
   stickyOffset: number = 0,
-  getCompressionRatio?: () => number,
   existingContainer?: HTMLElement,
   getHeaderOffset?: (headerLayoutIndex: number) => number,
 ): StickyHeader => {
@@ -104,11 +103,10 @@ export const createStickyHeader = (
     offsets = new Array(groupCount);
     sizes = new Array(groupCount);
     vSizes = new Array(groupCount);
-    const ratio = getCompressionRatio ? getCompressionRatio() : 1;
     for (let i = 0; i < groupCount; i++) {
-      offsets[i] = (getHeaderOffset ? getHeaderOffset(groups[i]!.headerLayoutIndex) : sizeCache.getOffset(groups[i]!.headerLayoutIndex)) * ratio;
+      offsets[i] = getHeaderOffset ? getHeaderOffset(groups[i]!.headerLayoutIndex) : sizeCache.getOffset(groups[i]!.headerLayoutIndex);
       sizes[i] = layout.getHeaderHeight(i);
-      vSizes[i] = sizes[i]! * ratio;
+      vSizes[i] = sizes[i]!;
     }
   };
   cacheGroups();

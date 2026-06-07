@@ -33,11 +33,7 @@ import type {
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 import { neutralizeFocusable } from "../../core/dom";
 import { claimPlaceholderSelection } from "../selection/state";
-import {
-  calculateCompressedItemPosition,
-} from "../../rendering/scale";
 import type { SizeCache } from "../../rendering/sizes";
-import type { CompressionContext } from "../../rendering/renderer";
 import type { GridLayout } from "./types";
 import { isGroupHeader } from "../groups/types";
 import { sortRenderedDOM } from "../../rendering/sort";
@@ -54,11 +50,7 @@ export interface GridRenderer<T extends VListItem = VListItem> {
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
-    compressionCtx?: CompressionContext,
   ) => void;
-
-  /** Update item positions (for compressed scrolling) */
-  updatePositions: (compressionCtx: CompressionContext) => void;
 
   /** Update a single item (used by selection feature for focused item changes) */
   updateItem: (
@@ -268,27 +260,9 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   /**
    * Calculate the Y offset for an item (based on its row).
-   * Uses compression-aware positioning for large grids.
    */
-  const calculateRowOffset = (
-    itemIndex: number,
-    compressionCtx?: CompressionContext,
-  ): number => {
+  const calculateRowOffset = (itemIndex: number): number => {
     const row = gridLayout.getRow(itemIndex);
-
-    if (compressionCtx?.compression?.isCompressed) {
-      return calculateCompressedItemPosition(
-        row,
-        compressionCtx.scrollPosition,
-        sizeCache,
-        compressionCtx.totalItems,
-        compressionCtx.containerSize,
-        compressionCtx.compression,
-        compressionCtx.rangeStart,
-      );
-    }
-
-    // Normal positioning: row offset from size cache
     return sizeCache.getOffset(row);
   };
 
@@ -296,10 +270,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
    * Build the transform string for an element at the given item index.
    * Group headers are positioned at x=0 to span full width.
    */
-  const buildTransform = (
-    itemIndex: number,
-    compressionCtx?: CompressionContext,
-  ): string => {
+  const buildTransform = (itemIndex: number): string => {
     // Check if this is a group header - position at full width
     const itemCol = gridLayout.getCol(itemIndex);
     const isHeader = groupsActive && itemCol === 0;
@@ -325,7 +296,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
       y = offset;
     } else {
-      y = calculateRowOffset(itemIndex, compressionCtx);
+      y = calculateRowOffset(itemIndex);
     }
 
     // Swap axes for horizontal orientation
@@ -475,7 +446,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
-    compressionCtx?: CompressionContext,
   ): void => {
     frameCounter++;
 
@@ -566,7 +536,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         }
 
         // Position update only when transform changed
-        const transform = buildTransform(i, compressionCtx);
+        const transform = buildTransform(i);
         if (existing.lastTransform !== transform) {
           existing.element.style.transform = transform;
           existing.lastTransform = transform;
@@ -583,7 +553,7 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
         }
 
         // Render new item — collect in fragment for batched insertion
-        const transform = buildTransform(i, compressionCtx);
+        const transform = buildTransform(i);
         const tracked = renderItem(
           i,
           item,
@@ -614,19 +584,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
       }
     }
 
-  };
-
-  /**
-   * Update positions of all rendered items (for compressed scrolling)
-   */
-  const updatePositions = (compressionCtx: CompressionContext): void => {
-    for (const [index, tracked] of rendered) {
-      const transform = buildTransform(index, compressionCtx);
-      if (tracked.lastTransform !== transform) {
-        tracked.element.style.transform = transform;
-        tracked.lastTransform = transform;
-      }
-    }
   };
 
   /**
@@ -737,7 +694,6 @@ export const createGridRenderer = <T extends VListItem = VListItem>(
 
   return {
     render,
-    updatePositions,
     updateItem,
     updateItemClasses,
     getElement,

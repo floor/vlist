@@ -9,7 +9,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createTableRenderer, type TableRendererInstance } from "../../../src/plugins/table/renderer";
 import { createTableLayout } from "../../../src/plugins/table/layout";
 import { createSizeCache } from "../../../src/rendering/sizes";
-import { getCompressionState } from "../../../src/rendering/scale";
 import type { TableColumn, TableLayout } from "../../../src/plugins/table/types";
 import type { VListItem } from "../../../src/types";
 
@@ -99,6 +98,78 @@ describe("createTableRenderer", () => {
     expect(renderer.updateColumnLayout).toBeFunction();
     expect(renderer.clear).toBeFunction();
     expect(renderer.destroy).toBeFunction();
+    container.remove();
+  });
+});
+
+// =============================================================================
+// RFC-013 — bounded scroll: row transforms shifted by baseOffset
+// =============================================================================
+
+describe("bounded baseOffset", () => {
+  const ty = (el: Element): number => {
+    const m = (el as HTMLElement).style.transform.match(/translateY\((-?\d+)px\)/);
+    return parseInt(m![1]!, 10);
+  };
+
+  it("subtracts baseOffset from row translateY", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const sizeCache = createSizeCache(40, 100);
+    const layout = createTableLayout<TestItem>([col("name", { width: 200 })], 50, Infinity, true);
+    layout.resolve(800);
+
+    let baseOffset = 200;
+    const renderer = createTableRenderer<TestItem>(
+      container, () => sizeCache as any, layout, [col("name", { width: 200 })],
+      "vlist", "vlist", () => 100, undefined, undefined, () => baseOffset,
+    );
+
+    const items = makeItems(100);
+    // Rows 5..7 (offsets 200/240/280). baseOffset 200 maps row 5 to y=0.
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+
+    expect(ty(renderer.getElement(5)!)).toBe(0);
+    expect(ty(renderer.getElement(6)!)).toBe(40);
+    expect(ty(renderer.getElement(7)!)).toBe(80);
+
+    container.remove();
+  });
+
+  it("recomputes transforms for surviving rows when baseOffset shifts", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const sizeCache = createSizeCache(40, 100);
+    const layout = createTableLayout<TestItem>([col("name", { width: 200 })], 50, Infinity, true);
+    layout.resolve(800);
+
+    let baseOffset = 200;
+    const renderer = createTableRenderer<TestItem>(
+      container, () => sizeCache as any, layout, [col("name", { width: 200 })],
+      "vlist", "vlist", () => 100, undefined, undefined, () => baseOffset,
+    );
+
+    const items = makeItems(100);
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+    expect(ty(renderer.getElement(5)!)).toBe(0);
+
+    // A rebase shifts baseOffset while the same rows stay rendered — the
+    // adjusted offset changes, so transforms must update (lastOffset tracks
+    // the adjusted value, mirroring the core pipeline).
+    baseOffset = 100;
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+    expect(ty(renderer.getElement(5)!)).toBe(100); // 200 - 100
+
+    container.remove();
+  });
+
+  it("leaves transforms at the absolute offset in native mode (baseOffset = 0)", () => {
+    const { renderer, container } = createTestRenderer({ rowHeight: 40 });
+    const items = makeItems(100);
+    renderer.render(items.slice(5, 8), { start: 5, end: 7 }, EMPTY_SET, -1);
+
+    // No baseOffset accessor → defaults to 0 → absolute offset preserved.
+    expect(ty(renderer.getElement(5)!)).toBe(200);
     container.remove();
   });
 });
@@ -1921,10 +1992,10 @@ describe("striped", () => {
 });
 
 // =============================================================================
-// Table Renderer — Compressed Positioning (withScale)
+// Table Renderer — Absolute Positioning
 // =============================================================================
 
-describe("table renderer compressed positioning", () => {
+describe("table renderer absolute positioning", () => {
   let itemsContainer: HTMLElement;
 
   beforeEach(() => {
@@ -1933,80 +2004,7 @@ describe("table renderer compressed positioning", () => {
     document.body.appendChild(itemsContainer);
   });
 
-  it("should use compressed positioning for large tables", () => {
-    const totalItems = 2_000_000;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-      col("email", { width: 300 }),
-      col("role", { width: 100 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(600);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(20);
-
-    // Build compression state for the large dataset
-    const compression = getCompressionState(totalItems, sizeCache as any, false);
-    expect(compression.isCompressed).toBe(true);
-
-    // Calculate a scroll position that maps to the target range in compressed space.
-    // actualOffset = 100000 * 36 = 3,600,000
-    // scrollRatio = actualOffset / actualSize = 3,600,000 / 72,000,000 = 0.05
-    // scrollPosition = scrollRatio * virtualSize
-    const actualOffset = sizeCache.getOffset(100000);
-    const scrollPosition = (actualOffset / compression.actualSize) * compression.virtualSize;
-
-    const compressionCtx = {
-      scrollPosition,
-      totalItems,
-      containerSize: 500,
-      rangeStart: 100000,
-      compression,
-    };
-
-    renderer.render(
-      items,
-      { start: 100000, end: 100019 },
-      EMPTY_SET,
-      -1,
-      compressionCtx,
-    );
-
-    // Verify rows were rendered
-    const rendered = itemsContainer.querySelectorAll("[data-index]");
-    expect(rendered.length).toBe(20);
-
-    // In compressed mode, items should be positioned relative to the viewport
-    // (viewport-relative, not at absolute sizeCache offsets of ~3.6M px)
-    const firstRow = rendered[0] as HTMLElement;
-    const transform = firstRow.style.transform;
-    expect(transform).toMatch(/translateY\([-\d.]+px\)/);
-
-    // The first visible item should be near the top of the viewport (small offset)
-    const match = transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match).toBeTruthy();
-    const renderedY = parseFloat(match![1]!);
-    // Viewport-relative: should be within a reasonable range, not millions of pixels
-    expect(Math.abs(renderedY)).toBeLessThan(1000);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should use absolute positioning when no compression context", () => {
+  it("should position rows at their absolute sizeCache offsets", () => {
     const totalItems = 100;
     const rowHeight = 36;
     const columns: TableColumn<TestItem>[] = [
@@ -2030,7 +2028,6 @@ describe("table renderer compressed positioning", () => {
 
     const items = makeItems(5);
 
-    // Render without compression context
     renderer.render(items, { start: 0, end: 4 }, EMPTY_SET, -1);
 
     // First row at index 0 should be at offset 0
@@ -2040,173 +2037,6 @@ describe("table renderer compressed positioning", () => {
     // Second row at index 1 should be at absolute offset = rowHeight
     const secondRow = itemsContainer.querySelector("[data-index='1']") as HTMLElement;
     expect(secondRow.style.transform).toBe(`translateY(${rowHeight}px)`);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should update positions on subsequent render with changed scroll", () => {
-    const totalItems = 2_000_000;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(200);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(10);
-    const compression = getCompressionState(totalItems, sizeCache as any, false);
-
-    // Calculate scroll position for range start
-    const actualOffset = sizeCache.getOffset(100000);
-    const scrollA = (actualOffset / compression.actualSize) * compression.virtualSize;
-
-    // First render at scroll position A
-    const ctxA = {
-      scrollPosition: scrollA,
-      totalItems,
-      containerSize: 500,
-      rangeStart: 100000,
-      compression,
-    };
-    renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctxA);
-
-    const firstRow = itemsContainer.querySelector("[data-index='100000']") as HTMLElement;
-    const posA = firstRow.style.transform;
-
-    // Second render at scroll position B (same range, different scroll — user scrolled a bit)
-    const ctxB = {
-      ...ctxA,
-      scrollPosition: scrollA + 1000,
-    };
-    renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctxB);
-
-    const posB = firstRow.style.transform;
-
-    // Positions should differ because scroll position changed
-    expect(posA).not.toBe(posB);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should update positions via updatePositions()", () => {
-    const totalItems = 2_000_000;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(200);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(10);
-    const compression = getCompressionState(totalItems, sizeCache as any, false);
-
-    const actualOffset = sizeCache.getOffset(100000);
-    const scrollPos = (actualOffset / compression.actualSize) * compression.virtualSize;
-
-    // Initial render
-    const ctx = {
-      scrollPosition: scrollPos,
-      totalItems,
-      containerSize: 500,
-      rangeStart: 100000,
-      compression,
-    };
-    renderer.render(items, { start: 100000, end: 100009 }, EMPTY_SET, -1, ctx);
-
-    const firstRow = itemsContainer.querySelector("[data-index='100000']") as HTMLElement;
-    const posBefore = firstRow.style.transform;
-
-    // Update positions without a full render (scroll moved, range unchanged)
-    renderer.updatePositions({
-      ...ctx,
-      scrollPosition: scrollPos + 2000,
-    });
-
-    const posAfter = firstRow.style.transform;
-    expect(posBefore).not.toBe(posAfter);
-
-    renderer.destroy();
-    itemsContainer.remove();
-  });
-
-  it("should use force-mode compressed positioning (ratio=1)", () => {
-    const totalItems = 100;
-    const rowHeight = 36;
-    const columns: TableColumn<TestItem>[] = [
-      col("name", { width: 200 }),
-    ];
-
-    const sizeCache = createSizeCache(rowHeight, totalItems);
-    const layout = createTableLayout<TestItem>(columns, 50, Infinity, true);
-    layout.resolve(200);
-
-    const renderer = createTableRenderer<TestItem>(
-      itemsContainer,
-      () => sizeCache as any,
-      layout,
-      columns,
-      "vlist",
-      "vlist",
-      () => totalItems,
-    );
-
-    const items = makeItems(5);
-
-    // Force compression — ratio will be 1 (actualSize < MAX_VIRTUAL_SIZE)
-    const compression = getCompressionState(totalItems, sizeCache as any, true);
-    expect(compression.isCompressed).toBe(true);
-    expect(compression.ratio).toBe(1);
-
-    const scrollPosition = 500;
-    const ctx = {
-      scrollPosition,
-      totalItems,
-      containerSize: 300,
-      rangeStart: 0,
-      compression,
-    };
-
-    renderer.render(items, { start: 0, end: 4 }, EMPTY_SET, -1, ctx);
-
-    // With ratio=1, items are positioned at (offset - scrollPosition)
-    // Index 0: offset 0 - 500 = -500
-    const firstRow = itemsContainer.querySelector("[data-index='0']") as HTMLElement;
-    const match = firstRow.style.transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match).toBeTruthy();
-    const y = parseFloat(match![1]!);
-    expect(y).toBe(0 - scrollPosition);
-
-    // Index 1: offset 36 - 500 = -464
-    const secondRow = itemsContainer.querySelector("[data-index='1']") as HTMLElement;
-    const match2 = secondRow.style.transform.match(/translateY\(([-\d.]+)px\)/);
-    expect(match2).toBeTruthy();
-    expect(parseFloat(match2![1]!)).toBe(rowHeight - scrollPosition);
 
     renderer.destroy();
     itemsContainer.remove();

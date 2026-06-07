@@ -17,6 +17,7 @@ import type {
 import type { SizeCache } from "../../src/core/sizes";
 import { createEngineState } from "../../src/core/state";
 import type { EngineState } from "../../src/core/state";
+import { createScrollAdapter } from "../../src/core/adapter";
 
 export interface PluginTestContext<T extends VListItem> {
   ctx: PluginContext<T>;
@@ -171,6 +172,18 @@ export function createPluginMockContext<T extends VListItem>(
   const keydownHandlers: ((event: KeyboardEvent) => void)[] = [];
   const scrollCalls: number[] = [];
 
+  // Functional scroll adapter over the mock's sizeCache + engineState, so
+  // plugins exercising ctx.scroll behave as they would in createVList().
+  const scroll = createScrollAdapter({
+    sizeCache,
+    getPixel: () => engineState.scrollPosition,
+    setPixel: (px) => {
+      engineState.scrollPosition = px;
+      scrollCalls.push(px);
+    },
+    getContainerSize: () => engineState.containerSize,
+  });
+
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let _renderFnReplaced = false;
@@ -185,6 +198,7 @@ export function createPluginMockContext<T extends VListItem>(
   const ctx: PluginContext<T> = {
     dom,
     sizeCache,
+    scroll,
     pool,
     config,
     emitter,
@@ -206,7 +220,9 @@ export function createPluginMockContext<T extends VListItem>(
 
     setSizeConfig: () => {},
     setScrollFns: () => {},
+    setBoundedWrap: () => {},
     setVirtualTotalFn: () => {},
+    setIndexMapFn: () => {},
 
     getItems: () => items,
     getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],
@@ -238,11 +254,17 @@ export function createPluginMockContext<T extends VListItem>(
     get rawSizeSpec() { return itemSizeConfig; },
 
     scrollTo: (pos: number) => {
+      // Mirror the real adapter: a scroll write moves the logical position.
+      engineState.scrollPosition = pos;
       scrollCalls.push(pos);
     },
-    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, _onComplete?: () => void) => {
-      scrollCalls.push(typeof target === "function" ? target() : target);
+    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
+      const dest = typeof target === "function" ? target() : target;
+      engineState.scrollPosition = dest;
+      scrollCalls.push(dest);
+      onComplete?.();
     },
+    cancelScroll: () => {},
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
@@ -278,7 +300,7 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     setNavConfig: (cfg: any) => { _navConfig = cfg; },
-    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null }),
+    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
     enableListboxRole: () => {},
   };
 

@@ -38,6 +38,13 @@ export interface EngineState {
   /** 1 = forward, -1 = backward, 0 = idle */
   scrollDirection: number;
 
+  /**
+   * Bounded logical-scroll origin (RFC-012). The virtual offset that maps to
+   * native scrollTop=0. Items render at `getOffset(index) - baseOffset`.
+   * Defaults to 0, which makes native mode byte-identical (`offset - 0`).
+   */
+  baseOffset: number;
+
   // ── Container state (updated on resize, cold path) ───────────────
 
   containerSize: number;
@@ -51,11 +58,6 @@ export interface EngineState {
   renderPending: boolean;
   initialized: boolean;
   destroyed: boolean;
-
-  // ── Compression state ────────────────────────────────────────────
-
-  isCompressed: boolean;
-  compressionRatio: number;
 
   // ── ARIA tracking (for aria-setsize freshness) ───────────────────
 
@@ -84,6 +86,7 @@ export function createEngineState(initialCapacity: number): EngineState {
     scrollPosition: 0,
     prevScrollPosition: 0,
     scrollDirection: 0,
+    baseOffset: 0,
 
     containerSize: 0,
     crossSize: 0,
@@ -94,9 +97,6 @@ export function createEngineState(initialCapacity: number): EngineState {
     renderPending: false,
     initialized: false,
     destroyed: false,
-
-    isCompressed: false,
-    compressionRatio: 1,
 
     prevAriaTotal: -1,
 

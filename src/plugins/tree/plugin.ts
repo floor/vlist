@@ -16,8 +16,6 @@ import type { VListItem, ItemState, ItemTemplate, TreeState, VListEvents } from 
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
-import type { CompressionState } from "../../rendering/scale";
-import { calculateCompressedVisibleRange, calculateCompressedItemPosition } from "../../rendering/scale";
 import { neutralizeFocusable } from "../../core/dom";
 import { createTreeLayout, type TreeLayout } from "./layout";
 import type { TreePluginConfig, FlatNode } from "./types";
@@ -174,9 +172,6 @@ export function tree<T extends VListItem = VListItem>(
   let emitter: PluginContext<T>["emitter"];
   let getLabel: (item: T) => string;
 
-  let getCompression: (() => CompressionState) | null = null;
-  let compressionResolved = false;
-
   let treeItemClass: string;
   let expandedClass: string;
   let leafClass: string;
@@ -199,16 +194,6 @@ export function tree<T extends VListItem = VListItem>(
   let hasExternalFocus = false;
   let typeAheadBuffer = "";
   let typeAheadTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const compRange = { start: 0, end: -1 };
-
-  // ── Compression ──────────────────────────────────────────────────
-
-  function resolveCompressionFn(): void {
-    if (compressionResolved) return;
-    compressionResolved = true;
-    getCompression = (getMethod("_scale:getCompression") as (() => CompressionState)) ?? null;
-  }
 
   // ── Focus helpers ────────────────────────────────────────────────
 
@@ -527,26 +512,13 @@ export function tree<T extends VListItem = VListItem>(
       return;
     }
 
-    resolveCompressionFn();
-    const compression = getCompression?.() ?? null;
-    const isCompressed = compression !== null && compression.isCompressed;
-
-    let renderStart: number;
-    let renderEnd: number;
-
-    if (isCompressed) {
-      calculateCompressedVisibleRange(scrollPos, cs, sizeCache, totalItems, compression, compRange);
-      renderStart = Math.max(0, compRange.start - overscan);
-      renderEnd = Math.min(totalItems - 1, compRange.end + overscan);
-    } else {
-      let visStart = sizeCache.indexAtOffset(scrollPos);
-      let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
-      if (visEnd < totalItems - 1) visEnd++;
-      visStart = Math.max(0, visStart);
-      visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
-      renderStart = Math.max(0, visStart - overscan);
-      renderEnd = Math.min(totalItems - 1, visEnd + overscan);
-    }
+    let visStart = sizeCache.indexAtOffset(scrollPos);
+    let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
+    if (visEnd < totalItems - 1) visEnd++;
+    visStart = Math.max(0, visStart);
+    visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
+    const renderStart = Math.max(0, visStart - overscan);
+    const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
     if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) return;
 
@@ -579,9 +551,7 @@ export function tree<T extends VListItem = VListItem>(
         }
       }
 
-      element.style.transform = isCompressed
-        ? buildTransform(calculateCompressedItemPosition(i, scrollPos, sizeCache, totalItems, cs, compression!))
-        : buildTransform(sizeCache.getOffset(i));
+      element.style.transform = buildTransform(sizeCache.getOffset(i));
 
       if (isf) {
         isf(i, itemState);

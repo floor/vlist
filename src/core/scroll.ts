@@ -62,8 +62,6 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
   // ── Wheel event (non-passive, synchronous rendering) ────────────
 
   function onWheelEvent(event: WheelEvent): void {
-    if (state.isCompressed) return;
-
     let next: number;
 
     if (isX) {

@@ -85,34 +85,6 @@ export {
   // Size cache (variable item sizes - works for both vertical and horizontal)
   createSizeCache,
   type SizeCache,
-  // Measured size cache (auto-measurement for Mode B)
-  createMeasuredSizeCache,
-  type MeasuredSizeCache,
-  // Virtual scrolling calculations
-  simpleVisibleRange,
-  calculateRenderRange,
-  calculateTotalSize,
-  calculateActualSize,
-  calculateItemOffset,
-  calculateScrollToIndex,
-  clampScrollPosition,
-  rangesEqual,
-  isInRange,
-  getRangeCount,
-  diffRanges,
-  // Scale utilities (for handling 1M+ items)
-  MAX_VIRTUAL_SIZE,
-  getCompressionState as getScaleState,
-  getCompression as getScale,
-  needsCompression as needsScaling,
-  getMaxItemsWithoutCompression as getMaxItemsWithoutScaling,
-  getCompressionInfo as getScaleInfo,
-  calculateCompressedVisibleRange as calculateScaledVisibleRange,
-  calculateCompressedRenderRange as calculateScaledRenderRange,
-  calculateCompressedItemPosition as calculateScaledItemPosition,
-  calculateCompressedScrollToIndex as calculateScaledScrollToIndex,
-  calculateIndexFromScrollPosition,
-  type CompressionState as ScaleState,
 } from "./rendering";
 
 // =============================================================================
@@ -159,10 +131,7 @@ export {
 // =============================================================================
 
 export {
-  createScrollController,
   createScrollbar,
-  rafThrottle,
-  type ScrollController,
   type Scrollbar,
 } from "./plugins/scrollbar";
 export type { ScrollbarConfig } from "./plugins/scrollbar/scrollbar";

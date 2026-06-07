@@ -39,6 +39,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+.env.agents
+.agents/
 
 # Bun
 bun.lockb
