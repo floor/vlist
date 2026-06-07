@@ -216,8 +216,15 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   function onWheelEvent(event: WheelEvent): void {
     let delta: number;
     if (isX) {
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-      delta = event.deltaY;
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        // Horizontal trackpad swipe on a horizontal list. In wrap mode
+        // (carousel) we must intercept — native scroll is limited by the
+        // bounded runway and can't keep up with fast swipes.
+        if (!isWrap) return;
+        delta = event.deltaX;
+      } else {
+        delta = event.deltaY;
+      }
     } else {
       const crossOverflow = viewport.scrollWidth > viewport.clientWidth;
       if (crossOverflow && Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;

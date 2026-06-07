@@ -9,6 +9,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.4.1] - 2026-06-07
+
+### Fixed
+
+- **Carousel trackpad scroll** — horizontal two-finger swipe on macOS now scrolls smoothly. The bounded handler was ignoring `deltaX`-dominant wheel events in wrap mode, forcing trackpad scrolling through the limited native runway.
+- **Masonry keyboard navigation scroll** — arrowing past the viewport edge now scrolls to keep the focused item visible. The selection plugin skipped scroll-into-view when a custom `navigate` function was present (masonry), even though masonry relies on the selection plugin for scrolling.
+- **Custom scrollbar not reaching the end with padding** — dragging the scrollbar thumb to the bottom now reaches the very last items when padding is configured. The scrollbar bounds were missing the main-axis padding, making the max scroll position fall short by `padding.top + padding.bottom` pixels.
+
 ## [2.4.0] - 2026-06-07
 
 ### Added

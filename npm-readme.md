@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.4.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** Bounded logical scroll model for 1M+ items (`scroll: { mode: "bounded" }`), `carousel()` plugin with infinite loop, snap, and focal scaling. `scale()` deprecated.
+**v2.4.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** Bounded logical scroll model for 1M+ items (`scroll: { mode: "bounded" }`), `carousel()` plugin with infinite loop, snap, and focal scaling. `scale()` deprecated.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)

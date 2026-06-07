@@ -90,6 +90,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   let initialScrollPending = false;
   let prefix = "vlist";
+  let intendedVi = -1;
 
   function resolveIndex(index: number): number {
     if (realTotal <= 0) return 0;
@@ -131,6 +132,11 @@ export function carousel<T extends VListItem = VListItem>(
   function virtualIndexAtScroll(pos: number): number {
     if (stepSize <= 0) return 0;
     return Math.round(pos / stepSize);
+  }
+
+  function getBaseVi(): number {
+    if (intendedVi >= 0) return intendedVi;
+    return virtualIndexAtScroll(engineState.scrollPosition);
   }
 
   // Rebasing (folding the logical position back toward the middle cycle) and the
@@ -215,14 +221,15 @@ export function carousel<T extends VListItem = VListItem>(
 
     if (realTotal <= 1) return;
 
-    const currentPos = engineState.scrollPosition;
-    const currentVi = virtualIndexAtScroll(currentPos);
-    const currentLogical = logicalIndexOf(currentVi);
+    const baseVi = getBaseVi();
+    const currentLogical = logicalIndexOf(baseVi);
 
     const forward = ((logicalTarget - currentLogical) % realTotal + realTotal) % realTotal;
     const backward = realTotal - forward;
     const delta = forward <= backward ? forward : -backward;
-    const nearestPos = scrollPositionForVirtual(currentVi + delta);
+    const targetVi = baseVi + delta;
+    intendedVi = targetVi;
+    const nearestPos = scrollPositionForVirtual(targetVi);
 
     if (smooth) {
       smoothScrollTo(nearestPos, duration);
@@ -317,13 +324,15 @@ export function carousel<T extends VListItem = VListItem>(
         if (realTotal <= 1) return;
         const s = step ?? 1;
         const prevIndex = currentIndex;
-        currentIndex = resolveIndex(currentIndex + s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
         storedCtx!.cancelScroll();
-        const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
-        const nearestPos = currentSnap + s * stepSize;
+        const baseVi = getBaseVi();
+        const targetVi = baseVi + s;
+        intendedVi = targetVi;
+        currentIndex = logicalIndexOf(targetVi);
+        const nearestPos = scrollPositionForVirtual(targetVi);
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -340,13 +349,15 @@ export function carousel<T extends VListItem = VListItem>(
         if (realTotal <= 1) return;
         const s = step ?? 1;
         const prevIndex = currentIndex;
-        currentIndex = resolveIndex(currentIndex - s);
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
         storedCtx!.cancelScroll();
-        const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
-        const nearestPos = currentSnap - s * stepSize;
+        const baseVi = getBaseVi();
+        const targetVi = baseVi - s;
+        intendedVi = targetVi;
+        currentIndex = logicalIndexOf(targetVi);
+        const nearestPos = scrollPositionForVirtual(targetVi);
 
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
@@ -381,8 +392,10 @@ export function carousel<T extends VListItem = VListItem>(
           const delta = shortestPath(currentIndex, target,
             direction === "forward" ? "forward" : "backward");
           currentIndex = target;
-          const currentPos = engineState.scrollPosition;
-          const nearestPos = currentPos + delta * stepSize;
+          const baseVi = getBaseVi();
+          const targetVi = baseVi + delta;
+          intendedVi = targetVi;
+          const nearestPos = scrollPositionForVirtual(targetVi);
 
           if (smooth) {
             smoothScrollTo(nearestPos, dur);
@@ -503,16 +516,19 @@ export function carousel<T extends VListItem = VListItem>(
         if (initialScrollPending || !storedCtx) return;
         syncItemCount();
         if (realTotal <= 1) return;
-        const pos = engineState.scrollPosition;
-        const vi = virtualIndexAtScroll(pos);
-        const newIndex = logicalIndexOf(vi);
 
-        if (newIndex !== currentIndex) {
-          currentIndex = newIndex;
-          storedCtx.emitter.emit("carousel:change" as any, {
-            index: currentIndex,
-            scrollPosition: pos,
-          });
+        if (intendedVi < 0) {
+          const pos = engineState.scrollPosition;
+          const vi = virtualIndexAtScroll(pos);
+          const newIndex = logicalIndexOf(vi);
+
+          if (newIndex !== currentIndex) {
+            currentIndex = newIndex;
+            storedCtx.emitter.emit("carousel:change" as any, {
+              index: currentIndex,
+              scrollPosition: pos,
+            });
+          }
         }
 
         updateItemLayout();
@@ -521,6 +537,7 @@ export function carousel<T extends VListItem = VListItem>(
       // Snap-to-item once scrolling stops. The bounded handler fires onIdle
       // after the idle timeout, replacing the old setTimeout(200) dance.
       onIdle(): void {
+        intendedVi = -1;
         if (!snapEnabled || !storedCtx || realTotal <= 1) return;
         const p = engineState.scrollPosition;
         const nearestVi = Math.round(p / stepSize);
