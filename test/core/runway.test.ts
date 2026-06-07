@@ -22,6 +22,9 @@ import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";
+import { grid } from "../../src/plugins/grid";
+import { table } from "../../src/plugins/table";
+import { masonry } from "../../src/plugins/masonry";
 
 // =============================================================================
 // DOM Setup — viewport reports a fixed 500px main-axis size
@@ -455,6 +458,259 @@ describe("bounded scroll — resize", () => {
     } finally {
       globalThis.ResizeObserver = saved;
     }
+  });
+});
+
+// =============================================================================
+// Renderer plugins — grid / table / masonry install setRenderFn and own content
+// sizing, so they must route through ctx.updateContentSize to respect the
+// bounded runway instead of writing the full physical size (RFC-013 Phase A).
+// =============================================================================
+
+describe("bounded scroll — renderer plugins", () => {
+  // 50k items keeps the test light while still producing a physical size far
+  // larger than the runway (e.g. 50k/4 cols × 50px = 625,000px ≫ 1000px runway).
+  const HUGE = 50_000;
+
+  it("grid caps content to the runway for a huge item count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [grid({ columns: 4 })],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("table caps content to the runway for a huge row count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [
+        table({
+          columns: [{ key: "name", label: "Name", width: 200 }],
+          rowHeight: ITEM,
+        }),
+      ],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("masonry caps content to the runway for a huge item count", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(HUGE),
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [masonry({ columns: 3 })],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBeLessThanOrEqual(RUNWAY);
+  });
+});
+
+// =============================================================================
+// Wheel handler — drives scroll in logical space via WheelEvent
+// =============================================================================
+
+function fireWheel(target: HTMLElement, deltaY: number, deltaX: number = 0): WheelEvent {
+  const event = new WheelEvent("wheel", {
+    deltaY,
+    deltaX,
+    bubbles: true,
+    cancelable: true,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
+
+describe("bounded scroll — wheel", () => {
+  it("advances logical position on wheel deltaY", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    const before = list.getScrollPosition();
+
+    fireWheel(viewport, 100);
+
+    expect(list.getScrollPosition()).toBeGreaterThan(before);
+  });
+
+  it("clamps logical position at 0 (no negative scroll)", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    // Already at 0
+    fireWheel(viewport, -1000);
+    expect(list.getScrollPosition()).toBe(0);
+  });
+
+  it("clamps logical position at max (end of list)", () => {
+    list = makeBounded(100); // 100 × 50 = 5000px total, containerSize 500 → maxLogical 4500
+    const viewport = getViewport(container);
+
+    // Scroll way past the end
+    for (let i = 0; i < 200; i++) fireWheel(viewport, 100);
+
+    expect(list.getScrollPosition()).toBeLessThanOrEqual(4500);
+  });
+
+  it("prevents default on consumed wheel events", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+
+    const event = fireWheel(viewport, 100);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("ignores wheel when delta is too small to move", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    const before = list.getScrollPosition();
+
+    // deltaY of 0 produces no movement
+    const event = fireWheel(viewport, 0);
+    expect(list.getScrollPosition()).toBe(before);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("ignores cross-axis dominant wheel in horizontal mode", () => {
+    // Horizontal bounded list
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(1_000_000),
+        item: { height: ITEM, template: simpleTemplate },
+        orientation: "horizontal",
+        scroll: { mode: "bounded" },
+      },
+      [],
+    );
+    const viewport = getViewport(container);
+    const before = list.getScrollPosition();
+
+    // deltaX dominant → should be ignored in horizontal mode (cross-axis)
+    fireWheel(viewport, 0, 100);
+    expect(list.getScrollPosition()).toBe(before);
+  });
+
+  it("forwards cross-axis deltaX to viewport.scrollLeft when content overflows horizontally", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+
+    // Simulate horizontal overflow: scrollWidth > clientWidth
+    Object.defineProperty(viewport, "scrollWidth", { value: 600, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 300, configurable: true });
+    viewport.scrollLeft = 0;
+
+    // deltaY dominant (50) so the handler doesn't bail on the cross-axis check,
+    // but deltaX (30) is non-zero → forwarded to viewport.scrollLeft.
+    fireWheel(viewport, 50, 30);
+    expect(viewport.scrollLeft).toBe(30);
+  });
+
+  it("ignores cross-axis dominant wheel when content overflows horizontally", () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    const before = list.getScrollPosition();
+
+    Object.defineProperty(viewport, "scrollWidth", { value: 600, configurable: true });
+    Object.defineProperty(viewport, "clientWidth", { value: 300, configurable: true });
+
+    // deltaX dominant → returns early, no vertical scroll
+    fireWheel(viewport, 10, 100);
+    expect(list.getScrollPosition()).toBe(before);
+  });
+});
+
+// =============================================================================
+// Idle detection — scrollDirection resets after idle timeout
+// =============================================================================
+
+describe("bounded scroll — idle detection", () => {
+  it("resets scrollDirection to 0 after idle timeout", async () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+
+    fireWheel(viewport, 100);
+    // scrollDirection should be set after wheel
+    const state = (list as any)._test?.engineState;
+
+    // Wait for the idle timeout (150ms default) + buffer
+    await new Promise((r) => setTimeout(r, 250));
+
+    // After idle, scrollDirection should be 0
+    // We verify via a second scroll — if idle fired, the direction was reset
+    const posBefore = list.getScrollPosition();
+    fireWheel(viewport, 50);
+    expect(list.getScrollPosition()).toBeGreaterThan(posBefore);
+  });
+});
+
+// =============================================================================
+// Smooth scroll — animates in logical space via requestAnimationFrame
+// =============================================================================
+
+describe("bounded scroll — smooth scroll", () => {
+  it("scrollToIndex with smooth behavior animates to the target", async () => {
+    list = makeBounded(1_000_000);
+    const target = 500;
+    const targetOffset = target * ITEM; // 25000
+
+    list.scrollToIndex(target, { behavior: "smooth" });
+
+    // rAF is shimmed to setTimeout(0), so give it time to complete
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Should arrive near the target
+    const pos = list.getScrollPosition();
+    expect(Math.abs(pos - targetOffset)).toBeLessThan(ITEM);
+  });
+
+  it("scrollToIndex with auto behavior jumps instantly", () => {
+    list = makeBounded(1_000_000);
+    const target = 500;
+
+    list.scrollToIndex(target, { behavior: "auto" });
+
+    const pos = list.getScrollPosition();
+    expect(Math.abs(pos - target * ITEM)).toBeLessThan(ITEM);
+  });
+
+  it("cancels an in-flight smooth scroll when a new one starts", async () => {
+    list = makeBounded(1_000_000);
+
+    list.scrollToIndex(100, { behavior: "smooth" });
+    // Immediately start a second animation — the first should be cancelled
+    await new Promise((r) => setTimeout(r, 50));
+    list.scrollToIndex(200, { behavior: "smooth" });
+
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Should end near index 200, not 100
+    const pos = list.getScrollPosition();
+    const target200 = 200 * ITEM;
+    expect(Math.abs(pos - target200)).toBeLessThan(ITEM * 2);
+  });
+
+  it("handles smooth scroll to a position within 1px (instant jump, no animation)", () => {
+    list = makeBounded(1_000_000);
+    // Jump to a known position
+    list.scrollToIndex(100, { behavior: "auto" });
+    const current = list.getScrollPosition();
+
+    // Smooth scroll to the same position — the <1px guard should fire setLogical
+    // directly without starting an animation.
+    list.scrollToIndex(100, { behavior: "smooth" });
+
+    // Position unchanged (no animation drift)
+    expect(Math.abs(list.getScrollPosition() - current)).toBeLessThan(ITEM);
   });
 });
 

@@ -179,6 +179,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   getTotalItems: () => number,
   striped?: boolean | "data" | "even" | "odd",
   stripeIndexFn?: () => (index: number) => number,
+  // RFC-013: absolute row offsets are shifted into the bounded runway by
+  // subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
+  getBaseOffset: () => number = () => 0,
 ): TableRendererInstance<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedRow>();
@@ -381,7 +384,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const element = pool.acquire();
     const headerItem = item as unknown as GroupHeaderItem;
     const height = sc.getSize(index);
-    const offset = sc.getOffset(index);
+    const offset = sc.getOffset(index) - getBaseOffset();
 
     // Set all styles in one operation (element was reset by pool.release)
     element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
@@ -437,7 +440,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   ): TrackedRow => {
     const element = pool.acquire();
     const height = sc.getSize(index);
-    const offset = sc.getOffset(index);
+    const offset = sc.getOffset(index) - getBaseOffset();
     const isPlaceholder = isPH(item.id);
 
     // Set all row styles in one operation (element was reset by pool.release)
@@ -569,7 +572,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
           // Position update
-          const offset = sc.getOffset(i);
+          const offset = sc.getOffset(i) - getBaseOffset();
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
@@ -627,7 +630,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
           // Position update only when offset changed
-          const offset = sc.getOffset(i);
+          const offset = sc.getOffset(i) - getBaseOffset();
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
