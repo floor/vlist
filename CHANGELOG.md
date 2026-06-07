@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Added
 
-- **Bounded logical scroll model (RFC-012)** — opt-in mode `scroll: { mode: "bounded" }` sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, supporting unbounded item counts without coordinate compression. Core grows +0.3 KB (base 9.4 → 9.7 KB gzipped); large-list bundles shrink by ~3 KB vs the old `scale()` plugin.
+- **Bounded logical scroll model (RFC-012)** — opt-in mode `scroll: { mode: "bounded" }` sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, supporting unbounded item counts without coordinate compression. Core grows +0.3 KB gzipped; large-list bundles shrink by ~3 KB vs the old `scale()` plugin.
 - **Renderer routing for bounded scroll (RFC-013 Phase A)** — grid, table, and masonry renderers detect bounded mode and apply the base offset to item positions, keeping all layout plugins compatible with the logical scroll model.
 
 ### Changed
