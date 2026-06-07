@@ -1210,6 +1210,75 @@ describe("selection — scroll padding", () => {
 });
 
 // =============================================================================
+// selection — scrollFocusIntoView with custom navigate (masonry-like)
+// =============================================================================
+
+describe("selection — scroll with custom navigate + _scrollItemIntoView", () => {
+  function makeKeyEvent(key: string): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true });
+    (event as any).preventDefault = mock(() => {});
+    return event;
+  }
+
+  it("should call _scrollItemIntoView when nav.navigate exists alongside it", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, keydownHandlers, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    const sivCalls: number[] = [];
+    methods.set("_scrollItemIntoView", (index: number) => { sivCalls.push(index); });
+
+    ctx.setNavConfig({
+      total: () => 20,
+      navigate: (current: number, key: string, _total: number): number => {
+        if (key === "ArrowDown") return Math.min(current + 1, 19);
+        if (key === "ArrowUp") return Math.max(current - 1, 0);
+        return current;
+      },
+    });
+
+    plugin.setup!(ctx);
+
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+
+    expect(sivCalls.length).toBe(3);
+    expect(sivCalls).toEqual([0, 1, 2]);
+
+    cleanup();
+  });
+
+  it("should NOT call scrollFocusIntoView when only nav.navigate exists (no sivFn)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, keydownHandlers, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    ctx.setNavConfig({
+      total: () => 20,
+      navigate: (current: number, key: string, _total: number): number => {
+        if (key === "ArrowDown") return Math.min(current + 1, 19);
+        return current;
+      },
+    });
+
+    plugin.setup!(ctx);
+
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+    keydownHandlers[0]!(makeKeyEvent("ArrowDown"));
+
+    // No _scrollItemIntoView registered → no scroll calls from focusIntoView
+    expect(scrollCalls.length).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
 // selection — Keyboard Shift Range Selection (multiple mode)
 // =============================================================================
 

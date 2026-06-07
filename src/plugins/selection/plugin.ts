@@ -589,7 +589,7 @@ export function selection<T extends VListItem = VListItem>(
             event.preventDefault();
 
             if (focusMoved && state.focusedIndex >= 0) {
-              if (!nav.navigate) scrollFocusIntoView(state.focusedIndex);
+              if (sivFn || !nav.navigate) scrollFocusIntoView(state.focusedIndex);
               setActiveDescendant(state.focusedIndex);
             }
 
