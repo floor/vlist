@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.4.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** Bounded logical scroll model for 1M+ items (`scroll: { mode: "bounded" }`). `scale()` deprecated.
+**v2.4.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · **New:** Bounded logical scroll model for 1M+ items (`scroll: { mode: "bounded" }`), `carousel()` plugin with infinite loop, snap, and focal scaling. `scale()` deprecated.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -56,7 +56,7 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 9.4 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
+| **Base** | 9.7 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
@@ -64,10 +64,12 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 | `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.4 KB | 2D grid layout |
-| `masonry()` | +3.9 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `table()` | +5.9 KB | Data table with columns, resize, sort |
+| `masonry()` | +4.0 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `carousel()` | +2.3 KB | Paged horizontal carousel with snap and keyboard nav |
+| `table()` | +5.8 KB | Data table with columns, resize, sort |
+| `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
-| `sortable()` | +2.9 KB | Drag-and-drop reordering with auto-scroll |
+| `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
 | `snapshots()` | +1.1 KB | Scroll position save/restore |
 | `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
 
