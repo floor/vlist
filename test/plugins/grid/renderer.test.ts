@@ -130,7 +130,6 @@ describe("createGridRenderer", () => {
 
       expect(renderer).toBeDefined();
       expect(typeof renderer.render).toBe("function");
-      expect(typeof renderer.updatePositions).toBe("function");
       expect(typeof renderer.updateItem).toBe("function");
       expect(typeof renderer.updateItemClasses).toBe("function");
       expect(typeof renderer.getElement).toBe("function");
@@ -695,43 +694,6 @@ describe("createGridRenderer", () => {
       expect(el4.getAttribute("data-id")).toBe("5");
       expect(el4.getAttribute("data-row")).toBe("1");
       expect(el4.getAttribute("data-col")).toBe("0");
-
-      renderer.destroy();
-    });
-  });
-
-  // ===========================================================================
-  // updatePositions()
-  // ===========================================================================
-
-  describe("updatePositions", () => {
-    it("should update positions of all rendered items", () => {
-      const renderer = createGridRenderer<TestItem>(
-        container,
-        defaultTemplate,
-        sizeCache,
-        gridLayout,
-        "vlist",
-        800,
-      );
-
-      const items = createTestItems(4);
-      renderer.render(items, { start: 0, end: 3 }, new Set(), -1);
-
-      // Get original position
-      const el0 = container.querySelector("[data-index='0']") as HTMLElement;
-      const originalTransform = el0.style.transform;
-
-      // Update positions with a compression context (no compression active)
-      renderer.updatePositions({
-        scrollPosition: 0,
-        containerSize: 600,
-        totalItems: 2, // totalRows in grid mode
-        rangeStart: 0,
-      });
-
-      // Positions should still be set (may or may not change depending on compression)
-      expect(el0.style.transform).toBeTruthy();
 
       renderer.destroy();
     });
@@ -1507,9 +1469,7 @@ describe("grid renderer compressed positioning", () => {
     itemsContainer.remove();
   });
 
-  it("should use compressed positioning for large grids", () => {
-    // Create grid layout and height cache for a very large grid
-    // that would trigger compression
+  it("should render a windowed range of a very large grid", () => {
     const gridLayout = createGridLayout({ columns: 4, gap: 8 });
     const totalItems = 2_000_000;
     const totalRows = gridLayout.getTotalRows(totalItems);
@@ -1529,23 +1489,7 @@ describe("grid renderer compressed positioning", () => {
     // Create a small set of items for the visible range
     const items = createTestItems(20);
 
-    // Render with compression context (simulating a compressed scroll state)
-    const compressionCtx = {
-      scrollPosition: 5000000,
-      totalItems: 100010, // totalRows
-      containerSize: 500,
-      rangeStart: 100000,
-    };
-
-    // L231-239: When compressionCtx is provided and compression is active,
-    // calculateRowOffset should use calculateCompressedItemPosition
-    gridRenderer.render(
-      items,
-      { start: 100000, end: 100019 },
-      new Set(),
-      -1,
-      compressionCtx,
-    );
+    gridRenderer.render(items, { start: 100000, end: 100019 }, new Set(), -1);
 
     // Verify items were rendered
     const rendered = itemsContainer.querySelectorAll("[data-index]");

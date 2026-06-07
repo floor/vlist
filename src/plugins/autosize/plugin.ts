@@ -53,16 +53,25 @@ export function autosize<T extends VListItem = VListItem>(
     return measuredSizes.get(index) ?? estimatedSize;
   }
 
+  // Maximum logical scroll position, derived from the size cache rather than
+  // native scroll geometry. Under bounded mode (RFC-012) `viewport.scrollHeight`
+  // reflects the runway, not the full virtual size, so reading it would treat
+  // the runway edge as the list end. This matches the end-aligned scroll target
+  // computed in `setScrollToIndexFn` below, and is mode-independent.
+  function maxScrollPos(): number {
+    return Math.max(
+      0,
+      storedCtx!.sizeCache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
+    );
+  }
+
   function isAtEnd(): boolean {
-    const viewport = storedCtx!.dom.viewport;
-    const maxScroll = viewport.scrollHeight - viewport.clientHeight;
+    const maxScroll = maxScrollPos();
     return maxScroll > 0 && engineState.scrollPosition >= maxScroll - END_THRESHOLD;
   }
 
   function snapToEnd(): void {
-    const viewport = storedCtx!.dom.viewport;
-    void viewport.scrollHeight;
-    const maxScroll = viewport.scrollHeight - viewport.clientHeight;
+    const maxScroll = maxScrollPos();
     if (maxScroll > engineState.scrollPosition) {
       storedCtx!.scrollTo(maxScroll);
     }

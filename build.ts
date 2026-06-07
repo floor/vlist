@@ -26,7 +26,7 @@ async function build() {
   // reference all exports in a wrapper to force inclusion.
   const entryAbs = resolve("./src/index.ts");
   const wrapperCode = [
-    `export { createVList, scale, scrollbar, grid, a11y, selection, page,`,
+    `export { createVList, scrollbar, grid, a11y, selection, page,`,
     `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree, search, carousel,`,
     `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
@@ -143,7 +143,7 @@ async function build() {
 
   const ALL_PLUGINS = [
     "a11y", "selection", "data", "scrollbar", "sortable",
-    "groups", "scale", "page", "snapshots", "transition",
+    "groups", "page", "snapshots", "transition",
     "autosize", "grid", "table", "masonry", "tree", "search", "carousel",
   ] as const;
 

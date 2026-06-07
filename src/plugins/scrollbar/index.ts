@@ -9,12 +9,3 @@ export {
   type ScrollbarConfig,
   type ScrollCallback,
 } from "./scrollbar";
-export {
-  createScrollController,
-  rafThrottle,
-  isAtBottom,
-  isAtTop,
-  getScrollPercentage,
-  isRangeVisible,
-  type ScrollController,
-} from "./controller";

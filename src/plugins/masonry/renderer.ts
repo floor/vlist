@@ -177,6 +177,9 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   ariaIdPrefix?: string,
   ariaPosInSetGetter?: (layoutIndex: number) => number,
   interactive?: boolean,
+  // RFC-013: the main-axis placement offset is shifted into the bounded runway
+  // by subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
+  getBaseOffset: () => number = () => 0,
 ): MasonryRenderer<T> => {
   const pool = createElementPool();
   const rendered = new Map<number, TrackedItem>();
@@ -237,10 +240,12 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element: HTMLElement,
     placement: ItemPlacement,
   ): void => {
+    // placement.y is the absolute main-axis offset; shift it into the runway.
+    const main = Math.round(placement.y - getBaseOffset());
     if (isHorizontal) {
-      element.style.transform = `translate(${Math.round(placement.y)}px, ${Math.round(placement.x)}px)`;
+      element.style.transform = `translate(${main}px, ${Math.round(placement.x)}px)`;
     } else {
-      element.style.transform = `translate(${Math.round(placement.x)}px, ${Math.round(placement.y)}px)`;
+      element.style.transform = `translate(${Math.round(placement.x)}px, ${main}px)`;
     }
   };
 
@@ -335,7 +340,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       lastItem: item,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastY: placement.y,
+      lastY: placement.y - getBaseOffset(),
       lastX: placement.x,
       lastSize: placement.size,
       lastCrossSize: placement.crossSize,
@@ -389,7 +394,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
         const posChanged =
-          existing.lastY !== placement.y ||
+          existing.lastY !== placement.y - getBaseOffset() ||
           existing.lastX !== placement.x;
         const sizeChanged =
           existing.lastSize !== placement.size ||
@@ -433,7 +438,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // Position update only when coordinates changed
         if (posChanged) {
           positionElement(existing.element, placement);
-          existing.lastY = placement.y;
+          existing.lastY = placement.y - getBaseOffset();
           existing.lastX = placement.x;
         }
       } else {

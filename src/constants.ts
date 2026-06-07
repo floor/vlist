@@ -79,6 +79,42 @@ export const SCROLL_EASING = (t: number): number => t < 0.5 ? 2 * t * t : 1 - (-
 export const SCROLL_DURATION = 300;
 
 // =============================================================================
+// Bounded Logical Scroll (RFC-012)
+// =============================================================================
+
+/**
+ * Runway size as a multiple of the viewport. The bounded content element is
+ * sized to `containerSize × this` (capped at total size), giving the native
+ * scrollbar room to move before a rebase shifts the logical origin.
+ */
+export const BOUNDED_RUNWAY_FACTOR = 2;
+
+/**
+ * Minimum runway multiple. The runway must exceed the viewport so native scroll
+ * and touch/trackpad momentum have room before a rebase; below this there would
+ * be little-to-no native scrollable range. User-supplied `scroll.runway` values
+ * are clamped up to this floor.
+ *
+ * 1.5 keeps a half-viewport of native scroll travel — enough for the native
+ * scrollbar and most touch gestures. The wheel/trackpad path is already fully
+ * synthetic (driven in logical space), so it is unaffected by the runway size;
+ * a small runway only risks interrupting native touch momentum at the edges.
+ */
+export const BOUNDED_RUNWAY_MIN = 1.5;
+
+/**
+ * Lower rebase trigger: when native scrollTop drops below this fraction of the
+ * runway (and we are not already at the logical start), shift the origin back.
+ */
+export const BOUNDED_REBASE_LOW = 0.25;
+
+/**
+ * Upper rebase trigger: when native scrollTop rises above this fraction of the
+ * runway (and we are not already at the logical end), shift the origin forward.
+ */
+export const BOUNDED_REBASE_HIGH = 0.75;
+
+// =============================================================================
 // Scrollbar
 // =============================================================================
 
