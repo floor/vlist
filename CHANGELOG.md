@@ -9,16 +9,23 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
-## [Unreleased]
+## [2.4.0] - 2026-06-07
+
+### Added
+
+- **Bounded logical scroll model (RFC-012)** — opt-in mode `scroll: { mode: "bounded" }` sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, supporting unbounded item counts without coordinate compression. Core grows +0.3 KB (base 9.4 → 9.7 KB gzipped); large-list bundles shrink by ~3 KB vs the old `scale()` plugin.
+- **Renderer routing for bounded scroll (RFC-013 Phase A)** — grid, table, and masonry renderers detect bounded mode and apply the base offset to item positions, keeping all layout plugins compatible with the logical scroll model.
 
 ### Changed
 
-- **Bounded logical scroll model (RFC-012)** — large lists (1M+ items) are now handled by an opt-in bounded scroll mode (`scroll: { mode: "bounded" }`) that sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, instead of compressing the scroll space. This lives in core (+1.1 KB base), replacing the +4.2 KB `scale()` plugin — large-list bundles shrink by ~2.9 KB. The `MAX_VIRTUAL_SIZE` overflow warning now points at bounded mode.
-- **`carousel()` infinite loop now runs through the bounded scroll handler (RFC-012 Phase 4)** — the plugin no longer manages its own rebasing, smooth-scroll animation, or raw `scrollTop` writes; it requests a wrap-capable bounded handler (`ctx.setBoundedWrap`) that folds the logical position back toward the middle cycle by whole laps. Snap-to-item moved from an internal timer to the engine's `onIdle` hook. Behavior is unchanged; `list.getScrollPosition()` for a carousel now returns the raw logical position rather than a lap-normalized value.
+- **`carousel()` infinite loop now runs through the bounded scroll handler** — the plugin no longer manages its own rebasing or raw `scrollTop` writes; it requests a wrap-capable bounded handler (`ctx.setBoundedWrap`) that folds the logical position back toward the middle cycle by whole laps. Carousel shrank from +2.6 KB to +2.3 KB.
+
+### Deprecated
+
+- **`scale()` plugin** — importing `scale()` still works but logs a deprecation warning and does nothing. Migrate to `scroll: { mode: "bounded" }`. Will be removed in vlist 3.0.
 
 ### Removed
 
-- **`scale()` plugin** — removed entirely (superseded by bounded scroll). Migrate `scale()` to `scroll: { mode: "bounded" }`.
 - **Compression internals** — deleted the dead legacy rendering/compression modules that the live `src/core/` engine had already superseded. These were reachable only via `vlist/internals`, never on the runtime path, so the main bundle is unaffected.
   - Removed `vlist/internals` exports: `createRenderer`, `createMeasuredSizeCache` (+ `MeasuredSizeCache`), `createViewportState` and the viewport range helpers (`simpleVisibleRange`, `calculateRenderRange`, `calculateTotalSize`, `calculateActualSize`, `calculateItemOffset`, `calculateScrollToIndex`, `clampScrollPosition`, `rangesEqual`, `isInRange`, `getRangeCount`, `diffRanges`), the scale re-exports (`getScaleState`, `getScale`, `needsScaling`, `getMaxItemsWithoutScaling`, `getScaleInfo`, `calculateScaledVisibleRange`, `calculateScaledRenderRange`, `calculateScaledItemPosition`, `calculateScaledScrollToIndex`, `calculateIndexFromScrollPosition`, `ScaleState`), `MAX_VIRTUAL_SIZE` (still exported from `vlist`/constants), and the scroll controller (`createScrollController`, `rafThrottle`, `isAtBottom`, `isAtTop`, `getScrollPercentage`, `isRangeVisible`, `ScrollController`).
   - Removed the `isCompressed`, `compressionRatio`, and `actualSize` fields from `ViewportState`, and `isCompressed` from the error event's viewport snapshot.
