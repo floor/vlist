@@ -14,6 +14,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Changed
 
 - **Bounded logical scroll model (RFC-012)** — large lists (1M+ items) are now handled by an opt-in bounded scroll mode (`scroll: { mode: "bounded" }`) that sizes the content element to a viewport-relative runway and rebases a logical origin near the edges, instead of compressing the scroll space. This lives in core (+1.1 KB base), replacing the +4.2 KB `scale()` plugin — large-list bundles shrink by ~2.9 KB. The `MAX_VIRTUAL_SIZE` overflow warning now points at bounded mode.
+- **`carousel()` infinite loop now runs through the bounded scroll handler (RFC-012 Phase 4)** — the plugin no longer manages its own rebasing, smooth-scroll animation, or raw `scrollTop` writes; it requests a wrap-capable bounded handler (`ctx.setBoundedWrap`) that folds the logical position back toward the middle cycle by whole laps. Snap-to-item moved from an internal timer to the engine's `onIdle` hook. Behavior is unchanged; `list.getScrollPosition()` for a carousel now returns the raw logical position rather than a lap-normalized value.
 
 ### Removed
 

@@ -272,3 +272,150 @@ describe("bounded scroll — rebasing", () => {
     expect(viewport.scrollTop).toBe(200); // untouched: baseOffset is 0
   });
 });
+
+// =============================================================================
+// Wrap mode (infinite loop — carousel uses this via ctx.setBoundedWrap)
+// =============================================================================
+
+/**
+ * Minimal infinite-loop plugin mirroring how the carousel wires the bounded
+ * handler: it inflates the virtual window to `realTotal × cycles`, maps virtual
+ * indices to real items via modulo, and requests wrap mode. Configurable cycle
+ * geometry keeps the fold threshold small enough to exercise in a test.
+ */
+function wrapPlugin(
+  realTotal: number,
+  opts: { cycles: number; middle: number; threshold: number; step?: number },
+): VListPlugin<TestItem> {
+  const step = opts.step ?? ITEM;
+  const virtualTotal = realTotal * opts.cycles;
+  const lapSize = step * realTotal;
+  const mod = (i: number): number => ((i % realTotal) + realTotal) % realTotal;
+  return {
+    name: "wrap-test",
+    priority: 10,
+    setup(ctx): void {
+      const es = ctx.getState();
+      ctx.setGetItemFn((i) => ctx.getItems()[mod(i)]);
+      ctx.sizeCache.getTotalSize = (): number => virtualTotal * step;
+      ctx.sizeCache.getOffset = (index): number => index * step;
+      ctx.sizeCache.getSize = (): number => step;
+      ctx.sizeCache.indexAtOffset = (off): number =>
+        Math.max(0, Math.min(Math.floor(off / step), virtualTotal - 1));
+      ctx.sizeCache.getTotal = (): number => virtualTotal;
+      es.totalItems = virtualTotal;
+      ctx.setVirtualTotalFn(() => realTotal);
+      ctx.setIndexMapFn(mod);
+      ctx.setBoundedWrap({
+        lapSize: () => lapSize,
+        home: () => opts.middle * lapSize,
+        thresholdLaps: opts.middle - opts.threshold,
+      });
+      ctx.registerMethod("jump", (px: number) => ctx.scrollTo(px));
+    },
+  };
+}
+
+// A multiset of (rendered item, paint offset) pairs. Real items repeat across
+// laps, so the data index alone is ambiguous — identity is the content paired
+// with its transform. A seamless fold leaves this multiset unchanged.
+function renderSnapshot(c: HTMLElement): string[] {
+  const snap: string[] = [];
+  for (const el of getContent(c).querySelectorAll<HTMLElement>("[data-index]")) {
+    if (el.style.display === "none") continue;
+    snap.push(`${el.textContent}@${transformPx(el)}`);
+  }
+  return snap.sort();
+}
+
+describe("bounded scroll — wrap mode", () => {
+  it("sizes content to the full runway even when the real list fits within it", () => {
+    // 5 items × 50px = 250px — would degenerate to native sizing in non-wrap mode,
+    // but the loop is infinite so the runway is always used in full.
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(5),
+        item: { height: ITEM, template: simpleTemplate },
+      },
+      [wrapPlugin(5, { cycles: 101, middle: 50, threshold: 10 })],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("never clamps the logical position; baseOffset absorbs the overflow", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(5),
+        item: { height: ITEM, template: simpleTemplate },
+      },
+      [wrapPlugin(5, { cycles: 101, middle: 50, threshold: 10 })],
+    );
+    const lapSize = 5 * ITEM; // 250
+    const home = 50 * lapSize; // 62500 — far past maxLogical of a non-wrap runway
+    (list as unknown as { jump(px: number): void }).jump(home);
+    // Logical is preserved exactly (no clamp to virtualTotal - viewport).
+    expect(list.getScrollPosition()).toBe(home);
+    const viewport = getViewport(container);
+    // scrollTop pinned to the runway centre; baseOffset carries the rest.
+    expect(viewport.scrollTop).toBe((RUNWAY - VIEWPORT) / 2); // 250
+  });
+
+  it("folds back toward home by whole laps once drift crosses the threshold", () => {
+    // Small cycle geometry: thresholdLaps = middle - threshold = 5 - 2 = 3 laps.
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(5),
+        item: { height: ITEM, template: simpleTemplate },
+      },
+      [wrapPlugin(5, { cycles: 11, middle: 5, threshold: 2 })],
+    );
+    const viewport = getViewport(container);
+    const lapSize = 5 * ITEM; // 250
+    const home = 5 * lapSize; // 1250
+    (list as unknown as { jump(px: number): void }).jump(home);
+
+    const before = renderSnapshot(container);
+    expect(list.getScrollPosition()).toBe(home);
+    const scrollTopBefore = viewport.scrollTop;
+
+    // Each native scroll to the runway edge advances the logical position by one
+    // lap (the rebase recenters scrollTop after every event). After three laps
+    // the drift hits the threshold and the handler folds back to home.
+    simulateScroll(viewport, RUNWAY - VIEWPORT); // lap 1
+    simulateScroll(viewport, RUNWAY - VIEWPORT); // lap 2
+    simulateScroll(viewport, RUNWAY - VIEWPORT); // lap 3 → fold
+
+    // Logical position folded exactly back to home and scrollTop is unchanged.
+    expect(list.getScrollPosition()).toBe(home);
+    expect(viewport.scrollTop).toBe(scrollTopBefore);
+
+    // The rendered frame is visually identical to the start: same real items at
+    // the same transforms — the loop returned seamlessly.
+    const after = renderSnapshot(container);
+    expect(after).toEqual(before);
+  });
+
+  it("does not fold while drift stays within the threshold", () => {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(5),
+        item: { height: ITEM, template: simpleTemplate },
+      },
+      [wrapPlugin(5, { cycles: 11, middle: 5, threshold: 2 })],
+    );
+    const viewport = getViewport(container);
+    const lapSize = 5 * ITEM;
+    const home = 5 * lapSize;
+    (list as unknown as { jump(px: number): void }).jump(home);
+
+    simulateScroll(viewport, RUNWAY - VIEWPORT); // lap 1
+    simulateScroll(viewport, RUNWAY - VIEWPORT); // lap 2, still < threshold (3)
+
+    // Drifted two laps forward, not folded.
+    expect(list.getScrollPosition()).toBe(home + 2 * lapSize);
+  });
+});

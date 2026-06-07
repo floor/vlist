@@ -776,13 +776,14 @@ describe("autosize anchor preservation", () => {
     state.visibleCount = 6;
     for (let i = 0; i < 6; i++) state.visibleIndices[i] = 10 + i;
 
-    // Each measurement fires the observer callback independently.
-    // Mock doesn't update engineState.scrollPosition, so each uses 500 as base.
+    // Each measurement fires the observer callback independently. A scroll
+    // write updates engineState.scrollPosition (matching the real adapter), so
+    // compensations accumulate off the running position.
     triggerMeasurement(el2, 80); // +30 → scrollTo(500 + 30 = 530)
-    triggerMeasurement(el4, 90); // +40 → scrollTo(500 + 40 = 540)
+    triggerMeasurement(el4, 90); // +40 → scrollTo(530 + 40 = 570)
 
     expect(mockCtx.scrollCalls).toContain(530);
-    expect(mockCtx.scrollCalls).toContain(540);
+    expect(mockCtx.scrollCalls).toContain(570);
 
     plugin.destroy();
     mockCtx.cleanup();

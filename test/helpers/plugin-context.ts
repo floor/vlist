@@ -220,6 +220,7 @@ export function createPluginMockContext<T extends VListItem>(
 
     setSizeConfig: () => {},
     setScrollFns: () => {},
+    setBoundedWrap: () => {},
     setVirtualTotalFn: () => {},
     setIndexMapFn: () => {},
 
@@ -253,11 +254,17 @@ export function createPluginMockContext<T extends VListItem>(
     get rawSizeSpec() { return itemSizeConfig; },
 
     scrollTo: (pos: number) => {
+      // Mirror the real adapter: a scroll write moves the logical position.
+      engineState.scrollPosition = pos;
       scrollCalls.push(pos);
     },
-    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, _onComplete?: () => void) => {
-      scrollCalls.push(typeof target === "function" ? target() : target);
+    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
+      const dest = typeof target === "function" ? target() : target;
+      engineState.scrollPosition = dest;
+      scrollCalls.push(dest);
+      onComplete?.();
     },
+    cancelScroll: () => {},
     disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},

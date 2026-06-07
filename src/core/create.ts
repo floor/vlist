@@ -25,7 +25,7 @@ import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollHandler } from "./scroll";
-import { createBoundedScrollHandler, type BoundedScrollHandler } from "./bounded-scroll";
+import { createBoundedScrollHandler, type BoundedScrollHandler, type WrapConfig } from "./bounded-scroll";
 import type { ScrollHandler } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./scroll-model";
 import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
@@ -298,6 +298,9 @@ export function createVList<T extends VListItem = VListItem>(
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
   let boundedHandler: BoundedScrollHandler | null = null;
+  // A plugin (carousel) can request the bounded handler in wrap mode during
+  // setup, before the handler is built below. Wrap implies bounded.
+  let boundedWrap: WrapConfig | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
@@ -366,6 +369,8 @@ export function createVList<T extends VListItem = VListItem>(
         scrollGetFn = get;
         scrollSetFn = set;
       },
+      setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
+      cancelScroll(): void { scrollHandler?.cancelScroll(); },
       setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
       setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
       getItems,
@@ -590,7 +595,8 @@ export function createVList<T extends VListItem = VListItem>(
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
-  if (boundedMode) {
+  // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
+  if (boundedMode || boundedWrap) {
     boundedHandler = createBoundedScrollHandler({
       state,
       viewport: dom.viewport,
@@ -605,6 +611,7 @@ export function createVList<T extends VListItem = VListItem>(
       ...(rawConfig.scroll?.runway !== undefined
         ? { runwayFactor: Math.max(BOUNDED_RUNWAY_MIN, rawConfig.scroll.runway) }
         : {}),
+      ...(boundedWrap ? { wrap: boundedWrap } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });

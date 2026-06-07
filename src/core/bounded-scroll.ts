@@ -49,6 +49,27 @@ export interface BoundedScrollHandler extends ScrollHandler {
   refresh(totalSize: number): void;
 }
 
+/**
+ * Infinite-loop (wrap) configuration for the bounded handler (carousel, RFC-011).
+ *
+ * In wrap mode the logical position is never clamped to a maximum: instead it is
+ * periodically folded back toward {@link home} by whole laps once it drifts more
+ * than {@link thresholdLaps} laps away. Because the consumer maps virtual indices
+ * to real items via `index % realTotal`, shifting the logical position (and
+ * baseOffset) by a whole lap leaves the rendered items and their on-screen
+ * positions unchanged — the loop is seamless. The content element is sized to the
+ * runway exactly as in non-wrap mode, so large item counts never blow the
+ * browser's element-size limit.
+ */
+export interface WrapConfig {
+  /** Current lap period in virtual px (`realTotal × stepSize`). */
+  readonly lapSize: () => number;
+  /** Logical position to fold back toward (e.g. the middle cycle). */
+  readonly home: () => number;
+  /** Fold the logical position back toward `home` once it drifts this many laps away. */
+  readonly thresholdLaps: number;
+}
+
 export interface BoundedScrollConfig {
   readonly state: EngineState;
   readonly viewport: HTMLElement;
@@ -61,6 +82,9 @@ export interface BoundedScrollConfig {
   readonly mainAxisPadding: number;
   /** Runway size as a multiple of the viewport (defaults to BOUNDED_RUNWAY_FACTOR). */
   readonly runwayFactor?: number;
+  /** Infinite-loop config (carousel). When set, the logical position wraps by
+   *  whole laps toward `home` instead of clamping to a maximum. */
+  readonly wrap?: WrapConfig;
   /** Called synchronously per frame — triggers the 2-phase pipeline. */
   readonly onFrame: () => void;
   /** Called when scrolling becomes idle. */
@@ -77,6 +101,8 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   const { state, viewport, content, isX, wheelEnabled, onFrame, onIdle, mainAxisPadding } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
   const runwayFactor = config.runwayFactor ?? BOUNDED_RUNWAY_FACTOR;
+  const wrap = config.wrap ?? null;
+  const isWrap = wrap !== null;
   const target: EventTarget = config.scrollTarget ?? viewport;
 
   // ── Derived runway geometry (recomputed by refresh) ──────────────
@@ -100,12 +126,19 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   // either direction. At the extremes the clamps land scrollTop exactly on 0 or
   // maxScrollTop, so the logical start/end are reachable precisely.
   function applySplit(logicalPx: number): void {
-    const clamped = clamp(logicalPx, 0, maxLogical);
+    // Wrap mode never clamps the logical position (the loop is infinite) and
+    // pins scrollTop to the runway centre, driving all motion through baseOffset.
+    const clamped = isWrap ? logicalPx : clamp(logicalPx, 0, maxLogical);
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = clamped;
     state.scrollDirection = clamped > state.prevScrollPosition ? 1 : clamped < state.prevScrollPosition ? -1 : 0;
 
     const centre = maxScrollTop / 2;
+    if (isWrap) {
+      state.baseOffset = clamped - centre;
+      setScrollTop(centre);
+      return;
+    }
     const base = clamp(clamped - centre, 0, maxBaseOffset);
     state.baseOffset = base;
     setScrollTop(clamp(clamped - base, 0, maxScrollTop));
@@ -128,6 +161,7 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     state.scrollDirection = logical > state.prevScrollPosition ? 1 : logical < state.prevScrollPosition ? -1 : 0;
 
     maybeRebase(top);
+    if (isWrap) wrapRebase();
     onFrame();
     scheduleIdle();
   }
@@ -135,20 +169,47 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   // Shift baseOffset + scrollTop by the same delta (logical preserved) so the
   // native scrollbar moves back toward the runway centre, leaving headroom.
   function maybeRebase(top: number): void {
-    if (maxBaseOffset <= 0) return;
-    const base = state.baseOffset;
     const low = maxScrollTop * BOUNDED_REBASE_LOW;
     const high = maxScrollTop * BOUNDED_REBASE_HIGH;
+    const centre = maxScrollTop / 2;
+
+    if (isWrap) {
+      // No virtual cap in wrap mode: recenter scrollTop whenever it leaves the
+      // central band, absorbing the delta into baseOffset (logical unchanged).
+      if (top >= low && top <= high) return;
+      state.baseOffset = state.scrollPosition - centre;
+      setScrollTop(centre);
+      return;
+    }
+
+    if (maxBaseOffset <= 0) return;
+    const base = state.baseOffset;
     const needsDown = top < low && base > 0;
     const needsUp = top > high && base < maxBaseOffset;
     if (!needsDown && !needsUp) return;
 
     const logical = state.scrollPosition;
-    const centre = maxScrollTop / 2;
     const newBase = clamp(logical - centre, 0, maxBaseOffset);
     if (newBase === base) return;
     state.baseOffset = newBase;
     setScrollTop(clamp(logical - newBase, 0, maxScrollTop));
+  }
+
+  // Fold the logical position back toward `home` by whole laps once it drifts
+  // beyond the threshold. Shifting scrollPosition + baseOffset by the same whole
+  // number of laps leaves scrollTop (and therefore every on-screen position)
+  // untouched — the modulo index mapping resolves the shifted window to the same
+  // real items, so the loop is seamless and the render window stays bounded.
+  function wrapRebase(): void {
+    const lap = wrap!.lapSize();
+    if (lap <= 0) return;
+    const drift = state.scrollPosition - wrap!.home();
+    const laps = Math.trunc(drift / lap);
+    if (Math.abs(laps) < wrap!.thresholdLaps) return;
+    const shift = laps * lap;
+    state.scrollPosition -= shift;
+    state.prevScrollPosition -= shift;
+    state.baseOffset -= shift;
   }
 
   // ── Wheel (synchronous; driven entirely in logical space) ────────
@@ -168,11 +229,13 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     }
 
     const current = state.scrollPosition;
-    const next = clamp(current + delta * WHEEL_SENSITIVITY, 0, maxLogical);
+    const raw = current + delta * WHEEL_SENSITIVITY;
+    const next = isWrap ? raw : clamp(raw, 0, maxLogical);
     if (Math.abs(next - current) < 1) return;
 
     event.preventDefault();
     setLogical(next);
+    if (isWrap) wrapRebase();
   }
 
   // ── Idle detection ───────────────────────────────────────────────
@@ -233,7 +296,10 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     const cs = state.containerSize;
     const virtualTotal = totalSize + mainAxisPadding;
     const cap = cs * runwayFactor;
-    const contentSize = Math.min(virtualTotal, cap);
+    // Wrap mode always uses the full runway (the loop is infinite, so there is no
+    // virtual total to degenerate toward). Non-wrap caps the runway at the real
+    // virtual size so short lists size their content natively.
+    const contentSize = isWrap ? cap : Math.min(virtualTotal, cap);
 
     maxScrollTop = Math.max(0, contentSize - cs);
     maxLogical = Math.max(0, virtualTotal - cs);

@@ -80,7 +80,6 @@ export function carousel<T extends VListItem = VListItem>(
   let engineState: EngineState;
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
-  let viewport: HTMLElement;
   let isX: boolean;
 
   let currentIndex = initialIndex;
@@ -89,8 +88,6 @@ export function carousel<T extends VListItem = VListItem>(
   let lapSize = 0;
   let virtualTotal = 0;
 
-  let animId: number | null = null;
-  let snapTimerId: ReturnType<typeof setTimeout> | null = null;
   let initialScrollPending = false;
   let prefix = "vlist";
 
@@ -136,55 +133,11 @@ export function carousel<T extends VListItem = VListItem>(
     return Math.round(pos / stepSize);
   }
 
-  function rebaseIfNeeded(): void {
-    if (realTotal <= 0 || !storedCtx) return;
-    const pos = engineState.scrollPosition;
-    const currentVi = virtualIndexAtScroll(pos);
-    const cycle = Math.floor(currentVi / realTotal);
-
-    if (cycle < REBASE_THRESHOLD || cycle >= CYCLES - REBASE_THRESHOLD) {
-      const logical = logicalIndexOf(currentVi);
-      const targetVi = virtualIndexOf(logical);
-      const offset = pos - currentVi * stepSize;
-      const newPos = targetVi * stepSize + offset;
-
-      engineState.scrollPosition = newPos;
-      engineState.prevScrollPosition = newPos;
-      const prop = isX ? "scrollLeft" : "scrollTop";
-      (viewport as any)[prop] = newPos;
-    }
-  }
-
-  function cancelAnim(): void {
-    if (animId !== null) {
-      cancelAnimationFrame(animId);
-      animId = null;
-    }
-    if (snapTimerId !== null) {
-      clearTimeout(snapTimerId);
-      snapTimerId = null;
-    }
-  }
-
+  // Rebasing (folding the logical position back toward the middle cycle) and the
+  // smooth-scroll animation both live in the bounded scroll handler now — the
+  // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
-    cancelAnim();
-    if (!storedCtx) return;
-    const from = engineState.scrollPosition;
-    if (Math.abs(target - from) < 1) {
-      storedCtx.scrollTo(target);
-      updateItemLayout();
-      return;
-    }
-    const start = performance.now();
-    const tick = (now: number): void => {
-      const t = Math.min((now - start) / duration, 1);
-      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      storedCtx!.scrollTo(from + (target - from) * eased);
-      updateItemLayout();
-      if (t < 1) animId = requestAnimationFrame(tick);
-      else { animId = null; rebaseIfNeeded(); storedCtx!.forceRender(); updateItemLayout(); }
-    };
-    animId = requestAnimationFrame(tick);
+    storedCtx?.smoothScrollTo(target, duration);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
@@ -201,11 +154,10 @@ export function carousel<T extends VListItem = VListItem>(
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
       currentIndex = safeIndex;
-      const targetVi = MIDDLE_CYCLE * realTotal + safeIndex;
-      const newPos = targetVi * stepSize;
-      engineState.scrollPosition = newPos;
-      engineState.prevScrollPosition = newPos;
-      (viewport as any)[isX ? "scrollLeft" : "scrollTop"] = newPos;
+      // Recenter on the middle cycle through the handler so baseOffset/scrollTop
+      // stay consistent. realTotal is already updated, so the re-entrant
+      // onAfterScroll triggered by this write returns early.
+      storedCtx.scrollTo((MIDDLE_CYCLE * realTotal + safeIndex) * stepSize);
     }
   }
 
@@ -218,6 +170,10 @@ export function carousel<T extends VListItem = VListItem>(
     const frac = stepSize > 0 ? (pos / stepSize) - focalVi : 0;
     const prop = isX ? "width" : "height";
     const anchor = pos + layoutEngine!.getAnchorOffset(focalVi, frac);
+    // Item offsets are computed in absolute logical space; subtract baseOffset to
+    // land them inside the bounded runway. baseOffset is 0 in native mode, so this
+    // is a no-op there.
+    const baseOffset = engineState.baseOffset;
 
     const baseCycle = focalVi - (focalVi % realTotal);
 
@@ -232,7 +188,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       const layout = layoutEngine!.getItemLayout(vi, focalVi, frac, anchor);
       const roundedSize = Math.max(0, Math.round(layout.size));
-      const roundedOffset = Math.round(layout.offset);
+      const roundedOffset = Math.round(layout.offset - baseOffset);
 
       if (roundedSize <= 0) {
         el.style.display = "none";
@@ -272,7 +228,6 @@ export function carousel<T extends VListItem = VListItem>(
       smoothScrollTo(nearestPos, duration);
     } else {
       storedCtx.scrollTo(nearestPos);
-      rebaseIfNeeded();
       updateItemLayout();
     }
   }
@@ -286,7 +241,6 @@ export function carousel<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;
       storedCtx = ctx;
-      viewport = ctx.dom.viewport;
       isX = ctx.config.axis.primary === "x";
       prefix = ctx.config.classPrefix;
       realTotal = engineState.totalItems;
@@ -343,17 +297,16 @@ export function carousel<T extends VListItem = VListItem>(
         ctx.setIndexMapFn(logicalIndexOf);
         ctx.registerMethod("_layoutToDataIndex", logicalIndexOf);
 
-        // Normalize getScrollPosition to return within one lap
-        ctx.setScrollFns(
-          () => {
-            const raw = engineState.scrollPosition;
-            return lapSize > 0 ? ((raw % lapSize) + lapSize) % lapSize : 0;
-          },
-          (pos: number) => {
-            engineState.scrollPosition = pos;
-            (viewport as any)[isX ? "scrollLeft" : "scrollTop"] = pos;
-          },
-        );
+        // Route scroll through the bounded handler in wrap mode: the logical
+        // position never clamps, and the handler folds it back toward the
+        // middle cycle by whole laps once it drifts far enough. The carousel's
+        // modulo getItemFn maps the shifted virtual indices to identical real
+        // items at identical paint positions, so the fold is seamless.
+        ctx.setBoundedWrap({
+          lapSize: () => lapSize,
+          home: () => MIDDLE_CYCLE * lapSize,
+          thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
+        });
 
         initialScrollPending = true;
       }
@@ -368,7 +321,7 @@ export function carousel<T extends VListItem = VListItem>(
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        cancelAnim();
+        storedCtx!.cancelScroll();
         const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
         const nearestPos = currentSnap + s * stepSize;
 
@@ -376,7 +329,6 @@ export function carousel<T extends VListItem = VListItem>(
           smoothScrollTo(nearestPos, dur);
         } else {
           storedCtx!.scrollTo(nearestPos);
-          rebaseIfNeeded();
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -392,7 +344,7 @@ export function carousel<T extends VListItem = VListItem>(
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        cancelAnim();
+        storedCtx!.cancelScroll();
         const currentSnap = Math.round(engineState.scrollPosition / stepSize) * stepSize;
         const nearestPos = currentSnap - s * stepSize;
 
@@ -400,7 +352,6 @@ export function carousel<T extends VListItem = VListItem>(
           smoothScrollTo(nearestPos, dur);
         } else {
           storedCtx!.scrollTo(nearestPos);
-          rebaseIfNeeded();
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -424,7 +375,7 @@ export function carousel<T extends VListItem = VListItem>(
           return;
         }
 
-        cancelAnim();
+        storedCtx!.cancelScroll();
 
         if (direction === "forward" || direction === "backward") {
           const delta = shortestPath(currentIndex, target,
@@ -437,7 +388,6 @@ export function carousel<T extends VListItem = VListItem>(
             smoothScrollTo(nearestPos, dur);
           } else {
             storedCtx!.scrollTo(nearestPos);
-            rebaseIfNeeded();
             updateItemLayout();
           }
         } else {
@@ -526,12 +476,12 @@ export function carousel<T extends VListItem = VListItem>(
       // ── Destroy handler ─────────────────────────────────────────
 
       ctx.registerDestroyHandler(() => {
-        cancelAnim();
+        storedCtx?.cancelScroll();
       });
     },
 
     destroy(): void {
-      cancelAnim();
+      storedCtx?.cancelScroll();
       storedCtx = null;
     },
 
@@ -540,15 +490,11 @@ export function carousel<T extends VListItem = VListItem>(
         if (!initialScrollPending || !storedCtx) return;
         initialScrollPending = false;
 
+        // The first render used scrollPosition=0. Seed the real start
+        // position through the handler so baseOffset/scrollTop stay
+        // consistent, then re-render at the correct offset.
         const startPos = scrollPositionForVirtual(virtualIndexOf(currentIndex));
-        engineState.scrollPosition = startPos;
-        engineState.prevScrollPosition = startPos;
-        const prop = isX ? "scrollLeft" : "scrollTop";
-        void viewport.scrollHeight;
-        (viewport as any)[prop] = startPos;
-
-        // The first render used scrollPosition=0. Now that we've set
-        // the real position, force a re-render at the correct offset.
+        storedCtx.scrollTo(startPos);
         storedCtx.forceRender();
         updateItemLayout();
       },
@@ -570,21 +516,18 @@ export function carousel<T extends VListItem = VListItem>(
         }
 
         updateItemLayout();
-        rebaseIfNeeded();
+      },
 
-        if (snapEnabled && animId === null) {
-          if (snapTimerId !== null) clearTimeout(snapTimerId);
-          snapTimerId = setTimeout(() => {
-            snapTimerId = null;
-            if (animId !== null || !storedCtx || realTotal <= 1) return;
-            const p = engineState.scrollPosition;
-            const nearestVi = Math.round(p / stepSize);
-            const snapTarget = nearestVi * stepSize;
-            if (Math.abs(p - snapTarget) > 1) {
-              currentIndex = logicalIndexOf(nearestVi);
-              smoothScrollTo(snapTarget, snapDuration);
-            }
-          }, 200);
+      // Snap-to-item once scrolling stops. The bounded handler fires onIdle
+      // after the idle timeout, replacing the old setTimeout(200) dance.
+      onIdle(): void {
+        if (!snapEnabled || !storedCtx || realTotal <= 1) return;
+        const p = engineState.scrollPosition;
+        const nearestVi = Math.round(p / stepSize);
+        const snapTarget = nearestVi * stepSize;
+        if (Math.abs(p - snapTarget) > 1) {
+          currentIndex = logicalIndexOf(nearestVi);
+          smoothScrollTo(snapTarget, snapDuration);
         }
       },
     },

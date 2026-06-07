@@ -123,6 +123,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
 
   setSizeConfig(config: number | ((index: number) => number)): void;
   setScrollFns(get: () => number, set: (pos: number) => void): void;
+  /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
+  setBoundedWrap(config: import("./bounded-scroll").WrapConfig): void;
   setVirtualTotalFn(fn: () => number): void;
   setIndexMapFn(fn: (renderIndex: number) => number): void;
 
@@ -142,6 +144,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
 
   scrollTo(position: number): void;
   smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
+  /** Cancel any in-flight smooth-scroll animation on the active handler. */
+  cancelScroll(): void;
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
