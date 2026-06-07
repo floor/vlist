@@ -17,7 +17,7 @@ const entry = `${root}/src/index.ts`;
 
 const ALL_PLUGINS = [
   "a11y", "selection", "data", "scrollbar", "sortable",
-  "groups", "scale", "page", "snapshots", "transition",
+  "groups", "page", "snapshots", "transition",
   "autosize", "grid", "table", "masonry", "tree", "search",
 ] as const;
 
@@ -30,8 +30,6 @@ type PluginName = (typeof ALL_PLUGINS)[number];
 // plugin wasn't explicitly imported by the consumer.
 
 const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
-  // scale imports createScrollbar for fallback scrollbar in compressed mode
-  scale: ["scrollbar"],
   // selection does a dynamic getMethod("getGroupLayout") lookup — string only, no import
   selection: ["groups"],
   // groups does dynamic getMethod lookups for grid/masonry — string only, no import
@@ -48,7 +46,6 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   grid:       ["-grid-item", "getGridLayout", "updateGrid"],
   selection:  ["selectAll", "clearSelection"],
   scrollbar:  ["-scrollbar__thumb"],
-  scale:      ["touchcancel"],
   page:       ["scrollPadding"],
   snapshots:  ["getScrollSnapshot", "restoreScroll"],
   transition: ["remove:end", "insert:end"],
@@ -89,7 +86,6 @@ const scenarios: Scenario[] = [
   { name: "scrollbar",         imports: ["createVList", "scrollbar"] },
   { name: "sortable",          imports: ["createVList", "sortable"] },
   { name: "groups",            imports: ["createVList", "groups"] },
-  { name: "scale",             imports: ["createVList", "scale"] },
   { name: "page",              imports: ["createVList", "page"] },
   { name: "snapshots",         imports: ["createVList", "snapshots"] },
   { name: "transition",        imports: ["createVList", "transition"] },
