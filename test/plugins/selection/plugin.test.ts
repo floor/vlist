@@ -463,6 +463,35 @@ describe("selection — Methods Behavior", () => {
     cleanup();
   });
 
+  it("selectAll should use placeholder IDs for unloaded async items", () => {
+    const loaded = createTestItems(5);
+    const plugin = selection<TestItem>({ mode: "multiple" });
+    const { ctx, methods, engineState, cleanup } = createPluginMockContext(loaded);
+    engineState.totalItems = 20;
+
+    ctx.registerMethod("_getLoadedItem", (index: number): TestItem | undefined => {
+      return index < 5 ? loaded[index] : undefined;
+    });
+
+    plugin.setup!(ctx);
+
+    const selectAll = methods.get("selectAll") as () => void;
+    const getSelected = methods.get("getSelected") as () => Array<string | number>;
+
+    selectAll();
+    const selected = getSelected();
+    expect(selected.length).toBe(20);
+
+    for (let i = 0; i < 5; i++) {
+      expect(selected).toContain(i);
+    }
+    for (let i = 5; i < 20; i++) {
+      expect(selected).toContain("__placeholder_" + i);
+    }
+
+    cleanup();
+  });
+
   it("select should be a no-op in none mode", () => {
     const plugin = selection<TestItem>({ mode: "none" });
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(100));

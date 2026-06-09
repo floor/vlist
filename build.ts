@@ -125,6 +125,7 @@ async function build() {
   minifyCss("./src/styles/vlist-extras.css", "./dist/vlist-extras.css");
   minifyCss("./src/styles/vlist-tree.css", "./dist/vlist-tree.css");
   minifyCss("./src/styles/vlist-search.css", "./dist/vlist-search.css");
+  minifyCss("./src/styles/vlist-carousel.css", "./dist/vlist-carousel.css");
   const cssTime = performance.now() - cssStart;
   const cssFile = Bun.file("./dist/vlist.css");
   const cssSize = (cssFile.size / 1024).toFixed(1);

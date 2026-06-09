@@ -9,6 +9,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.5.0] - 2026-06-09
+
+### Added
+
+- **Carousel stylesheet** (`vlist/styles/carousel`) — optional structural styles for carousel slides: media stabilization (no image "breathing" during transitions), overlay visibility driven by `--vlist-carousel-role-weight`, and text truncation. Uses `vlist-carousel-slide` BEM classes.
+- **`--vlist-carousel-focal-width`** CSS variable — constant per preset, the focal slot's pixel width. Locks media to the focal size with centered absolute positioning for a parallax-like pan effect.
+- **`--vlist-carousel-radius`** CSS variable — read by `vlist-carousel.css` to set slide border-radius.
+
+### Fixed
+
+- **`selectAll()` with async data** — previously only selected the ~25 loaded items. Now adds placeholder IDs for unloaded items, which are swapped for real IDs when data loads via `claimPlaceholderSelection`. Also applies to shift-click range selection across unloaded items.
+- **`selectAll()` placeholder visibility** — unloaded placeholder DOM elements now show the selected class immediately (via `itemStateFn` placeholder ID check), eliminating the brief visual flash before data arrives.
+- **Snapshot restore across selection modes** — `_seedSelection` now respects the selection mode. Switching from multiple (563 items selected) to single no longer visually restores the full multi-selection via snapshot.
+
 ## [2.4.2] - 2026-06-09
 
 ### Added
