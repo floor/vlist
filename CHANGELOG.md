@@ -9,6 +9,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.4.2] - 2026-06-09
+
+### Added
+
+- **Modular carousel preset registry** — presets are now `SlotConfigResolver` functions stored in a named registry. `registerPreset(name, resolver)` lets users add or override presets at runtime. `getPreset(name)` and `resolvePreset(name, containerSize, peek)` expose the registry for lookup.
+- **`SlotConfigResolver` type** — `(containerSize: number, peek: number) => SlotConfig | null`. The `variant` config now accepts a string name, a `SlotConfig` object, or a `SlotConfigResolver` function.
+- **Extensible `CarouselVariant` type** — accepts any string via `(string & {})`, not just the built-in names. Custom registered presets get full type support.
+- **Exported built-in preset functions** — `full`, `hero`, `heroCenter`, `multi`, `uncontained` are exported as named `SlotConfigResolver` functions for direct use or re-registration as aliases.
+
+### Fixed
+
+- **Carousel multi-aspect left alignment** — multi-aspect variable-width items now left-align per the MD3 uncontained spec instead of centering.
+- **Carousel focal offset jump** — eliminated the gap/size discontinuity at the focal boundary by fading the gap proportionally with item size.
+
 ## [2.4.1] - 2026-06-07
 
 ### Fixed

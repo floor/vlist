@@ -16,7 +16,8 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
-import { resolvePreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
+import { resolvePreset, registerPreset, getPreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
+import type { SlotConfigResolver } from "../../../src/plugins/carousel/presets";
 
 // Import will fail until plugin is created — that's expected for TDD
 let carousel: any;
@@ -1568,7 +1569,7 @@ describeCarousel("carousel — Normalized Scroll", () => {
 
 describeCarousel("carousel — Presets", () => {
   it("multi() returns 4 slots summing to 1.0", () => {
-    const cfg = multi();
+    const cfg = multi(800, 56)!;
     expect(cfg.slots).toHaveLength(4);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1576,7 +1577,7 @@ describeCarousel("carousel — Presets", () => {
   });
 
   it("uncontained() derives slot count from container size", () => {
-    const cfg = uncontained(900);
+    const cfg = uncontained(900, 0)!;
     expect(cfg.slots.length).toBeGreaterThanOrEqual(2);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1622,6 +1623,105 @@ describeCarousel("carousel — Presets", () => {
     });
 
     carousel({ variant: "uncontained" }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("registerPreset adds a custom preset accessible via resolvePreset", () => {
+    const custom: SlotConfigResolver = (containerSize) => ({
+      slots: [0.6, 0.4],
+      focalSlot: 0,
+    });
+    registerPreset("my-custom", custom);
+    const result = resolvePreset("my-custom", 800, 56);
+    expect(result).not.toBeNull();
+    expect(result!.slots).toEqual([0.6, 0.4]);
+  });
+
+  it("getPreset returns the registered resolver", () => {
+    const resolver = getPreset("hero");
+    expect(resolver).toBeDefined();
+    expect(typeof resolver).toBe("function");
+    const result = resolver!(800, 56);
+    expect(result).not.toBeNull();
+    expect(result!.focalSlot).toBe(0);
+  });
+
+  it("getPreset returns undefined for unregistered names", () => {
+    expect(getPreset("nonexistent-preset")).toBeUndefined();
+  });
+
+  it("registerPreset can override built-in presets", () => {
+    const original = resolvePreset("full", 800, 56);
+    expect(original!.slots).toEqual([1.0]);
+
+    registerPreset("full", () => ({ slots: [0.5, 0.5], focalSlot: 0 }));
+    const overridden = resolvePreset("full", 800, 56);
+    expect(overridden!.slots).toEqual([0.5, 0.5]);
+
+    // Restore
+    registerPreset("full", () => ({ slots: [1.0], focalSlot: 0 }));
+  });
+
+  it("carousel accepts a SlotConfigResolver function as variant", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const resolver: SlotConfigResolver = () => ({
+      slots: [0.7, 0.3],
+      focalSlot: 0,
+    });
+    carousel({ variant: resolver }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("carousel accepts an arbitrary string as variant via registerPreset", () => {
+    registerPreset("panorama", () => ({
+      slots: [0.8, 0.1, 0.1],
+      focalSlot: 0,
+    }));
+
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "panorama" }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// normalizeVariant — SlotConfig object branch
+// =============================================================================
+
+describeCarousel("carousel — normalizeVariant SlotConfig object", () => {
+  it("carousel accepts a SlotConfig object and uses the layout engine", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: { slots: [0.7, 0.3], focalSlot: 0 } }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1677,6 +1777,33 @@ describeCarousel("carousel — syncItemCount", () => {
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
 
     const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("syncItemCount rebuilds variable-width step cache when items are added", () => {
+    const items = createTestItems(5);
+    const widths = [200, 300, 250, 180, 220, 350, 280];
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: (i: number) => widths[i % widths.length],
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "multi-aspect" });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    items.push({ id: 5, name: "Item 5" });
+    items.push({ id: 6, name: "Item 6" });
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    expect(ctx.getItems().length).toBe(7);
     expect(getState().index).toBe(0);
 
     cleanup();
@@ -2116,6 +2243,175 @@ describeCarousel("carousel — goTo single item", () => {
 
     goTo(0);
     expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// Variable-width (multi-aspect) — per-item step sizes
+// =============================================================================
+
+describeCarousel("carousel — Variable-width (multi-aspect)", () => {
+  const WIDTHS = [300, 200, 400, 150, 250];
+
+  function createVariableWidthContext() {
+    const items = createTestItems(5);
+    const mockCtx = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: (index: number) => WIDTHS[index % WIDTHS.length]!,
+      isX: true,
+    });
+    return mockCtx;
+  }
+
+  it("should accept multi-aspect variant", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("sizeCache.getSize should return per-item step sizes", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+
+    for (let i = 0; i < 5; i++) {
+      expect(ctx.sizeCache.getSize(i)).toBe(WIDTHS[i]! + 8);
+    }
+
+    cleanup();
+  });
+
+  it("sizeCache.getSize should wrap for virtual indices", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+
+    expect(ctx.sizeCache.getSize(5)).toBe(WIDTHS[0]! + 8);
+    expect(ctx.sizeCache.getSize(6)).toBe(WIDTHS[1]! + 8);
+
+    cleanup();
+  });
+
+  it("sizeCache.getOffset should use prefix sums", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+
+    expect(ctx.sizeCache.getOffset(0)).toBe(0);
+    expect(ctx.sizeCache.getOffset(1)).toBe(WIDTHS[0]! + gap);
+    expect(ctx.sizeCache.getOffset(2)).toBe(WIDTHS[0]! + WIDTHS[1]! + gap * 2);
+
+    cleanup();
+  });
+
+  it("next/prev should cycle correctly with variable widths", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const prev = methods.get("prev") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const fwd: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      fwd.push(getState().index);
+      next();
+    }
+    expect(fwd).toEqual([0, 1, 2, 3, 4, 0, 1]);
+
+    const bwd: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      bwd.push(getState().index);
+      prev();
+    }
+    expect(bwd).toEqual([2, 1, 0, 4]);
+
+    cleanup();
+  });
+
+  it("goTo should work with variable widths", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(3);
+    expect(getState().index).toBe(3);
+
+    goTo(0, { direction: "forward" });
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("indexAtOffset should binary-search for variable widths", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+
+    expect(ctx.sizeCache.indexAtOffset(0)).toBe(0);
+    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + gap)).toBe(1);
+    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + WIDTHS[1]! + gap * 2)).toBe(2);
+
+    cleanup();
+  });
+
+  it("updateItemLayout should set per-item widths in natural-width mode", () => {
+    const { ctx, dom, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    const plugin = carousel({ variant: "multi-aspect", gap });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const es = ctx.getState();
+
+    const totalLap = WIDTHS.reduce((a, b) => a + b, 0) + gap * 5;
+    es.scrollPosition = 50 * totalLap;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const w0 = parseInt(els[0].style.width);
+    const w1 = parseInt(els[1].style.width);
+    const w2 = parseInt(els[2].style.width);
+
+    expect(w0).toBe(WIDTHS[0]!);
+    expect(w1).toBe(WIDTHS[1]!);
+    expect(w2).toBe(WIDTHS[2]!);
+
+    cleanup();
+  });
+
+  it("uniform preset still works after refactor (backward compat)", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    const stepSz = 800 - 56;
+    expect(ctx.sizeCache.getSize(0)).toBe(stepSz);
+    expect(ctx.sizeCache.getSize(1)).toBe(stepSz);
+    expect(ctx.sizeCache.getOffset(0)).toBe(0);
+    expect(ctx.sizeCache.getOffset(1)).toBe(stepSz);
+    expect(ctx.sizeCache.getOffset(3)).toBe(stepSz * 3);
 
     cleanup();
   });

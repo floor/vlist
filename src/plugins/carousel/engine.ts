@@ -82,6 +82,14 @@ export function createLayoutEngine(config: LayoutConfig): {
 
   const stepSize = (slotWidths[focalSlot] ?? 0) + gapPx;
 
+  // Gap that fades with an item's size. At rest every visible slot is wider than
+  // the gap, so this returns the full gap. But as an item shrinks toward 0 at the
+  // focal-boundary flip, holding the full gap until its size hits exactly 0 (then
+  // dropping it instantly) injects a gap-sized jump into every item's on-screen
+  // offset — the visible "chop just before the final position" (issue 023). Fading
+  // the gap with the size keeps the cumulative offset continuous through the flip.
+  const gapFor = (size: number): number => (size >= gapPx ? gapPx : Math.max(0, size));
+
   /**
    * Compute the dynamic size of a single item based on its
    * position relative to the focal point and scroll fraction.
@@ -138,12 +146,12 @@ export function createLayoutEngine(config: LayoutConfig): {
     if (rel > 0) {
       for (let r = 0; r < rel; r++) {
         const s = getItemSize(focalVi + r, focalVi, frac);
-        offset += s + (s > 0 ? gapPx : 0);
+        offset += s + gapFor(s);
       }
     } else if (rel < 0) {
       for (let r = -1; r >= rel; r--) {
         const s = getItemSize(focalVi + r, focalVi, frac);
-        offset -= s + (s > 0 ? gapPx : 0);
+        offset -= s + gapFor(s);
       }
     }
 
@@ -173,7 +181,7 @@ export function createLayoutEngine(config: LayoutConfig): {
     let offset = 0;
     for (let r = -1; r >= -focalSlot; r--) {
       const s = getItemSize(focalVi + r, focalVi, frac);
-      offset += s + (s > 0 ? gapPx : 0);
+      offset += s + gapFor(s);
     }
     return offset;
   }
