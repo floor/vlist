@@ -91,6 +91,18 @@ function makeBounded(itemCount: number): VList<TestItem> {
   );
 }
 
+function makeBoundedIn(c: HTMLElement, itemCount: number): VList<TestItem> {
+  return createVList<TestItem>(
+    {
+      container: c,
+      items: createTestItems(itemCount),
+      item: { height: ITEM, template: simpleTemplate },
+      scroll: { mode: "bounded" },
+    },
+    [],
+  );
+}
+
 function transformPx(el: HTMLElement): number {
   const m = /translateY\(([-\d.]+)px\)/.exec(el.style.transform);
   return m ? parseFloat(m[1]!) : NaN;
@@ -430,7 +442,8 @@ describe("bounded scroll — wrap mode", () => {
 // =============================================================================
 
 describe("bounded scroll — resize", () => {
-  it("refreshes the runway when the container resizes", async () => {
+  it("refreshes the runway when the container resizes", () => {
+    const c = createContainer({ width: 300, height: VIEWPORT });
     const saved = globalThis.ResizeObserver;
     let cb: ResizeObserverCallback | null = null;
     // Capture the observer callback without auto-firing on observe.
@@ -441,11 +454,21 @@ describe("bounded scroll — resize", () => {
       disconnect(): void {}
     } as unknown as typeof ResizeObserver;
 
+    // Intercept setTimeout so we can flush the observer install synchronously,
+    // avoiding any yield where concurrent tests could see the mock.
+    const origSetTimeout = globalThis.setTimeout;
+    let pendingInit: (() => void) | null = null;
+    globalThis.setTimeout = ((fn: () => void) => { pendingInit = fn; return 0; }) as typeof setTimeout;
+
+    const l = makeBoundedIn(c, 1_000_000);
+
+    globalThis.setTimeout = origSetTimeout;
+    if (pendingInit) pendingInit();
+    // Restore immediately — the observer callback is captured, mock no longer needed.
+    globalThis.ResizeObserver = saved;
+
     try {
-      list = makeBounded(1_000_000);
-      // The observer is installed on a 0ms timer.
-      await new Promise((r) => setTimeout(r, 0));
-      expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY); // 500 × 2
+      expect(parseInt(getContent(c).style.height, 10)).toBe(RUNWAY); // 500 × 2
 
       // Resize the viewport to 700px (vertical → contentRect.height is the main axis).
       cb!(
@@ -454,9 +477,10 @@ describe("bounded scroll — resize", () => {
       );
 
       // Runway tracks the new viewport: 700 × FACTOR, not the stale 1000.
-      expect(parseInt(getContent(container).style.height, 10)).toBe(700 * FACTOR);
+      expect(parseInt(getContent(c).style.height, 10)).toBe(700 * FACTOR);
     } finally {
-      globalThis.ResizeObserver = saved;
+      l.destroy();
+      c.remove();
     }
   });
 });
@@ -655,21 +679,27 @@ describe("bounded scroll — wheel", () => {
 
 describe("bounded scroll — idle detection", () => {
   it("resets scrollDirection to 0 after idle timeout", async () => {
-    list = makeBounded(1_000_000);
-    const viewport = getViewport(container);
+    const c = createContainer({ width: 300, height: VIEWPORT });
+    try {
+      const l = makeBoundedIn(c, 1_000_000);
+      const viewport = getViewport(c);
 
-    fireWheel(viewport, 100);
-    // scrollDirection should be set after wheel
-    const state = (list as any)._test?.engineState;
+      fireWheel(viewport, 100);
+      // scrollDirection should be set after wheel
+      const state = (l as any)._test?.engineState;
 
-    // Wait for the idle timeout (150ms default) + buffer
-    await new Promise((r) => setTimeout(r, 250));
+      // Wait for the idle timeout (150ms default) + buffer
+      await new Promise((r) => setTimeout(r, 250));
 
-    // After idle, scrollDirection should be 0
-    // We verify via a second scroll — if idle fired, the direction was reset
-    const posBefore = list.getScrollPosition();
-    fireWheel(viewport, 50);
-    expect(list.getScrollPosition()).toBeGreaterThan(posBefore);
+      // After idle, scrollDirection should be 0
+      // We verify via a second scroll — if idle fired, the direction was reset
+      const posBefore = l.getScrollPosition();
+      fireWheel(viewport, 50);
+      expect(l.getScrollPosition()).toBeGreaterThan(posBefore);
+      l.destroy();
+    } finally {
+      c.remove();
+    }
   });
 });
 
@@ -679,18 +709,24 @@ describe("bounded scroll — idle detection", () => {
 
 describe("bounded scroll — smooth scroll", () => {
   it("scrollToIndex with smooth behavior animates to the target", async () => {
-    list = makeBounded(1_000_000);
-    const target = 500;
-    const targetOffset = target * ITEM; // 25000
+    const c = createContainer({ width: 300, height: VIEWPORT });
+    try {
+      const l = makeBoundedIn(c, 1_000_000);
+      const target = 500;
+      const targetOffset = target * ITEM; // 25000
 
-    list.scrollToIndex(target, { behavior: "smooth" });
+      l.scrollToIndex(target, { behavior: "smooth" });
 
-    // rAF is shimmed to setTimeout(0), so give it time to complete
-    await new Promise((r) => setTimeout(r, 600));
+      // rAF is shimmed to setTimeout(0), so give it time to complete
+      await new Promise((r) => setTimeout(r, 600));
 
-    // Should arrive near the target
-    const pos = list.getScrollPosition();
-    expect(Math.abs(pos - targetOffset)).toBeLessThan(ITEM);
+      // Should arrive near the target
+      const pos = l.getScrollPosition();
+      expect(Math.abs(pos - targetOffset)).toBeLessThan(ITEM);
+      l.destroy();
+    } finally {
+      c.remove();
+    }
   });
 
   it("scrollToIndex with auto behavior jumps instantly", () => {
@@ -704,19 +740,25 @@ describe("bounded scroll — smooth scroll", () => {
   });
 
   it("cancels an in-flight smooth scroll when a new one starts", async () => {
-    list = makeBounded(1_000_000);
+    const c = createContainer({ width: 300, height: VIEWPORT });
+    try {
+      const l = makeBoundedIn(c, 1_000_000);
 
-    list.scrollToIndex(100, { behavior: "smooth" });
-    // Immediately start a second animation — the first should be cancelled
-    await new Promise((r) => setTimeout(r, 50));
-    list.scrollToIndex(200, { behavior: "smooth" });
+      l.scrollToIndex(100, { behavior: "smooth" });
+      // Immediately start a second animation — the first should be cancelled
+      await new Promise((r) => setTimeout(r, 50));
+      l.scrollToIndex(200, { behavior: "smooth" });
 
-    await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 600));
 
-    // Should end near index 200, not 100
-    const pos = list.getScrollPosition();
-    const target200 = 200 * ITEM;
-    expect(Math.abs(pos - target200)).toBeLessThan(ITEM * 2);
+      // Should end near index 200, not 100
+      const pos = l.getScrollPosition();
+      const target200 = 200 * ITEM;
+      expect(Math.abs(pos - target200)).toBeLessThan(ITEM * 2);
+      l.destroy();
+    } finally {
+      c.remove();
+    }
   });
 
   it("handles smooth scroll to a position within 1px (instant jump, no animation)", () => {

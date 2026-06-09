@@ -241,7 +241,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   function updateItemLayout(): void {
     if (!storedCtx || realTotal <= 0) return;
-    if (!layoutEngine && !isVariableWidth) return;
+    if (!layoutEngine && !isVariableWidth && realTotal <= 1) return;
 
     const content = storedCtx.dom.content;
     const children = content.children;
