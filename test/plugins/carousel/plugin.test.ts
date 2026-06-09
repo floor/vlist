@@ -1708,6 +1708,28 @@ describeCarousel("carousel — Presets", () => {
 });
 
 // =============================================================================
+// normalizeVariant — SlotConfig object branch
+// =============================================================================
+
+describeCarousel("carousel — normalizeVariant SlotConfig object", () => {
+  it("carousel accepts a SlotConfig object and uses the layout engine", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: { slots: [0.7, 0.3], focalSlot: 0 } }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
 // syncItemCount — item mutations trigger resync on scroll
 // =============================================================================
 
@@ -1755,6 +1777,33 @@ describeCarousel("carousel — syncItemCount", () => {
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
 
     const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("syncItemCount rebuilds variable-width step cache when items are added", () => {
+    const items = createTestItems(5);
+    const widths = [200, 300, 250, 180, 220, 350, 280];
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: (i: number) => widths[i % widths.length],
+      isX: true,
+    });
+
+    const plugin = carousel({ variant: "multi-aspect" });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    items.push({ id: 5, name: "Item 5" });
+    items.push({ id: 6, name: "Item 6" });
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+
+    expect(ctx.getItems().length).toBe(7);
     expect(getState().index).toBe(0);
 
     cleanup();
