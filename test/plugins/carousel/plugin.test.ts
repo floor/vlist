@@ -2410,6 +2410,39 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
     cleanup();
   });
 
+  it("static variant repositions items on scroll (no layout engine)", () => {
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 600,
+      containerHeight: 480,
+      itemSize: 480,
+    });
+
+    const plugin = carousel({ variant: "static", snap: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const es = ctx.getState();
+
+    const middleStart = 50 * 10;
+    es.scrollPosition = middleStart * 480;
+    es.baseOffset = es.scrollPosition - 240;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const t0 = els[0].style.transform;
+    expect(t0).toBeTruthy();
+
+    es.scrollPosition = middleStart * 480 + 240;
+    es.baseOffset = es.scrollPosition - 240;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const t0After = els[0].style.transform;
+    expect(t0After).not.toBe(t0);
+
+    cleanup();
+  });
+
   it("uniform preset still works after refactor (backward compat)", () => {
     const items = createTestItems(5);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
