@@ -16,7 +16,8 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
-import { resolvePreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
+import { resolvePreset, registerPreset, getPreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
+import type { SlotConfigResolver } from "../../../src/plugins/carousel/presets";
 
 // Import will fail until plugin is created — that's expected for TDD
 let carousel: any;
@@ -1568,7 +1569,7 @@ describeCarousel("carousel — Normalized Scroll", () => {
 
 describeCarousel("carousel — Presets", () => {
   it("multi() returns 4 slots summing to 1.0", () => {
-    const cfg = multi();
+    const cfg = multi(800, 56)!;
     expect(cfg.slots).toHaveLength(4);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1576,7 +1577,7 @@ describeCarousel("carousel — Presets", () => {
   });
 
   it("uncontained() derives slot count from container size", () => {
-    const cfg = uncontained(900);
+    const cfg = uncontained(900, 0)!;
     expect(cfg.slots.length).toBeGreaterThanOrEqual(2);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1622,6 +1623,83 @@ describeCarousel("carousel — Presets", () => {
     });
 
     carousel({ variant: "uncontained" }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("registerPreset adds a custom preset accessible via resolvePreset", () => {
+    const custom: SlotConfigResolver = (containerSize) => ({
+      slots: [0.6, 0.4],
+      focalSlot: 0,
+    });
+    registerPreset("my-custom", custom);
+    const result = resolvePreset("my-custom", 800, 56);
+    expect(result).not.toBeNull();
+    expect(result!.slots).toEqual([0.6, 0.4]);
+  });
+
+  it("getPreset returns the registered resolver", () => {
+    const resolver = getPreset("hero");
+    expect(resolver).toBeDefined();
+    expect(typeof resolver).toBe("function");
+    const result = resolver!(800, 56);
+    expect(result).not.toBeNull();
+    expect(result!.focalSlot).toBe(0);
+  });
+
+  it("getPreset returns undefined for unregistered names", () => {
+    expect(getPreset("nonexistent-preset")).toBeUndefined();
+  });
+
+  it("registerPreset can override built-in presets", () => {
+    const original = resolvePreset("full", 800, 56);
+    expect(original!.slots).toEqual([1.0]);
+
+    registerPreset("full", () => ({ slots: [0.5, 0.5], focalSlot: 0 }));
+    const overridden = resolvePreset("full", 800, 56);
+    expect(overridden!.slots).toEqual([0.5, 0.5]);
+
+    // Restore
+    registerPreset("full", () => ({ slots: [1.0], focalSlot: 0 }));
+  });
+
+  it("carousel accepts a SlotConfigResolver function as variant", () => {
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    const resolver: SlotConfigResolver = () => ({
+      slots: [0.7, 0.3],
+      focalSlot: 0,
+    });
+    carousel({ variant: resolver }).setup!(ctx);
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("carousel accepts an arbitrary string as variant via registerPreset", () => {
+    registerPreset("panorama", () => ({
+      slots: [0.8, 0.1, 0.1],
+      focalSlot: 0,
+    }));
+
+    const items = createTestItems(10);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "panorama" }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 

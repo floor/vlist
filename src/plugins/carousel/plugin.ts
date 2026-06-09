@@ -21,18 +21,18 @@ import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import { createLayoutEngine } from "./engine";
-import type { SlotConfig } from "./presets";
+import type { SlotConfig, SlotConfigResolver } from "./presets";
 import { resolvePreset } from "./presets";
 
 // =============================================================================
 // Config
 // =============================================================================
 
-export type CarouselVariant = "static" | "full" | "hero" | "hero-center" | "multi" | "uncontained" | "multi-aspect" | "free";
+export type CarouselVariant = "static" | "full" | "hero" | "hero-center" | "multi" | "uncontained" | "multi-aspect" | "free" | (string & {});
 export type CarouselDirection = "auto" | "forward" | "backward";
 
 export interface CarouselPluginConfig {
-  variant?: CarouselVariant | SlotConfig;
+  variant?: CarouselVariant | SlotConfig | SlotConfigResolver;
   snap?: boolean;
   snapDuration?: number;
   peek?: number | string | "auto";
@@ -62,6 +62,31 @@ const MIDDLE_CYCLE = 50;
 const REBASE_THRESHOLD = 10;
 
 // =============================================================================
+// Variant normalisation
+// =============================================================================
+
+interface NormalizedVariant {
+  variant: string;
+  resolveSlots: SlotConfigResolver;
+}
+
+function normalizeVariant(
+  input: CarouselVariant | SlotConfig | SlotConfigResolver,
+): NormalizedVariant {
+  if (typeof input === "function") {
+    return { variant: "custom", resolveSlots: input };
+  }
+  if (typeof input === "object") {
+    const slots = input as SlotConfig;
+    return { variant: "custom", resolveSlots: () => slots };
+  }
+  return {
+    variant: input,
+    resolveSlots: (containerSize, peek) => resolvePreset(input, containerSize, peek),
+  };
+}
+
+// =============================================================================
 // Factory
 // =============================================================================
 
@@ -69,9 +94,7 @@ export function carousel<T extends VListItem = VListItem>(
   config?: CarouselPluginConfig,
 ): VListPlugin<T> {
   const variantConfig = config?.variant ?? "full";
-  const isCustomPreset = typeof variantConfig === "object";
-  const variant: string = isCustomPreset ? "custom" : variantConfig;
-  const customSlots: SlotConfig | null = isCustomPreset ? variantConfig : null;
+  const { variant, resolveSlots } = normalizeVariant(variantConfig);
   const snapEnabled = config?.snap ?? (variant !== "free");
   const snapDuration = config?.snapDuration ?? 400;
   const initialIndex = config?.initialIndex ?? 0;
@@ -158,7 +181,6 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function resolvePeekSize(containerSize: number): number {
-    if (variant === "full") return 0;
     if (typeof peekConfig === "number") return peekConfig;
     if (typeof peekConfig === "string" && peekConfig.endsWith("%")) {
       return Math.round(containerSize * parseFloat(peekConfig) / 100);
@@ -335,7 +357,7 @@ export function carousel<T extends VListItem = VListItem>(
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
       const peekResolved = resolvePeekSize(containerSize);
-      const variantSlots = customSlots ?? resolvePreset(variant, containerSize, peekResolved);
+      const variantSlots = resolveSlots(containerSize, peekResolved);
       if (variantSlots) {
         layoutEngine = createLayoutEngine({
           slots: variantSlots.slots,

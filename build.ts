@@ -28,6 +28,7 @@ async function build() {
   const wrapperCode = [
     `export { createVList, scrollbar, grid, a11y, selection, page,`,
     `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree, search, carousel,`,
+    `  registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained,`,
     `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
   const wrapperPath = "/tmp/_vlist_build_entry.ts";
