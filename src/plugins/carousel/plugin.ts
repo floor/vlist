@@ -262,14 +262,6 @@ export function carousel<T extends VListItem = VListItem>(
         el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
       }
     } else {
-      const containerSz = engineState.containerSize;
-      const focalLogIdx = logicalIndexOf(focalVi);
-      const nextLogIdx = logicalIndexOf(focalVi + 1);
-      const focalStep = stepSizes[focalLogIdx] ?? 0;
-      const nextStep = stepSizes[nextLogIdx] ?? 0;
-      const interpItem = (focalStep + frac * (nextStep - focalStep)) - gapPx;
-      const centerShift = (containerSz - Math.max(0, interpItem)) / 2;
-
       for (let i = 0; i < children.length; i++) {
         const el = children[i] as HTMLElement;
         const idx = el.dataset.index;
@@ -282,7 +274,7 @@ export function carousel<T extends VListItem = VListItem>(
         const logIdx = logicalIndexOf(vi);
         const itemSize = Math.max(0, Math.round((stepSizes[logIdx] ?? 0) - gapPx));
         const absOffset = scrollPositionForVirtual(vi);
-        const roundedOffset = Math.round(absOffset - baseOffset + centerShift);
+        const roundedOffset = Math.round(absOffset - baseOffset);
 
         if (itemSize <= 0) {
           el.style.display = "none";
