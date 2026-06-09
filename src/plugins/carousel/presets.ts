@@ -10,7 +10,7 @@
  * textFade: "viewport".
  */
 
-export type TextFade = "role" | "viewport";
+export type TextFade = "role" | "viewport" | "size";
 
 export interface SlotConfig {
   slots: number[];
@@ -100,7 +100,7 @@ export const uncontained: SlotConfigResolver = (containerSize) => {
   return {
     slots: Array.from({ length: count }, () => ratio),
     focalSlot: 0,
-    textFade: "viewport",
+    textFade: "size",
   };
 };
 

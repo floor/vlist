@@ -1586,6 +1586,7 @@ describeCarousel("carousel — Presets", () => {
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
     expect(cfg.focalSlot).toBe(0);
+    expect(cfg.textFade).toBe("size");
   });
 
   it("resolvePreset returns correct configs for all named variants", () => {

@@ -281,7 +281,10 @@ export function carousel<T extends VListItem = VListItem>(
         }
 
         let roleWeight: number;
-        if (textFade === "viewport") {
+        if (textFade === "size") {
+          const maxSize = layoutEngine!.slotWidths[layoutEngine!.focalSlot] ?? 1;
+          roleWeight = Math.min(1, Math.max(0, roundedSize / maxSize));
+        } else if (textFade === "viewport") {
           const vpOffset = roundedOffset - scrollTop;
           const vStart = Math.max(0, vpOffset);
           const vEnd = Math.min(engineState.containerSize, vpOffset + roundedSize);
@@ -324,7 +327,7 @@ export function carousel<T extends VListItem = VListItem>(
         const relOffset = vi - focalVi;
         const progress = Math.min(1, Math.abs(relOffset) + (relOffset === 0 ? frac : 0));
         let roleWeight: number;
-        if (textFade === "viewport") {
+        if (textFade === "viewport" || textFade === "size") {
           const vpOffset = roundedOffset - scrollTop;
           const vStart = Math.max(0, vpOffset);
           const vEnd = Math.min(engineState.containerSize, vpOffset + itemSize);
