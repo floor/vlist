@@ -345,58 +345,65 @@ describe("groups + table + data", () => {
     it("should show correct groups after snapshot restore + data load", async () => {
       const adapter = createCityAdapter(100);
       const STORAGE_KEY = "test-gtd-snap-" + Math.random().toString(36).slice(2, 8);
+      const c1 = createContainer({ width: 300, height: 500 });
 
-      list = createList(
-        { container, item: { height: 36, template: () => "" } },
-        [
-          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-          groups({
-            getGroupForIndex: getPopTier,
-            header: { height: 28, template: (key) => key },
-          }),
-          snapshots({ autoSave: STORAGE_KEY }),
-        ],
-      );
+      try {
+        const l1 = createList(
+          { container: c1, item: { height: 36, template: () => "" } },
+          [
+            dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups({
+              getGroupForIndex: getPopTier,
+              header: { height: 28, template: (key) => key },
+            }),
+            snapshots({ autoSave: STORAGE_KEY }),
+          ],
+        );
 
-      await waitForLoad(list);
+        await waitForLoad(l1);
 
-      // Verify groups exist on first load
-      const headersFirstLoad = container.querySelectorAll(".vlist-table-group-header");
-      const firstLoadCount = headersFirstLoad.length;
+        // Verify groups exist on first load
+        const headersFirstLoad = c1.querySelectorAll(".vlist-table-group-header");
+        const firstLoadCount = headersFirstLoad.length;
 
-      // Save snapshot (simulates browser session)
-      const snap = (list as any).getScrollSnapshot();
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+        // Save snapshot (simulates browser session)
+        const snap = (l1 as any).getScrollSnapshot();
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
 
-      list.destroy();
-      list = null;
-      container.innerHTML = "";
-      ensureDimensions();
+        l1.destroy();
+        c1.innerHTML = "";
+        ensureDimensions();
 
-      list = createList(
-        { container, item: { height: 36, template: () => "" } },
-        [
-          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-          groups({
-            getGroupForIndex: getPopTier,
-            header: { height: 28, template: (key) => key },
-          }),
-          snapshots({ autoSave: STORAGE_KEY }),
-        ],
-      );
+        const c2 = createContainer({ width: 300, height: 500 });
+        const l2 = createList(
+          { container: c2, item: { height: 36, template: () => "" } },
+          [
+            dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups({
+              getGroupForIndex: getPopTier,
+              header: { height: 28, template: (key) => key },
+            }),
+            snapshots({ autoSave: STORAGE_KEY }),
+          ],
+        );
 
-      await waitForLoad(list);
+        await waitForLoad(l2);
 
-      // After snapshot restore + data load, groups must still be present
-      const headersAfterRestore = container.querySelectorAll(".vlist-table-group-header");
-      expect(headersAfterRestore.length).toBeGreaterThan(0);
+        // After snapshot restore + data load, groups must still be present
+        const headersAfterRestore = c2.querySelectorAll(".vlist-table-group-header");
+        expect(headersAfterRestore.length).toBeGreaterThan(0);
 
-      // Header count should be the same as first load
-      expect(headersAfterRestore.length).toBe(firstLoadCount);
+        // Header count should be the same as first load
+        expect(headersAfterRestore.length).toBe(firstLoadCount);
 
-      sessionStorage.removeItem(STORAGE_KEY);
+        l2.destroy();
+        c2.remove();
+      } finally {
+        sessionStorage.removeItem(STORAGE_KEY);
+        c1.remove();
+      }
     });
   });
 
@@ -437,53 +444,59 @@ describe("groups + table + data", () => {
       // NOTE: flaky under --concurrent — prototype override can be stomped
       // during async waits (reload, setTimeout). See snapshot test comment.
       const adapter = createCityAdapter(50);
-      list = createList(
-        { container, item: { height: 36, template: () => "" } },
-        [
-          dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-          groups({
-            getGroupForIndex: getPopTier,
-            header: { height: 28, template: (key) => key },
-            sticky: true,
-          }),
-        ],
-      );
+      const c = createContainer({ width: 300, height: 500 });
+      try {
+        const l = createList(
+          { container: c, item: { height: 36, template: () => "" } },
+          [
+            dataPlugin({ adapter, storage: { chunkSize: 50 } }),
+            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups({
+              getGroupForIndex: getPopTier,
+              header: { height: 28, template: (key) => key },
+              sticky: true,
+            }),
+          ],
+        );
 
-      await waitForLoad(list);
+        await waitForLoad(l);
 
-      const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement;
-      expect(sticky).not.toBeNull();
-      // With groups resolved, the sticky is shown with a label.
-      expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
+        const sticky = c.querySelector(".vlist-sticky-header") as HTMLElement;
+        expect(sticky).not.toBeNull();
+        // With groups resolved, the sticky is shown with a label.
+        expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
 
-      // Reload with a failing adapter → the new range is all placeholders →
-      // no resolvable groups. An enabled sticky header stays displayed but
-      // empty (it must NOT collapse or hide — it fills in on recovery without
-      // a layout shift).
-      (adapter.read as any).mockImplementation(async () => {
-        throw new Error("offline");
-      });
-      await (list as any).reload();
-      await new Promise((r) => setTimeout(r, 30));
+        // Reload with a failing adapter → the new range is all placeholders →
+        // no resolvable groups. An enabled sticky header stays displayed but
+        // empty (it must NOT collapse or hide — it fills in on recovery without
+        // a layout shift).
+        (adapter.read as any).mockImplementation(async () => {
+          throw new Error("offline");
+        });
+        await (l as any).reload();
+        await new Promise((r) => setTimeout(r, 30));
 
-      expect(container.querySelectorAll(".vlist-table-group-header").length).toBe(0);
-      expect(sticky.style.display).not.toBe("none"); // not collapsed
-      expect(sticky.style.visibility).not.toBe("hidden"); // shown, not hidden
-      expect((sticky.textContent ?? "").trim()).toBe(""); // empty
+        expect(c.querySelectorAll(".vlist-table-group-header").length).toBe(0);
+        expect(sticky.style.display).not.toBe("none"); // not collapsed
+        expect(sticky.style.visibility).not.toBe("hidden"); // shown, not hidden
+        expect((sticky.textContent ?? "").trim()).toBe(""); // empty
 
-      // Recover: data loads again → groups return → the label fills in.
-      (adapter.read as any).mockImplementation(async ({ offset, limit }: { offset: number; limit: number }) => {
-        const end = Math.min(offset + limit, 50);
-        const items = createCities(offset, end - offset);
-        return { items, total: 50, hasMore: end < 50 };
-      });
-      const reloaded = waitForLoad(list);
-      await (list as any).loadVisibleRange();
-      await reloaded;
+        // Recover: data loads again → groups return → the label fills in.
+        (adapter.read as any).mockImplementation(async ({ offset, limit }: { offset: number; limit: number }) => {
+          const end = Math.min(offset + limit, 50);
+          const items = createCities(offset, end - offset);
+          return { items, total: 50, hasMore: end < 50 };
+        });
+        const reloaded = waitForLoad(l);
+        await (l as any).loadVisibleRange();
+        await reloaded;
 
-      expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
-      expect((sticky.textContent ?? "").trim().length).toBeGreaterThan(0);
+        expect(getComputedStyle(sticky).visibility).not.toBe("hidden");
+        expect((sticky.textContent ?? "").trim().length).toBeGreaterThan(0);
+        l.destroy();
+      } finally {
+        c.remove();
+      }
     });
   });
 
