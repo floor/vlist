@@ -152,6 +152,9 @@ export function selection<T extends VListItem = VListItem>(
       if (item) {
         state.selected.add(item.id);
         selectedItemCache.set(item.id, item);
+      } else if (loadedItemFn) {
+        const di = toDataIndex(i);
+        if (di >= 0) state.selected.add(PLACEHOLDER_ID_PREFIX + di);
       }
     }
   }
@@ -164,6 +167,9 @@ export function selection<T extends VListItem = VListItem>(
       if (item) {
         state.selected.add(item.id);
         selectedItemCache.set(item.id, item);
+      } else if (loadedItemFn) {
+        const di = toDataIndex(i);
+        if (di >= 0) state.selected.add(PLACEHOLDER_ID_PREFIX + di);
       }
     }
   }
@@ -258,7 +264,7 @@ export function selection<T extends VListItem = VListItem>(
               is.selected = false;
             }
           } else {
-            is.selected = false;
+            is.selected = loadedItemFn !== null && di >= 0 && state.selected.has(PLACEHOLDER_ID_PREFIX + di);
           }
         } else {
           is.selected = false;
@@ -626,6 +632,7 @@ export function selection<T extends VListItem = VListItem>(
 
       ctx.registerMethod("selectAll", (): void => {
         if (mode !== "multiple") return;
+        resolveOnce(ctx);
         doSelectAll();
         emitSelectionChange();
       });
@@ -668,7 +675,11 @@ export function selection<T extends VListItem = VListItem>(
       // ── Internal methods (used by snapshots, sortable) ────────
 
       ctx.registerMethod("_seedSelection", (ids: Array<string | number>): void => {
-        for (const id of ids) state.selected.add(id);
+        if (mode === "single") {
+          if (ids.length === 1) state.selected.add(ids[0]!);
+        } else {
+          for (const id of ids) state.selected.add(id);
+        }
       });
 
       ctx.registerMethod("_isFollowFocus", (): boolean => followFocus);
