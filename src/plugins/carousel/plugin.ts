@@ -262,6 +262,14 @@ export function carousel<T extends VListItem = VListItem>(
         el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
       }
     } else {
+      const containerSz = engineState.containerSize;
+      const focalLogIdx = logicalIndexOf(focalVi);
+      const nextLogIdx = logicalIndexOf(focalVi + 1);
+      const focalStep = stepSizes[focalLogIdx] ?? 0;
+      const nextStep = stepSizes[nextLogIdx] ?? 0;
+      const interpItem = (focalStep + frac * (nextStep - focalStep)) - gapPx;
+      const centerShift = (containerSz - Math.max(0, interpItem)) / 2;
+
       for (let i = 0; i < children.length; i++) {
         const el = children[i] as HTMLElement;
         const idx = el.dataset.index;
@@ -274,7 +282,7 @@ export function carousel<T extends VListItem = VListItem>(
         const logIdx = logicalIndexOf(vi);
         const itemSize = Math.max(0, Math.round((stepSizes[logIdx] ?? 0) - gapPx));
         const absOffset = scrollPositionForVirtual(vi);
-        const roundedOffset = Math.round(absOffset - baseOffset);
+        const roundedOffset = Math.round(absOffset - baseOffset + centerShift);
 
         if (itemSize <= 0) {
           el.style.display = "none";
@@ -287,7 +295,8 @@ export function carousel<T extends VListItem = VListItem>(
         }
 
         const relOffset = vi - focalVi;
-        el.style.setProperty("--vlist-carousel-progress", relOffset === 0 ? "0.000" : "1.000");
+        const progress = Math.min(1, Math.abs(relOffset) + (relOffset === 0 ? frac : 0));
+        el.style.setProperty("--vlist-carousel-progress", progress.toFixed(3));
         el.style.setProperty("--vlist-carousel-offset", String(relOffset));
         el.style.setProperty("--vlist-carousel-role", "large");
         el.style.setProperty("--vlist-carousel-width", itemSize + "px");
