@@ -247,6 +247,7 @@ export function carousel<T extends VListItem = VListItem>(
     const children = content.children;
     const pos = engineState.scrollPosition;
     const baseOffset = engineState.baseOffset;
+    const scrollTop = Math.round(pos - baseOffset);
     const prop = isX ? "width" : "height";
     const { vi: focalVi, frac } = decomposeScroll(pos);
     const baseCycle = focalVi - ((focalVi % realTotal + realTotal) % realTotal);
@@ -281,10 +282,11 @@ export function carousel<T extends VListItem = VListItem>(
 
         let roleWeight: number;
         if (textFade === "viewport") {
-          const vStart = Math.max(0, roundedOffset);
-          const vEnd = Math.min(engineState.containerSize, roundedOffset + roundedSize);
+          const vpOffset = roundedOffset - scrollTop;
+          const vStart = Math.max(0, vpOffset);
+          const vEnd = Math.min(engineState.containerSize, vpOffset + roundedSize);
           const vRatio = roundedSize > 0 ? Math.max(0, (vEnd - vStart) / roundedSize) : 0;
-          roleWeight = Math.min(1, Math.max(0, vRatio * 2 - 1));
+          roleWeight = Math.min(1, vRatio);
         } else {
           roleWeight = layout.role === "large" ? 1 - layout.progress : 0;
         }
@@ -323,10 +325,11 @@ export function carousel<T extends VListItem = VListItem>(
         const progress = Math.min(1, Math.abs(relOffset) + (relOffset === 0 ? frac : 0));
         let roleWeight: number;
         if (textFade === "viewport") {
-          const vStart = Math.max(0, roundedOffset);
-          const vEnd = Math.min(engineState.containerSize, roundedOffset + itemSize);
+          const vpOffset = roundedOffset - scrollTop;
+          const vStart = Math.max(0, vpOffset);
+          const vEnd = Math.min(engineState.containerSize, vpOffset + itemSize);
           const vRatio = itemSize > 0 ? Math.max(0, (vEnd - vStart) / itemSize) : 0;
-          roleWeight = Math.min(1, Math.max(0, vRatio * 2 - 1));
+          roleWeight = Math.min(1, vRatio);
         } else {
           roleWeight = 1 - progress;
         }
