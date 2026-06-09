@@ -1,0 +1,48 @@
+/* =============================================================================
+   vlist — Carousel Slide Styles
+   Optional structural styles for carousel items. Import with:
+     import "vlist/styles/carousel"
+   ============================================================================= */
+
+/* Slide container — clips media and anchors overlay */
+.vlist-carousel-slide {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--vlist-carousel-radius, 0);
+}
+
+/* Media (img/video) — locked to focal slot width, centered.
+   The item shrinks during transitions but the media stays at full size,
+   preventing object-fit recalculation (no "breathing"). The parent clips
+   the overflow, creating a smooth parallax-like pan. */
+.vlist-carousel-slide__media {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    width: var(--vlist-carousel-focal-width, 100%);
+    min-width: var(--vlist-carousel-focal-width, 100%);
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Text overlay — opacity driven by --vlist-carousel-role-weight */
+.vlist-carousel-slide__overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    opacity: var(--vlist-carousel-role-weight, 0);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* Text lines — single-line with ellipsis truncation */
+.vlist-carousel-slide__title,
+.vlist-carousel-slide__subtitle {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

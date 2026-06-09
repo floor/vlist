@@ -46,6 +46,7 @@
     "./styles/extras": "./dist/vlist-extras.css",
     "./styles/tree": "./dist/vlist-tree.css",
     "./styles/search": "./dist/vlist-search.css",
+    "./styles/carousel": "./dist/vlist-carousel.css",
     "./package.json": "./package.json"
   },
   "files": [

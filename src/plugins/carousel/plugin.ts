@@ -252,6 +252,8 @@ export function carousel<T extends VListItem = VListItem>(
     const { vi: focalVi, frac } = decomposeScroll(pos);
     const baseCycle = focalVi - ((focalVi % realTotal + realTotal) % realTotal);
 
+    const focalWidth = layoutEngine ? (layoutEngine.slotWidths[layoutEngine.focalSlot] ?? 0) : 0;
+
     if (layoutEngine) {
       const anchor = pos + layoutEngine.getAnchorOffset(focalVi, frac);
 
@@ -298,6 +300,7 @@ export function carousel<T extends VListItem = VListItem>(
         el.style.setProperty("--vlist-carousel-role", layout.role);
         el.style.setProperty("--vlist-carousel-role-weight", roleWeight.toFixed(3));
         el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
+        el.style.setProperty("--vlist-carousel-focal-width", focalWidth + "px");
       }
     } else {
       for (let i = 0; i < children.length; i++) {
