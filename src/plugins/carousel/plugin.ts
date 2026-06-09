@@ -28,7 +28,7 @@ import { resolvePreset } from "./presets";
 // Config
 // =============================================================================
 
-export type CarouselVariant = "static" | "full" | "hero" | "hero-center" | "multi" | "uncontained" | "free";
+export type CarouselVariant = "static" | "full" | "hero" | "hero-center" | "multi" | "uncontained" | "multi-aspect" | "free";
 export type CarouselDirection = "auto" | "forward" | "backward";
 
 export interface CarouselPluginConfig {
@@ -92,6 +92,11 @@ export function carousel<T extends VListItem = VListItem>(
   let prefix = "vlist";
   let intendedVi = -1;
 
+  let stepSizes: number[] = [];
+  let stepOffsets: number[] = [];
+  let isVariableWidth = false;
+  const gapPx = config?.gap ?? 0;
+
   function resolveIndex(index: number): number {
     if (realTotal <= 0) return 0;
     return ((index % realTotal) + realTotal) % realTotal;
@@ -116,6 +121,42 @@ export function carousel<T extends VListItem = VListItem>(
     return ((virtualIndex % realTotal) + realTotal) % realTotal;
   }
 
+  function buildStepCache(sizes: number[]): void {
+    stepSizes = sizes;
+    const n = sizes.length;
+    stepOffsets = new Array(n + 1) as number[];
+    stepOffsets[0] = 0;
+    for (let i = 0; i < n; i++) {
+      stepOffsets[i + 1] = stepOffsets[i]! + sizes[i]!;
+    }
+    lapSize = n > 0 ? stepOffsets[n]! : 0;
+  }
+
+  function decomposeScroll(pos: number): { vi: number; frac: number } {
+    if (realTotal <= 0 || lapSize <= 0) return { vi: 0, frac: 0 };
+    const cycle = Math.floor(pos / lapSize);
+    let rem = pos - cycle * lapSize;
+    if (rem < 0) rem = 0;
+
+    if (!isVariableWidth) {
+      const s = stepSizes[0]!;
+      const idx = Math.min(Math.floor(rem / s), realTotal - 1);
+      return { vi: cycle * realTotal + idx, frac: s > 0 ? (rem / s) - idx : 0 };
+    }
+
+    let lo = 0;
+    let hi = realTotal - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (stepOffsets[mid]! <= rem) lo = mid;
+      else hi = mid - 1;
+    }
+    const start = stepOffsets[lo]!;
+    const size = stepSizes[lo]!;
+    const frac = size > 0 ? Math.max(0, Math.min((rem - start) / size, 1)) : 0;
+    return { vi: cycle * realTotal + lo, frac };
+  }
+
   function resolvePeekSize(containerSize: number): number {
     if (variant === "full") return 0;
     if (typeof peekConfig === "number") return peekConfig;
@@ -126,12 +167,15 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function scrollPositionForVirtual(vi: number): number {
-    return vi * stepSize;
+    if (realTotal <= 0 || lapSize <= 0) return 0;
+    const cycle = Math.floor(vi / realTotal);
+    const within = ((vi % realTotal) + realTotal) % realTotal;
+    return cycle * lapSize + (stepOffsets[within] ?? 0);
   }
 
   function virtualIndexAtScroll(pos: number): number {
-    if (stepSize <= 0) return 0;
-    return Math.round(pos / stepSize);
+    const { vi, frac } = decomposeScroll(pos);
+    return frac >= 0.5 ? vi + 1 : vi;
   }
 
   function getBaseVi(): number {
@@ -154,64 +198,100 @@ export function carousel<T extends VListItem = VListItem>(
     if (currentTotal === realTotal) return;
     const savedIndex = currentIndex;
     realTotal = currentTotal;
+    if (isVariableWidth) {
+      const rawSpec = storedCtx.rawSizeSpec;
+      const getSz = typeof rawSpec === "function"
+        ? (i: number) => (rawSpec as (index: number) => number)(i) + gapPx
+        : () => (rawSpec as number) + gapPx;
+      buildStepCache(Array.from({ length: realTotal }, (_, i) => getSz(i)));
+    } else {
+      buildStepCache(Array.from({ length: realTotal }, () => stepSizes[0] ?? stepSize));
+    }
     virtualTotal = realTotal * CYCLES;
-    lapSize = stepSize * realTotal;
     engineState.totalItems = virtualTotal;
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
       currentIndex = safeIndex;
-      // Recenter on the middle cycle through the handler so baseOffset/scrollTop
-      // stay consistent. realTotal is already updated, so the re-entrant
-      // onAfterScroll triggered by this write returns early.
-      storedCtx.scrollTo((MIDDLE_CYCLE * realTotal + safeIndex) * stepSize);
+      storedCtx.scrollTo(scrollPositionForVirtual(MIDDLE_CYCLE * realTotal + safeIndex));
     }
   }
 
   function updateItemLayout(): void {
-    if (!storedCtx || realTotal <= 0 || !layoutEngine) return;
+    if (!storedCtx || realTotal <= 0) return;
+    if (!layoutEngine && !isVariableWidth) return;
+
     const content = storedCtx.dom.content;
     const children = content.children;
     const pos = engineState.scrollPosition;
-    const focalVi = Math.floor(pos / stepSize);
-    const frac = stepSize > 0 ? (pos / stepSize) - focalVi : 0;
-    const prop = isX ? "width" : "height";
-    const anchor = pos + layoutEngine!.getAnchorOffset(focalVi, frac);
-    // Item offsets are computed in absolute logical space; subtract baseOffset to
-    // land them inside the bounded runway. baseOffset is 0 in native mode, so this
-    // is a no-op there.
     const baseOffset = engineState.baseOffset;
+    const prop = isX ? "width" : "height";
+    const { vi: focalVi, frac } = decomposeScroll(pos);
+    const baseCycle = focalVi - ((focalVi % realTotal + realTotal) % realTotal);
 
-    const baseCycle = focalVi - (focalVi % realTotal);
+    if (layoutEngine) {
+      const anchor = pos + layoutEngine.getAnchorOffset(focalVi, frac);
 
-    for (let i = 0; i < children.length; i++) {
-      const el = children[i] as HTMLElement;
-      const idx = el.dataset.index;
-      if (idx === undefined) continue;
-      const logical = parseInt(idx, 10);
-      let vi = baseCycle + logical;
-      if (vi - focalVi > realTotal / 2) vi -= realTotal;
-      if (focalVi - vi > realTotal / 2) vi += realTotal;
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i] as HTMLElement;
+        const idx = el.dataset.index;
+        if (idx === undefined) continue;
+        const logical = parseInt(idx, 10);
+        let vi = baseCycle + logical;
+        if (vi - focalVi > realTotal / 2) vi -= realTotal;
+        if (focalVi - vi > realTotal / 2) vi += realTotal;
 
-      const layout = layoutEngine!.getItemLayout(vi, focalVi, frac, anchor);
-      const roundedSize = Math.max(0, Math.round(layout.size));
-      const roundedOffset = Math.round(layout.offset - baseOffset);
+        const layout = layoutEngine.getItemLayout(vi, focalVi, frac, anchor);
+        const roundedSize = Math.max(0, Math.round(layout.size));
+        const roundedOffset = Math.round(layout.offset - baseOffset);
 
-      if (roundedSize <= 0) {
-        el.style.display = "none";
-        el.classList.remove(`${prefix}-item--focused`, `${prefix}-item--selected`);
-        el.removeAttribute("aria-selected");
-      } else {
-        el.style.display = "";
-        el.style[prop] = roundedSize + "px";
-        el.style.transform = isX
-          ? `translateX(${roundedOffset}px)`
-          : `translateY(${roundedOffset}px)`;
+        if (roundedSize <= 0) {
+          el.style.display = "none";
+          el.classList.remove(`${prefix}-item--focused`, `${prefix}-item--selected`);
+          el.removeAttribute("aria-selected");
+        } else {
+          el.style.display = "";
+          el.style[prop] = roundedSize + "px";
+          el.style.transform = isX
+            ? `translateX(${roundedOffset}px)`
+            : `translateY(${roundedOffset}px)`;
+        }
+
+        el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
+        el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
+        el.style.setProperty("--vlist-carousel-role", layout.role);
+        el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
       }
+    } else {
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i] as HTMLElement;
+        const idx = el.dataset.index;
+        if (idx === undefined) continue;
+        const logical = parseInt(idx, 10);
+        let vi = baseCycle + logical;
+        if (vi - focalVi > realTotal / 2) vi -= realTotal;
+        if (focalVi - vi > realTotal / 2) vi += realTotal;
 
-      el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
-      el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
-      el.style.setProperty("--vlist-carousel-role", layout.role);
-      el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
+        const logIdx = logicalIndexOf(vi);
+        const itemSize = Math.max(0, Math.round((stepSizes[logIdx] ?? 0) - gapPx));
+        const absOffset = scrollPositionForVirtual(vi);
+        const roundedOffset = Math.round(absOffset - baseOffset);
+
+        if (itemSize <= 0) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "";
+          el.style[prop] = itemSize + "px";
+          el.style.transform = isX
+            ? `translateX(${roundedOffset}px)`
+            : `translateY(${roundedOffset}px)`;
+        }
+
+        const relOffset = vi - focalVi;
+        el.style.setProperty("--vlist-carousel-progress", relOffset === 0 ? "0.000" : "1.000");
+        el.style.setProperty("--vlist-carousel-offset", String(relOffset));
+        el.style.setProperty("--vlist-carousel-role", "large");
+        el.style.setProperty("--vlist-carousel-width", itemSize + "px");
+      }
     }
   }
 
@@ -260,22 +340,25 @@ export function carousel<T extends VListItem = VListItem>(
           slots: variantSlots.slots,
           focalSlot: variantSlots.focalSlot,
           containerSize,
-          gap: config?.gap ?? 0,
+          gap: gapPx,
         });
         stepSize = layoutEngine.stepSize;
+        buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
+        isVariableWidth = false;
+      } else if (typeof ctx.rawSizeSpec === "function") {
+        const rawFn = ctx.rawSizeSpec as (index: number) => number;
+        buildStepCache(Array.from({ length: realTotal }, (_, i) => rawFn(i) + gapPx));
+        stepSize = stepSizes[0] ?? baseItemSize;
+        isVariableWidth = true;
       } else {
         stepSize = baseItemSize;
+        buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
+        isVariableWidth = false;
       }
-      lapSize = stepSize * realTotal;
       virtualTotal = realTotal * CYCLES;
       currentIndex = resolveIndex(initialIndex);
 
       // ── Virtual scroll window ─────────────────────────────────────
-      // Map virtual indices to real items via modulo. The render
-      // pipeline sees virtualTotal items but public API stays at
-      // realTotal. We hook getTotalSize and getOffset on the sizeCache
-      // so content height reflects the virtual window, and we override
-      // getItemFn so virtual indices resolve to real items.
 
       if (realTotal > 1) {
         ctx.setGetItemFn((i: number): T | undefined => {
@@ -283,12 +366,28 @@ export function carousel<T extends VListItem = VListItem>(
           return ctx.getItems()[logical];
         });
 
-        sizeCache.getTotalSize = (): number => virtualTotal * stepSize;
-        sizeCache.getOffset = (index: number): number => index * stepSize;
-        sizeCache.getSize = (_index: number): number => stepSize;
+        sizeCache.getTotalSize = (): number => lapSize * CYCLES;
+        sizeCache.getOffset = (index: number): number => scrollPositionForVirtual(index);
+        sizeCache.getSize = (index: number): number => {
+          const logical = logicalIndexOf(index);
+          return stepSizes[logical] ?? stepSizes[0] ?? 0;
+        };
         sizeCache.indexAtOffset = (offset: number): number => {
-          if (stepSize <= 0) return 0;
-          return Math.max(0, Math.min(Math.floor(offset / stepSize), virtualTotal - 1));
+          if (lapSize <= 0) return 0;
+          const cycle = Math.floor(offset / lapSize);
+          const rem = offset - cycle * lapSize;
+          if (!isVariableWidth) {
+            const s = stepSizes[0] ?? 1;
+            return Math.max(0, Math.min(cycle * realTotal + Math.floor(rem / s), virtualTotal - 1));
+          }
+          let lo = 0;
+          let hi = realTotal - 1;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (stepOffsets[mid]! <= rem) lo = mid;
+            else hi = mid - 1;
+          }
+          return Math.max(0, Math.min(cycle * realTotal + lo, virtualTotal - 1));
         };
         sizeCache.getTotal = (): number => virtualTotal;
 
@@ -540,8 +639,8 @@ export function carousel<T extends VListItem = VListItem>(
         intendedVi = -1;
         if (!snapEnabled || !storedCtx || realTotal <= 1) return;
         const p = engineState.scrollPosition;
-        const nearestVi = Math.round(p / stepSize);
-        const snapTarget = nearestVi * stepSize;
+        const nearestVi = virtualIndexAtScroll(p);
+        const snapTarget = scrollPositionForVirtual(nearestVi);
         if (Math.abs(p - snapTarget) > 1) {
           currentIndex = logicalIndexOf(nearestVi);
           smoothScrollTo(snapTarget, snapDuration);

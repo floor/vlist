@@ -61,6 +61,7 @@ export function resolvePreset(
     case "multi": return multi();
     case "uncontained": return uncontained(containerSize);
     case "full": return full();
+    case "multi-aspect":
     case "static":
     default: return null;
   }

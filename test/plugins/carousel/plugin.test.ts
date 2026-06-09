@@ -2120,3 +2120,172 @@ describeCarousel("carousel — goTo single item", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// Variable-width (multi-aspect) — per-item step sizes
+// =============================================================================
+
+describeCarousel("carousel — Variable-width (multi-aspect)", () => {
+  const WIDTHS = [300, 200, 400, 150, 250];
+
+  function createVariableWidthContext() {
+    const items = createTestItems(5);
+    const mockCtx = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: (index: number) => WIDTHS[index % WIDTHS.length]!,
+      isX: true,
+    });
+    return mockCtx;
+  }
+
+  it("should accept multi-aspect variant", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const getState = methods.get("getCarouselState") as Function;
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("sizeCache.getSize should return per-item step sizes", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+
+    for (let i = 0; i < 5; i++) {
+      expect(ctx.sizeCache.getSize(i)).toBe(WIDTHS[i]! + 8);
+    }
+
+    cleanup();
+  });
+
+  it("sizeCache.getSize should wrap for virtual indices", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+
+    expect(ctx.sizeCache.getSize(5)).toBe(WIDTHS[0]! + 8);
+    expect(ctx.sizeCache.getSize(6)).toBe(WIDTHS[1]! + 8);
+
+    cleanup();
+  });
+
+  it("sizeCache.getOffset should use prefix sums", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+
+    expect(ctx.sizeCache.getOffset(0)).toBe(0);
+    expect(ctx.sizeCache.getOffset(1)).toBe(WIDTHS[0]! + gap);
+    expect(ctx.sizeCache.getOffset(2)).toBe(WIDTHS[0]! + WIDTHS[1]! + gap * 2);
+
+    cleanup();
+  });
+
+  it("next/prev should cycle correctly with variable widths", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const next = methods.get("next") as Function;
+    const prev = methods.get("prev") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    const fwd: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      fwd.push(getState().index);
+      next();
+    }
+    expect(fwd).toEqual([0, 1, 2, 3, 4, 0, 1]);
+
+    const bwd: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      bwd.push(getState().index);
+      prev();
+    }
+    expect(bwd).toEqual([2, 1, 0, 4]);
+
+    cleanup();
+  });
+
+  it("goTo should work with variable widths", () => {
+    const { ctx, methods, cleanup } = createVariableWidthContext();
+
+    carousel({ variant: "multi-aspect" }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as Function;
+    const getState = methods.get("getCarouselState") as Function;
+
+    goTo(3);
+    expect(getState().index).toBe(3);
+
+    goTo(0, { direction: "forward" });
+    expect(getState().index).toBe(0);
+
+    cleanup();
+  });
+
+  it("indexAtOffset should binary-search for variable widths", () => {
+    const { ctx, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+
+    expect(ctx.sizeCache.indexAtOffset(0)).toBe(0);
+    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + gap)).toBe(1);
+    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + WIDTHS[1]! + gap * 2)).toBe(2);
+
+    cleanup();
+  });
+
+  it("updateItemLayout should set per-item widths in natural-width mode", () => {
+    const { ctx, dom, cleanup } = createVariableWidthContext();
+    const gap = 8;
+
+    const plugin = carousel({ variant: "multi-aspect", gap });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const es = ctx.getState();
+
+    const totalLap = WIDTHS.reduce((a, b) => a + b, 0) + gap * 5;
+    es.scrollPosition = 50 * totalLap;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    const w0 = parseInt(els[0].style.width);
+    const w1 = parseInt(els[1].style.width);
+    const w2 = parseInt(els[2].style.width);
+
+    expect(w0).toBe(WIDTHS[0]!);
+    expect(w1).toBe(WIDTHS[1]!);
+    expect(w2).toBe(WIDTHS[2]!);
+
+    cleanup();
+  });
+
+  it("uniform preset still works after refactor (backward compat)", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 400,
+      itemSize: 400,
+      isX: true,
+    });
+
+    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+
+    const stepSz = 800 - 56;
+    expect(ctx.sizeCache.getSize(0)).toBe(stepSz);
+    expect(ctx.sizeCache.getSize(1)).toBe(stepSz);
+    expect(ctx.sizeCache.getOffset(0)).toBe(0);
+    expect(ctx.sizeCache.getOffset(1)).toBe(stepSz);
+    expect(ctx.sizeCache.getOffset(3)).toBe(stepSz * 3);
+
+    cleanup();
+  });
+});
