@@ -21,8 +21,8 @@ import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import { createLayoutEngine } from "./engine";
-import type { SlotConfig, SlotConfigResolver } from "./presets";
-import { resolvePreset } from "./presets";
+import type { SlotConfig, SlotConfigResolver, TextFade } from "./presets";
+import { resolvePreset, hasSlots } from "./presets";
 
 // =============================================================================
 // Config
@@ -118,6 +118,7 @@ export function carousel<T extends VListItem = VListItem>(
   let stepSizes: number[] = [];
   let stepOffsets: number[] = [];
   let isVariableWidth = false;
+  let textFade: TextFade = "role";
   const gapPx = config?.gap ?? 0;
 
   function resolveIndex(index: number): number {
@@ -278,9 +279,19 @@ export function carousel<T extends VListItem = VListItem>(
             : `translateY(${roundedOffset}px)`;
         }
 
+        let roleWeight: number;
+        if (textFade === "viewport") {
+          const vStart = Math.max(0, roundedOffset);
+          const vEnd = Math.min(engineState.containerSize, roundedOffset + roundedSize);
+          const vRatio = roundedSize > 0 ? Math.max(0, (vEnd - vStart) / roundedSize) : 0;
+          roleWeight = Math.min(1, Math.max(0, vRatio * 2 - 1));
+        } else {
+          roleWeight = layout.role === "large" ? 1 - layout.progress : 0;
+        }
         el.style.setProperty("--vlist-carousel-progress", layout.progress.toFixed(3));
         el.style.setProperty("--vlist-carousel-offset", String(layout.relOffset));
         el.style.setProperty("--vlist-carousel-role", layout.role);
+        el.style.setProperty("--vlist-carousel-role-weight", roleWeight.toFixed(3));
         el.style.setProperty("--vlist-carousel-width", roundedSize + "px");
       }
     } else {
@@ -310,9 +321,19 @@ export function carousel<T extends VListItem = VListItem>(
 
         const relOffset = vi - focalVi;
         const progress = Math.min(1, Math.abs(relOffset) + (relOffset === 0 ? frac : 0));
+        let roleWeight: number;
+        if (textFade === "viewport") {
+          const vStart = Math.max(0, roundedOffset);
+          const vEnd = Math.min(engineState.containerSize, roundedOffset + itemSize);
+          const vRatio = itemSize > 0 ? Math.max(0, (vEnd - vStart) / itemSize) : 0;
+          roleWeight = Math.min(1, Math.max(0, vRatio * 2 - 1));
+        } else {
+          roleWeight = 1 - progress;
+        }
         el.style.setProperty("--vlist-carousel-progress", progress.toFixed(3));
         el.style.setProperty("--vlist-carousel-offset", String(relOffset));
         el.style.setProperty("--vlist-carousel-role", "large");
+        el.style.setProperty("--vlist-carousel-role-weight", roleWeight.toFixed(3));
         el.style.setProperty("--vlist-carousel-width", itemSize + "px");
       }
     }
@@ -357,11 +378,12 @@ export function carousel<T extends VListItem = VListItem>(
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
       const peekResolved = resolvePeekSize(containerSize);
-      const variantSlots = resolveSlots(containerSize, peekResolved);
-      if (variantSlots) {
+      const presetResult = resolveSlots(containerSize, peekResolved);
+      if (hasSlots(presetResult)) {
+        textFade = presetResult.textFade ?? "role";
         layoutEngine = createLayoutEngine({
-          slots: variantSlots.slots,
-          focalSlot: variantSlots.focalSlot,
+          slots: presetResult.slots,
+          focalSlot: presetResult.focalSlot,
           containerSize,
           gap: gapPx,
         });
@@ -369,11 +391,13 @@ export function carousel<T extends VListItem = VListItem>(
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
       } else if (typeof ctx.rawSizeSpec === "function") {
+        textFade = presetResult?.textFade ?? "viewport";
         const rawFn = ctx.rawSizeSpec as (index: number) => number;
         buildStepCache(Array.from({ length: realTotal }, (_, i) => rawFn(i) + gapPx));
         stepSize = stepSizes[0] ?? baseItemSize;
         isVariableWidth = true;
       } else {
+        textFade = presetResult?.textFade ?? "viewport";
         stepSize = baseItemSize;
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;

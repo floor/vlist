@@ -6,16 +6,28 @@
  * add or override presets via `registerPreset()`.
  *
  * Returning `null` from a resolver means "no layout engine" — the
- * plugin falls back to variable-width item rendering.
+ * plugin falls back to variable-width item rendering with default
+ * textFade: "viewport".
  */
+
+export type TextFade = "role" | "viewport";
 
 export interface SlotConfig {
   slots: number[];
   focalSlot: number;
+  textFade?: TextFade;
 }
 
-/** Resolves a variant name to a slot configuration (or null for no-engine mode). */
-export type SlotConfigResolver = (containerSize: number, peek: number) => SlotConfig | null;
+/** Config without a layout engine — just behavioral options. */
+export interface NoEngineConfig {
+  textFade?: TextFade;
+}
+
+/** What a preset resolver can return. */
+export type PresetResult = SlotConfig | NoEngineConfig | null;
+
+/** Resolves a variant name to a preset configuration. */
+export type SlotConfigResolver = (containerSize: number, peek: number) => PresetResult;
 
 // =============================================================================
 // Registry
@@ -33,14 +45,19 @@ export function getPreset(name: string): SlotConfigResolver | undefined {
   return presetRegistry.get(name);
 }
 
-/** Resolve a named preset to a SlotConfig. Returns null if the name is unknown or the resolver returns null. */
+/** Resolve a named preset. Returns null if the name is unknown. */
 export function resolvePreset(
   variant: string,
   containerSize: number,
   peek: number,
-): SlotConfig | null {
+): PresetResult {
   const resolver = presetRegistry.get(variant);
   return resolver ? resolver(containerSize, peek) : null;
+}
+
+/** Type guard: does the result have a layout engine? */
+export function hasSlots(result: PresetResult): result is SlotConfig {
+  return result !== null && "slots" in result;
 }
 
 // =============================================================================
@@ -83,6 +100,7 @@ export const uncontained: SlotConfigResolver = (containerSize) => {
   return {
     slots: Array.from({ length: count }, () => ratio),
     focalSlot: 0,
+    textFade: "viewport",
   };
 };
 

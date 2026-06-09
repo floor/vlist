@@ -16,7 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
-import { resolvePreset, registerPreset, getPreset, multi, uncontained } from "../../../src/plugins/carousel/presets";
+import { resolvePreset, registerPreset, getPreset, hasSlots, multi, uncontained } from "../../../src/plugins/carousel/presets";
 import type { SlotConfigResolver } from "../../../src/plugins/carousel/presets";
 
 // Import will fail until plugin is created — that's expected for TDD
@@ -1569,7 +1569,9 @@ describeCarousel("carousel — Normalized Scroll", () => {
 
 describeCarousel("carousel — Presets", () => {
   it("multi() returns 4 slots summing to 1.0", () => {
-    const cfg = multi(800, 56)!;
+    const cfg = multi(800, 56);
+    expect(cfg).not.toBeNull();
+    if (!hasSlots(cfg)) throw new Error("expected slots");
     expect(cfg.slots).toHaveLength(4);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1577,7 +1579,9 @@ describeCarousel("carousel — Presets", () => {
   });
 
   it("uncontained() derives slot count from container size", () => {
-    const cfg = uncontained(900, 0)!;
+    const cfg = uncontained(900, 0);
+    expect(cfg).not.toBeNull();
+    if (!hasSlots(cfg)) throw new Error("expected slots");
     expect(cfg.slots.length).toBeGreaterThanOrEqual(2);
     const sum = cfg.slots.reduce((a, b) => a + b, 0);
     expect(Math.abs(sum - 1.0)).toBeLessThan(1e-10);
@@ -1630,14 +1634,14 @@ describeCarousel("carousel — Presets", () => {
   });
 
   it("registerPreset adds a custom preset accessible via resolvePreset", () => {
-    const custom: SlotConfigResolver = (containerSize) => ({
+    const custom: SlotConfigResolver = () => ({
       slots: [0.6, 0.4],
       focalSlot: 0,
     });
     registerPreset("my-custom", custom);
     const result = resolvePreset("my-custom", 800, 56);
-    expect(result).not.toBeNull();
-    expect(result!.slots).toEqual([0.6, 0.4]);
+    if (!hasSlots(result)) throw new Error("expected slots");
+    expect(result.slots).toEqual([0.6, 0.4]);
   });
 
   it("getPreset returns the registered resolver", () => {
@@ -1645,8 +1649,8 @@ describeCarousel("carousel — Presets", () => {
     expect(resolver).toBeDefined();
     expect(typeof resolver).toBe("function");
     const result = resolver!(800, 56);
-    expect(result).not.toBeNull();
-    expect(result!.focalSlot).toBe(0);
+    if (!hasSlots(result)) throw new Error("expected slots");
+    expect(result.focalSlot).toBe(0);
   });
 
   it("getPreset returns undefined for unregistered names", () => {
@@ -1655,14 +1659,24 @@ describeCarousel("carousel — Presets", () => {
 
   it("registerPreset can override built-in presets", () => {
     const original = resolvePreset("full", 800, 56);
-    expect(original!.slots).toEqual([1.0]);
+    if (!hasSlots(original)) throw new Error("expected slots");
+    expect(original.slots).toEqual([1.0]);
 
     registerPreset("full", () => ({ slots: [0.5, 0.5], focalSlot: 0 }));
     const overridden = resolvePreset("full", 800, 56);
-    expect(overridden!.slots).toEqual([0.5, 0.5]);
+    if (!hasSlots(overridden)) throw new Error("expected slots");
+    expect(overridden.slots).toEqual([0.5, 0.5]);
 
     // Restore
     registerPreset("full", () => ({ slots: [1.0], focalSlot: 0 }));
+  });
+
+  it("no-engine preset can specify textFade", () => {
+    registerPreset("custom-no-engine", () => ({ textFade: "role" }));
+    const result = resolvePreset("custom-no-engine", 800, 56);
+    expect(result).not.toBeNull();
+    expect(hasSlots(result)).toBe(false);
+    expect(result!.textFade).toBe("role");
   });
 
   it("carousel accepts a SlotConfigResolver function as variant", () => {
