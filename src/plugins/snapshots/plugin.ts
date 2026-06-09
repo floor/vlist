@@ -43,9 +43,8 @@ export function snapshots<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   const autoSaveKey = config?.autoSave;
 
-  const restoreSnapshot = autoSaveKey
-    ? readSnapshot(autoSaveKey)
-    : config?.restore;
+  const restoreSnapshot = config?.restore
+    ?? (autoSaveKey ? readSnapshot(autoSaveKey) : undefined);
 
   let disposed = false;
   let saveToStorage: (() => void) | null = null;

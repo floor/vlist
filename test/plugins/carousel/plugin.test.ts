@@ -1994,6 +1994,93 @@ describeCarousel("carousel — onIdle snap", () => {
 
     cleanup();
   });
+
+  it("snaps forward when scrollDirection is positive", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Position slightly past item boundary (frac ~0.1 — would round backward without direction)
+    const misaligned = 50 * 5 * 400 + 40;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = 1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Should have snapped forward (to next item) despite small frac
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeGreaterThan(misaligned);
+
+    cleanup();
+  });
+
+  it("snaps backward when scrollDirection is negative", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Position mostly through item (frac ~0.9 — would round forward without direction)
+    const misaligned = 50 * 5 * 400 + 360;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = -1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Should have snapped backward despite high frac
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeLessThan(misaligned);
+
+    cleanup();
+  });
+
+  it("falls back to nearest when snapDirection is false", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: false });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Small forward offset — nearest-snap rounds backward
+    const misaligned = 50 * 5 * 400 + 40;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = 1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Nearest snap: frac ~0.1, rounds backward
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeLessThan(misaligned);
+
+    cleanup();
+  });
 });
 
 // =============================================================================
