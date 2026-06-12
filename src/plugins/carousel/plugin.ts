@@ -217,7 +217,7 @@ export function carousel<T extends VListItem = VListItem>(
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
-    storedCtx?.smoothScrollTo(target, duration, undefined, snapEasing);
+    storedCtx?.smoothScrollTo(target, duration, snapEasing);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;

@@ -2551,3 +2551,47 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
     cleanup();
   });
 });
+
+// =============================================================================
+// snapEasing wiring
+// =============================================================================
+
+describeCarousel("carousel — snapEasing", () => {
+  it("forwards the configured snapEasing to smoothScrollTo as the easing argument", () => {
+    // Regression: the carousel called smoothScrollTo(target, duration, undefined,
+    // snapEasing), parking snapEasing in the onComplete slot — so a configured
+    // snapEasing was silently ignored and snaps used the default easing. It must
+    // be forwarded as the easing (3rd) argument.
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const snapEasing = (t: number): number => t; // marker (linear) easing
+    let smoothCalled = false;
+    let capturedEasing: ((t: number) => number) | undefined;
+    const realSmooth = ctx.smoothScrollTo;
+    ctx.smoothScrollTo = ((
+      target: number | (() => number),
+      duration: number,
+      easing?: (t: number) => number,
+      onComplete?: () => void,
+    ) => {
+      smoothCalled = true;
+      capturedEasing = easing;
+      return realSmooth(target, duration, easing, onComplete);
+    }) as typeof ctx.smoothScrollTo;
+
+    carousel({ snapEasing }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as (index: number, options?: Record<string, unknown>) => void;
+    // A smooth programmatic navigation triggers a snap animation.
+    goTo(2, { behavior: "smooth", direction: "forward" });
+
+    expect(smoothCalled).toBe(true);
+    expect(capturedEasing).toBe(snapEasing);
+
+    cleanup();
+  });
+});
