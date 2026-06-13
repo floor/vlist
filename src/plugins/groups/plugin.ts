@@ -64,6 +64,11 @@ export function groups<T extends VListItem = VListItem>(
   let engineState: EngineState;
   let pool: ElementPool;
   let contentElement: HTMLElement;
+  // Bounded-mode (RFC-012): route content sizing through ctx.updateContentSize so
+  // the bounded scroll handler keeps vlist-content at the runway size instead of
+  // the full virtual height (which would blow the browser's element cap on huge
+  // lists). Null until setup; in native mode it just sets the style height.
+  let updateContentSize: ((size: number) => void) | null = null;
   let rootElement: HTMLElement;
   let userTemplate: ItemTemplate<T>;
   let ctxGetItem: (index: number) => T | undefined;
@@ -92,6 +97,11 @@ export function groups<T extends VListItem = VListItem>(
   const detached = new Map<string, HTMLElement>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
+  // Bounded mode (RFC-012): item transforms are `offset - baseOffset`. baseOffset
+  // shifts when the runway rebases, so on a change every already-rendered item
+  // must be repositioned — not just newly added ones. Tracks the last rendered
+  // baseOffset to detect that. Stays 0 in native mode (no extra work).
+  let lastRenderBaseOffset = 0;
   let forceNextRender = true;
   let lastDataCount = -1;
   let lastRebuildLoadedCount = 0;
@@ -119,7 +129,7 @@ export function groups<T extends VListItem = VListItem>(
     origSizeCacheRebuild(layout.totalEntries);
     rebuildGridPositions();
     const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+    updateContentSize?.(totalSize);
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
@@ -266,17 +276,20 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   function buildTransform(layoutIndex: number): string {
+    // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+    // bounded runway. baseOffset is 0 in native mode (byte-identical).
+    const base = engineState.baseOffset;
     if (gridItemPositions) {
       const pos = gridItemPositions.get(layoutIndex);
       if (pos) {
         const x = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
-        const y = pos.rowY;
+        const y = pos.rowY - base;
         if (isX) return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
         return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
       }
     }
 
-    const offset = sizeCache.getOffset(layoutIndex);
+    const offset = sizeCache.getOffset(layoutIndex) - base;
     if (isX) {
       return `translate(${Math.round(offset)}px, 0)`;
     }
@@ -429,7 +442,7 @@ export function groups<T extends VListItem = VListItem>(
     lastCrossSize = cross;
     rebuildGridPositions();
     const totalSize = getGridContentSize();
-    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+    updateContentSize?.(totalSize);
     if (stickyHeader) {
       stickyHeader.refresh();
       stickyHeader.update(engineState.scrollPosition);
@@ -445,8 +458,10 @@ export function groups<T extends VListItem = VListItem>(
 
     const scrollPos = engineState.scrollPosition;
     const cs = engineState.containerSize;
+    const baseOffset = engineState.baseOffset;
+    const baseChanged = baseOffset !== lastRenderBaseOffset;
 
-    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) {
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && !baseChanged) {
       return;
     }
     lastScrollPosition = scrollPos;
@@ -510,9 +525,10 @@ export function groups<T extends VListItem = VListItem>(
       renderEnd = Math.min(totalItems - 1, visEnd + overscan);
     }
 
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) {
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && !baseChanged) {
       return;
     }
+    lastRenderBaseOffset = baseOffset;
 
     // Recycle elements outside the new range
     rendered.forEach((element, idx) => {
@@ -586,6 +602,10 @@ export function groups<T extends VListItem = VListItem>(
         if (isForced) {
           applySizeStyles(element, i);
           element.style.transform = buildTransform(i);
+        } else if (baseChanged) {
+          // Bounded mode (RFC-012): the runway rebased, so reposition the item
+          // at its new offset - baseOffset (native mode never reaches here).
+          element.style.transform = buildTransform(i);
         }
       }
 
@@ -605,7 +625,7 @@ export function groups<T extends VListItem = VListItem>(
     drainDetached();
 
     const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
-    contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+    updateContentSize?.(totalSize);
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
@@ -665,7 +685,7 @@ export function groups<T extends VListItem = VListItem>(
         origSizeCacheRebuild(layout.totalEntries);
         rebuildGridPositions();
         const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
-        contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+        updateContentSize?.(totalSize);
         if (stickyHeader) {
           stickyHeader.refresh();
           stickyHeader.update(engineState.scrollPosition);
@@ -716,6 +736,7 @@ export function groups<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       pool = ctx.pool;
       contentElement = ctx.dom.content;
+      updateContentSize = ctx.updateContentSize.bind(ctx);
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
@@ -1063,7 +1084,7 @@ export function groups<T extends VListItem = VListItem>(
         lastCrossSize = engineState.crossSize;
         rebuildGridPositions();
         const totalSize = getGridContentSize();
-        contentElement.style[isX ? "width" : "height"] = (totalSize + mainAxisPadding) + "px";
+        updateContentSize?.(totalSize);
         if (stickyHeader) {
           stickyHeader.refresh();
           stickyHeader.update(engineState.scrollPosition);
