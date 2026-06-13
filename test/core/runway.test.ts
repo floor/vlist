@@ -255,30 +255,67 @@ describe("bounded scroll — logical position", () => {
 // Rebasing
 // =============================================================================
 
-describe("bounded scroll — rebasing", () => {
-  it("rebases near the upper runway edge, preserving the logical position", () => {
+describe("bounded scroll — rebasing (idle, RFC-013 Gate B)", () => {
+  // RFC-013 Gate B: rebasing moves OUT of the per-event scroll path and into the
+  // idle boundary, so it never writes scrollTop mid-gesture (which kills native
+  // touch momentum on iOS). During an active scroll the split is left untouched;
+  // once scrolling settles, baseOffset re-centres toward the runway middle
+  // (logical preserved) and a render flush repositions the pooled items.
+
+  it("does NOT rebase synchronously on a scroll event (no mid-gesture scrollTop write)", () => {
     list = makeBounded(1_000_000);
     const viewport = getViewport(container);
+    const state = (list as unknown as { _test: { engineState: { baseOffset: number } } })._test.engineState;
 
-    // 450 > high threshold (375). Rebase recenters scrollTop to the runway
-    // centre (250) and shifts baseOffset by the same delta — logical stays 450.
     simulateScroll(viewport, 450);
 
-    expect(list.getScrollPosition()).toBe(450);
-    expect(viewport.scrollTop).toBe(RUNWAY / 2 - VIEWPORT / 2); // 500 - 250 = 250
+    // The scroll handler must leave scrollTop exactly where the browser put it
+    // and must not shift baseOffset — the rebase is deferred to idle.
+    expect(viewport.scrollTop).toBe(450);
+    expect(state.baseOffset).toBe(0);
+    expect(list.getScrollPosition()).toBe(450); // logical == baseOffset + scrollTop
   });
 
-  it("a synthetic scroll event from the rebase does not shift the logical position", () => {
+  it("never writes scrollTop across a continuous (active) scroll sequence", () => {
     list = makeBounded(1_000_000);
     const viewport = getViewport(container);
 
-    simulateScroll(viewport, 450); // triggers rebase → scrollTop reset to 250
-    const afterRebase = list.getScrollPosition();
+    // A fling arrives as a rapid sequence of scroll events; none may
+    // programmatically move scrollTop (that would interrupt native momentum).
+    for (const top of [80, 170, 260, 350, 440]) {
+      simulateScroll(viewport, top);
+      expect(viewport.scrollTop).toBe(top);
+    }
+  });
 
-    // Replay the scroll event the browser would fire for the programmatic
-    // scrollTop change. It must be absorbed by the logical-unchanged guard.
-    viewport.dispatchEvent(new Event("scroll", { bubbles: false }));
-    expect(list.getScrollPosition()).toBe(afterRebase);
+  it("rebases at idle: recenters baseOffset toward the runway middle, preserves logical, repositions items", async () => {
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    const content = getContent(container);
+    const state = (list as unknown as { _test: { engineState: { baseOffset: number } } })._test.engineState;
+
+    const coversTop = (): HTMLElement =>
+      Array.from(content.children).find((el) => {
+        const y = transformPx(el as HTMLElement) - viewport.scrollTop;
+        return y <= 0 && y + ITEM > 0;
+      }) as HTMLElement;
+
+    simulateScroll(viewport, 450);
+    const topItem = coversTop();
+    const idxBefore = topItem.dataset.index;
+    const transformBefore = transformPx(topItem);
+    expect(state.baseOffset).toBe(0); // not yet rebased
+
+    await new Promise((r) => setTimeout(r, 250)); // let the idle timer fire
+
+    // baseOffset recentered so scrollTop returns toward the runway middle (250),
+    // logical is unchanged, and the same item still covers the top — repositioned.
+    expect(state.baseOffset).toBeGreaterThan(0);
+    expect(viewport.scrollTop).toBeCloseTo(250, 0);
+    expect(list.getScrollPosition()).toBe(450);
+    const topAfter = content.querySelector<HTMLElement>(`[data-index="${idxBefore}"]`)!;
+    expect(topAfter).not.toBeNull();
+    expect(transformPx(topAfter)).not.toBe(transformBefore); // render flush moved items
   });
 
   it("does not rebase for small lists (baseOffset stays 0)", () => {
