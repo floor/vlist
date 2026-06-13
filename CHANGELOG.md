@@ -9,6 +9,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.5.1] - 2026-06-13
+
+### Added
+
+- **Carousel snap refinements** — direction-aware snapping, configurable snap easing, and snap enforced for the `full` variant.
+
+### Fixed
+
+- **Groups + bounded scroll** — the `groups()` plugin is now bounded-scroll aware: sticky headers and item transforms account for the runway origin (`baseOffset`), so grouped lists position correctly under `scroll: { mode: "bounded" }` (RFC-012).
+- **Carousel `snapEasing`** — now forwarded to `smoothScrollTo` as the easing argument, so a custom snap easing is actually applied.
+- **Carousel static variant** — repositions its items during smooth scroll instead of leaving them fixed.
+- **Async data on idle** — the visible range now reconciles on scroll idle regardless of any pending range request, avoiding a stale window after fast scrolling.
+- **Grouped tables** — publish data indices (not layout indices) to the data loader, so the correct rows are fetched in grouped table mode.
+
 ## [2.5.0] - 2026-06-09
 
 ### Added

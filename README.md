@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.5.0** — [Changelog](./CHANGELOG.md) · **New:** Bounded logical scroll model for 1M+ items (`scroll: { mode: "bounded" }`), `carousel()` plugin with infinite loop, snap, and focal scaling. `scale()` deprecated.
+**v2.5.1** — [Changelog](./CHANGELOG.md) · Carousel snap refinements (direction-aware, configurable easing) plus fixes for groups under bounded scroll, grouped-table data loading, and async range reconciliation on idle.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -103,7 +103,7 @@ const list = createVList({
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.4 KB | 2D grid layout |
 | `masonry()` | +4.0 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `carousel()` | +3.3 KB | Paged horizontal carousel with snap and keyboard nav |
+| `carousel()` | +3.4 KB | Paged horizontal carousel with snap and keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
