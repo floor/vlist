@@ -66,6 +66,14 @@ export function table<T extends VListItem = VListItem>(
   let lastAriaRowCount = -1;
   let lastContentTotalSize = -1;
 
+  // Resolved once on first render: when the groups plugin is active it runs the
+  // table in LAYOUT-index space (header pseudo-entries interleaved with data
+  // rows) and exposes _layoutToDataIndex to translate back. Stays null for a
+  // plain table (layout space == data space). All plugin setups complete before
+  // the first render, so a one-shot resolve is safe regardless of plugin order.
+  let layoutToDataFn: ((layoutIndex: number) => number) | null = null;
+  let layoutToDataResolved = false;
+
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
@@ -138,14 +146,40 @@ export function table<T extends VListItem = VListItem>(
     engineState.prevRangeEnd = renderEnd;
     engineState.renderPending = false;
 
-    const count = renderEnd - renderStart + 1;
-    engineState.visibleCount = Math.min(count, engineState.capacity);
-    engineState.startIndex = renderStart;
-    for (let i = 0; i < engineState.visibleCount; i++) {
-      const idx = renderStart + i;
-      engineState.visibleIndices[i] = idx;
-      engineState.visibleOffsets[i] = sizeCache.getOffset(idx);
-      engineState.visibleSizes[i] = sizeCache.getSize(idx);
+    // Publish the visible DATA range for the async data plugin's load hooks.
+    // They read startIndex + visibleCount as a CONTIGUOUS data range (group
+    // headers interrupt layout space, not data space) and are the only consumer
+    // of these in table mode — the per-row visible* arrays are read solely by
+    // the default render pipeline, which the table replaces, so we don't touch
+    // them. When grouped, renderStart/renderEnd are layout indices; translate
+    // the first and last data rows of the (overscanned) window via
+    // _layoutToDataIndex (−1 for header pseudo-entries). Without this the loader
+    // gets layout indices, requests a data-shifted range, and the top of the
+    // viewport stays stuck on placeholders.
+    if (!layoutToDataResolved) {
+      layoutToDataResolved = true;
+      layoutToDataFn =
+        (storedCtx.getMethod?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
+    }
+
+    if (layoutToDataFn) {
+      const toData = layoutToDataFn;
+      let firstDataIndex = -1;
+      for (let i = renderStart; i <= renderEnd; i++) {
+        const di = toData(i);
+        if (di >= 0) { firstDataIndex = di; break; }
+      }
+      let lastDataIndex = -1;
+      for (let i = renderEnd; i >= renderStart; i--) {
+        const di = toData(i);
+        if (di >= 0) { lastDataIndex = di; break; }
+      }
+      engineState.startIndex = firstDataIndex < 0 ? renderStart : firstDataIndex;
+      engineState.visibleCount = firstDataIndex < 0 ? 0 : lastDataIndex - firstDataIndex + 1;
+    } else {
+      // Plain table (no groups): layout space == data space.
+      engineState.startIndex = renderStart;
+      engineState.visibleCount = renderEnd - renderStart + 1;
     }
 
     // Route content sizing through the engine so bounded mode (RFC-013) caps the

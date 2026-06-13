@@ -52,38 +52,22 @@ export async function rebuild<T extends VListItem = VListItem>(
   const key = options?.key;
 
   // Capture scroll snapshot from old list
-  let snapshot: ScrollSnapshot | undefined;
-  if (previous) {
-    const getSnapshot = previous.getScrollSnapshot as
-      | (() => ScrollSnapshot)
-      | undefined;
-    if (typeof getSnapshot === "function") {
-      snapshot = getSnapshot();
-    }
-  }
+  const getSnapshot = previous?.getScrollSnapshot as
+    | (() => ScrollSnapshot)
+    | undefined;
+  const snapshot = typeof getSnapshot === "function" ? getSnapshot() : undefined;
 
-  // Persist to sessionStorage so snapshots plugin auto-restores
-  if (snapshot && key) {
-    try {
-      sessionStorage.setItem(key, JSON.stringify(snapshot));
-    } catch { /* sessionStorage full or unavailable */ }
-  }
-
-  // Pre-configured snapshots plugin: autoSave for persistence, restore for one-shot
+  // Snapshots plugin: direct restore (no sessionStorage round-trip) + optional auto-save
   const snapshotPlugin = snapshots<T>(
-    key
-      ? { autoSave: key }
-      : snapshot
-        ? { restore: snapshot }
-        : undefined,
+    snapshot
+      ? key ? { restore: snapshot, autoSave: key } : { restore: snapshot }
+      : key ? { autoSave: key } : undefined,
   );
 
-  // Create new list in the same container — old DOM stays visible
   const newList = create(snapshotPlugin);
   const newRoot = newList.element;
 
-  // Hide new list behind old (overlay, invisible, but renders for layout).
-  // The container must have position: relative for this to work.
+  // Hide new list behind old (overlay, invisible, but renders for layout)
   newRoot.style.position = "absolute";
   newRoot.style.inset = "0";
   newRoot.style.visibility = "hidden";
@@ -92,22 +76,20 @@ export async function rebuild<T extends VListItem = VListItem>(
   if (options?.ready) {
     await options.ready(newList);
   } else {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
   }
 
-  // Optional settle delay
-  const delay = options?.delay;
-  if (delay && delay > 0) {
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
+  if (options?.delay && options.delay > 0) {
+    await new Promise<void>((r) => setTimeout(r, options.delay));
   }
 
+  // Crossfade
   const raw = options?.transition;
   const fadeIn = typeof raw === "number" ? raw : raw?.fadeIn ?? 0;
   const fadeOut = typeof raw === "number" ? raw : raw?.fadeOut ?? 0;
   const fadeOutDelay = typeof raw === "object" ? raw?.fadeOutDelay ?? 0 : 0;
-  const longest = Math.max(fadeIn, fadeOut + fadeOutDelay);
 
-  if (longest > 0 && previous) {
+  if (previous && (fadeIn > 0 || fadeOut > 0)) {
     const oldRoot = previous.element;
 
     newRoot.style.visibility = "";
@@ -119,9 +101,9 @@ export async function rebuild<T extends VListItem = VListItem>(
     newRoot.style.opacity = "1";
     oldRoot.style.opacity = "0";
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, longest + 50);
-    });
+    await new Promise<void>((r) =>
+      setTimeout(r, Math.max(fadeIn, fadeOut + fadeOutDelay) + 50),
+    );
 
     newRoot.style.transition = "";
     newRoot.style.opacity = "";

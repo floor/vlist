@@ -1994,6 +1994,93 @@ describeCarousel("carousel — onIdle snap", () => {
 
     cleanup();
   });
+
+  it("snaps forward when scrollDirection is positive", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Position slightly past item boundary (frac ~0.1 — would round backward without direction)
+    const misaligned = 50 * 5 * 400 + 40;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = 1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Should have snapped forward (to next item) despite small frac
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeGreaterThan(misaligned);
+
+    cleanup();
+  });
+
+  it("snaps backward when scrollDirection is negative", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: true });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Position mostly through item (frac ~0.9 — would round forward without direction)
+    const misaligned = 50 * 5 * 400 + 360;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = -1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Should have snapped backward despite high frac
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeLessThan(misaligned);
+
+    cleanup();
+  });
+
+  it("falls back to nearest when snapDirection is false", () => {
+    const items = createTestItems(5);
+    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const plugin = carousel({ snap: true, snapDirection: false });
+    plugin.setup!(ctx);
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+
+    const es = ctx.getState();
+    // Small forward offset — nearest-snap rounds backward
+    const misaligned = 50 * 5 * 400 + 40;
+    es.scrollPosition = misaligned;
+    es.scrollDirection = 1;
+    scrollCalls.length = 0;
+    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+
+    es.scrollDirection = 0;
+    plugin.hooks!.onIdle!();
+
+    // Nearest snap: frac ~0.1, rounds backward
+    const lastSnap = scrollCalls[scrollCalls.length - 1]!;
+    expect(lastSnap).toBeLessThan(misaligned);
+
+    cleanup();
+  });
 });
 
 // =============================================================================
@@ -2460,6 +2547,50 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
     expect(ctx.sizeCache.getOffset(0)).toBe(0);
     expect(ctx.sizeCache.getOffset(1)).toBe(stepSz);
     expect(ctx.sizeCache.getOffset(3)).toBe(stepSz * 3);
+
+    cleanup();
+  });
+});
+
+// =============================================================================
+// snapEasing wiring
+// =============================================================================
+
+describeCarousel("carousel — snapEasing", () => {
+  it("forwards the configured snapEasing to smoothScrollTo as the easing argument", () => {
+    // Regression: the carousel called smoothScrollTo(target, duration, undefined,
+    // snapEasing), parking snapEasing in the onComplete slot — so a configured
+    // snapEasing was silently ignored and snaps used the default easing. It must
+    // be forwarded as the easing (3rd) argument.
+    const items = createTestItems(5);
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    const snapEasing = (t: number): number => t; // marker (linear) easing
+    let smoothCalled = false;
+    let capturedEasing: ((t: number) => number) | undefined;
+    const realSmooth = ctx.smoothScrollTo;
+    ctx.smoothScrollTo = ((
+      target: number | (() => number),
+      duration: number,
+      easing?: (t: number) => number,
+      onComplete?: () => void,
+    ) => {
+      smoothCalled = true;
+      capturedEasing = easing;
+      return realSmooth(target, duration, easing, onComplete);
+    }) as typeof ctx.smoothScrollTo;
+
+    carousel({ snapEasing }).setup!(ctx);
+
+    const goTo = methods.get("goTo") as (index: number, options?: Record<string, unknown>) => void;
+    // A smooth programmatic navigation triggers a snap animation.
+    goTo(2, { behavior: "smooth", direction: "forward" });
+
+    expect(smoothCalled).toBe(true);
+    expect(capturedEasing).toBe(snapEasing);
 
     cleanup();
   });

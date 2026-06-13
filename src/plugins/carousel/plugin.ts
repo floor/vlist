@@ -34,7 +34,11 @@ export type CarouselDirection = "auto" | "forward" | "backward";
 export interface CarouselPluginConfig {
   variant?: CarouselVariant | SlotConfig | SlotConfigResolver;
   snap?: boolean;
+  /** Snap in the user's scroll direction instead of to the nearest item. */
+  snapDirection?: boolean;
   snapDuration?: number;
+  /** Custom easing function for snap animation. Receives t in [0,1], returns eased value. */
+  snapEasing?: (t: number) => number;
   peek?: number | string | "auto";
   largeItemMaxWidth?: number | "auto";
   parallax?: number;
@@ -95,8 +99,10 @@ export function carousel<T extends VListItem = VListItem>(
 ): VListPlugin<T> {
   const variantConfig = config?.variant ?? "full";
   const { variant, resolveSlots } = normalizeVariant(variantConfig);
-  const snapEnabled = config?.snap ?? (variant !== "free");
+  const snapEnabled = variant === "full" || (config?.snap ?? (variant !== "free"));
+  const snapDirectional = config?.snapDirection ?? true;
   const snapDuration = config?.snapDuration ?? 400;
+  const snapEasing = config?.snapEasing;
   const initialIndex = config?.initialIndex ?? 0;
   const peekConfig = config?.peek ?? "auto";
 
@@ -114,6 +120,7 @@ export function carousel<T extends VListItem = VListItem>(
   let initialScrollPending = false;
   let prefix = "vlist";
   let intendedVi = -1;
+  let lastDirection = 0;
 
   let stepSizes: number[] = [];
   let stepOffsets: number[] = [];
@@ -210,7 +217,7 @@ export function carousel<T extends VListItem = VListItem>(
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
-    storedCtx?.smoothScrollTo(target, duration);
+    storedCtx?.smoothScrollTo(target, duration, snapEasing);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
@@ -672,6 +679,8 @@ export function carousel<T extends VListItem = VListItem>(
         syncItemCount();
         if (realTotal <= 1) return;
 
+        if (engineState.scrollDirection !== 0) lastDirection = engineState.scrollDirection;
+
         if (intendedVi < 0) {
           const pos = engineState.scrollPosition;
           const vi = virtualIndexAtScroll(pos);
@@ -689,16 +698,24 @@ export function carousel<T extends VListItem = VListItem>(
         updateItemLayout();
       },
 
-      // Snap-to-item once scrolling stops. The bounded handler fires onIdle
-      // after the idle timeout, replacing the old setTimeout(200) dance.
       onIdle(): void {
+        const dir = lastDirection;
         intendedVi = -1;
+        lastDirection = 0;
         if (!snapEnabled || !storedCtx || realTotal <= 1) return;
         const p = engineState.scrollPosition;
-        const nearestVi = virtualIndexAtScroll(p);
-        const snapTarget = scrollPositionForVirtual(nearestVi);
+        const { vi, frac } = decomposeScroll(p);
+
+        let snapVi: number;
+        if (snapDirectional && dir !== 0 && frac > 0.02 && frac < 0.98) {
+          snapVi = dir > 0 ? vi + 1 : vi;
+        } else {
+          snapVi = frac >= 0.5 ? vi + 1 : vi;
+        }
+
+        const snapTarget = scrollPositionForVirtual(snapVi);
         if (Math.abs(p - snapTarget) > 1) {
-          currentIndex = logicalIndexOf(nearestVi);
+          currentIndex = logicalIndexOf(snapVi);
           smoothScrollTo(snapTarget, snapDuration);
         }
       },

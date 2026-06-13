@@ -675,4 +675,83 @@ describe("groups + table + data", () => {
       expect(dataRows.length).toBeGreaterThan(0);
     });
   });
+
+  // ── Scrolled load uses DATA indices, not layout indices ─────────────
+  //
+  // Regression: in grouped TABLE mode the engine runs in layout-index space
+  // (header pseudo-rows interleaved with data rows). The table render must
+  // translate the visible window back to DATA indices before the data plugin
+  // loads it. Before the fix it published raw layout indices, so the loader
+  // requested a range shifted by the header count above the viewport — at the
+  // bottom that range overshoots past the dataset and the last rows never load;
+  // mid-list it loads the bottom of the viewport and leaves the top stuck on
+  // placeholders. This is table-only: list/grid translate via the groups/grid
+  // render's entry.dataIndex fill.
+  describe("scrolled load uses data indices (table-mode regression)", () => {
+    // One group per item → header count equals the loaded-item count, so layout
+    // indices diverge sharply from data indices: any off-by-headers bug pushes
+    // the requested range clean past the dataset.
+    const eachIdGroup = (_index: number, item?: any): string =>
+      item ? `g-${item.id}` : "loading";
+
+    const TOTAL = 500;
+    const CHUNK = 20;
+    const LAST = TOTAL - 1;
+
+    function scrollToBottom(l: VList<CityItem>): void {
+      const vp = (l as unknown as { element: HTMLElement }).element
+        .querySelector(".vlist-viewport") as HTMLElement;
+      vp.scrollTop = 10_000_000; // clamped to max scroll by the runway
+      vp.dispatchEvent(new Event("scroll", { bubbles: true }));
+    }
+
+    function readParams(adapter: VListAdapter<CityItem>): Array<{ offset: number; limit: number }> {
+      return (adapter.read as any).mock.calls.map((c: any[]) => c[0] as { offset: number; limit: number });
+    }
+
+    it("loads the chunk covering the last row when scrolled to the bottom (grouped)", async () => {
+      const adapter = createCityAdapter(TOTAL);
+      list = createList(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: CHUNK, maxCachedItems: 100_000 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 28 }),
+          groups({ getGroupForIndex: eachIdGroup, header: { height: 28, template: (k) => k } }),
+        ],
+      );
+      await waitForLoad(list);
+
+      (adapter.read as any).mockClear();
+      scrollToBottom(list);
+      await new Promise((r) => setTimeout(r, 300)); // scroll idle (150ms) + chunk load
+
+      const reads = readParams(adapter);
+      expect(reads.length).toBeGreaterThan(0);
+      // The chunk containing the LAST data row must be fetched...
+      expect(reads.some((p) => p.offset <= LAST && LAST < p.offset + p.limit)).toBe(true);
+      // ...and nothing may be requested past the dataset (the bug's signature:
+      // a layout index used as a data offset, shifted beyond `total`).
+      expect(reads.every((p) => p.offset < TOTAL)).toBe(true);
+    });
+
+    it("loads the chunk covering the last row at the bottom (plain table baseline)", async () => {
+      // Guards the non-grouped branch (layout space == data space).
+      const adapter = createCityAdapter(TOTAL);
+      list = createList(
+        { container, item: { height: 36, template: () => "" } },
+        [
+          dataPlugin({ adapter, storage: { chunkSize: CHUNK, maxCachedItems: 100_000 } }),
+          table({ columns: COLUMNS, rowHeight: 36, headerHeight: 28 }),
+        ],
+      );
+      await waitForLoad(list);
+
+      (adapter.read as any).mockClear();
+      scrollToBottom(list);
+      await new Promise((r) => setTimeout(r, 300));
+
+      const reads = readParams(adapter);
+      expect(reads.some((p) => p.offset <= LAST && LAST < p.offset + p.limit)).toBe(true);
+    });
+  });
 });

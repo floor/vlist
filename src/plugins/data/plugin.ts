@@ -143,9 +143,13 @@ export function data<T extends VListItem = VListItem>(
   };
 
   const loadPendingRange = (): void => {
-    if (!pendingRange) {
-      return;
-    }
+    // Always reconcile the *currently visible* range when scrolling settles —
+    // not only when a pendingRange flag is set. During a momentum (flick)
+    // scroll the final onAfterScroll can land in the slow path, which calls
+    // resetDeceleration() → pendingRange = null and only re-ensures on a chunk
+    // change. When the settled chunk index is unchanged, nothing reloads it and
+    // the viewport is stuck on placeholders. ensure() dedupes against
+    // loaded/in-flight chunks, so this is a cheap no-op when already loaded.
     pendingRange = null;
 
     const currentRange = {

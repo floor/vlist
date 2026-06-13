@@ -156,6 +156,34 @@ describe("async lifecycle — velocity-gated loading", () => {
     expect(adapter.read).toHaveBeenCalled();
   });
 
+  it("reconciles the visible range on idle even with no pending range queued", async () => {
+    // Regression: a momentum (flick) scroll can settle with its final
+    // onAfterScroll in the slow path, which calls resetDeceleration() →
+    // pendingRange = null without re-ensuring the settled chunk. Idle must then
+    // still load the currently-visible range; otherwise the viewport is left
+    // stuck on placeholders. So onIdle reconciles the visible range
+    // unconditionally — not only when a pendingRange flag was set.
+    const adapter = createMockAdapter(1000);
+    const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
+    const { ctx, engineState } = createContextWithEmitter({
+      visibleCount: 10,
+      startIndex: 100,
+    });
+
+    plugin.setup(ctx);
+    engineState.initialized = true;
+    await flush();
+
+    // Idle with NO prior onAfterScroll → pendingRange is null.
+    plugin.hooks!.onIdle!();
+    await flush();
+
+    expect(adapter.read).toHaveBeenCalled();
+    // It loaded the chunk covering the visible range [100..109], not the top.
+    const calls = (adapter.read as any).mock.calls.map((c: any[]) => c[0] as { offset: number; limit: number });
+    expect(calls.some((p) => p.offset <= 100 && 100 < p.offset + p.limit)).toBe(true);
+  });
+
   it("does not load on afterScroll when destroyed", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
