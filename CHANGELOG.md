@@ -9,6 +9,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.6.0] - 2026-07-08
+
+### Added
+
+- **`vlist/config` subpath** — a framework-agnostic config layer for the framework adapters (and vanilla users who want it). Exports `VListConfig` (the high-level, declarative config shape), `resolvePlugins(config)` (the convenience-fields → plugin-array translation), and `createVListFromConfig(config)`. Centralises the translation that was previously duplicated across the React, Vue, Svelte, and Solid adapter repos. The main `vlist` entry and its bundle size are unchanged — the resolver is opt-in via the subpath.
+
+### Fixed
+
+- **Adapter config types out of sync (#119)** — `CreateVListConfig` re-declared inline `item`/`scroll` shapes that had drifted from the public `ItemConfig`/`ScrollConfig`, leaving adapter feature fields (`grid`, `selection`, `plugins`, …) untyped. `CreateVListConfig` now composes `ItemConfig`/`ScrollConfig`, and the RFC-012 `mode`/`runway` scroll options are exposed on the public `ScrollConfig`.
+- **`scroll.scrollbar: "native"` via the config resolver** — now uses the browser's native scrollbar (skips the custom scrollbar plugin), matching core; previously any value other than `"none"` forced the custom overlay scrollbar.
+
 ## [2.5.1] - 2026-06-13
 
 ### Added
