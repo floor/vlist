@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.5.1** — [Changelog](./CHANGELOG.md) · Carousel snap refinements (direction-aware, configurable easing) plus fixes for groups under bounded scroll, grouped-table data loading, and async range reconciliation on idle.
+**v2.6.0** — [Changelog](./CHANGELOG.md) · New `vlist/config` resolver shared by the framework adapters (fixes #119); adapter feature-field types realigned, and `scroll.scrollbar: "native"` honored in the config layer.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)

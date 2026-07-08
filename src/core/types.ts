@@ -5,7 +5,7 @@
  * on the EngineState singleton — no intermediate object allocation.
  */
 
-import type { VListItem, ItemTemplate, ItemState } from "../types";
+import type { VListItem, ItemTemplate, ItemState, ItemConfig, ScrollConfig } from "../types";
 import type { SizeCache } from "./sizes";
 import type { ScrollAdapter } from "./adapter";
 import type { EngineState } from "./state";
@@ -246,15 +246,7 @@ export interface VList<T extends VListItem = VListItem> {
 
 export interface CreateVListConfig<T extends VListItem = VListItem> {
   container: HTMLElement | string;
-  item: {
-    height?: number | ((index: number) => number);
-    width?: number | ((index: number) => number);
-    estimatedHeight?: number;
-    estimatedWidth?: number;
-    template: ItemTemplate<T>;
-    gap?: number;
-    striped?: boolean | "data" | "even" | "odd";
-  };
+  item: ItemConfig<T>;
   items?: T[];
   overscan?: number;
   classPrefix?: string;
@@ -262,29 +254,7 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
   padding?: number | [number, number] | [number, number, number, number];
   reverse?: boolean;
   ariaLabel?: string;
-  scroll?: {
-    wheel?: boolean;
-    scrollbar?: "none";
-    gutter?: "auto" | "stable";
-    idleTimeout?: number;
-    /**
-     * Scroll model (RFC-012). `"native"` (default) sizes the content element to
-     * the full virtual size — simple, but hits the browser's ~16.7M px limit.
-     * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
-     * logical origin near the edges, supporting unbounded item counts without
-     * compressing the scroll space.
-     */
-    mode?: "native" | "bounded";
-    /**
-     * Runway size as a multiple of the viewport, used only with
-     * `mode: "bounded"` (default 2). The bounded content element is sized to
-     * `viewport × runway` (capped at the real virtual size). Larger values mean
-     * more native-scroll headroom and less frequent rebasing, at the cost of a
-     * bigger content element. Clamped up to a minimum of 1.5 so native scroll and
-     * touch momentum always have some room.
-     */
-    runway?: number;
-  };
+  scroll?: ScrollConfig;
   /** Defer initial render to the next animation frame. */
   defer?: boolean;
 }

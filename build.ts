@@ -59,6 +59,38 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
+  // Build config bundle (framework-adapter convenience config + resolver)
+  const configStart = performance.now();
+
+  const cfgWrapperCode = `export * from "${resolve("./src/config.ts")}";`;
+  const cfgWrapperPath = "/tmp/_vlist_build_config.ts";
+  writeFileSync(cfgWrapperPath, cfgWrapperCode);
+
+  const configResult = await Bun.build({
+    entrypoints: [cfgWrapperPath],
+    outdir: "./dist",
+    format: "esm",
+    target: "browser",
+    minify: !isDev,
+    sourcemap: isDev ? "inline" : "none",
+    naming: "config.js",
+  });
+
+  if (!configResult.success) {
+    console.error("\nConfig build failed:\n");
+    for (const log of configResult.logs) {
+      console.error(log);
+    }
+    process.exit(1);
+  }
+
+  const configFile = Bun.file("./dist/config.js");
+  const configSize = (configFile.size / 1024).toFixed(1);
+  const configTime = performance.now() - configStart;
+  console.log(
+    `  Config      ${configTime.toFixed(0).padStart(6)}ms  dist/config.js (${configSize} KB)`,
+  );
+
   // Build internals bundle (low-level exports for advanced users)
   const internalsStart = performance.now();
 
