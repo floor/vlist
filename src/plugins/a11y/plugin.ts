@@ -107,10 +107,10 @@ export function a11y<T extends VListItem = VListItem>(
         ctx.forceRender();
       };
 
-      const move = (next: number): void => {
+      const move = (next: number, scroll = true): void => {
         focusIdx = next;
         focusVis = true;
-        commit(next, true);
+        commit(next, scroll);
         const it = getItem(next);
         if (it) {
           _focusEvt.id = it.id;
@@ -155,7 +155,10 @@ export function a11y<T extends VListItem = VListItem>(
         if (t === 0) return;
         let tgt = focusIdx >= 0 ? Math.min(focusIdx, t - 1) : 0;
         tgt = skip(tgt, 1, t);
-        move(tgt);
+        // Restore the active option without hijacking scroll — tabbing INTO (or
+        // through) the list must not scroll it. Scroll-into-view happens on
+        // actual arrow/page navigation via move(). (#31)
+        move(tgt, false);
       };
 
       const onFocusOut = (e: FocusEvent): void => {
