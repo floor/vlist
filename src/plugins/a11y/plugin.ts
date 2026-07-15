@@ -10,6 +10,7 @@
 
 import type { VListItem, ItemState } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
+import { clampPageTarget } from "../../utils/grid-nav";
 
 export interface A11yPluginConfig {
   /**
@@ -214,7 +215,10 @@ export function a11y<T extends VListItem = VListItem>(
               const sz = sizeCache.getSize(Math.max(0, nav.scrollIndex ? nav.scrollIndex(p) : p));
               const visRows = Math.max(1, Math.floor(engineState.containerSize / sz));
               const delta = visRows * ud;
-              n = e.key === "PageUp" ? p - delta : p + delta;
+              // Column-preserving clamp so a page move at the top/bottom row
+              // stays in the same column rather than jumping to the corner
+              // (Home/End). #60
+              n = clampPageTarget(e.key === "PageUp" ? p - delta : p + delta, p, ud, total);
               break;
             }
             case "Home": n = 0; break;

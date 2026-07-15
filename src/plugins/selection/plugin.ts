@@ -17,6 +17,7 @@ import {
   type SelectionState,
 } from "./state";
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
+import { clampPageTarget } from "../../utils/grid-nav";
 
 // =============================================================================
 // Config
@@ -491,9 +492,18 @@ export function selection<T extends VListItem = VListItem>(
                 const curData = l2dFn(state.focusedIndex);
                 const step = event.key === "PageUp" ? -pageSize : pageSize;
                 const maxData = engineState.totalItems - 1;
-                state.focusedIndex = d2lFn(Math.max(0, Math.min(maxData, curData + step)));
+                // Column-preserving clamp so PageUp/Down at the top/bottom row
+                // stays in the same column rather than jumping to the corner
+                // (Home/End). #60
+                state.focusedIndex = d2lFn(
+                  clampPageTarget(curData + step, curData, ud, maxData + 1),
+                );
               } else {
-                moveFocus(state, event.key === "PageUp" ? -pageSize : pageSize, total);
+                const target =
+                  event.key === "PageUp"
+                    ? state.focusedIndex - pageSize
+                    : state.focusedIndex + pageSize;
+                state.focusedIndex = clampPageTarget(target, state.focusedIndex, ud, total);
               }
               state.focusVisible = true;
               handled = true;

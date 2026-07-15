@@ -9,6 +9,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [2.6.1] - 2026-07-15
+
+### Fixed
+
+- **Grid PageUp/PageDown snapped to the corner (#60)** — in grid mode, PageUp from an item in the first row (and PageDown from the last row) clamped focus to the absolute first/last item, duplicating Home/End behaviour. Page navigation now preserves the column at the top/bottom row (a no-op on a boundary row), in both the `selection` and `a11y` keyboard handlers.
+
 ## [2.6.0] - 2026-07-08
 
 ### Added
