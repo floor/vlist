@@ -41,10 +41,17 @@ jobs:
       - name: Build
         run: bun run build --types
 
+      # Trusted publishing needs npm 11.5.1 or later; setup-node ships 10.x
+      - name: Newer npm
+        run: npm install -g npm@latest
+
+      # No NODE_AUTH_TOKEN: the workflow's own OIDC identity is what npm
+      # trusts (the package's trusted publisher is floor/vlist publish.yml).
+      # With a token set, npm authenticates as that token instead and a token
+      # without publish rights on this package answers 404 on the PUT, which
+      # is what v2.6.2 hit.
       - name: Publish
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         run: gh release create ${{ github.ref_name }} --title "${{ github.ref_name }}" --generate-notes
