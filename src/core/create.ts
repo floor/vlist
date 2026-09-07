@@ -297,6 +297,15 @@ export function createVList<T extends VListItem = VListItem>(
   let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
+  /**
+   * A scrollToIndex asked for before the list knew how long it was.
+   *
+   * With an async adapter the total arrives after the list is created, so
+   * "open this list on row 2960" is given before there is a row 2960 to scroll
+   * to. It used to be dropped in silence, which no caller could detect; it is
+   * held here instead and honoured on the first render that has a total.
+   */
+  let pendingScrollToIndex: { index: number; alignOrOptions: Parameters<VList<T>["scrollToIndex"]>[1] } | null = null;
   let boundedHandler: BoundedScrollHandler | null = null;
   // A plugin (carousel) can request the bounded handler in wrap mode during
   // setup, before the handler is built below. Wrap implies bounded.
@@ -538,7 +547,18 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
+  /** A scroll asked for before the list had a length, once it has one. */
+  function flushPendingScroll(): void {
+    if (!pendingScrollToIndex) return;
+    const total = virtualTotalFn ? virtualTotalFn() : items.length;
+    if (total === 0) return;
+    const wanted = pendingScrollToIndex;
+    pendingScrollToIndex = null;
+    api.scrollToIndex(wanted.index, wanted.alignOrOptions);
+  }
+
   function doRender(): void {
+    flushPendingScroll();
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
@@ -574,6 +594,7 @@ export function createVList<T extends VListItem = VListItem>(
   }
 
   function doForceRender(): void {
+    flushPendingScroll();
     state.renderPending = true;
     if (customForceRender) {
       customForceRender();
@@ -866,7 +887,11 @@ export function createVList<T extends VListItem = VListItem>(
       alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number; easing?: (t: number) => number } = "start",
     ): void {
       const total = virtualTotalFn ? virtualTotalFn() : items.length;
-      if (total === 0) return;
+      if (total === 0) {
+        // not "nowhere to scroll" but "not yet": held until a total arrives
+        pendingScrollToIndex = { index, alignOrOptions };
+        return;
+      }
       const clamped = Math.max(0, Math.min(index, total - 1));
 
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
