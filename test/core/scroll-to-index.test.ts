@@ -177,6 +177,37 @@ describe("scrollToIndex — edge cases", () => {
     expect(viewport.scrollTop).toBe(0);
   });
 
+  it("a scroll asked for before the list has a length is honoured when it gets one", () => {
+    // With an async adapter the total arrives after the list is created, so
+    // "open this list on row 60" is given before there is a row 60. Dropping
+    // it in silence made that a race no caller could win: the list opened at
+    // the top and nothing said why.
+    const vlist = makeList(0);
+    const viewport = getViewport(container);
+
+    vlist.scrollToIndex(60, "start");
+    expect(viewport.scrollTop).toBe(0);
+
+    vlist.setItems(createTestItems(100));
+
+    expect(viewport.scrollTop).toBe(60 * 50);
+  });
+
+  it("only the last one asked for is kept, and only until it is honoured", () => {
+    const vlist = makeList(0);
+    const viewport = getViewport(container);
+
+    vlist.scrollToIndex(10, "start");
+    vlist.scrollToIndex(60, "start");
+    vlist.setItems(createTestItems(100));
+    expect(viewport.scrollTop).toBe(60 * 50);
+
+    // and it does not fire again on the next render
+    viewport.scrollTop = 0;
+    vlist.setItems(createTestItems(100));
+    expect(viewport.scrollTop).toBe(0);
+  });
+
   it("single item list scrolls to 0", () => {
     const vlist = makeList(1);
     const viewport = getViewport(container);
