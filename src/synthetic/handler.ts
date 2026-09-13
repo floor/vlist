@@ -36,14 +36,17 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     state.scrollDirection = position > previous ? 1 : position < previous ? -1 : 0;
     if (!refreshing) { onFrame(); scheduleIdle(); }
   }
+  function idleDue(): void {
+    idle = null;
+    if (motion.active || motion.state === "tracking" || motion.state === "axis-pending") return;
+    state.scrollDirection = 0;
+    onIdle();
+  }
   function scheduleIdle(): void {
+    if (!attached) return;
     if (idle !== null) clearTimeout(idle);
-    idle = setTimeout(() => {
-      idle = null;
-      if (motion.active || motion.state === "tracking" || motion.state === "axis-pending") return;
-      state.scrollDirection = 0;
-      onIdle();
-    }, config.idleTimeout || SCROLL_IDLE_TIMEOUT);
+    // Stable callback: no per-sample or per-frame timer closure.
+    idle = setTimeout(idleDue, config.idleTimeout || SCROLL_IDLE_TIMEOUT);
   }
   function schedule(): void {
     if (attached && frame === null && motion.active) frame = requestAnimationFrame(tick);
@@ -56,11 +59,8 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
   const motion = createMotion({
     axis: isX ? "x" : "y", getMax: () => max, reducedMotion: () => reduced.matches,
     onChange: commit,
-    onEvent(type, detail) {
-      if (type === "cancel") complete = undefined;
-      if (detail.reason === "animation-end") {
-        const callback = complete; complete = undefined; callback?.();
-      }
+    onFinish() {
+      const callback = complete; complete = undefined; callback?.();
     },
   });
 

@@ -4,11 +4,18 @@ export interface MotionEvent { from?: MotionState; to?: MotionState; reason?: st
 export interface MotionOptions {
   getMax: () => number;
   onChange?: (position: number) => void;
+  onFinish?: () => void;
   onEvent?: (type: string, detail: MotionEvent) => void;
   axis?: "x" | "y";
   reducedMotion?: boolean | (() => boolean);
 }
-export function createMotion({ getMax, onChange = () => {}, onEvent = () => {}, axis = "y", reducedMotion = false }: MotionOptions) {
+export function createMotion({ getMax, onChange = () => {}, onEvent, onFinish, axis = "y", reducedMotion = false }: MotionOptions) {
+  // Diagnostic payloads are borrowed/reused, like core scroll event payloads.
+  // No event objects are allocated while sampling, ticking or setting position.
+  const stateEvent: MotionEvent = {};
+  const cancelEvent: MotionEvent = {};
+  const touchBoundary: MotionEvent = { source: "touch" };
+  const inertiaBoundary: MotionEvent = { source: "inertia" };
   let position = 0;
   let state: MotionState = "idle";
   let pointer: number | null = null;
@@ -25,8 +32,12 @@ export function createMotion({ getMax, onChange = () => {}, onEvent = () => {}, 
   const main = (x: number, y: number) => axis === "y" ? y : x;
   const cross = (x: number, y: number) => axis === "y" ? x : y;
   function transition(next: MotionState, reason: string) {
-    if (state !== next) onEvent("state", { from: state, to: next, reason });
+    if (state !== next && onEvent) {
+      stateEvent.from = state; stateEvent.to = next; stateEvent.reason = reason;
+      onEvent("state", stateEvent);
+    }
     state = next;
+    if (reason === "animation-end") onFinish?.();
   }
   function commit(value: number) {
     const next = clamp(value);
@@ -36,7 +47,7 @@ export function createMotion({ getMax, onChange = () => {}, onEvent = () => {}, 
   function cancel(reason = "cancel") {
     velocity = 0;
     transition(pointer === null ? "idle" : "cancelled", reason);
-    onEvent("cancel", { reason });
+    if (onEvent) { cancelEvent.reason = reason; onEvent("cancel", cancelEvent); }
   }
   function jump(value: number, reason = "programmatic") {
     cancel(reason);
@@ -75,7 +86,7 @@ export function createMotion({ getMax, onChange = () => {}, onEvent = () => {}, 
       }
       lastMain = current;
       lastTime = time;
-      if (commit(position + delta)) { velocity = 0; onEvent("boundary", { source: "touch" }); }
+      if (commit(position + delta)) { velocity = 0; onEvent?.("boundary", touchBoundary); }
       return true;
     },
     end(id: number, time: number) {
@@ -135,7 +146,7 @@ export function createMotion({ getMax, onChange = () => {}, onEvent = () => {}, 
       const decay = Math.exp(-friction * dt);
       const hit = commit(position + velocity * (1 - decay) / friction);
       velocity *= decay;
-      if (hit) onEvent("boundary", { source: "inertia" });
+      if (hit) onEvent?.("boundary", inertiaBoundary);
       if (hit || Math.abs(velocity) < 0.02) { velocity = 0; transition("idle", hit ? "boundary" : "settled"); }
     },
   };
