@@ -253,6 +253,7 @@ export function createPluginMockContext<T extends VListItem>(
     getItemStateFn: () => itemStateFn,
     get rawSizeSpec() { return itemSizeConfig; },
 
+    shiftScroll(delta: number) { this.scrollTo(this.getState().scrollPosition + delta); },
     scrollTo: (pos: number) => {
       // Mirror the real adapter: a scroll write moves the logical position.
       engineState.scrollPosition = pos;

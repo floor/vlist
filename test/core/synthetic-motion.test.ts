@@ -166,3 +166,47 @@ describe("RFC-014 standalone synthetic motion contract", () => {
     expect(motion.position).toBe(8000); expect(motion.active).toBe(false);
   });
 });
+
+describe("non-cancelling measurement shifts", () => {
+  test("inertia keeps velocity, cadence and the translated resting position", () => {
+    const a = setup().motion, b = setup().motion;
+    fling(a); fling(b); a.tick(40); b.tick(40); a.tick(56); b.tick(56);
+    const velocity = a.velocity;
+    a.shiftBy(75);
+    expect(a.velocity).toBe(velocity); expect(a.state).toBe(INERTIA);
+    for (let t = 72; t < 1200; t += 16) { a.tick(t); b.tick(t); }
+    expect(a.position).toBeCloseTo(b.position + 75, 8);
+  });
+  test("tracking and pending gestures continue in the shifted coordinate space", () => {
+    const a = setup().motion, b = setup().motion;
+    for (const m of [a, b]) m.begin(1, 0, 100, 0);
+    a.shiftBy(20);
+    for (const m of [a, b]) m.move(1, 0, 80, 16);
+    a.shiftBy(-10);
+    for (const m of [a, b]) m.move(1, 0, 60, 32);
+    expect(a.position).toBe(b.position + 10); expect(a.velocity).toBe(b.velocity);
+    for (const m of [a, b]) m.end(1, 40);
+    expect(a.state).toBe(INERTIA);
+  });
+  test("smooth shifts translate the trajectory and dynamic target without resetting clocks", () => {
+    for (const dynamic of [false, true]) {
+      const a = setup().motion, b = setup().motion;
+      let target = 2000;
+      for (const m of [a, b]) { m.smooth(dynamic ? () => target : target, 200, t => t); m.tick(0); m.tick(50); }
+      a.shiftBy(75); a.shiftBy(-25); target = 2100;
+      for (const t of [100, 150, 200]) {
+        a.tick(t); b.tick(t); expect(a.position).toBeCloseTo(b.position + 50, 8);
+      }
+      expect(a.state).toBe(IDLE);
+      a.smooth(1000); a.tick(300); a.tick(450);
+      expect(a.position).toBe(1000); // a fresh navigation clears prior corrections
+    }
+  });
+  test("paused smooth navigation completes at the shifted target, clamped to bounds", () => {
+    const { motion, setMax } = setup();
+    motion.smooth(2000); motion.tick(0); motion.tick(50); motion.shiftBy(100);
+    motion.tick(200); expect(motion.position).toBe(2100);
+    motion.smooth(9000); motion.tick(300); motion.shiftBy(2000); setMax(9500);
+    motion.tick(450); expect(motion.position).toBe(9500);
+  });
+});

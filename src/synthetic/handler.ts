@@ -173,18 +173,29 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     scheduleIdle();
   }
   function refresh(totalSize: number): void {
-    const changed = totalSize !== state.totalSize || previousSize !== state.containerSize || previousCross !== state.crossSize;
+    const resized = previousSize !== state.containerSize || previousCross !== state.crossSize;
+    const changed = totalSize !== state.totalSize || resized;
     previousSize = state.containerSize; previousCross = state.crossSize;
     state.totalSize = totalSize;
     max = Math.max(0, totalSize + mainAxisPadding - state.containerSize);
     if (changed) {
       refreshing = true;
-      cancelScroll(); motion.resize(); commit(motion.position);
+      // Content corrections preserve motion; viewport geometry still cancels.
+      if (resized) { cancelScroll(); motion.resize(); }
+      else motion.shiftBy(0);
+      commit(motion.position);
       refreshing = false;
     }
   }
   return {
     setLogical, refresh,
+    shiftBy(delta): void {
+      // Measurements may change the bounds before the next content refresh.
+      state.totalSize = config.sizeCache.getTotalSize();
+      max = Math.max(0, state.totalSize + mainAxisPadding - state.containerSize);
+      motion.shiftBy(delta);
+      if (!motion.active) scheduleIdle();
+    },
     cancelScroll(): void { cancelScroll(); scheduleIdle(); },
     getLogical: () => state.scrollPosition,
     getMaxLogical: () => max,
