@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Grid PageUp/PageDown now preserve the column at the top/bottom row instead of jumping to the corner (#60).
+**v2.6.4** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Autosize items whose content changes after measurement (a broken or slow image, a font swap) are now remeasured instead of clipped (#126).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **9.7 KB gzipped** — composable plugins with perfect tree-shaking
+- **9.8 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
@@ -56,16 +56,16 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 9.7 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
+| **Base** | 9.8 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
-| `selection()` | +2.7 KB | Single/multiple selection with 2D keyboard nav |
+| `selection()` | +2.8 KB | Single/multiple selection with 2D keyboard nav |
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
 | `groups()` | +5.3 KB | Sticky/inline headers with grid + masonry + table + data integration |
-| `autosize()` | +0.8 KB | Auto-measure items via ResizeObserver |
+| `autosize()` | +1.0 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.4 KB | 2D grid layout |
 | `masonry()` | +4.0 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `carousel()` | +3.4 KB | Paged horizontal carousel with snap and keyboard nav |
+| `carousel()` | +3.5 KB | Paged horizontal carousel with snap and keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
