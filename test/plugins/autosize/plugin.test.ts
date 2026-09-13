@@ -1037,3 +1037,167 @@ describe("autosize end-pinning", () => {
     mockCtx.cleanup();
   });
 });
+
+// =============================================================================
+// Remeasure Tests (#126)
+// =============================================================================
+
+describe("autosize remeasure on late content", () => {
+  let mockCtx: ReturnType<typeof createPluginMockContext<TestItem>>;
+  let plugin: ReturnType<typeof autosize<TestItem>>;
+  let observed: Element[];
+  let nextSize: number;
+  let forceRenders: number;
+  let rebuilds: number;
+
+  const entry = (target: Element, blockSize: number): ResizeObserverEntry =>
+    ({
+      target,
+      borderBoxSize: [{ blockSize, inlineSize: 300 } as ResizeObserverSize],
+      contentBoxSize: [{ blockSize, inlineSize: 300 } as ResizeObserverSize],
+      contentRect: {} as DOMRectReadOnly,
+      devicePixelContentBoxSize: [],
+    }) as ResizeObserverEntry;
+
+  const installObserver = (fires: boolean): void => {
+    (global as any).ResizeObserver = class {
+      callback: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      observe(el: Element): void {
+        observed.push(el);
+        if (fires) this.callback([entry(el, nextSize)], this as unknown as ResizeObserver);
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+  };
+
+  const renderItem = (index: number, withImage = true): { el: HTMLElement; img: HTMLImageElement } => {
+    const el = document.createElement("div");
+    el.setAttribute("data-index", String(index));
+    const img = document.createElement("img");
+    if (withImage) el.appendChild(img);
+    mockCtx.dom.content.appendChild(el);
+    return { el, img };
+  };
+
+  const commit = (...indices: number[]): void => {
+    const state = mockCtx.engineState;
+    state.visibleCount = indices.length;
+    indices.forEach((idx, i) => { state.visibleIndices[i] = idx; });
+    plugin.hooks!.onCommit!(state);
+  };
+
+  const method = <F extends Function>(name: string): F => mockCtx.methods.get(name) as F;
+
+  beforeEach(() => {
+    mockCtx = createPluginMockContext(createTestItems(10), { itemSize: 50 });
+    observed = [];
+    nextSize = 80;
+    forceRenders = 0;
+    rebuilds = 0;
+    installObserver(true);
+    plugin = autosize<TestItem>();
+    plugin.setup(mockCtx.ctx);
+    // Stand in for the pipeline: a forced render commits the visible range.
+    mockCtx.ctx.forceRender = () => {
+      forceRenders++;
+      plugin.hooks!.onCommit!(mockCtx.engineState);
+    };
+    mockCtx.ctx.rebuildSizeCache = () => { rebuilds++; };
+  });
+
+  afterEach(() => {
+    plugin.destroy();
+    mockCtx.cleanup();
+  });
+
+  it("an image error inside a measured item re-observes it and pins the new size", () => {
+    const { el, img } = renderItem(0);
+    commit(0);
+    expect(el.style.height).toBe("80px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+
+    nextSize = 140;
+    forceRenders = 0;
+    img.dispatchEvent(new Event("error"));
+
+    expect(forceRenders).toBeGreaterThanOrEqual(1);
+    expect(observed.filter((o) => o === el)).toHaveLength(2);
+    expect(el.style.height).toBe("140px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+    expect(method<() => number>("getMeasuredCount")()).toBe(1);
+  });
+
+  it("an image load inside a measured item triggers a remeasure", () => {
+    const { el, img } = renderItem(0);
+    commit(0);
+
+    nextSize = 200;
+    img.dispatchEvent(new Event("load"));
+
+    expect(el.style.height).toBe("200px");
+  });
+
+  it("a remeasure corrects the scroll position by the delta from the previous measurement", () => {
+    // Mock cache uses 50px items: scrollPosition 100 puts index 2 first.
+    mockCtx.engineState.scrollPosition = 100;
+    const { el, img } = renderItem(0);
+    commit(0);
+    // First measurement: 80 vs estimate 50 → +30
+    expect(mockCtx.engineState.scrollPosition).toBe(130);
+
+    nextSize = 120;
+    img.dispatchEvent(new Event("error"));
+    // Remeasure: 120 vs previous measurement 80 → +40, not 120 - 50
+    expect(mockCtx.engineState.scrollPosition).toBe(170);
+    expect(el.style.height).toBe("120px");
+  });
+
+  it("a remeasure with an unchanged size does not rebuild the cache", () => {
+    const { el, img } = renderItem(0);
+    commit(0);
+    expect(rebuilds).toBe(1);
+
+    img.dispatchEvent(new Event("error"));
+
+    expect(rebuilds).toBe(1);
+    expect(el.style.height).toBe("80px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+  });
+
+  it("media events on unmeasured items are ignored", () => {
+    installObserver(false);
+    plugin.destroy();
+    plugin = autosize<TestItem>();
+    plugin.setup(mockCtx.ctx);
+    mockCtx.ctx.forceRender = () => { forceRenders++; };
+
+    const { img } = renderItem(0);
+    commit(0);
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(false);
+
+    img.dispatchEvent(new Event("error"));
+    expect(forceRenders).toBe(0);
+  });
+
+  it("media events outside the list items are ignored", () => {
+    renderItem(0);
+    commit(0);
+    forceRenders = 0;
+    mockCtx.dom.content.dispatchEvent(new Event("error"));
+    expect(forceRenders).toBe(0);
+  });
+
+  it("media listeners are removed on destroy", () => {
+    const { img } = renderItem(0);
+    commit(0);
+
+    mockCtx.destroyHandlers.forEach((h) => h());
+    plugin.destroy();
+    forceRenders = 0;
+    nextSize = 140;
+    img.dispatchEvent(new Event("error"));
+    expect(forceRenders).toBe(0);
+  });
+});
