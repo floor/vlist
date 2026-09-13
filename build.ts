@@ -218,6 +218,9 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
+      if (name !== "synthetic" && new TextDecoder().decode(bytes).includes("pan-x pinch-zoom")) {
+        throw new Error(`Synthetic driver leaked into ${name}`);
+      }
       const compressed = Bun.gzipSync(bytes);
       sizes[name] = {
         minified: (bytes.byteLength / 1024).toFixed(1),

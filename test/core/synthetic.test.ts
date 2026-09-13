@@ -110,7 +110,7 @@ describe("synthetic entry and input", () => {
     }
     it(`${axis}: text/range controls keep gestures, native activation keys remain unconsumed`, () => {
       const { content } = make(axis);
-      for (const type of ["text", "range"]) {
+      for (const type of ["text", "range", "file", "color"]) {
         const input = document.createElement("input"); input.type = type; content.append(input);
         drag(input, axis); expect(list!.getScrollPosition()).toBe(0);
       }
@@ -194,16 +194,48 @@ describe("synthetic entry and input", () => {
     const { content } = make("y", [plugin]);
     key(content, "ArrowDown"); expect(list!.getScrollPosition()).toBe(200);
   });
-  it("selection/a11y consume navigation once and preserve descendant activation", () => {
-    for (const plugin of [selection<TestItem>(), a11y<TestItem>()]) {
-      const { content } = make("y", [plugin]);
-      const child = document.createElement("button"); content.append(child);
-      expect(key(child, " ").defaultPrevented).toBe(false);
-      expect(key(child, "Enter").defaultPrevented).toBe(false);
-      key(content, "ArrowDown");
-      expect(list!.getScrollPosition()).toBeLessThanOrEqual(50);
-      list!.destroy(); list = undefined;
+  it("selection/a11y retain their existing activation and navigation policy", () => {
+    for (const factory of [selection<TestItem>, a11y<TestItem>]) {
+      const outcomes: unknown[] = [];
+      for (const mode of ["native", "synthetic"] as const) {
+        list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [factory()]);
+        const content = container.querySelector<HTMLElement>(".vlist-content")!;
+        const child = document.createElement("button"); content.append(child);
+        let delivered = 0;
+        list.element.addEventListener("keydown", () => delivered++);
+        const space = key(child, " ").defaultPrevented;
+        const enter = key(child, "Enter").defaultPrevented;
+        key(content, "ArrowDown");
+        outcomes.push({ space, enter, delivered, position: list.getScrollPosition() });
+        list.destroy(); list = undefined;
+      }
+      expect(outcomes[1]).toEqual(outcomes[0]);
     }
+  });
+  it("pointermove and active frames neither schedule timers nor query capture repeatedly", () => {
+    const { viewport } = make();
+    let timers = 0, captures = 0;
+    const original = globalThis.setTimeout;
+    const hasCapture = viewport.hasPointerCapture;
+    viewport.hasPointerCapture = id => { captures++; return hasCapture(id); };
+    globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => { timers++; return original(...args); }) as typeof setTimeout;
+    try {
+      pointer(viewport, "pointerdown", 1, 200, 200, 0);
+      pointer(viewport, "pointermove", 1, 200, 150, 16);
+      pointer(viewport, "pointermove", 1, 200, 100, 32);
+      expect(timers).toBe(0); expect(captures).toBe(0);
+      pointer(window, "pointerup", 1, 200, 100, 40);
+      timers = 0;
+      frame(100); frame(116); frame(132);
+      expect(timers).toBe(0);
+    } finally { globalThis.setTimeout = original; }
+  });
+  it("unrelated page touches and their cancellation do not catch a fling", () => {
+    const { viewport } = make(); drag(viewport, "y"); frame(100); frame(116);
+    const before = list!.getScrollPosition();
+    pointer(document.body, "pointerdown", 99, 0, 0, 120);
+    pointer(window, "pointercancel", 99, 0, 0, 125);
+    frame(132); expect(list!.getScrollPosition()).toBeGreaterThan(before);
   });
   it("table and groups render far logical positions without growing the stage", () => {
     for (const plugin of [

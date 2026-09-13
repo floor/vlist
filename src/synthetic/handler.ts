@@ -1,14 +1,14 @@
 /** RFC-014 input provider. No native main-axis scroll position writes. */
 import type { BoundedScrollConfig, BoundedScrollHandler } from "../core/runway";
 import { SCROLL_IDLE_TIMEOUT, SCROLL_EASING } from "../constants";
-import { createMotion } from "./motion";
+import { createMotion, TRACKING, PENDING } from "./motion";
 
 const touch = (e: PointerEvent): boolean => e.pointerType === "touch" || e.pointerType === "pen";
 // Buttons (including input[type=button]) and links may start a drag.
 function editing(target: Element): boolean {
   if (target.closest("textarea,select,[contenteditable]:not([contenteditable=false])")) return true;
   const input = target.closest("input");
-  return !!input && /^(text|search|tel|url|email|password|number|range|date|datetime-local|month|week|time)$/.test(input.type);
+  return !!input && !/^(button|submit|reset|checkbox|radio|image)$/.test(input.type);
 }
 
 export function createSyntheticScrollHandler(config: BoundedScrollConfig): BoundedScrollHandler {
@@ -22,9 +22,8 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
   let attached = false, refreshing = false;
   let previousSize = -1, previousCross = -1;
   let gesture: number | null = null, suppressed: number | null = null;
-  let dragged = false, caught = false, blocked = false;
+  let dragged = false, caught = false, blocked = false, captured = false;
   let complete: (() => void) | undefined;
-  let pendingKey: KeyboardEvent | null = null;
   const pointers = new Set<number>();
   const savedViewport = { overflowX: viewport.style.overflowX, overflowY: viewport.style.overflowY, touchAction: viewport.style.touchAction, overflowAnchor: viewport.style.overflowAnchor };
   const savedContent = { overflow: content.style.overflow, overflowAnchor: content.style.overflowAnchor };
@@ -34,11 +33,11 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     state.prevScrollPosition = previous;
     state.scrollPosition = state.baseOffset = position;
     state.scrollDirection = position > previous ? 1 : position < previous ? -1 : 0;
-    if (!refreshing) { onFrame(); scheduleIdle(); }
+    if (!refreshing) onFrame();
   }
   function idleDue(): void {
     idle = null;
-    if (motion.active || motion.state === "tracking" || motion.state === "axis-pending") return;
+    if (motion.active || motion.state === TRACKING || motion.state === PENDING) return;
     state.scrollDirection = 0;
     onIdle();
   }
@@ -68,11 +67,12 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     complete = undefined;
     if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
     motion.cancel();
-    if (attached) scheduleIdle();
+    if (idle !== null) { clearTimeout(idle); idle = null; }
   }
   function reset(): void {
     cancelScroll(); motion.reset();
-    for (const id of pointers) if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
+    if (captured && gesture !== null && viewport.hasPointerCapture(gesture)) viewport.releasePointerCapture(gesture);
+    captured = false;
     pointers.clear();
     gesture = suppressed = null; dragged = caught = blocked = false;
     scheduleIdle();
@@ -92,28 +92,28 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
   }
   function outsideDown(e: PointerEvent): void {
     if (!touch(e) || (e.target instanceof Node && viewport.contains(e.target))) return;
-    if (e.isPrimary) reset();
+    if (e.isPrimary && pointers.size) reset();
     else if (pointers.size) { pointers.add(e.pointerId); blocked = true; cancelScroll(); }
   }
   function move(e: PointerEvent): void {
     if (!touch(e) || blocked) return;
     if (motion.move(e.pointerId, e.clientX, e.clientY, e.timeStamp)) {
       dragged = true;
-      if (!viewport.hasPointerCapture(e.pointerId)) viewport.setPointerCapture(e.pointerId);
+      if (!captured) { viewport.setPointerCapture(e.pointerId); captured = true; }
       if (e.cancelable) e.preventDefault();
     }
   }
   function end(e: PointerEvent): void {
-    if (!touch(e)) return;
+    if (!touch(e) || !pointers.has(e.pointerId)) return;
     const cancelled = e.type === "pointercancel";
     if (cancelled) cancelScroll();
     if (gesture === e.pointerId) {
       if (!cancelled && !blocked && (dragged || caught)) suppressed = e.pointerId;
-      gesture = null; dragged = caught = false;
+      if (captured && viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+      captured = false; gesture = null; dragged = caught = false;
     }
     motion.end(e.pointerId, e.timeStamp);
     pointers.delete(e.pointerId);
-    if (viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
     if (!pointers.size) {
       if (blocked || cancelled) motion.reset();
       blocked = false;
@@ -148,18 +148,6 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     scheduleIdle();
   }
   function key(e: KeyboardEvent): void {
-    if (e.currentTarget === viewport && root !== viewport) {
-      pendingKey = e;
-      const target = e.target;
-      // Preserve native activation/editing before list-level keyboard plugins.
-      if (target instanceof Element && (editing(target) ||
-          ((e.key === " " || e.key === "Enter") && target.closest("button,summary,a,input")))) {
-        pendingKey = null; e.stopPropagation();
-      }
-      return;
-    }
-    if (root !== viewport && pendingKey !== e) return;
-    pendingKey = null;
     // Root plugins run first; their handled navigation must not scroll twice.
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof Element) || editing(e.target)) return;
     if ((e.key === " " || e.key === "Enter") && e.target.closest("button,summary,a,input")) return;
@@ -180,6 +168,7 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     cancelScroll(); motion.jump(position);
     // Even an unchanged jump completes the external navigation/idle contract.
     if (previous === motion.position) commit(motion.position);
+    scheduleIdle();
   }
   function refresh(totalSize: number): void {
     const changed = totalSize !== state.totalSize || previousSize !== state.containerSize || previousCross !== state.crossSize;
@@ -193,7 +182,8 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     }
   }
   return {
-    setLogical, refresh, cancelScroll,
+    setLogical, refresh,
+    cancelScroll(): void { cancelScroll(); scheduleIdle(); },
     getLogical: () => state.scrollPosition,
     getMaxLogical: () => max,
     smoothScrollTo(target, duration, _setFn, easing = SCROLL_EASING, onComplete): void {
@@ -221,8 +211,7 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
       win.addEventListener("pointercancel", end);
       viewport.addEventListener("click", click, true);
       if (config.wheelEnabled) viewport.addEventListener("wheel", wheel, { passive: false });
-      viewport.addEventListener("keydown", key);
-      if (root !== viewport) root.addEventListener("keydown", key);
+      root.addEventListener("keydown", key);
       win.addEventListener("blur", reset);
       doc.addEventListener("visibilitychange", hidden);
       reduced.addEventListener("change", reset);
@@ -238,8 +227,7 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
       win.removeEventListener("pointercancel", end);
       viewport.removeEventListener("click", click, true);
       viewport.removeEventListener("wheel", wheel);
-      viewport.removeEventListener("keydown", key);
-      if (root !== viewport) root.removeEventListener("keydown", key);
+      root.removeEventListener("keydown", key);
       win.removeEventListener("blur", reset);
       doc.removeEventListener("visibilitychange", hidden);
       reduced.removeEventListener("change", reset);

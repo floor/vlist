@@ -153,7 +153,7 @@ for (const scenario of scenarios) {
     deltaKB: 0,
   });
 
-  const syntheticMarker = '"axis-pending"';
+  const syntheticMarker = "pan-x pinch-zoom";
   if (scenario.name !== "synthetic" && new TextDecoder().decode(output).includes(syntheticMarker)) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
   }

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import type { MotionOptions, MotionEvent } from "../../src/synthetic/motion";
-import { createMotion } from "../../src/synthetic/motion";
+import type { MotionOptions } from "../../src/synthetic/motion";
+import { createMotion, IDLE, INERTIA, ANIMATING, CANCELLED } from "../../src/synthetic/motion";
 
 function setup(options: Partial<MotionOptions> = {}) {
   let max = 10_000;
-  const events: (MotionEvent & { type: string })[] = [];
-  const motion = createMotion({ getMax: () => max, onEvent: (type, detail) => events.push({ type, ...detail }), ...options });
+  let completed = 0;
+  const motion = createMotion({ getMax: () => max, onFinish: () => completed++, ...options });
   motion.jump(500);
-  return { motion, events, setMax: (value: number) => { max = value; } };
+  return { motion, get completed() { return completed; }, setMax: (value: number) => { max = value; } };
 }
 function fling(motion: ReturnType<typeof createMotion>, direction = 1) {
   motion.begin(1, 100, 100, 0);
@@ -21,7 +21,7 @@ describe("RFC-014 standalone synthetic motion contract", () => {
       const { motion } = setup();
       fling(motion, sign);
       const released = motion.position;
-      expect(motion.state).toBe("inertia");
+      expect(motion.state).toBe(INERTIA);
       motion.tick(40); motion.tick(56);
       expect((motion.position - released) * sign).toBeGreaterThan(0);
     }
@@ -37,16 +37,16 @@ describe("RFC-014 standalone synthetic motion contract", () => {
   test("held release and cancelled gestures never seed inertia", () => {
     const { motion } = setup();
     motion.begin(1, 0, 100, 0); motion.move(1, 0, 50, 16); motion.end(1, 100);
-    expect(motion.state).toBe("idle");
+    expect(motion.state).toBe(IDLE);
     motion.begin(2, 0, 100, 110); motion.move(2, 0, 50, 126);
-    motion.cancel("pointercancel"); motion.end(2, 130);
-    expect(motion.state).toBe("idle");
+    motion.cancel(); motion.end(2, 130);
+    expect(motion.state).toBe(IDLE);
   });
   test("cross-axis intent releases ownership and cannot reacquire in the gesture", () => {
     const { motion } = setup();
     motion.begin(1, 0, 0, 0);
     expect(motion.move(1, 20, 2, 16)).toBe(false);
-    expect(motion.state).toBe("cancelled");
+    expect(motion.state).toBe(CANCELLED);
     expect(motion.move(1, 20, 100, 32)).toBe(false);
     expect(motion.position).toBe(500);
   });
@@ -95,10 +95,10 @@ describe("RFC-014 standalone synthetic motion contract", () => {
   });
   test("wheel interrupts inertia and smooth motion shares cancellation", () => {
     const { motion } = setup(); fling(motion);
-    motion.by(20, "wheel"); const p = motion.position;
+    motion.by(20); const p = motion.position;
     motion.tick(56); expect(motion.position).toBe(p);
     motion.smooth(2000); motion.tick(76);
-    motion.cancel("slider-start"); const q = motion.position;
+    motion.cancel(); const q = motion.position;
     motion.tick(92); expect(motion.position).toBe(q);
   });
   test("resize clamps and frame suspension completes smooth navigation", () => {
@@ -114,13 +114,13 @@ describe("RFC-014 standalone synthetic motion contract", () => {
     const before = motion.position;
     motion.tick(192);
     expect(motion.position).toBe(before);
-    expect(motion.state).toBe("idle");
+    expect(motion.state).toBe(IDLE);
   });
   test("a delayed first inertia frame uses the frame clock, not release time", () => {
     const { motion } = setup(); fling(motion);
     const released = motion.position;
     motion.tick(160); // 120ms after release, but no frame-to-frame pause.
-    expect(motion.state).toBe("inertia");
+    expect(motion.state).toBe(INERTIA);
     expect(motion.position).toBe(released);
     motion.tick(176);
     expect(motion.position).toBeGreaterThan(released);
@@ -129,18 +129,20 @@ describe("RFC-014 standalone synthetic motion contract", () => {
     const { motion } = setup();
     motion.smooth(1000);
     motion.tick(1000);
-    expect(motion.state).toBe("animating");
+    expect(motion.state).toBe(ANIMATING);
     expect(motion.position).toBe(500);
     motion.tick(1016);
     expect(motion.position).toBeGreaterThan(500);
     expect(motion.position).toBeLessThan(1000);
   });
-  test("paused smooth navigation reports completion, never cancellation", () => {
-    const { motion, events } = setup();
-    motion.smooth(2000); motion.tick(100); events.length = 0;
-    motion.tick(250);
-    expect(events).toEqual([{ type: "state", from: "animating", to: "idle", reason: "animation-end" }]);
+  test("paused smooth navigation invokes completion exactly once", () => {
+    const sample = setup(), motion = sample.motion;
+    motion.smooth(2000); motion.tick(100);
+    motion.tick(250); motion.tick(266);
+    expect(sample.completed).toBe(1);
     expect(motion.position).toBe(2000);
+    motion.smooth(3000); motion.tick(300); motion.cancel(); motion.tick(500);
+    expect(sample.completed).toBe(1);
   });
   test("dynamic targets and custom easing retain the existing smooth-scroll API", () => {
     const { motion } = setup(); let target = 1000;
