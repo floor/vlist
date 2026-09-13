@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.3** — [Changelog](./CHANGELOG.md) · Autosize items whose content changes after measurement (a broken or slow image, a font swap) are now remeasured instead of clipped (#126).
+**v2.6.4** — [Changelog](./CHANGELOG.md) · Autosize items whose content changes after measurement (a broken or slow image, a font swap) are now remeasured instead of clipped (#126).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
