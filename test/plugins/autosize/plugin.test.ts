@@ -1200,4 +1200,40 @@ describe("autosize remeasure on late content", () => {
     img.dispatchEvent(new Event("error"));
     expect(forceRenders).toBe(0);
   });
+
+  it("remeasure(index) re-observes the item and pins the new size", () => {
+    const { el } = renderItem(0, false);
+    commit(0);
+    expect(el.style.height).toBe("80px");
+
+    nextSize = 120;
+    forceRenders = 0;
+    method<(i?: number) => void>("remeasure")(0);
+
+    expect(forceRenders).toBeGreaterThanOrEqual(1);
+    expect(observed.filter((o) => o === el)).toHaveLength(2);
+    expect(el.style.height).toBe("120px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+  });
+
+  it("remeasure(index) ignores items that were never measured", () => {
+    renderItem(0, false);
+    method<(i?: number) => void>("remeasure")(5);
+    expect(forceRenders).toBe(0);
+  });
+
+  it("remeasure() drops every measurement and measures again as items render", () => {
+    const a = renderItem(0, false).el;
+    const b = renderItem(1, false).el;
+    commit(0, 1);
+    expect(method<() => number>("getMeasuredCount")()).toBe(2);
+
+    nextSize = 100;
+    method<(i?: number) => void>("remeasure")();
+
+    expect(rebuilds).toBeGreaterThanOrEqual(2);
+    expect(a.style.height).toBe("100px");
+    expect(b.style.height).toBe("100px");
+    expect(method<() => number>("getMeasuredCount")()).toBe(2);
+  });
 });

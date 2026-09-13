@@ -323,7 +323,7 @@ groups({ getGroupForIndex, header: { height, template }, sticky?: true })
 selection({ mode: 'single' | 'multiple', initial?: [...ids] })
 data({ adapter: { read }, loading?: { cancelThreshold? } })
 table({ columns, rowHeight, headerHeight?, resizable? })
-autosize()                        // auto-measure items (requires estimatedHeight)
+autosize()                        // auto-measure items (requires estimatedHeight); list.remeasure(index?) after late content
 scrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 transition({ duration?: 200, insert?: timing, remove?: timing })
 sortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
