@@ -25,7 +25,7 @@ import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollHandler } from "./scroll";
-import { createBoundedScrollHandler, type BoundedScrollHandler, type WrapConfig } from "./runway";
+import { createBoundedScrollHandler, type BoundedScrollHandler, type BoundedScrollConfig, type WrapConfig } from "./runway";
 import type { ScrollHandler } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
 import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
@@ -179,7 +179,7 @@ export function createVList<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
   /** @internal Provided only by the opt-in scroll entry. */
-  logicalHandlerFactory?: typeof createBoundedScrollHandler,
+  logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 

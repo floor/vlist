@@ -5,7 +5,7 @@ import { createMotion, IDLE, INERTIA, ANIMATING, CANCELLED } from "../../src/syn
 function setup(options: Partial<MotionOptions> = {}) {
   let max = 10_000;
   let completed = 0;
-  const motion = createMotion({ getMax: () => max, onFinish: () => completed++, ...options });
+  const motion = createMotion({ getMax: () => max, reducedMotion: () => false, onFinish: () => completed++, ...options });
   motion.jump(500);
   return { motion, get completed() { return completed; }, setMax: (value: number) => { max = value; } };
 }
@@ -160,7 +160,7 @@ describe("RFC-014 standalone synthetic motion contract", () => {
     motion.smooth(2000); expect(motion.position).toBe(2000);
   });
   test("reduced motion disables inertia and interpolation", () => {
-    const { motion } = setup({ reducedMotion: true }); fling(motion);
+    const { motion } = setup({ reducedMotion: () => true }); fling(motion);
     expect(motion.active).toBe(false);
     motion.smooth(8000);
     expect(motion.position).toBe(8000); expect(motion.active).toBe(false);

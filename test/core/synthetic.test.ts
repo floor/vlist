@@ -269,7 +269,7 @@ it("handler completion callback, unchanged refresh, resize and detach contracts"
   viewport.append(content); container.append(viewport);
   const state = createEngineState(20); state.containerSize = 500;
   let completed = 0, renders = 0;
-  const handler = createSyntheticScrollHandler({ state, viewport, content, isX: false, wheelEnabled: true, idleTimeout: 150, mainAxisPadding: 0, onFrame: () => renders++, onIdle: () => {} });
+  const handler = createSyntheticScrollHandler({ sizeCache: { getSize: () => 50, indexAtOffset: position => Math.floor(position / 50) }, state, viewport, content, isX: false, wheelEnabled: true, idleTimeout: 150, mainAxisPadding: 0, onFrame: () => renders++, onIdle: () => {} });
   handler.refresh(10000); handler.attach();
   handler.smoothScrollTo(2000, 400, undefined, undefined, () => completed++);
   frame(100); handler.refresh(10000); frame(116); expect(state.scrollPosition).toBeGreaterThan(0);

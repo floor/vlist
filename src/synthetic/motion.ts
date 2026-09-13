@@ -6,9 +6,11 @@ export interface MotionOptions {
   onChange?: (position: number) => void;
   onFinish?: () => void;
   axis?: "x" | "y";
-  reducedMotion?: boolean | (() => boolean);
+  reducedMotion: () => boolean;
 }
-export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y", reducedMotion = false }: MotionOptions) {
+const cubicOut = (t: number): number => 1 - (1 - t) ** 3;
+
+export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y", reducedMotion }: MotionOptions) {
   let position = 0;
   let state: MotionState = IDLE;
   let pointer: number | null = null;
@@ -17,9 +19,8 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
   let frameTime: number | null = null;
   let animationStart = 0, animationFrom = 0, animationTo = 0;
   let duration = 400;
-  let ease = (t: number): number => 1 - (1 - t) ** 3;
+  let ease = cubicOut;
   let getTarget: () => number = () => animationTo;
-  const prefersReduced = (): boolean => typeof reducedMotion === "function" ? reducedMotion() : reducedMotion;
   const friction = 0.006;
   const clamp = (value: number) => Math.max(0, Math.min(getMax(), value));
   const main = (x: number, y: number) => axis === "y" ? y : x;
@@ -76,7 +77,7 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
     end(id: number, time: number) {
       if (id !== pointer) return;
       pointer = null;
-      if (state === TRACKING && !prefersReduced() && time - lastTime <= 80 && Math.abs(velocity) >= 0.02) {
+      if (state === TRACKING && !reducedMotion() && time - lastTime <= 80 && Math.abs(velocity) >= 0.02) {
         frameTime = null;
         state = INERTIA;
       } else { velocity = 0; state = IDLE; }
@@ -90,10 +91,10 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
       commit(position + delta);
       return position !== previous;
     },
-    smooth(value: number | (() => number), milliseconds = 400, easing = (t: number): number => 1 - (1 - t) ** 3) {
+    smooth(value: number | (() => number), milliseconds = 400, easing = cubicOut) {
       cancel();
       getTarget = typeof value === "function" ? value : () => value;
-      if (pointer !== null || prefersReduced() || milliseconds <= 0) { commit(getTarget()); return; }
+      if (pointer !== null || reducedMotion() || milliseconds <= 0) { commit(getTarget()); return; }
       duration = milliseconds;
       ease = easing;
       animationFrom = position;

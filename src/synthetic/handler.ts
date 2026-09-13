@@ -11,7 +11,11 @@ function editing(target: Element): boolean {
   return !!input && !/^(button|submit|reset|checkbox|radio|image)$/.test(input.type);
 }
 
-export function createSyntheticScrollHandler(config: BoundedScrollConfig): BoundedScrollHandler {
+type SyntheticScrollConfig = BoundedScrollConfig & {
+  readonly sizeCache: NonNullable<BoundedScrollConfig["sizeCache"]>;
+};
+
+export function createSyntheticScrollHandler(config: SyntheticScrollConfig): BoundedScrollHandler {
   const { state, viewport, content, isX, onFrame, onIdle, mainAxisPadding } = config;
   const root = viewport.parentElement ?? viewport;
   const win = viewport.ownerDocument.defaultView!;
@@ -25,8 +29,6 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
   let dragged = false, caught = false, blocked = false, captured = false;
   let complete: (() => void) | undefined;
   const pointers = new Set<number>();
-  const savedViewport = { overflowX: viewport.style.overflowX, overflowY: viewport.style.overflowY, touchAction: viewport.style.touchAction, overflowAnchor: viewport.style.overflowAnchor };
-  const savedContent = { overflow: content.style.overflow, overflowAnchor: content.style.overflowAnchor };
 
   function commit(position: number): void {
     const previous = state.scrollPosition;
@@ -152,7 +154,7 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof Element) || editing(e.target)) return;
     if ((e.key === " " || e.key === "Enter") && e.target.closest("button,summary,a,input")) return;
     const cache = config.sizeCache;
-    const step = cache ? cache.getSize(cache.indexAtOffset(motion.position)) : state.visibleSizes[0] || 40;
+    const step = cache.getSize(cache.indexAtOffset(motion.position));
     let position: number | undefined;
     if (e.key === (isX ? "ArrowRight" : "ArrowDown")) position = motion.position + step;
     if (e.key === (isX ? "ArrowLeft" : "ArrowUp")) position = motion.position - step;
@@ -231,7 +233,9 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
       win.removeEventListener("blur", reset);
       doc.removeEventListener("visibilitychange", hidden);
       reduced.removeEventListener("change", reset);
-      Object.assign(viewport.style, savedViewport); Object.assign(content.style, savedContent);
+      // Core removes this DOM immediately after detach; no style snapshot needed.
+      viewport.style.overflowX = viewport.style.overflowY = viewport.style.touchAction = viewport.style.overflowAnchor = "";
+      content.style.overflow = content.style.overflowAnchor = "";
     },
   };
 }
