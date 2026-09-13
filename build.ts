@@ -1,12 +1,13 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync, rmSync } from "fs";
+import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "fs";
 import { resolve } from "path";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
 
 async function build() {
+  const scratch = mkdtempSync("/tmp/vlist-build-");
   const totalStart = performance.now();
   console.log("Building vlist...\n");
 
@@ -31,7 +32,7 @@ async function build() {
     `  registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained,`,
     `  createStats, rebuild } from "${entryAbs}";`,
   ].join("\n");
-  const wrapperPath = "/tmp/_vlist_build_entry.ts";
+  const wrapperPath = `${scratch}/entry.ts`;
   writeFileSync(wrapperPath, wrapperCode);
 
   const bundleResult = await Bun.build({
@@ -59,11 +60,22 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
+  // Separate opt-in entry: never re-export the synthetic driver from index.ts.
+  const syntheticResult = await Bun.build({
+    entrypoints: [resolve("./src/synthetic.ts")], outdir: "./dist",
+    format: "esm", target: "browser", minify: !isDev,
+    sourcemap: isDev ? "inline" : "none", naming: "synthetic.js",
+  });
+  if (!syntheticResult.success) {
+    for (const log of syntheticResult.logs) console.error(log);
+    process.exit(1);
+  }
+
   // Build config bundle (framework-adapter convenience config + resolver)
   const configStart = performance.now();
 
   const cfgWrapperCode = `export * from "${resolve("./src/config.ts")}";`;
-  const cfgWrapperPath = "/tmp/_vlist_build_config.ts";
+  const cfgWrapperPath = `${scratch}/config.ts`;
   writeFileSync(cfgWrapperPath, cfgWrapperCode);
 
   const configResult = await Bun.build({
@@ -95,7 +107,7 @@ async function build() {
   const internalsStart = performance.now();
 
   const intWrapperCode = `export * from "${resolve("./src/internals.ts")}";`;
-  const intWrapperPath = "/tmp/_vlist_build_internals.ts";
+  const intWrapperPath = `${scratch}/internals.ts`;
   writeFileSync(intWrapperPath, intWrapperCode);
 
   const internalsResult = await Bun.build({
@@ -183,14 +195,16 @@ async function build() {
 
   const scenarios = [
     { name: "base", imports: ["createVList"] },
+    { name: "synthetic", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
   const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
 
   for (const { name, imports } of scenarios) {
-    const code = `import { ${imports.join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`;
-    const tmp = `/tmp/_vlist_size_${name}.ts`;
+    const scenarioEntry = name === "synthetic" ? resolve("./src/synthetic.ts") : entryAbs;
+    const code = `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
+    const tmp = `${scratch}/size_${name}.ts`;
     writeFileSync(tmp, code);
 
     const result = await Bun.build({
@@ -226,6 +240,7 @@ async function build() {
   console.log("");
   console.log(`  base        ${base.minified} KB minified, ${base.gzipped} KB gzipped (tree-shaken)`);
 
+  rmSync(scratch, { recursive: true, force: true });
   const totalTime = performance.now() - totalStart;
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
 }

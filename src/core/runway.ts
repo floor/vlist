@@ -27,6 +27,7 @@
  * render that the rebasing scroll frame performs.
  */
 
+import type { SizeCache } from "./sizes";
 import type { EngineState } from "./state";
 import {
   SCROLL_IDLE_TIMEOUT,
@@ -71,6 +72,8 @@ export interface WrapConfig {
 }
 
 export interface BoundedScrollConfig {
+  /** Logical row geometry for opt-in input providers (keyboard row steps). */
+  readonly sizeCache?: Pick<SizeCache, "getSize" | "indexAtOffset">;
   readonly state: EngineState;
   readonly viewport: HTMLElement;
   readonly content: HTMLElement;

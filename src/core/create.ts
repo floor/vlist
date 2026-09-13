@@ -178,6 +178,8 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
 export function createVList<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
+  /** @internal Provided only by the opt-in scroll entry. */
+  logicalHandlerFactory?: typeof createBoundedScrollHandler,
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
@@ -187,7 +189,7 @@ export function createVList<T extends VListItem = VListItem>(
 
   const config = resolveConfig(rawConfig, plugins);
   const isX = config.axis.primary === "x";
-  const boundedMode = rawConfig.scroll?.mode === "bounded";
+  const boundedMode = rawConfig.scroll?.mode === "bounded" || !!logicalHandlerFactory;
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
   const gappedSizeSpec: number | ((index: number) => number) = gap > 0
@@ -626,8 +628,8 @@ export function createVList<T extends VListItem = VListItem>(
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
   if (boundedMode || boundedWrap) {
-    boundedHandler = createBoundedScrollHandler({
-      state,
+    boundedHandler = (logicalHandlerFactory ?? createBoundedScrollHandler)({
+      state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
       isX,
