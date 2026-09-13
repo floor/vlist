@@ -90,7 +90,7 @@ describe("synthetic entry and input", () => {
     it(`${axis}: viewport-sized content, exact logical end, no native writes`, () => {
       const { viewport, content } = make(axis);
       expect(content.style.overflow).toBe("clip");
-      expect(content.style[axis === "x" ? "width" : "height"]).toBe(axis === "x" ? "300px" : "500px");
+      expect(content.style[axis === "x" ? "width" : "height"]).toBe("100%");
       expect(viewport.style.touchAction).toBe(axis === "x" ? "pan-y pinch-zoom" : "pan-x pinch-zoom");
       list!.scrollToIndex(999, "end");
       expect(list!.getScrollPosition()).toBe(50_000 - (axis === "x" ? 300 : 500));
@@ -216,7 +216,7 @@ describe("synthetic entry and input", () => {
       const beforeKey = list!.getScrollPosition();
       key(content, "ArrowDown");
       expect(list!.getScrollPosition()).toBe(beforeKey + 50);
-      expect(content.style.height).toBe("500px");
+      expect(content.style.height).toBe("100%");
       expect(content.querySelectorAll("[data-index]").length).toBeGreaterThan(0);
       expect(content.querySelectorAll("[data-index]").length).toBeLessThan(40);
       list!.destroy(); list = undefined;

@@ -186,7 +186,6 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
     previousSize = state.containerSize; previousCross = state.crossSize;
     state.totalSize = totalSize;
     max = Math.max(0, totalSize + mainAxisPadding - state.containerSize);
-    content.style[isX ? "width" : "height"] = `${state.containerSize}px`;
     if (changed) {
       refreshing = true;
       cancelScroll(); motion.resize(); commit(motion.position);
@@ -211,6 +210,9 @@ export function createSyntheticScrollHandler(config: BoundedScrollConfig): Bound
       viewport.style.overflowY = isX ? "auto" : "hidden";
       viewport.style.touchAction = isX ? "pan-y pinch-zoom" : "pan-x pinch-zoom";
       viewport.style.overflowAnchor = "none";
+      // Percentage sizing prevents transient native overflow while a header or
+      // viewport resize is awaiting ResizeObserver's logical geometry update.
+      content.style[isX ? "width" : "height"] = "100%";
       content.style.overflow = "clip"; content.style.overflowAnchor = "none";
       viewport.addEventListener("pointerdown", down);
       win.addEventListener("pointerdown", outsideDown);

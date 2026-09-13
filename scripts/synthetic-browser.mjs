@@ -49,6 +49,8 @@ try {
       const r=viewport.getBoundingClientRect();
       const link=[...stage.querySelectorAll('a')].find(a=>axis==='y'?a.getBoundingClientRect().top>r.bottom:a.getBoundingClientRect().left>r.right);
       if(!link)throw new Error('No off-viewport link');
+      // Shrink synchronously, before ResizeObserver can update logical extent.
+      viewport.style[axis==='y'?'height':'width']=(axis==='y'?viewport.clientHeight-40:viewport.clientWidth-40)+'px';
       link.focus();
       return { overflow:getComputedStyle(stage).overflow, stage:axis==='y'?stage.scrollTop:stage.scrollLeft, viewport:axis==='y'?viewport.scrollTop:viewport.scrollLeft };
     },axis);
