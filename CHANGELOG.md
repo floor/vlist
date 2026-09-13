@@ -9,6 +9,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 (April 2026). Earlier versions were published as `@floor/vlist` — see the
 [git history](https://github.com/floor/vlist/commits/main) for the full record.
 
+## [Unreleased]
+
+## [2.6.4] - 2026-09-13
+
+### Fixed
+
+- **Autosize clipped items whose content changed after measurement (#126)** — items were measured once, then unobserved and pinned to that height, so a broken or slow image, a font swap or lazy content grew past the pinned box and was clipped. `load` and `error` events from an item's descendants now re-observe the item; the new size replaces the old one and the scroll position is corrected by the real delta.
+
+## [2.6.3] - 2026-09-07
+
+### Changed
+
+- **Publish workflow** — `npm publish` runs through the workflow's trusted-publisher identity instead of a stored token, which had broken the 2.6.2 publish. No library changes.
+
+## [2.6.2] - 2026-09-07
+
+### Fixed
+
+- **`scrollToIndex` before the list has a length (#122)** — a `scrollToIndex` call made before an async list had received its total was silently dropped. The request is now held and honoured on the first render that has a total; only the last request is kept.
+
 ## [2.6.1] - 2026-07-15
 
 ### Fixed
