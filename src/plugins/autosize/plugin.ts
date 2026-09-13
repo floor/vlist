@@ -185,7 +185,7 @@ export function autosize<T extends VListItem = VListItem>(
 
         // Apply scroll correction for items above viewport
         if (pendingScrollDelta) {
-          ctx.scrollTo(engineState.scrollPosition + pendingScrollDelta);
+          ctx.shiftScroll(pendingScrollDelta);
           pendingScrollDelta = 0;
         }
 

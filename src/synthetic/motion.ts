@@ -17,7 +17,7 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
   let startMain = 0, startCross = 0, lastMain = 0, lastTime = 0;
   let velocity = 0;
   let frameTime: number | null = null;
-  let animationStart = 0, animationFrom = 0, animationTo = 0;
+  let animationStart = 0, animationFrom = 0, animationTo = 0, targetShift = 0;
   let duration = 400;
   let ease = cubicOut;
   let getTarget: () => number = () => animationTo;
@@ -85,6 +85,11 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
     cancel,
     reset() { pointer = null; cancel(); },
     jump,
+    shiftBy(delta: number) {
+      animationFrom += delta;
+      targetShift += delta;
+      commit(position + delta);
+    },
     by(delta: number) {
       cancel();
       const previous = position;
@@ -93,12 +98,13 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
     },
     smooth(value: number | (() => number), milliseconds = 400, easing = cubicOut) {
       cancel();
+      targetShift = 0;
       getTarget = typeof value === "function" ? value : () => value;
       if (pointer !== null || reducedMotion() || milliseconds <= 0) { commit(getTarget()); return; }
       duration = milliseconds;
       ease = easing;
       animationFrom = position;
-      animationTo = clamp(getTarget());
+      animationTo = clamp(getTarget() + targetShift);
       frameTime = null;
       state = ANIMATING;
     },
@@ -116,13 +122,13 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
       frameTime = time;
       if (dt > 100) {
         if (state === ANIMATING) {
-          commit(clamp(getTarget()));
+          commit(clamp(getTarget() + targetShift));
           state = IDLE; onFinish?.();
         } else cancel();
         return;
       }
       if (state === ANIMATING) {
-        animationTo = clamp(getTarget());
+        animationTo = clamp(getTarget() + targetShift);
         const progress = Math.min(1, (time - animationStart) / duration);
         commit(animationFrom + (animationTo - animationFrom) * ease(progress));
         if (progress === 1) { state = IDLE; onFinish?.(); }

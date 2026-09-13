@@ -421,6 +421,10 @@ export function createVList<T extends VListItem = VListItem>(
         else if (isX) dom.viewport.scrollLeft = position;
         else dom.viewport.scrollTop = position;
       },
+      shiftScroll(delta: number): void {
+        if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
+        else ctx.scrollTo(state.scrollPosition + delta);
+      },
       smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
         if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
         else ctx.scrollTo(typeof target === "function" ? target() : target);

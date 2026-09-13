@@ -12,14 +12,14 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width,i
 <div id="list"></div><div id="tail">Tail</div>
 <script type="module">
 import {createVList} from '/synthetic.js';
-import {table,groups,a11y,selection,scrollbar,snapshots} from '/index.js';
+import {table,groups,a11y,selection,scrollbar,snapshots,autosize,transition} from '/index.js';
 const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.get('plugin');
 const items=Array.from({length:10000},(_,id)=>({id,name:'Row '+id}));
 const template=item=>'<span>'+item.name+'</span><a href="#tail">Test link</a><input type="button" value="Button">';
 const plugins=plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'Name',width:400,cell:template},{key:'id',label:'ID',width:400}]})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
- plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
-window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins);
+ plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
+window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins);
 window.clicks=0;document.querySelector('.vlist-content').addEventListener('click',()=>window.clicks++);
 window.ready=true;
 </script>`;
@@ -34,7 +34,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
   console.log(await browser.version());
-  for (const axis of ["y", "x"]) for (const plugin of (axis === "y" ? ["", "table", "groups", "a11y", "selection", "snapshots"] : [""])) {
+  for (const axis of ["y", "x"]) for (const plugin of (axis === "y" ? ["", "table", "groups", "a11y", "selection", "snapshots", "autosize", "transition"] : [""])) {
     const page = await browser.newPage();
     page.on("pageerror", e => errors.push(String(e)));
     await page.setViewport({ width: 430, height: 932, hasTouch: true, isMobile: true });
@@ -80,6 +80,18 @@ try {
     },axis);
     assert.equal(end.main,0);assert.equal(end.extent,end.size);
     if(plugin!=='groups')assert(end.covered,`${axis}/${plugin}: exact final item geometry`);
+    if(plugin==='transition'){
+      const animations = await page.evaluate(()=>{
+        window.list.scrollToIndex(500);
+        window.list.insertItem({id:10001,name:'Inserted'},502);
+        return [...document.querySelectorAll('.vlist-content [data-index]')].flatMap(el=>el.getAnimations().map(a=>({
+          last:a.effect.getKeyframes().slice(-1)[0].transform, expected:el.style.transform
+        }))).filter(a=>!a.last.includes('scale'));
+      });
+      assert(animations.length>0,'transition creates sibling animations');
+      for(const a of animations)assert.equal(a.last,a.expected,'transition ends at stage-relative row coordinate');
+      await wait(260);
+    }
     if(plugin==='table'){
       await page.evaluate(()=>{const v=document.querySelector('.vlist-viewport');v.dispatchEvent(new WheelEvent('wheel',{deltaX:30,deltaY:-60,bubbles:true,cancelable:true}));});await wait(50);
       const cross = await page.$eval('.vlist-viewport',el=>el.scrollLeft);

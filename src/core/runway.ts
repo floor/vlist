@@ -44,6 +44,8 @@ export interface BoundedScrollHandler extends ScrollHandler {
   setLogical(logicalPx: number): void;
   /** Current absolute logical position (== state.scrollPosition). */
   getLogical(): number;
+  /** Non-cancelling coordinate correction, when supported by the input provider. */
+  shiftBy?(delta: number): void;
   /** Maximum scrollable logical position (`virtualTotal - containerSize`, >= 0). */
   getMaxLogical(): number;
   /** Recompute runway/derived values and resize the content element. */
@@ -73,7 +75,7 @@ export interface WrapConfig {
 
 export interface BoundedScrollConfig {
   /** Logical row geometry for opt-in input providers (keyboard row steps). */
-  readonly sizeCache?: Pick<SizeCache, "getSize" | "indexAtOffset">;
+  readonly sizeCache?: Pick<SizeCache, "getSize" | "indexAtOffset" | "getTotalSize">;
   readonly state: EngineState;
   readonly viewport: HTMLElement;
   readonly content: HTMLElement;

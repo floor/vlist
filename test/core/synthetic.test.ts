@@ -3,7 +3,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createContainer, createTestItems, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/synthetic";
-import type { VList, VListPlugin } from "../../src/core/types";
+import type { PluginContext, VList, VListPlugin } from "../../src/core/types";
 import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
 import { createEngineState } from "../../src/core/state";
 import { a11y } from "../../src/plugins/a11y";
@@ -12,6 +12,8 @@ import type { ScrollSnapshot } from "../../src/types";
 import { groups } from "../../src/plugins/groups";
 import { table } from "../../src/plugins/table";
 import { snapshots } from "../../src/plugins/snapshots";
+import { autosize } from "../../src/plugins/autosize";
+import { transition } from "../../src/plugins/transition";
 import { scrollbar } from "../../src/plugins/scrollbar";
 
 let container: HTMLElement;
@@ -269,7 +271,7 @@ it("handler completion callback, unchanged refresh, resize and detach contracts"
   viewport.append(content); container.append(viewport);
   const state = createEngineState(20); state.containerSize = 500;
   let completed = 0, renders = 0;
-  const handler = createSyntheticScrollHandler({ sizeCache: { getSize: () => 50, indexAtOffset: position => Math.floor(position / 50) }, state, viewport, content, isX: false, wheelEnabled: true, idleTimeout: 150, mainAxisPadding: 0, onFrame: () => renders++, onIdle: () => {} });
+  const handler = createSyntheticScrollHandler({ sizeCache: { getTotalSize: () => 50000, getSize: () => 50, indexAtOffset: position => Math.floor(position / 50) }, state, viewport, content, isX: false, wheelEnabled: true, idleTimeout: 150, mainAxisPadding: 0, onFrame: () => renders++, onIdle: () => {} });
   handler.refresh(10000); handler.attach();
   handler.smoothScrollTo(2000, 400, undefined, undefined, () => completed++);
   frame(100); handler.refresh(10000); frame(116); expect(state.scrollPosition).toBeGreaterThan(0);
@@ -280,4 +282,115 @@ it("handler completion callback, unchanged refresh, resize and detach contracts"
   expect(state.scrollPosition).toBe(200); expect(completed).toBe(1);
   handler.detach(); const stopped = renders; wheel(viewport, 0, -100); frame(400);
   expect(renders).toBe(stopped); expect(viewport.style.touchAction).toBe("");
+});
+
+
+describe("synthetic correction integration", () => {
+  it("shifting active navigation preserves its one pending frame and completion", () => {
+    let ctx!: PluginContext<TestItem>;
+    make("y", [{ name: "capture-context", setup(value) { ctx = value; } }]);
+    let completed = 0;
+    ctx.smoothScrollTo(2000, 200, t => t, () => completed++);
+    frame(0); frame(50);
+    const pending = [...frames.keys()];
+    ctx.shiftScroll(75);
+    expect([...frames.keys()]).toEqual(pending);
+    expect(ctx.getState().baseOffset).toBe(list!.getScrollPosition());
+    for (const t of [100, 150, 200]) frame(t);
+    expect(list!.getScrollPosition()).toBe(2075); expect(completed).toBe(1);
+  });
+
+  it("autosize measurement above the viewport keeps a synthetic fling moving", () => {
+    const original = globalThis.ResizeObserver;
+    let measure!: ResizeObserverCallback;
+    const observed = new Set<Element>();
+    globalThis.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) { measure = cb; }
+      observe(el: Element) { observed.add(el); }
+      unobserve(el: Element) { observed.delete(el); }
+      disconnect() { observed.clear(); }
+    } as unknown as typeof ResizeObserver;
+    try {
+      let ctx!: PluginContext<TestItem>;
+      list = createVList({ container, items: createTestItems(1000),
+        item: { estimatedHeight: 50, template: simpleTemplate }, scroll: { mode: "synthetic" } },
+        [autosize(), { name: "capture-context", setup(value) { ctx = value; } }]);
+      const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+      viewport.setPointerCapture = () => {}; viewport.hasPointerCapture = () => false;
+      list.scrollToIndex(10); drag(viewport, "y"); frame(40); frame(56);
+      const before = list.getScrollPosition();
+      const above = [...observed].find(el => el.isConnected && ctx.getRenderedElement(Number(el.getAttribute("data-index"))) === el && Number(el.getAttribute("data-index")) < ctx.sizeCache.indexAtOffset(before));
+      expect(above).toBeDefined();
+      measure([{ target: above!, borderBoxSize: [{ blockSize: 80, inlineSize: 300 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      expect(list.getScrollPosition()).toBeCloseTo(before + 30, 8);
+      ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+      frame(72);
+      expect(list.getScrollPosition()).toBeGreaterThan(before + 30);
+      expect(ctx.getState().baseOffset).toBe(list.getScrollPosition());
+    } finally { list?.destroy(); list = undefined; globalThis.ResizeObserver = original; }
+  });
+
+  it("native and bounded correction fallback matches their absolute scroll path", () => {
+    for (const mode of ["native", "bounded"] as const) {
+      let ctx!: PluginContext<TestItem>;
+      list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } },
+        [{ name: "capture-context", setup(value) { ctx = value; } }]);
+      ctx.scrollTo(500);
+      const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+      viewport.dispatchEvent(new Event("scroll")); frame(0);
+      const before = ctx.getState().scrollPosition;
+      ctx.shiftScroll(75);
+      const actualNative = viewport.scrollTop;
+      const actualLogical = list.getScrollPosition();
+      ctx.scrollTo(before + 75);
+      expect(viewport.scrollTop).toBe(actualNative);
+      expect(list.getScrollPosition()).toBe(actualLogical);
+      list.destroy(); list = undefined;
+    }
+  });
+});
+
+it("transition animations end at rendered coordinates in native, bounded and synthetic modes", () => {
+  const original = HTMLElement.prototype.animate;
+  const animations: { el: HTMLElement; keyframes: Keyframe[] }[] = [];
+  HTMLElement.prototype.animate = function(keyframes) {
+    animations.push({ el: this, keyframes: keyframes as Keyframe[] });
+    return { finished: new Promise(() => {}), playState: "running", cancel() {} } as unknown as Animation;
+  };
+  try {
+    for (const mode of ["native", "bounded", "synthetic"] as const) {
+      list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [transition()]);
+      list.scrollToIndex(500);
+      const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+      viewport.dispatchEvent(new Event("scroll")); frame(0);
+      animations.length = 0;
+      list.insertItem({ id: 10001, name: "Inserted", value: 0 }, 502);
+      const moved = animations.filter(a => a.el.isConnected && a.el.dataset.index && !String(a.keyframes[a.keyframes.length - 1]?.transform).includes("scale"));
+      expect(moved.length).toBeGreaterThan(0);
+      for (const a of moved) expect(a.keyframes[a.keyframes.length - 1]?.transform).toBe(a.el.style.transform);
+      list.scrollToIndex(1000, "end"); viewport.dispatchEvent(new Event("scroll")); frame(16);
+      list.removeItem(999);
+      expect(list.getScrollPosition()).toBe(49500);
+      list.removeItems([997, 998]);
+      expect(list.getScrollPosition()).toBe(49400);
+      list.destroy(); list = undefined;
+    }
+  } finally { HTMLElement.prototype.animate = original; }
+});
+
+
+it("reverse transition insertion preserves end pinning for all three scroll modes", () => {
+  const original = HTMLElement.prototype.animate;
+  HTMLElement.prototype.animate = () => ({ finished: Promise.resolve(), playState: "finished", cancel() {} }) as unknown as Animation;
+  try {
+    for (const mode of ["native", "bounded", "synthetic"] as const) {
+      list = createVList({ container, reverse: true, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [transition()]);
+      list.scrollToIndex(999, "end");
+      container.querySelector(".vlist-viewport")!.dispatchEvent(new Event("scroll")); frame(0);
+      expect(list.getScrollPosition()).toBe(49500);
+      list.insertItem({ id: 10001, name: "Inserted", value: 0 }, 1000);
+      expect(list.getScrollPosition()).toBe(49550);
+      list.destroy(); list = undefined;
+    }
+  } finally { HTMLElement.prototype.animate = original; }
 });
