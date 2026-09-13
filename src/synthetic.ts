@@ -12,6 +12,13 @@ export type SyntheticVListConfig<T extends VListItem = VListItem> =
 export function createVList<T extends VListItem = VListItem>(
   config: SyntheticVListConfig<T>, plugins: VListPlugin<T>[] = [],
 ): VList<T> {
+  if (config.scroll?.mode === "synthetic") {
+    for (const plugin of plugins) {
+      if (plugin.name === "page" || plugin.name === "carousel" || plugin.name === "sortable") {
+        throw new Error(`${plugin.name} is not supported with synthetic mode in this release`);
+      }
+    }
+  }
   return createCore(config as CreateVListConfig<T>, plugins,
     config.scroll?.mode === "synthetic" ? createSyntheticScrollHandler : undefined);
 }

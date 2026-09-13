@@ -394,3 +394,31 @@ it("reverse transition insertion preserves end pinning for all three scroll mode
     }
   } finally { HTMLElement.prototype.animate = original; }
 });
+
+describe("synthetic unsupported-combination guards", () => {
+  for (const name of ["page", "carousel", "sortable"]) {
+    it(`rejects ${name} before plugin setup or DOM creation`, () => {
+      let setupCalled = false;
+      const plugin: VListPlugin<TestItem> = { name, setup() { setupCalled = true; } };
+      expect(() => make("y", [plugin])).toThrow(`${name} is not supported with synthetic mode in this release`);
+      expect(setupCalled).toBe(false); expect(container.children.length).toBe(0);
+    });
+    it(`leaves ${name} handling in native and bounded modes to core`, () => {
+      for (const mode of ["native", "bounded"] as const) {
+        let setupCalled = false;
+        // Stub isolates the entry guard from each plugin's own mode policy.
+        list = createVList({ container, items: createTestItems(10), item: { height: 50, template: simpleTemplate }, scroll: { mode } },
+          [{ name, setup() { setupCalled = true; } }]);
+        expect(setupCalled).toBe(true); list.destroy(); list = undefined;
+      }
+    });
+  }
+  it("allows every supported plugin name through the entry", () => {
+    const names = ["table", "groups", "snapshots", "scrollbar", "autosize", "transition", "selection", "a11y"];
+    const called: string[] = [];
+    make("y", names.map(name => ({ name, setup() { called.push(name); } })));
+    expect(called.sort()).toEqual(names.sort());
+    // Real-plugin integration coverage is above; combinations still respect
+    // plugin conflicts (for example, table and transition cannot be combined).
+  });
+});
