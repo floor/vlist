@@ -170,8 +170,10 @@ export function grid<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalRows - 1, visEnd + overscan);
 
-    // Range-unchanged fast path
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) {
+    // Range-unchanged fast path. Item transforms subtract baseOffset, so a
+    // logical provider that moves baseOffset without changing the range must
+    // still commit (see core pipeline, issue 025). Native keeps baseOffset at 0.
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) {
       return;
     }
 
@@ -250,6 +252,7 @@ export function grid<T extends VListItem = VListItem>(
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
+    engineState.prevBaseOffset = engineState.baseOffset;
     engineState.renderPending = false;
 
     // Fill EngineState buffers for plugins that read them

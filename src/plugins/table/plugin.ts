@@ -118,10 +118,13 @@ export function table<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
+    // Row transforms subtract baseOffset, so a baseOffset move with an
+    // unchanged range must still commit (issue 025). Native keeps it at 0.
     if (
       renderStart === engineState.prevRangeStart &&
       renderEnd === engineState.prevRangeEnd &&
-      !engineState.renderPending
+      !engineState.renderPending &&
+      engineState.baseOffset === engineState.prevBaseOffset
     ) {
       return;
     }
@@ -144,6 +147,7 @@ export function table<T extends VListItem = VListItem>(
     // Update engine state
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
+    engineState.prevBaseOffset = engineState.baseOffset;
     engineState.renderPending = false;
 
     // Publish the visible DATA range for the async data plugin's load hooks.

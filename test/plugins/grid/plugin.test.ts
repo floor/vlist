@@ -659,6 +659,30 @@ describe("grid - render correctness (optimized hot path)", () => {
     cleanup();
   });
 
+  it("re-commits when baseOffset moves with an unchanged row range (issue 025)", () => {
+    const plugin = grid<TestItem>({ columns: 4 });
+    const items = createTestItems(200);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 600,
+      itemSize: 100,
+    });
+    plugin.setup!(ctx);
+
+    engineState.scrollPosition = 300;
+    engineState.baseOffset = 300;
+    ctx.forceRender();
+    const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
+    expect(transformXY(row3)).toEqual({ x: 0, y: 0 });
+
+    // A wheel step smaller than a row: same rendered range, baseOffset moved.
+    engineState.scrollPosition = 288;
+    engineState.baseOffset = 288;
+    ctx.renderIfNeeded();
+    expect(transformXY(row3)).toEqual({ x: 0, y: 12 });
+    cleanup();
+  });
+
   it("does not shift transforms in native mode (baseOffset = 0)", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(200);

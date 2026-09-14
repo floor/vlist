@@ -346,6 +346,25 @@ describe("table - Render Functions", () => {
     cleanup();
   });
 
+  it("re-commits row transforms when baseOffset moves with an unchanged range (issue 025)", () => {
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    const { ctx, dom, engineState, cleanup } = createTableMockContext({ itemCount: 1000, scrollTop: 4000 });
+    plugin.setup!(ctx);
+
+    engineState.baseOffset = 4000;
+    ctx.forceRender();
+    const row = dom.content.querySelector("[data-index='100']") as HTMLElement;
+    const before = row.style.transform;
+
+    // Sub-row step: identical rendered range, baseOffset moved by 12 px.
+    engineState.scrollPosition = 3988;
+    engineState.baseOffset = 3988;
+    ctx.renderIfNeeded();
+    expect(row.style.transform).not.toBe(before);
+    expect(row.style.transform).toContain("12px");
+    cleanup();
+  });
+
   it("should render rows on first renderIfNeeded call", () => {
     const plugin = table({ columns: testColumns, rowHeight: 40 });
     const { ctx, dom, engineState, cleanup } = createTableMockContext({ containerSize: 200 });
