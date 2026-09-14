@@ -183,6 +183,7 @@ export function createPluginMockContext<T extends VListItem>(
     },
     getRenderOrigin: () => engineState.baseOffset,
     getContainerSize: () => engineState.containerSize,
+    padding: config.mainAxisPadding,
   });
 
   let customRenderIfNeeded: (() => void) | null = null;

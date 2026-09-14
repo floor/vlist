@@ -310,7 +310,7 @@ export function selection<T extends VListItem = VListItem>(
         const offset = sizeCache.getOffset(ci);
         const size = sizeCache.getSize(ci) - selGridGap;
         const cs = engineState.containerSize;
-        const sp = engineState.scrollPosition;
+        const sp = ctx.scroll.getPixelEquivalent();
         const sp0 = resolvedConfig.startPadding;
         const sp1 = resolvedConfig.endPadding;
 
