@@ -338,6 +338,7 @@ export function createVList<T extends VListItem = VListItem>(
     setPixel: writeScroll,
     getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
+    padding: config.mainAxisPadding,
   });
 
   // ── Run plugin setup (cold path) ────────────────────────────────

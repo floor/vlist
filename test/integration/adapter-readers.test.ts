@@ -4,6 +4,9 @@ import { createPluginMockContext } from "../helpers/plugin-context";
 import { a11y } from "../../src/plugins/a11y/plugin";
 import { autosize } from "../../src/plugins/autosize/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
+import { createVList } from "../../src/core/create";
+import type { PluginContext, VListPlugin } from "../../src/core/types";
+import { createContainer } from "../helpers/factory";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 
 beforeAll(() => GlobalRegistrator.register());
@@ -69,4 +72,21 @@ it("autosize corrects measurements above the adapter's first visible item", () =
     callback([{ target: row, borderBoxSize: [{ blockSize: 60, inlineSize: 400 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
     expect(shifts).toEqual([20]);
   } finally { plugin.destroy?.(); t.cleanup(); globalThis.ResizeObserver = original; }
+});
+
+
+it("a11y last-item focus reaches the padded end", () => {
+  const host = createContainer();
+  let ctx!: PluginContext<{ id: number }>;
+  const inspect: VListPlugin<{ id: number }> = { name: "inspect", priority: 100, setup(c) { ctx = c; } };
+  const list = createVList({ container: host, padding: [16, 0, 24, 0],
+    items: Array.from({ length: 100 }, (_, id) => ({ id })),
+    item: { height: 40, template: item => String(item.id) },
+  }, [a11y(), inspect]);
+  ctx.getState().containerSize = 400;
+  try {
+    ctx.dom.viewport.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    expect(list.getScrollPosition()).toBe(3640);
+    expect(ctx.dom.viewport.scrollTop).toBe(3640);
+  } finally { list.destroy(); host.remove(); }
 });
