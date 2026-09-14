@@ -66,13 +66,12 @@ export function scrollbar<T extends VListItem = VListItem>(
         isX,
         dom.root,
         () => ctx.sizeCache,
+        dom.root.parentElement!,
       );
 
       dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
 
-      if (config?.gutter) {
-        dom.viewport.classList.add(`${classPrefix}-viewport--gutter`);
-      }
+      ctx.registerMethod("refreshScrollbar", () => sb?.refresh());
 
       // Defer initial bounds update — containerSize may be 0 during setup
       // since the viewport hasn't been laid out yet. The resize observer

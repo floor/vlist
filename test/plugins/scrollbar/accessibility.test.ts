@@ -13,7 +13,7 @@ function fixture(isX = false) {
  const viewport = document.createElement('div'); document.body.append(viewport);
  const cache = createSizeCache((i: number) => i === 0 ? 20 : 40, 100);
  const writes: number[] = [];
- sb = createScrollbar(viewport, value => { writes.push(value); sb!.updatePosition(value); }, {autoHideDelay: 5}, 'vlist', isX, undefined, () => cache);
+ sb = createScrollbar(viewport, value => { writes.push(value); sb!.updatePosition(value); }, {autoHide: true, autoHideDelay: 5}, 'vlist', isX, undefined, () => cache);
  sb.updateBounds(cache.getTotalSize(), 200);
  const track = viewport.querySelector<HTMLElement>('.vlist-scrollbar')!;
  return {viewport,cache,writes,track,thumb:track.firstElementChild as HTMLElement};
