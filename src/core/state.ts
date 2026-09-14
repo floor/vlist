@@ -44,6 +44,8 @@ export interface EngineState {
    * Defaults to 0, which makes native mode byte-identical (`offset - 0`).
    */
   baseOffset: number;
+  /** baseOffset at the last phase-1 commit; a change forces phase 2 even when the range is unchanged. */
+  prevBaseOffset: number;
 
   // ── Container state (updated on resize, cold path) ───────────────
 
@@ -87,6 +89,7 @@ export function createEngineState(initialCapacity: number): EngineState {
     prevScrollPosition: 0,
     scrollDirection: 0,
     baseOffset: 0,
+    prevBaseOffset: 0,
 
     containerSize: 0,
     crossSize: 0,

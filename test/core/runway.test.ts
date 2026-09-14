@@ -585,6 +585,25 @@ describe("bounded scroll — wheel", () => {
     expect(list.getScrollPosition()).toBeLessThanOrEqual(4500);
   });
 
+  it("moves rendered items on every wheel step, not only when the range changes (#judder)", () => {
+    // 1M rows, wheel steps smaller than a row: the runway origin (baseOffset)
+    // carries the motion mid-list. Every step must reach the DOM.
+    list = makeBounded(1_000_000);
+    const viewport = getViewport(container);
+    list.scrollToIndex(500_000);
+    const item = () => getContent(container).querySelector(".vlist-item") as HTMLElement;
+    const transformOf = () => item().style.transform;
+    let stalls = 0;
+    let previous = transformOf();
+    for (let i = 0; i < 12; i++) {
+      fireWheel(viewport, 12);
+      const now = transformOf();
+      if (now === previous) stalls++;
+      previous = now;
+    }
+    expect(stalls).toBe(0);
+  });
+
   it("prevents default on consumed wheel events", () => {
     list = makeBounded(1_000_000);
     const viewport = getViewport(container);
