@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { createVList as createCore } from "../../src/core/create";
+import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
 import { createVList } from "../../src/synthetic";
 import { table } from "../../src/plugins/table/plugin";
 import { page } from "../../src/plugins/page/plugin";
@@ -82,6 +84,11 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
     ctx.updateContentSize(80);
     expect(sizes).toEqual([60, 100]);
     expect(ctx.dom.content.style.height).toBe("100px");
+    ctx.setScrollFns(() => 0, px => ctx.commitScroll(px));
+    list.appendItems([{ id: 2 }]);
+    expect(sizes).toEqual([60, 100]);
+    ctx.scrollTo(20);
+    expect(list.getScrollPosition()).toBe(20);
   } finally { list.destroy(); host.remove(); }
 });
 
@@ -135,4 +142,22 @@ it("plain synthetic lists do not run the document provider's warning", () => {
       expect(warnings).toHaveLength(0);
     } finally { list.destroy(); }
   } finally { host.remove(); console.warn = original; }
+});
+
+it("a synthetic custom renderer refreshes its handler only once when items change", () => {
+  const host = createContainer();
+  let refreshes = 0;
+  const list = createCore({ container: host, items: [{ id: 1 }],
+    item: { height: 40, template: () => "row" },
+  }, [{ name: "custom", setup(ctx) {
+    ctx.setRenderFn(() => {}, () => ctx.updateContentSize(ctx.sizeCache.getTotalSize()));
+  } }], config => {
+    const handler = createSyntheticScrollHandler(config);
+    return { ...handler, refresh(size) { refreshes++; handler.refresh(size); } };
+  });
+  try {
+    refreshes = 0;
+    list.setItems([{ id: 1 }, { id: 2 }]);
+    expect(refreshes).toBe(1);
+  } finally { list.destroy(); host.remove(); }
 });

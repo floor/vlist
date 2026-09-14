@@ -388,7 +388,9 @@ export function createVList<T extends VListItem = VListItem>(
       },
       commitScroll(pos): void { commitScroll!(pos); },
       setScrollFns(_get: () => number, set: (pos: number) => void): void {
-        ctx.setScrollSource({ write: set });
+        scrollSetFn = set;
+        onContentSize = undefined;
+        skipDefaultScroll = true;
       },
       setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
       cancelScroll(): void { scrollHandler?.cancelScroll(); },
@@ -527,7 +529,7 @@ export function createVList<T extends VListItem = VListItem>(
 
   function updateContentSize(size: number, write = true): void {
     if (boundedHandler) {
-      boundedHandler.refresh(size);
+      if (write) boundedHandler.refresh(size);
       return;
     }
     state.totalSize = size;
@@ -630,7 +632,7 @@ export function createVList<T extends VListItem = VListItem>(
       content: dom.content,
       isX,
       wheelEnabled,
-      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
       // Clamp the user runway multiple up to the floor so native scroll always
@@ -653,7 +655,7 @@ export function createVList<T extends VListItem = VListItem>(
       viewport: dom.viewport,
       isX,
       wheelEnabled,
-      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
