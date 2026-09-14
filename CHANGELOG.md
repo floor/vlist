@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-09-14
+
+### Fixed
+
+- **Judder in grid, table, tree and masonry layouts in bounded and synthetic mode** — the same family as the 2.6.5 core fix. Grid, table and tree kept their own range-unchanged fast path without the `baseOffset` guard, so rows stood still between row boundaries on wheel and synthetic input (grid moved rows on 7 of 40 frames). Tree also never subtracted `baseOffset`, placing rows at absolute offsets past the first runway in bounded mode. Masonry kept grace-period items with stale transforms, which landed inside the viewport after a jump. All four now follow `baseOffset`; native mode unaffected.
+
 ## [2.7.0] - 2026-09-14
 
 ### Added
