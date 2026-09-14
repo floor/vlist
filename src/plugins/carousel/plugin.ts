@@ -114,6 +114,7 @@ export function carousel<T extends VListItem = VListItem>(
   let currentIndex = initialIndex;
   let realTotal = 0;
   let stepSize = 0;
+  let layoutContainerSize = 0;
   let lapSize = 0;
   let virtualTotal = 0;
 
@@ -393,6 +394,7 @@ export function carousel<T extends VListItem = VListItem>(
       realTotal = engineState.totalItems;
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
+      layoutContainerSize = containerSize;
       const peekResolved = resolvePeekSize(containerSize);
       const presetResult = resolveSlots(containerSize, peekResolved);
       if (hasSlots(presetResult)) {
@@ -661,6 +663,34 @@ export function carousel<T extends VListItem = VListItem>(
     },
 
     hooks: {
+      onResize(): void {
+        if (!storedCtx) return;
+        const containerSize = engineState.containerSize;
+        if (Math.abs(containerSize - layoutContainerSize) < 1) return;
+        layoutContainerSize = containerSize;
+        const preset = resolveSlots(containerSize, resolvePeekSize(containerSize));
+        if (!hasSlots(preset)) return;
+
+        layoutEngine = createLayoutEngine({
+          slots: preset.slots, focalSlot: preset.focalSlot, containerSize, gap: gapPx,
+        });
+        textFade = preset.textFade ?? "role";
+        stepSize = layoutEngine.stepSize;
+        buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
+        isVariableWidth = false;
+
+        // Re-anchor in the middle lap using the new step widths. Mark the
+        // target before refreshing the runway so intermediate commits cannot
+        // interpret old pixels as a different focal item.
+        intendedVi = virtualIndexOf(currentIndex);
+        lastDirection = 0;
+        storedCtx.updateContentSize(sizeCache.getTotalSize());
+        storedCtx.scrollTo(scrollPositionForVirtual(intendedVi));
+        storedCtx.forceRender();
+        updateItemLayout();
+        intendedVi = -1;
+      },
+
       onCommit(): void {
         if (!initialScrollPending || !storedCtx) return;
         initialScrollPending = false;
