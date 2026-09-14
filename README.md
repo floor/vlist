@@ -109,7 +109,7 @@ const list = createVList({
 }, [scrollbar()])
 ```
 
-Supported plugins are **table, groups, snapshots, scrollbar, autosize, transition, selection and a11y**. Existing plugin conflicts still apply; this list does not imply that all eight can be combined. `page()`, `carousel()` and `sortable()` throw when configured with synthetic mode. Carousel uses wrap scrolling, which this release does not support with synthetic input.
+Supported plugins are **table, groups, snapshots, scrollbar, autosize, transition, selection and a11y**. Existing plugin conflicts still apply; this list does not imply that all eight can be combined. `carousel()` and `sortable()` throw when configured with synthetic mode. Carousel uses wrap scrolling, which this release does not support with synthetic input. `page()` uses native document scrolling through an external source, including under the synthetic entry. Its content must fit the 16,777,216 px document element limit; creation throws above that limit when the size is known, and later growth warns once. A deferred custom renderer whose size is first committed during rendering also warns once. Use viewport scrolling for larger lists.
 
 Known limitations:
 

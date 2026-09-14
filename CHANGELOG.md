@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Support `page()` under the synthetic entry using native document scrolling, with an initial document-size guard and a one-time warning for later growth.
+
+### Changed
+
+- Route page scrolling through the external-source seam and core scroll commits, honoring configured idle timing and synchronous rendering. Deprecate `setScrollFns` and `disableDefaultScroll` in favor of `setScrollSource`.
+
 ### Internal
 
 - Complete plugin scroll-adapter adoption for a11y, autosize, selection and snapshots; enforce the page-only scroll-source boundary.

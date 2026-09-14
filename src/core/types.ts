@@ -123,7 +123,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
 
   setSizeConfig(config: number | ((index: number) => number)): void;
   /** Install an external writer and disable default scroll/wheel listeners. */
-  setScrollSource(source: { write(px: number): void }): void;
+  setScrollSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
   /** Commit an external position, render synchronously and schedule configured idle. */
   commitScroll(px: number): void;
   /** @deprecated Use setScrollSource; removed in 3.0. The getter is unused. */
