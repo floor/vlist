@@ -8,6 +8,7 @@
  * Priority: 5 (runs early, before plugins that depend on scroll)
  */
 
+import { MAX_ELEMENT_SIZE } from "../../constants";
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 
@@ -69,7 +70,23 @@ export function page<T extends VListItem = VListItem>(
       dom.viewport.classList.remove(`${cfg.classPrefix}-viewport--custom-scrollbar`);
 
       // ── 3. Install the external scroll writer ─────────────────────
+      let sized = false;
+      let warned = false;
       ctx.setScrollSource({
+        onContentSize(pixels): void {
+          if (pixels > MAX_ELEMENT_SIZE && !warned) {
+            const message = `vlist: page() native document size ${pixels}px exceeds the ${MAX_ELEMENT_SIZE}px limit. Use the viewport-scrolled default for larger lists. See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model`;
+            if (!sized) {
+              cleanupScroll?.();
+              cleanupResize?.();
+              dom.root.remove();
+              throw new Error(message);
+            }
+            warned = true;
+            console.warn(message);
+          }
+          sized = true;
+        },
         write(pos: number): void {
           const rect = dom.viewport.getBoundingClientRect();
           const target = (isX ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;

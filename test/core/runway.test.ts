@@ -811,23 +811,10 @@ describe("bounded scroll — smooth scroll", () => {
 });
 
 // =============================================================================
-// Page mode guard — bounded page-mode scrolling is not implemented
+// Page mode retains the carousel conflict
 // =============================================================================
 
 describe("bounded scroll — page mode guard", () => {
-  it("throws when page() is combined with scroll: { mode: 'bounded' }", () => {
-    expect(() =>
-      createVList<TestItem>(
-        {
-          container,
-          items: createTestItems(10),
-          item: { height: ITEM, template: simpleTemplate },
-          scroll: { mode: "bounded" },
-        },
-        [page()],
-      ),
-    ).toThrow(/page\(\) is not compatible with scroll: \{ mode: "bounded" \}/);
-  });
 
   it("throws when page() is combined with the carousel plugin (bounded wrap)", () => {
     expect(() =>

@@ -7,6 +7,9 @@
 // Core
 // =============================================================================
 
+/** Conservative native document element size limit, in CSS pixels. */
+export const MAX_ELEMENT_SIZE = 16_777_216;
+
 /** Default number of extra items to render outside viewport */
 export const OVERSCAN = 3;
 

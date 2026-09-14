@@ -13,16 +13,17 @@ export type SyntheticVListConfig<T extends VListItem = VListItem> =
 export function createVList<T extends VListItem = VListItem>(
   config: SyntheticVListConfig<T>, plugins: VListPlugin<T>[] = [],
 ): VList<T> {
-  if (config.scroll?.mode === "synthetic") {
+  const synthetic = config.scroll?.mode === "synthetic";
+  if (synthetic) {
     if (config.orientation === "horizontal" && getComputedStyle(resolveContainer(config.container)).direction === "rtl") {
       throw new Error("RTL horizontal lists are not supported with synthetic mode in this release; use native mode");
     }
     for (const plugin of plugins) {
-      if (plugin.name === "page" || plugin.name === "carousel" || plugin.name === "sortable") {
+      if (plugin.name === "carousel" || plugin.name === "sortable") {
         throw new Error(`${plugin.name} is not supported with synthetic mode in this release`);
       }
     }
   }
   return createCore(config as CreateVListConfig<T>, plugins,
-    config.scroll?.mode === "synthetic" ? createSyntheticScrollHandler : undefined);
+    synthetic ? createSyntheticScrollHandler : undefined);
 }

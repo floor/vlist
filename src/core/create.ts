@@ -279,6 +279,7 @@ export function createVList<T extends VListItem = VListItem>(
   const destroyHandlers: Array<() => void> = [];
   let virtualTotalFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
+  let onContentSize: ((px: number) => void) | undefined;
   let commitScroll: ((pos?: number) => void) | undefined;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
@@ -382,6 +383,7 @@ export function createVList<T extends VListItem = VListItem>(
       },
       setScrollSource(source): void {
         scrollSetFn = source.write;
+        onContentSize = source.onContentSize;
         skipDefaultScroll = true;
       },
       commitScroll(pos): void { commitScroll!(pos); },
@@ -400,18 +402,7 @@ export function createVList<T extends VListItem = VListItem>(
       rebuildSizeCache(): void {
         sizeCache.rebuild(state.totalItems);
       },
-      updateContentSize(size: number): void {
-        // Bounded mode (RFC-012): the content element is sized to the runway, not
-        // the full virtual size. Delegate to the handler so plugins that grow the
-        // virtual total (autosize, masonry, data, snapshots, search) never blow the
-        // runway. refresh() sets state.totalSize and re-derives the runway split.
-        if (boundedHandler) {
-          boundedHandler.refresh(size);
-          return;
-        }
-        state.totalSize = size;
-        dom.content.style[isX ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
-      },
+      updateContentSize,
       setRenderFn(renderFn: () => void, forceFn: () => void): void {
         customRenderIfNeeded = renderFn;
         customForceRender = forceFn;
@@ -534,19 +525,21 @@ export function createVList<T extends VListItem = VListItem>(
 
   let sizeWarningEmitted = false;
 
-  function syncContentSize(): void {
-    if (customRenderIfNeeded) return;
-    const totalSize = sizeCache.getTotalSize();
-
-    // Bounded mode (RFC-012): the content element is sized to a viewport-multiple
-    // runway, not the full virtual size, so the browser's element-size limit is
-    // never reached and no MAX_VIRTUAL_SIZE warning applies.
+  function updateContentSize(size: number, write = true): void {
     if (boundedHandler) {
-      boundedHandler.refresh(totalSize);
+      boundedHandler.refresh(size);
       return;
     }
+    state.totalSize = size;
+    const pixels = size + config.mainAxisPadding;
+    onContentSize?.(pixels);
+    if (write) dom.content.style[isX ? "width" : "height"] = pixels + "px";
+  }
 
-    dom.content.style[isX ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
+  function syncContentSize(): void {
+    const totalSize = customRenderIfNeeded ? state.totalSize : sizeCache.getTotalSize();
+    updateContentSize(totalSize, !customRenderIfNeeded);
+    if (boundedHandler || customRenderIfNeeded) return;
 
     if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
       sizeWarningEmitted = true;
@@ -626,16 +619,11 @@ export function createVList<T extends VListItem = VListItem>(
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
-  // page() (the only caller of disableDefaultScroll) installs window-based scroll
-  // fns; the bounded handler below would overwrite them with a viewport handler,
-  // silently breaking both. Bounded page-mode scrolling is not implemented yet.
-  if (skipDefaultScroll && (boundedMode || boundedWrap)) {
-    throw new Error(
-      `vlist: page() is not compatible with ${boundedWrap ? "the carousel plugin" : 'scroll: { mode: "bounded" }'} — bounded page-mode scrolling is not implemented yet.`,
-    );
+  if (skipDefaultScroll && boundedWrap) {
+    throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (boundedMode || boundedWrap) {
+  if (!skipDefaultScroll && (boundedMode || boundedWrap)) {
     boundedHandler = (logicalHandlerFactory ?? createBoundedScrollHandler)({
       state, sizeCache,
       viewport: dom.viewport,

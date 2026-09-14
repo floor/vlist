@@ -12,17 +12,20 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width,i
 <div id="list"></div><div id="tail">Tail</div>
 <script type="module">
 import {createVList} from '/synthetic.js';
-import {table,groups,a11y,selection,scrollbar,snapshots,autosize,transition} from '/index.js';
+import {table,groups,a11y,selection,scrollbar,snapshots,autosize,transition,page} from '/index.js';
 const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.get('plugin');
-const items=Array.from({length:10000},(_,id)=>({id,name:'Row '+id}));
+const items=Array.from({length:Number(q.get('count'))||10000},(_,id)=>({id,name:'Row '+id}));
 const template=item=>'<span>'+item.name+'</span><a href="#tail">Test link</a><input type="button" value="Button">';
 const plugins=plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'Name',width:400,cell:template},{key:'id',label:'ID',width:400}]})]:
+ plugin==='page'?[page()]:
  plugin==='scrollbar'?[scrollbar({gutter:true,platform:'windows'})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
  plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
-window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins);
+try { window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
+if(window.list) {
 window.clicks=0;document.querySelector('.vlist-content').addEventListener('click',()=>window.clicks++);
 window.ready=true;
+}
 </script>`;
 const server = Bun.serve({ port: 0, fetch(req) {
   const path = new URL(req.url).pathname;
@@ -35,6 +38,48 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
   console.log(await browser.version());
+  const documentPage = await browser.newPage();
+  await documentPage.setViewport({width:900,height:700});
+  await documentPage.goto(`http://localhost:${server.port}/?plugin=page&count=100000`);
+  await documentPage.waitForFunction(() => window.ready);
+  assert.equal(await documentPage.evaluate(() => window.creationError), undefined);
+  await documentPage.evaluate(() => {
+    window.documentFrames = {moving:0,matching:0,previous:0};
+    const tick = () => {
+      const viewport = document.querySelector('.vlist-viewport');
+      const pos = window.list.getScrollPosition();
+      if (pos !== window.documentFrames.previous) {
+        window.documentFrames.moving++;
+        const row = document.querySelector('[data-index]');
+        const expected = viewport.getBoundingClientRect().top + Number(row.dataset.index) * 50;
+        if (Math.abs(pos - Math.max(0,-viewport.getBoundingClientRect().top)) < 0.5 &&
+            viewport.scrollTop === 0 && Math.abs(row.getBoundingClientRect().top - expected) < 0.5) {
+          window.documentFrames.matching++;
+        }
+        window.documentFrames.previous=pos;
+      }
+      window.documentRaf=requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  await documentPage.mouse.move(180,180);
+  for (let i=0;i<40;i++) { await documentPage.mouse.wheel({deltaY:80}); await wait(20); }
+  await wait(100);
+  const documentFrames = await documentPage.evaluate(() => {
+    cancelAnimationFrame(window.documentRaf);
+    return {...window.documentFrames,position:window.list.getScrollPosition(),height:document.querySelector('.vlist-content').style.height};
+  });
+  assert(documentFrames.moving > 0);
+  assert.equal(documentFrames.matching,documentFrames.moving);
+  assert(documentFrames.position > 0);
+  assert.equal(parseFloat(documentFrames.height),5000000);
+  console.log('PASS page 100K document wheel',JSON.stringify(documentFrames));
+  await documentPage.goto(`http://localhost:${server.port}/?plugin=page&count=1000000`);
+  await documentPage.waitForFunction(() => window.ready);
+  const guard = await documentPage.evaluate(() => window.creationError);
+  assert.match(guard,/50000000px.*16777216px.*https:\/\/vlist.io\/docs\/rfcs\/RFC-014-Scroll-Input-Model/);
+  console.log('PASS page 1M size guard',guard);
+  await documentPage.close();
   const rtlPage = await browser.newPage();
   await rtlPage.goto(`http://localhost:${server.port}/`);
   await rtlPage.waitForFunction(() => window.ready);
