@@ -83,6 +83,8 @@ export function page<T extends VListItem = VListItem>(
           } else {
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
+          // Read-after-write must not wait for the asynchronous window event.
+          state.scrollPosition = pos;
         },
       );
 

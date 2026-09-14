@@ -51,6 +51,8 @@ export function grid<T extends VListItem = VListItem>(
   let layout: GridLayout;
   let sizeCache: SizeCache;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let pool: ElementPool;
   let storedCtx: PluginContext<T> | null = null;
   let contentElement: HTMLElement;
@@ -108,13 +110,12 @@ export function grid<T extends VListItem = VListItem>(
     return layout.getTotalRows(engineState.totalItems);
   }
 
-  function buildTransform(itemIndex: number): string {
+  function buildTransform(itemIndex: number, origin: number): string {
     const row = (itemIndex / columns) | 0;
     const col = itemIndex - row * columns;
     const x = col * (columnWidth + gap) + crossPadStart;
-    // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-    // bounded runway. baseOffset is 0 in native mode (byte-identical).
-    const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
+    // Map logical item offsets into content coordinates using the adapter origin.
+    const y = sizeCache.getOffset(row) - origin + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
@@ -147,10 +148,11 @@ export function grid<T extends VListItem = VListItem>(
   function gridRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
 
-    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) {
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && origin === lastOrigin) {
       return;
     }
     lastScrollPosition = scrollPos;
@@ -170,10 +172,9 @@ export function grid<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalRows - 1, visEnd + overscan);
 
-    // Range-unchanged fast path. Item transforms subtract baseOffset, so a
-    // logical provider that moves baseOffset without changing the range must
-    // still commit (see core pipeline, issue 025). Native keeps baseOffset at 0.
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) {
+    // An origin move must still commit even when the range stays unchanged
+    // (issue 025). The renderer owns the origin of its last committed frame.
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && origin === lastOrigin) {
       return;
     }
 
@@ -231,9 +232,8 @@ export function grid<T extends VListItem = VListItem>(
       applySizeStyles(tracked.el, row);
 
       const x = col * (columnWidth + gap) + crossPadStart;
-      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-      // bounded runway. baseOffset is 0 in native mode (byte-identical).
-      const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
+      // Map logical item offsets into content coordinates using the adapter origin.
+      const y = sizeCache.getOffset(row) - origin + mainPadStart;
       tracked.el.style.transform = isX
         ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
         : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
@@ -252,7 +252,7 @@ export function grid<T extends VListItem = VListItem>(
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     // Fill EngineState buffers for plugins that read them
@@ -285,6 +285,7 @@ export function grid<T extends VListItem = VListItem>(
     conflicts: ["masonry", "table"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       columns = Math.max(1, Math.floor(config.columns));
       gap = config.gap ?? 0;
 
@@ -493,10 +494,11 @@ export function grid<T extends VListItem = VListItem>(
         containerWidth = newCross;
         recomputeColumnWidth();
 
+        const origin = scroll.getRenderOrigin();
         for (const [index, tracked] of rendered) {
           const row = (index / columns) | 0;
           applySizeStyles(tracked.el, row);
-          tracked.el.style.transform = buildTransform(index);
+          tracked.el.style.transform = buildTransform(index, origin);
         }
       },
     },

@@ -122,6 +122,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   enableListboxRole(): void;
 
   setSizeConfig(config: number | ((index: number) => number)): void;
+  /** Install a scroll-source setter. The getter argument is retained for
+   * compatibility but unused; sources commit position to engine state. */
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
   setBoundedWrap(config: import("./runway").WrapConfig): void;

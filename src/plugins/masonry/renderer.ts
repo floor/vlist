@@ -44,6 +44,8 @@ export interface MasonryRenderer<T extends VListItem = VListItem> {
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    /** Reuse the plugin commit's origin; standalone renders read the callback once. */
+    origin?: number,
   ) => void;
 
   /** Get rendered item element by flat item index */
@@ -243,7 +245,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     placement: ItemPlacement,
   ): void => {
     // placement.y is the absolute main-axis offset; shift it into the runway.
-    const main = Math.round(placement.y - getBaseOffset());
+    const main = Math.round(placement.y - renderOrigin);
     if (isHorizontal) {
       element.style.transform = `translate(${main}px, ${Math.round(placement.x)}px)`;
     } else {
@@ -342,7 +344,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       lastItem: item,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastY: placement.y - getBaseOffset(),
+      lastY: placement.y - renderOrigin,
       absY: placement.y,
       lastX: placement.x,
       lastSize: placement.size,
@@ -361,12 +363,15 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
    * - Release grace period prevents boundary thrashing
    * - Released elements removed from DOM immediately
    */
+  let renderOrigin = 0;
   const render = (
     getItem: GetItemFn<T>,
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    origin = getBaseOffset(),
   ): void => {
+    renderOrigin = origin;
     frameCounter++;
 
     // Repopulate reusable visibleSet — O(k) clear + O(k) add, no allocation
@@ -397,7 +402,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
         const posChanged =
-          existing.lastY !== placement.y - getBaseOffset() ||
+          existing.lastY !== placement.y - renderOrigin ||
           existing.lastX !== placement.x;
         const sizeChanged =
           existing.lastSize !== placement.size ||
@@ -441,7 +446,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // Position update only when coordinates changed
         if (posChanged) {
           positionElement(existing.element, placement);
-          existing.lastY = placement.y - getBaseOffset();
+          existing.lastY = placement.y - renderOrigin;
           existing.absY = placement.y;
           existing.lastX = placement.x;
         }
@@ -479,7 +484,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // current runway. In native mode baseOffset is 0 and nothing changes;
         // in bounded/synthetic mode a stale transform would land it inside the
         // viewport after a jump, or lag by the baseOffset delta on wheel.
-        const main = Math.round(tracked.absY - getBaseOffset());
+        const main = Math.round(tracked.absY - renderOrigin);
         if (main !== tracked.lastY) {
           tracked.lastY = main;
           const cross = Math.round(tracked.lastX);

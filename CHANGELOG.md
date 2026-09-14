@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Internal
+
+- Route grid, table, masonry and tree render coordinates through the scroll adapter, with renderer-owned origin guards and an enforced plugin boundary.
+
 ## [2.7.2] - 2026-09-14
 
 ### Fixed

@@ -138,14 +138,26 @@ describe("createScrollAdapter", () => {
   function setup(total = 1000, itemSize = 48, containerSize = 600) {
     const sizeCache = createSizeCache(itemSize, total);
     let pixel = 0;
+    let origin = 0;
     const adapter = createScrollAdapter({
       sizeCache,
       getPixel: () => pixel,
       setPixel: (px) => { pixel = px; },
+      getRenderOrigin: () => origin,
       getContainerSize: () => containerSize,
     });
-    return { adapter, getPixel: () => pixel };
+    return { adapter, getPixel: () => pixel, setOrigin: (value: number) => { origin = value; } };
   }
+
+  it("reads the render origin independently of logical position", () => {
+    const { adapter, setOrigin } = setup();
+    adapter.setPixelEquivalent(500);
+    setOrigin(420);
+    expect(adapter.getRenderOrigin()).toBe(420);
+    setOrigin(430);
+    expect(adapter.getRenderOrigin()).toBe(430);
+    expect(adapter.getPixelEquivalent()).toBe(500);
+  });
 
   it("getPixelEquivalent reflects the source", () => {
     const { adapter } = setup();

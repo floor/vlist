@@ -278,7 +278,6 @@ export function createVList<T extends VListItem = VListItem>(
   const keydownHandlers: Array<(e: KeyboardEvent) => void> = [];
   const destroyHandlers: Array<() => void> = [];
   let virtualTotalFn: (() => number) | null = null;
-  let scrollGetFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
@@ -319,21 +318,18 @@ export function createVList<T extends VListItem = VListItem>(
   state.crossSize = isX ? dom.viewport.clientHeight : dom.viewport.clientWidth;
 
   // ── Scroll adapter (RFC-012) ────────────────────────────────────
-  // The logical scroll model's translation boundary: plugins read and write
-  // scroll position through this adapter rather than touching state.scrollPosition
-  // or raw scrollTop/scrollLeft. During migration its pixel-equivalent is the
-  // engine's existing scroll position (or the active scroll source's, e.g. page
-  // mode), so the public surface is unchanged (G4). scrollGetFn/scrollSetFn
-  // overrides installed during plugin setup are picked up lazily through the
-  // closures below, so this can be created before setup runs.
+  // Scroll sources commit their position to engine state. Reads stay cached so
+  // rendering and event payloads never invoke a source's DOM geometry getter.
+  // The setter override installed during plugin setup is resolved lazily.
   const scrollAdapter: ScrollAdapter = createScrollAdapter({
     sizeCache,
-    getPixel: () => (scrollGetFn ? scrollGetFn() : state.scrollPosition),
+    getPixel: () => state.scrollPosition,
     setPixel: (px) => {
       if (scrollSetFn) scrollSetFn(px);
       else if (isX) dom.viewport.scrollLeft = px;
       else dom.viewport.scrollTop = px;
     },
+    getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
   });
 
@@ -376,8 +372,7 @@ export function createVList<T extends VListItem = VListItem>(
           Object.assign(sizeCache, newCache);
         }
       },
-      setScrollFns(get: () => number, set: (pos: number) => void): void {
-        scrollGetFn = get;
+      setScrollFns(_get: () => number, set: (pos: number) => void): void {
         scrollSetFn = set;
       },
       setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
@@ -506,7 +501,7 @@ export function createVList<T extends VListItem = VListItem>(
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
 
   function emitScrollEvents(): void {
-    _scrollEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
+    _scrollEvt.scrollPosition = state.scrollPosition;
     if (isX) {
       _scrollEvt.direction = state.scrollDirection > 0 ? "right" : "left";
     } else {
@@ -595,7 +590,7 @@ export function createVList<T extends VListItem = VListItem>(
     _velEvt.velocity = 0;
     _velEvt.reliable = false;
     emitter.emit("velocity:change", _velEvt);
-    _idleEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
+    _idleEvt.scrollPosition = state.scrollPosition;
     emitter.emit("scroll:idle", _idleEvt);
   }
 
@@ -654,7 +649,6 @@ export function createVList<T extends VListItem = VListItem>(
     // Route every scroll write (ctx.scrollTo, scrollToIndex, adapter.setPixel)
     // through the logical setter so the runway split stays consistent. The
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
-    scrollGetFn = () => state.scrollPosition;
     scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
   } else {
     scrollHandler = createScrollHandler({
