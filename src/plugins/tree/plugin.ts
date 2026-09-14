@@ -170,6 +170,7 @@ export function tree<T extends VListItem = VListItem>(
   let getItemStateFn: (() => ItemStateFn | null) | null = null;
   let getMethod: (name: string) => unknown;
   let emitter: PluginContext<T>["emitter"];
+  let updateContentSize: ((size: number) => void) | null = null;
   let getLabel: (item: T) => string;
 
   let treeItemClass: string;
@@ -261,11 +262,16 @@ export function tree<T extends VListItem = VListItem>(
     return isX ? `translate(${Math.round(offset)}px, 0)` : `translate(0, ${Math.round(offset)}px)`;
   }
 
-  /** Write the content element's scroll size, skipping the DOM write when unchanged. */
+  /**
+   * Publish the virtual total, skipping the write when unchanged. Routed through
+   * the core so bounded mode sizes the content element to its runway instead of
+   * the full virtual size (RFC-012); native mode writes the full size as before.
+   */
   function applyContentSize(totalSize: number): void {
     if (totalSize === lastTotalSize) return;
     lastTotalSize = totalSize;
-    contentElement.style[isX ? "width" : "height"] = totalSize + "px";
+    if (updateContentSize) updateContentSize(totalSize);
+    else contentElement.style[isX ? "width" : "height"] = totalSize + "px";
   }
 
   function detachAll(): void {
@@ -648,6 +654,7 @@ export function tree<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       pool = ctx.pool;
       contentElement = ctx.dom.content;
+      updateContentSize = ctx.updateContentSize.bind(ctx);
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
