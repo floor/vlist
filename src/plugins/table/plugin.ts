@@ -443,6 +443,7 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Keyboard horizontal scroll ─────────────────────────────
+      const crossRTL = getComputedStyle(dom.viewport).direction === 'rtl';
       ctx.registerKeydownHandler((event: KeyboardEvent): void => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         if (!tableLayout) return;
@@ -453,12 +454,15 @@ export function table<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth;
         if (tableLayout.totalWidth <= viewportWidth) return;
 
-        const scrollLeft = dom.viewport.scrollLeft;
+        // Column offsets run from the physical left. RTL native scrollLeft is
+        // zero at the right edge and negative toward the left in current engines.
+        const origin = crossRTL ? tableLayout.totalWidth - viewportWidth : 0;
+        const scrollLeft = dom.viewport.scrollLeft + origin;
 
         if (event.key === "ArrowRight") {
           for (let i = 0; i < cols.length; i++) {
             if (cols[i]!.offset > scrollLeft + 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset;
+              dom.viewport.scrollLeft = cols[i]!.offset - origin;
               event.preventDefault();
               return;
             }
@@ -466,13 +470,13 @@ export function table<T extends VListItem = VListItem>(
         } else {
           for (let i = cols.length - 1; i >= 0; i--) {
             if (cols[i]!.offset < scrollLeft - 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset;
+              dom.viewport.scrollLeft = cols[i]!.offset - origin;
               event.preventDefault();
               return;
             }
           }
           if (scrollLeft > 0) {
-            dom.viewport.scrollLeft = 0;
+            dom.viewport.scrollLeft = -origin;
             event.preventDefault();
           }
         }
