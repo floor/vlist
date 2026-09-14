@@ -422,3 +422,48 @@ describe("synthetic unsupported-combination guards", () => {
     // plugin conflicts (for example, table and transition cannot be combined).
   });
 });
+
+describe("synthetic horizontal RTL creation guard", () => {
+  it("rejects computed RTL for element and selector containers before creating DOM", () => {
+    container.style.direction = "rtl";
+    container.id = "rtl-synthetic-container";
+    for (const target of [container, "#rtl-synthetic-container"]) {
+      expect(() => createVList({ container: target, orientation: "horizontal", items: createTestItems(10),
+        item: { width: 50, template: simpleTemplate }, scroll: { mode: "synthetic" } }))
+        .toThrow("RTL horizontal lists are not supported with synthetic mode in this release; use native mode");
+      expect(container.children.length).toBe(0);
+    }
+  });
+  it("allows vertical RTL and horizontal LTR synthetic lists", () => {
+    container.style.direction = "rtl";
+    make("y"); list!.scrollToIndex(10); expect(list!.getScrollPosition()).toBe(500);
+    list!.destroy(); list = undefined;
+    container.style.direction = "ltr";
+    make("x"); list!.scrollToIndex(10); expect(list!.getScrollPosition()).toBe(500);
+  });
+  it("leaves horizontal RTL handling in native and bounded modes unchanged", () => {
+    container.style.direction = "rtl";
+    for (const mode of ["native", "bounded"] as const) {
+      list = createVList({ container, orientation: "horizontal", items: createTestItems(100),
+        item: { width: 50, template: simpleTemplate }, scroll: { mode } });
+      expect(list.element).toBeDefined(); list.destroy(); list = undefined;
+    }
+  });
+});
+
+
+it("reads horizontal synthetic direction once at creation, never during input", () => {
+  const original = globalThis.getComputedStyle;
+  let reads = 0;
+  globalThis.getComputedStyle = ((element: Element, pseudo?: string | null) => {
+    if (element === container) reads++;
+    return original(element, pseudo);
+  }) as typeof getComputedStyle;
+  try {
+    container.style.direction = "ltr";
+    const { viewport } = make("x");
+    expect(reads).toBe(1);
+    drag(viewport, "x"); frame(40); frame(56); key(viewport, "ArrowRight");
+    expect(reads).toBe(1);
+  } finally { globalThis.getComputedStyle = original; }
+});

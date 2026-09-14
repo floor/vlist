@@ -34,6 +34,29 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
   console.log(await browser.version());
+  const rtlPage = await browser.newPage();
+  await rtlPage.goto(`http://localhost:${server.port}/`);
+  await rtlPage.waitForFunction(() => window.ready);
+  const rtl = await rtlPage.evaluate(async () => {
+    const {createVList} = await import('/synthetic.js');
+    const parent = document.createElement('div'); parent.style.direction = 'rtl'; document.body.append(parent);
+    const container = document.createElement('div'); container.id = 'rtl-probe'; container.style.cssText = 'width:300px;height:300px'; parent.append(container);
+    const results = { direction: getComputedStyle(container).direction, rejected: [], allowed: [] };
+    try {
+      for (const target of [container, '#rtl-probe']) {
+        try { const list=createVList({container:target,orientation:'horizontal',items:[{id:1}],item:{width:50,template:()=>''},scroll:{mode:'synthetic'}});list.destroy();results.rejected.push(false); }
+        catch(error) { results.rejected.push(error.message.includes('RTL horizontal lists') && container.children.length===0); }
+      }
+      for(const [mode,orientation] of [['synthetic','vertical'],['native','horizontal'],['bounded','horizontal']]) {
+        const list=createVList({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''},scroll:{mode}});
+        results.allowed.push(mode);list.destroy();
+      }
+      return results;
+    } finally { parent.remove(); }
+  });
+  assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true],allowed:['synthetic','native','bounded']});
+  console.log('PASS inherited RTL: horizontal synthetic rejects before DOM creation; vertical/native/bounded allowed');
+  await rtlPage.close();
   for (const axis of ["y", "x"]) for (const plugin of (axis === "y" ? ["", "table", "groups", "a11y", "selection", "snapshots", "autosize", "transition"] : [""])) {
     const page = await browser.newPage();
     page.on("pageerror", e => errors.push(String(e)));

@@ -1,4 +1,5 @@
 /** Opt-in RFC-014 entry: import { createVList } from "vlist/synthetic". */
+import { resolveContainer } from "./core/dom";
 import { createVList as createCore } from "./core/create";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
 import type { ScrollConfig, VListItem } from "./types";
@@ -13,6 +14,9 @@ export function createVList<T extends VListItem = VListItem>(
   config: SyntheticVListConfig<T>, plugins: VListPlugin<T>[] = [],
 ): VList<T> {
   if (config.scroll?.mode === "synthetic") {
+    if (config.orientation === "horizontal" && getComputedStyle(resolveContainer(config.container)).direction === "rtl") {
+      throw new Error("RTL horizontal lists are not supported with synthetic mode in this release; use native mode");
+    }
     for (const plugin of plugins) {
       if (plugin.name === "page" || plugin.name === "carousel" || plugin.name === "sortable") {
         throw new Error(`${plugin.name} is not supported with synthetic mode in this release`);
