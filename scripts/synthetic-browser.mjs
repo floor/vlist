@@ -126,9 +126,13 @@ try {
       for(let step=1;step<=6;step++) { await touch('touchMove',[{...origin,x:origin.x-step*10}]);await wait(16); }
       await touch('touchEnd',[]);await wait(100);
       assert.equal(await read(),logical,'table cross-axis touch does not move the logical axis');
-      const after = await page.$eval('.vlist-viewport',el=>el.scrollLeft);
-      assert(after>cross,'table real native cross-axis touch');
-      assert.equal(await page.$eval('.vlist-table-header-scroll',el=>el.style.transform),`translateX(${-after}px)`,'table header follows native touch');
+      // Read both values in one turn: native momentum can advance between CDP calls.
+      const after = await page.evaluate(() => ({
+        offset: document.querySelector('.vlist-viewport').scrollLeft,
+        transform: document.querySelector('.vlist-table-header-scroll').style.transform,
+      }));
+      assert(after.offset>cross,'table real native cross-axis touch');
+      assert.equal(after.transform,`translateX(${-after.offset}px)`,'table header follows native touch');
     }
     console.log(`PASS ${axis}/${plugin||'base'}: focus clipping, real link drag, logical navigation, viewport extent`);
     await page.close();
