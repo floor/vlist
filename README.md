@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.4** — [Changelog](./CHANGELOG.md) · Bounded mode no longer judders on wheel: rows now move on every step, not only when the visible range crosses a row boundary.
+**v2.6.5** — [Changelog](./CHANGELOG.md) · Bounded mode no longer judders on wheel: rows now move on every step, not only when the visible range crosses a row boundary.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
