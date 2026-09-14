@@ -14,6 +14,8 @@
  *   bun run bench --suite=render           # single suite
  *   bun run bench --items=100000           # custom item count
  *   bun run bench --dry-run                # validate environment only
+ *   VLIST_IO_DIR=../vlist.io-synthetic VLIST_BENCH_PORT=3397 bun run bench
+ *   # Explicit ports must be unused; existing servers are never reused there.
  */
 
 import { resolve } from "path";
@@ -27,7 +29,10 @@ const DEFAULT_SUITES = "render-vanilla,scroll-vanilla,scrollto-vanilla,memory-va
 const QUICK_ITEMS = "10000";
 const DEFAULT_ITEMS = "10000,100000";
 const FULL_ITEMS = "10000,100000,1000000";
-const SERVER_PORT = 3338;
+const SERVER_PORT = Number(process.env.VLIST_BENCH_PORT ?? 3338);
+if (!Number.isInteger(SERVER_PORT) || SERVER_PORT < 1 || SERVER_PORT > 65535) {
+  throw new Error("VLIST_BENCH_PORT must be an integer from 1 to 65535");
+}
 const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
 const STARTUP_TIMEOUT_MS = 15_000;
 const POLL_INTERVAL_MS = 300;
@@ -135,8 +140,7 @@ async function run(cmd: string[], cwd: string, label: string): Promise<void> {
   });
   const code = await proc.exited;
   if (code !== 0) {
-    console.error(`${label} failed with exit code ${code}`);
-    process.exit(code);
+    throw new Error(`${label} failed with exit code ${code}`);
   }
 }
 
@@ -168,6 +172,9 @@ async function main(): Promise<void> {
   let serverProc: Bun.Subprocess | null = null;
   const serverWasRunning = await isServerRunning();
 
+  if (serverWasRunning && process.env.VLIST_BENCH_PORT) {
+    throw new Error(`Benchmark port ${SERVER_PORT} is already in use; choose a free VLIST_BENCH_PORT`);
+  }
   if (!serverWasRunning) {
     serverProc = await startServer();
   } else {
@@ -218,4 +225,4 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+main().catch(error => { console.error(error); process.exitCode = 1; });

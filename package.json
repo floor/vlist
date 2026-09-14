@@ -34,6 +34,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./synthetic": {
+      "types": "./dist/synthetic.d.ts",
+      "import": "./dist/synthetic.js",
+      "default": "./dist/synthetic.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js",

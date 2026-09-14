@@ -143,6 +143,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
 
   scrollTo(position: number): void;
+  /** Preserve synthetic motion during a measurement/anchor correction. */
+  shiftScroll(delta: number): void;
   smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   /** Cancel any in-flight smooth-scroll animation on the active handler. */
   cancelScroll(): void;
