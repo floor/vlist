@@ -25,9 +25,17 @@ import {
 
 let origRAF: typeof globalThis.requestAnimationFrame;
 let origCAF: typeof globalThis.cancelAnimationFrame;
+let captured: HTMLElement | null = null;
+let captureDescriptors: (PropertyDescriptor | undefined)[];
+const captureNames = ['setPointerCapture', 'hasPointerCapture', 'releasePointerCapture'] as const;
+const dispatchCaptured = (event: Event): boolean => (captured ?? document).dispatchEvent(event);
 
 beforeAll(() => {
   GlobalRegistrator.register();
+  captureDescriptors = captureNames.map(name => Object.getOwnPropertyDescriptor(HTMLElement.prototype, name));
+  HTMLElement.prototype.setPointerCapture = function () { captured = this; };
+  HTMLElement.prototype.hasPointerCapture = function () { return captured === this; };
+  HTMLElement.prototype.releasePointerCapture = function () { if (captured === this) captured = null; };
   origRAF = global.requestAnimationFrame;
   origCAF = global.cancelAnimationFrame;
   global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
@@ -38,6 +46,11 @@ beforeAll(() => {
 afterAll(() => {
   global.requestAnimationFrame = origRAF;
   global.cancelAnimationFrame = origCAF;
+  captureNames.forEach((name, i) => {
+    const descriptor = captureDescriptors[i];
+    if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
+    else delete (HTMLElement.prototype as any)[name];
+  });
   GlobalRegistrator.unregister();
 });
 
@@ -351,8 +364,8 @@ describe("createScrollbar", () => {
       });
 
       // Default is 'scroll' — uses mousedown
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 350, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
     });
@@ -371,7 +384,7 @@ describe("createScrollbar", () => {
       });
 
       // Click at top of track (clientY: 0) — thumb should jump near start
-      track.dispatchEvent(new MouseEvent("click", { clientY: 0, bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 0, bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBeGreaterThanOrEqual(0);
@@ -394,7 +407,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("click", { clientY: 200, bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 200, bubbles: true }));
 
       expect(onScrollMock).not.toHaveBeenCalled();
     });
@@ -413,8 +426,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 350, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(400);
@@ -434,8 +447,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 350, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(400);
@@ -456,8 +469,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 10, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 10, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(200);
@@ -478,8 +491,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 0, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(0);
@@ -500,8 +513,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 390, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(600);
@@ -522,13 +535,13 @@ describe("createScrollbar", () => {
       });
 
       // Press and hold
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 390, bubbles: true }));
 
       // Wait past initial delay + at least one repeat interval
       fakeTimers.tick(500);
 
       // Release
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       // Should have scrolled more than once
       expect(onScrollMock.mock.calls.length).toBeGreaterThan(1);
@@ -549,7 +562,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 390, bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 390, bubbles: true }));
 
       // Simulate the scroll position updating after first scroll
       scrollbar.updatePosition(100); // maxScroll = 100
@@ -557,7 +570,7 @@ describe("createScrollbar", () => {
       // Wait past initial delay
       fakeTimers.tick(500);
 
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       // Should not have fired indefinitely — clamped
       const calls = onScrollMock.mock.calls.length;
@@ -579,8 +592,8 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new MouseEvent("mousedown", { clientY: 350, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 350, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       // Scrollbar should still be visible immediately after release
       expect(scrollbar.isVisible()).toBe(true);
@@ -602,7 +615,7 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
@@ -611,8 +624,8 @@ describe("createScrollbar", () => {
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(true);
 
       // Cleanup: trigger mouseup
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
     });
 
     it("should remove dragging class on mouseup", () => {
@@ -626,15 +639,15 @@ describe("createScrollbar", () => {
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
     });
@@ -653,16 +666,14 @@ describe("createScrollbar", () => {
       const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
-      thumb.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 50 ,
         bubbles: true,
       }));
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(true);
 
       // Cleanup
-      thumb.dispatchEvent(new TouchEvent("touchend", {
-        touches: [] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
     });
@@ -675,13 +686,11 @@ describe("createScrollbar", () => {
       const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
-      thumb.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 50 ,
         bubbles: true,
       }));
 
-      thumb.dispatchEvent(new TouchEvent("touchend", {
-        touches: [] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
 
@@ -695,13 +704,11 @@ describe("createScrollbar", () => {
 
       const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
 
-      thumb.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 50 ,
         bubbles: true,
       }));
 
-      thumb.dispatchEvent(new TouchEvent("touchmove", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 150 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, pointerType: "touch", clientY: 150 ,
         bubbles: true,
         cancelable: true,
       }));
@@ -709,8 +716,7 @@ describe("createScrollbar", () => {
       expect(onScrollMock).toHaveBeenCalled();
 
       // Cleanup
-      thumb.dispatchEvent(new TouchEvent("touchend", {
-        touches: [] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
     });
@@ -722,8 +728,7 @@ describe("createScrollbar", () => {
 
       const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
 
-      thumb.dispatchEvent(new TouchEvent("touchmove", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 150 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, pointerType: "touch", clientY: 150 ,
         bubbles: true,
         cancelable: true,
       }));
@@ -741,13 +746,11 @@ describe("createScrollbar", () => {
 
       const thumb = viewport.querySelector(".vlist-scrollbar__thumb") as HTMLElement;
 
-      thumb.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 50 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 50 ,
         bubbles: true,
       }));
 
-      thumb.dispatchEvent(new TouchEvent("touchend", {
-        touches: [] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
 
@@ -776,8 +779,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 200 ,
         bubbles: true,
       }));
 
@@ -798,8 +800,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: track, clientY: 350 })] as any,
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 350 ,
         bubbles: true,
       }));
 
@@ -825,8 +826,7 @@ describe("createScrollbar", () => {
       // Dispatch on track but with thumb as the target via the event reaching the track.
       // Since we can't set target directly, we dispatch on thumb which bubbles to track.
       // The handler is on track, and e.target will be thumb.
-      thumb.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: thumb, clientY: 200 })] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 200 ,
         bubbles: true,
       }));
 
@@ -838,8 +838,7 @@ describe("createScrollbar", () => {
       expect(onScrollMock).not.toHaveBeenCalled();
 
       // Cleanup
-      thumb.dispatchEvent(new TouchEvent("touchend", {
-        touches: [] as any,
+      thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
     });
@@ -859,8 +858,7 @@ describe("createScrollbar", () => {
 
       expect(scrollbar.isVisible()).toBe(false);
 
-      track.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 200 ,
         bubbles: true,
       }));
 
@@ -882,8 +880,7 @@ describe("createScrollbar", () => {
         width: 8, height: 400, x: 0, y: 0, toJSON: () => ({}),
       });
 
-      track.dispatchEvent(new TouchEvent("touchstart", {
-        touches: [new Touch({ identifier: 0, target: track, clientY: 200 })] as any,
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "touch", clientY: 200 ,
         bubbles: true,
       }));
 
@@ -942,8 +939,8 @@ describe("createScrollbar", () => {
       scrollbar.destroy();
 
       // Simulate events after destroy - should not cause errors
-      const mouseEvent = new MouseEvent("mousemove", { clientY: 100 });
-      document.dispatchEvent(mouseEvent);
+      const mouseEvent = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientY: 100 });
+      dispatchCaptured(mouseEvent);
 
       // If no error thrown, test passes
       expect(true).toBe(true);
@@ -1136,8 +1133,8 @@ describe("createScrollbar", () => {
       });
 
       // Click at y=5 — above the track (top padding area)
-      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      hoverZone.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 5, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
@@ -1161,8 +1158,8 @@ describe("createScrollbar", () => {
       });
 
       // Click at y=395 — below the track (bottom padding area)
-      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 395, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      hoverZone.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 395, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
@@ -1185,7 +1182,7 @@ describe("createScrollbar", () => {
       });
 
       // Click above the track → clamps to top (position 0)
-      hoverZone.dispatchEvent(new MouseEvent("click", { clientY: 5, bubbles: true }));
+      hoverZone.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 5, bubbles: true }));
       expect(onScrollMock).toHaveBeenCalledWith(0);
     });
 
@@ -1206,8 +1203,8 @@ describe("createScrollbar", () => {
         configurable: true,
       });
 
-      hoverZone.dispatchEvent(new MouseEvent("mousedown", { clientY: 5, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      hoverZone.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 5, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
@@ -1316,8 +1313,8 @@ describe("createScrollbar", () => {
       });
 
       // Default is 'scroll' — uses mousedown
-      track.dispatchEvent(new MouseEvent("mousedown", { clientX: 350, bubbles: true }));
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientX: 350, bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
     });
@@ -1333,7 +1330,7 @@ describe("createScrollbar", () => {
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientX: 50,
         bubbles: true,
       });
@@ -1342,18 +1339,18 @@ describe("createScrollbar", () => {
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(true);
 
       // Move horizontally
-      const mousemoveEvent = new MouseEvent("mousemove", {
+      const mousemoveEvent = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         clientX: 150,
         bubbles: true,
       });
-      document.dispatchEvent(mousemoveEvent);
+      dispatchCaptured(mousemoveEvent);
 
       // onScroll should be called via RAF during drag
       // (may not fire synchronously, but the drag state should be active)
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
     });
@@ -1416,18 +1413,18 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // Move mouse (simulates dragging thumb down)
-      const mousemoveEvent = new MouseEvent("mousemove", {
+      const mousemoveEvent = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         clientY: 100,
         bubbles: true,
       });
-      document.dispatchEvent(mousemoveEvent);
+      dispatchCaptured(mousemoveEvent);
 
       // Wait for RAF to fire
       fakeTimers.tick(50);
@@ -1436,8 +1433,8 @@ describe("createScrollbar", () => {
       expect(onScrollMock).toHaveBeenCalled();
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
     });
 
     it("should update thumb transform immediately during mousemove", () => {
@@ -1450,26 +1447,26 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // Move mouse
-      const mousemoveEvent = new MouseEvent("mousemove", {
+      const mousemoveEvent = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         clientY: 150,
         bubbles: true,
       });
-      document.dispatchEvent(mousemoveEvent);
+      dispatchCaptured(mousemoveEvent);
 
       // Thumb transform should update immediately (not waiting for RAF)
       const transform = thumb.style.transform;
       expect(transform).toContain("translateY");
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
     });
 
     it("should apply final position on mouseup", async () => {
@@ -1482,22 +1479,22 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // Move mouse
-      const mousemoveEvent = new MouseEvent("mousemove", {
+      const mousemoveEvent = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         clientY: 200,
         bubbles: true,
       });
-      document.dispatchEvent(mousemoveEvent);
+      dispatchCaptured(mousemoveEvent);
 
       // End drag immediately (before RAF fires)
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
 
       // onScroll should be called with the final position
       expect(onScrollMock).toHaveBeenCalled();
@@ -1513,25 +1510,25 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
 
       // Clear the mock
       onScrollMock.mockClear();
 
       // Further mousemove should NOT trigger onScroll (listeners removed)
-      const strayMove = new MouseEvent("mousemove", {
+      const strayMove = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         clientY: 300,
         bubbles: true,
       });
-      document.dispatchEvent(strayMove);
+      dispatchCaptured(strayMove);
 
       // Wait a tick for potential RAF
       // onScroll should NOT have been called
@@ -1551,15 +1548,15 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
       thumb.dispatchEvent(mousedownEvent);
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
 
       expect(scrollbar.isVisible()).toBe(true);
 
@@ -1582,7 +1579,7 @@ describe("createScrollbar", () => {
       ) as HTMLElement;
 
       // Start drag
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
@@ -1595,8 +1592,8 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // End drag
-      const mouseupEvent = new MouseEvent("mouseup", { bubbles: true });
-      document.dispatchEvent(mouseupEvent);
+      const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
+      dispatchCaptured(mouseupEvent);
     });
 
     it("should handle multiple sequential drag operations", async () => {
@@ -1611,13 +1608,13 @@ describe("createScrollbar", () => {
 
       // First drag
       thumb.dispatchEvent(
-        new MouseEvent("mousedown", { clientY: 50, bubbles: true }),
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 50, bubbles: true }),
       );
-      document.dispatchEvent(
-        new MouseEvent("mousemove", { clientY: 100, bubbles: true }),
+      dispatchCaptured(
+        new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientY: 100, bubbles: true }),
       );
       fakeTimers.tick(20);
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
 
@@ -1625,13 +1622,13 @@ describe("createScrollbar", () => {
 
       // Second drag
       thumb.dispatchEvent(
-        new MouseEvent("mousedown", { clientY: 100, bubbles: true }),
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 100, bubbles: true }),
       );
-      document.dispatchEvent(
-        new MouseEvent("mousemove", { clientY: 200, bubbles: true }),
+      dispatchCaptured(
+        new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientY: 200, bubbles: true }),
       );
       fakeTimers.tick(20);
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       // Should have additional onScroll calls from second drag
       expect(onScrollMock.mock.calls.length).toBeGreaterThan(firstCallCount);
@@ -1646,7 +1643,7 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar__thumb",
       ) as HTMLElement;
 
-      const mousedownEvent = new MouseEvent("mousedown", {
+      const mousedownEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
         cancelable: true,
@@ -1668,7 +1665,7 @@ describe("createScrollbar", () => {
       expect(preventDefaultCalled).toBe(true);
 
       // Cleanup
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
     });
   });
 
@@ -1710,7 +1707,7 @@ describe("createScrollbar", () => {
 
       // Start drag
       thumb.dispatchEvent(
-        new MouseEvent("mousedown", { clientY: 50, bubbles: true }),
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 50, bubbles: true }),
       );
 
       // Leave viewport while dragging
@@ -1723,7 +1720,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
 
       // Cleanup
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
     });
 
     it("should cancel pending hide timer when mouse re-enters viewport", async () => {
@@ -1814,17 +1811,17 @@ describe("createScrollbar", () => {
 
       // Start drag
       thumb.dispatchEvent(
-        new MouseEvent("mousedown", { clientY: 50, bubbles: true }),
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 50, bubbles: true }),
       );
 
       // Destroy while dragging
       scrollbar.destroy();
 
       // Further events should not cause errors
-      document.dispatchEvent(
-        new MouseEvent("mousemove", { clientY: 200, bubbles: true }),
+      dispatchCaptured(
+        new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientY: 200, bubbles: true }),
       );
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(true).toBe(true);
     });
@@ -1840,12 +1837,12 @@ describe("createScrollbar", () => {
 
       // Start drag at bottom
       thumb.dispatchEvent(
-        new MouseEvent("mousedown", { clientY: 350, bubbles: true }),
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 350, bubbles: true }),
       );
 
       // Drag far beyond bounds
-      document.dispatchEvent(
-        new MouseEvent("mousemove", { clientY: 9999, bubbles: true }),
+      dispatchCaptured(
+        new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientY: 9999, bubbles: true }),
       );
 
       fakeTimers.tick(20);
@@ -1861,7 +1858,7 @@ describe("createScrollbar", () => {
       }
 
       // Cleanup
-      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
     });
 
     it("should ignore track click on thumb element", () => {
@@ -1888,7 +1885,7 @@ describe("createScrollbar", () => {
       });
 
       // Click directly on thumb (should be ignored by track click handler)
-      const clickEvent = new MouseEvent("click", {
+      const clickEvent = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         clientY: 50,
         bubbles: true,
       });
@@ -1943,7 +1940,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
     // then destroy while the RAF is pending.
     if (thumb) {
       // Start drag — fires mousedown on thumb
-      const mousedown = new MouseEvent("mousedown", {
+      const mousedown = new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse",
         bubbles: true,
         clientX: 0,
         clientY: 10,
@@ -1951,12 +1948,12 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
       thumb.dispatchEvent(mousedown);
 
       // Simulate a mousemove — this schedules a RAF
-      const mousemove = new MouseEvent("mousemove", {
+      const mousemove = new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse",
         bubbles: true,
         clientX: 0,
         clientY: 50,
       });
-      document.dispatchEvent(mousemove);
+      dispatchCaptured(mousemove);
     }
 
     // Destroy while RAF could be pending — exercises the animationFrameId !== null branch

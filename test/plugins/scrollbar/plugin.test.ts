@@ -23,6 +23,12 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // =============================================================================
 
 beforeAll(() => { GlobalRegistrator.register(); });
+function captureThumb(thumb: HTMLElement): void {
+  let captured = false;
+  thumb.setPointerCapture = () => { captured = true; };
+  thumb.hasPointerCapture = () => captured;
+  thumb.releasePointerCapture = () => { captured = false; };
+}
 afterAll(() => { GlobalRegistrator.unregister(); });
 
 // =============================================================================
@@ -189,9 +195,10 @@ describe("scrollbar — scroll callback", () => {
     expect(thumb).not.toBeNull();
 
     // Simulate a downward thumb drag.
-    thumb!.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
-    document.dispatchEvent(new MouseEvent("mousemove", { clientY: 100, bubbles: true }));
-    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    captureThumb(thumb!);
+    thumb!.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, clientY: 0, bubbles: true }));
+    thumb!.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientY: 100, bubbles: true }));
+    thumb!.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, bubbles: true }));
 
     // The mock adapter's setPixel records every write into scrollCalls. The
     // pre-RFC-012 callback wrote dom.viewport.scrollTop directly (untracked).
@@ -402,9 +409,10 @@ describe("scrollbar — padding in max scroll", () => {
 
     // The track length ≈ containerSize - scrollbar padding (default 2 + 2).
     // Drag a large distance that would put us at 100% of the track.
-    thumb!.dispatchEvent(new MouseEvent("mousedown", { clientY: 0, bubbles: true }));
-    document.dispatchEvent(new MouseEvent("mousemove", { clientY: 1000, bubbles: true }));
-    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    captureThumb(thumb!);
+    thumb!.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, clientY: 0, bubbles: true }));
+    thumb!.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientY: 1000, bubbles: true }));
+    thumb!.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, bubbles: true }));
 
     // Max scroll should be totalSize + mainAxisPadding - containerSize = 5000 + 16 - 600 = 4416.
     // Without the fix, max would be 5000 - 600 = 4400 (missing 16px of padding).

@@ -350,6 +350,14 @@
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
 
+/* Keyboard focus stays visible even with an auto-hidden track. */
+.vlist-scrollbar:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
 /* Scrollbar track */
 .vlist-scrollbar {
     position: absolute;
@@ -360,6 +368,7 @@
     background-color: var(--vlist-custom-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
+    touch-action: none;
     z-index: 10;
     pointer-events: none;
 }
@@ -373,6 +382,7 @@
     right: 0;
     height: 100%;
     z-index: 9;
+    touch-action: none;
     pointer-events: auto;
 }
 
