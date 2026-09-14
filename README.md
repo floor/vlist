@@ -386,12 +386,21 @@ groups({ getGroupForIndex, header: { height, template }, sticky?: true })
 selection({ mode: 'single' | 'multiple', initial?: [...ids] })
 data({ adapter: { read }, loading?: { cancelThreshold? } })
 table({ columns, rowHeight, headerHeight?, resizable? })
-autosize()                        // auto-measure items (requires estimatedHeight)
+autosize()                        // auto-measure items (requires estimatedHeight); list.remeasure(index?) after late content
 scrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 transition({ duration?: 200, insert?: timing, remove?: timing })
 sortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
 page()                            // no config — uses document scroll
 snapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
+```
+
+### Autosize
+
+With `autosize()` and `item.estimatedHeight` (or `estimatedWidth` for horizontal lists), call `remeasure(i)` after content changes size without a `load` or `error` event, such as expanding text or changing a font. Call `remeasure()` to discard every cached measurement: visible items are measured again, and offscreen items use estimates until they render. Unknown or unmeasured indices are a no-op.
+
+```javascript
+list.remeasure(12); // Re-measure one item after its content changes.
+list.remeasure();   // Invalidate all sizes and measure items as they render.
 ```
 
 Full configuration reference → **[vlist.io](https://vlist.io)**
