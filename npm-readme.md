@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.5** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Bounded mode no longer judders on wheel: rows now move on every step, not only when the visible range crosses a row boundary.
+**v2.7.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Opt-in synthetic scroll input (RFC-014): import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for list-owned touch, wheel and keyboard input over a viewport-sized content box.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **9.8 KB gzipped** — composable plugins with perfect tree-shaking
+- **9.9 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
@@ -52,18 +52,48 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 ])
 ```
 
+## Synthetic scroll input
+
+The opt-in `vlist/synthetic` entry adds `scroll.mode: 'synthetic'` alongside native and bounded modes. Native remains the default. Import the factory from this entry and plugins from `vlist`:
+
+```typescript
+import { createVList } from 'vlist/synthetic'
+import { scrollbar } from 'vlist'
+import 'vlist/styles'
+
+const list = createVList({
+  container: '#my-list',
+  items: Array.from({ length: 1000 }, (_, id) => ({ id, name: `Row ${id}` })),
+  item: { height: 48, template: item => `<div>${item.name}</div>` },
+  scroll: { mode: 'synthetic' },
+}, [scrollbar()])
+```
+
+Supported plugins are **table, groups, snapshots, scrollbar, autosize, transition, selection and a11y**. Existing plugin conflicts still apply; this list does not imply that all eight can be combined. `page()`, `carousel()` and `sortable()` throw when configured with synthetic mode. Carousel uses wrap scrolling, which this release does not support with synthetic input.
+
+Known limitations:
+
+- RTL horizontal lists throw in synthetic mode in this release; use native mode. Vertical lists on RTL pages are supported. RTL support for the synthetic driver is planned as a non-breaking addition.
+- Same-axis touch stops at either boundary with no parent handoff, including gestures that start inside an edge-pinned list. Use native mode when touch gestures must scroll the parent page at a boundary.
+- The native main-axis scrollbar is absent. Provide a custom scrollbar, such as `scrollbar()` above. Its accessibility release gate remains open; synthetic mode is not a completed scrollbar-accessibility sign-off.
+- Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
+- Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
+
+Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.6 KB gzipped** over the base entry (**12.5 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
+
 ## Plugins
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 9.8 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
+| **Base** | 9.9 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
+| `vlist/synthetic` entry | +2.6 KB | Opt-in synthetic scroll input (12.5 KB total before plugins) |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.8 KB | Single/multiple selection with 2D keyboard nav |
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
 | `groups()` | +5.3 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +1.0 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
-| `grid()` | +2.4 KB | 2D grid layout |
+| `grid()` | +2.5 KB | 2D grid layout |
 | `masonry()` | +4.0 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `carousel()` | +3.5 KB | Paged horizontal carousel with snap and keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
@@ -71,7 +101,7 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
 | `snapshots()` | +1.1 KB | Scroll position save/restore |
-| `transition()` | +1.8 KB | FLIP-based enter/exit animations for insert & remove |
+| `transition()` | +2.0 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Framework Adapters
 

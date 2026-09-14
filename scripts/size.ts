@@ -8,8 +8,10 @@
  */
 
 import { gzipSync } from "bun";
+import { mkdtempSync, rmSync } from "fs";
 import { resolve } from "path";
 
+const scratch = mkdtempSync("/tmp/vlist-size-");
 const root = resolve(import.meta.dir, "..");
 const entry = `${root}/src/index.ts`;
 
@@ -80,6 +82,7 @@ const excluded = (imported: readonly string[]): readonly PluginName[] => {
 
 const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
+  { name: "synthetic", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
   { name: "data",              imports: ["createVList", "data"] },
@@ -118,8 +121,8 @@ const treeShakeFailures: TreeShakeFailure[] = [];
 
 for (const scenario of scenarios) {
   const imports = scenario.imports.join(", ");
-  const code = `import { ${imports} } from "${entry}"; globalThis._v = [${imports}];`;
-  const tmpFile = `/tmp/_vlist_v2_size_${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
+  const code = `import { ${imports} } from "${scenario.name === "synthetic" ? `${root}/src/synthetic.ts` : entry}"; globalThis._v = [${imports}];`;
+  const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
 
   await Bun.write(tmpFile, code);
 
@@ -149,6 +152,11 @@ for (const scenario of scenarios) {
     gzKB: gzBytes / 1024,
     deltaKB: 0,
   });
+
+  const syntheticMarker = "pan-x pinch-zoom";
+  if (scenario.name !== "synthetic" && new TextDecoder().decode(output).includes(syntheticMarker)) {
+    treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
+  }
 
   // ── Tree-shaking verification ─────────────────────────────────
 
@@ -224,6 +232,8 @@ if (treeShakeFailures.length === 0) {
 }
 
 console.log("");
+
+rmSync(scratch, { recursive: true, force: true });
 
 // ── Exit code ─────────────────────────────────────────────────────
 

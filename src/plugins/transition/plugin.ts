@@ -79,6 +79,16 @@ export function transition<T extends VListItem = VListItem>(
       const state = ctx.getState();
       const origin = cfg.reverse ? "bottom center" : "top center";
       const prop = cfg.axis.primary === "x" ? "translateX" : "translateY";
+      const maxScroll = (): number => Math.max(0, sc.getTotalSize() + cfg.mainAxisPadding - state.containerSize);
+      const clampScroll = (): void => {
+        const delta = Math.min(0, maxScroll() - state.scrollPosition);
+        if (delta) {
+          const target = state.scrollPosition + delta;
+          ctx.shiftScroll(delta);
+          state.scrollPosition = target;
+        }
+      };
+      const visualOffset = (logical: number): number => Math.round(logical - state.baseOffset);
 
       const toLayout = (ctx.getMethod("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       const dataToLayout = (dataIndex: number): number =>
@@ -122,6 +132,7 @@ export function transition<T extends VListItem = VListItem>(
           if (!removedEl || layoutIndex < 0) {
             const result = ctx.removeItemById(id);
             if (result < 0) return false;
+            clampScroll();
             ctx.forceRender();
             commitStyles();
             emitter.emit("data:change", { type: "remove", id });
@@ -143,17 +154,17 @@ export function transition<T extends VListItem = VListItem>(
           exitClone.removeAttribute("aria-selected");
           exitClone.classList.remove(`${cfg.classPrefix}-item--selected`);
 
-          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
-          const oldScroll = dom.viewport[scrollProp];
+          const oldScroll = state.scrollPosition;
 
           // LAST — remove data + reconcile
           const result = ctx.removeItemById(id);
           if (result < 0) return false;
+          clampScroll();
           ctx.forceRender();
           commitStyles();
           emitter.emit("data:change", { type: "remove", id });
 
-          const scrollDelta = oldScroll - dom.viewport[scrollProp];
+          const scrollDelta = oldScroll - state.scrollPosition;
 
           exitClone.style.zIndex = "1";
           dom.content.appendChild(exitClone);
@@ -162,10 +173,10 @@ export function transition<T extends VListItem = VListItem>(
           const animOptions: KeyframeAnimationOptions = { duration: rt.duration, easing: rt.easing };
           const animations: Animation[] = [];
 
-          const cloneStart = Math.round(originalOffset - scrollDelta);
+          const cloneStart = visualOffset(originalOffset - scrollDelta);
           animations.push(exitClone.animate([
             { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
-            { transform: `${prop}(${Math.round(originalOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
+            { transform: `${prop}(${visualOffset(originalOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
           ], animOptions));
 
           const allOnClamp = scrollDelta > 0;
@@ -177,9 +188,9 @@ export function transition<T extends VListItem = VListItem>(
             if (idx < 0 || (!allOnClamp && idx < layoutIndex)) continue;
             const newOffset = sc.getOffset(idx);
             const oldVisual = idx >= layoutIndex
-              ? Math.round(newOffset + itemSize - scrollDelta)
-              : Math.round(newOffset - scrollDelta);
-            const newVisual = Math.round(newOffset);
+              ? visualOffset(newOffset + itemSize - scrollDelta)
+              : visualOffset(newOffset - scrollDelta);
+            const newVisual = visualOffset(newOffset);
             if (oldVisual === newVisual) continue;
             animations.push(el.animate([
               { transform: `${prop}(${oldVisual}px)` },
@@ -274,8 +285,7 @@ export function transition<T extends VListItem = VListItem>(
             if (elId && idx >= 0) oldOffsetById.set(elId, sc.getOffset(idx));
           }
 
-          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
-          const oldScroll = dom.viewport[scrollProp];
+          const oldScroll = state.scrollPosition;
 
           // Remove all items (descending order preserved)
           const removedIds: (string | number)[] = [];
@@ -286,6 +296,7 @@ export function transition<T extends VListItem = VListItem>(
 
           if (removedIds.length === 0) return 0;
 
+          clampScroll();
           ctx.forceRender();
           commitStyles();
 
@@ -302,7 +313,7 @@ export function transition<T extends VListItem = VListItem>(
             return removedIds.length;
           }
 
-          const scrollDelta = oldScroll - dom.viewport[scrollProp];
+          const scrollDelta = oldScroll - state.scrollPosition;
           const rt = removeTiming;
           const animOptions: KeyframeAnimationOptions = { duration: rt.duration, easing: rt.easing };
           const animations: Animation[] = [];
@@ -312,8 +323,8 @@ export function transition<T extends VListItem = VListItem>(
           for (const c of clones) {
             c.clone.style.zIndex = "1";
             dom.content.appendChild(c.clone);
-            const cloneStart = Math.round(c.offset - scrollDelta);
-            const shiftedEnd = Math.round(c.offset - removedSizeAbove);
+            const cloneStart = visualOffset(c.offset - scrollDelta);
+            const shiftedEnd = visualOffset(c.offset - removedSizeAbove);
             animations.push(c.clone.animate([
               { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
               { transform: `${prop}(${shiftedEnd}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
@@ -332,8 +343,8 @@ export function transition<T extends VListItem = VListItem>(
             const oldOffset = oldOffsetById.get(elId);
             if (oldOffset === undefined) continue;
             const newOffset = sc.getOffset(idx);
-            const oldVisual = Math.round(oldOffset - scrollDelta);
-            const newVisual = Math.round(newOffset);
+            const oldVisual = visualOffset(oldOffset - scrollDelta);
+            const newVisual = visualOffset(newOffset);
             if (oldVisual === newVisual) continue;
             animations.push(el.animate([
               { transform: `${prop}(${oldVisual}px)` },
@@ -386,11 +397,8 @@ export function transition<T extends VListItem = VListItem>(
             if (id && idx >= 0) oldOffsetById.set(id, sc.getOffset(idx));
           }
 
-          const scrollProp = cfg.axis.primary === "x" ? "scrollLeft" : "scrollTop";
-          const sizeProp = cfg.axis.primary === "x" ? "scrollWidth" : "scrollHeight";
-          const clientProp = cfg.axis.primary === "x" ? "clientWidth" : "clientHeight";
-          const oldScroll = dom.viewport[scrollProp];
-          const oldMaxScroll = dom.viewport[sizeProp] - dom.viewport[clientProp];
+          const oldScroll = state.scrollPosition;
+          const oldMaxScroll = maxScroll();
           const wasAtEnd = oldScroll >= oldMaxScroll - 1;
 
           ctx.insertItemAt(item, insertDataIndex);
@@ -398,15 +406,16 @@ export function transition<T extends VListItem = VListItem>(
           commitStyles();
           emitter.emit("data:change", { type: "insert", id: item.id });
 
-          let scrollDelta = dom.viewport[scrollProp] - oldScroll;
+          let scrollDelta = state.scrollPosition - oldScroll;
           const postInsertLayoutIndex = dataToLayout(insertDataIndex);
 
           if (cfg.reverse && scrollDelta === 0 && wasAtEnd) {
-            dom.viewport[scrollProp] = dom.viewport[sizeProp] - dom.viewport[clientProp];
-            const bumped = dom.viewport[scrollProp];
+            const target = maxScroll();
+            ctx.shiftScroll(target - state.scrollPosition);
+            // Native scroll events may be delivered after the FLIP snapshot.
             state.prevScrollPosition = state.scrollPosition;
-            state.scrollPosition = bumped;
-            scrollDelta = bumped - oldScroll;
+            state.scrollPosition = target;
+            scrollDelta = target - oldScroll;
             if (scrollDelta > 0) {
               ctx.forceRender();
               commitStyles();
@@ -421,8 +430,8 @@ export function transition<T extends VListItem = VListItem>(
           if (newEl) {
             const newOffset = sc.getOffset(postInsertLayoutIndex);
             animations.push(newEl.animate([
-              { transform: `${prop}(${Math.round(newOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
-              { transform: `${prop}(${Math.round(newOffset)}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
+              { transform: `${prop}(${visualOffset(newOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
+              { transform: `${prop}(${visualOffset(newOffset)}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
             ], animOptions));
           }
 
@@ -436,8 +445,8 @@ export function transition<T extends VListItem = VListItem>(
             const oldOffset = oldOffsetById.get(id);
             if (oldOffset === undefined) continue;
             const newOffset = sc.getOffset(idx);
-            const visualOld = Math.round(oldOffset + scrollDelta);
-            const visualNew = Math.round(newOffset);
+            const visualOld = visualOffset(oldOffset + scrollDelta);
+            const visualNew = visualOffset(newOffset);
             if (visualOld === visualNew) continue;
             animations.push(el.animate([
               { transform: `${prop}(${visualOld}px)` },
