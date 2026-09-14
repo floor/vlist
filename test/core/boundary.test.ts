@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 
@@ -120,7 +121,7 @@ describe("boundary — extreme item dimensions", () => {
 
     const viewport = getViewport(container);
     list.scrollToIndex(5000, "start");
-    expect(viewport.scrollTop).toBe(5000);
+    expect(list!.getScrollPosition()).toBe(5000);
   });
 
   it("scrollToIndex works with very large items", () => {
@@ -132,7 +133,7 @@ describe("boundary — extreme item dimensions", () => {
     const viewport = getViewport(container);
     list.scrollToIndex(5, "start");
     // offset = 5 * 10000 = 50000, but maxScroll = 100000 - 400 = 99600
-    expect(viewport.scrollTop).toBe(50000);
+    expect(list!.getScrollPosition()).toBe(50000);
   });
 });
 
@@ -428,7 +429,7 @@ describe("boundary — timer & listener cleanup", () => {
   });
 
   it("scroll events stop after destroy", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate } },
       [],
     );

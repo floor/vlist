@@ -11,6 +11,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { setupDOM, teardownDOM, useFakeTimers } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
 
@@ -252,7 +253,7 @@ describe("createVList — horizontal mode E2E", () => {
     hContainer.remove();
   });
 
-  it("scrollToIndex sets scrollLeft in horizontal mode", () => {
+  it("scrollToIndex sets logical position in horizontal mode", () => {
     list = createVList<TestItem>(
       {
         container: hContainer,
@@ -265,9 +266,9 @@ describe("createVList — horizontal mode E2E", () => {
 
     const viewport = getViewport(hContainer);
     list.scrollToIndex(10);
-    // In horizontal mode, scrollToIndex writes to scrollLeft
+    // Horizontal navigation updates the logical position.
     // With width 80, index 10 offset = 800
-    expect(viewport.scrollLeft).toBe(800);
+    expect(list!.getScrollPosition()).toBe(800);
   });
 
   it("getScrollPosition reads state in horizontal mode", () => {
@@ -286,11 +287,11 @@ describe("createVList — horizontal mode E2E", () => {
     expect(list.getScrollPosition()).toBe(400);
     // Programmatic writes commit native read-back before the DOM scroll event.
     const viewport = getViewport(hContainer);
-    expect(viewport.scrollLeft).toBe(400);
+    expect(list!.getScrollPosition()).toBe(400);
   });
 
   it("scroll event reports horizontal position", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container: hContainer,
         items: createTestItems(100),
@@ -314,7 +315,7 @@ describe("createVList — horizontal mode E2E", () => {
   });
 
   it("content width reflects total in horizontal mode", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container: hContainer,
         items: createTestItems(20),
@@ -377,8 +378,8 @@ describe("createVList — smooth scrollToIndex", () => {
 
     const viewport = getViewport(container);
     list.scrollToIndex(10);
-    // Auto/instant: sets scrollTop directly = 10 * 50 = 500
-    expect(viewport.scrollTop).toBe(500);
+    // Auto/instant: logical position = 10 * 50 = 500
+    expect(list!.getScrollPosition()).toBe(500);
   });
 
   it("scrollToIndex with smooth behavior starts animation", () => {
@@ -390,14 +391,14 @@ describe("createVList — smooth scrollToIndex", () => {
       );
 
       const viewport = getViewport(container);
-      const initialPos = viewport.scrollTop;
+      const initialPos = list!.getScrollPosition();
       list.scrollToIndex(20, { align: "start", behavior: "smooth" });
 
       // After first tick, rAF fires and position should start changing
       fakeTimers.tick(16);
       // The position may have started animating but won't reach final yet
       // We just verify something happened (rAF was scheduled)
-      expect(viewport.scrollTop).not.toBe(initialPos);
+      expect(list!.getScrollPosition()).not.toBe(initialPos);
     } finally {
       fakeTimers.restore();
     }
@@ -421,7 +422,7 @@ describe("createVList — smooth scrollToIndex", () => {
 
       const viewport = getViewport(container);
       // Should end up at index 20's offset = 20 * 50 = 1000
-      expect(viewport.scrollTop).toBe(1000);
+      expect(list!.getScrollPosition()).toBe(1000);
     } finally {
       fakeTimers.restore();
     }
@@ -436,7 +437,7 @@ describe("createVList — smooth scrollToIndex", () => {
     const viewport = getViewport(container);
     list.scrollToIndex(-5);
     // Clamped to 0
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("scrollToIndex clamps to valid range — beyond total", () => {
@@ -449,8 +450,8 @@ describe("createVList — smooth scrollToIndex", () => {
     list.scrollToIndex(999);
     // Clamped to last index (19), offset = 19 * 50 = 950
     // But also clamped to maxScroll = totalSize - containerSize = 1000 - 500 = 500
-    expect(viewport.scrollTop).toBeLessThanOrEqual(500);
-    expect(viewport.scrollTop).toBeGreaterThan(0);
+    expect(list!.getScrollPosition()).toBeLessThanOrEqual(500);
+    expect(list!.getScrollPosition()).toBeGreaterThan(0);
   });
 });
 
@@ -634,7 +635,7 @@ describe("createVList — scroll config", () => {
     const fakeTimers = useFakeTimers();
     try {
       const customIdleTimeout = 500;
-      list = createVList<TestItem>(
+      list = createNative<TestItem>(
         {
           container,
           items: createTestItems(100),

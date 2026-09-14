@@ -60,15 +60,24 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
-  // Separate opt-in entry: never re-export the synthetic driver from index.ts.
-  const syntheticResult = await Bun.build({
-    entrypoints: [resolve("./src/synthetic.ts")], outdir: "./dist",
-    format: "esm", target: "browser", minify: !isDev,
-    sourcemap: isDev ? "inline" : "none", naming: "synthetic.js",
-  });
-  if (!syntheticResult.success) {
-    for (const log of syntheticResult.logs) console.error(log);
-    process.exit(1);
+  // Compatibility alias and opt-in native entry.
+  for (const name of ["synthetic", "native"]) {
+    const result = await Bun.build({
+      entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
+      format: "esm", target: "browser", minify: !isDev,
+      sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+  }
+
+  for (const name of ["index", "native"]) {
+    const hasDriver = (await Bun.file(`./dist/${name}.js`).text()).includes("pan-x pinch-zoom");
+    if (hasDriver !== (name === "index")) {
+      throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
+    }
   }
 
   // Build config bundle (framework-adapter convenience config + resolver)
@@ -196,13 +205,14 @@ async function build() {
   const scenarios = [
     { name: "base", imports: ["createVList"] },
     { name: "synthetic", imports: ["createVList"] },
+    { name: "native", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
   const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
 
   for (const { name, imports } of scenarios) {
-    const scenarioEntry = name === "synthetic" ? resolve("./src/synthetic.ts") : entryAbs;
+    const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
     const code = `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
     writeFileSync(tmp, code);
@@ -218,8 +228,8 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
-      if (name !== "synthetic" && new TextDecoder().decode(bytes).includes("pan-x pinch-zoom")) {
-        throw new Error(`Synthetic driver leaked into ${name}`);
+      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") === (name === "native")) {
+        throw new Error(`Unexpected synthetic driver presence in ${name}`);
       }
       const compressed = Bun.gzipSync(bytes);
       sizes[name] = {

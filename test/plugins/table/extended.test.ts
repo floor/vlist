@@ -24,6 +24,7 @@ import {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { table } from "../../../src/plugins/table/plugin";
 import { selection } from "../../../src/plugins/selection/plugin";
+import { createVList as createNative } from "../../../src/native";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import type { VListItem } from "../../../src/types";
@@ -438,7 +439,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -470,7 +471,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -507,7 +508,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -545,7 +546,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const scrollEvents: Array<{ scrollPosition: number; direction: string }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,

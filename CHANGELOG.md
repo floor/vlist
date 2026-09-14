@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed (3.0)
+
+- Synthetic scrolling is now the default in `vlist` and `vlist/config`. Import `createVList` from `vlist/native` for native or bounded scrolling, carousel, sortable, or horizontal RTL lists. Config consumers select that entry with `factory`.
+- Core accepts `scroll.mode: "synthetic"`; `"native"` and `"bounded"` report the required native import. The native entry rejects `"synthetic"` and points back to `vlist`. Page scrolling continues to use the external source.
+- Deprecate `vlist/synthetic` as an alias of the default factory; it remains available in 3.0.
+
 ## [2.8.0] - 2026-09-15
 
 ### Added

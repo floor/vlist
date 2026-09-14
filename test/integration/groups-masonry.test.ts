@@ -20,6 +20,7 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -82,8 +83,8 @@ function getGroupByTen(index: number): string {
   return "Delta";
 }
 
-function createGroupedMasonry(itemCount: number = 40, opts?: { sticky?: boolean }) {
-  list = createVList(
+function createGroupedMasonry(itemCount: number = 40, opts?: { sticky?: boolean }, factory = createVList<TestItem>) {
+  list = factory(
     {
       container,
       items: createTestItems(itemCount),
@@ -300,7 +301,7 @@ describe("groups + masonry integration", () => {
       // In masonry, the last-indexed item may be in a shorter lane.
       // align:end must target the group's tallest-lane bottom so the
       // scroll reaches the true content bottom (maxScroll).
-      createGroupedMasonry(40);
+      createGroupedMasonry(40, undefined, createNative);
       const vp = container.querySelector(".vlist-viewport") as HTMLElement;
       const content = container.querySelector(".vlist-content") as HTMLElement;
       const contentH = parseFloat(content.style.height);

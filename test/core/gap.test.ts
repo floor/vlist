@@ -15,7 +15,7 @@ import { phase1Calculate, phase2Commit, createRenderConfig } from "../../src/cor
 import { createPool } from "../../src/core/pool";
 import { compileHooks } from "../../src/core/hooks";
 import { createSizeCache } from "../../src/core/sizes";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/native";
 
 // =============================================================================
 // DOM Setup

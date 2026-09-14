@@ -87,6 +87,6 @@ it("a11y last-item focus reaches the padded end", () => {
   try {
     ctx.dom.viewport.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
     expect(list.getScrollPosition()).toBe(3640);
-    expect(ctx.dom.viewport.scrollTop).toBe(3640);
+    expect(ctx.dom.viewport.scrollTop).toBe(0);
   } finally { list.destroy(); host.remove(); }
 });

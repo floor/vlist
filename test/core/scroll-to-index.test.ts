@@ -72,7 +72,7 @@ describe("scrollToIndex — alignment", () => {
     vlist.scrollToIndex(20, "start");
 
     // index 20 * height 50 = offset 1000
-    expect(viewport.scrollTop).toBe(1000);
+    expect(list!.getScrollPosition()).toBe(1000);
   });
 
   it("align=center scrolls item to center of viewport", () => {
@@ -83,7 +83,7 @@ describe("scrollToIndex — alignment", () => {
 
     // offset=1000, itemSize=50, containerSize=500
     // pos = offset - (containerSize - itemSize) / 2 = 1000 - 225 = 775
-    expect(viewport.scrollTop).toBe(775);
+    expect(list!.getScrollPosition()).toBe(775);
   });
 
   it("align=end scrolls item to bottom of viewport", () => {
@@ -93,7 +93,7 @@ describe("scrollToIndex — alignment", () => {
     vlist.scrollToIndex(20, "end");
 
     // pos = offset + itemSize - containerSize = 1000 + 50 - 500 = 550
-    expect(viewport.scrollTop).toBe(550);
+    expect(list!.getScrollPosition()).toBe(550);
   });
 
   it("default alignment is start", () => {
@@ -102,7 +102,7 @@ describe("scrollToIndex — alignment", () => {
 
     vlist.scrollToIndex(20);
 
-    expect(viewport.scrollTop).toBe(1000);
+    expect(list!.getScrollPosition()).toBe(1000);
   });
 
   it("options object form works", () => {
@@ -111,7 +111,7 @@ describe("scrollToIndex — alignment", () => {
 
     vlist.scrollToIndex(20, { align: "center" });
 
-    expect(viewport.scrollTop).toBe(775);
+    expect(list!.getScrollPosition()).toBe(775);
   });
 });
 
@@ -126,7 +126,7 @@ describe("scrollToIndex — clamping", () => {
 
     vlist.scrollToIndex(-5, "start");
 
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("index beyond total clamps to last item", () => {
@@ -137,7 +137,7 @@ describe("scrollToIndex — clamping", () => {
 
     // Clamped to index 99, offset = 99 * 50 = 4950
     // But maxScroll = totalSize - containerSize = 5000 - 500 = 4500
-    expect(viewport.scrollTop).toBe(4500);
+    expect(list!.getScrollPosition()).toBe(4500);
   });
 
   it("scrollToIndex on first item sets scrollTop to 0", () => {
@@ -146,11 +146,11 @@ describe("scrollToIndex — clamping", () => {
 
     // First scroll somewhere else
     vlist.scrollToIndex(50, "start");
-    expect(viewport.scrollTop).toBeGreaterThan(0);
+    expect(list!.getScrollPosition()).toBeGreaterThan(0);
 
     // Then back to 0
     vlist.scrollToIndex(0, "start");
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("scrollToIndex on last item does not exceed max scroll", () => {
@@ -160,7 +160,7 @@ describe("scrollToIndex — clamping", () => {
     vlist.scrollToIndex(99, "start");
 
     // maxScroll = 5000 - 500 = 4500
-    expect(viewport.scrollTop).toBeLessThanOrEqual(4500);
+    expect(list!.getScrollPosition()).toBeLessThanOrEqual(4500);
   });
 });
 
@@ -174,7 +174,7 @@ describe("scrollToIndex — edge cases", () => {
     const viewport = getViewport(container);
 
     vlist.scrollToIndex(0, "start");
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("a scroll asked for before the list has a length is honoured when it gets one", () => {
@@ -186,11 +186,11 @@ describe("scrollToIndex — edge cases", () => {
     const viewport = getViewport(container);
 
     vlist.scrollToIndex(60, "start");
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
 
     vlist.setItems(createTestItems(100));
 
-    expect(viewport.scrollTop).toBe(60 * 50);
+    expect(list!.getScrollPosition()).toBe(60 * 50);
   });
 
   it("only the last one asked for is kept, and only until it is honoured", () => {
@@ -200,12 +200,12 @@ describe("scrollToIndex — edge cases", () => {
     vlist.scrollToIndex(10, "start");
     vlist.scrollToIndex(60, "start");
     vlist.setItems(createTestItems(100));
-    expect(viewport.scrollTop).toBe(60 * 50);
+    expect(list!.getScrollPosition()).toBe(60 * 50);
 
     // and it does not fire again on the next render
-    viewport.scrollTop = 0;
+    vlist.scrollToIndex(0);
     vlist.setItems(createTestItems(100));
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("single item list scrolls to 0", () => {
@@ -214,7 +214,7 @@ describe("scrollToIndex — edge cases", () => {
 
     vlist.scrollToIndex(0, "center");
     // Single item fits in viewport — scrollTop stays 0
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("scrollToIndex after destroy does not throw", () => {

@@ -274,13 +274,12 @@ it("config factory selects the synthetic driver with the public config type", ()
   } finally { list.destroy(); host.remove(); }
 });
 
-it("synthetic config without a factory rejects before DOM creation with the import fix", () => {
+it("config defaults to synthetic input without an injected factory", () => {
   const host = createContainer();
+  const list = createVListFromConfig({ ...base(), container: host, scroll: { mode: "synthetic" } });
   try {
-    expect(() => createVListFromConfig({ ...base(), container: host, scroll: { mode: "synthetic" } }))
-      .toThrow('Import { createVList } from "vlist/synthetic" and pass it as factory');
-    expect(host.children.length).toBe(0);
-  } finally { host.remove(); }
+    expect(host.querySelector<HTMLElement>(".vlist-viewport")!.style.touchAction).toBe("pan-x pinch-zoom");
+  } finally { list.destroy(); host.remove(); }
 });
 
 for (const name of ["carousel", "sortable"]) {
@@ -289,7 +288,7 @@ for (const name of ["carousel", "sortable"]) {
     try {
       expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
         scroll: { mode: "synthetic" }, plugins: [{ name }],
-      })).toThrow(`${name} is not supported with synthetic mode in this release`);
+      })).toThrow(`${name} requires createVList from "vlist/native"`);
       expect(host.children.length).toBe(0);
     } finally { host.remove(); }
   });
@@ -301,7 +300,7 @@ it("synthetic factory preserves the RTL horizontal entry guard", () => {
   try {
     expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
       orientation: "horizontal", item: { width: 40, template }, scroll: { mode: "synthetic" },
-    })).toThrow("RTL horizontal lists are not supported");
+    })).toThrow("RTL horizontal lists require createVList");
     expect(host.children.length).toBe(0);
   } finally { host.remove(); }
 });

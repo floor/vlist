@@ -18,7 +18,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/native";
 import type { VList, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";

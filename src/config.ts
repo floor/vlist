@@ -47,7 +47,7 @@ export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T
  */
 export interface VListConfig<T extends VListItem = VListItem>
   extends Omit<CreateVListConfig<T>, "container" | "scroll"> {
-  /** Synthetic mode requires a factory imported from vlist/synthetic. */
+  /** Input model; native scrolling requires a factory imported from vlist/native. */
   scroll?: Omit<ScrollConfig, "mode"> & { mode?: ScrollConfig["mode"] | "synthetic" };
   /** List factory; defaults to core createVList. Fixed for this instance. */
   factory?: VListFactory<T>;
@@ -195,8 +195,5 @@ export function createVListFromConfig<T extends VListItem = VListItem>(
   config: VListConfig<T> & { container: HTMLElement | string },
 ): VList<T> {
   const { factory, ...options } = config;
-  if (options.scroll?.mode === "synthetic" && !factory) {
-    throw new Error('vlist/config: synthetic mode requires a factory. Import { createVList } from "vlist/synthetic" and pass it as factory.');
-  }
   return (factory ?? createVList<T>)(options as CreateVListConfig<T>, resolvePlugins(config));
 }

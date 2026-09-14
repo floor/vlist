@@ -10,6 +10,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import { OVERSCAN } from "../../src/constants";
 
@@ -92,7 +93,7 @@ describe("range — overscan defaults", () => {
 
 describe("range — range:change event", () => {
   it("emits range:change when scroll shifts visible range", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -178,7 +179,7 @@ describe("range — range:change event", () => {
 
 describe("range — scroll event", () => {
   it("emits scroll event with position and direction", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -201,7 +202,7 @@ describe("range — scroll event", () => {
   });
 
   it("emits scroll event with direction=up when scrolling backward", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -225,7 +226,7 @@ describe("range — scroll event", () => {
   });
 
   it("emits direction=right/left for horizontal lists", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -260,7 +261,7 @@ describe("range — scroll event", () => {
 
 describe("range — velocity:change event", () => {
   it("emits velocity:change on scroll", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -283,7 +284,7 @@ describe("range — velocity:change event", () => {
   });
 
   it("velocity is unreliable with insufficient samples", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),

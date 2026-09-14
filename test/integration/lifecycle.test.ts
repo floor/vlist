@@ -108,7 +108,7 @@ describe("lifecycle", () => {
       expect(indices.length).toBeLessThan(items.length);
     });
 
-    it("should set content height based on total items", () => {
+    it("should keep content viewport-sized for the total items", () => {
       const items = createTestItems(50);
       list = createVList(
         { container, items, item: { height: 40, template: simpleTemplate } },
@@ -118,8 +118,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const height = parseInt(content.style.height, 10);
-      expect(height).toBe(50 * 40);
+      expect(content.style.height).toBe("100%");
+      expect(list.total).toBe(50);
     });
 
     it("should expose correct total count", () => {
@@ -178,8 +178,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const height = parseInt(content.style.height, 10);
-      expect(height).toBe(50 * 40);
+      expect(content.style.height).toBe("100%");
+      expect(list.total).toBe(50);
     });
 
     it("should append items and update total", () => {
@@ -316,7 +316,7 @@ describe("lifecycle", () => {
       const viewport = list.element.querySelector(
         ".vlist-viewport",
       ) as HTMLElement;
-      expect(viewport.scrollTop).toBe(20 * 40);
+      expect(list!.getScrollPosition()).toBe(20 * 40);
     });
 
     it("should clamp scrollToIndex to valid range", () => {
@@ -334,7 +334,7 @@ describe("lifecycle", () => {
         ".vlist-viewport",
       ) as HTMLElement;
       const maxScroll = 100 * 40 - 500;
-      expect(viewport.scrollTop).toBeLessThanOrEqual(maxScroll);
+      expect(list!.getScrollPosition()).toBeLessThanOrEqual(maxScroll);
     });
   });
 
@@ -472,8 +472,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const width = parseInt(content.style.width, 10);
-      expect(width).toBe(100 * 120);
+      expect(content.style.width).toBe("100%");
+      expect(list.total).toBe(100);
     });
 
     it("should scroll horizontally with scrollToIndex", () => {
@@ -492,7 +492,7 @@ describe("lifecycle", () => {
       const viewport = list.element.querySelector(
         ".vlist-viewport",
       ) as HTMLElement;
-      expect(viewport.scrollLeft).toBe(10 * 120);
+      expect(list!.getScrollPosition()).toBe(10 * 120);
     });
   });
 });

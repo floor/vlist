@@ -83,6 +83,7 @@ const excluded = (imported: readonly string[]): readonly PluginName[] => {
 const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
   { name: "synthetic", imports: ["createVList"] },
+  { name: "native", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
   { name: "data",              imports: ["createVList", "data"] },
@@ -121,7 +122,7 @@ const treeShakeFailures: TreeShakeFailure[] = [];
 
 for (const scenario of scenarios) {
   const imports = scenario.imports.join(", ");
-  const code = `import { ${imports} } from "${scenario.name === "synthetic" ? `${root}/src/synthetic.ts` : entry}"; globalThis._v = [${imports}];`;
+  const code = `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
   const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
 
   await Bun.write(tmpFile, code);
@@ -154,7 +155,7 @@ for (const scenario of scenarios) {
   });
 
   const syntheticMarker = "pan-x pinch-zoom";
-  if (scenario.name !== "synthetic" && new TextDecoder().decode(output).includes(syntheticMarker)) {
+  if (new TextDecoder().decode(output).includes(syntheticMarker) === (scenario.name === "native")) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
   }
 
@@ -208,7 +209,7 @@ console.log(`  ${sep}`);
 for (const r of results) {
   const min = `${r.minKB.toFixed(1)} KB`;
   const gz = `${r.gzKB.toFixed(1)} KB`;
-  const delta = r.name.startsWith("Base") ? "" : `+${r.deltaKB.toFixed(1)} KB`;
+  const delta = r.name.startsWith("Base") ? "" : `${r.deltaKB >= 0 ? "+" : ""}${r.deltaKB.toFixed(1)} KB`;
 
   console.log(
     `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(delta, COL_DELTA)}`,
