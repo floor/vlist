@@ -23,10 +23,20 @@ export type { ScrollbarPadding } from "../../types";
 
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
-  /** Enable scrollbar (default: true when compressed) */
+  /** Override the platform appearance selected once at setup. */
+  platform?: 'macos' | 'windows' | 'android';
+  /** Override standard scrollbar-width; auto uses the platform width. */
+  width?: 'auto' | 'thin' | 'none';
+  /** Explicit colors override author scrollbar-color. */
+  thumbColor?: string;
+  trackColor?: string;
+  /** Reserve a gutter while the scrollbar is enabled. */
+  gutter?: boolean;
+
+  /** Enable scrollbar (default: true; width:none also disables it). */
   enabled?: boolean;
 
-  /** Auto-hide scrollbar after idle (default: true) */
+  /** Auto-hide after idle (default: true for overlays, false for Windows). */
   autoHide?: boolean;
 
   /** Auto-hide delay in milliseconds (default: 1000) */
@@ -87,6 +97,9 @@ export interface ScrollbarConfig {
 
 /** Scrollbar instance */
 export interface Scrollbar {
+  /** Re-read the container’s standard scrollbar CSS properties. */
+  refresh: () => void;
+
   /** Show the scrollbar */
   show: () => void;
 
@@ -114,7 +127,6 @@ export type ScrollCallback = (position: number) => void;
 // =============================================================================
 
 let nextViewportId = 0;
-const AUTO_HIDE = true;
 const AUTO_HIDE_DELAY = 1000;
 const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
@@ -173,9 +185,12 @@ export const createScrollbar = (
   isX = false,
   parent?: HTMLElement,
   getSizeCache?: () => SizeCache,
+  styleSource?: HTMLElement,
 ): Scrollbar => {
+  const os = (navigator as Navigator & {userAgentData?: {platform: string}}).userAgentData?.platform || navigator.platform + navigator.userAgent;
+  const classic = config.platform ? config.platform === 'windows' : !/Mac|Android/i.test(os);
   const {
-    autoHide = AUTO_HIDE,
+    autoHide = !classic,
     autoHideDelay = AUTO_HIDE_DELAY,
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
@@ -197,6 +212,7 @@ export const createScrollbar = (
   const hoverZoneWidth = config.hoverZoneWidth ?? (wallPad + HOVER_ZONE_REACH);
 
   // State
+  let enabled = true;
   let totalSize = 0;
   let containerSize = 0;
   let thumbSize = 0;
@@ -331,7 +347,7 @@ export const createScrollbar = (
    * When called from hover events, no auto-hide is scheduled.
    */
   const show = (): void => {
-    if (totalSize <= containerSize) return;
+    if (!enabled || totalSize <= containerSize) return;
 
     clearHideTimeout();
 
@@ -368,9 +384,10 @@ export const createScrollbar = (
     updatePosition(currentScrollPosition);
 
     // Check if scrollbar is needed
-    if (totalSize <= containerSize) {
+    if (!enabled || totalSize <= containerSize) {
       track.style.display = "none";
-      hide();
+      track.classList.remove(`${classPrefix}-scrollbar--visible`);
+      visible = false;
       return;
     }
     track.style.display = "";
@@ -421,7 +438,7 @@ export const createScrollbar = (
   };
 
   const handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.target !== track || document.activeElement !== track) return;
+    if (!enabled || event.target !== track || document.activeElement !== track) return;
     // A focused scrollbar must not forward Space/Enter to list selection.
     event.stopPropagation();
     if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -544,7 +561,7 @@ export const createScrollbar = (
   };
 
   const handlePointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0 || pointerId !== null || maxThumbTravel <= 0) return;
+    if (!enabled || event.button !== 0 || pointerId !== null || maxThumbTravel <= 0) return;
     event.preventDefault(); event.stopPropagation();
     pointerId = event.pointerId;
     isDragging = event.target === thumb;
@@ -619,6 +636,24 @@ export const createScrollbar = (
     }
   };
 
+  const styleNames = ['width', 'radius', 'thumb-color', 'track-color'];
+  const setStyle = (name: string, value: string): void => attachTo.style.setProperty(`--vlist-custom-scrollbar-${name}`, value);
+  const originalStyles = styleNames.map(name => attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`));
+  const refresh = (): void => {
+    const css = getComputedStyle(styleSource ?? attachTo);
+    const width = config.width ?? css.getPropertyValue('scrollbar-width');
+    const colors = css.getPropertyValue('scrollbar-color').match(/[\w-]+\([^)]*\)|\S+/g);
+    enabled = config.enabled !== false && width !== 'none';
+    const values = [width === 'thin' || !classic ? '6px' : '14px', classic ? '0px' : '4px',
+      config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),
+      config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
+    for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
+    hoverZone.style.display = enabled ? '' : 'none';
+    viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
+    if (!enabled) handlePointerEnd();
+    updateBounds(totalSize, containerSize);
+  };
+
   // =============================================================================
   // Cleanup
   // =============================================================================
@@ -631,6 +666,8 @@ export const createScrollbar = (
     handlePointerEnd();
     clearHideTimeout();
     for (const remove of removeListeners) remove();
+    for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, originalStyles[i]!);
+    viewport.classList.remove(`${classPrefix}-viewport--gutter`);
     hoverZone.remove();
 
     // Remove inline CSS variable overrides
@@ -674,13 +711,14 @@ export const createScrollbar = (
     listen(hoverZone, 'mouseenter', handleScrollbarAreaEnter);
     listen(hoverZone, 'mouseleave', handleScrollbarAreaLeave);
   }
-  updatePosition(0);
+  refresh();
 
   // =============================================================================
   // Public API
   // =============================================================================
 
   return {
+    refresh,
     show,
     hide,
     updateBounds,
