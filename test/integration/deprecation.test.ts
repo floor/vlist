@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVListFromConfig } from "../../src/config";
+import { scale } from "../../src/plugins/scale/plugin";
 import { createVList as createSynthetic } from "../../src/synthetic";
 import type { PluginContext } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
@@ -37,6 +39,33 @@ it("scale warns once per process with the available synthetic migration and 2.x 
   expect(messages[0]).toContain('vlist/synthetic');
   expect(messages[0]).toContain('bounded remains available in 2.x');
   expect(messages[0]).toContain('https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model');
+});
+
+it("config scale stubs preserve the explicit warning, which is emitted only once", () => {
+  // Exercise the module in this process so coverage includes the warning path.
+  // The subprocess test above independently verifies a fresh process's latch.
+  const original = console.warn;
+  const warnings: unknown[] = [];
+  console.warn = value => warnings.push(value);
+  const config = () => ({ container: createContainer(), items: [{ id: 1 }],
+    item: { height: 40, template: () => "row" } });
+  try {
+    for (const mode of [undefined, "bounded"] as const) {
+      const options = config();
+      const list = createVListFromConfig({ ...options, scroll: { mode } });
+      list.destroy(); options.container.remove();
+    }
+    expect(warnings).toHaveLength(0);
+    for (let count = 0; count < 2; count++) {
+      const options = config();
+      const list = createVList(options, [scale()]);
+      list.destroy(); options.container.remove();
+      expect(warnings).toHaveLength(1);
+    }
+    expect(warnings[0]).toContain('removed in vlist 3.0');
+    expect(warnings[0]).toContain('vlist/synthetic');
+    expect(warnings[0]).toContain('bounded remains available in 2.x');
+  } finally { console.warn = original; }
 });
 
 it("core and synthetic entry default/native/bounded configurations emit no warnings", () => {

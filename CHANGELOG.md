@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-09-15
+
 ### Added
 
 - Support `page()` under the synthetic entry using native document scrolling, with an initial document-size guard and a one-time warning for later growth.
