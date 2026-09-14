@@ -41,9 +41,7 @@
     --vlist-scrollbar-radius: 4px;
 
     /* Custom overlay scrollbar (withScrollbar feature) */
-    --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
-    --vlist-custom-scrollbar-radius: 4px;
     --vlist-custom-scrollbar-padding-top: 2px;
     --vlist-custom-scrollbar-padding-right: 2px;
     --vlist-custom-scrollbar-padding-bottom: 2px;

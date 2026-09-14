@@ -1,3 +1,6 @@
+import {readFileSync} from 'node:fs';
+import {createVList} from '../../../src/core/create';
+import {scrollbar} from '../../../src/plugins/scrollbar/plugin';
 import {test, expect, beforeAll, afterAll, afterEach} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
 import {createScrollbar, type Scrollbar, type ScrollbarConfig} from '../../../src/plugins/scrollbar/scrollbar';
@@ -57,4 +60,48 @@ test('CSS reads occur only at setup/refresh; explicit disable survives author CS
   sb!.updatePosition(400);sb!.updateBounds(20000,600);sb!.show();expect(reads).toBe(1);
   sb!.refresh();expect(reads).toBe(2);expect(track.style.display).toBe('none');
  } finally {globalThis.getComputedStyle=original;}
+});
+
+test('numeric width and radius override stylesheet sizing, including zero radius',()=>{
+ const style=document.createElement('style');style.textContent='div { --vlist-custom-scrollbar-width: 11px; --vlist-custom-scrollbar-radius: 7px; }';document.body.append(style);
+ const config={platform:'windows',width:19,radius:0} as const;
+ const {variable}=make(config);
+ expect(variable('width')).toBe('19px');expect(variable('radius')).toBe('0px');
+});
+
+test('stylesheet sizing wins over platform defaults and refresh rereads changes',()=>{
+ const style=document.createElement('style');document.body.append(style);
+ style.textContent='div { --vlist-custom-scrollbar-width: 11px; --vlist-custom-scrollbar-radius: 7px; }';
+ const {variable}=make({platform:'windows'});
+ expect(variable('width')).toBe('11px');expect(variable('radius')).toBe('7px');
+ style.textContent='div { --vlist-custom-scrollbar-width: 17px; --vlist-custom-scrollbar-radius: 3px; }';sb!.refresh();
+ expect(variable('width')).toBe('17px');expect(variable('radius')).toBe('3px');
+ style.remove();sb!.refresh();
+ expect(variable('width')).toBe('14px');expect(variable('radius')).toBe('0px');
+});
+
+test('standalone inline sizing changes remain authored values across refreshes',()=>{
+ const {host,variable}=make({platform:'macos'});
+ host.style.setProperty('--vlist-custom-scrollbar-width','21px');host.style.setProperty('--vlist-custom-scrollbar-radius','2px');
+ sb!.refresh();sb!.refresh();
+ expect(variable('width')).toBe('21px');expect(variable('radius')).toBe('2px');
+});
+
+
+test('plugin supplies defaults with vlist.css and refreshScrollbar rereads the container',()=>{
+ const style=document.createElement('style');
+ style.textContent=readFileSync(new URL('../../../src/styles/vlist.css',import.meta.url),'utf8');
+ document.body.append(style);
+ const host=document.createElement('div');document.body.append(host);
+ const list=createVList({container:host,items:[{id:1}],item:{height:40,template:()=>''}},[scrollbar({platform:'windows'})]);
+ const variable=(name:string)=>list.element.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`);
+ try {
+  expect(variable('width')).toBe('14px');expect(variable('radius')).toBe('0px');
+  host.style.setProperty('--vlist-custom-scrollbar-width','23px');host.style.setProperty('--vlist-custom-scrollbar-radius','5px');
+  (list.refreshScrollbar as () => void)();
+  expect(variable('width')).toBe('23px');expect(variable('radius')).toBe('5px');
+  host.style.removeProperty('--vlist-custom-scrollbar-width');host.style.removeProperty('--vlist-custom-scrollbar-radius');
+  host.style.setProperty('scrollbar-width','thin');(list.refreshScrollbar as () => void)();
+  expect(variable('width')).toBe('6px');expect(variable('radius')).toBe('0px');
+ } finally { list.destroy(); }
 });
