@@ -107,6 +107,7 @@ export function carousel<T extends VListItem = VListItem>(
   const peekConfig = config?.peek ?? "auto";
 
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
   let isX: boolean;
@@ -210,7 +211,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   function getBaseVi(): number {
     if (intendedVi >= 0) return intendedVi;
-    return virtualIndexAtScroll(engineState.scrollPosition);
+    return virtualIndexAtScroll(scroll.getPixelEquivalent());
   }
 
   // Rebasing (folding the logical position back toward the middle cycle) and the
@@ -252,8 +253,8 @@ export function carousel<T extends VListItem = VListItem>(
 
     const content = storedCtx.dom.content;
     const children = content.children;
-    const pos = engineState.scrollPosition;
-    const baseOffset = engineState.baseOffset;
+    const pos = scroll.getPixelEquivalent();
+    const baseOffset = scroll.getRenderOrigin();
     const scrollTop = Math.round(pos - baseOffset);
     const prop = isX ? "width" : "height";
     const { vi: focalVi, frac } = decomposeScroll(pos);
@@ -385,6 +386,7 @@ export function carousel<T extends VListItem = VListItem>(
     conflicts: ["scale"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;
       storedCtx = ctx;
@@ -503,7 +505,7 @@ export function carousel<T extends VListItem = VListItem>(
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
-          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: engineState.scrollPosition });
+          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: scroll.getPixelEquivalent() });
         }
       });
 
@@ -528,7 +530,7 @@ export function carousel<T extends VListItem = VListItem>(
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
-          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: engineState.scrollPosition });
+          storedCtx!.emitter.emit("carousel:change" as any, { index: currentIndex, scrollPosition: scroll.getPixelEquivalent() });
         }
       });
 
@@ -573,7 +575,7 @@ export function carousel<T extends VListItem = VListItem>(
       // ── getCarouselState ────────────────────────────────────────
 
       ctx.registerMethod("getCarouselState", (): CarouselState => {
-        const pos = engineState.scrollPosition;
+        const pos = scroll.getPixelEquivalent();
         const normalizedPos = realTotal > 0 && lapSize > 0
           ? ((pos % lapSize) + lapSize) % lapSize
           : 0;
@@ -682,7 +684,7 @@ export function carousel<T extends VListItem = VListItem>(
         if (engineState.scrollDirection !== 0) lastDirection = engineState.scrollDirection;
 
         if (intendedVi < 0) {
-          const pos = engineState.scrollPosition;
+          const pos = scroll.getPixelEquivalent();
           const vi = virtualIndexAtScroll(pos);
           const newIndex = logicalIndexOf(vi);
 
@@ -703,7 +705,7 @@ export function carousel<T extends VListItem = VListItem>(
         intendedVi = -1;
         lastDirection = 0;
         if (!snapEnabled || !storedCtx || realTotal <= 1) return;
-        const p = engineState.scrollPosition;
+        const p = scroll.getPixelEquivalent();
         const { vi, frac } = decomposeScroll(p);
 
         let snapVi: number;

@@ -283,9 +283,8 @@ describe("createVList — horizontal mode E2E", () => {
 
     list.scrollToIndex(5);
     // scrollToIndex(5) -> offset = 5 * 80 = 400
-    expect(list.getScrollPosition()).toBe(0);
-    // getScrollPosition reads state.scrollPosition, which updates on scroll events
-    // After scrollToIndex with auto behavior, viewport.scrollLeft is set directly
+    expect(list.getScrollPosition()).toBe(400);
+    // Programmatic writes commit native read-back before the DOM scroll event.
     const viewport = getViewport(hContainer);
     expect(viewport.scrollLeft).toBe(400);
   });

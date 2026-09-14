@@ -2595,3 +2595,20 @@ describeCarousel("carousel — snapEasing", () => {
     cleanup();
   });
 });
+
+
+describeCarousel("carousel adapter position", () => {
+  it("reads its public pixel position from the adapter", () => {
+    const t = createPluginMockContext(createTestItems(10), { itemSize: 100 });
+    let position = 42;
+    t.ctx.scroll.getPixelEquivalent = () => position;
+    const plugin = carousel();
+    try {
+      plugin.setup(t.ctx);
+      t.engineState.scrollPosition = 0;
+      expect(t.methods.get("getCarouselState")!().scrollPosition).toBe(42);
+      position = 84;
+      expect(t.methods.get("getCarouselState")!().scrollPosition).toBe(84);
+    } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
+  });
+});

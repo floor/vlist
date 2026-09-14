@@ -1550,3 +1550,56 @@ describe("withTransition — insertItem sibling slide", () => {
     allAnimations.length = 0;
   });
 });
+
+
+it("captures the adapter origin once for a removal animation", async () => {
+  const { ctx, dom, testItems, methods } = createMockContext();
+  populateDOM(dom.content, testItems, 50);
+  const readOrigin = mock(() => 100);
+  ctx.scroll.getRenderOrigin = readOrigin;
+  ctx.getState().baseOffset = 0;
+  const plugin = transition<TestItem>();
+  plugin.setup!(ctx);
+  const start = allAnimations.length;
+  await methods.get("removeItem")!(0);
+  expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(-100px) scaleY(1)");
+  expect(readOrigin).toHaveBeenCalledTimes(1);
+  dom.root.remove();
+});
+
+for (const reverse of [false, true]) it(`adapter correction preserves FLIP positions after ${reverse ? "reverse end pin" : "removal clamp"}`, async () => {
+  const { ctx, dom, testItems, methods } = createMockContext({ reverse });
+  let position = 400;
+  let renderOrigin = 400;
+  const shifts: number[] = [];
+  ctx.scroll.getPixelEquivalent = () => position;
+  ctx.scroll.getRenderOrigin = () => renderOrigin;
+  // The source owns its position. A plugin assigning engine coordinates fails.
+  Object.defineProperty(ctx.getState(), "scrollPosition", {
+    get: () => position,
+    set: () => { throw new Error("plugin wrote source-owned scroll position"); },
+    configurable: true,
+  });
+  ctx.shiftScroll = delta => { shifts.push(delta); position += delta; renderOrigin += delta; };
+  const remove = ctx.removeItemById, insert = ctx.insertItemAt;
+  ctx.removeItemById = id => { const index = remove(id); ctx.sizeCache.rebuild(testItems.length); return index; };
+  ctx.insertItemAt = (item, index) => { insert(item, index); ctx.sizeCache.rebuild(testItems.length); };
+  ctx.forceRender = () => { dom.content.replaceChildren(); populateDOM(dom.content, testItems, 50, 0, testItems.length); };
+  ctx.forceRender();
+  transition<TestItem>().setup!(ctx);
+  const start = allAnimations.length;
+  if (reverse) {
+    methods.get("insertItem")!({ id: 100, name: "New" }, 20);
+    expect(shifts).toEqual([50]);
+    expect(position).toBe(450);
+    expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(550px) scaleY(0)");
+  } else {
+    methods.get("removeItem")!(10);
+    expect(shifts).toEqual([-50]);
+    expect(position).toBe(350);
+    expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(100px) scaleY(1)");
+    expect(allAnimations[start]!.keyframes[1]!.transform).toBe("translateY(150px) scaleY(0)");
+  }
+  await flushMicrotasks();
+  dom.root.remove();
+});

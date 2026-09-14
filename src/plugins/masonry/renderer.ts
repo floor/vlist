@@ -353,6 +353,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     };
   };
 
+  let renderOrigin = 0;
+
   /**
    * Render visible items using pre-calculated placements.
    *
@@ -363,7 +365,6 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
    * - Release grace period prevents boundary thrashing
    * - Released elements removed from DOM immediately
    */
-  let renderOrigin = 0;
   const render = (
     getItem: GetItemFn<T>,
     placements: ItemPlacement[],
