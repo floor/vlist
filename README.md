@@ -1,8 +1,8 @@
 # vlist
 
-The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
+The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.9 KB.
 
-**v2.7.2** — [Changelog](./CHANGELOG.md) · Tree keeps the bounded runway for large trees; the scale() deprecation link works; bounded-mode touch limitation documented.
+**v2.8.0** — [Changelog](./CHANGELOG.md) · autosize `remeasure(index?)`; framework adapters can select the `vlist/synthetic` entry via `VListConfig.factory`; `vlist/config` no longer warns about the scale stub; deprecation notices for 3.0 (`scroll.mode`, `scroll.runway`, native scrollbar values, old plugin hooks).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -44,6 +44,22 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 npm install vlist              # vanilla JS
 npm install vlist vlist-vue    # or vlist-svelte / vlist-solidjs / vlist-react
 ```
+
+With vlist 2.8 and an adapter that forwards the `factory` option, opt into synthetic input explicitly:
+
+```ts
+import { useVList } from "vlist-react";
+import { createVList } from "vlist/synthetic";
+
+useVList({
+  factory: createVList,
+  scroll: { mode: "synthetic" },
+  items,
+  item: { height: 48, template: item => String(item.id) },
+});
+```
+
+The same factory option is available to the other adapters. `vlist/config` keeps the synthetic driver out of its default bundle; importing the factory opts in. The factory is structural configuration: changing it requires recreating the list.
 
 ## Quick Start
 
@@ -120,6 +136,21 @@ Known limitations:
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
 Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.6 KB gzipped** over the base entry (**12.5 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
+
+## Deprecated in 2.8, removed in 3.0
+
+These notices prepare the 3.0 migration; 2.x behavior and defaults stay unchanged. `vlist/native` and `setScrollSource` are 3.0 replacements, not 2.8 APIs. Bounded mode remains supported in 2.x, including carousel and sortable; it emits no deprecation warning.
+
+| Option or API | Replacement | Since |
+|---|---|---|
+| `scroll.mode` | In 3.0, synthetic input in core; import `vlist/native` for native scrolling. Bounded is removed. | 2.8 |
+| `scroll.runway` | Remove it when moving to 3.0 synthetic core. | 2.8 |
+| `scroll.scrollbar: "native"` | In 3.0 use `vlist/native` for a browser scrollbar, or `scrollbar()` in synthetic core. | 2.8 |
+| `scroll.scrollbar: "none"` | In 3.0 synthetic core has no native main-axis scrollbar to hide; native hiding belongs to `vlist/native`. | 2.8 |
+| `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `setScrollSource` when upgrading to 3.0. | 2.8 |
+| `scale()` | Use `scroll: { mode: "synthetic" }` from `vlist/synthetic`; bounded remains available in 2.x. | 2.4; guidance updated in 2.8 |
+
+Only explicit `scale()` calls warn, once per process. The `vlist/config` compatibility stub is silent in 2.x and will no longer be installed in 3.0. Its scrollbar omission/options convenience remains supported and maps to `scrollbar()`; only the two string values above are deprecated. See the [RFC-014 migration contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
 
 ## Plugins
 
@@ -355,12 +386,21 @@ groups({ getGroupForIndex, header: { height, template }, sticky?: true })
 selection({ mode: 'single' | 'multiple', initial?: [...ids] })
 data({ adapter: { read }, loading?: { cancelThreshold? } })
 table({ columns, rowHeight, headerHeight?, resizable? })
-autosize()                        // auto-measure items (requires estimatedHeight)
+autosize()                        // auto-measure items (requires estimatedHeight); list.remeasure(index?) after late content
 scrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 transition({ duration?: 200, insert?: timing, remove?: timing })
 sortable({ handle?: '.drag-handle' })  // drag-and-drop reordering
 page()                            // no config — uses document scroll
 snapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
+```
+
+### Autosize
+
+With `autosize()` and `item.estimatedHeight` (or `estimatedWidth` for horizontal lists), call `remeasure(i)` after content changes size without a `load` or `error` event, such as expanding text or changing a font. Call `remeasure()` to discard every cached measurement: visible items are measured again, and offscreen items use estimates until they render. Unknown or unmeasured indices are a no-op.
+
+```javascript
+list.remeasure(12); // Re-measure one item after its content changes.
+list.remeasure();   // Invalidate all sizes and measure items as they render.
 ```
 
 Full configuration reference → **[vlist.io](https://vlist.io)**

@@ -11,6 +11,25 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-09-15
+
+### Added
+
+- Add autosize `remeasure(index?)`: manually re-measure one item after a content-size change, or invalidate every cached size for measurement as items render. It shares the automatic load/error pending queue.
+
+- Add `VListConfig.factory` and the `VListFactory` type so framework adapters can select the `vlist/synthetic` factory without adding the driver to the default `vlist/config` bundle. Requesting synthetic mode without a factory reports the required import.
+
+### Fixed
+
+- Stop `vlist/config` and framework adapters from warning about the automatically installed `scale()` compatibility stub. Explicit `scale()` calls still warn once per process.
+
+### Deprecated
+
+- Deprecate `scroll.mode` and `scroll.runway` for 3.0: synthetic input becomes core's only model, bounded is removed, and native scrolling moves to `vlist/native`. Bounded remains supported without runtime warnings in 2.x.
+- Deprecate the `"native"` and `"none"` values of `scroll.scrollbar` for 3.0 core; native scrollbar visibility moves to `vlist/native`. The `vlist/config` omission/options convenience remains supported through the scrollbar plugin.
+- Announce removal of `PluginContext.setScrollFns` and `disableDefaultScroll` in 3.0 in favor of `setScrollSource`.
+- Update the existing `scale()` deprecation to recommend the `vlist/synthetic` entry with synthetic mode, noting that bounded remains available in 2.x. In 3.0, `vlist/config` stops installing scale entirely.
+
 ## [2.7.2] - 2026-09-14
 
 ### Fixed

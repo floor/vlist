@@ -8,7 +8,7 @@
  * Because a pinned item cannot grow, content that changes size after the
  * measurement (an image that loads or fails, a font swap, lazy content)
  * needs a fresh measurement. `load` and `error` events from descendants
- * trigger one automatically.
+ * trigger one automatically; `list.remeasure(index?)` does it on demand.
  *
  * Priority 5 — runs before grid/masonry (10) so the measured cache
  * is in place before layout plugins consume it.
@@ -65,14 +65,29 @@ export function autosize<T extends VListItem = VListItem>(
   }
 
   /**
-   * Queue a fresh measurement: the item is re-observed on the next commit and
-   * its new size replaces the old one, correcting the scroll position by the
-   * real delta.
+   * Queue a fresh measurement. With an index, the item is re-observed on the
+   * next commit and its new size replaces the old one, correcting the scroll
+   * position by the real delta. Without an index, every measurement is
+   * dropped and items are measured again as they render.
+   *
+   * @param index Zero-based item index; omit to invalidate all cached sizes.
+   * Unknown or unmeasured indices are ignored. A single-item request keeps the
+   * previous size for scroll correction until ResizeObserver supplies the new
+   * measurement; a full reset immediately falls back to estimates, including
+   * for offscreen items. Manual requests share the automatic load/error queue.
    */
-  function remeasure(index: number): void {
+  function remeasure(index?: number): void {
     if (!storedCtx || engineState.destroyed) return;
-    if (!measuredSizes.has(index)) return;
-    pendingRemeasure.add(index);
+    if (index === undefined) {
+      if (measuredSizes.size === 0) return;
+      measuredSizes.clear();
+      pendingRemeasure.clear();
+      storedCtx.rebuildSizeCache();
+      updateContentSize();
+    } else {
+      if (!measuredSizes.has(index)) return;
+      pendingRemeasure.add(index);
+    }
     storedCtx.forceRender();
   }
 
@@ -269,6 +284,7 @@ export function autosize<T extends VListItem = VListItem>(
 
       // Public methods
       ctx.registerMethod("isMeasured", isMeasured);
+      ctx.registerMethod("remeasure", remeasure);
 
       ctx.registerMethod("setMeasuredSize", (index: number, size: number): void => {
         measuredSizes.set(index, size);

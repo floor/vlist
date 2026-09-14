@@ -41,7 +41,9 @@ export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
 export type { SearchPluginConfig, SearchText } from "./plugins/search";
 export { carousel, registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained } from "./plugins/carousel";
 export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState, SlotConfig, SlotConfigResolver, TextFade } from "./plugins/carousel";
-/** @deprecated Use `scroll: { mode: "bounded" }` instead. Will be removed in vlist 3.0. */
+/** @deprecated Removed in 3.0. Use `scroll: { mode: "synthetic" }` from
+ * `vlist/synthetic` (bounded remains available in 2.x).
+ * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
 export { scale } from "./plugins/scale";
 export type { ScalePluginConfig } from "./plugins/scale";
 

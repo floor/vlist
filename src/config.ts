@@ -17,7 +17,7 @@
  * config (the adapters) pull in this module and, with it, every plugin it wires.
  */
 
-import type { VListItem, ItemConfig, GroupsConfig, VListAdapter } from "./types";
+import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
 import { createVList } from "./core/create";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
 import { page } from "./plugins/page";
@@ -31,10 +31,13 @@ import type { MasonryPluginConfig } from "./plugins/masonry";
 import { groups } from "./plugins/groups";
 import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
-import { scale } from "./plugins/scale";
+import { createScalePlugin } from "./plugins/scale/plugin";
 import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 import { snapshots } from "./plugins/snapshots";
+
+/** List creation function injected by an adapter consumer. */
+export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T>;
 
 /**
  * High-level, declarative vlist configuration accepted by the framework
@@ -43,7 +46,12 @@ import { snapshots } from "./plugins/snapshots";
  * translated into plugins by {@link resolvePlugins}.
  */
 export interface VListConfig<T extends VListItem = VListItem>
-  extends Omit<CreateVListConfig<T>, "container"> {
+  extends Omit<CreateVListConfig<T>, "container" | "scroll"> {
+  /** Synthetic mode requires a factory imported from vlist/synthetic. */
+  scroll?: Omit<ScrollConfig, "mode"> & { mode?: ScrollConfig["mode"] | "synthetic" };
+  /** List factory; defaults to core createVList. Fixed for this instance. */
+  factory?: VListFactory<T>;
+
   /** Layout mode. Wires the grid or masonry plugin from `grid`/`masonry`. */
   layout?: "grid" | "masonry";
 
@@ -150,10 +158,11 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     plugins.push(selection<T>({ mode: "none" }));
   }
 
-  plugins.push(scale<T>());
+  plugins.push(createScalePlugin<T>(false));
 
   // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
-  // browser's native scrollbar) — core handles both without a plugin. Any other
+  // browser's native scrollbar). Core hides native only for "none"; "native"
+  // simply leaves browser defaults in place. Any other
   // value (or omitted) opts into vlist's custom overlay scrollbar.
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
   if (scrollbarConfig !== "none" && scrollbarConfig !== "native") {
@@ -185,5 +194,9 @@ export function resolvePlugins<T extends VListItem = VListItem>(
 export function createVListFromConfig<T extends VListItem = VListItem>(
   config: VListConfig<T> & { container: HTMLElement | string },
 ): VList<T> {
-  return createVList<T>(config, resolvePlugins(config));
+  const { factory, ...options } = config;
+  if (options.scroll?.mode === "synthetic" && !factory) {
+    throw new Error('vlist/config: synthetic mode requires a factory. Import { createVList } from "vlist/synthetic" and pass it as factory.');
+  }
+  return (factory ?? createVList<T>)(options as CreateVListConfig<T>, resolvePlugins(config));
 }

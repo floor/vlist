@@ -356,14 +356,23 @@ export interface ScrollConfig {
   wrap?: boolean;
 
   /**
-   * Scrollbar mode (default: custom scrollbar).
-   *
-   * - *omitted* — Custom scrollbar (default), native scrollbar hidden via CSS
-   * - `'native'` — Browser native scrollbar
-   * - `'none'` — No scrollbar at all (native hidden, custom not created)
-   * - `ScrollbarOptions` — Custom scrollbar with fine-tuning options
+   * Scrollbar selection depends on the entry:
+   * - Core reads only `'none'`, which hides the native scrollbar via CSS.
+   *   Omission, `'native'` and options objects do not install a custom scrollbar.
+   * - `vlist/config` installs `scrollbar()` for omission or an options object;
+   *   `'native'` and `'none'` skip that plugin. An explicit `scrollbar()` plugin
+   *   controls its own native-scrollbar hiding independently.
    */
-  scrollbar?: "native" | "none" | ScrollbarOptions;
+  scrollbar?:
+    /** @deprecated In 3.0, native scrollbar visibility belongs to `vlist/native`.
+     * Synthetic core has no native main-axis scrollbar; use `scrollbar()` instead.
+     * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
+    | "native"
+    /** @deprecated In 3.0, native scrollbar hiding belongs to `vlist/native`.
+     * Synthetic core needs no option to hide a native main-axis scrollbar.
+     * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
+    | "none"
+    | ScrollbarOptions;
 
   /** External scroll element for window scrolling */
   element?: Window;
@@ -377,6 +386,10 @@ export interface ScrollConfig {
    * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
    * logical origin near the edges, supporting unbounded item counts without
    * compressing the scroll space.
+   *
+   * @deprecated In 3.0 synthetic input is the only model in core, native scrolling
+   * moves to `vlist/native`, and bounded is removed. Bounded remains supported in 2.x.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model
    */
   mode?: "native" | "bounded";
 
@@ -387,6 +400,9 @@ export interface ScrollConfig {
    * more native-scroll headroom and less frequent rebasing, at the cost of a
    * bigger content element. Clamped up to a minimum of 1.5 so native scroll and
    * touch momentum always have some room.
+   *
+   * @deprecated Removed with bounded scrolling in 3.0; synthetic core needs no runway.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model
    */
   runway?: number;
 }
