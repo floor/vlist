@@ -129,6 +129,22 @@ Only explicit `scale()` calls warn, once per process. The `vlist/config` compati
 | SolidJS | [`vlist-solidjs`](https://github.com/floor/vlist-solidjs) | 0.5 KB |
 | React | [`vlist-react`](https://github.com/floor/vlist-react) | 0.6 KB |
 
+With vlist 2.8 and an adapter that forwards the `factory` option, opt into synthetic input explicitly:
+
+```ts
+import { useVList } from "vlist-react";
+import { createVList } from "vlist/synthetic";
+
+useVList({
+  factory: createVList,
+  scroll: { mode: "synthetic" },
+  items,
+  item: { height: 48, template: item => String(item.id) },
+});
+```
+
+The same factory option is available to the other adapters. `vlist/config` keeps the synthetic driver out of its default bundle; importing the factory opts in. The factory is structural configuration: changing it requires recreating the list.
+
 ## Docs & Examples
 
 **18 interactive examples, full API reference, tutorials, and live benchmarks → [vlist.io](https://vlist.io)**

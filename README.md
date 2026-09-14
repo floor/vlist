@@ -45,6 +45,22 @@ npm install vlist              # vanilla JS
 npm install vlist vlist-vue    # or vlist-svelte / vlist-solidjs / vlist-react
 ```
 
+With vlist 2.8 and an adapter that forwards the `factory` option, opt into synthetic input explicitly:
+
+```ts
+import { useVList } from "vlist-react";
+import { createVList } from "vlist/synthetic";
+
+useVList({
+  factory: createVList,
+  scroll: { mode: "synthetic" },
+  items,
+  item: { height: 48, template: item => String(item.id) },
+});
+```
+
+The same factory option is available to the other adapters. `vlist/config` keeps the synthetic driver out of its default bundle; importing the factory opts in. The factory is structural configuration: changing it requires recreating the list.
+
 ## Quick Start
 
 ```typescript
