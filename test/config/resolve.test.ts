@@ -15,6 +15,8 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { createVList as createSynthetic } from "../../src/synthetic";
+import { createVList as createCore } from "../../src/core/create";
 import { resolvePlugins, createVListFromConfig } from "../../src/config";
 import type { VListConfig } from "../../src/config";
 import type { VListPlugin } from "../../src/core/types";
@@ -233,4 +235,73 @@ describe("createVListFromConfig", () => {
     expect(create).not.toThrow();
     create().destroy();
   });
+});
+
+it("factory receives resolved plugins and a copy of frozen config without factory", () => {
+  const host = createContainer();
+  let received: any;
+  let receivedPlugins: VListPlugin<TestItem>[] = [];
+  const factory = (config: any, plugins: VListPlugin<TestItem>[] = []) => {
+    received = config;
+    receivedPlugins = plugins;
+    return createCore(config, plugins);
+  };
+  const custom: VListPlugin<TestItem> = { name: "custom" };
+  const config = Object.freeze({ ...base(), container: host, factory, plugins: [custom] });
+  const list = createVListFromConfig(config);
+  try {
+    expect(received).toBeDefined();
+    expect(received).not.toHaveProperty("factory");
+    expect(received).not.toBe(config);
+    expect(received.item).toBe(config.item);
+    expect(receivedPlugins.map(plugin => plugin.name)).toEqual(["selection", "scale", "scrollbar", "snapshots", "custom"]);
+    expect(receivedPlugins[receivedPlugins.length - 1]).toBe(custom);
+    expect(config.factory).toBe(factory);
+    expect(Object.isFrozen(config)).toBe(true);
+  } finally { list.destroy(); host.remove(); }
+});
+
+it("config factory selects the synthetic driver with the public config type", () => {
+  const host = createContainer();
+  const config: VListConfig<TestItem> = {
+    ...base(), factory: createSynthetic, scroll: { mode: "synthetic" },
+  };
+  const list = createVListFromConfig({ ...config, container: host });
+  try {
+    const viewport = host.querySelector<HTMLElement>(".vlist-viewport")!;
+    expect(viewport.style.touchAction).toBe("pan-x pinch-zoom");
+    expect(viewport.firstElementChild?.getAttribute("style")).toContain("clip");
+  } finally { list.destroy(); host.remove(); }
+});
+
+it("synthetic config without a factory rejects before DOM creation with the import fix", () => {
+  const host = createContainer();
+  try {
+    expect(() => createVListFromConfig({ ...base(), container: host, scroll: { mode: "synthetic" } }))
+      .toThrow('Import { createVList } from "vlist/synthetic" and pass it as factory');
+    expect(host.children.length).toBe(0);
+  } finally { host.remove(); }
+});
+
+for (const name of ["carousel", "sortable"]) {
+  it(`synthetic factory preserves the ${name} entry guard`, () => {
+    const host = createContainer();
+    try {
+      expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
+        scroll: { mode: "synthetic" }, plugins: [{ name }],
+      })).toThrow(`${name} is not supported with synthetic mode in this release`);
+      expect(host.children.length).toBe(0);
+    } finally { host.remove(); }
+  });
+}
+
+it("synthetic factory preserves the RTL horizontal entry guard", () => {
+  const host = createContainer();
+  host.style.direction = "rtl";
+  try {
+    expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
+      orientation: "horizontal", item: { width: 40, template }, scroll: { mode: "synthetic" },
+    })).toThrow("RTL horizontal lists are not supported");
+    expect(host.children.length).toBe(0);
+  } finally { host.remove(); }
 });

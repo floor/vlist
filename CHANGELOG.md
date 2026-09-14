@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Add `VListConfig.factory` and the `VListFactory` type so framework adapters can select the `vlist/synthetic` factory without adding the driver to the default `vlist/config` bundle. Requesting synthetic mode without a factory reports the required import.
+
 ### Fixed
 
 - Stop `vlist/config` and framework adapters from warning about the automatically installed `scale()` compatibility stub. Explicit `scale()` calls still warn once per process.
