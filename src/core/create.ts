@@ -334,6 +334,7 @@ export function createVList<T extends VListItem = VListItem>(
       else if (isX) dom.viewport.scrollLeft = px;
       else dom.viewport.scrollTop = px;
     },
+    getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
   });
 

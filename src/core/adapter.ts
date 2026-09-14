@@ -52,6 +52,8 @@ export interface ScrollAdapter {
   setLogical(pos: LogicalScrollPosition): void;
   /** Pixel-equivalent of the current position (for public API / events). */
   getPixelEquivalent(): number;
+  /** Origin subtracted from logical item offsets when positioning content. */
+  getRenderOrigin(): number;
   /** Move to a pixel-equivalent position. Out-of-range input is clamped. */
   setPixelEquivalent(px: number): void;
   /** Maximum scrollable pixel-equivalent (`totalSize - containerSize`, >= 0). */
@@ -66,6 +68,8 @@ export interface ScrollAdapterConfig {
   readonly sizeCache: SizeCache;
   /** Read the current pixel-equivalent position from the active scroll source. */
   readonly getPixel: () => number;
+  /** Read the origin owned by the active scroll source. */
+  readonly getRenderOrigin: () => number;
   /** Write a (clamped) pixel-equivalent position to the active scroll source. */
   readonly setPixel: (px: number) => void;
   /** Current viewport size along the main axis. */
@@ -183,6 +187,7 @@ export function createScrollAdapter(config: ScrollAdapterConfig): ScrollAdapter 
     },
 
     getMaxPixelEquivalent,
+    getRenderOrigin: config.getRenderOrigin,
 
     scrollByPx(delta: number): void {
       setPixel(clampPixel(getPixel() + delta));

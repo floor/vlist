@@ -56,6 +56,8 @@ export function table<T extends VListItem = VListItem>(
   let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
 
@@ -108,7 +110,8 @@ export function table<T extends VListItem = VListItem>(
     }
 
     // Calculate visible range
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const overscan = storedCtx.config.overscan;
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
@@ -118,13 +121,12 @@ export function table<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-    // Row transforms subtract baseOffset, so a baseOffset move with an
-    // unchanged range must still commit (issue 025). Native keeps it at 0.
+    // An origin move with an unchanged range must still commit (issue 025).
     if (
       renderStart === engineState.prevRangeStart &&
       renderEnd === engineState.prevRangeEnd &&
       !engineState.renderPending &&
-      engineState.baseOffset === engineState.prevBaseOffset
+      origin === lastOrigin
     ) {
       return;
     }
@@ -142,12 +144,12 @@ export function table<T extends VListItem = VListItem>(
     range.start = renderStart;
     range.end = renderEnd;
 
-    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex);
+    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex, origin);
 
     // Update engine state
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     // Publish the visible DATA range for the async data plugin's load hooks.
@@ -217,6 +219,7 @@ export function table<T extends VListItem = VListItem>(
     conflicts: ["grid", "masonry"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;
@@ -344,7 +347,7 @@ export function table<T extends VListItem = VListItem>(
         () => engineState.totalItems,
         resolvedConfig.striped || undefined,
         undefined,
-        () => engineState.baseOffset,
+        scroll.getRenderOrigin,
       );
 
       // ── Wire render pipeline ────────────────────────────────────

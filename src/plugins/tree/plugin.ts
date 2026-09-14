@@ -160,6 +160,8 @@ export function tree<T extends VListItem = VListItem>(
   let layout: TreeLayout<T>;
   let sizeCache: SizeCache;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let pool: ElementPool;
   let contentElement: HTMLElement;
   let rootElement: HTMLElement;
@@ -243,7 +245,7 @@ export function tree<T extends VListItem = VListItem>(
   function scrollIntoView(index: number): void {
     const offset = sizeCache.getOffset(index);
     const size = sizeCache.getSize(index);
-    const sp = engineState.scrollPosition;
+    const sp = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
     if (offset < sp) {
       scrollTo(offset);
@@ -502,10 +504,11 @@ export function tree<T extends VListItem = VListItem>(
       if (connectorLines) rootElement.classList.add(`${classPrefix}--tree-lines`);
     }
 
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
 
-    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) return;
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && origin === lastOrigin) return;
     lastScrollPosition = scrollPos;
     lastContainerSize = cs;
     forceNextRender = false;
@@ -526,9 +529,8 @@ export function tree<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-    // Row transforms subtract baseOffset (issue 025): a baseOffset move with an
-    // unchanged range must still commit. Native keeps baseOffset at 0.
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) return;
+    // An origin move with an unchanged range must still commit (issue 025).
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && origin === lastOrigin) return;
 
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
@@ -559,9 +561,8 @@ export function tree<T extends VListItem = VListItem>(
         }
       }
 
-      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-      // bounded runway. baseOffset is 0 in native mode (byte-identical).
-      element.style.transform = buildTransform(sizeCache.getOffset(i) - engineState.baseOffset);
+      // Map logical item offsets into content coordinates using the adapter origin.
+      element.style.transform = buildTransform(sizeCache.getOffset(i) - origin);
 
       if (isf) {
         isf(i, itemState);
@@ -583,7 +584,7 @@ export function tree<T extends VListItem = VListItem>(
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     let fillCount = 0;
@@ -650,6 +651,7 @@ export function tree<T extends VListItem = VListItem>(
     conflicts: ["groups", "grid", "masonry", "table"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       sizeCache = ctx.sizeCache;
       engineState = ctx.getState();
       pool = ctx.pool;

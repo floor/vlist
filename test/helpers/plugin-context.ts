@@ -181,6 +181,7 @@ export function createPluginMockContext<T extends VListItem>(
       engineState.scrollPosition = px;
       scrollCalls.push(px);
     },
+    getRenderOrigin: () => engineState.baseOffset,
     getContainerSize: () => engineState.containerSize,
   });
 

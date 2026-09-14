@@ -62,6 +62,8 @@ export function masonry<T extends VListItem = VListItem>(
   let layout: MasonryLayout;
   let renderer: MasonryRenderer<T> | null = null;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let storedCtx: PluginContext<T> | null = null;
   let isX: boolean;
   let classPrefix: string;
@@ -333,10 +335,11 @@ export function masonry<T extends VListItem = VListItem>(
 
     resolveSelectionMethods();
 
-    const scrollPosition = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPosition = scroll.getPixelEquivalent();
     const containerSize = engineState.containerSize;
 
-    if (!forceNextRender && scrollPosition === lastScrollPosition && containerSize === lastContainerSize) {
+    if (!forceNextRender && scrollPosition === lastScrollPosition && containerSize === lastContainerSize && origin === lastOrigin) {
       return;
     }
     lastScrollPosition = scrollPosition;
@@ -355,7 +358,8 @@ export function masonry<T extends VListItem = VListItem>(
 
     cachedItems = storedCtx.getItems();
 
-    renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex);
+    renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex, origin);
+    lastOrigin = origin;
 
     // Update engine state for other plugins
     const vLen = visiblePlacements.length;
@@ -395,6 +399,7 @@ export function masonry<T extends VListItem = VListItem>(
     conflicts: ["grid", "table"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
       rawSizeSpec = ctx.rawSizeSpec;
@@ -429,7 +434,7 @@ export function masonry<T extends VListItem = VListItem>(
         undefined,
         undefined,
         undefined,
-        () => engineState.baseOffset,
+        scroll.getRenderOrigin,
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);
@@ -498,7 +503,7 @@ export function masonry<T extends VListItem = VListItem>(
         const placement = cachedPlacements[index];
         if (!placement) return;
 
-        const scrollPos = engineState.scrollPosition;
+        const scrollPos = scroll.getPixelEquivalent();
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);

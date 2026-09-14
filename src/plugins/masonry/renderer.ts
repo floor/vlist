@@ -44,6 +44,8 @@ export interface MasonryRenderer<T extends VListItem = VListItem> {
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    /** Reuse the plugin commit's origin; standalone renders read the callback once. */
+    origin?: number,
   ) => void;
 
   /** Get rendered item element by flat item index */
@@ -241,9 +243,10 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   const positionElement = (
     element: HTMLElement,
     placement: ItemPlacement,
+    origin: number,
   ): void => {
     // placement.y is the absolute main-axis offset; shift it into the runway.
-    const main = Math.round(placement.y - getBaseOffset());
+    const main = Math.round(placement.y - origin);
     if (isHorizontal) {
       element.style.transform = `translate(${main}px, ${Math.round(placement.x)}px)`;
     } else {
@@ -276,6 +279,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     placement: ItemPlacement,
     isSelected: boolean,
     isFocused: boolean,
+    origin: number,
   ): TrackedItem => {
     const element = pool.acquire();
     const isGH = (item as any).__groupHeader;
@@ -335,14 +339,14 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
     // Apply state classes and position
     applyClasses(element, isSelected, isFocused);
-    positionElement(element, placement);
+    positionElement(element, placement, origin);
 
     return {
       element,
       lastItem: item,
       lastSelected: isSelected,
       lastFocused: isFocused,
-      lastY: placement.y - getBaseOffset(),
+      lastY: placement.y - origin,
       absY: placement.y,
       lastX: placement.x,
       lastSize: placement.size,
@@ -366,6 +370,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     placements: ItemPlacement[],
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    origin = getBaseOffset(),
   ): void => {
     frameCounter++;
 
@@ -397,7 +402,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         const selectedChanged = existing.lastSelected !== isSelected;
         const focusedChanged = existing.lastFocused !== isFocused;
         const posChanged =
-          existing.lastY !== placement.y - getBaseOffset() ||
+          existing.lastY !== placement.y - origin ||
           existing.lastX !== placement.x;
         const sizeChanged =
           existing.lastSize !== placement.size ||
@@ -440,8 +445,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
         // Position update only when coordinates changed
         if (posChanged) {
-          positionElement(existing.element, placement);
-          existing.lastY = placement.y - getBaseOffset();
+          positionElement(existing.element, placement, origin);
+          existing.lastY = placement.y - origin;
           existing.absY = placement.y;
           existing.lastX = placement.x;
         }
@@ -453,6 +458,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           placement,
           isSelected,
           isFocused,
+          origin,
         );
         if (!fragment) fragment = document.createDocumentFragment();
         fragment.appendChild(tracked.element);
@@ -479,7 +485,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // current runway. In native mode baseOffset is 0 and nothing changes;
         // in bounded/synthetic mode a stale transform would land it inside the
         // viewport after a jump, or lag by the baseOffset delta on wheel.
-        const main = Math.round(tracked.absY - getBaseOffset());
+        const main = Math.round(tracked.absY - origin);
         if (main !== tracked.lastY) {
           tracked.lastY = main;
           const cross = Math.round(tracked.lastX);
