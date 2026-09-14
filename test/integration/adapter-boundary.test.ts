@@ -17,8 +17,8 @@ const allowed: Record<string, number> = {
   "snapshots/plugin.ts": 2,
   "sortable/plugin.ts": 4,
   "transition/plugin.ts": 13,
-  // Page is a scroll source: copy the previous position, then commit its input.
-  "page/plugin.ts": 2,
+  // Page is a scroll source: setter commit, listener previous/current position.
+  "page/plugin.ts": 3,
 };
 
 it("keeps renderer coordinates behind the adapter and limits unmigrated accesses", () => {
