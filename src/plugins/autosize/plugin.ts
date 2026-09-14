@@ -69,6 +69,12 @@ export function autosize<T extends VListItem = VListItem>(
    * next commit and its new size replaces the old one, correcting the scroll
    * position by the real delta. Without an index, every measurement is
    * dropped and items are measured again as they render.
+   *
+   * @param index Zero-based item index; omit to invalidate all cached sizes.
+   * Unknown or unmeasured indices are ignored. A single-item request keeps the
+   * previous size for scroll correction until ResizeObserver supplies the new
+   * measurement; a full reset immediately falls back to estimates, including
+   * for offscreen items. Manual requests share the automatic load/error queue.
    */
   function remeasure(index?: number): void {
     if (!storedCtx || engineState.destroyed) return;

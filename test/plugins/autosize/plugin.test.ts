@@ -1236,4 +1236,57 @@ describe("autosize remeasure on late content", () => {
     expect(b.style.height).toBe("100px");
     expect(method<() => number>("getMeasuredCount")()).toBe(2);
   });
+
+  it("manual and media requests share the pending queue until measurements arrive", () => {
+    const a = renderItem(0);
+    const b = renderItem(1, false);
+    commit(0, 1);
+    mockCtx.ctx.forceRender = () => { forceRenders++; };
+    a.img.dispatchEvent(new Event("load"));
+    method<(i?: number) => void>("remeasure")(1);
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(false);
+    expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(false);
+    expect(method<() => number>("getMeasuredCount")()).toBe(2);
+
+    nextSize = 120;
+    commit(0, 1);
+    expect(a.el.style.height).toBe("120px");
+    expect(b.el.style.height).toBe("120px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+    expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(true);
+  });
+
+  it("remeasure all clears pending requests and invalidates offscreen measurements", () => {
+    renderItem(0);
+    renderItem(1, false);
+    commit(0, 1);
+    mockCtx.ctx.forceRender = () => { forceRenders++; };
+    method<(i?: number) => void>("remeasure")(1);
+    expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(false);
+
+    method<(i?: number) => void>("remeasure")();
+    expect(method<() => number>("getMeasuredCount")()).toBe(0);
+    nextSize = 110;
+    commit(0);
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+    expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(false);
+    expect(method<() => number>("getMeasuredCount")()).toBe(1);
+
+    // A supplied measurement must not remain invalidated by an old pending request.
+    method<(i: number, size: number) => void>("setMeasuredSize")(1, 95);
+    expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(true);
+  });
+
+  it("unknown indices leave measured items and rendering unchanged", () => {
+    renderItem(0, false);
+    commit(0);
+    forceRenders = 0;
+    for (const index of [-1, 10, 999, 0.5, NaN]) {
+      method<(i?: number) => void>("remeasure")(index);
+    }
+    expect(forceRenders).toBe(0);
+    expect(method<() => number>("getMeasuredCount")()).toBe(1);
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+  });
+
 });

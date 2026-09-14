@@ -394,6 +394,15 @@ page()                            // no config — uses document scroll
 snapshots({ autoSave: 'key' })    // automatic sessionStorage save/restore
 ```
 
+### Autosize
+
+With `autosize()` and `item.estimatedHeight` (or `estimatedWidth` for horizontal lists), call `remeasure(i)` after content changes size without a `load` or `error` event, such as expanding text or changing a font. Call `remeasure()` to discard every cached measurement: visible items are measured again, and offscreen items use estimates until they render. Unknown or unmeasured indices are a no-op.
+
+```javascript
+list.remeasure(12); // Re-measure one item after its content changes.
+list.remeasure();   // Invalidate all sizes and measure items as they render.
+```
+
 Full configuration reference → **[vlist.io](https://vlist.io)**
 
 ## Base Configuration

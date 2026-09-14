@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Added
 
+- Add autosize `remeasure(index?)`: manually re-measure one item after a content-size change, or invalidate every cached size for measurement as items render. It shares the automatic load/error pending queue.
+
 - Add `VListConfig.factory` and the `VListFactory` type so framework adapters can select the `vlist/synthetic` factory without adding the driver to the default `vlist/config` bundle. Requesting synthetic mode without a factory reports the required import.
 
 ### Fixed
