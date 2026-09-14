@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.7.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Grid, table, tree and masonry no longer judder in bounded and synthetic mode: their renderers now follow baseOffset on every step.
+**v2.7.2** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Tree keeps the bounded runway for large trees; the scale() deprecation link works; bounded-mode touch limitation documented.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -55,6 +55,8 @@ const list = createVList({ container: '#app', items, item: { height: 200, templa
 ## Synthetic scroll input
 
 The opt-in `vlist/synthetic` entry adds `scroll.mode: 'synthetic'` alongside native and bounded modes. Native remains the default. Import the factory from this entry and plugins from `vlist`:
+Bounded mode note: on touch devices a long native fling can outrun the 2x runway and stall at its edge (measured at 145-226% of a 16x runway on an iPhone SE and a Pixel 8a). Prefer synthetic mode for touch-heavy lists; bounded remains the right choice for wheel and keyboard driven lists.
+
 
 ```typescript
 import { createVList } from 'vlist/synthetic'

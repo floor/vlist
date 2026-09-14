@@ -19,7 +19,7 @@ export function scale<T extends VListItem = VListItem>(
         console.warn(
           "[vlist] scale() is deprecated and will be removed in vlist 3.0. " +
           "Use scroll: { mode: \"bounded\" } instead — it handles lists of any size " +
-          "without coordinate compression. See https://vlist.io/docs/logical-scroll",
+          "without coordinate compression. See https://vlist.io/docs/rfcs/RFC-012-Logical-Scroll-Model",
         );
       }
     },

@@ -24,6 +24,7 @@ import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";
 import { grid } from "../../src/plugins/grid";
 import { table } from "../../src/plugins/table";
+import { tree } from "../../src/plugins/tree";
 import { masonry } from "../../src/plugins/masonry";
 
 // =============================================================================
@@ -525,6 +526,20 @@ describe("bounded scroll — renderer plugins", () => {
       ],
     );
     expect(parseInt(getContent(container).style.height, 10)).toBe(RUNWAY);
+  });
+
+  it("tree caps content to the runway for a huge item count", () => {
+    const nodes = Array.from({ length: HUGE }, (_, i) => ({ id: i + 1, name: `Node ${i}`, children: [] as never[] }));
+    list = createVList<TestItem & { children: never[] }>(
+      {
+        container,
+        items: nodes,
+        item: { height: ITEM, template: simpleTemplate },
+        scroll: { mode: "bounded" },
+      },
+      [tree<TestItem & { children: never[] }>({})],
+    );
+    expect(parseInt(getContent(container).style.height, 10)).toBeLessThanOrEqual(RUNWAY);
   });
 
   it("masonry caps content to the runway for a huge item count", () => {
