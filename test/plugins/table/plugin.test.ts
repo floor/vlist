@@ -1324,3 +1324,31 @@ describe("table - Integration", () => {
     cleanup();
   });
 });
+
+describe('table — physical cross-axis keyboard navigation', () => {
+  for (const rtl of [false, true]) it(`${rtl ? 'RTL' : 'LTR'} column keys reach both edges with native offsets`, () => {
+    const t = createTableMockContext({ containerWidth: 300 });
+    t.dom.root.dir = rtl ? 'rtl' : 'ltr';
+    // Happy DOM omits the browser UA rule mapping dir to inherited direction.
+    t.dom.root.style.direction = t.dom.root.dir;
+    let raw = 0;
+    Object.defineProperty(t.dom.viewport, 'scrollLeft', {
+      configurable: true, get: () => raw,
+      set: (value: number) => { raw = rtl ? Math.max(-300, Math.min(0, value)) : Math.max(0, Math.min(300, value)); },
+    });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    try {
+      plugin.setup!(t.ctx);
+      const sequence: [string, number][] = rtl
+        ? [['ArrowLeft', -100], ['ArrowLeft', -300], ['ArrowRight', -100], ['ArrowRight', 0]]
+        : [['ArrowRight', 200], ['ArrowRight', 300], ['ArrowLeft', 200], ['ArrowLeft', 0]];
+      for (const [key, expected] of sequence) {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true });
+        for (const handler of t.keydownHandlers) handler(event);
+        expect(raw).toBe(expected);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(t.engineState.scrollPosition).toBe(0);
+    } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
+  });
+});

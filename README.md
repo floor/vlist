@@ -113,7 +113,7 @@ Supported plugins are **table, groups, snapshots, scrollbar, autosize, transitio
 
 Known limitations:
 
-- RTL horizontal lists throw in synthetic mode in this release; use native mode. Vertical lists on RTL pages are supported. RTL support for the synthetic driver is planned as a non-breaking addition.
+- RTL horizontal lists throw in synthetic mode in this release; use native mode. Vertical lists and tables support `dir="rtl"` on the container, including cross-axis wheel movement, aligned table headers and keyboard column navigation. Horizontal RTL support for the synthetic driver is planned as a non-breaking addition.
 - Same-axis touch stops at either boundary with no parent handoff, including gestures that start inside an edge-pinned list. Use native mode when touch gestures must scroll the parent page at a boundary.
 - The native main-axis scrollbar is absent. Provide a custom scrollbar, such as `scrollbar()` above. Its accessibility release gate remains open; synthetic mode is not a completed scrollbar-accessibility sign-off.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
