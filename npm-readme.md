@@ -73,19 +73,20 @@ Supported plugins are **table, groups, snapshots, scrollbar, autosize, transitio
 
 Known limitations:
 
+- RTL horizontal lists throw in synthetic mode in this release; use native mode. Vertical lists on RTL pages are supported. RTL support for the synthetic driver is planned as a non-breaking addition.
 - Same-axis touch stops at either boundary with no parent handoff, including gestures that start inside an edge-pinned list. Use native mode when touch gestures must scroll the parent page at a boundary.
 - The native main-axis scrollbar is absent. Provide a custom scrollbar, such as `scrollbar()` above. Its accessibility release gate remains open; synthetic mode is not a completed scrollbar-accessibility sign-off.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
-Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.5 KB gzipped** over the base entry (**12.4 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
+Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.6 KB gzipped** over the base entry (**12.4 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
 
 ## Plugins
 
 | Plugin | Size | Description |
 |--------|------|-------------|
 | **Base** | 9.8 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
-| `vlist/synthetic` entry | +2.5 KB | Opt-in synthetic scroll input (12.4 KB total before plugins; unreleased) |
+| `vlist/synthetic` entry | +2.6 KB | Opt-in synthetic scroll input (12.4 KB total before plugins; unreleased) |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.8 KB | Single/multiple selection with 2D keyboard nav |
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
