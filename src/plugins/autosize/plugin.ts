@@ -40,6 +40,7 @@ export function autosize<T extends VListItem = VListItem>(
   let observer: ResizeObserver | null = null;
   let storedCtx: PluginContext<T> | null = null;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let isX: boolean;
   let sizeProp: "width" | "height";
   let estimatedSize: number;
@@ -90,12 +91,12 @@ export function autosize<T extends VListItem = VListItem>(
 
   function isAtEnd(): boolean {
     const maxScroll = maxScrollPos();
-    return maxScroll > 0 && engineState.scrollPosition >= maxScroll - END_THRESHOLD;
+    return maxScroll > 0 && scroll.getPixelEquivalent() >= maxScroll - END_THRESHOLD;
   }
 
   function snapToEnd(): void {
     const maxScroll = maxScrollPos();
-    if (maxScroll > engineState.scrollPosition) {
+    if (maxScroll > scroll.getPixelEquivalent()) {
       storedCtx!.scrollTo(maxScroll);
     }
   }
@@ -109,6 +110,7 @@ export function autosize<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
       isX = ctx.config.axis.primary === "x";
@@ -136,7 +138,7 @@ export function autosize<T extends VListItem = VListItem>(
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
-        const firstVisible = ctx.sizeCache.indexAtOffset(engineState.scrollPosition);
+        const firstVisible = ctx.sizeCache.indexAtOffset(scroll.getPixelEquivalent());
 
         for (const entry of entries) {
           const el = entry.target as HTMLElement;

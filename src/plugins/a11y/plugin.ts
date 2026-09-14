@@ -84,7 +84,7 @@ export function a11y<T extends VListItem = VListItem>(
         const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
-        const sp = engineState.scrollPosition;
+        const sp = ctx.scroll.getPixelEquivalent();
         const cs = engineState.containerSize;
         const sP = config.startPadding;
         const eP = config.endPadding;
@@ -96,8 +96,7 @@ export function a11y<T extends VListItem = VListItem>(
         else if (adjBot > sp + cs) pos = adjBot + eP - cs;
 
         if (pos !== sp) {
-          engineState.scrollPosition = pos;
-          ctx.scrollTo(pos);
+          ctx.scroll.setPixelEquivalent(pos);
         }
       };
 

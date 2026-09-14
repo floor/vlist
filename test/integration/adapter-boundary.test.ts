@@ -6,18 +6,13 @@ import ts from "typescript";
 const root = join(import.meta.dir, "../../src/plugins");
 const forbidden = new Set(["scrollPosition", "baseOffset", "prevBaseOffset"]);
 
-// Migration debt, removed in PR b (motion) and PR c (readers). Counts prevent
-// adding another direct access even in a plugin that is not migrated yet.
-const allowed: Record<string, number> = {
-  "a11y/plugin.ts": 2,
-  "autosize/plugin.ts": 3,
-  "selection/plugin.ts": 1,
-  "snapshots/plugin.ts": 2,
-  // Page is a scroll source: setter commit, listener previous/current position.
-  "page/plugin.ts": 3,
-};
+// The migration is complete. Page is the only plugin scroll source: its setter
+// and window listener commit position, and the listener reads the previous value.
+// These three accesses belong to those two source commit sites; no renderer or
+// reader plugin may access engine scroll coordinates directly.
+const allowed: Record<string, number> = { "page/plugin.ts": 3 };
 
-it("keeps renderer coordinates behind the adapter and limits unmigrated accesses", () => {
+it("allows direct engine scroll coordinates only in the page scroll source", () => {
   const found: Record<string, number> = {};
   const accesses: string[] = [];
   function scan(dir: string): void {

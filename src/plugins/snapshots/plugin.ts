@@ -54,13 +54,13 @@ export function snapshots<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
-      const { sizeCache, emitter } = ctx;
+      const { sizeCache, emitter, scroll } = ctx;
       const state = ctx.getState();
 
       // ── getScrollSnapshot ──────────────────────────────────────
 
       const getScrollSnapshot = (): ScrollSnapshot => {
-        const scrollTop = state.scrollPosition;
+        const scrollTop = scroll.getPixelEquivalent();
         const totalItems = state.totalItems;
 
         const getSelected = ctx.getMethod("getSelected") as
@@ -224,7 +224,7 @@ export function snapshots<T extends VListItem = VListItem>(
             let polls = 0;
             const pollUntilReady = (): void => {
               if (state.containerSize > 0) {
-                if (Math.abs(state.scrollPosition - scrollPosition) > 1) {
+                if (Math.abs(scroll.getPixelEquivalent() - scrollPosition) > 1) {
                   ctx.scrollTo(scrollPosition);
                 }
                 loadVisibleFn().then(() => settle(true), () => settle(false));

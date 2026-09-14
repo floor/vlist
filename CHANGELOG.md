@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Internal
 
+- Complete plugin scroll-adapter adoption for a11y, autosize, selection and snapshots; enforce the page-only scroll-source boundary.
+
 - Route transition, groups, carousel and sortable through the scroll adapter; commit native programmatic writes synchronously through the scroll source.
 
 - Route grid, table, masonry and tree render coordinates through the scroll adapter, with renderer-owned origin guards and an enforced plugin boundary.
