@@ -132,8 +132,11 @@ export function phase1Calculate(
   const count = renderEnd - renderStart + 1;
   const safeCap = Math.min(count, state.capacity, maxRender);
 
-  // Range-unchanged fast path
-  if (renderStart === state.prevRangeStart && renderEnd === state.prevRangeEnd && !state.renderPending) {
+  // Range-unchanged fast path. Item transforms are `offset - baseOffset`, so a
+  // logical provider that moves baseOffset without changing the range (bounded
+  // wheel mid-list, synthetic input) must still commit, or rows stand still
+  // until the range crosses a row boundary. Native mode keeps baseOffset at 0.
+  if (renderStart === state.prevRangeStart && renderEnd === state.prevRangeEnd && !state.renderPending && state.baseOffset === state.prevBaseOffset) {
     return false;
   }
 
@@ -152,6 +155,7 @@ export function phase1Calculate(
 
   state.prevRangeStart = renderStart;
   state.prevRangeEnd = renderEnd;
+  state.prevBaseOffset = state.baseOffset;
   state.renderPending = false;
   return true;
 }
