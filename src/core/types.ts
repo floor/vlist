@@ -122,6 +122,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   enableListboxRole(): void;
 
   setSizeConfig(config: number | ((index: number) => number)): void;
+  /** @deprecated Use setScrollSource in 3.0; removed in 3.0.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
   setBoundedWrap(config: import("./runway").WrapConfig): void;
@@ -148,6 +150,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   /** Cancel any in-flight smooth-scroll animation on the active handler. */
   cancelScroll(): void;
+  /** @deprecated Use setScrollSource in 3.0; removed in 3.0.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
