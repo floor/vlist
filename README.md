@@ -93,6 +93,8 @@ const list = createVList({
 ## Synthetic scroll input
 
 The opt-in `vlist/synthetic` entry adds `scroll.mode: 'synthetic'` alongside native and bounded modes. Native remains the default. Import the factory from this entry and plugins from `vlist`:
+Bounded mode note: on touch devices a long native fling can outrun the 2x runway and stall at its edge (measured at 145-226% of a 16x runway on an iPhone SE and a Pixel 8a). Prefer synthetic mode for touch-heavy lists; bounded remains the right choice for wheel and keyboard driven lists.
+
 
 ```typescript
 import { createVList } from 'vlist/synthetic'
