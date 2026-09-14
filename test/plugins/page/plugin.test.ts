@@ -149,12 +149,12 @@ describe("page — DOM Modifications", () => {
 // =============================================================================
 
 describe("page — Context Method Delegation", () => {
-  it("should call disableDefaultScroll", () => {
+  it("should install an external scroll source", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const disableScrollSpy = mock(() => {});
-    (ctx as any).disableDefaultScroll = disableScrollSpy;
+    (ctx as any).setScrollSource = disableScrollSpy;
 
     plugin.setup!(ctx);
 
@@ -175,7 +175,7 @@ describe("page — Context Method Delegation", () => {
     cleanup();
   });
 
-  it("should call disableDefaultScroll and disableDefaultResize (not setScrollTarget)", () => {
+  it("should install an external scroll source and disableDefaultResize (not setScrollTarget)", () => {
     // v2 page plugin manages scroll via window.addEventListener directly,
     // it does NOT call setScrollTarget — scroll interception is handled internally.
     const plugin = page<TestItem>();
@@ -191,18 +191,17 @@ describe("page — Context Method Delegation", () => {
     cleanup();
   });
 
-  it("should call setScrollFns with getTop and setTop functions", () => {
+  it("should call setScrollSource with a writer", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
-    const setScrollFnsSpy = mock((_get: any, _set: any) => {});
-    (ctx as any).setScrollFns = setScrollFnsSpy;
+    const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
+    (ctx as any).setScrollSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
-    expect(setScrollFnsSpy).toHaveBeenCalledTimes(1);
-    const [getTop, setTop] = setScrollFnsSpy.mock.calls[0]!;
-    expect(typeof getTop).toBe("function");
+    expect(setScrollSourceSpy).toHaveBeenCalledTimes(1);
+    const { write: setTop } = setScrollSourceSpy.mock.calls[0]![0];
     expect(typeof setTop).toBe("function");
     cleanup();
   });
@@ -225,17 +224,17 @@ describe("page — Context Method Delegation", () => {
 // =============================================================================
 
 describe("page — Scroll Position Functions", () => {
-  it("getTop should return a number (0 in JSDOM since getBoundingClientRect returns zeros)", () => {
+  it("window listener should keep position at zero when the viewport begins at the origin", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
-    const setScrollFnsSpy = mock((_get: any, _set: any) => {});
-    (ctx as any).setScrollFns = setScrollFnsSpy;
+    const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
+    (ctx as any).setScrollSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
-    const getTop = setScrollFnsSpy.mock.calls[0]![0] as () => number;
-    const position = getTop();
+    window.dispatchEvent(new Event("scroll"));
+    const position = ctx.scroll.getPixelEquivalent();
 
     expect(typeof position).toBe("number");
     // In JSDOM, getBoundingClientRect().top = 0, so Math.max(0, -0) = 0
@@ -247,12 +246,12 @@ describe("page — Scroll Position Functions", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
-    const setScrollFnsSpy = mock((_get: any, _set: any) => {});
-    (ctx as any).setScrollFns = setScrollFnsSpy;
+    const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
+    (ctx as any).setScrollSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
-    const setTop = setScrollFnsSpy.mock.calls[0]![1] as (pos: number) => void;
+    const setTop = setScrollSourceSpy.mock.calls[0]![0].write;
 
     // Should not throw — window.scrollTo is a no-op in JSDOM
     expect(() => setTop(100)).not.toThrow();
@@ -260,21 +259,21 @@ describe("page — Scroll Position Functions", () => {
     cleanup();
   });
 
-  it("getTop should use rect.left in horizontal mode", () => {
+  it("window listener should use rect.left in horizontal mode", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
-    const setScrollFnsSpy = mock((_get: any, _set: any) => {});
-    (ctx as any).setScrollFns = setScrollFnsSpy;
+    const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
+    (ctx as any).setScrollSource = setScrollSourceSpy;
 
+    ctx.dom.viewport.getBoundingClientRect = () => ({ left: -125, top: -250 } as DOMRect);
     plugin.setup!(ctx);
 
-    const getTop = setScrollFnsSpy.mock.calls[0]![0] as () => number;
-    const position = getTop();
+    window.dispatchEvent(new Event("scroll"));
+    const position = ctx.scroll.getPixelEquivalent();
 
     expect(typeof position).toBe("number");
-    // In JSDOM, getBoundingClientRect().left = 0, so Math.max(0, -0) = 0
-    expect(position).toBe(0);
+    expect(position).toBe(125);
     cleanup();
   });
 
@@ -282,12 +281,12 @@ describe("page — Scroll Position Functions", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
-    const setScrollFnsSpy = mock((_get: any, _set: any) => {});
-    (ctx as any).setScrollFns = setScrollFnsSpy;
+    const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
+    (ctx as any).setScrollSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
-    const setTop = setScrollFnsSpy.mock.calls[0]![1] as (pos: number) => void;
+    const setTop = setScrollSourceSpy.mock.calls[0]![0].write;
 
     // Should not throw — window.scrollTo is a no-op in JSDOM
     expect(() => setTop(200)).not.toThrow();
@@ -824,7 +823,7 @@ describe("page — Window scroll", () => {
 
     plugin.setup!(ctx);
 
-    engineState.scrollPosition = 0;
+    engineState.scrollPosition = 100;
     engineState.prevScrollPosition = 0;
 
     window.dispatchEvent(new Event("scroll"));
@@ -834,42 +833,28 @@ describe("page — Window scroll", () => {
     cleanup();
   });
 
-  it("should fire onScrollIdle after 150ms of no scrolling", async () => {
+  it("should delegate window commits to core", () => {
     const plugin = page<TestItem>();
-    const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items);
-    const onScrollIdleSpy = mock(() => {});
-    (ctx as any).onScrollIdle = onScrollIdleSpy;
-    (ctx as any).onScrollFrame = () => {};
-
+    const { ctx, cleanup } = createPluginMockContext(createTestItems(100));
+    const commit = mock(() => {});
+    ctx.commitScroll = commit;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ top: -120 } as DOMRect);
     plugin.setup!(ctx);
-
     window.dispatchEvent(new Event("scroll"));
-
-    await new Promise((r) => setTimeout(r, 200));
-    expect(onScrollIdleSpy).toHaveBeenCalled();
-
+    expect(commit).toHaveBeenCalledWith(120);
     plugin.destroy!();
     cleanup();
   });
 
-  it("should clear previous idle timer on rapid scroll", async () => {
+  it("should dedupe window events within half a pixel", () => {
     const plugin = page<TestItem>();
-    const items = createTestItems(100);
-    const { ctx, cleanup } = createPluginMockContext(items);
-    const onScrollIdleSpy = mock(() => {});
-    (ctx as any).onScrollIdle = onScrollIdleSpy;
-    (ctx as any).onScrollFrame = () => {};
-
+    const { ctx, cleanup } = createPluginMockContext(createTestItems(100));
+    const commit = mock(() => {});
+    ctx.commitScroll = commit;
+    ctx.dom.viewport.getBoundingClientRect = () => ({ top: -0.25 } as DOMRect);
     plugin.setup!(ctx);
-
     window.dispatchEvent(new Event("scroll"));
-    window.dispatchEvent(new Event("scroll"));
-    window.dispatchEvent(new Event("scroll"));
-
-    await new Promise((r) => setTimeout(r, 200));
-    expect(onScrollIdleSpy).toHaveBeenCalledTimes(1);
-
+    expect(commit).not.toHaveBeenCalled();
     plugin.destroy!();
     cleanup();
   });

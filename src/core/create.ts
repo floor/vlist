@@ -279,7 +279,7 @@ export function createVList<T extends VListItem = VListItem>(
   const destroyHandlers: Array<() => void> = [];
   let virtualTotalFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
-  let syncNativeScroll: (() => void) | undefined;
+  let commitScroll: ((pos?: number) => void) | undefined;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
@@ -328,7 +328,7 @@ export function createVList<T extends VListItem = VListItem>(
       if (isX) dom.viewport.scrollLeft = position;
       else dom.viewport.scrollTop = position;
       // Reuse native read-back, rendering, event dedupe and the idle timer.
-      syncNativeScroll?.();
+      commitScroll?.();
     }
   }
 
@@ -380,8 +380,13 @@ export function createVList<T extends VListItem = VListItem>(
           Object.assign(sizeCache, newCache);
         }
       },
+      setScrollSource(source): void {
+        scrollSetFn = source.write;
+        skipDefaultScroll = true;
+      },
+      commitScroll(pos): void { commitScroll!(pos); },
       setScrollFns(_get: () => number, set: (pos: number) => void): void {
-        scrollSetFn = set;
+        ctx.setScrollSource({ write: set });
       },
       setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
       cancelScroll(): void { scrollHandler?.cancelScroll(); },
@@ -666,7 +671,7 @@ export function createVList<T extends VListItem = VListItem>(
       onIdle: doScrollIdle,
     });
     scrollHandler = nativeHandler;
-    syncNativeScroll = nativeHandler.syncScroll;
+    commitScroll = nativeHandler.commitScroll;
   }
 
   smoothScrollFn = scrollHandler.smoothScrollTo;

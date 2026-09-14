@@ -6,13 +6,10 @@ import ts from "typescript";
 const root = join(import.meta.dir, "../../src/plugins");
 const forbidden = new Set(["scrollPosition", "baseOffset", "prevBaseOffset"]);
 
-// The migration is complete. Page is the only plugin scroll source: its setter
-// and window listener commit position, and the listener reads the previous value.
-// These three accesses belong to those two source commit sites; no renderer or
-// reader plugin may access engine scroll coordinates directly.
-const allowed: Record<string, number> = { "page/plugin.ts": 3 };
+// Plugins use the adapter and core commit seam for all scroll coordinates.
+const allowed: Record<string, number> = {};
 
-it("allows direct engine scroll coordinates only in the page scroll source", () => {
+it("rejects direct engine scroll coordinates in every plugin", () => {
   const found: Record<string, number> = {};
   const accesses: string[] = [];
   function scan(dir: string): void {

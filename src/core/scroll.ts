@@ -37,7 +37,7 @@ export interface ScrollHandlerConfig {
   readonly onIdle: () => void;
 }
 
-export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler & { syncScroll(): void } {
+export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler & { commitScroll(pos?: number): void } {
   const { state, viewport, isX, wheelEnabled, onFrame, onIdle } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
   const target: EventTarget = config.scrollTarget ?? viewport;
@@ -48,10 +48,14 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
   // ── Scroll event (passive, for native/touch scrolling) ──────────
 
   // Explicit writes also commit subpixel changes; DOM events keep the dedupe guard.
-  function onScrollEvent(sync?: Event | boolean): void {
+  function onScrollEvent(): void {
     const pos = isX ? viewport.scrollLeft : viewport.scrollTop;
-    if (sync !== true && Math.abs(pos - state.scrollPosition) < 0.5) return;
+    if (Math.abs(pos - state.scrollPosition) < 0.5) return;
 
+    commitScroll(pos);
+  }
+
+  function commitScroll(pos = isX ? viewport.scrollLeft : viewport.scrollTop): void {
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = pos;
     state.scrollDirection = pos > state.prevScrollPosition ? 1 : pos < state.prevScrollPosition ? -1 : 0;
@@ -93,12 +97,7 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
       viewport.scrollTop = next;
     }
 
-    state.prevScrollPosition = state.scrollPosition;
-    state.scrollPosition = next;
-    state.scrollDirection = next > state.prevScrollPosition ? 1 : -1;
-
-    onFrame();
-    scheduleIdle();
+    commitScroll(next);
   }
 
   // ── Idle detection ──────────────────────────────────────────────
@@ -150,8 +149,10 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
       if (setFn) setFn(pos);
       else if (isX) viewport.scrollLeft = pos;
       else viewport.scrollTop = pos;
-      if (!setFn) state.scrollPosition = pos;
-      onFrame();
+      if (!setFn) {
+        state.scrollPosition = pos;
+        onFrame();
+      }
       if (t < 1) {
         animationId = requestAnimationFrame(tick);
       } else {
@@ -187,6 +188,6 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
     cancelScroll,
     smoothScrollTo,
-    syncScroll: () => onScrollEvent(true),
+    commitScroll,
   };
 }
