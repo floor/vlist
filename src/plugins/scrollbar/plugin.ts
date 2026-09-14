@@ -65,6 +65,7 @@ export function scrollbar<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         dom.root,
+        () => ctx.sizeCache,
       );
 
       dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
