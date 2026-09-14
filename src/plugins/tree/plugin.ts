@@ -520,7 +520,9 @@ export function tree<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending) return;
+    // Row transforms subtract baseOffset (issue 025): a baseOffset move with an
+    // unchanged range must still commit. Native keeps baseOffset at 0.
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) return;
 
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
@@ -551,7 +553,9 @@ export function tree<T extends VListItem = VListItem>(
         }
       }
 
-      element.style.transform = buildTransform(sizeCache.getOffset(i));
+      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
+      // bounded runway. baseOffset is 0 in native mode (byte-identical).
+      element.style.transform = buildTransform(sizeCache.getOffset(i) - engineState.baseOffset);
 
       if (isf) {
         isf(i, itemState);
@@ -573,6 +577,7 @@ export function tree<T extends VListItem = VListItem>(
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
+    engineState.prevBaseOffset = engineState.baseOffset;
     engineState.renderPending = false;
 
     let fillCount = 0;

@@ -187,6 +187,39 @@ describe("masonry - Render Functions", () => {
     mock.cleanup();
   });
 
+  it("keeps grace-period items runway-relative when baseOffset jumps (issue 025)", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(2000);
+    const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerWidth: 800,
+      containerHeight: 600,
+      itemSize: 100,
+    });
+    plugin.setup!(ctx);
+    engineState.containerSize = 600;
+    ctx.forceRender();
+    const firstRendered = dom.content.querySelectorAll("[data-index]").length;
+    expect(firstRendered).toBeGreaterThan(0);
+
+    // Programmatic jump far down: logical position and runway origin move together.
+    engineState.scrollPosition = 20_000;
+    engineState.baseOffset = 20_000;
+    ctx.renderIfNeeded();
+
+    // Items from the old range are kept for the release grace period, but must
+    // sit where their absolute placement says relative to the new runway
+    // (far above the viewport), never inside it.
+    const inside: number[] = [];
+    dom.content.querySelectorAll("[data-index]").forEach((el) => {
+      const m = (el as HTMLElement).style.transform.match(/translate\(-?\d+px,\s*(-?\d+)px\)/);
+      const y = m ? parseInt(m[1]!, 10) : NaN;
+      const index = Number((el as HTMLElement).dataset.index);
+      if (index < 100 && y > -100 && y < 600) inside.push(index);
+    });
+    expect(inside).toEqual([]);
+    cleanup();
+  });
+
   it("should replace render functions so ctx.renderIfNeeded calls masonry render", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(20);

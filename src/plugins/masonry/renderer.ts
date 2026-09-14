@@ -142,8 +142,10 @@ interface TrackedItem {
   lastSelected: boolean;
   /** Focused state at last render */
   lastFocused: boolean;
-  /** Placement Y at last render (to detect position changes) */
+  /** Placement Y at last render, runway-relative (to detect position changes) */
   lastY: number;
+  /** Absolute placement Y at last render, so a grace-period item can follow baseOffset */
+  absY: number;
   /** Placement X at last render */
   lastX: number;
   /** Item size (main axis) at last render */
@@ -341,6 +343,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       lastSelected: isSelected,
       lastFocused: isFocused,
       lastY: placement.y - getBaseOffset(),
+      absY: placement.y,
       lastX: placement.x,
       lastSize: placement.size,
       lastCrossSize: placement.crossSize,
@@ -439,6 +442,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         if (posChanged) {
           positionElement(existing.element, placement);
           existing.lastY = placement.y - getBaseOffset();
+          existing.absY = placement.y;
           existing.lastX = placement.x;
         }
       } else {
@@ -470,6 +474,19 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
         pool.release(tracked.element);
         rendered.delete(index);
+      } else {
+        // Grace-period item: keep it where its placement says relative to the
+        // current runway. In native mode baseOffset is 0 and nothing changes;
+        // in bounded/synthetic mode a stale transform would land it inside the
+        // viewport after a jump, or lag by the baseOffset delta on wheel.
+        const main = Math.round(tracked.absY - getBaseOffset());
+        if (main !== tracked.lastY) {
+          tracked.lastY = main;
+          const cross = Math.round(tracked.lastX);
+          tracked.element.style.transform = isHorizontal
+            ? `translate(${main}px, ${cross}px)`
+            : `translate(${cross}px, ${main}px)`;
+        }
       }
     }
   };

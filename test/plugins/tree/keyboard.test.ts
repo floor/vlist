@@ -46,6 +46,20 @@ function setup(expandedIds: string[] = []) {
   return testCtx;
 }
 
+test("re-commits row transforms when baseOffset moves with an unchanged range (issue 025)", () => {
+  const testCtx = setup(["1", "1.1"]);
+  const { ctx, dom, engineState } = testCtx;
+  const row = dom.content.querySelector("[data-index='1']") as HTMLElement;
+  const before = row.style.transform;
+
+  // Sub-row logical move carried by baseOffset, range unchanged.
+  engineState.scrollPosition = 12;
+  engineState.baseOffset = 12;
+  ctx.renderIfNeeded();
+  expect(row.style.transform).not.toBe(before);
+  testCtx.cleanup();
+});
+
 function fireKey(handler: (e: KeyboardEvent) => void, key: string, opts?: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts });
   handler(event);

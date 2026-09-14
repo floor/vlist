@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.7.0** — [Changelog](./CHANGELOG.md) · Opt-in synthetic scroll input (RFC-014): import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for list-owned touch, wheel and keyboard input over a viewport-sized content box.
+**v2.7.1** — [Changelog](./CHANGELOG.md) · Grid, table, tree and masonry no longer judder in bounded and synthetic mode: their renderers now follow baseOffset on every step.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -132,7 +132,7 @@ Measurement corrections from autosize preserve ongoing motion. Synthetic input a
 | `autosize()` | +1.0 KB | Auto-measure items via ResizeObserver |
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.5 KB | 2D grid layout |
-| `masonry()` | +4.0 KB | Pinterest-style masonry with lane-aware keyboard nav |
+| `masonry()` | +4.1 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `carousel()` | +3.5 KB | Paged horizontal carousel with snap and keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
