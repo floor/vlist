@@ -279,6 +279,7 @@ export function createVList<T extends VListItem = VListItem>(
   const destroyHandlers: Array<() => void> = [];
   let virtualTotalFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
+  let syncNativeScroll: (() => void) | undefined;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
@@ -321,14 +322,20 @@ export function createVList<T extends VListItem = VListItem>(
   // Scroll sources commit their position to engine state. Reads stay cached so
   // rendering and event payloads never invoke a source's DOM geometry getter.
   // The setter override installed during plugin setup is resolved lazily.
+  function writeScroll(position: number): void {
+    if (scrollSetFn) scrollSetFn(position);
+    else {
+      if (isX) dom.viewport.scrollLeft = position;
+      else dom.viewport.scrollTop = position;
+      // Reuse native read-back, rendering, event dedupe and the idle timer.
+      syncNativeScroll?.();
+    }
+  }
+
   const scrollAdapter: ScrollAdapter = createScrollAdapter({
     sizeCache,
     getPixel: () => state.scrollPosition,
-    setPixel: (px) => {
-      if (scrollSetFn) scrollSetFn(px);
-      else if (isX) dom.viewport.scrollLeft = px;
-      else dom.viewport.scrollTop = px;
-    },
+    setPixel: writeScroll,
     getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
   });
@@ -411,11 +418,7 @@ export function createVList<T extends VListItem = VListItem>(
       setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
       getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
       get rawSizeSpec() { return sizeSpec; },
-      scrollTo(position: number): void {
-        if (scrollSetFn) scrollSetFn(position);
-        else if (isX) dom.viewport.scrollLeft = position;
-        else dom.viewport.scrollTop = position;
-      },
+      scrollTo: writeScroll,
       shiftScroll(delta: number): void {
         if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
         else ctx.scrollTo(state.scrollPosition + delta);
@@ -651,7 +654,7 @@ export function createVList<T extends VListItem = VListItem>(
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
     scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
   } else {
-    scrollHandler = createScrollHandler({
+    const nativeHandler = createScrollHandler({
       state,
       viewport: dom.viewport,
       isX,
@@ -661,6 +664,8 @@ export function createVList<T extends VListItem = VListItem>(
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
+    scrollHandler = nativeHandler;
+    syncNativeScroll = nativeHandler.syncScroll;
   }
 
   smoothScrollFn = scrollHandler.smoothScrollTo;
@@ -930,11 +935,8 @@ export function createVList<T extends VListItem = VListItem>(
 
       if (behavior === "smooth") {
         scrollHandler.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
-      } else if (scrollSetFn) {
-        scrollSetFn(pos);
       } else {
-        if (isX) dom.viewport.scrollLeft = pos;
-        else dom.viewport.scrollTop = pos;
+        writeScroll(pos);
       }
     },
 

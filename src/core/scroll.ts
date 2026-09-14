@@ -37,7 +37,7 @@ export interface ScrollHandlerConfig {
   readonly onIdle: () => void;
 }
 
-export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler {
+export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler & { syncScroll(): void } {
   const { state, viewport, isX, wheelEnabled, onFrame, onIdle } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
   const target: EventTarget = config.scrollTarget ?? viewport;
@@ -47,9 +47,10 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
   // ── Scroll event (passive, for native/touch scrolling) ──────────
 
-  function onScrollEvent(): void {
+  // Explicit writes also commit subpixel changes; DOM events keep the dedupe guard.
+  function onScrollEvent(sync?: Event | boolean): void {
     const pos = isX ? viewport.scrollLeft : viewport.scrollTop;
-    if (Math.abs(pos - state.scrollPosition) < 0.5) return;
+    if (sync !== true && Math.abs(pos - state.scrollPosition) < 0.5) return;
 
     state.prevScrollPosition = state.scrollPosition;
     state.scrollPosition = pos;
@@ -186,5 +187,6 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
 
     cancelScroll,
     smoothScrollTo,
+    syncScroll: () => onScrollEvent(true),
   };
 }

@@ -483,6 +483,19 @@ describe("sortable — sort events", () => {
     return emitSpy;
   }
 
+  it("computes the drop position from the adapter pixel offset", () => {
+    const t = createMockContext();
+    t.ctx.scroll.getPixelEquivalent = () => 112;
+    t.engineState.scrollPosition = 0;
+    const plugin = sortable<TestItem>();
+    try {
+      plugin.setup!(t.ctx);
+      const calls = simulateDrag(t.ctx, t.emitSpy, 2, 20).mock.calls;
+      const moved = calls.find(c => c[0] === "sort:move");
+      expect(moved?.[1]).toEqual({ fromIndex: 2, currentIndex: 4 });
+    } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
+  });
+
   it("emits sort:start when drag threshold is crossed", () => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();

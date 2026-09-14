@@ -62,6 +62,7 @@ export function groups<T extends VListItem = VListItem>(
   let stickyHeader: StickyHeaderInstance | null = null;
   let sizeCache: SizeCache;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let pool: ElementPool;
   let contentElement: HTMLElement;
   // Bounded-mode (RFC-012): route content sizing through ctx.updateContentSize so
@@ -132,7 +133,7 @@ export function groups<T extends VListItem = VListItem>(
     updateContentSize?.(totalSize);
     if (stickyHeader) {
       stickyHeader.refresh();
-      stickyHeader.update(engineState.scrollPosition);
+      stickyHeader.update(scroll.getPixelEquivalent());
     }
 
     // Layout indices shifted — detach elements (keyed by data-id) so the
@@ -275,10 +276,9 @@ export function groups<T extends VListItem = VListItem>(
     return maxY;
   }
 
-  function buildTransform(layoutIndex: number): string {
+  function buildTransform(layoutIndex: number, base: number): string {
     // RFC-012: subtract baseOffset so absolute virtual offsets map into the
     // bounded runway. baseOffset is 0 in native mode (byte-identical).
-    const base = engineState.baseOffset;
     if (gridItemPositions) {
       const pos = gridItemPositions.get(layoutIndex);
       if (pos) {
@@ -445,7 +445,7 @@ export function groups<T extends VListItem = VListItem>(
     updateContentSize?.(totalSize);
     if (stickyHeader) {
       stickyHeader.refresh();
-      stickyHeader.update(engineState.scrollPosition);
+      stickyHeader.update(scroll.getPixelEquivalent());
     }
     forceNextRender = true;
   }
@@ -456,9 +456,9 @@ export function groups<T extends VListItem = VListItem>(
     syncLayoutIfNeeded();
     syncGridIfResized();
 
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
-    const baseOffset = engineState.baseOffset;
+    const baseOffset = scroll.getRenderOrigin();
     const baseChanged = baseOffset !== lastRenderBaseOffset;
 
     if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && !baseChanged) {
@@ -582,7 +582,7 @@ export function groups<T extends VListItem = VListItem>(
         else placeholderIndices.add(i);
 
         applySizeStyles(element, i);
-        element.style.transform = buildTransform(i);
+        element.style.transform = buildTransform(i, baseOffset);
 
         rendered.set(i, element);
         if (!fragment) fragment = document.createDocumentFragment();
@@ -601,11 +601,11 @@ export function groups<T extends VListItem = VListItem>(
         isHeader = element.classList.contains(groupHeaderClass);
         if (isForced) {
           applySizeStyles(element, i);
-          element.style.transform = buildTransform(i);
+          element.style.transform = buildTransform(i, baseOffset);
         } else if (baseChanged) {
           // Bounded mode (RFC-012): the runway rebased, so reposition the item
           // at its new offset - baseOffset (native mode never reaches here).
-          element.style.transform = buildTransform(i);
+          element.style.transform = buildTransform(i, baseOffset);
         }
       }
 
@@ -688,7 +688,7 @@ export function groups<T extends VListItem = VListItem>(
         updateContentSize?.(totalSize);
         if (stickyHeader) {
           stickyHeader.refresh();
-          stickyHeader.update(engineState.scrollPosition);
+          stickyHeader.update(scroll.getPixelEquivalent());
         }
 
         // Only clear DOM if the boundary shift affects the rendered range.
@@ -732,6 +732,7 @@ export function groups<T extends VListItem = VListItem>(
     priority: 10,
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       sizeCache = ctx.sizeCache;
       engineState = ctx.getState();
       pool = ctx.pool;
@@ -836,7 +837,7 @@ export function groups<T extends VListItem = VListItem>(
             engineState.totalItems = layout.totalEntries;
             if (stickyHeader) {
               stickyHeader.refresh();
-              stickyHeader.update(engineState.scrollPosition);
+              stickyHeader.update(scroll.getPixelEquivalent());
             }
           }
         }
@@ -889,7 +890,7 @@ export function groups<T extends VListItem = VListItem>(
           gridHeaderOffset,
         );
 
-        stickyHeader.update(engineState.scrollPosition);
+        stickyHeader.update(scroll.getPixelEquivalent());
 
         if (!isX) {
           // Vertical: relative container occupies a top row via block flow;
@@ -987,7 +988,7 @@ export function groups<T extends VListItem = VListItem>(
         const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
         const size = pos?.h ?? sizeCache.getSize(layoutIndex);
         const cs = engineState.containerSize;
-        const sp = engineState.scrollPosition;
+        const sp = scroll.getPixelEquivalent();
 
         if (offset < sp + mainPadStart) {
           ctx.scrollTo(Math.max(0, offset - mainPadStart));
@@ -1087,7 +1088,7 @@ export function groups<T extends VListItem = VListItem>(
         updateContentSize?.(totalSize);
         if (stickyHeader) {
           stickyHeader.refresh();
-          stickyHeader.update(engineState.scrollPosition);
+          stickyHeader.update(scroll.getPixelEquivalent());
         }
         forceNextRender = true;
         groupsRenderIfNeeded();

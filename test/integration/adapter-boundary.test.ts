@@ -11,12 +11,8 @@ const forbidden = new Set(["scrollPosition", "baseOffset", "prevBaseOffset"]);
 const allowed: Record<string, number> = {
   "a11y/plugin.ts": 2,
   "autosize/plugin.ts": 3,
-  "carousel/plugin.ts": 8,
-  "groups/plugin.ts": 10,
   "selection/plugin.ts": 1,
   "snapshots/plugin.ts": 2,
-  "sortable/plugin.ts": 4,
-  "transition/plugin.ts": 13,
   // Page is a scroll source: setter commit, listener previous/current position.
   "page/plugin.ts": 3,
 };

@@ -55,6 +55,7 @@ export function sortable<T extends VListItem = VListItem>(
   const ghostContainer = config?.ghostContainer ?? null;
 
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
   let contentEl: HTMLElement;
@@ -140,7 +141,7 @@ export function sortable<T extends VListItem = VListItem>(
     if (totalItems === 0) return 0;
 
     const viewportRect = viewportEl.getBoundingClientRect();
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const ghostTop = isX
       ? pointerCurrentX - ghostOffsetX - viewportRect.left + viewportEl.scrollLeft + scrollPos
       : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
@@ -235,7 +236,7 @@ export function sortable<T extends VListItem = VListItem>(
     const containerSize = isX
       ? viewportEl.clientWidth
       : viewportEl.clientHeight;
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const itemTop = sizeCache.getOffset(index);
     const itemBottom = itemTop + sizeCache.getSize(index);
 
@@ -309,7 +310,7 @@ export function sortable<T extends VListItem = VListItem>(
       const outsideViewport = isPointerOutsideViewport();
 
       if (delta !== 0) {
-        const currentScroll = engineState.scrollPosition;
+        const currentScroll = scroll.getPixelEquivalent();
         const maxScroll = sizeCache.getTotalSize() - (isX
           ? viewportEl.clientWidth
           : viewportEl.clientHeight);
@@ -408,7 +409,7 @@ export function sortable<T extends VListItem = VListItem>(
     }
 
     const viewportRect = viewportEl.getBoundingClientRect();
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const targetOffset = sizeCache.getOffset(toIndex);
     const duration = shiftDuration > 0 ? shiftDuration : 150;
 
@@ -732,6 +733,7 @@ export function sortable<T extends VListItem = VListItem>(
     conflicts: ["grid", "masonry", "table", "scale", "tree"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
       sizeCache = ctx.sizeCache;

@@ -4,6 +4,7 @@ import { createPluginMockContext } from "../helpers/plugin-context";
 import { grid } from "../../src/plugins/grid/plugin";
 import { table } from "../../src/plugins/table/plugin";
 import { masonry } from "../../src/plugins/masonry/plugin";
+import { groups } from "../../src/plugins/groups/plugin";
 import { tree } from "../../src/plugins/tree/plugin";
 
 beforeAll(() => GlobalRegistrator.register());
@@ -14,6 +15,7 @@ const factories = [
   () => table({ columns: [{ key: "id", label: "ID", width: 200 }], rowHeight: 40 }),
   () => masonry({ columns: 2 }),
   () => tree(),
+  () => groups({ getGroupForIndex: () => "A", headerHeight: 20, headerTemplate: () => "A" }),
 ];
 
 for (const factory of factories) describe(`${factory().name} adapter boundary`, () => {
