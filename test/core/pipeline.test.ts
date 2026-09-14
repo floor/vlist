@@ -114,6 +114,26 @@ describe("phase1Calculate — range calculations", () => {
     expect(second).toBe(false);
   });
 
+  it("commits again when baseOffset moves with an unchanged range (bounded wheel, synthetic)", () => {
+    const { state, sizeCache } = makeFixedSetup({
+      totalItems: 100,
+      itemSize: 50,
+      containerSize: 500,
+    });
+    const hooks = emptyHooks();
+
+    expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(true);
+    expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(false);
+
+    // A logical provider moves the runway origin by less than a row: the visible
+    // range is identical, but every transform (offset - baseOffset) changed.
+    state.baseOffset = 12;
+    expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(true);
+    expect(state.prevBaseOffset).toBe(12);
+    // Stable again until baseOffset or the range moves.
+    expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(false);
+  });
+
   it("handles empty list (totalItems = 0)", () => {
     const { state, sizeCache } = makeFixedSetup({
       totalItems: 0,

@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.4** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Autosize items whose content changes after measurement (a broken or slow image, a font swap) are now remeasured instead of clipped (#126).
+**v2.6.5** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · Bounded mode no longer judders on wheel: rows now move on every step, not only when the visible range crosses a row boundary.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
