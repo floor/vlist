@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -228,7 +229,7 @@ describe("memory — DOM leak detection per plugin", () => {
 
 describe("memory — event listener cleanup", () => {
   it("scroll events stop after destroy", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -253,7 +254,7 @@ describe("memory — event listener cleanup", () => {
   });
 
   it("unsubscribe stops event delivery", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -277,7 +278,7 @@ describe("memory — event listener cleanup", () => {
   });
 
   it("off() stops event delivery", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -356,7 +357,7 @@ describe("memory — event listener cleanup", () => {
     const scrollHandler = mock(() => {});
 
     for (let i = 0; i < 5; i++) {
-      const cycleList = createVList(
+      const cycleList = createNative(
         {
           container,
           items: createTestItems(100),
@@ -369,7 +370,7 @@ describe("memory — event listener cleanup", () => {
       cycleList.destroy();
     }
 
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),

@@ -15,6 +15,7 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -138,7 +139,7 @@ describe("grid + padding", () => {
   });
 
   it("content height includes main-axis padding", () => {
-    list = createVList({
+    list = createNative({
       container,
       item: { height: 100, template: simpleTemplate },
       items: createTestItems(6),

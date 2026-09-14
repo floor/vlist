@@ -39,6 +39,11 @@
       "import": "./dist/synthetic.js",
       "default": "./dist/synthetic.js"
     },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "import": "./dist/native.js",
+      "default": "./dist/native.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js",

@@ -5,6 +5,7 @@
  * plugins, wires the 2-phase pipeline, returns the public VList API.
  */
 
+import { createSyntheticScrollHandler } from "../synthetic/handler";
 import type { VListItem } from "../types";
 import type {
   CreateVListConfig,
@@ -175,15 +176,38 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
 // createVList()
 // =============================================================================
 
+/** Create a list with synthetic input. Native input is available from vlist/native. */
 export function createVList<T extends VListItem = VListItem>(
+  config: CreateVListConfig<T>, plugins: VListPlugin<T>[] = [],
+): VList<T> {
+  return createCore(config, plugins, createSyntheticScrollHandler);
+}
+
+/** @internal Shared factory; entries select the input handler. */
+export function createCore<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
-  /** @internal Provided only by the opt-in scroll entry. */
+  /** @internal Omitted by the native entry. */
   logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
   validateConfig(rawConfig);
+  if (logicalHandlerFactory) {
+    if (rawConfig.scroll?.mode === "native" || rawConfig.scroll?.mode === "bounded") {
+      throw new Error('vlist: native and bounded modes require createVList from "vlist/native"');
+    }
+    if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
+      throw new Error('vlist: RTL horizontal lists require createVList from "vlist/native"');
+    }
+    for (const plugin of plugins) {
+      if (plugin.name === "carousel" || plugin.name === "sortable") {
+        throw new Error(`vlist: ${plugin.name} requires createVList from "vlist/native"`);
+      }
+    }
+  } else if (rawConfig.scroll?.mode === "synthetic") {
+    throw new Error('vlist/native: synthetic mode requires createVList from "vlist"');
+  }
 
   // ── Resolve config ──────────────────────────────────────────────
 

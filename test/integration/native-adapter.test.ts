@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/native";
 import type { PluginContext, VListPlugin } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 

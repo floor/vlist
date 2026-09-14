@@ -174,7 +174,7 @@ describe("selection + scrollbar integration", () => {
       const viewport = list.element.querySelector(
         ".vlist-viewport",
       ) as HTMLElement;
-      expect(viewport.scrollTop).toBeGreaterThan(0);
+      expect(list!.getScrollPosition()).toBeGreaterThan(0);
     });
   });
 

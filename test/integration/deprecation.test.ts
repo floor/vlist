@@ -3,6 +3,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import { createVListFromConfig } from "../../src/config";
 import { scale } from "../../src/plugins/scale/plugin";
+import { createVList as createNative } from "../../src/native";
 import { createVList as createSynthetic } from "../../src/synthetic";
 import type { PluginContext } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
@@ -16,12 +17,13 @@ it("scale warns once per process with the available synthetic migration and 2.x 
     import {scale} from ${JSON.stringify(new URL("../../src/plugins/scale/plugin.ts", import.meta.url).pathname)};
     import {GlobalRegistrator} from '@happy-dom/global-registrator';
     import {createVListFromConfig} from ${JSON.stringify(new URL("../../src/config.ts", import.meta.url).pathname)};
+    import {createVList as createNative} from ${JSON.stringify(new URL("../../src/native.ts", import.meta.url).pathname)};
     GlobalRegistrator.register();
     const messages=[];
     console.warn=message=>messages.push(message);
     for (const mode of [undefined, 'bounded']) {
       const host=document.createElement('div');document.body.append(host);
-      const list=createVListFromConfig({container:host,items:[{id:1}],item:{height:40,template:()=>''},scroll:{mode}});
+      const list=createVListFromConfig({container:host,items:[{id:1}],item:{height:40,template:()=>''},scroll:{mode},factory:createNative});
       list.destroy();host.remove();
     }
     const implicit=messages.length;
@@ -52,7 +54,7 @@ it("config scale stubs preserve the explicit warning, which is emitted only once
   try {
     for (const mode of [undefined, "bounded"] as const) {
       const options = config();
-      const list = createVListFromConfig({ ...options, scroll: { mode } });
+      const list = createVListFromConfig({ ...options, factory: createNative, scroll: { mode } });
       list.destroy(); options.container.remove();
     }
     expect(warnings).toHaveLength(0);
@@ -68,13 +70,13 @@ it("config scale stubs preserve the explicit warning, which is emitted only once
   } finally { console.warn = original; }
 });
 
-it("core and synthetic entry default/native/bounded configurations emit no warnings", () => {
+it("core, alias and native entry supported configurations emit no warnings", () => {
   const original = console.warn;
   const warnings: unknown[] = [];
   console.warn = value => warnings.push(value);
   try {
-    for (const create of [createVList, createSynthetic]) {
-      for (const mode of [undefined, "native", "bounded"] as const) {
+    for (const create of [createVList, createSynthetic, createNative]) {
+      for (const mode of (create === createNative ? [undefined, "native", "bounded"] : [undefined, "synthetic"]) as (undefined | "native" | "bounded" | "synthetic")[]) {
         const host = createContainer();
         const list = create({ container: host, items: [{ id: 1 }],
           item: { height: 40, template: () => "row" }, scroll: { mode },

@@ -18,6 +18,7 @@ import {
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -779,7 +780,7 @@ describe("cross-feature — grid with variable height", () => {
 
 describe("cross-feature — scroll idle", () => {
   it("adds scrolling class during scroll", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate } },
       [],
     );
@@ -791,7 +792,7 @@ describe("cross-feature — scroll idle", () => {
   });
 
   it("scroll idle event fires after timeout", async () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate }, scroll: { idleTimeout: 30 } },
       [],
     );
@@ -807,7 +808,7 @@ describe("cross-feature — scroll idle", () => {
   });
 
   it("removes scrolling class after idle fires", async () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate }, scroll: { idleTimeout: 20 } },
       [],
     );

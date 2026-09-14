@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { createVList as createCore } from "../../src/core/create";
+import { createCore } from "../../src/core/create";
 import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
+import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/synthetic";
 import { table } from "../../src/plugins/table/plugin";
 import { page } from "../../src/plugins/page/plugin";
@@ -15,7 +16,7 @@ for (const mode of ["bounded", "synthetic"] as const) {
   it(`page uses the document source and origin zero under ${mode}`, () => {
     const host = createContainer();
     let ctx!: PluginContext<{ id: number }>;
-    const list = createVList({ container: host,
+    const list = (mode === "bounded" ? createNative : createVList)({ container: host,
       items: Array.from({ length: 1000 }, (_, id) => ({ id })),
       item: { height: 40, template: item => String(item.id) },
       padding: [10, 0, 20, 0], scroll: { mode },

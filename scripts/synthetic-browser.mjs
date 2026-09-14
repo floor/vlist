@@ -11,7 +11,7 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width,i
 <style>body{margin:20px}#list{width:360px;height:360px}a,button,input{margin:5px}</style>
 <div id="list"></div><div id="tail">Tail</div>
 <script type="module">
-import {createVList} from '/synthetic.js';
+import {createVList} from '/index.js';
 import {table,groups,a11y,selection,scrollbar,snapshots,autosize,transition,page} from '/index.js';
 const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.get('plugin');
 const items=Array.from({length:Number(q.get('count'))||10000},(_,id)=>({id,name:'Row '+id}));
@@ -21,7 +21,7 @@ const plugins=plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'
  plugin==='scrollbar'?[scrollbar({gutter:true,platform:'windows'})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
  plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
-try { window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
+try { window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
 if(window.list) {
 window.clicks=0;document.querySelector('.vlist-content').addEventListener('click',()=>window.clicks++);
 window.ready=true;
@@ -30,7 +30,7 @@ window.ready=true;
 const server = Bun.serve({ port: 0, fetch(req) {
   const path = new URL(req.url).pathname;
   if (path === "/") return new Response(html, { headers: { "Content-Type": "text/html" } });
-  if (["/synthetic.js", "/index.js", "/vlist.css", "/vlist-table.css"].includes(path)) return new Response(Bun.file(`${root}/dist${path}`));
+  if (["/synthetic.js", "/native.js", "/index.js", "/vlist.css", "/vlist-table.css"].includes(path)) return new Response(Bun.file(`${root}/dist${path}`));
   return new Response("Not found", { status: 404 });
 } });
 const browser = await launchBrowser();
@@ -84,7 +84,8 @@ try {
   await rtlPage.goto(`http://localhost:${server.port}/`);
   await rtlPage.waitForFunction(() => window.ready);
   const rtl = await rtlPage.evaluate(async () => {
-    const {createVList} = await import('/synthetic.js');
+    const {createVList} = await import('/index.js');
+    const {createVList:createNative} = await import('/native.js');
     const parent = document.createElement('div'); parent.style.direction = 'rtl'; document.body.append(parent);
     const container = document.createElement('div'); container.id = 'rtl-probe'; container.style.cssText = 'width:300px;height:300px'; parent.append(container);
     const results = { direction: getComputedStyle(container).direction, rejected: [], allowed: [] };
@@ -94,7 +95,7 @@ try {
         catch(error) { results.rejected.push(error.message.includes('RTL horizontal lists') && container.children.length===0); }
       }
       for(const [mode,orientation] of [['synthetic','vertical'],['native','horizontal'],['bounded','horizontal']]) {
-        const list=createVList({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''},scroll:{mode}});
+        const list=(mode==='synthetic'?createVList:createNative)({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''},scroll:{mode}});
         results.allowed.push(mode);list.destroy();
       }
       return results;

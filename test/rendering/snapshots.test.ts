@@ -102,11 +102,11 @@ describe("DOM snapshots — base list", () => {
     expect(viewport).toBeTruthy();
     expect(viewport.classList.contains("vlist-viewport")).toBe(true);
 
-    // Vertical viewport should have overflow:auto
+    // Synthetic main-axis input keeps native scrolling hidden.
     const style = viewport.getAttribute("style") ?? "";
     expect(style).toContain("overflow");
-    expect(style).toContain("height:100%");
-    expect(style).toContain("width:100%");
+    expect(viewport.style.height).toBe("100%");
+    expect(viewport.style.width).toBe("100%");
 
     // Viewport should have tabindex=-1 for programmatic focus
     expect(viewport.getAttribute("tabindex")).toBe("-1");

@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM, useFakeTimers } from "../helpers/dom";
 import { createContainer, createTestItems, simpleTemplate } from "../helpers/factory";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/native";
 import { SCROLL_IDLE_TIMEOUT } from "../../src/constants";
 
 beforeAll(() => setupDOM());

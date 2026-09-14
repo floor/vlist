@@ -699,10 +699,7 @@ describe("groups + table + data", () => {
     const LAST = TOTAL - 1;
 
     function scrollToBottom(l: VList<CityItem>): void {
-      const vp = (l as unknown as { element: HTMLElement }).element
-        .querySelector(".vlist-viewport") as HTMLElement;
-      vp.scrollTop = 10_000_000; // clamped to max scroll by the runway
-      vp.dispatchEvent(new Event("scroll", { bubbles: true }));
+      l.scrollToIndex(l.total - 1, "end");
     }
 
     function readParams(adapter: VListAdapter<CityItem>): Array<{ offset: number; limit: number }> {

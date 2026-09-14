@@ -381,20 +381,15 @@ export interface ScrollConfig {
   idleTimeout?: number;
 
   /**
-   * Scroll model (RFC-012). `"native"` (default) sizes the content element to
-   * the full virtual size — simple, but hits the browser's ~16.7M px limit.
-   * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
-   * logical origin near the edges, supporting unbounded item counts without
-   * compressing the scroll space.
-   *
-   * @deprecated In 3.0 synthetic input is the only model in core, native scrolling
-   * moves to `vlist/native`, and bounded is removed. Bounded remains supported in 2.x.
-   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model
+   * Input model. Core uses synthetic input; omitting mode or specifying
+   * `"synthetic"` has the same behavior. `"native"` and `"bounded"` require
+   * createVList from `vlist/native`; that entry defaults to `"native"`.
+   * The native entry rejects `"synthetic"`.
    */
-  mode?: "native" | "bounded";
+  mode?: "synthetic" | "native" | "bounded";
 
   /**
-   * Runway size as a multiple of the viewport, used only with
+   * Native-entry runway size as a multiple of the viewport, used only with
    * `mode: "bounded"` (default 2). The bounded content element is sized to
    * `viewport × runway` (capped at the real virtual size). Larger values mean
    * more native-scroll headroom and less frequent rebasing, at the cost of a
