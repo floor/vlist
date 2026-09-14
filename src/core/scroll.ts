@@ -149,15 +149,11 @@ export function createScrollHandler(config: ScrollHandlerConfig): ScrollHandler 
       if (setFn) setFn(pos);
       else if (isX) viewport.scrollLeft = pos;
       else viewport.scrollTop = pos;
-      if (!setFn) {
-        state.scrollPosition = pos;
-        onFrame();
-      }
+      if (!setFn) commitScroll(pos);
       if (t < 1) {
         animationId = requestAnimationFrame(tick);
       } else {
         animationId = null;
-        scheduleIdle();
         onComplete?.();
       }
     }
