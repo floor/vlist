@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.7.1** — [Changelog](./CHANGELOG.md) · Tree keeps the bounded runway for large trees; the scale() deprecation link works; bounded-mode touch limitation documented.
+**v2.7.2** — [Changelog](./CHANGELOG.md) · Tree keeps the bounded runway for large trees; the scale() deprecation link works; bounded-mode touch limitation documented.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
