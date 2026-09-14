@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-09-14
+
 ### Added
 
 - **Opt-in synthetic scroll input ([RFC-014](https://github.com/floor/vlist/discussions/127))** — import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for logical touch, wheel and keyboard input. Measurement corrections preserve ongoing motion. Native remains the default; page, carousel and sortable combinations throw. The README documents the supported plugins, custom-scrollbar requirement and open accessibility gate, touch-boundary policy, wheel behavior and release latency.

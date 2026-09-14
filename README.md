@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.5** — [Changelog](./CHANGELOG.md) · Bounded mode no longer judders on wheel: rows now move on every step, not only when the visible range crosses a row boundary.
+**v2.6.5** — [Changelog](./CHANGELOG.md) · Opt-in synthetic scroll input (RFC-014): import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for list-owned touch, wheel and keyboard input over a viewport-sized content box.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **9.8 KB gzipped** — composable plugins with perfect tree-shaking
+- **9.9 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Tree, grid, masonry, carousel, table, groups, data, selection, search, sortable, transition** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
@@ -90,7 +90,7 @@ const list = createVList({
 ])
 ```
 
-## Synthetic scroll input (unreleased)
+## Synthetic scroll input
 
 The opt-in `vlist/synthetic` entry adds `scroll.mode: 'synthetic'` alongside native and bounded modes. Native remains the default. Import the factory from this entry and plugins from `vlist`:
 
@@ -117,14 +117,14 @@ Known limitations:
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
-Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.6 KB gzipped** over the base entry (**12.4 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
+Measurement corrections from autosize preserve ongoing motion. Synthetic input adds **2.6 KB gzipped** over the base entry (**12.5 KB** total before plugins); ordinary `vlist` imports exclude this driver. See [RFC-014](https://github.com/floor/vlist/discussions/127).
 
 ## Plugins
 
 | Plugin | Size | Description |
 |--------|------|-------------|
-| **Base** | 9.8 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
-| `vlist/synthetic` entry | +2.6 KB | Opt-in synthetic scroll input (12.4 KB total before plugins; unreleased) |
+| **Base** | 9.9 KB | Virtualization, ARIA, keyboard nav, gap, padding, bounded scroll (1M+ items) |
+| `vlist/synthetic` entry | +2.6 KB | Opt-in synthetic scroll input (12.5 KB total before plugins) |
 | `data()` | +4.8 KB | Lazy loading with velocity-aware fetching |
 | `selection()` | +2.8 KB | Single/multiple selection with 2D keyboard nav |
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
