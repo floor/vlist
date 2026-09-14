@@ -31,7 +31,7 @@ import type { MasonryPluginConfig } from "./plugins/masonry";
 import { groups } from "./plugins/groups";
 import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
-import { scale } from "./plugins/scale";
+import { createScalePlugin } from "./plugins/scale/plugin";
 import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 import { snapshots } from "./plugins/snapshots";
@@ -150,10 +150,11 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     plugins.push(selection<T>({ mode: "none" }));
   }
 
-  plugins.push(scale<T>());
+  plugins.push(createScalePlugin<T>(false));
 
   // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
-  // browser's native scrollbar) — core handles both without a plugin. Any other
+  // browser's native scrollbar). Core hides native only for "none"; "native"
+  // simply leaves browser defaults in place. Any other
   // value (or omitted) opts into vlist's custom overlay scrollbar.
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
   if (scrollbarConfig !== "none" && scrollbarConfig !== "native") {

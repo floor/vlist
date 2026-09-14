@@ -126,7 +126,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   setScrollSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
   /** Commit an external position, render synchronously and schedule configured idle. */
   commitScroll(px: number): void;
-  /** @deprecated Use setScrollSource; removed in 3.0. The getter is unused. */
+  /** @deprecated Use setScrollSource; removed in 3.0. The getter is unused.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
   setBoundedWrap(config: import("./runway").WrapConfig): void;
@@ -153,7 +154,8 @@ export interface PluginContext<T extends VListItem = VListItem> {
   smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   /** Cancel any in-flight smooth-scroll animation on the active handler. */
   cancelScroll(): void;
-  /** @deprecated Use setScrollSource; removed in 3.0. */
+  /** @deprecated Use setScrollSource; removed in 3.0.
+   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;
