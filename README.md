@@ -306,7 +306,8 @@ bar. Set `gutter: true` to reserve space. The same behavior works horizontally.
 ```typescript
 scrollbar({
   platform: 'windows',        // optional: macos | windows | android
-  width: 'thin',              // optional: auto | thin | none
+  width: 'thin',              // optional: pixels (number) | auto | thin | none
+  radius: 4,                  // optional: thumb radius in pixels
   thumbColor: '#666',         // optional explicit colors
   trackColor: '#eee',
   gutter: true,
@@ -316,8 +317,11 @@ scrollbar({
 Without explicit overrides, the plugin reads the container's standard
 `scrollbar-width` and `scrollbar-color`. `auto` uses the platform width; `thin`
 uses 6 px; `none` disables the track, hover target and gutter. Color order is
-thumb then track. Config overrides author standard properties, which override
-platform defaults. `autoHide`, `autoHideDelay` and `minThumbSize` remain available.
+thumb then track. Numeric `width` and `radius` override the corresponding
+`--vlist-custom-scrollbar-width` and `--vlist-custom-scrollbar-radius` variables
+on the container; those variables override platform defaults. Without a custom
+width variable, the width keywords retain their standard meaning (`none` always
+disables the bar). Explicit colors override author standard colors. `autoHide`, `autoHideDelay` and `minThumbSize` remain available.
 After changing author CSS, call `list.refreshScrollbar()` (or `refresh()` on a
 standalone `Scrollbar` instance). Refresh rereads CSS; platform selection remains
 fixed for that instance. Setting `enabled: false` disables the plugin's bar.

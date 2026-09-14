@@ -25,8 +25,10 @@ export type { ScrollbarPadding } from "../../types";
 export interface ScrollbarConfig {
   /** Override the platform appearance selected once at setup. */
   platform?: 'macos' | 'windows' | 'android';
-  /** Override standard scrollbar-width; auto uses the platform width. */
-  width?: 'auto' | 'thin' | 'none';
+  /** Width in pixels, or a standard scrollbar-width keyword. */
+  width?: number | 'auto' | 'thin' | 'none';
+  /** Thumb radius in pixels; overrides the author CSS variable. */
+  radius?: number;
   /** Explicit colors override author scrollbar-color. */
   thumbColor?: string;
   trackColor?: string;
@@ -639,15 +641,30 @@ export const createScrollbar = (
   const styleNames = ['width', 'radius', 'thumb-color', 'track-color'];
   const setStyle = (name: string, value: string): void => attachTo.style.setProperty(`--vlist-custom-scrollbar-${name}`, value);
   const originalStyles = styleNames.map(name => attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`));
+  const authoredSizing = originalStyles.slice(0, 2);
+  let appliedSizing: string[] = [];
   const refresh = (): void => {
+    // Remove our previous sizing before reading author CSS, including when the
+    // standalone component's style source is the element we write to.
+    for (let i = 0; i < 2; i++) {
+      const name = styleNames[i]!;
+      const inline = attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`);
+      if (inline !== appliedSizing[i]) authoredSizing[i] = inline;
+      setStyle(name, authoredSizing[i]!);
+    }
     const css = getComputedStyle(styleSource ?? attachTo);
     const width = config.width ?? css.getPropertyValue('scrollbar-width');
     const colors = css.getPropertyValue('scrollbar-color').match(/[\w-]+\([^)]*\)|\S+/g);
     enabled = config.enabled !== false && width !== 'none';
-    const values = [width === 'thin' || !classic ? '6px' : '14px', classic ? '0px' : '4px',
+    const values = [
+      typeof config.width === 'number' ? `${config.width}px` :
+        css.getPropertyValue('--vlist-custom-scrollbar-width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
+      typeof config.radius === 'number' ? `${config.radius}px` :
+        css.getPropertyValue('--vlist-custom-scrollbar-radius').trim() || (classic ? '0px' : '4px'),
       config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),
       config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
+    appliedSizing = values.slice(0, 2);
     hoverZone.style.display = enabled ? '' : 'none';
     viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
     if (!enabled) handlePointerEnd();
