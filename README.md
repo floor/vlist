@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.7 KB.
 
-**v2.6.5** — [Changelog](./CHANGELOG.md) · Opt-in synthetic scroll input (RFC-014): import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for list-owned touch, wheel and keyboard input over a viewport-sized content box.
+**v2.7.0** — [Changelog](./CHANGELOG.md) · Opt-in synthetic scroll input (RFC-014): import `createVList` from `vlist/synthetic` and set `scroll.mode: "synthetic"` for list-owned touch, wheel and keyboard input over a viewport-sized content box.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
