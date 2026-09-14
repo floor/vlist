@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.6.5] - 2026-09-14
+
+### Fixed
+
+- **Bounded mode judder on wheel** — the render pipeline's range-unchanged fast path skipped the DOM commit whenever the visible range was unchanged, but item transforms depend on `baseOffset`, which carries all the motion mid-list in bounded mode on wheel. Rows stood still until the range crossed a row boundary and then lurched 24-36 px, most visible during a trackpad's deceleration. Phase 2 now runs whenever `baseOffset` moved. Native mode is unaffected.
+
 ## [2.6.4] - 2026-09-13
 
 ### Fixed
