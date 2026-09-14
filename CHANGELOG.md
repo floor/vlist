@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-09-14
+
+### Fixed
+
+- **Tree in bounded mode wrote the full virtual height** — the tree renderer bypassed the bounded content sizing that grid, table and masonry use, so a large tree reintroduced the browser's 16.7M px limit. Content size now routes through the core; native mode unchanged.
+- **`scale()` deprecation warning** linked to a page that did not exist; it now points at the RFC-012 page.
+
+### Documentation
+
+- Bounded mode on touch devices: long native flings outrun the runway and stall at its edge (measured 145-226% of a 16x runway on an iPhone SE and a Pixel 8a). Documented in the README with a pointer to synthetic mode for touch-heavy lists.
+
 ## [2.7.1] - 2026-09-14
 
 ### Fixed
