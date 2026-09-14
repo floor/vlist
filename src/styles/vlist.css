@@ -428,6 +428,27 @@
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
 }
 
+/* Preserve track, thumb and keyboard focus in high-contrast themes. */
+@media (forced-colors: active) {
+    .vlist-scrollbar {
+        forced-color-adjust: none;
+        background-color: Canvas;
+    }
+
+    .vlist-scrollbar__thumb {
+        background-color: CanvasText;
+    }
+
+    .vlist-scrollbar__thumb:hover,
+    .vlist-scrollbar--dragging .vlist-scrollbar__thumb {
+        background-color: Highlight;
+    }
+
+    .vlist-scrollbar:focus-visible {
+        outline-color: Highlight;
+    }
+}
+
 /* =============================================================================
    Group Headers & Sticky Headers
    ============================================================================= */

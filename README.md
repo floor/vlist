@@ -132,7 +132,7 @@ Measurement corrections from autosize preserve ongoing motion. Synthetic input a
 | `search()` | +3.2 KB | Search bar: filter/navigate modes, match highlighting |
 | `groups()` | +5.3 KB | Sticky/inline headers with grid + masonry + table + data integration |
 | `autosize()` | +1.0 KB | Auto-measure items via ResizeObserver |
-| `scrollbar()` | +2.0 KB | Custom scrollbar UI |
+| `scrollbar()` | +2.8 KB | Accessible custom scrollbar UI |
 | `grid()` | +2.5 KB | 2D grid layout |
 | `masonry()` | +4.1 KB | Pinterest-style masonry with lane-aware keyboard nav |
 | `carousel()` | +3.5 KB | Paged horizontal carousel with snap and keyboard nav |
@@ -265,6 +265,60 @@ const list = createVList({
   search(),
 ])
 ```
+
+## Custom scrollbar (3.0 preview)
+
+On `next`, `scrollbar()` remains a plugin. macOS and Android default to thin,
+rounded, auto-hiding overlays; Windows defaults to a wider, square, always-visible
+bar. Set `gutter: true` to reserve space. The same behavior works horizontally.
+
+```typescript
+scrollbar({
+  platform: 'windows',        // optional: macos | windows | android
+  width: 'thin',              // optional: auto | thin | none
+  thumbColor: '#666',         // optional explicit colors
+  trackColor: '#eee',
+  gutter: true,
+})
+```
+
+Without explicit overrides, the plugin reads the container's standard
+`scrollbar-width` and `scrollbar-color`. `auto` uses the platform width; `thin`
+uses 6 px; `none` disables the track, hover target and gutter. Color order is
+thumb then track. Config overrides author standard properties, which override
+platform defaults. `autoHide`, `autoHideDelay` and `minThumbSize` remain available.
+After changing author CSS, call `list.refreshScrollbar()` (or `refresh()` on a
+standalone `Scrollbar` instance). Refresh rereads CSS; platform selection remains
+fixed for that instance. Setting `enabled: false` disables the plugin's bar.
+
+The focusable track exposes its controlled viewport, orientation, logical range,
+and “Row N of M” value. Arrows move one row along the active axis, PageUp/PageDown
+move a viewport, and Home/End reach the bounds. Focus keeps the bar visible.
+Forced-color themes use system colors for the track, thumb and focus indicator.
+The thumb has a minimum size even for millions of rows; drag positions continue
+to use the full logical range. The real screen-reader acceptance pass is still
+pending; this is not a completed accessibility sign-off.
+
+### Migrating WebKit scrollbar selectors
+
+**The `::-webkit-scrollbar*` pseudo-elements are not mirrored.** They style
+browser-owned scrollbars, not this plugin's DOM. Migrate each rule as follows
+(the classes shown use the default `vlist` prefix):
+
+| Existing selector | Plugin replacement |
+| --- | --- |
+| `::-webkit-scrollbar` | `.vlist-scrollbar`; `--vlist-custom-scrollbar-width` for thickness |
+| `::-webkit-scrollbar-track` | `.vlist-scrollbar`; `--vlist-custom-scrollbar-track-color` |
+| `::-webkit-scrollbar-thumb` | `.vlist-scrollbar__thumb`; `--vlist-custom-scrollbar-thumb-color`, `--vlist-custom-scrollbar-radius`, `--vlist-custom-scrollbar-min-thumb-size` |
+| `::-webkit-scrollbar-thumb:hover` | `.vlist-scrollbar__thumb:hover`; `--vlist-custom-scrollbar-thumb-hover-color` |
+| `::-webkit-scrollbar-corner` | No separate corner element. Reserved gutter space uses the `.vlist` background (`--vlist-bg`). A dedicated corner rule has no direct equivalent. |
+| `::-webkit-scrollbar-button` | No arrow-button elements or direct styling equivalent. Use the scrollbar's row keys or track paging; custom buttons must be separate controls. |
+
+For width and base thumb/track colors, prefer standard `scrollbar-width` and
+`scrollbar-color` on the container, or plugin config. The plugin maps these onto
+its custom properties at setup/refresh. Use the plugin classes and remaining
+variables for radius, minimum thumb size and hover styling. High-contrast system
+colors take priority while forced colors are active.
 
 ## Accessibility
 

@@ -17,6 +17,7 @@ const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.
 const items=Array.from({length:10000},(_,id)=>({id,name:'Row '+id}));
 const template=item=>'<span>'+item.name+'</span><a href="#tail">Test link</a><input type="button" value="Button">';
 const plugins=plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'Name',width:400,cell:template},{key:'id',label:'ID',width:400}]})]:
+ plugin==='scrollbar'?[scrollbar({gutter:true,platform:'windows'})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
  plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
 window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{mode:'synthetic'}},plugins);
@@ -57,6 +58,56 @@ try {
   assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true],allowed:['synthetic','native','bounded']});
   console.log('PASS inherited RTL: horizontal synthetic rejects before DOM creation; vertical/native/bounded allowed');
   await rtlPage.close();
+  for (const axis of ['y', 'x']) {
+    const page = await browser.newPage();
+    await page.setViewport({width:900,height:700,hasTouch:true});
+    await page.goto(`http://localhost:${server.port}/?axis=${axis}&plugin=scrollbar`);
+    await page.waitForFunction(()=>window.ready);
+    const cdp = await page.createCDPSession();
+    for (const mode of ['normal', 'forced']) {
+      await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'forced-colors',value:mode==='forced'?'active':'none'}]});
+      await page.evaluate(()=>{
+        const host=document.querySelector('#list');host.style.scrollbarWidth='thin';host.style.scrollbarColor='rgb(10, 20, 30) rgb(40, 50, 60)';
+        window.list.refreshScrollbar();document.querySelector('.vlist-scrollbar').focus();
+      });
+      await wait(250);
+      const colors=await page.evaluate(()=>{
+        const track=document.querySelector('.vlist-scrollbar'),thumb=track.firstElementChild;
+        const reference=document.createElement('div');reference.style.forcedColorAdjust='none';reference.style.colorScheme=getComputedStyle(track).colorScheme;document.body.append(reference);
+        const system=name=>{reference.style.backgroundColor=name;return getComputedStyle(reference).backgroundColor;};
+        const result={track:getComputedStyle(track).backgroundColor,thumb:getComputedStyle(thumb).backgroundColor,adjust:getComputedStyle(track).forcedColorAdjust,
+          focus:getComputedStyle(track).outlineColor,outline:getComputedStyle(track).outlineStyle,focusVisible:track.matches(':focus-visible'),
+          canvas:system('Canvas'),text:system('CanvasText'),highlight:system('Highlight')};reference.remove();return result;
+      });
+      assert(colors.focusVisible);assert.equal(colors.outline,'solid');
+      if(mode==='forced') {
+        assert.equal(colors.adjust,'none','forced colors use explicit system colors');
+        assert.equal(colors.track,colors.canvas);assert.equal(colors.thumb,colors.text);assert.equal(colors.focus,colors.highlight);
+      } else {assert.equal(colors.track,'rgb(40, 50, 60)');assert.equal(colors.thumb,'rgb(10, 20, 30)');}
+      await page.keyboard.press('Home');await page.keyboard.press(axis==='x'?'ArrowRight':'ArrowDown');
+      assert.equal(await page.evaluate(()=>window.list.getScrollPosition()),axis==='x'?180:50);
+      await page.keyboard.press('PageDown');await page.keyboard.press('End');
+      const values=await page.$eval('.vlist-scrollbar',t=>[t.getAttribute('aria-valuemax'),t.getAttribute('aria-valuenow')]);assert.equal(values[0],values[1]);
+      await page.keyboard.press('Home');
+      console.log(`PASS ${axis}/scrollbar ${mode}: theme/system colors, focus-visible, logical keyboard`);
+    }
+    const thumb=await page.$('.vlist-scrollbar__thumb'),box=await thumb.boundingBox();
+    const x=box.x+box.width/2,y=box.y+box.height/2;
+    await page.mouse.move(x,y);await page.mouse.down();
+    assert(await thumb.evaluate(t=>t.hasPointerCapture(1)));
+    await page.mouse.move(axis==='x'?x+80:x-80,axis==='y'?y+80:y-80,{steps:4});await page.mouse.up();
+    assert((await page.evaluate(()=>window.list.getScrollPosition()))>0);
+    assert(!(await thumb.evaluate(t=>t.hasPointerCapture(1))));
+    await page.evaluate(()=>window.list.scrollToIndex(0));
+    const touchBox=await thumb.boundingBox(),point={id:1,x:touchBox.x+touchBox.width/2,y:touchBox.y+touchBox.height/2};
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,x:point.x+(axis==='x'?40:0),y:point.y+(axis==='y'?40:0)}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert((await page.evaluate(()=>window.list.getScrollPosition()))>0);
+    const native=await page.$eval('.vlist-viewport',(v,axis)=>axis==='x'?v.scrollLeft:v.scrollTop,axis);assert.equal(native,0);
+    console.log(`PASS ${axis}/scrollbar: captured mouse and touch drag, no native main-axis offset`);
+    await page.close();
+  }
   for (const axis of ["y", "x"]) for (const plugin of (axis === "y" ? ["", "table", "groups", "a11y", "selection", "snapshots", "autosize", "transition"] : [""])) {
     const page = await browser.newPage();
     page.on("pageerror", e => errors.push(String(e)));
