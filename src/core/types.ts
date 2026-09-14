@@ -122,8 +122,11 @@ export interface PluginContext<T extends VListItem = VListItem> {
   enableListboxRole(): void;
 
   setSizeConfig(config: number | ((index: number) => number)): void;
-  /** Install a scroll-source setter. The getter argument is retained for
-   * compatibility but unused; sources commit position to engine state. */
+  /** Install an external writer and disable default scroll/wheel listeners. */
+  setScrollSource(source: { write(px: number): void }): void;
+  /** Commit an external position, render synchronously and schedule configured idle. */
+  commitScroll(px: number): void;
+  /** @deprecated Use setScrollSource; removed in 3.0. The getter is unused. */
   setScrollFns(get: () => number, set: (pos: number) => void): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
   setBoundedWrap(config: import("./runway").WrapConfig): void;
@@ -150,6 +153,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
   smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   /** Cancel any in-flight smooth-scroll animation on the active handler. */
   cancelScroll(): void;
+  /** @deprecated Use setScrollSource; removed in 3.0. */
   disableDefaultScroll(): void;
   disableDefaultResize(): void;
   setScrollTarget(target: EventTarget): void;

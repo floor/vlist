@@ -57,3 +57,26 @@ it("native writes commit the clamped value and dedupe DOM events without losing 
     expect(idle).toEqual([3600]);
   } finally { t.cleanup(); }
 });
+
+for (const [from, target, direction] of [[100, 500, 1], [500, 100, -1]]) {
+  it(`native smooth scrolling commits previous position and direction ${direction} on each tick`, () => {
+    const t = setup();
+    const raf = globalThis.requestAnimationFrame;
+    let frame!: FrameRequestCallback;
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    try {
+      t.ctx.scrollTo(from!);
+      t.ctx.smoothScrollTo(target!, 100, x => x);
+      frame(performance.now() + 40);
+      expect(t.ctx.getState().prevScrollPosition).toBe(from!);
+      expect(t.ctx.getState().scrollDirection).toBe(direction!);
+      const middle = t.list.getScrollPosition();
+      expect(middle).toBeGreaterThan(100);
+      expect(middle).toBeLessThan(500);
+      frame(performance.now() + 200);
+      expect(t.ctx.getState().prevScrollPosition).toBe(middle);
+      expect(t.ctx.getState().scrollDirection).toBe(direction!);
+      expect(t.list.getScrollPosition()).toBe(target!);
+    } finally { globalThis.requestAnimationFrame = raf; t.cleanup(); }
+  });
+}

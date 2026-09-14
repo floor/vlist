@@ -52,8 +52,7 @@ export function page<T extends VListItem = VListItem>(
       const win = window;
       const state = ctx.getState();
 
-      // ── 1. Disable default viewport scroll & resize ────────────
-      ctx.disableDefaultScroll();
+      // ── 1. Own window resize ────────────
       ctx.disableDefaultResize();
 
       // ── 2. Modify DOM for window scroll ────────────────────────
@@ -69,13 +68,9 @@ export function page<T extends VListItem = VListItem>(
 
       dom.viewport.classList.remove(`${cfg.classPrefix}-viewport--custom-scrollbar`);
 
-      // ── 3. Override scroll position get/set ─────────────────────
-      ctx.setScrollFns(
-        (): number => {
-          const rect = dom.viewport.getBoundingClientRect();
-          return Math.max(0, isX ? -rect.left : -rect.top);
-        },
-        (pos: number): void => {
+      // ── 3. Install the external scroll writer ─────────────────────
+      ctx.setScrollSource({
+        write(pos: number): void {
           const rect = dom.viewport.getBoundingClientRect();
           const target = (isX ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;
           if (isX) {
@@ -84,33 +79,21 @@ export function page<T extends VListItem = VListItem>(
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
           // Read-after-write must not wait for the asynchronous window event.
-          state.scrollPosition = pos;
+          ctx.commitScroll(pos);
         },
-      );
+      });
 
       // ── 4. Set container size from window ──────────────────────
       state.containerSize = isX ? win.innerWidth : win.innerHeight;
       state.crossSize = isX ? win.innerHeight : win.innerWidth;
 
       // ── 5. Window scroll listener ──────────────────────────────
-      let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
       const onWindowScroll = (): void => {
         const rect = dom.viewport.getBoundingClientRect();
         const pos = Math.max(0, isX ? -rect.left : -rect.top);
 
-        state.prevScrollPosition = state.scrollPosition;
-        state.scrollPosition = pos;
-        state.scrollDirection = pos > state.prevScrollPosition ? 1
-          : pos < state.prevScrollPosition ? -1 : 0;
-
-        ctx.onScrollFrame();
-
-        if (idleTimer !== null) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          idleTimer = null;
-          ctx.onScrollIdle();
-        }, 150);
+        if (Math.abs(pos - ctx.scroll.getPixelEquivalent()) < 0.5) return;
+        ctx.commitScroll(pos);
       };
 
       win.addEventListener("scroll", onWindowScroll, { passive: true });
@@ -201,7 +184,6 @@ export function page<T extends VListItem = VListItem>(
       ctx.registerDestroyHandler(() => {
         cleanupScroll?.();
         cleanupResize?.();
-        if (idleTimer !== null) clearTimeout(idleTimer);
       });
     },
 

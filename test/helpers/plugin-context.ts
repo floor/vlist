@@ -221,6 +221,13 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     setSizeConfig: () => {},
+    setScrollSource: () => {},
+    commitScroll(pos) {
+      engineState.prevScrollPosition = engineState.scrollPosition;
+      engineState.scrollPosition = pos;
+      engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : pos < engineState.prevScrollPosition ? -1 : 0;
+      this.onScrollFrame();
+    },
     setScrollFns: () => {},
     setBoundedWrap: () => {},
     setVirtualTotalFn: () => {},
