@@ -1,6 +1,7 @@
 import {afterAll, beforeAll, beforeEach, expect, test} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
-import {createVList} from '../../../src/core/create';
+// On next the core factory is synthetic; carousel needs the native entry.
+import {createVList} from '../../../src/native';
 import {carousel} from '../../../src/plugins/carousel/plugin';
 import type {CarouselState} from '../../../src/plugins/carousel/plugin';
 
