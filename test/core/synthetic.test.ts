@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createContainer, createTestItems, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/synthetic";
 import { createVList as createNative } from "../../src/native";
 import type { PluginContext, VList, VListPlugin } from "../../src/core/types";
 import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
@@ -404,7 +404,7 @@ describe("synthetic unsupported-combination guards", () => {
     it(`rejects ${name} before plugin setup or DOM creation`, () => {
       let setupCalled = false;
       const plugin: VListPlugin<TestItem> = { name, setup() { setupCalled = true; } };
-      expect(() => make("y", [plugin])).toThrow(`${name} requires createVList from "vlist/native"`);
+      expect(() => make("y", [plugin])).toThrow(`${name} requires createVList from "vlist"`);
       expect(setupCalled).toBe(false); expect(container.children.length).toBe(0);
     });
     it(`leaves ${name} handling in the native entry to core`, () => {
@@ -434,7 +434,7 @@ describe("synthetic horizontal RTL creation guard", () => {
     for (const target of [container, "#rtl-synthetic-container"]) {
       expect(() => createVList({ container: target, orientation: "horizontal", items: createTestItems(10),
         item: { width: 50, template: simpleTemplate } }))
-        .toThrow('RTL horizontal lists require createVList from "vlist/native"');
+        .toThrow('RTL horizontal lists require createVList from "vlist"');
       expect(container.children.length).toBe(0);
     }
   });

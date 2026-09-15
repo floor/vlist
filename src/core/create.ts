@@ -5,7 +5,7 @@
  * plugins, wires the 2-phase pipeline, returns the public VList API.
  */
 
-import { createSyntheticScrollHandler } from "../synthetic/handler";
+import { createScrollHandler } from "./scroll";
 import type { VListItem } from "../types";
 import type {
   CreateVListConfig,
@@ -17,7 +17,7 @@ import type {
   Axis,
   AxisConfig,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -86,7 +86,7 @@ function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
 
   const legacyScroll = raw.scroll as { mode?: unknown; runway?: unknown } | undefined;
   if (legacyScroll?.mode !== undefined || legacyScroll?.runway !== undefined) {
-    throw new Error('vlist 3.0: scroll.mode and scroll.runway were removed; bounded mode is gone. Use "vlist" for huge lists or "vlist/native" for native scrolling.');
+    throw new Error('vlist 3.0: scroll.mode and scroll.runway were removed; bounded mode is gone. Use "vlist/synthetic" for huge lists or "vlist" for native scrolling.');
   }
 
 }
@@ -175,11 +175,23 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
 // createVList()
 // =============================================================================
 
-/** Create a list with synthetic input. Native input is available from vlist/native. */
+/** Create a list with native scrolling. Opt into synthetic input via vlist/synthetic. */
 export function createVList<T extends VListItem = VListItem>(
   config: CreateVListConfig<T>, plugins: VListPlugin<T>[] = [],
 ): VList<T> {
-  return createCore(config, plugins, createSyntheticScrollHandler);
+  let warned = false;
+  return createCore(config, plugins, undefined, {
+    native: createScrollHandler,
+    onContentSize(size, emitter) {
+      if (!warned && size > MAX_VIRTUAL_SIZE) {
+        warned = true;
+        emitter.emit("error", {
+          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use "vlist/synthetic" for large datasets.`),
+          context: "content:size:overflow",
+        });
+      }
+    },
+  });
 }
 
 /** @internal Shared factory; entries select the input handler. */
@@ -198,14 +210,14 @@ export function createCore<T extends VListItem = VListItem>(
   validateConfig(rawConfig);
   if (logicalHandlerFactory) {
     if (typeof rawConfig.scroll?.scrollbar === "string") {
-      throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist/native"; use the scrollbar() plugin with "vlist".');
+      throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
     }
     if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
-      throw new Error('vlist: RTL horizontal lists require createVList from "vlist/native"');
+      throw new Error('vlist: RTL horizontal lists require createVList from "vlist"');
     }
     for (const plugin of plugins) {
       if (plugin.name === "carousel" || plugin.name === "sortable") {
-        throw new Error(`vlist: ${plugin.name} requires createVList from "vlist/native"`);
+        throw new Error(`vlist: ${plugin.name} requires createVList from "vlist"`);
       }
     }
   }
@@ -243,7 +255,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   // ── Scroll config: scrollbar & gutter CSS classes ──────────────
 
-  const scrollbarMode = rawConfig.scroll?.scrollbar as unknown;
+  const scrollbarMode = rawConfig.scroll?.scrollbar;
   if (scrollbarMode === "none") {
     dom.viewport.classList.add(`${config.classPrefix}-viewport--no-scrollbar`);
   }

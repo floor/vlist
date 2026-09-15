@@ -11,7 +11,7 @@ const html = `<!doctype html><meta name="viewport" content="width=device-width,i
 <style>body{margin:20px}#list{width:360px;height:360px}a,button,input{margin:5px}</style>
 <div id="list"></div><div id="tail">Tail</div>
 <script type="module">
-import {createVList} from '/index.js';
+import {createVList} from '/synthetic.js';
 import {grid,masonry,table,groups,a11y,selection,scrollbar,snapshots,autosize,transition,page} from '/index.js';
 const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.get('plugin');
 const items=Array.from({length:Number(q.get('count'))||10000},(_,id)=>({id,name:'Row '+id}));
@@ -21,7 +21,7 @@ const plugins=plugin==='grid'?[grid({columns:3,gap:0})]:plugin==='masonry'?[maso
  plugin==='scrollbar'?[scrollbar({gutter:true,platform:'windows'})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
  plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
-const factory=q.get('entry')==='native'?(await import('/native.js')).createVList:createVList;
+const factory=q.get('entry')==='native'?(await import('/index.js')).createVList:createVList;
 try { window.list=factory({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
 if(window.list) {
 window.clicks=0;document.querySelector('.vlist-content').addEventListener('click',()=>window.clicks++);
@@ -41,7 +41,7 @@ try {
   console.log(await browser.version());
   // 3.0 removal gate: both entries keep their supported plugin behavior.
   // The wheel gate observes DOM displacement, not only position telemetry.
-  for (const entry of ['core','native']) {
+  for (const entry of ['synthetic','native']) {
     for (const plugin of ['list','table','groups','scrollbar','page','grid','masonry']) {
       const probe = await browser.newPage();
       await probe.setViewport({width:900,height:700});
@@ -74,7 +74,7 @@ try {
           assert(Math.abs(before.y-after.y-delta)<1,`${entry}/${plugin} wheel ${step}: DOM ${before.y-after.y}, logical ${delta}`);
           matching++;
         }
-        if(entry==='core' || plugin==='page') assert.equal(after.native,0);
+        if(entry==='synthetic' || plugin==='page') assert.equal(after.native,0);
       }
       assert.equal(moving,20,`${entry}/${plugin} every wheel step moves`);
       assert.equal(matching,moving);
@@ -128,8 +128,8 @@ try {
   await rtlPage.goto(`http://localhost:${server.port}/`);
   await rtlPage.waitForFunction(() => window.ready);
   const rtl = await rtlPage.evaluate(async () => {
-    const {createVList} = await import('/index.js');
-    const {createVList:createNative} = await import('/native.js');
+    const {createVList} = await import('/synthetic.js');
+    const {createVList:createNative} = await import('/index.js');
     const parent = document.createElement('div'); parent.style.direction = 'rtl'; document.body.append(parent);
     const container = document.createElement('div'); container.id = 'rtl-probe'; container.style.cssText = 'width:300px;height:300px'; parent.append(container);
     const results = { direction: getComputedStyle(container).direction, rejected: [], allowed: [] };
