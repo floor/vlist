@@ -6,6 +6,7 @@
  * events, methods, template state, and cleanup.
  */
 
+import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../../src/core/create";
@@ -27,22 +28,22 @@ const FRUITS: Fruit[] = [
   { id: 5, name: "Grape", kind: "berry" },
 ];
 
-let heightDesc: PropertyDescriptor | undefined;
-let widthDesc: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   GlobalRegistrator.register();
-  heightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  widthDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 500; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 
 afterAll(() => {
-  if (heightDesc) Object.defineProperty(HTMLElement.prototype, "clientHeight", heightDesc);
-  if (widthDesc) Object.defineProperty(HTMLElement.prototype, "clientWidth", widthDesc);
+  geometry.restore();
   GlobalRegistrator.unregister();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let lists: VList<Fruit>[] = [];
 afterEach(() => {

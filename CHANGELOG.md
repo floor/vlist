@@ -56,6 +56,20 @@ Prerelease of 3.0, published under the npm `next` dist-tag; `latest` stays on 2.
 - Publish prereleases under the npm `next` dist-tag with a GitHub prerelease, and fail the publish job when the tag does not match `package.json`.
 - Measure all 19 size scenarios and reject runway implementation leaks into the base bundle. Base size after removals is 11,670 bytes gzipped; optimization toward the 9.9 KB target is deferred.
 
+## [2.8.1] - 2026-09-15
+
+### Fixed
+
+- Carousel slots follow container resizes and keep the focal item; they previously stayed at their creation-time size.
+
+### Documentation
+
+- Correct the 3.0 guidance in the 2.8 deprecation notices. Native scrolling stays the default in 3.0 and synthetic input stays opt-in through `vlist/synthetic`; `scroll.scrollbar: "native"` and `"none"` are no longer deprecated. `scroll.mode`, `scroll.runway`, `scale()`, `setScrollFns` and `disableDefaultScroll` are still removed in 3.0.
+
+### Internal
+
+- The publish workflow sends prerelease versions to the npm `next` dist-tag, creates GitHub prereleases, and fails when the tag does not match `package.json`.
+
 ## [2.8.0] - 2026-09-15
 
 ### Added
