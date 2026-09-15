@@ -2,7 +2,7 @@
 
 High-performance virtual scrolling library. Zero dependencies, plugin architecture, TypeScript strict mode.
 
-- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses latest staging branch code)
+- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses the latest `next` branch code, the 3.0 prerelease line)
 
 **Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
 
@@ -230,7 +230,7 @@ Before tagging a new version, complete ALL of these steps:
 5. Update `npm-readme.md` — version reference and base size
 
 ### Cross-Repo Staging Deploy (`notify-staging.yml`)
-When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
+When `next` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
 
 ## Zero Dependencies
 

@@ -1,12 +1,12 @@
 # GitHub Actions — Notify vlist.io to redeploy staging
-# When vlist staging branch is updated (and CI passes),
-# triggers a staging redeploy on vlist.io so it picks up the latest vlist code.
+# When the vlist next branch (the 3.0 prerelease line) is updated,
+# triggers a staging redeploy on vlist.io so it picks up the latest next code.
 
 name: Notify Staging Deploy
 
 on:
   push:
-    branches: [staging]
+    branches: [next]
 
 jobs:
   # Wait for CI to pass first
