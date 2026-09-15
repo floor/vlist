@@ -282,16 +282,12 @@ it("config defaults to native input without an injected factory", () => {
   } finally { list.destroy(); host.remove(); }
 });
 
-for (const name of ["sortable"]) {
-  it(`synthetic factory preserves the ${name} entry guard`, () => {
-    const host = createContainer();
-    try {
-      expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic, plugins: [{ name }],
-      })).toThrow(`${name} requires createVList from "vlist"`);
-      expect(host.children.length).toBe(0);
-    } finally { host.remove(); }
-  });
-}
+it("config permits sortable with the synthetic factory", () => {
+  const host=createContainer();
+  const list=createVListFromConfig({...base(),container:host,factory:createSynthetic,plugins:[{name:"sortable"}]});
+  try {expect(host.querySelector(".vlist-viewport")).not.toBeNull();}
+  finally {list.destroy();host.remove();}
+});
 
 it("synthetic factory preserves the RTL horizontal entry guard", () => {
   const host = createContainer();

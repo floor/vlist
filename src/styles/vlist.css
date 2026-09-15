@@ -584,6 +584,19 @@
     cursor: grabbing;
 }
 
+/* Applied only for an active touch/pen press on a sortable item. */
+.vlist-item--touch-sort {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Long-press/handle claim cue; applications may override this class hook. */
+.vlist-sort-ghost--touch {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: 2px;
+}
+
 /* Hide the original item while its ghost is being dragged */
 .vlist-item--drag-source {
     opacity: 0 !important;

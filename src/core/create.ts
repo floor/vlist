@@ -215,11 +215,6 @@ export function createCore<T extends VListItem = VListItem>(
     if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
       throw new Error('vlist: RTL horizontal lists require createVList from "vlist"');
     }
-    for (const plugin of plugins) {
-      if (plugin.name === "sortable") {
-        throw new Error(`vlist: ${plugin.name} requires createVList from "vlist"`);
-      }
-    }
   }
 
   // ── Resolve config ──────────────────────────────────────────────

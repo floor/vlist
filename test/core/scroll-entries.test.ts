@@ -73,19 +73,12 @@ it("config uses an injected synthetic factory for synthetic scrolling", () => {
   } finally { list.destroy(); container.remove(); }
 });
 
-for (const name of ["sortable"]) {
-  it(`synthetic entry rejects ${name} before setup or DOM creation`, () => {
-    const container = createContainer();
-    let setups = 0;
-    try {
-      expect(() => createSynthetic({ container, items: createTestItems(1),
-        item: { height: 40, template: simpleTemplate },
-      }, [{ name, setup() { setups++; } }])).toThrow('createVList from "vlist"');
-      expect(setups).toBe(0);
-      expect(container.children).toHaveLength(0);
-    } finally { container.remove(); }
-  });
-}
+it("synthetic entry permits sortable setup", () => {
+  const container = createContainer();let setups=0;
+  const list=createSynthetic({container,items:createTestItems(1),item:{height:40,template:simpleTemplate}},[{name:"sortable",setup(){setups++;}}]);
+  try {expect(setups).toBe(1);expect(container.children.length).toBeGreaterThan(0);}
+  finally {list.destroy();container.remove();}
+});
 
 it("synthetic entry rejects horizontal RTL before creating DOM", () => {
   const container = createContainer();

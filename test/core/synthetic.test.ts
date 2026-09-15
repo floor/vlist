@@ -402,25 +402,8 @@ it("reverse transition insertion preserves end pinning for both scroll entries",
 });
 
 describe("synthetic unsupported-combination guards", () => {
-  for (const name of ["sortable"]) {
-    it(`rejects ${name} before plugin setup or DOM creation`, () => {
-      let setupCalled = false;
-      const plugin: VListPlugin<TestItem> = { name, setup() { setupCalled = true; } };
-      expect(() => make("y", [plugin])).toThrow(`${name} requires createVList from "vlist"`);
-      expect(setupCalled).toBe(false); expect(container.children.length).toBe(0);
-    });
-    it(`leaves ${name} handling in the native entry to core`, () => {
-      for (const mode of ["native"] as const) {
-        let setupCalled = false;
-        // Stub isolates the entry guard from each plugin's own mode policy.
-        list = factoryFor(mode)({ container, items: createTestItems(10), item: { height: 50, template: simpleTemplate } },
-          [{ name, setup() { setupCalled = true; } }]);
-        expect(setupCalled).toBe(true); list.destroy(); list = undefined;
-      }
-    });
-  }
   it("allows every supported plugin name through the entry", () => {
-    const names = ["table", "groups", "snapshots", "scrollbar", "autosize", "transition", "selection", "a11y"];
+    const names = ["table", "groups", "snapshots", "scrollbar", "autosize", "transition", "selection", "a11y", "carousel", "sortable"];
     const called: string[] = [];
     make("y", names.map(name => ({ name, setup() { called.push(name); } })));
     expect(called.sort()).toEqual(names.sort());
