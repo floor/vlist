@@ -7,21 +7,22 @@ if (!driver) throw new Error("Set VLIST_BROWSER_DRIVER to the Chrome launchBrows
 const { launchBrowser } = await import(resolve(driver));
 const root = resolve(import.meta.dir, "..");
 const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
+<link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css"><link rel="stylesheet" href="/vlist-grid.css"><link rel="stylesheet" href="/vlist-masonry.css">
 <style>body{margin:20px}#list{width:360px;height:360px}a,button,input{margin:5px}</style>
 <div id="list"></div><div id="tail">Tail</div>
 <script type="module">
 import {createVList} from '/index.js';
-import {table,groups,a11y,selection,scrollbar,snapshots,autosize,transition,page} from '/index.js';
+import {grid,masonry,table,groups,a11y,selection,scrollbar,snapshots,autosize,transition,page} from '/index.js';
 const q=new URLSearchParams(location.search), axis=q.get('axis')||'y', plugin=q.get('plugin');
 const items=Array.from({length:Number(q.get('count'))||10000},(_,id)=>({id,name:'Row '+id}));
 const template=item=>'<span>'+item.name+'</span><a href="#tail">Test link</a><input type="button" value="Button">';
-const plugins=plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'Name',width:400,cell:template},{key:'id',label:'ID',width:400}]})]:
+const plugins=plugin==='grid'?[grid({columns:3,gap:0})]:plugin==='masonry'?[masonry({columns:3,gap:0})]:plugin==='table'?[table({rowHeight:50,columns:[{key:'name',label:'Name',width:400,cell:template},{key:'id',label:'ID',width:400}]})]:
  plugin==='page'?[page()]:
  plugin==='scrollbar'?[scrollbar({gutter:true,platform:'windows'})]:
  plugin==='groups'?[groups({getGroupForIndex:i=>String(Math.floor(i/10)),headerHeight:30,headerTemplate:g=>g})]:
  plugin==='autosize'?[autosize()]:plugin==='transition'?[transition()]:plugin==='a11y'?[a11y()]:plugin==='selection'?[selection()]:plugin==='snapshots'?[snapshots(),scrollbar()]:[];
-try { window.list=createVList({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
+const factory=q.get('entry')==='native'?(await import('/native.js')).createVList:createVList;
+try { window.list=factory({container:'#list',orientation:axis==='x'?'horizontal':'vertical',items,item:plugin==='autosize'?{estimatedHeight:50,template:item=>'<div style="height:50px">'+template(item)+'</div>'}:{height:50,width:180,template},scroll:{}},plugins); } catch(error) { window.creationError=error.message; window.ready=true; }
 if(window.list) {
 window.clicks=0;document.querySelector('.vlist-content').addEventListener('click',()=>window.clicks++);
 window.ready=true;
@@ -30,7 +31,7 @@ window.ready=true;
 const server = Bun.serve({ port: 0, fetch(req) {
   const path = new URL(req.url).pathname;
   if (path === "/") return new Response(html, { headers: { "Content-Type": "text/html" } });
-  if (["/synthetic.js", "/native.js", "/index.js", "/vlist.css", "/vlist-table.css"].includes(path)) return new Response(Bun.file(`${root}/dist${path}`));
+  if (["/synthetic.js", "/native.js", "/index.js", "/vlist.css", "/vlist-table.css", "/vlist-grid.css", "/vlist-masonry.css"].includes(path)) return new Response(Bun.file(`${root}/dist${path}`));
   return new Response("Not found", { status: 404 });
 } });
 const browser = await launchBrowser();
@@ -38,6 +39,49 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
   console.log(await browser.version());
+  // 3.0 removal gate: both entries keep their supported plugin behavior.
+  // The wheel gate observes DOM displacement, not only position telemetry.
+  for (const entry of ['core','native']) {
+    for (const plugin of ['list','table','groups','scrollbar','page','grid','masonry']) {
+      const probe = await browser.newPage();
+      await probe.setViewport({width:900,height:700});
+      await probe.goto(`http://localhost:${server.port}/?entry=${entry}&plugin=${plugin}&count=10000`);
+      await probe.waitForFunction(() => window.ready);
+      assert.equal(await probe.evaluate(() => window.creationError),undefined);
+      await probe.evaluate(() => window.list.scrollToIndex(400));
+      await wait(80);
+      const point = await probe.$eval('.vlist-viewport',v=>{
+        const r=v.getBoundingClientRect();return {x:r.left+100,y:Math.max(60,r.top+160)};
+      });
+      await probe.mouse.move(point.x,point.y);
+      let moving=0,matching=0;
+      for(let step=0;step<20;step++) {
+        const before=await probe.evaluate(()=>{
+          const rows=[...document.querySelectorAll('.vlist-item[data-index]')];
+          const row=rows[Math.floor(rows.length/2)];
+          return {index:row.dataset.index,y:row.getBoundingClientRect().top,pos:window.list.getScrollPosition()};
+        });
+        await probe.mouse.wheel({deltaY:12});
+        await wait(35);
+        const after=await probe.evaluate(index=>{
+          const row=document.querySelector(`.vlist-item[data-index="${index}"]`);
+          return {y:row?.getBoundingClientRect().top,pos:window.list.getScrollPosition(),native:document.querySelector('.vlist-viewport').scrollTop};
+        },before.index);
+        const delta=after.pos-before.pos;
+        if(delta>0) {
+          moving++;
+          assert(after.y!==undefined,`${entry}/${plugin} retained sampled row`);
+          assert(Math.abs(before.y-after.y-delta)<1,`${entry}/${plugin} wheel ${step}: DOM ${before.y-after.y}, logical ${delta}`);
+          matching++;
+        }
+        if(entry==='core' || plugin==='page') assert.equal(after.native,0);
+      }
+      assert.equal(moving,20,`${entry}/${plugin} every wheel step moves`);
+      assert.equal(matching,moving);
+      console.log(`PASS ${entry}/${plugin} DOM wheel: ${matching}/${moving} steps, 12px input`);
+      await probe.close();
+    }
+  }
   const documentPage = await browser.newPage();
   await documentPage.setViewport({width:900,height:700});
   await documentPage.goto(`http://localhost:${server.port}/?plugin=page&count=100000`);
@@ -91,18 +135,18 @@ try {
     const results = { direction: getComputedStyle(container).direction, rejected: [], allowed: [] };
     try {
       for (const target of [container, '#rtl-probe']) {
-        try { const list=createVList({container:target,orientation:'horizontal',items:[{id:1}],item:{width:50,template:()=>''},scroll:{mode:'synthetic'}});list.destroy();results.rejected.push(false); }
+        try { const list=createVList({container:target,orientation:'horizontal',items:[{id:1}],item:{width:50,template:()=>''}});list.destroy();results.rejected.push(false); }
         catch(error) { results.rejected.push(error.message.includes('RTL horizontal lists') && container.children.length===0); }
       }
-      for(const [mode,orientation] of [['synthetic','vertical'],['native','horizontal'],['bounded','horizontal']]) {
-        const list=(mode==='synthetic'?createVList:createNative)({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''},scroll:{mode}});
+      for(const [mode,orientation] of [['synthetic','vertical'],['native','horizontal']]) {
+        const list=(mode==='synthetic'?createVList:createNative)({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''}});
         results.allowed.push(mode);list.destroy();
       }
       return results;
     } finally { parent.remove(); }
   });
-  assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true],allowed:['synthetic','native','bounded']});
-  console.log('PASS inherited RTL: horizontal synthetic rejects before DOM creation; vertical/native/bounded allowed');
+  assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true],allowed:['synthetic','native']});
+  console.log('PASS inherited RTL: horizontal synthetic rejects before DOM creation; vertical/native allowed');
   await rtlPage.close();
   for (const axis of ['y', 'x']) {
     const page = await browser.newPage();

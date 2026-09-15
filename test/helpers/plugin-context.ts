@@ -228,7 +228,6 @@ export function createPluginMockContext<T extends VListItem>(
       engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : pos < engineState.prevScrollPosition ? -1 : 0;
       this.onScrollFrame();
     },
-    setScrollFns: () => {},
     setBoundedWrap: () => {},
     setVirtualTotalFn: () => {},
     setIndexMapFn: () => {},
@@ -275,7 +274,6 @@ export function createPluginMockContext<T extends VListItem>(
       onComplete?.();
     },
     cancelScroll: () => {},
-    disableDefaultScroll: () => {},
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
     setScrollToPosFn: (fn: any) => { _scrollToPosFn = fn; },

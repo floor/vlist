@@ -83,19 +83,6 @@ it("page writes commit direction, frame and configured idle once, then dedupe wi
   } finally { t.cleanup(); }
 });
 
-it("deprecated setScrollFns delegates to the external writer contract", () => {
-  const t = setup();
-  try {
-    const getter = mock(() => { throw new Error("dead getter"); });
-    const writer = mock((px: number) => t.ctx.commitScroll(px));
-    t.ctx.setScrollFns(getter, writer);
-    t.ctx.scrollTo(300);
-    expect(writer).toHaveBeenCalledWith(300);
-    expect(getter).not.toHaveBeenCalled();
-    expect(t.list.getScrollPosition()).toBe(300);
-  } finally { t.cleanup(); }
-});
-
 it("page smooth navigation renders once per animation frame", () => {
   const t = setup();
   const raf = globalThis.requestAnimationFrame;

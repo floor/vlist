@@ -231,6 +231,9 @@ async function build() {
       if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") === (name === "native")) {
         throw new Error(`Unexpected synthetic driver presence in ${name}`);
       }
+      if (new TextDecoder().decode(bytes).includes(".thresholdLaps") !== (name === "native")) {
+        throw new Error(`Unexpected private runway presence in ${name}`);
+      }
       const compressed = Bun.gzipSync(bytes);
       sizes[name] = {
         minified: (bytes.byteLength / 1024).toFixed(1),

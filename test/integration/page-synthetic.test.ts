@@ -12,14 +12,14 @@ import { createContainer } from "../helpers/factory";
 beforeAll(() => GlobalRegistrator.register());
 afterAll(() => GlobalRegistrator.unregister());
 
-for (const mode of ["bounded", "synthetic"] as const) {
+for (const mode of ["native", "synthetic"] as const) {
   it(`page uses the document source and origin zero under ${mode}`, () => {
     const host = createContainer();
     let ctx!: PluginContext<{ id: number }>;
-    const list = (mode === "bounded" ? createNative : createVList)({ container: host,
+    const list = (mode === "native" ? createNative : createVList)({ container: host,
       items: Array.from({ length: 1000 }, (_, id) => ({ id })),
       item: { height: 40, template: item => String(item.id) },
-      padding: [10, 0, 20, 0], scroll: { mode },
+      padding: [10, 0, 20, 0], scroll: {},
     }, [page(), { name: "inspect", setup(c) { ctx = c; } }]);
     try {
       ctx.dom.viewport.getBoundingClientRect = () => ({ top: -400 } as DOMRect);
@@ -46,7 +46,7 @@ it("page rejects an initial document size over the limit, including padding and 
     try {
       expect(() => createVList({ container: host, defer,
         items: [{ id: 1 }], item: { height: 16_777_216, template: () => "row" },
-        padding: [1, 0], scroll: { mode: "synthetic" },
+        padding: [1, 0],
       }, [page()])).toThrow(/16777218px.*16777216px.*viewport-scrolled default.*https:\/\/vlist.io\/docs\/rfcs\/RFC-014-Scroll-Input-Model/);
       expect(host.children.length).toBe(0);
     } finally { host.remove(); }
@@ -59,7 +59,7 @@ it("page warns once on later growth past the document limit", async () => {
   const warnings: string[] = [];
   console.warn = message => warnings.push(String(message));
   const list = createVList({ container: host, items: [{ id: 1 }],
-    item: { height: 10_000_000, template: () => "row" }, scroll: { mode: "synthetic" },
+    item: { height: 10_000_000, template: () => "row" },
   }, [page()]);
   try {
     await Promise.resolve();
@@ -75,7 +75,7 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
   let ctx!: PluginContext<{ id: number }>;
   const sizes: number[] = [];
   const list = createVList({ container: host, items: [{ id: 1 }],
-    item: { height: 40, template: () => "row" }, padding: [10, 0], scroll: { mode: "synthetic" },
+    item: { height: 40, template: () => "row" }, padding: [10, 0],
   }, [{ name: "external", setup(c) {
     ctx = c;
     c.setScrollSource({ write: px => c.commitScroll(px), onContentSize: px => sizes.push(px) });
@@ -85,7 +85,7 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
     ctx.updateContentSize(80);
     expect(sizes).toEqual([60, 100]);
     expect(ctx.dom.content.style.height).toBe("100px");
-    ctx.setScrollFns(() => 0, px => ctx.commitScroll(px));
+    ctx.setScrollSource({ write: px => ctx.commitScroll(px) });
     list.appendItems([{ id: 2 }]);
     expect(sizes).toEqual([60, 100]);
     ctx.scrollTo(20);
@@ -97,7 +97,7 @@ for (const defer of [false, true]) it(`custom layout initial sizing guards befor
   const host = createContainer();
   try {
     expect(() => createVList({ container: host, defer, items: [{ id: 1 }],
-      item: { height: 40, template: () => "row" }, scroll: { mode: "synthetic" },
+      item: { height: 40, template: () => "row" },
     }, [page(), { name: "layout", priority: 10, setup(ctx) {
       ctx.setRenderFn(() => {}, () => {});
       ctx.updateContentSize(20_000_000);
@@ -116,7 +116,7 @@ it("deferred table warns on its first size commit when creation did not know its
   globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
   try {
     const list = createVList({ container: host, defer: true, items: [{ id: 1 }, { id: 2 }],
-      item: { height: 40, template: () => "row" }, scroll: { mode: "synthetic" },
+      item: { height: 40, template: () => "row" },
     }, [page(), table({ rowHeight: 10_000_000, columns: [{ key: "id", label: "ID", width: 100 }] })]);
     try {
       expect(warnings).toHaveLength(0);
@@ -136,7 +136,7 @@ it("plain synthetic lists do not run the document provider's warning", () => {
   console.warn = value => warnings.push(value);
   try {
     const list = createVList({ container: host, items: [{ id: 1 }, { id: 2 }],
-      item: { height: 10_000_000, template: () => "row" }, scroll: { mode: "synthetic" },
+      item: { height: 10_000_000, template: () => "row" },
     });
     try {
       list.appendItems([{ id: 3 }]);

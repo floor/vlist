@@ -17,8 +17,9 @@
  * config (the adapters) pull in this module and, with it, every plugin it wires.
  */
 
-import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
+import type { VListItem, ItemConfig, GroupsConfig, VListAdapter } from "./types";
 import { createVList } from "./core/create";
+import type { NativeScrollConfig } from "./native";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
 import { page } from "./plugins/page";
 import { autosize } from "./plugins/autosize";
@@ -31,7 +32,6 @@ import type { MasonryPluginConfig } from "./plugins/masonry";
 import { groups } from "./plugins/groups";
 import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
-import { createScalePlugin } from "./plugins/scale/plugin";
 import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 import { snapshots } from "./plugins/snapshots";
@@ -48,7 +48,9 @@ export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T
 export interface VListConfig<T extends VListItem = VListItem>
   extends Omit<CreateVListConfig<T>, "container" | "scroll"> {
   /** Input model; native scrolling requires a factory imported from vlist/native. */
-  scroll?: Omit<ScrollConfig, "mode"> & { mode?: ScrollConfig["mode"] | "synthetic" };
+  // The convenience layer also supports native factories. Core rejects native
+  // visibility strings at creation; they are meaningful only with that factory.
+  scroll?: NativeScrollConfig;
   /** List factory; defaults to core createVList. Fixed for this instance. */
   factory?: VListFactory<T>;
 
@@ -88,7 +90,7 @@ export interface VListConfig<T extends VListItem = VListItem>
 /**
  * Translate a {@link VListConfig} into the ordered plugin array that the core
  * `createVList` expects. Mirrors the adapters' historical behavior exactly:
- * `scale` and `snapshots` are always included, and `selection` is always
+ * `snapshots` is always included, and `selection` is always
  * present (in `"none"` mode when unset) so its API is available. Any user
  * `plugins` are appended last as an escape hatch.
  */
@@ -158,11 +160,9 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     plugins.push(selection<T>({ mode: "none" }));
   }
 
-  plugins.push(createScalePlugin<T>(false));
-
   // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
-  // browser's native scrollbar). Core hides native only for "none"; "native"
-  // simply leaves browser defaults in place. Any other
+  // browser's native scrollbar). These strings require the native factory;
+  // it hides the native scrollbar only for "none". Any other
   // value (or omitted) opts into vlist's custom overlay scrollbar.
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
   if (scrollbarConfig !== "none" && scrollbarConfig !== "native") {

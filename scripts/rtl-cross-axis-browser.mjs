@@ -12,7 +12,7 @@ const base='';
 const {createVList}=await import(base+'/synthetic.js');const {table}=await import(base+'/index.js');
 const q=new URLSearchParams(location.search),host=document.querySelector('#host');host.dir=q.get('dir')||'rtl';
 const isTable=q.get('table')!=='false';
-window.testList=createVList({container:host,items:Array.from({length:100},(_,id)=>({id,a:'A '+id,b:'B '+id,c:'C '+id})),item:{height:40,template:i=>'<div class="wide">'+i.a+'</div>'},scroll:{mode:'synthetic'}},isTable?[table({rowHeight:40,columns:[{key:'a',label:'A',width:200},{key:'b',label:'B',width:250},{key:'c',label:'C',width:300}]})]:[]);
+window.testList=createVList({container:host,items:Array.from({length:100},(_,id)=>({id,a:'A '+id,b:'B '+id,c:'C '+id})),item:{height:40,template:i=>'<div class="wide">'+i.a+'</div>'}},isTable?[table({rowHeight:40,columns:[{key:'a',label:'A',width:200},{key:'b',label:'B',width:250},{key:'c',label:'C',width:300}]})]:[]);
 if(!isTable)document.querySelector('.vlist-content').style.width='800px';
 window.sample=()=>{
  const v=document.querySelector('.vlist-viewport'),h=[...document.querySelectorAll('.vlist-table-header-cell')],b=[...document.querySelectorAll('.vlist-table-row')][0]?.querySelectorAll('.vlist-table-cell')||[];

@@ -1,24 +1,25 @@
-/**
- * vlist — Bounded Logical Scroll Tests (RFC-012)
- *
- * Verifies the bounded scroll model (`scroll: { mode: "bounded" }`):
- *   - the content element is sized to a viewport-multiple runway, not the full
- *     virtual size (so the browser's ~16.7M px element limit is never reached)
- *   - the public scroll position is the absolute logical pixel and reaches the
- *     full range, including the exact end
- *   - items render at `offset - baseOffset`, landing inside the runway
- *   - native scroll near a runway edge rebases (shifts baseOffset + scrollTop)
- *     while preserving the logical position
- *
- * Native mode (the default) is covered by the rest of the suite; here we assert
- * the bounded path's distinct behavior.
+/** Private runway regression tests. The native carousel still uses this engine.
+ * Non-wrap cases inject the private handler into createCore to exercise its
+ * clamping/rebase branches; they are not a public bounded-mode configuration.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
-import { createVList } from "../../src/native";
+import { createVList as createNative } from "../../src/native";
+import { createCore } from "../../src/core/create";
+import { createBoundedScrollHandler } from "../../src/core/runway";
+import type { CreateVListConfig } from "../../src/core/types";
+import type { VListItem } from "../../src/types";
+
+function createVList<T extends VListItem>(
+  options: CreateVListConfig<T> & { runwayFactor?: number }, plugins: VListPlugin<T>[] = [],
+): VList<T> {
+  const { runwayFactor, ...config } = options;
+  if (runwayFactor === undefined) return createNative(config, plugins);
+  return createCore(config, plugins, cfg => createBoundedScrollHandler({ ...cfg, runwayFactor }));
+}
 import type { VList, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";
@@ -86,7 +87,7 @@ function makeBounded(itemCount: number): VList<TestItem> {
       container,
       items: createTestItems(itemCount),
       item: { height: ITEM, template: simpleTemplate },
-      scroll: { mode: "bounded" },
+      runwayFactor: FACTOR,
     },
     [],
   );
@@ -98,7 +99,7 @@ function makeBoundedIn(c: HTMLElement, itemCount: number): VList<TestItem> {
       container: c,
       items: createTestItems(itemCount),
       item: { height: ITEM, template: simpleTemplate },
-      scroll: { mode: "bounded" },
+      runwayFactor: FACTOR,
     },
     [],
   );
@@ -128,31 +129,18 @@ describe("bounded scroll — runway sizing", () => {
     expect(parseInt(content.style.height, 10)).toBe(15 * ITEM);
   });
 
-  it("honors a custom scroll.runway multiple", () => {
+  it("honors a custom private runway factor multiple", () => {
     list = createVList<TestItem>(
       {
         container,
         items: createTestItems(1_000_000),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded", runway: 5 },
+        runwayFactor: 5,
       },
       [],
     );
     // runway 5 × 500px viewport = 2500px content.
     expect(parseInt(getContent(container).style.height, 10)).toBe(VIEWPORT * 5);
-  });
-
-  it("clamps scroll.runway up to the minimum floor (1.5)", () => {
-    list = createVList<TestItem>(
-      {
-        container,
-        items: createTestItems(1_000_000),
-        item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded", runway: 1 }, // below floor → clamped to 1.5
-      },
-      [],
-    );
-    expect(parseInt(getContent(container).style.height, 10)).toBe(VIEWPORT * 1.5);
   });
 
   it("honors a small runway multiple above the floor (1.6)", () => {
@@ -161,7 +149,7 @@ describe("bounded scroll — runway sizing", () => {
         container,
         items: createTestItems(1_000_000),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded", runway: 1.6 }, // above floor → kept as-is
+        runwayFactor: 1.6, // above floor → kept as-is
       },
       [],
     );
@@ -186,7 +174,7 @@ describe("bounded scroll — runway sizing", () => {
         container,
         items: createTestItems(1000),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [grower],
     );
@@ -199,19 +187,7 @@ describe("bounded scroll — runway sizing", () => {
     expect(parseInt(content.style.height, 10)).toBe(RUNWAY);
   });
 
-  it("throws on an invalid scroll.runway", () => {
-    expect(() =>
-      createVList<TestItem>(
-        {
-          container,
-          items: createTestItems(10),
-          item: { height: ITEM, template: simpleTemplate },
-          scroll: { mode: "bounded", runway: 0 },
-        },
-        [],
-      ),
-    ).toThrow(/scroll\.runway must be a positive number/);
-  });
+
 });
 
 // =============================================================================
@@ -503,7 +479,7 @@ describe("bounded scroll — renderer plugins", () => {
         container,
         items: createTestItems(HUGE),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [grid({ columns: 4 })],
     );
@@ -516,7 +492,7 @@ describe("bounded scroll — renderer plugins", () => {
         container,
         items: createTestItems(HUGE),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [
         table({
@@ -535,7 +511,7 @@ describe("bounded scroll — renderer plugins", () => {
         container,
         items: nodes,
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [tree<TestItem & { children: never[] }>({})],
     );
@@ -548,7 +524,7 @@ describe("bounded scroll — renderer plugins", () => {
         container,
         items: createTestItems(HUGE),
         item: { height: ITEM, template: simpleTemplate },
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [masonry({ columns: 3 })],
     );
@@ -646,7 +622,7 @@ describe("bounded scroll — wheel", () => {
         items: createTestItems(1_000_000),
         item: { height: ITEM, template: simpleTemplate },
         orientation: "horizontal",
-        scroll: { mode: "bounded" },
+        runwayFactor: FACTOR,
       },
       [],
     );
