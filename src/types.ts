@@ -364,13 +364,10 @@ export interface ScrollConfig {
    *   controls its own native-scrollbar hiding independently.
    */
   scrollbar?:
-    /** @deprecated In 3.0, native scrollbar visibility belongs to `vlist/native`.
-     * Synthetic core has no native main-axis scrollbar; use `scrollbar()` instead.
-     * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
+    /** Browser scrollbar. Stays available on the native default in 3.0; the
+     * `vlist/synthetic` entry has no browser scrollbar and uses `scrollbar()`. */
     | "native"
-    /** @deprecated In 3.0, native scrollbar hiding belongs to `vlist/native`.
-     * Synthetic core needs no option to hide a native main-axis scrollbar.
-     * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
+    /** Hide the browser scrollbar. Stays available on the native default in 3.0. */
     | "none"
     | ScrollbarOptions;
 
@@ -387,9 +384,10 @@ export interface ScrollConfig {
    * logical origin near the edges, supporting unbounded item counts without
    * compressing the scroll space.
    *
-   * @deprecated In 3.0 synthetic input is the only model in core, native scrolling
-   * moves to `vlist/native`, and bounded is removed. Bounded remains supported in 2.x.
-   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model
+   * @deprecated Removed in 3.0. Native scrolling stays the default of `vlist`; for
+   * lists beyond the browser's element size limit, import `createVList` from
+   * `vlist/synthetic` instead of using bounded mode. Bounded remains supported in 2.x.
+   * See https://vlist.io/docs/migration-v3
    */
   mode?: "native" | "bounded";
 
@@ -401,8 +399,8 @@ export interface ScrollConfig {
    * bigger content element. Clamped up to a minimum of 1.5 so native scroll and
    * touch momentum always have some room.
    *
-   * @deprecated Removed with bounded scrolling in 3.0; synthetic core needs no runway.
-   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model
+   * @deprecated Removed with bounded mode in 3.0.
+   * See https://vlist.io/docs/migration-v3
    */
   runway?: number;
 }

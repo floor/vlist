@@ -52,7 +52,35 @@ Work on `staging`; `main` is protected and is the released line.
    PR, waits for it to merge, then tags `vX.Y.Z` on `main`. The tag triggers
    `publish.yml` → `npm publish` + GitHub Release.
 
-### Pre-releases (optional)
+### Pre-releases
 
-For a risky, feature-bearing minor, publish `X.Y.0-rc.1` under the npm `next`
-dist-tag first, then promote to `latest` once confident.
+A prerelease ships a major, or a risky minor, to early adopters without moving
+npm `latest` or production vlist.io. Any tag whose version contains a hyphen
+(`v3.0.0-next.1`, `v2.9.0-rc.1`) is a prerelease: `publish.yml` publishes it
+with `npm publish --tag next` and creates a GitHub prerelease. Users install it
+with `npm install vlist@next`.
+
+1. **Branch** — cut it from the branch that holds the work (`next` for 3.0), not
+   from `staging`. `bun run release` does not apply.
+2. **Prep** — set `package.json` to `X.Y.Z-next.N`, move the `[Unreleased]`
+   entries into a `[X.Y.Z-next.N] - <date>` section of `CHANGELOG.md`, and update
+   the version line in `README.md` and `npm-readme.md`. Commit
+   `chore(release): vX.Y.Z-next.N` and push the branch.
+3. **Verify** — CI does not run on integration branches, so verify the exact
+   commit from a clean export: `bun install --frozen-lockfile`,
+   `bun run typecheck`, `bun test`, `bun run scripts/coverage.ts --threshold 85`,
+   `bun run build --types`, `bun run size`, `npm pack --dry-run`. A local run
+   proves macOS only; the publish job reruns the tests on Linux.
+4. **Tag** — `git tag -a vX.Y.Z-next.N <commit> -m vX.Y.Z-next.N`, then
+   `git push origin vX.Y.Z-next.N`. The job fails unless the tag matches
+   `package.json`, then typechecks, tests, builds and publishes.
+5. **Confirm** — `npm view vlist dist-tags` shows `next` at the new version and
+   `latest` unchanged, and the GitHub release is marked as a prerelease.
+
+**A publish job that fails before `npm publish`** leaves the version unused on
+npm. Fix the branch, delete the tag (`git push origin :refs/tags/vX.Y.Z-next.N`
+and `git tag -d vX.Y.Z-next.N`), and tag the fixed commit with the same version.
+**Once npm has a version, never reuse it**: bump to the next `-next.N` instead.
+
+**Promotion** — the final `X.Y.Z` follows the normal process after the
+integration branch is merged into `staging`.

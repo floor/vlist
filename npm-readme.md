@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.9 KB.
 
-**v2.8.0** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · autosize `remeasure(index?)`; framework adapters can select the `vlist/synthetic` entry via `VListConfig.factory`; `vlist/config` no longer warns about the scale stub; deprecation notices for 3.0 (`scroll.mode`, `scroll.runway`, native scrollbar values, old plugin hooks).
+**v2.8.1** — [Changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md) · deprecation notices corrected for the revised 3.0 shape (native stays the default, synthetic input stays opt-in, the scrollbar strings are not deprecated); carousel slots follow container resizes; prerelease-aware publish workflow.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -85,18 +85,16 @@ Measurement corrections from autosize preserve ongoing motion. Synthetic input a
 
 ## Deprecated in 2.8, removed in 3.0
 
-These notices prepare the 3.0 migration; 2.x behavior and defaults stay unchanged. `vlist/native` and `setScrollSource` are 3.0 replacements, not 2.8 APIs. Bounded mode remains supported in 2.x, including carousel and sortable; it emits no deprecation warning.
+These notices prepare the 3.0 migration; 2.x behavior and defaults stay unchanged. Native scrolling stays the default in 3.0, and synthetic input stays the opt-in `vlist/synthetic` entry. Bounded mode remains supported in 2.x, including carousel and sortable; it emits no deprecation warning.
 
-| Option or API | Replacement | Since |
+| Option or API | In 3.0 | Since |
 |---|---|---|
-| `scroll.mode` | In 3.0, synthetic input in core; import `vlist/native` for native scrolling. Bounded is removed. | 2.8 |
-| `scroll.runway` | Remove it when moving to 3.0 synthetic core. | 2.8 |
-| `scroll.scrollbar: "native"` | In 3.0 use `vlist/native` for a browser scrollbar, or `scrollbar()` in synthetic core. | 2.8 |
-| `scroll.scrollbar: "none"` | In 3.0 synthetic core has no native main-axis scrollbar to hide; native hiding belongs to `vlist/native`. | 2.8 |
-| `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `setScrollSource` when upgrading to 3.0. | 2.8 |
-| `scale()` | Use `scroll: { mode: "synthetic" }` from `vlist/synthetic`; bounded remains available in 2.x. | 2.4; guidance updated in 2.8 |
+| `scroll.mode` | Removed. `vlist` is native by default; for lists beyond the browser's element size limit, import `createVList` from `vlist/synthetic` instead of using bounded mode. | 2.8 |
+| `scroll.runway` | Removed with bounded mode. | 2.8 |
+| `PluginContext.setScrollFns`, `disableDefaultScroll` | Removed; use `setScrollSource`. | 2.8 |
+| `scale()` | Removed; use `vlist/synthetic` for huge lists. | 2.4 |
 
-Only explicit `scale()` calls warn, once per process. The `vlist/config` compatibility stub is silent in 2.x and will no longer be installed in 3.0. Its scrollbar omission/options convenience remains supported and maps to `scrollbar()`; only the two string values above are deprecated. See the [RFC-014 migration contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
+`scroll.scrollbar: "native"` and `"none"` are not deprecated: they stay available on the native default in 3.0. Only explicit `scale()` calls warn, once per process, and 3.0's `vlist/config` no longer installs the scale compatibility stub. Release 2.8.0 described native scrolling and the scrollbar strings as moving to a `vlist/native` entry in 3.0; that plan was revised. See the [v2 to v3 migration guide](https://vlist.io/docs/migration-v3).
 
 ## Plugins
 
@@ -112,12 +110,12 @@ Only explicit `scale()` calls warn, once per process. The `vlist/config` compati
 | `scrollbar()` | +2.0 KB | Custom scrollbar UI |
 | `grid()` | +2.5 KB | 2D grid layout |
 | `masonry()` | +4.1 KB | Pinterest-style masonry with lane-aware keyboard nav |
-| `carousel()` | +3.5 KB | Paged horizontal carousel with snap and keyboard nav |
+| `carousel()` | +3.6 KB | Paged horizontal carousel with snap and keyboard nav |
 | `table()` | +5.8 KB | Data table with columns, resize, sort |
 | `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
-| `snapshots()` | +1.1 KB | Scroll position save/restore |
+| `snapshots()` | +1.2 KB | Scroll position save/restore |
 | `transition()` | +2.0 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Framework Adapters
