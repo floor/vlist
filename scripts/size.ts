@@ -83,6 +83,7 @@ const excluded = (imported: readonly string[]): readonly PluginName[] => {
 const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
   { name: "synthetic", imports: ["createVList"] },
+  { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
   { name: "native", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
@@ -122,7 +123,9 @@ const treeShakeFailures: TreeShakeFailure[] = [];
 
 for (const scenario of scenarios) {
   const imports = scenario.imports.join(", ");
-  const code = `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
+  const code = scenario.name === "synthetic + carousel"
+    ? `import { createVList } from "${root}/src/synthetic.ts"; import { carousel } from "${entry}"; globalThis._v = [createVList, carousel];`
+    : `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
   const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
 
   await Bun.write(tmpFile, code);
@@ -155,15 +158,14 @@ for (const scenario of scenarios) {
   });
 
   const syntheticMarker = "pan-x pinch-zoom";
-  if (new TextDecoder().decode(output).includes(syntheticMarker) !== (scenario.name === "synthetic")) {
+  if (new TextDecoder().decode(output).includes(syntheticMarker) !== (scenario.name.startsWith("synthetic"))) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
   }
 
   // The private runway engine belongs exclusively to the carousel plugin.
-  // This property read is part of wrap folding; plugin config literals alone
-  // do not match it (carousel constructs a thresholdLaps property).
-  const runwayMarker = ".thresholdLaps";
-  if (new TextDecoder().decode(output).includes(runwayMarker) !== (scenario.name === "carousel")) {
+  // The native runway factor read distinguishes it from synthetic wrap folding.
+  const runwayMarker = ".runwayFactor";
+  if (new TextDecoder().decode(output).includes(runwayMarker) !== (scenario.imports.includes("carousel"))) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "runway", marker: runwayMarker });
   }
 

@@ -9,7 +9,7 @@
  * across a focal-boundary flip and assert every visible item moves continuously
  * (no single-step jump anywhere near the gap size).
  */
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { createLayoutEngine } from "../../../src/plugins/carousel/engine";
 
 /**
@@ -113,4 +113,27 @@ describe("carousel engine — gap continuity across focal-boundary flip", () => 
     const peek = engine.slotWidths[0]!;
     expect(focalLeft).toBeCloseTo(peek + gap, 5);
   });
+});
+
+
+// Check the real plugin's rendered geometry on both input entries as well as
+// the pure engine sweeps above. Folded and home-cycle layouts must coincide.
+import {setupDOM,teardownDOM} from '../../helpers/dom';
+import {carouselEntries,carouselEntry} from '../../helpers/carousel-entry';
+describe('entry fold geometry',()=>{
+ beforeAll(()=>setupDOM());afterAll(()=>teardownDOM());
+ for(const [entry,create] of carouselEntries) for(const isX of [false,true]) for(const variant of ['full','hero','multi'] as const) {
+  it(`${entry}/${isX?'horizontal':'vertical'}/${variant} preserves rendered offsets through fold`,()=>{
+   const f=carouselEntry(create,{variant,peek:'20%'},isX);
+   const step=variant==='full'?400:variant==='hero'?320:160;
+   const read=()=>[...f.host.querySelectorAll<HTMLElement>('[data-index]')].filter(el=>el.style.display!=='none').map(el=>({
+    id:el.textContent,size:el.style[isX?'width':'height'],offset:parseFloat(el.style.transform.match(/\(([-\d.]+)/)![1]!)-(isX?f.ctx.dom.viewport.scrollLeft:f.ctx.dom.viewport.scrollTop),
+   })).sort((a,b)=>Number(a.id)-Number(b.id));
+   try {
+    f.ctx.scrollTo(500*step+20);const expected=read();
+    f.ctx.scrollTo(900*step-20);f.wheel(40);
+    expect(f.list.getScrollPosition()).toBe(500*step+20);expect(read()).toEqual(expected);
+   } finally {f.destroy();}
+  });
+ }
 });

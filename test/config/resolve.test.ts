@@ -282,7 +282,7 @@ it("config defaults to native input without an injected factory", () => {
   } finally { list.destroy(); host.remove(); }
 });
 
-for (const name of ["carousel", "sortable"]) {
+for (const name of ["sortable"]) {
   it(`synthetic factory preserves the ${name} entry guard`, () => {
     const host = createContainer();
     try {

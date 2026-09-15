@@ -73,7 +73,7 @@ it("config uses an injected synthetic factory for synthetic scrolling", () => {
   } finally { list.destroy(); container.remove(); }
 });
 
-for (const name of ["carousel", "sortable"]) {
+for (const name of ["sortable"]) {
   it(`synthetic entry rejects ${name} before setup or DOM creation`, () => {
     const container = createContainer();
     let setups = 0;

@@ -81,9 +81,11 @@ const list = createVList({
 
 `page()` uses native document scrolling through an external source with either entry. Its content must fit the 16,777,216 px document element limit; creation throws above that limit when the size is known, and later growth warns once. A deferred custom renderer whose size is first committed during rendering also warns once. Use `vlist/synthetic` viewport scrolling for larger lists. Default native viewport lists warn once when content exceeds their browser-size safety limit, pointing to that entry.
 
+`carousel()` works with either entry. Synthetic carousel folds preserve touch motion and smooth snapping across whole laps. `page()` and carousel remain incompatible. The shared carousel plugin includes its native wrap handler even when used with synthetic input; the combined size is reported below.
+
 Synthetic input limitations:
 
-- `carousel()`, `sortable()` and horizontal RTL lists throw with instructions to use `vlist`. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
+- `sortable()` and horizontal RTL lists throw with instructions to use `vlist`. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
 - Same-axis touch stops at either boundary with no parent handoff, including gestures starting inside an edge-pinned list. Use the native default when boundary gestures must scroll the parent page.
 - There is no native main-axis scrollbar. Add `scrollbar()` for an accessible custom scrollbar. The synthetic entry rejects the `"native"` and `"none"` scrollbar strings.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
@@ -110,26 +112,27 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
 | **Base (`vlist`)** | 25.4 KB | 9.3 KB |
-| `vlist/synthetic` | 31.1 KB | 11.4 KB |
+| `vlist/synthetic` | 31.4 KB | 11.5 KB |
 | `vlist/native` (alias) | 25.4 KB | 9.3 KB |
 | `a11y()` | 28.7 KB | 10.5 KB |
 | `selection()` | 34.8 KB | 12.1 KB |
-| `data()` | 39.0 KB | 14.1 KB |
+| `data()` | 39.1 KB | 14.1 KB |
 | `scrollbar()` | 33.6 KB | 12.2 KB |
 | `sortable()` | 34.9 KB | 12.2 KB |
-| `groups()` | 41.3 KB | 14.6 KB |
+| `groups()` | 41.4 KB | 14.6 KB |
 | `page()` | 27.9 KB | 10.2 KB |
-| `snapshots()` | 28.7 KB | 10.4 KB |
+| `snapshots()` | 28.7 KB | 10.5 KB |
 | `transition()` | 32.1 KB | 11.3 KB |
-| `autosize()` | 28.5 KB | 10.3 KB |
+| `autosize()` | 28.5 KB | 10.4 KB |
 | `grid()` | 32.5 KB | 11.8 KB |
-| `table()` | 43.8 KB | 15.2 KB |
+| `table()` | 43.9 KB | 15.2 KB |
 | `masonry()` | 36.8 KB | 13.4 KB |
-| `tree()` | 40.6 KB | 14.3 KB |
-| `search()` | 34.5 KB | 12.4 KB |
-| `carousel()` | 38.0 KB | 13.7 KB |
+| `tree()` | 40.7 KB | 14.3 KB |
+| `search()` | 34.5 KB | 12.5 KB |
+| `carousel()` | 38.1 KB | 13.8 KB |
+| `vlist/synthetic` + `carousel()` | 44.0 KB | 16.0 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,523 bytes gzipped**, below the 9.9 KB target; synthetic input is **11,687 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,543 bytes gzipped**, below the 9.9 KB target; synthetic input is **11,820 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Framework Adapters
 

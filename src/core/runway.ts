@@ -71,6 +71,8 @@ export interface WrapConfig {
   readonly home: () => number;
   /** Fold the logical position back toward `home` once it drifts this many laps away. */
   readonly thresholdLaps: number;
+  /** @internal Notify the wrap owner when its logical coordinates fold. */
+  readonly onFold?: (shift: number) => void;
 }
 
 export interface BoundedScrollConfig {
@@ -90,6 +92,8 @@ export interface BoundedScrollConfig {
   /** Infinite-loop config (carousel). When set, the logical position wraps by
    *  whole laps toward `home` instead of clamping to a maximum. */
   readonly wrap?: WrapConfig;
+  /** @internal Coordinate fold: shift core telemetry references before rendering. */
+  readonly onFold?: (shift: number) => void;
   /** Called synchronously per frame — triggers the 2-phase pipeline. */
   readonly onFrame: () => void;
   /** Called when scrolling becomes idle. */
@@ -215,6 +219,8 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     state.scrollPosition -= shift;
     state.prevScrollPosition -= shift;
     state.baseOffset -= shift;
+    config.onFold?.(shift);
+    wrap!.onFold?.(shift);
   }
 
   // ── Wheel (synchronous; driven entirely in logical space) ────────
@@ -246,8 +252,10 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     if (Math.abs(next - current) < 1) return;
 
     event.preventDefault();
-    setLogical(next);
+    applySplit(next);
     if (isWrap) wrapRebase();
+    onFrame();
+    scheduleIdle();
   }
 
   // ── Idle detection ───────────────────────────────────────────────

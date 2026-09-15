@@ -1,8 +1,9 @@
 import {afterAll, beforeAll, beforeEach, expect, test} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
-// On next the core factory is synthetic; carousel needs the native entry.
-import {createVList} from '../../../src/native';
+import {createVList as createNative} from '../../../src/core/create';
+import {createVList as createSynthetic} from '../../../src/synthetic';
 import {carousel} from '../../../src/plugins/carousel/plugin';
+import type {PluginContext} from '../../../src/core/types';
 import type {CarouselState} from '../../../src/plugins/carousel/plugin';
 
 let width=400, height=250;
@@ -30,12 +31,13 @@ beforeEach(()=>{width=400;height=250;frames.clear();});
 function frame(){const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(performance.now());}
 function resize(w:number,h:number){width=w;height=h;observer([{target:observed,contentRect:{width,height}} as ResizeObserverEntry],{} as ResizeObserver);}
 
-for(const orientation of ['horizontal','vertical'] as const) for(const variant of ['full','hero','multi'] as const) {
- test(`${orientation}/${variant}: main-axis resize updates slots, preserves focal index and still wraps`,async()=>{
+for(const [entry,createVList] of [['native',createNative],['synthetic',createSynthetic]] as const) for(const orientation of ['horizontal','vertical'] as const) for(const variant of ['full','hero','multi'] as const) {
+ test(`${entry}/${orientation}/${variant}: main-axis resize updates slots, preserves focal index and still wraps`,async()=>{
   const isX=orientation==='horizontal';if(!isX){width=250;height=400;}
   const sizeProp=isX?'width':'height';
   const host=document.createElement('div');document.body.append(host);
-  const list=createVList({container:host,orientation,items:Array.from({length:10},(_,id)=>({id})),item:{width:200,height:200,template:()=>''}},[carousel({variant,initialIndex:3,peek:'20%'})]);
+  let ctx!:PluginContext;
+  const list=createVList({container:host,orientation,items:Array.from({length:10},(_,id)=>({id})),item:{width:200,height:200,template:()=>''}},[carousel({variant,initialIndex:3,peek:'20%'}),{name:'inspect',setup(value){ctx=value;}}]);
   const state=()=> (list.getCarouselState as ()=>CarouselState)();
   const focal=()=>[...host.querySelectorAll<HTMLElement>('[data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0')!;
   try {
@@ -43,6 +45,10 @@ for(const orientation of ['horizontal','vertical'] as const) for(const variant o
    expect(state().index).toBe(3);
    const initialWidth=variant==='full'?400:variant==='hero'?320:160;
    expect(focal().style[sizeProp]).toBe(`${initialWidth}px`);
+   // Resize immediately after crossing the fold at real index 3.
+   ctx.scrollTo(initialWidth*899);
+   ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?initialWidth*4:0,deltaY:isX?0:initialWidth*4,cancelable:true}));
+   expect(state().index).toBe(3);
    const position=list.getScrollPosition(),transform=focal().style.transform;
    if(isX)resize(400,350);else resize(350,400);
    expect(focal().style[sizeProp]).toBe(`${initialWidth}px`);expect(focal().style.transform).toBe(transform);expect(list.getScrollPosition()).toBe(position);
