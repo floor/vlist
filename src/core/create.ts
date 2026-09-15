@@ -658,7 +658,11 @@ export function createCore<T extends VListItem = VListItem>(
       idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
-      ...(boundedWrap ? { wrap: boundedWrap } : {}),
+      ...(boundedWrap ? { wrap: boundedWrap, onFold(shift: number) {
+        const tracker = velocityTracker as { _lp?: number };
+        if (tracker._lp !== undefined) tracker._lp -= shift;
+        lastEventScrollPos -= shift;
+      } } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });

@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent native carousel wrap folds from spiking public scroll velocity or suppressing a scroll event when the folded position equals the previous event position. Wheel folds now commit before emitting the frame.
+
 ## [3.0.0-next.2] - 2026-09-15
 
 Prerelease of the revised 3.0 shape, published under the npm `next` dist-tag: native scrolling is the default of `vlist` and synthetic input is the opt-in `vlist/synthetic` entry. Supersedes the synthetic default of 3.0.0-next.1; `latest` stays on 2.8.
