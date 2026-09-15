@@ -209,6 +209,8 @@ async function build() {
     { name: "synthetic", imports: ["createVList"] },
     { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
     { name: "synthetic + sortable", imports: ["createVList", "sortable"] },
+    { name: "createStats", imports: ["createVList", "createStats"] },
+    { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
     { name: "native", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];

@@ -19,6 +19,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Compute `createStats` item counts and progress from unscaled logical positions. Large synthetic lists no longer reach 100% prematurely through the removed scale-compression ratio; native browser-limited positions stay relative to the full declared range.
+
 - Recompute the sortable drop position when a mouse or touch drag returns from edge auto-scroll, so dropping without another pointer move reorders instead of cancelling.
 
 - Correct horizontal sortable drop coordinates that counted native scrolling twice, and position sortable item shifts relative to the renderer origin for synthetic input.
