@@ -190,7 +190,6 @@ export function createCore<T extends VListItem = VListItem>(
   logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
   nativeOptions?: {
     native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
-    wrap: (config: BoundedScrollConfig) => BoundedScrollHandler;
     onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
   },
 ): VList<T> {
@@ -338,6 +337,7 @@ export function createCore<T extends VListItem = VListItem>(
   // A plugin (carousel) can request the bounded handler in wrap mode during
   // setup, before the handler is built below. Wrap implies bounded.
   let boundedWrap: WrapConfig | null = null;
+  let wrapHandlerFactory: ((config: BoundedScrollConfig) => BoundedScrollHandler) | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
@@ -412,7 +412,7 @@ export function createCore<T extends VListItem = VListItem>(
         skipDefaultScroll = true;
       },
       commitScroll(pos): void { commitScroll!(pos); },
-      setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
+      setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
       cancelScroll(): void { scrollHandler?.cancelScroll(); },
       setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
       setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
@@ -637,7 +637,7 @@ export function createCore<T extends VListItem = VListItem>(
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
   if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
-    boundedHandler = (logicalHandlerFactory ?? nativeOptions!.wrap)({
+    boundedHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,

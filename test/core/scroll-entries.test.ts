@@ -4,6 +4,7 @@ import { createContainer, createTestItems, simpleTemplate } from "../helpers/fac
 import { createVList } from "../../src/core/create";
 import { createVList as createAlias } from "../../src/synthetic";
 import { createVList as createNative } from "../../src/native";
+import { createBoundedScrollHandler } from "../../src/core/runway";
 import { createVListFromConfig } from "../../src/config";
 
 beforeAll(setupDOM);
@@ -121,3 +122,37 @@ function removedTypes() {
   // @ts-expect-error use setScrollSource
   type RemovedDisable = Context["disableDefaultScroll"];
 }
+
+it("native creates the wrap handler supplied by the requesting plugin", () => {
+  const container = createContainer();
+  let created = 0;
+  const list = createNative({container, items:createTestItems(100), item:{height:40,template:simpleTemplate}}, [{
+    name:"wrap-owner", setup(ctx) {
+      ctx.setBoundedWrap({lapSize:()=>4000,home:()=>4000,thresholdLaps:2}, config => {
+        created++;
+        return createBoundedScrollHandler(config);
+      });
+    },
+  }]);
+  try { expect(created).toBe(1); }
+  finally { list.destroy(); container.remove(); }
+});
+
+it("native without carousel excludes the runway implementation", async () => {
+  const result = await Bun.build({entrypoints:["native-gate"], target:"browser", format:"esm", minify:true,
+    plugins:[{name:"entry",setup(build) {
+      build.onResolve({filter:/^native-gate$/},()=>({path:"entry",namespace:"gate"}));
+      build.onLoad({filter:/.*/,namespace:"gate"},()=>({loader:"ts",contents:
+        `import {createVList} from "${import.meta.dir}/../../src/native.ts";globalThis.factory=createVList;`}));
+    }}],
+  });
+  expect(result.success).toBe(true);
+  expect(await result.outputs[0].text()).not.toContain(".thresholdLaps");
+  const container=createContainer();
+  const list=createNative({container,items:createTestItems(1000),item:{height:40,template:simpleTemplate}});
+  try {
+    expect(container.querySelector<HTMLElement>(".vlist-content")!.style.height).toBe("40000px");
+    list.scrollToIndex(500);
+    expect(container.querySelector<HTMLElement>(".vlist-viewport")!.scrollTop).toBe(20000);
+  } finally {list.destroy();container.remove();}
+});
