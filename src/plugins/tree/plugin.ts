@@ -148,9 +148,35 @@ itemState.tree = treeState;
 // Factory
 // =============================================================================
 
+/** Methods the tree plugin adds to the list instance. */
+export interface TreeMethods<T extends VListItem = VListItem> {
+  /** Expand one node. */
+  expand(id: string | number): void;
+  /** Collapse one node. */
+  collapse(id: string | number): void;
+  /** Toggle one node. */
+  toggle(id: string | number): void;
+  /** Expand every node. */
+  expandAll(): void;
+  /** Collapse every node. */
+  collapseAll(): void;
+  /** Expand every ancestor of a node so it becomes visible. */
+  expandTo(id: string | number): void;
+  /** Ids of the expanded nodes. */
+  getExpanded(): (string | number)[];
+  /** Whether a node is expanded. */
+  isExpanded(id: string | number): boolean;
+  /** Add a child under a parent, or at the root when parentId is null. */
+  addChild(parentId: string | number | null, item: T, index?: number): void;
+  /** Move a node under a new parent. */
+  moveNode(id: string | number, newParentId: string | number | null, index?: number): void;
+  /** Visible node count and the flattened nodes. */
+  getTreeLayout(): { totalVisible: number; flatNodes: FlatNode<T>[] };
+}
+
 export function tree<T extends VListItem = VListItem>(
   config?: TreePluginConfig<T>,
-): VListPlugin<T> {
+): VListPlugin<T, TreeMethods<T>> {
   const cfg = config ?? {};
   const indent = cfg.indent ?? 24;
   const paddingStart = cfg.paddingStart ?? 0;

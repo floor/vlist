@@ -30,3 +30,4 @@ export { createStickyHeader } from "./sticky";
 
 // Async Bridge
 export { createAsyncGroupBridge, type AsyncBridgeConfig, type AsyncGroupBridge } from "./async-bridge";
+export type { GroupsMethods } from "./plugin";

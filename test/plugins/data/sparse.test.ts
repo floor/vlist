@@ -284,7 +284,7 @@ describe("createSparseStorage", () => {
     });
 
     it("should set items at non-zero offset", () => {
-      const storage = createSparseStorage();
+      const storage = createSparseStorage<TestItem>();
       const items = createItems(3, 10);
 
       storage.setRange(10, items);

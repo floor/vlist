@@ -41,9 +41,23 @@ export interface TablePluginConfig<T extends VListItem = VListItem> extends Tabl
 // Factory
 // =============================================================================
 
+/** Methods the table plugin adds to the list instance. */
+export interface TableMethods<T extends VListItem = VListItem> {
+  /** Replace the column definitions. */
+  updateColumns(columns: TableColumn<T>[]): void;
+  /** Resize one column by key or index. */
+  resizeColumn(keyOrIndex: string | number, width: number): void;
+  /** Current width of every column, by key. */
+  getColumnWidths(): Record<string, number>;
+  /** Set the sort column and direction. */
+  setSort(key: string | null, direction?: "asc" | "desc"): void;
+  /** Current sort column and direction. */
+  getSort(): { key: string | null; direction: "asc" | "desc" };
+}
+
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
-): VListPlugin<T> {
+): VListPlugin<T, TableMethods<T>> {
   if (!config.columns?.length) {
     throw new Error("[vlist] table: columns must be a non-empty array");
   }

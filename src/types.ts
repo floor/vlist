@@ -14,10 +14,13 @@ export type EventMap = Record<string, unknown>;
 // Item Types
 // =============================================================================
 
-/** Base item interface - must have an id */
+/**
+ * Base item interface: an item only has to carry an id. Plugins that read
+ * arbitrary fields (search, table, tree) narrow the item themselves, so an
+ * ordinary `interface Row { id: number; name: string }` satisfies this.
+ */
 export interface VListItem {
   id: string | number;
-  [key: string]: unknown;
 }
 
 // =============================================================================
@@ -416,28 +419,6 @@ export type ScrollbarPadding = number | {
   bottom?: number;
   left?: number;
 };
-
-// =============================================================================
-// Scrollbar (legacy — use ScrollConfig.scrollbar instead)
-// =============================================================================
-
-/**
- * Scrollbar configuration.
- * @deprecated Use `scroll.scrollbar` in `ScrollConfig` instead.
- */
-export interface ScrollbarConfig {
-  /** Enable scrollbar (default: true) */
-  enabled?: boolean;
-
-  /** Auto-hide scrollbar after idle (default: true) */
-  autoHide?: boolean;
-
-  /** Auto-hide delay in milliseconds (default: 1000) */
-  autoHideDelay?: number;
-
-  /** Minimum thumb size in pixels (default: 30) */
-  minThumbSize?: number;
-}
 
 /** Item template function */
 export type ItemTemplate<T = VListItem> = (

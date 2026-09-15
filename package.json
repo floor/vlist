@@ -79,7 +79,7 @@
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "test:changed": "bun test --changed",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.types.json && tsc --noEmit -p tsconfig.test.json",
     "bench": "bun run scripts/bench.ts",
     "bench:quick": "bun run scripts/bench.ts --quick",
     "bench:full": "bun run scripts/bench.ts --full",

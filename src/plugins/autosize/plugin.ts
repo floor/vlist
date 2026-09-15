@@ -32,9 +32,21 @@ export interface AutosizePluginConfig {
 // Factory
 // =============================================================================
 
+/** Methods the autosize plugin adds to the list instance. */
+export interface AutosizeMethods {
+  /** Whether the item at `index` has been measured. */
+  isMeasured(index: number): boolean;
+  /** Drop the measurement for `index`, or for every item when omitted. */
+  remeasure(index?: number): void;
+  /** Record a measured size for `index`. */
+  setMeasuredSize(index: number, size: number): void;
+  /** How many items have been measured. */
+  getMeasuredCount(): number;
+}
+
 export function autosize<T extends VListItem = VListItem>(
   config?: AutosizePluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, AutosizeMethods> {
   let gap = config?.gap ?? 0;
 
   let observer: ResizeObserver | null = null;

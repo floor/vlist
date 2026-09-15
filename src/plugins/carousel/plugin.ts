@@ -95,9 +95,21 @@ function normalizeVariant(
 // Factory
 // =============================================================================
 
+/** Methods the carousel plugin adds to the list instance. */
+export interface CarouselMethods {
+  /** Move forward by `step` slides (default 1). */
+  next(step?: number, options?: { behavior?: string; duration?: number }): void;
+  /** Move back by `step` slides (default 1). */
+  prev(step?: number, options?: { behavior?: string; duration?: number }): void;
+  /** Move to a slide index. */
+  goTo(index: number, options?: { direction?: CarouselDirection; behavior?: string; duration?: number }): void;
+  /** Current index, progress, offset and focal role. */
+  getCarouselState(): CarouselState;
+}
+
 export function carousel<T extends VListItem = VListItem>(
   config?: CarouselPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, CarouselMethods> {
   const variantConfig = config?.variant ?? "full";
   const { variant, resolveSlots } = normalizeVariant(variantConfig);
   const snapEnabled = variant === "full" || (config?.snap ?? (variant !== "free"));

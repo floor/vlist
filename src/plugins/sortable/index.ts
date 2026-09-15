@@ -5,3 +5,4 @@
 
 // v2 Plugin
 export { sortable, type SortablePluginConfig } from "./plugin";
+export type { SortableMethods } from "./plugin";

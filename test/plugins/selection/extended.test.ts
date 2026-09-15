@@ -339,7 +339,7 @@ describe("selection -- scroll on focus move", () => {
   it("selectNext scrolls when item is below viewport", () => {
     const { list, container } = makeList(30, { mode: "single" });
 
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
+    const selNext = (list as unknown as Record<string, Function>).selectNext as () => void;
     for (let i = 0; i <= 12; i++) selNext();
 
     const selected = getSelected(list);
@@ -353,8 +353,8 @@ describe("selection -- scroll on focus move", () => {
   it("selectPrevious scrolls when item is above viewport", () => {
     const { list, container } = makeList(30, { mode: "single" });
 
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
-    const selPrev = (list as Record<string, Function>).selectPrevious as () => void;
+    const selNext = (list as unknown as Record<string, Function>).selectNext as () => void;
+    const selPrev = (list as unknown as Record<string, Function>).selectPrevious as () => void;
     for (let i = 0; i < 15; i++) selNext();
     selPrev();
 
@@ -369,7 +369,7 @@ describe("selection -- scroll on focus move", () => {
   it("no scroll when focused item is within viewport", () => {
     const { list, container } = makeList(30, { mode: "single" });
 
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
+    const selNext = (list as unknown as Record<string, Function>).selectNext as () => void;
     selNext(); // index 0
     selNext(); // index 1
     selNext(); // index 2
@@ -392,7 +392,7 @@ describe("selection -- Delete/Backspace", () => {
   it("Delete emits delete event with selected items", () => {
     const { list, content, container } = makeList(10, { mode: "multiple" });
 
-    const selectFn = (list as Record<string, Function>).select as (...ids: Array<string | number>) => void;
+    const selectFn = (list as unknown as Record<string, Function>).select as (...ids: Array<string | number>) => void;
     selectFn(2, 4);
 
     const deleteEvents: Array<{ selected: Array<string | number>; items: TestItem[] }> = [];
@@ -414,7 +414,7 @@ describe("selection -- Delete/Backspace", () => {
   it("Backspace emits delete event with selected items", () => {
     const { list, content, container } = makeList(10, { mode: "multiple" });
 
-    const selectFn = (list as Record<string, Function>).select as (...ids: Array<string | number>) => void;
+    const selectFn = (list as unknown as Record<string, Function>).select as (...ids: Array<string | number>) => void;
     selectFn(3);
 
     const deleteEvents: Array<{ selected: Array<string | number> }> = [];

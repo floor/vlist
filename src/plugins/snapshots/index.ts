@@ -4,3 +4,4 @@
 
 // v2 plugin
 export { snapshots, type SnapshotsPluginConfig } from "./plugin";
+export type { SnapshotsMethods } from "./plugin";

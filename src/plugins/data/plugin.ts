@@ -78,9 +78,23 @@ export interface DataPluginConfig<T extends VListItem = VListItem> {
 // Factory
 // =============================================================================
 
+/** Methods the data plugin adds to the list instance. */
+export interface DataMethods {
+  /** Drop loaded pages and load the first range again. */
+  reload(): Promise<void>;
+  /** Load the range currently in view. */
+  loadVisibleRange(): Promise<void>;
+  /** Load the first range. */
+  loadInitial(): Promise<void>;
+  /** Total item count known to the adapter. */
+  getTotal(): number;
+  /** Set the total item count. */
+  setTotal(total: number): void;
+}
+
 export function data<T extends VListItem = VListItem>(
   config: DataPluginConfig<T>,
-): VListPlugin<T> {
+): VListPlugin<T, DataMethods> {
   const { adapter, total, autoLoad = true, storage } = config;
 
   const cancelThreshold = config.loading?.cancelThreshold ?? LOAD_VELOCITY_THRESHOLD;

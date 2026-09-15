@@ -189,7 +189,7 @@ export interface PluginContext<T extends VListItem = VListItem> {
 // Plugin Interface
 // =============================================================================
 
-export interface VListPlugin<T extends VListItem = VListItem> {
+export interface VListPlugin<T extends VListItem = VListItem, M = {}> {
   readonly name: string;
   readonly priority?: number;
   readonly conflicts?: readonly string[];
@@ -208,7 +208,30 @@ export interface VListPlugin<T extends VListItem = VListItem> {
 
   /** Cleanup on destroy. */
   destroy?(): void;
+
+  /**
+   * Phantom marker: the methods this plugin adds to the list instance.
+   * Never set at runtime; `createVList` reads it to type the returned list.
+   */
+  readonly __methods?: M;
 }
+
+/** @internal Turns a union into an intersection. */
+type UnionToIntersection<U> =
+  (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
+
+/**
+ * @internal The method map a single plugin declares. The item type is matched
+ * loosely: a plugin typed for a specific item is not assignable to
+ * `VListPlugin<VListItem, ...>` under strict function types.
+ */
+type MethodsOf<P> = P extends VListPlugin<any, infer M> ? M : {};
+
+/**
+ * The methods a plugin array adds to the list instance. A plugin that declares
+ * no methods contributes nothing, so `createVList(config)` stays exactly `VList<T>`.
+ */
+export type PluginMethods<P extends readonly unknown[]> = UnionToIntersection<MethodsOf<P[number]>>;
 
 // =============================================================================
 // VList Instance — returned by createVList()
@@ -243,8 +266,6 @@ export interface VList<T extends VListItem = VListItem> {
   ): void;
 
   destroy(): void;
-
-  [key: string]: unknown;
 }
 
 // =============================================================================

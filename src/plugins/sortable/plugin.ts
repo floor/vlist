@@ -47,9 +47,15 @@ export interface SortablePluginConfig {
 // Factory
 // =============================================================================
 
+/** Methods the sortable plugin adds to the list instance. */
+export interface SortableMethods {
+  /** Whether a drag or keyboard sort is in progress. */
+  isSorting(): boolean;
+}
+
 export function sortable<T extends VListItem = VListItem>(
   config?: SortablePluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SortableMethods> {
   const handleSelector = config?.handle ?? null;
   const ghostClass = config?.ghostClass ?? "vlist-sort-ghost";
   const shiftDuration = config?.shiftDuration ?? 150;

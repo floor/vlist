@@ -43,9 +43,31 @@ export interface SelectionPluginConfig {
 
 const focusPreventScroll = { preventScroll: true };
 
+/** Methods the selection plugin adds to the list instance. */
+export interface SelectionMethods<T extends VListItem = VListItem> {
+  /** Select one or more items by id. */
+  select(...ids: Array<string | number>): void;
+  /** Deselect one or more items by id. */
+  deselect(...ids: Array<string | number>): void;
+  /** Toggle one item by id. */
+  toggleSelect(id: string | number): void;
+  /** Select every item (multiple mode only). */
+  selectAll(): void;
+  /** Clear the selection. */
+  clearSelection(): void;
+  /** Ids of the selected items. */
+  getSelected(): Array<string | number>;
+  /** The selected items. */
+  getSelectedItems(): T[];
+  /** Move the selection to the next item. */
+  selectNext(): void;
+  /** Move the selection to the previous item. */
+  selectPrevious(): void;
+}
+
 export function selection<T extends VListItem = VListItem>(
   config?: SelectionPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SelectionMethods<T>> {
   const mode: SelectionMode = config?.mode ?? "single";
   const followFocus = config?.followFocus ?? false;
   const focusOnClick = config?.focusOnClick ?? false;

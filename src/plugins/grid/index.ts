@@ -12,3 +12,4 @@ export type {
   GridPosition,
   ItemRange,
 } from "./types";
+export type { GridMethods } from "./plugin";

@@ -14,7 +14,9 @@ export { createVList } from "./core/create";
 export { scrollbar } from "./plugins/scrollbar";
 export type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 export { grid } from "./plugins/grid";
+export type { GridPluginConfig } from "./plugins/grid";
 export { a11y } from "./plugins/a11y";
+export type { A11yPluginConfig } from "./plugins/a11y";
 export { selection } from "./plugins/selection";
 export type { SelectionPluginConfig } from "./plugins/selection";
 export { page } from "./plugins/page";
@@ -41,6 +43,22 @@ export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
 export type { SearchPluginConfig, SearchText } from "./plugins/search";
 export { carousel, registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained } from "./plugins/carousel";
 export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState, SlotConfig, SlotConfigResolver, TextFade } from "./plugins/carousel";
+
+// Plugin method types: what each plugin adds to the list instance.
+export type { AutosizeMethods } from "./plugins/autosize";
+export type { CarouselMethods } from "./plugins/carousel";
+export type { DataMethods } from "./plugins/data";
+export type { GridMethods } from "./plugins/grid";
+export type { GroupsMethods } from "./plugins/groups";
+export type { MasonryMethods } from "./plugins/masonry";
+export type { ScrollbarMethods } from "./plugins/scrollbar";
+export type { SearchMethods } from "./plugins/search";
+export type { SelectionMethods } from "./plugins/selection";
+export type { SnapshotsMethods } from "./plugins/snapshots";
+export type { SortableMethods } from "./plugins/sortable";
+export type { TableMethods } from "./plugins/table";
+export type { TreeMethods } from "./plugins/tree";
+
 // Utils
 export { createStats } from "./utils/stats";
 export type { Stats, StatsConfig, StatsState } from "./utils/stats";
@@ -64,7 +82,6 @@ export type {
   SelectionState,
 
   // Scrollbar
-  ScrollbarConfig,
   ScrollbarPadding,
   ScrollbarOptions,
 
@@ -106,6 +123,7 @@ export type {
   AxisConfig,
   VList,
   VListPlugin,
+  PluginMethods,
   PluginContext,
   CreateVListConfig,
   CompiledHooks,

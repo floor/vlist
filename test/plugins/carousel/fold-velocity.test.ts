@@ -4,6 +4,7 @@ import {capturePrototypeGeometry} from "../../helpers/geometry";
 import {createVList} from "../../../src/core/create";
 import {createVList as createSynthetic} from "../../../src/synthetic";
 import {carousel} from "../../../src/plugins/carousel/plugin";
+import type {CarouselMethods} from "../../../src/plugins/carousel/plugin";
 import type {PluginContext} from "../../../src/core/types";
 let geometry:ReturnType<typeof capturePrototypeGeometry>;
 let nowDescriptor:PropertyDescriptor|undefined;let clock=0;
@@ -22,7 +23,8 @@ afterAll(()=>{geometry.restore();if(nowDescriptor)Object.defineProperty(performa
 afterAll(()=>geometry.assertRestored());
 function fixture(create=createVList,snap=false){
  const host=document.createElement("div");document.body.append(host);let ctx!:PluginContext;
- const list=create({container:host,items:Array.from({length:10},(_,id)=>({id})),item:{height:100,template:()=>""}},[carousel({variant:"free",snap,snapDuration:64}),{name:"inspect",setup(value){ctx=value;}}]);
+ // `create` arrives as a value, so plugin methods are not inferred here.
+ const list=create({container:host,items:Array.from({length:10},(_,id)=>({id})),item:{height:100,template:()=>""}},[carousel({variant:"free",snap,snapDuration:64}),{name:"inspect",setup(value){ctx=value;}}]) as ReturnType<typeof create> & CarouselMethods;
  const captured=new Set<number>();let pointerY=100000;let started=false;
  ctx.dom.viewport.hasPointerCapture=id=>captured.has(id);ctx.dom.viewport.setPointerCapture=id=>{captured.add(id);};ctx.dom.viewport.releasePointerCapture=id=>{captured.delete(id);};
  function pointer(type:string,time:number){const e=new PointerEvent(type,{pointerType:"touch",pointerId:1,isPrimary:true,bubbles:true,cancelable:true,clientY:pointerY});Object.defineProperty(e,"timeStamp",{value:time});ctx.dom.viewport.dispatchEvent(e);}
@@ -49,5 +51,5 @@ test("synthetic idle snap after a forward fold chooses the next item",()=>{
  expect(f.list.getScrollPosition()).toBe(50020);
  timers.tick(150);
  for(let i=0;i<=4;i++){const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(clock);clock+=16;}
- expect(f.list.getScrollPosition()).toBe(50100);expect((f.list.getCarouselState as ()=>{index:number})().index).toBe(1);
+ expect(f.list.getScrollPosition()).toBe(50100);expect(f.list.getCarouselState().index).toBe(1);
 });
