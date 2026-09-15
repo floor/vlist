@@ -84,6 +84,7 @@ const scenarios: Scenario[] = [
   { name: "Base (createVList)", imports: ["createVList"] },
   { name: "synthetic", imports: ["createVList"] },
   { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
+  { name: "synthetic + sortable", imports: ["createVList", "sortable"] },
   { name: "native", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
@@ -123,8 +124,8 @@ const treeShakeFailures: TreeShakeFailure[] = [];
 
 for (const scenario of scenarios) {
   const imports = scenario.imports.join(", ");
-  const code = scenario.name === "synthetic + carousel"
-    ? `import { createVList } from "${root}/src/synthetic.ts"; import { carousel } from "${entry}"; globalThis._v = [createVList, carousel];`
+  const code = scenario.name.startsWith("synthetic +")
+    ? `import { createVList } from "${root}/src/synthetic.ts"; import { ${scenario.imports.slice(1).join(", ")} } from "${entry}"; globalThis._v = [${imports}];`
     : `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
   const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
 

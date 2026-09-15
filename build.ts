@@ -208,6 +208,7 @@ async function build() {
     { name: "base", imports: ["createVList"] },
     { name: "synthetic", imports: ["createVList"] },
     { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
+    { name: "synthetic + sortable", imports: ["createVList", "sortable"] },
     { name: "native", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
@@ -216,8 +217,8 @@ async function build() {
 
   for (const { name, imports } of scenarios) {
     const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
-    const code = name === "synthetic + carousel"
-      ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { carousel } from "${entryAbs}"; globalThis._v = [createVList, carousel];`
+    const code = name.startsWith("synthetic +")
+      ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { ${imports.slice(1).join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`
       : `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
     writeFileSync(tmp, code);

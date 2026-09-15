@@ -23,6 +23,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import { SCROLL_IDLE_TIMEOUT } from "../../constants";
 import type { SizeCache } from "../../core/sizes";
 
 // =============================================================================
@@ -36,6 +37,9 @@ export interface SortablePluginConfig {
   edgeScrollZone?: number;
   edgeScrollSpeed?: number;
   dragThreshold?: number;
+  /** Touch/pen hold delay without a handle, in milliseconds (default 350).
+   * Moving dragThreshold pixels before this expires yields to scrolling. */
+  touchDelay?: number;
   ghostContainer?: HTMLElement;
 }
 
@@ -52,6 +56,7 @@ export function sortable<T extends VListItem = VListItem>(
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
   const edgeScrollSpeed = config?.edgeScrollSpeed ?? 20;
   const dragThreshold = config?.dragThreshold ?? 5;
+  const touchDelay = Math.max(0, config?.touchDelay ?? 350);
   const ghostContainer = config?.ghostContainer ?? null;
 
   let engineState: EngineState;
@@ -87,6 +92,16 @@ export function sortable<T extends VListItem = VListItem>(
   let ghostOffsetX = 0;
   let ghostOffsetY = 0;
   let dragFocusedItemId: string | number | null = null;
+
+  let touchPointer: number | null = null;
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let touchClaimed = false;
+  let scrolling = false;
+  let lastScrollPosition = NaN, lastScrollTime = -Infinity;
+  let pressPosition = 0;
+  let touchItem: HTMLElement | null = null;
+  let touchTarget: HTMLElement | null = null;
+  let renderedOrigin = 0;
 
   // ── Keyboard state ──
   let kbGrabbed = false;
@@ -143,7 +158,7 @@ export function sortable<T extends VListItem = VListItem>(
     const viewportRect = viewportEl.getBoundingClientRect();
     const scrollPos = scroll.getPixelEquivalent();
     const ghostTop = isX
-      ? pointerCurrentX - ghostOffsetX - viewportRect.left + viewportEl.scrollLeft + scrollPos
+      ? pointerCurrentX - ghostOffsetX - viewportRect.left + scrollPos
       : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
     const ghostBottom = ghostTop + draggedItemSize;
 
@@ -184,7 +199,7 @@ export function sortable<T extends VListItem = VListItem>(
       }
 
       const baseOffset = sizeCache.getOffset(idx);
-      const finalOffset = Math.round(baseOffset + shift);
+      const finalOffset = Math.round(baseOffset + shift - scroll.getRenderOrigin());
       itemEl.style.transition = shiftTransition;
       itemEl.style.transform = `${prop}(${finalOffset}px)`;
     }
@@ -196,7 +211,7 @@ export function sortable<T extends VListItem = VListItem>(
       const itemEl = children[i] as HTMLElement;
       const idx = getIndex(itemEl);
       if (idx >= 0) {
-        itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
+        itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
       }
       itemEl.style.transition = "";
     }
@@ -280,6 +295,7 @@ export function sortable<T extends VListItem = VListItem>(
   const startEdgeScroll = (): void => {
     const tick = (): void => {
       if (!sorting || !storedCtx) return;
+      const wasInEdgeZone = inEdgeZone;
 
       const viewportRect = viewportEl.getBoundingClientRect();
       let delta = 0;
@@ -327,6 +343,7 @@ export function sortable<T extends VListItem = VListItem>(
         inEdgeZone = outsideViewport;
       }
 
+      if (wasInEdgeZone && !inEdgeZone) updateDropPosition();
       scrollRafId = requestAnimationFrame(tick);
     };
     scrollRafId = requestAnimationFrame(tick);
@@ -344,6 +361,7 @@ export function sortable<T extends VListItem = VListItem>(
   // =========================================================================
 
   const cleanupDrag = (skipRender = false): void => {
+    clearTouch();
     sorting = false;
     dragInitiated = false;
 
@@ -357,7 +375,7 @@ export function sortable<T extends VListItem = VListItem>(
       el.classList.remove(dragSourceClass);
       const idx = getIndex(el);
       if (idx >= 0) {
-        el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
+        el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
       }
       el.style.transition = "";
     }
@@ -416,7 +434,7 @@ export function sortable<T extends VListItem = VListItem>(
     ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
 
     if (isX) {
-      ghost.style.left = `${viewportRect.left - viewportEl.scrollLeft + targetOffset - scrollPos}px`;
+      ghost.style.left = `${viewportRect.left + targetOffset - scrollPos}px`;
       ghost.style.top = `${viewportRect.top}px`;
     } else {
       ghost.style.left = `${viewportRect.left}px`;
@@ -439,6 +457,83 @@ export function sortable<T extends VListItem = VListItem>(
   // Pointer Events
   // =========================================================================
 
+  const isTouch = (event: PointerEvent): boolean => event.pointerType === "touch" || event.pointerType === "pen";
+
+  function clearTouch(): void {
+    if (pressTimer !== null) clearTimeout(pressTimer);
+    pressTimer = null;
+    touchItem?.classList.remove(`${classPrefix}-item--touch-sort`);
+    touchItem = null;
+    touchTarget?.removeEventListener("touchmove", blockTouchMove);
+    touchTarget = null;
+    if (touchPointer !== null && contentEl.hasPointerCapture(touchPointer)) contentEl.releasePointerCapture(touchPointer);
+    touchPointer = null;
+    touchClaimed = false;
+    document.removeEventListener("pointermove", onPointerMove, true);
+    document.removeEventListener("pointerup", onPointerUp, true);
+    document.removeEventListener("pointercancel", onPointerCancel, true);
+    document.removeEventListener("pointerdown", secondTouch, true);
+    document.removeEventListener("touchmove", blockTouchMove, true);
+    contentEl.removeEventListener("contextmenu", blockCallout);
+    contentEl.removeEventListener("selectstart", blockCallout);
+  }
+
+  function abandonTouch(): void {
+    clearTouch();
+    if (!dragInitiated) draggedElement = null;
+  }
+
+  function secondTouch(event: PointerEvent): void {
+    if (!isTouch(event) || event.pointerId === touchPointer) return;
+    if (touchClaimed) cancelPointerDrag();
+    abandonTouch();
+  }
+
+  function blockTouchMove(event: TouchEvent): void {
+    if (touchClaimed && event.cancelable) event.preventDefault();
+  }
+
+  function blockCallout(event: Event): void {
+    if (touchPointer !== null && event.target instanceof Node && touchItem?.contains(event.target)) event.preventDefault();
+  }
+
+  function startDrag(): void {
+    if (!storedCtx || !draggedElement) return;
+    if (touchPointer !== null) {
+      touchClaimed = true;
+      storedCtx.cancelScroll();
+      if (viewportEl.hasPointerCapture(touchPointer)) viewportEl.releasePointerCapture(touchPointer);
+      // The source row can be recycled during edge scrolling; capture on the
+      // stable content element so the claimed gesture keeps reaching document.
+      contentEl.setPointerCapture(touchPointer);
+    }
+    dragInitiated = true;
+    sorting = true;
+    dropIndex = dragIndex;
+    rootEl.classList.add(sortingClass);
+    document.body.style.cursor = "grabbing";
+
+    draggedItemSize = sizeCache.getSize(dragIndex);
+
+    if (draggedElement) {
+      ghost = createGhost(draggedElement);
+      draggedElement.classList.add(dragSourceClass);
+    }
+
+    const focusIdx = getFocusedIndex();
+    if (focusIdx >= 0) {
+      const items = storedCtx.getItems();
+      const focusItem = items[focusIdx];
+      dragFocusedItemId = focusItem ? focusItem.id : null;
+    } else {
+      dragFocusedItemId = null;
+    }
+
+    storedCtx.emitter.emit("sort:start" as never, { index: dragIndex } as never);
+    startEdgeScroll();
+    if (touchClaimed) ghost?.classList.add(`${classPrefix}-sort-ghost--touch`);
+  }
+
   const onPointerDown = (event: PointerEvent): void => {
     if (engineState.destroyed || !storedCtx) return;
     if (sorting) return;
@@ -456,6 +551,10 @@ export function sortable<T extends VListItem = VListItem>(
 
     const index = getIndex(itemEl);
     if (index < 0) return;
+    const touch = isTouch(event);
+    // The native browser / synthetic viewport catches existing momentum. This
+    // contact does not arm a hold, even if the list becomes idle afterward.
+    if (touch && ((scrolling && performance.now() - lastScrollTime < SCROLL_IDLE_TIMEOUT) || !event.isPrimary)) return;
 
     pointerStartX = event.clientX;
     pointerStartY = event.clientY;
@@ -469,6 +568,31 @@ export function sortable<T extends VListItem = VListItem>(
     ghostOffsetX = event.clientX - rect.left;
     ghostOffsetY = event.clientY - rect.top;
 
+    if (touch) {
+      touchPointer = event.pointerId;
+      touchItem = itemEl;
+      // Touch Events retain their original target even when that node is
+      // recycled out of the DOM. Keep cancellation attached to that target too.
+      touchTarget = target;
+      target.addEventListener("touchmove", blockTouchMove, { passive: false });
+      pressPosition = scroll.getPixelEquivalent();
+      itemEl.classList.add(`${classPrefix}-item--touch-sort`);
+      document.addEventListener("pointermove", onPointerMove, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", onPointerCancel, true);
+      document.addEventListener("pointerdown", secondTouch, true);
+      document.addEventListener("touchmove", blockTouchMove, { capture: true, passive: false });
+      contentEl.addEventListener("contextmenu", blockCallout);
+      contentEl.addEventListener("selectstart", blockCallout);
+      if (handleSelector) {
+        // Reserve handle input before the viewport can begin tracking it.
+        storedCtx.cancelScroll();
+        event.stopPropagation();
+      } else {
+        pressTimer = setTimeout(() => { pressTimer = null; startDrag(); }, touchDelay);
+      }
+      return;
+    }
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("pointercancel", onPointerCancel);
@@ -476,6 +600,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   function onPointerMove(event: PointerEvent): void {
     if (!storedCtx) return;
+    if (touchPointer !== null && event.pointerId !== touchPointer) return;
     pointerCurrentX = event.clientX;
     pointerCurrentY = event.clientY;
 
@@ -483,34 +608,12 @@ export function sortable<T extends VListItem = VListItem>(
       const dx = pointerCurrentX - pointerStartX;
       const dy = pointerCurrentY - pointerStartY;
       if (Math.sqrt(dx * dx + dy * dy) < dragThreshold) return;
-
-      dragInitiated = true;
-      sorting = true;
-      dropIndex = dragIndex;
-      rootEl.classList.add(sortingClass);
-      document.body.style.cursor = "grabbing";
-
-      draggedItemSize = sizeCache.getSize(dragIndex);
-
-      if (draggedElement) {
-        ghost = createGhost(draggedElement);
-        draggedElement.classList.add(dragSourceClass);
-      }
-
-      const focusIdx = getFocusedIndex();
-      if (focusIdx >= 0) {
-        const items = storedCtx.getItems();
-        const focusItem = items[focusIdx];
-        dragFocusedItemId = focusItem ? focusItem.id : null;
-      } else {
-        dragFocusedItemId = null;
-      }
-
-      storedCtx.emitter.emit("sort:start" as never, { index: dragIndex } as never);
-      startEdgeScroll();
+      if (touchPointer !== null && !handleSelector) { abandonTouch(); return; }
+      startDrag();
     }
 
     if (sorting) {
+      if (touchClaimed) event.stopPropagation();
       event.preventDefault();
       updateGhostPosition();
       if (!inEdgeZone) {
@@ -525,6 +628,11 @@ export function sortable<T extends VListItem = VListItem>(
   }
 
   function onPointerUp(event: PointerEvent): void {
+    if (touchPointer !== null) {
+      if (event.pointerId !== touchPointer) return;
+      if (touchClaimed) event.stopPropagation();
+      clearTouch();
+    }
     if (!dragInitiated) {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
@@ -551,8 +659,11 @@ export function sortable<T extends VListItem = VListItem>(
     animateDrop(dragIndex, dragIndex);
   };
 
-  function onPointerCancel(): void {
+  function onPointerCancel(event: PointerEvent): void {
+    if (touchPointer !== null && event.pointerId !== touchPointer) return;
+    if (touchClaimed) event.stopPropagation();
     cancelPointerDrag();
+    clearTouch();
   }
 
   // =========================================================================
@@ -795,8 +906,20 @@ export function sortable<T extends VListItem = VListItem>(
     },
 
     hooks: {
+      onAfterScroll(position): void {
+        if (position !== lastScrollPosition) {
+          lastScrollPosition = position;
+          lastScrollTime = performance.now();
+          scrolling = true;
+        }
+        if (touchPointer !== null && !touchClaimed && position !== pressPosition) abandonTouch();
+      },
+      onIdle(): void { scrolling = false; },
       onCommit(): void {
         if (!storedCtx) return;
+        const origin = scroll.getRenderOrigin();
+        const originChanged = origin !== renderedOrigin;
+        renderedOrigin = origin;
 
         const children = contentEl.children;
         for (let i = 0; i < children.length; i++) {
@@ -818,8 +941,11 @@ export function sortable<T extends VListItem = VListItem>(
             }
           }
 
-          // During pointer drag: maintain visual state on recycled elements
+          // During pointer drag: maintain visual state on recycled elements.
           if (sorting) {
+            // Logical scrolling moves every item through its render origin.
+            // Only reordering shifts should animate, never that coordinate move.
+            if (originChanged) el.style.transition = "";
             if (idx === dragIndex) {
               el.classList.add(dragSourceClass);
               draggedElement = el;
@@ -831,7 +957,7 @@ export function sortable<T extends VListItem = VListItem>(
               } else if (dropIndex < dragIndex) {
                 if (idx >= dropIndex && idx < dragIndex) shift = draggedItemSize;
               }
-              const finalOffset = Math.round(sizeCache.getOffset(idx) + shift);
+              const finalOffset = Math.round(sizeCache.getOffset(idx) + shift - scroll.getRenderOrigin());
               el.style.transform = `${prop}(${finalOffset}px)`;
             }
           }

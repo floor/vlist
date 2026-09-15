@@ -138,13 +138,26 @@ const list = createVList({
 
 Synthetic input limitations:
 
-- `sortable()` and horizontal RTL lists throw with instructions to use `vlist`. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
+- Horizontal RTL lists throw with instructions to use `vlist`. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
 - Same-axis touch stops at either boundary with no parent handoff, including gestures starting inside an edge-pinned list. Use the native default when boundary gestures must scroll the parent page.
 - There is no native main-axis scrollbar. Add `scrollbar()` for an accessible custom scrollbar. The synthetic entry rejects the `"native"` and `"none"` scrollbar strings.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
 Measurement corrections from autosize preserve ongoing synthetic motion. Existing plugin conflicts still apply. See the [scroll input contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
+
+### Sortable gestures
+
+`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
+
+```typescript
+sortable({ touchDelay: 350, dragThreshold: 5 })
+sortable({ handle: '.drag-handle' })
+```
+
+A touch during scrolling catches the motion and does not arm a hold for that contact. Lift and press again once the list is at rest. A second finger or `pointercancel` cancels the pending press or active drag. Edge auto-scroll uses the list's logical position and stops on drop.
+
+The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts on the pressed item. A claimed touch/pen drag adds `.vlist-sort-ghost--touch` to the ghost as a visual cue; override that class in CSS to customize it. Keyboard reordering remains Space to grab/drop, arrows to move and Escape to cancel.
 
 ## Migrating to 3.0
 
@@ -164,28 +177,29 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
-| **Base (`vlist`)** | 25.4 KB | 9.3 KB |
-| `vlist/synthetic` | 31.4 KB | 11.5 KB |
-| `vlist/native` (alias) | 25.4 KB | 9.3 KB |
-| `a11y()` | 28.7 KB | 10.5 KB |
-| `selection()` | 34.8 KB | 12.1 KB |
-| `data()` | 39.1 KB | 14.1 KB |
-| `scrollbar()` | 33.6 KB | 12.2 KB |
-| `sortable()` | 34.9 KB | 12.2 KB |
-| `groups()` | 41.4 KB | 14.6 KB |
-| `page()` | 27.9 KB | 10.2 KB |
-| `snapshots()` | 28.7 KB | 10.5 KB |
-| `transition()` | 32.1 KB | 11.3 KB |
-| `autosize()` | 28.5 KB | 10.4 KB |
-| `grid()` | 32.5 KB | 11.8 KB |
-| `table()` | 43.9 KB | 15.2 KB |
-| `masonry()` | 36.8 KB | 13.4 KB |
-| `tree()` | 40.7 KB | 14.3 KB |
-| `search()` | 34.5 KB | 12.5 KB |
-| `carousel()` | 38.1 KB | 13.8 KB |
-| `vlist/synthetic` + `carousel()` | 44.0 KB | 16.0 KB |
+| **Base (`vlist`)** | 25.3 KB | 9.3 KB |
+| `vlist/synthetic` | 31.3 KB | 11.5 KB |
+| `vlist/native` (alias) | 25.3 KB | 9.3 KB |
+| `a11y()` | 28.6 KB | 10.5 KB |
+| `selection()` | 34.7 KB | 12.1 KB |
+| `data()` | 39.0 KB | 14.1 KB |
+| `scrollbar()` | 33.5 KB | 12.2 KB |
+| `sortable()` | 37.1 KB | 12.8 KB |
+| `groups()` | 41.3 KB | 14.6 KB |
+| `page()` | 27.8 KB | 10.2 KB |
+| `snapshots()` | 28.6 KB | 10.4 KB |
+| `transition()` | 32.0 KB | 11.3 KB |
+| `autosize()` | 28.4 KB | 10.3 KB |
+| `grid()` | 32.4 KB | 11.8 KB |
+| `table()` | 43.8 KB | 15.2 KB |
+| `masonry()` | 36.7 KB | 13.4 KB |
+| `tree()` | 40.6 KB | 14.3 KB |
+| `search()` | 34.4 KB | 12.4 KB |
+| `carousel()` | 38.0 KB | 13.7 KB |
+| `vlist/synthetic` + `carousel()` | 43.9 KB | 15.9 KB |
+| `vlist/synthetic` + `sortable()` | 43.0 KB | 15.1 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,543 bytes gzipped**, below the 9.9 KB target; synthetic input is **11,820 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,514 bytes gzipped**, below the 9.9 KB target; synthetic input is **11,790 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Examples
 
