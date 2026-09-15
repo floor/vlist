@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write. Sortable remains unsupported on the synthetic entry.
+
 ### Fixed
 
 - Keep pending carousel navigation targets in the folded coordinate space, so repeated next/previous calls do not animate through unintended laps before idle.

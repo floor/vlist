@@ -207,6 +207,7 @@ async function build() {
   const scenarios = [
     { name: "base", imports: ["createVList"] },
     { name: "synthetic", imports: ["createVList"] },
+    { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
     { name: "native", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
@@ -215,7 +216,9 @@ async function build() {
 
   for (const { name, imports } of scenarios) {
     const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
-    const code = `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
+    const code = name === "synthetic + carousel"
+      ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { carousel } from "${entryAbs}"; globalThis._v = [createVList, carousel];`
+      : `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
     writeFileSync(tmp, code);
 
@@ -230,10 +233,10 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
-      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name === "synthetic")) {
+      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name.startsWith("synthetic"))) {
         throw new Error(`Unexpected synthetic driver presence in ${name}`);
       }
-      if (new TextDecoder().decode(bytes).includes(".thresholdLaps") !== (name === "carousel")) {
+      if (new TextDecoder().decode(bytes).includes(".runwayFactor") !== imports.includes("carousel")) {
         throw new Error(`Unexpected private runway presence in ${name}`);
       }
       const compressed = Bun.gzipSync(bytes);

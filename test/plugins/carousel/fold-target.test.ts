@@ -2,7 +2,7 @@ import {beforeAll,afterAll,expect,test} from 'bun:test';
 import {setupDOM,teardownDOM} from '../../helpers/dom';
 import {carouselEntries,carouselEntry} from '../../helpers/carousel-entry';
 beforeAll(()=>setupDOM());afterAll(()=>teardownDOM());
-for(const [entry,create] of [carouselEntries[0]]) for(const direction of [1,-1]) for(const accumulated of [false,true]) {
+for(const [entry,create] of carouselEntries) for(const direction of [1,-1]) for(const accumulated of [false,true]) {
  test(`${entry} ${direction>0?'next':'prev'} preserves ${accumulated?'multi-lap':'single-item'} pending target across a fold`,()=>{
   const f=carouselEntry(create);
   const navigate=f.list[direction>0?'next':'prev'] as (n:number,o:{behavior:string;duration:number})=>void;

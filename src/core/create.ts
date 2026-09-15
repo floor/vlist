@@ -216,7 +216,7 @@ export function createCore<T extends VListItem = VListItem>(
       throw new Error('vlist: RTL horizontal lists require createVList from "vlist"');
     }
     for (const plugin of plugins) {
-      if (plugin.name === "carousel" || plugin.name === "sortable") {
+      if (plugin.name === "sortable") {
         throw new Error(`vlist: ${plugin.name} requires createVList from "vlist"`);
       }
     }

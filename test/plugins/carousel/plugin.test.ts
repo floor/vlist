@@ -2612,3 +2612,45 @@ describeCarousel("carousel adapter position", () => {
     } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
   });
 });
+
+
+// The geometry-only mock cases above are entry-independent. These exercise the
+// actual factories and input providers with the same public carousel API.
+import {carouselEntries, carouselEntry} from '../../helpers/carousel-entry';
+import {page} from '../../../src/plugins/page/plugin';
+for(const [entry,create] of carouselEntries) for(const isX of [false,true]) {
+ it(`${entry}/${isX?'horizontal':'vertical'} public navigation and keyboard after a fold`,()=>{
+  const f=carouselEntry(create,{},isX);
+  try {
+   f.ctx.scrollTo(89980);f.wheel(40);expect(f.list.getScrollPosition()).toBe(50020);
+   const next=f.list.next as (n:number,o:{behavior:string})=>void;
+   const prev=f.list.prev as typeof next;
+   const goTo=f.list.goTo as typeof next;
+   f.list.scrollToIndex(9);next(1,{behavior:'auto'});expect(f.state().index).toBe(0);
+   prev(1,{behavior:'auto'});expect(f.state().index).toBe(9);
+   goTo(12,{behavior:'auto'});expect(f.state().index).toBe(2);
+   f.list.scrollToIndex(9);
+   f.ctx.dom.content.dispatchEvent(new KeyboardEvent('keydown',{key:isX?'ArrowRight':'ArrowDown',bubbles:true,cancelable:true}));
+   f.advance();expect(f.state().index).toBe(0);
+   f.ctx.dom.content.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true}));
+   f.advance();expect(f.state().index).toBe(9);
+  } finally {f.destroy();}
+ });
+ it(`${entry}/${isX?'horizontal':'vertical'} item-count changes immediately after a fold`,()=>{
+  const f=carouselEntry(create,{},isX);
+  try {
+   f.ctx.scrollTo(89980);f.wheel(40);
+   f.list.setItems(Array.from({length:7},(_,id)=>({id})));f.advance();
+   expect(f.list.total).toBe(7);expect(f.state().index).toBeGreaterThanOrEqual(0);expect(f.state().index).toBeLessThan(7);
+   f.list.scrollToIndex(6);(f.list.next as Function)(1,{behavior:'auto'});expect(f.state().index).toBe(0);
+   f.list.setItems([]);f.advance();expect(f.list.total).toBe(0);
+   f.list.setItems(Array.from({length:3},(_,id)=>({id})));f.advance();
+   f.list.scrollToIndex(2);(f.list.next as Function)(1,{behavior:'auto'});expect(f.state().index).toBe(0);
+  } finally {f.destroy();}
+ });
+}
+for(const [entry,create] of carouselEntries) it(`${entry} still rejects page plus carousel`,()=>{
+ const host=document.createElement('div');document.body.append(host);
+ try {expect(()=>create({container:host,items:[{id:0},{id:1}],item:{height:100,template:()=>''}},[carousel(),page()])).toThrow();}
+ finally {host.remove();}
+});

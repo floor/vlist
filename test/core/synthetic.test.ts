@@ -402,7 +402,7 @@ it("reverse transition insertion preserves end pinning for both scroll entries",
 });
 
 describe("synthetic unsupported-combination guards", () => {
-  for (const name of ["carousel", "sortable"]) {
+  for (const name of ["sortable"]) {
     it(`rejects ${name} before plugin setup or DOM creation`, () => {
       let setupCalled = false;
       const plugin: VListPlugin<TestItem> = { name, setup() { setupCalled = true; } };
