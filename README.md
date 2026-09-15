@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**3.0 development** — Native scrolling by default, opt-in `vlist/synthetic`, and removal of deprecated scroll configuration and plugin hooks. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
+**v3.0.0-next.2** (prerelease on the npm `next` tag) — Native scrolling by default, opt-in `vlist/synthetic`, and removal of deprecated scroll configuration and plugin hooks. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **9.3 KB gzipped (3.0 development)** — composable plugins with perfect tree-shaking
+- **9.3 KB gzipped (3.0 prerelease)** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Tree, grid, masonry, carousel, table, groups, data, selection, search, sortable, transition** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
@@ -146,7 +146,7 @@ Measurement corrections from autosize preserve ongoing synthetic motion. Existin
 
 ## Migrating to 3.0
 
-`3.0.0-next.1` used synthetic input by default. The upcoming native-default prerelease restores the 2.x default. Import `vlist/synthetic` explicitly to retain synthetic behavior across these prereleases. `vlist/native` remains a deprecated compatibility alias; its `NativeScrollConfig` and `NativeCreateVListConfig` types alias the standard `ScrollConfig` and `CreateVListConfig`.
+`3.0.0-next.1` used synthetic input by default. `3.0.0-next.2` restores the 2.x default. Import `vlist/synthetic` explicitly to retain synthetic behavior across these prereleases. `vlist/native` remains a deprecated compatibility alias; its `NativeScrollConfig` and `NativeCreateVListConfig` types alias the standard `ScrollConfig` and `CreateVListConfig`.
 
 | 2.x option or API | 3.0 replacement |
 |---|---|
