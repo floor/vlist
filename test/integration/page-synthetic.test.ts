@@ -95,6 +95,8 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
 
 for (const defer of [false, true]) it(`custom layout initial sizing guards before ${defer ? "deferred" : "immediate"} rendering`, () => {
   const host = createContainer();
+  const expectedFailureConsole = console.error;
+  console.error = () => {}; // the guarded failure is the point of this test
   try {
     expect(() => createVList({ container: host, defer, items: [{ id: 1 }],
       item: { height: 40, template: () => "row" },
@@ -103,7 +105,7 @@ for (const defer of [false, true]) it(`custom layout initial sizing guards befor
       ctx.updateContentSize(20_000_000);
     } }])).toThrow(/20000000px.*16777216px/);
     expect(host.children.length).toBe(0);
-  } finally { host.remove(); }
+  } finally { console.error = expectedFailureConsole; host.remove(); }
 });
 
 it("deferred table warns on its first size commit when creation did not know its size", () => {

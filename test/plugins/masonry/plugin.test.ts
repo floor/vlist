@@ -134,11 +134,12 @@ describe("masonry - Setup", () => {
   it("should register scrollToIndex method", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
@@ -588,24 +589,24 @@ describe("masonry - scrollToIndex", () => {
   it("should register scrollToIndex in methods map", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
-    expect(typeof methods.get("scrollToIndex")).toBe("function");
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
   it("should call scrollTo with item position", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(0, "start");
 
     expect(scrollCalls.length).toBeGreaterThan(0);
@@ -616,12 +617,12 @@ describe("masonry - scrollToIndex", () => {
   it("should scroll to correct position for non-zero index", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(50, "start");
 
     expect(scrollCalls.length).toBeGreaterThan(0);
@@ -632,12 +633,12 @@ describe("masonry - scrollToIndex", () => {
   it("should handle center alignment", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(50, "center");
 
     expect(scrollCalls.length).toBeGreaterThan(0);
@@ -647,12 +648,12 @@ describe("masonry - scrollToIndex", () => {
   it("should handle end alignment", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(50, "end");
 
     expect(scrollCalls.length).toBeGreaterThan(0);
@@ -662,12 +663,12 @@ describe("masonry - scrollToIndex", () => {
   it("should clamp scroll position to >= 0", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(0, "center"); // center alignment might try to go negative
 
     expect(scrollCalls.length).toBeGreaterThan(0);
@@ -678,12 +679,12 @@ describe("masonry - scrollToIndex", () => {
   it("should no-op for out-of-bounds index", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(10);
-    const { ctx, methods, scrollCalls, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(9999);
 
     expect(scrollCalls.length).toBe(0);
@@ -1425,12 +1426,13 @@ describe("masonry - scrollToIndex smooth", () => {
   it("uses smoothScrollTo with behavior smooth and duration", () => {
     const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(20, () => 100);
-    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, scrollCalls, cleanup } = mockContext;
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const scrollToIndex = methods.get("scrollToIndex");
-    scrollToIndex!(5, { align: "start", behavior: "smooth", duration: 300 });
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(5, "start", "smooth", 300);
     expect(scrollCalls.length).toBeGreaterThan(0);
     cleanup();
   });
@@ -1438,14 +1440,15 @@ describe("masonry - scrollToIndex smooth", () => {
   it("scrollToIndex end alignment on last item snaps to maxScroll", () => {
     const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
     const items = createTestItems(20, () => 100);
-    const { ctx, engineState, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, engineState, methods, scrollCalls, cleanup } = mockContext;
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
     ctx.forceRender();
 
-    const scrollToIndex = methods.get("scrollToIndex");
-    scrollToIndex!(19, "end");
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(19, "end");
     expect(scrollCalls.length).toBeGreaterThan(0);
     cleanup();
   });

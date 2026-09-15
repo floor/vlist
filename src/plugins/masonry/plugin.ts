@@ -473,16 +473,18 @@ export function masonry<T extends VListItem = VListItem>(
       });
 
       // scrollToIndex: map item index to its placement position
-      ctx.registerMethod("scrollToIndex", (
+      // Core owns the public method: it holds a scroll requested before the
+      // total is known, clamps the index and resolves the options, then calls
+      // this hook. Returning false falls back to the core implementation.
+      ctx.setScrollToIndexFn((
         index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
-      ) => {
+        align: string,
+        behavior?: string,
+        duration?: number,
+      ): void | false => {
         const placement = cachedPlacements[index];
-        if (!placement) return;
+        if (!placement) return false;
 
-        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;

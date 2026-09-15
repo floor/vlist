@@ -437,13 +437,18 @@ export function grid<T extends VListItem = VListItem>(
       });
 
       // Override scrollToIndex: item index → row index
-      ctx.registerMethod("scrollToIndex", (
+      // Core owns the public method: it holds a scroll requested before the
+      // total is known, clamps the index and resolves the options, then calls
+      // this hook. Returning false falls back to the core implementation.
+      ctx.setScrollToIndexFn((
         index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
-      ) => {
+        align: string,
+        behavior?: string,
+        duration?: number,
+      ): void | false => {
         const rowIndex = layout.getRow(index);
         const totalRows = getRowCount();
-        if (totalRows === 0) return;
+        if (totalRows === 0) return false;
         const safeRow = Math.max(0, Math.min(rowIndex, totalRows - 1));
         const offset = sizeCache.getOffset(safeRow) + mainPadStart;
         const rowHeight = sizeCache.getSize(safeRow);
@@ -451,9 +456,6 @@ export function grid<T extends VListItem = VListItem>(
         const totalSize = sizeCache.getTotalSize() + mainPadTotal;
         const maxScroll = Math.max(0, totalSize - cs);
 
-        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         let pos: number;
         switch (align) {

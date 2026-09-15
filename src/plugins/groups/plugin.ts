@@ -1003,13 +1003,18 @@ export function groups<T extends VListItem = VListItem>(
         }
       });
 
-      ctx.registerMethod("scrollToIndex", (
+      // Core owns the public method: it holds a scroll requested before the
+      // total is known, clamps the index and resolves the options, then calls
+      // this hook. Returning false falls back to the core implementation.
+      ctx.setScrollToIndexFn((
         index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
-      ) => {
+        align: string,
+        behavior?: string,
+        duration?: number,
+      ): void | false => {
         const layoutIndex = layout.dataToLayoutIndex(index);
         const totalLayout = layout.totalEntries;
-        if (totalLayout === 0) return;
+        if (totalLayout === 0) return false;
         const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
         const cs = engineState.containerSize;
 
@@ -1025,9 +1030,6 @@ export function groups<T extends VListItem = VListItem>(
           : sizeCache.getTotalSize();
         const maxScroll = Math.max(0, totalSize - cs);
 
-        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         // Bottom padding to keep clear when aligning the last item to the end.
         const endPad = gridItemPositions ? mainAxisPadding : 0;
