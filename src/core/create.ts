@@ -395,7 +395,7 @@ export function createCore<T extends VListItem = VListItem>(
         // cross-plugin protocol, where overriding is deliberate (groups,
         // masonry and page each provide _scrollItemIntoView, for example).
         if (!name.startsWith("_") && methods.has(name)) {
-          throw new Error(`[vlist] duplicate method "${name}": another plugin already registers it. Rename it, or replace core behaviour through a setter such as setScrollToIndexFn, setGetItemFn or setRenderFn.`);
+          throw new Error(`[vlist] duplicate method "${name}"; rename it or use a set*Fn hook`);
         }
         methods.set(name, fn);
       },
@@ -528,7 +528,7 @@ export function createCore<T extends VListItem = VListItem>(
           // afterwards cannot hear it: without this the list comes back half
           // wired, with no throw and nothing logged.
           if (typeof process === "undefined" || process.env?.NODE_ENV !== "production") {
-            console.error(`[vlist] plugin "${plugin.name}" failed during setup; the list is missing its behaviour.`, error);
+            console.error(`[vlist] plugin "${plugin.name}" setup failed`, error);
           }
           emitter.emit("error", { error, context: `plugin:setup:${plugin.name}` });
         }
