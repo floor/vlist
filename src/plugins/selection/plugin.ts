@@ -240,7 +240,6 @@ export function selection<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
-      ctx.enableListboxRole();
       state = createSelectionState(config?.initial);
       getItems = ctx.getItems.bind(ctx);
       forceRender = ctx.forceRender.bind(ctx);
@@ -267,6 +266,11 @@ export function selection<T extends VListItem = VListItem>(
         ctx.registerMethod("_focusById", () => {});
         return;
       }
+
+      // Past the "none" early return: a list with no selection semantics is not
+      // a listbox. Claiming the role there put the list in the tab order and
+      // announced every item as an option, with no keyboard handler behind it.
+      ctx.enableListboxRole();
 
       const classPrefix = resolvedConfig.classPrefix;
 

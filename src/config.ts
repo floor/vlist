@@ -31,6 +31,8 @@ import type { MasonryPluginConfig } from "./plugins/masonry";
 import { groups } from "./plugins/groups";
 import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
+import { a11y } from "./plugins/a11y";
+import type { A11yPluginConfig } from "./plugins/a11y";
 import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 import { snapshots } from "./plugins/snapshots";
@@ -63,11 +65,34 @@ export interface VListConfig<T extends VListItem = VListItem>
   /** Sticky group headers. */
   groups?: GroupsConfig;
 
-  /** Row selection (single / multi). */
+  /**
+   * Row selection (single / multi). Omit it for a display-only list: nothing
+   * is wired then, so the list keeps `role="list"` and stays out of the tab
+   * order, exactly like a core list created without the plugin.
+   */
   selection?: SelectionPluginConfig;
 
-  /** Custom scrollbar options, or `"none"` to disable the custom scrollbar. */
-  scrollbar?: ScrollbarPluginConfig | "none";
+  /**
+   * Keyboard navigation, focus management and the WAI-ARIA listbox roles.
+   * Off by default, as in core: pass `true` for the defaults or an object to
+   * tune it. A selection mode other than `"none"` already provides both, so a
+   * list with one does not need this as well.
+   */
+  a11y?: A11yPluginConfig | boolean;
+
+  /**
+   * Custom overlay scrollbar. Off by default, as in core, which leaves the
+   * browser's native scrollbar in place: pass `true` for the defaults or an
+   * object to tune them. `"none"` is accepted for symmetry with
+   * `scroll.scrollbar` and wires nothing.
+   */
+  scrollbar?: ScrollbarPluginConfig | "none" | boolean;
+
+  /**
+   * Scroll position save/restore (`saveScroll` / `restoreScroll`).
+   * Off by default, as in core.
+   */
+  snapshots?: boolean;
 
   /** Async data source — enables the data plugin. */
   adapter?: VListAdapter<T>;
@@ -86,10 +111,10 @@ export interface VListConfig<T extends VListItem = VListItem>
 
 /**
  * Translate a {@link VListConfig} into the ordered plugin array that the core
- * `createVList` expects. Mirrors the adapters' historical behavior exactly:
- * `snapshots` is always included, and `selection` is always
- * present (in `"none"` mode when unset) so its API is available. Any user
- * `plugins` are appended last as an escape hatch.
+ * `createVList` expects. Every plugin comes from a field the caller set, so a
+ * config with no feature fields resolves to no plugins and an adapter list
+ * behaves like a core list given the same options. Any user `plugins` are
+ * appended last as an escape hatch.
  */
 export function resolvePlugins<T extends VListItem = VListItem>(
   config: VListConfig<T>,
@@ -122,53 +147,61 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     );
   }
 
-  // Layout.
-  if (config.layout === "grid" && config.grid) {
+  // Layout. Without its options a layout used to resolve to a plain list, so
+  // a typo in the options field read as "the grid quietly did nothing".
+  if (config.layout === "grid") {
+    if (!config.grid) {
+      throw new Error(
+        '[vlist] config: layout: "grid" requires a `grid` option, e.g. { columns: 3 }',
+      );
+    }
     plugins.push(grid<T>(config.grid));
   }
-  if (config.layout === "masonry" && config.masonry) {
+  if (config.layout === "masonry") {
+    if (!config.masonry) {
+      throw new Error(
+        '[vlist] config: layout: "masonry" requires a `masonry` option, e.g. { columns: 3 }',
+      );
+    }
     plugins.push(masonry<T>(config.masonry));
   }
 
-  // Grouped headers.
+  // Grouped headers. The plugin takes this config as it stands, `header` shape
+  // included. Rebuilding it field by field dropped `header` — the documented
+  // shape — so those configs threw, and it called a function `headerHeight`
+  // once with `("", 0)`, giving every group the first group's height.
   if (config.groups) {
-    const groupsConfig = config.groups;
-    const headerHeight =
-      typeof groupsConfig.headerHeight === "function"
-        ? groupsConfig.headerHeight("", 0)
-        : groupsConfig.headerHeight;
-    plugins.push(
-      groups<T>({
-        getGroupForIndex: groupsConfig.getGroupForIndex,
-        ...(headerHeight !== undefined && { headerHeight }),
-        ...(groupsConfig.headerTemplate !== undefined && {
-          headerTemplate: groupsConfig.headerTemplate,
-        }),
-        ...(groupsConfig.sticky !== undefined && { sticky: groupsConfig.sticky }),
-      }),
-    );
+    plugins.push(groups<T>(config.groups));
   }
 
-  // Selection is always registered so its API is available; `"none"` is inert.
-  const selectionMode = config.selection?.mode || "none";
-  if (selectionMode !== "none") {
+  // Selection, only when asked for. An always-on `selection({ mode: "none" })`
+  // gave every adapter list the listbox and option roles and `tabindex="0"`
+  // with no keyboard handler behind them: focusable, announced as a listbox,
+  // and inert under the arrow keys.
+  if (config.selection) {
     plugins.push(selection<T>(config.selection));
-  } else {
-    plugins.push(selection<T>({ mode: "none" }));
   }
 
-  // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
-  // browser's native scrollbar). These strings require the native factory;
-  // it hides the native scrollbar only for "none". Any other
-  // value (or omitted) opts into vlist's custom overlay scrollbar.
-  const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
-  if (scrollbarConfig !== "none" && scrollbarConfig !== "native") {
-    const scrollbarOptions: ScrollbarPluginConfig =
-      scrollbarConfig && typeof scrollbarConfig === "object" ? scrollbarConfig : {};
-    plugins.push(scrollbar<T>(scrollbarOptions));
+  // Keyboard navigation and ARIA, opt-in as in core. A real selection mode
+  // brings both, and a11y() steps aside when it finds the item state taken.
+  if (config.a11y) {
+    plugins.push(config.a11y === true ? a11y<T>() : a11y<T>(config.a11y));
   }
 
-  plugins.push(snapshots<T>());
+  // Custom overlay scrollbar, opt-in as in core: with nothing wired the
+  // browser's own scrollbar stays, which is what `createVList` gives for the
+  // same options. The `scroll.scrollbar` strings belong to core (it hides the
+  // native scrollbar for "none"), so they pass through untouched.
+  const scrollbarConfig = config.scroll?.scrollbar ?? config.scrollbar;
+  if (scrollbarConfig === true) {
+    plugins.push(scrollbar<T>({}));
+  } else if (scrollbarConfig && typeof scrollbarConfig === "object") {
+    plugins.push(scrollbar<T>(scrollbarConfig));
+  }
+
+  if (config.snapshots) {
+    plugins.push(snapshots<T>());
+  }
 
   // Escape hatch: user-supplied plugins take precedence. A user plugin whose
   // name matches an auto-wired one REPLACES it (rather than duplicating — core

@@ -13,6 +13,9 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- **Breaking:** `vlist/config` — the path every framework adapter goes through — wires only the plugins the config asks for. It used to add `selection({ mode: "none" })`, `snapshots()` and the custom overlay scrollbar to every list, so an adapter list and a core list built from the same options did not behave the same. Selection now follows the `selection` field, `snapshots: true` restores scroll save/restore, and `scrollbar: true` (or an options object) restores the overlay scrollbar; with neither, the browser's native scrollbar stays, as in core.
+- **Breaking:** `selection({ mode: "none" })` no longer claims the listbox role. Selection in that mode has no selection semantics, yet the role came with `tabindex="0"` on the list and an option role on every item while the arrow keys did nothing. Through `vlist/config` every adapter list inherited it, accessible in name only.
+- **Breaking:** `vlist/config` throws when `layout: "grid"` or `layout: "masonry"` arrives without its options object, instead of quietly resolving to a plain list.
 - **Breaking:** a plugin can no longer take a public method name another plugin already registered. `registerMethod` throws on a duplicate public name, so the collision surfaces instead of the last plugin silently winning. Internal names (a leading underscore) are the cross-plugin protocol and may still be overridden, which is how `groups`, `masonry` and `page` each provide `_scrollItemIntoView`.
 - **Breaking:** internal underscore methods are no longer copied onto the list instance. Plugins still reach them through `ctx.getMethod("_name")`; consumers never could rely on them meaningfully, and 29 of them were public surface.
 - `grid`, `groups` and `masonry` no longer shadow the public `scrollToIndex`. They install their layout-aware implementation through `setScrollToIndexFn`, so core keeps ownership of the method, including a scroll requested before the list has a total.
@@ -22,6 +25,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Added
 
+- `vlist/config` accepts `a11y` — `true` or an `A11yPluginConfig` — to wire keyboard navigation and the ARIA listbox roles, and `snapshots: true` for scroll save/restore.
+
 - Export `GridPluginConfig` and `A11yPluginConfig`, which the public config types already referenced, plus the per-plugin method types (`SelectionMethods`, `TreeMethods`, `TableMethods`, `SearchMethods`, `DataMethods`, `GridMethods`, `GroupsMethods`, `MasonryMethods`, `CarouselMethods`, `SnapshotsMethods`, `SortableMethods`, `AutosizeMethods`, `ScrollbarMethods`) and the `PluginMethods` helper.
 
 - Support `sortable()` with `vlist/synthetic`. Both entries use a configurable 350 ms touch/pen long press without a handle; early movement scrolls, while handles retain threshold-based dragging. Claimed drags exclude scrolling and momentum, and a touch-only ghost class provides a visual cue.
@@ -29,6 +34,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write.
 
 ### Fixed
+
+- Pass the `groups` config through to the plugin from `vlist/config`. The documented `groups.header` shape was dropped on the way, so those configs threw "header.template is required", and a function `headerHeight` was called once with `("", 0)`: every group got the first group's height.
+
+- Correct the accessibility claims in both READMEs. Keyboard navigation and the listbox roles come from `a11y()` or a selection mode, not from every list, and the display-only note pointed at `interactive: false` — a config option no version has ever read.
 
 - Compute `createStats` item counts and progress from unscaled logical positions. Large synthetic lists no longer reach 100% prematurely through the removed scale-compression ratio; native browser-limited positions stay relative to the full declared range.
 
