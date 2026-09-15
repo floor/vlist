@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Carousel slots follow container resizes and keep the focal item; they previously stayed at their creation-time size.
+
+### Documentation
+
+- Correct the 3.0 guidance in the 2.8 deprecation notices. Native scrolling stays the default in 3.0 and synthetic input stays opt-in through `vlist/synthetic`; `scroll.scrollbar: "native"` and `"none"` are no longer deprecated. `scroll.mode`, `scroll.runway`, `scale()`, `setScrollFns` and `disableDefaultScroll` are still removed in 3.0.
+
+### Internal
+
+- The publish workflow sends prerelease versions to the npm `next` dist-tag, creates GitHub prereleases, and fails when the tag does not match `package.json`.
+
 ## [2.8.0] - 2026-09-15
 
 ### Added
