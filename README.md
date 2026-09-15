@@ -169,7 +169,7 @@ These notices prepare the 3.0 migration; 2.x behavior and defaults stay unchange
 | `tree()` | +5.0 KB | Collapsible tree with async loading and indent guides |
 | `page()` | +0.8 KB | Window-level scrolling |
 | `sortable()` | +3.0 KB | Drag-and-drop reordering with auto-scroll |
-| `snapshots()` | +1.1 KB | Scroll position save/restore |
+| `snapshots()` | +1.2 KB | Scroll position save/restore |
 | `transition()` | +2.0 KB | FLIP-based enter/exit animations for insert & remove |
 
 ## Examples
