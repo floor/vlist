@@ -42,6 +42,7 @@ Prerelease of 3.0, published under the npm `next` dist-tag; `latest` stays on 2.
 - Route transition, groups, carousel and sortable through the scroll adapter; commit native programmatic writes synchronously through the scroll source.
 - Complete plugin scroll-adapter adoption for a11y, autosize, selection and snapshots; enforce the page-only scroll-source boundary.
 - Isolate the runway handler, native event listeners and native content-size warning behind the native entry. Retain shared external-source commits, animation and the generic render-origin guards.
+- Publish prereleases under the npm `next` dist-tag with a GitHub prerelease, and fail the publish job when the tag does not match `package.json`.
 - Measure all 19 size scenarios and reject runway implementation leaks into the base bundle. Base size after removals is 11,670 bytes gzipped; optimization toward the 9.9 KB target is deferred.
 
 ## [2.8.0] - 2026-09-15

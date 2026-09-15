@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
-- **11.4 KB gzipped (3.0 development)** — composable plugins with perfect tree-shaking
+- **11.4 KB gzipped (3.0 prerelease)** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
 
@@ -19,6 +19,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 ```bash
 npm install vlist
+npm install vlist@next   # 3.0 prerelease; latest stays on 2.8
 ```
 
 ## Quick Start
