@@ -79,11 +79,21 @@ it("a11y last-item focus reaches the padded end", () => {
   const host = createContainer();
   let ctx!: PluginContext<{ id: number }>;
   const inspect: VListPlugin<{ id: number }> = { name: "inspect", priority: 100, setup(c) { ctx = c; } };
-  const list = createVList({ container: host, padding: [16, 0, 24, 0],
-    items: Array.from({ length: 100 }, (_, id) => ({ id })),
-    item: { height: 40, template: item => String(item.id) },
-  }, [a11y(), inspect]);
-  ctx.getState().containerSize = 400;
+  // Pin the viewport height while the list is created: the synthetic driver
+  // derives its scroll limit from it. happy-dom reports 0, and a geometry mock
+  // leaked by another test file would otherwise change the limit.
+  const height = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 400 });
+  let list!: ReturnType<typeof createVList<{ id: number }>>;
+  try {
+    list = createVList({ container: host, padding: [16, 0, 24, 0],
+      items: Array.from({ length: 100 }, (_, id) => ({ id })),
+      item: { height: 40, template: item => String(item.id) },
+    }, [a11y(), inspect]);
+  } finally {
+    if (height) Object.defineProperty(HTMLElement.prototype, "clientHeight", height);
+    else delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+  }
   try {
     ctx.dom.viewport.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
     expect(list.getScrollPosition()).toBe(3640);
