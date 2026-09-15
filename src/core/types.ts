@@ -127,7 +127,10 @@ export interface PluginContext<T extends VListItem = VListItem> {
   /** Commit an external position, render synchronously and schedule configured idle. */
   commitScroll(px: number): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
-  setBoundedWrap(config: import("./runway").WrapConfig): void;
+  setBoundedWrap(
+    config: import("./runway").WrapConfig,
+    createHandler: (config: import("./runway").BoundedScrollConfig) => import("./runway").BoundedScrollHandler,
+  ): void;
   setVirtualTotalFn(fn: () => number): void;
   setIndexMapFn(fn: (renderIndex: number) => number): void;
 

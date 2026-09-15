@@ -304,7 +304,7 @@ function wrapPlugin(
         lapSize: () => lapSize,
         home: () => opts.middle * lapSize,
         thresholdLaps: opts.middle - opts.threshold,
-      });
+      }, createBoundedScrollHandler);
       ctx.registerMethod("jump", (px: number) => ctx.scrollTo(px));
     },
   };

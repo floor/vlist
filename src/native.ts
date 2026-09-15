@@ -1,6 +1,5 @@
 /** Opt-in native scrolling: import { createVList } from "vlist/native". */
 import { createScrollHandler } from "./core/scroll";
-import { createBoundedScrollHandler } from "./core/runway";
 import { MAX_VIRTUAL_SIZE } from "./constants";
 import { createCore } from "./core/create";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
@@ -22,7 +21,6 @@ export function createVList<T extends VListItem = VListItem>(
   let warned = false;
   return createCore(config as CreateVListConfig<T>, plugins, undefined, {
     native: createScrollHandler,
-    wrap: createBoundedScrollHandler,
     onContentSize(size, emitter) {
       if (!warned && size > MAX_VIRTUAL_SIZE) {
         warned = true;

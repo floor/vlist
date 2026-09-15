@@ -20,6 +20,7 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
+import { createBoundedScrollHandler } from "../../core/runway";
 import { createLayoutEngine } from "./engine";
 import type { SlotConfig, SlotConfigResolver, TextFade } from "./presets";
 import { resolvePreset, hasSlots } from "./presets";
@@ -479,7 +480,7 @@ export function carousel<T extends VListItem = VListItem>(
           lapSize: () => lapSize,
           home: () => MIDDLE_CYCLE * lapSize,
           thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
-        });
+        }, createBoundedScrollHandler);
 
         initialScrollPending = true;
       }
