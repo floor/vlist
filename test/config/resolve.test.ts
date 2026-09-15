@@ -39,9 +39,27 @@ const base = (over: Partial<VListConfig<TestItem>> = {}): VListConfig<TestItem> 
 });
 
 describe("resolvePlugins — baseline", () => {
-  it("always includes selection(none), scrollbar, snapshots for a plain config", () => {
-    const resolved = names(resolvePlugins(base()));
-    expect(resolved).toEqual(["selection", "scrollbar", "snapshots"]);
+  it("resolves a plain config to no plugins at all", () => {
+    // A config that asked for nothing gets nothing, so an adapter list behaves
+    // like the same options handed straight to createVList.
+    expect(names(resolvePlugins(base()))).toEqual([]);
+  });
+
+  it("leaves a plain adapter list display-only, out of the tab order", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVListFromConfig<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(10),
+    });
+    try {
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      expect(content.getAttribute("role")).toBe("list");
+      expect(content.hasAttribute("tabindex")).toBe(false);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 
   it("does not add page/autosize/data/grid/masonry/groups when not requested", () => {
@@ -110,13 +128,21 @@ describe("resolvePlugins — layout", () => {
     expect(resolved).not.toContain("grid");
   });
 
-  it("does not add grid when options are missing", () => {
-    expect(names(resolvePlugins(base({ layout: "grid" })))).not.toContain("grid");
+  it("throws for layout:grid with no grid options", () => {
+    expect(() => resolvePlugins(base({ layout: "grid" }))).toThrow(
+      'layout: "grid" requires a `grid` option',
+    );
+  });
+
+  it("throws for layout:masonry with no masonry options", () => {
+    expect(() => resolvePlugins(base({ layout: "masonry" }))).toThrow(
+      'layout: "masonry" requires a `masonry` option',
+    );
   });
 });
 
 describe("resolvePlugins — groups", () => {
-  it("adds groups and resolves a function headerHeight", () => {
+  it("adds groups from the deprecated header fields", () => {
     const resolved = names(
       resolvePlugins(
         base({
@@ -130,6 +156,51 @@ describe("resolvePlugins — groups", () => {
     );
     expect(resolved).toContain("groups");
   });
+
+  it("accepts the documented header shape, which used to be dropped", () => {
+    // Rebuilding the config field by field left `header` behind, so the plugin
+    // saw no height and no template and threw "header.template is required".
+    const resolved = names(
+      resolvePlugins(
+        base({
+          groups: {
+            getGroupForIndex: (i) => (i < 5 ? "a" : "b"),
+            header: { height: 60, template: (g) => `<h3>${g}</h3>` },
+          },
+        }),
+      ),
+    );
+    expect(resolved).toContain("groups");
+  });
+
+  it("asks a function header height for each group, not once for the first", () => {
+    // The resolver called it once with ("", 0) and passed the plugin that one
+    // number, so a 20/60 pair of groups rendered every header at 20.
+    const container = createContainer({ width: 300, height: 500 });
+    const asked: string[] = [];
+    const list = createVListFromConfig<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(10),
+      groups: {
+        getGroupForIndex: (i) => (i < 5 ? "a" : "b"),
+        header: {
+          height: (group) => {
+            asked.push(group);
+            return group === "a" ? 20 : 60;
+          },
+          template: (g) => `<h3>${g}</h3>`,
+        },
+      },
+    });
+    try {
+      expect(asked).toContain("a");
+      expect(asked).toContain("b");
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
 });
 
 describe("resolvePlugins — selection", () => {
@@ -138,12 +209,81 @@ describe("resolvePlugins — selection", () => {
     expect(names(resolved)).toContain("selection");
   });
 
-  it("registers selection even when unset (none mode)", () => {
-    expect(names(resolvePlugins(base()))).toContain("selection");
+  it("registers nothing when selection is unset", () => {
+    expect(names(resolvePlugins(base()))).not.toContain("selection");
+  });
+
+  it("passes an explicit none mode through without claiming the listbox role", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVListFromConfig<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(10),
+      selection: { mode: "none" },
+    });
+    try {
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      expect(content.getAttribute("role")).toBe("list");
+      expect(content.hasAttribute("tabindex")).toBe(false);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+});
+
+describe("resolvePlugins — a11y", () => {
+  it("adds a11y for a11y: true and for an options object", () => {
+    expect(names(resolvePlugins(base({ a11y: true })))).toContain("a11y");
+    expect(names(resolvePlugins(base({ a11y: { keyboard: false } })))).toContain("a11y");
+  });
+
+  it("omits a11y when unset or false", () => {
+    expect(names(resolvePlugins(base()))).not.toContain("a11y");
+    expect(names(resolvePlugins(base({ a11y: false })))).not.toContain("a11y");
+  });
+
+  it("gives an a11y list the listbox role and a tab stop", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVListFromConfig<TestItem>({
+      container,
+      item: { height: 40, template },
+      items: createTestItems(10),
+      a11y: true,
+    });
+    try {
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      expect(content.getAttribute("role")).toBe("listbox");
+      expect(content.getAttribute("tabindex")).toBe("0");
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+});
+
+describe("resolvePlugins — snapshots", () => {
+  it("adds snapshots only when asked", () => {
+    expect(names(resolvePlugins(base()))).not.toContain("snapshots");
+    expect(names(resolvePlugins(base({ snapshots: true })))).toContain("snapshots");
   });
 });
 
 describe("resolvePlugins — scrollbar", () => {
+  it("omits the custom scrollbar by default, leaving the browser's own", () => {
+    expect(names(resolvePlugins(base()))).not.toContain("scrollbar");
+  });
+
+  it("includes scrollbar for scrollbar: true", () => {
+    expect(names(resolvePlugins(base({ scrollbar: true })))).toContain("scrollbar");
+  });
+
+  it("includes scrollbar for scroll.scrollbar options", () => {
+    expect(names(resolvePlugins(base({ scroll: { scrollbar: { autoHide: false } } })))).toContain(
+      "scrollbar",
+    );
+  });
+
   it("omits scrollbar when set to none", () => {
     expect(names(resolvePlugins(base({ scrollbar: "none" })))).not.toContain("scrollbar");
   });
@@ -254,7 +394,7 @@ it("factory receives resolved plugins and a copy of frozen config without factor
     expect(received).not.toHaveProperty("factory");
     expect(received).not.toBe(config);
     expect(received.item).toBe(config.item);
-    expect(receivedPlugins.map(plugin => plugin.name)).toEqual(["selection", "scrollbar", "snapshots", "custom"]);
+    expect(receivedPlugins.map(plugin => plugin.name)).toEqual(["custom"]);
     expect(receivedPlugins[receivedPlugins.length - 1]).toBe(custom);
     expect(config.factory).toBe(factory);
     expect(Object.isFrozen(config)).toBe(true);

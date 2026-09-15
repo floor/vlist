@@ -9,7 +9,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 [![CI](https://github.com/floor/vlist/actions/workflows/ci.yml/badge.svg)](https://github.com/floor/vlist/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
-- **Accessible** — WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
+- **Accessible** — `a11y()` or a selection mode adds WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
 - **9.3 KB gzipped (3.0 prerelease)** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
@@ -22,7 +22,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 | | vlist | TanStack Virtual | react-virtuoso | virtua | vue-virtual-scroller |
 |---|---|---|---|---|---|
-| **A11y built-in** | WAI-ARIA + 2D keyboard | None (DIY) | Partial | Minimal | None |
+| **A11y** | WAI-ARIA + 2D keyboard, one plugin | None (DIY) | Partial | Minimal | None |
 | **Grid + Masonry + Table** | All | Grid only | Grid + Table | Grid only | None |
 | **Vue** | 0.6 KB adapter | Yes | — | Yes | 11.8 KB |
 | **Svelte** | 0.5 KB adapter | Yes | — | Yes | — |
@@ -171,7 +171,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `setScrollSource` to supply an external position source and commit callback. |
 | `scale()` and `ScalePluginConfig` | Remove them; use `vlist/synthetic` for the full logical range. Config no longer installs a scale stub. |
 
-Removed mode/runway options throw a migration error before creating DOM. `vlist/config` retains scrollbar omission/options convenience and its top-level `scrollbar: "none"` option. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.setBoundedWrap`.
+Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.setBoundedWrap`.
 
 ## Plugins
 
@@ -384,7 +384,9 @@ colors take priority while forced colors are active.
 
 ## Accessibility
 
-Every vlist is accessible by default following the [WAI-ARIA listbox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/):
+Accessibility is a plugin, not a default. Add `a11y()`, or a `selection()` mode
+other than `"none"` which brings the same behaviour, and the list follows the
+[WAI-ARIA listbox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/listbox/):
 
 - **Arrow keys** move focus between items with a visible focus ring
 - **2D navigation** in grids and masonry — Up/Down by row, Left/Right by cell
@@ -393,7 +395,9 @@ Every vlist is accessible by default following the [WAI-ARIA listbox pattern](ht
 - **Screen-reader DOM ordering** — items reordered on scroll idle for correct reading order
 - **Focus recovery** — maintains focus when items are removed
 
-Set `interactive: false` for display-only lists (log viewers, activity feeds) where items contain their own interactive elements.
+A list created without either stays display-only: `role="list"`, no item roles
+and out of the tab order. That is the right shape for log viewers and activity
+feeds, and for items carrying their own interactive elements.
 
 ## API
 
