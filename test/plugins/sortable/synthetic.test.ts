@@ -50,6 +50,11 @@ for(const [entry,create] of [['native',native],['synthetic',synthetic]] as const
  test(`${name} early move abandons the press`,()=>{const f=fixture(create,isX);f.pointer('pointerdown');f.pointer('pointermove',220);f.advance(400);expect(f.events).toHaveLength(0);if(entry==='synthetic')expect(f.list.getScrollPosition()).toBe(1030);f.pointer('pointerup',220);});
  test(`${name} handle claims at threshold without a delay`,()=>{const f=fixture(create,isX,true);f.pointer('pointerdown');f.pointer('pointermove',270);expect(f.events.filter(e=>e.name==='sort:start')).toHaveLength(1);expect(f.list.getScrollPosition()).toBe(1000);f.pointer('pointerup',270);f.advance(250);});
  test(`${name} outside handle does not arm`,()=>{const f=fixture(create,isX,true);const target=f.item.querySelector('.body')!;f.pointer('pointerdown',250,'touch',target);f.advance(400);f.pointer('pointermove',220,'touch',target);expect(f.events).toHaveLength(0);if(entry==='synthetic')expect(f.list.getScrollPosition()).toBe(1030);f.pointer('pointerup',220,'touch',target);});
+ test(`${name} touch returns from edge auto-scroll and drops without needing another move`,()=>{
+  const f=fixture(create,isX);f.pointer('pointerdown');f.advance(350);f.pointer('pointermove',430);f.advance(80);f.pointer('pointermove',435);f.advance(80);expect(f.list.getScrollPosition()).toBeGreaterThan(1000);
+  f.pointer('pointermove',300);f.advance(32);const target=Math.floor((f.list.getScrollPosition()+300)/100);f.pointer('pointerup',300);f.advance(250);
+  expect(f.events.filter(e=>e.name==='sort:end').map(e=>e.data.toIndex)).toEqual([target]);
+ });
  for(const claimed of [false,true])test(`${name} second finger cancels ${claimed?'claimed':'pending'} press once`,()=>{
   const f=fixture(create,isX);f.pointer('pointerdown');if(claimed)f.advance(350);f.pointer('pointerdown',270,'touch',document.body,2);f.advance(500);
   expect(f.events.filter(e=>e.name==='sort:start')).toHaveLength(claimed?1:0);expect(f.events.filter(e=>e.name==='sort:cancel')).toHaveLength(claimed?1:0);

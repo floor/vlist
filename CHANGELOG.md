@@ -19,6 +19,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Recompute the sortable drop position when a mouse or touch drag returns from edge auto-scroll, so dropping without another pointer move reorders instead of cancelling.
+
 - Correct horizontal sortable drop coordinates that counted native scrolling twice, and position sortable item shifts relative to the renderer origin for synthetic input.
 
 - Keep pending carousel navigation targets in the folded coordinate space, so repeated next/previous calls do not animate through unintended laps before idle.

@@ -295,6 +295,7 @@ export function sortable<T extends VListItem = VListItem>(
   const startEdgeScroll = (): void => {
     const tick = (): void => {
       if (!sorting || !storedCtx) return;
+      const wasInEdgeZone = inEdgeZone;
 
       const viewportRect = viewportEl.getBoundingClientRect();
       let delta = 0;
@@ -342,6 +343,7 @@ export function sortable<T extends VListItem = VListItem>(
         inEdgeZone = outsideViewport;
       }
 
+      if (wasInEdgeZone && !inEdgeZone) updateDropPosition();
       scrollRafId = requestAnimationFrame(tick);
     };
     scrollRafId = requestAnimationFrame(tick);
