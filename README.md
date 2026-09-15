@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins — in 9.9 KB.
 
-**v2.8.0** — [Changelog](./CHANGELOG.md) · autosize `remeasure(index?)`; framework adapters can select the `vlist/synthetic` entry via `VListConfig.factory`; `vlist/config` no longer warns about the scale stub; deprecation notices for 3.0 (`scroll.mode`, `scroll.runway`, native scrollbar values, old plugin hooks).
+**v2.8.1** — [Changelog](./CHANGELOG.md) · deprecation notices corrected for the revised 3.0 shape (native stays the default, synthetic input stays opt-in, the scrollbar strings are not deprecated); carousel slots follow container resizes; prerelease-aware publish workflow.
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)

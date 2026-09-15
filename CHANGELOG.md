@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-09-15
+
 ### Fixed
 
 - Carousel slots follow container resizes and keep the focal item; they previously stayed at their creation-time size.
