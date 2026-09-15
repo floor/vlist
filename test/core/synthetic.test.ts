@@ -1,3 +1,4 @@
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createContainer, createTestItems, simpleTemplate } from "../helpers/factory";
@@ -18,7 +19,6 @@ import { scrollbar } from "../../src/plugins/scrollbar";
 
 let container: HTMLElement;
 let list: VList<TestItem> | undefined;
-let originalHeight: PropertyDescriptor | undefined, originalWidth: PropertyDescriptor | undefined;
 let raf: typeof requestAnimationFrame, caf: typeof cancelAnimationFrame;
 let next = 0;
 const frames = new Map<number, FrameRequestCallback>();
@@ -26,10 +26,11 @@ function frame(time: number) {
   const pending = [...frames.values()]; frames.clear();
   for (const fn of pending) fn(time);
 }
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
+
 beforeAll(() => {
   setupDOM();
-  originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 500 });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 300 });
   raf = globalThis.requestAnimationFrame; caf = globalThis.cancelAnimationFrame;
@@ -37,11 +38,12 @@ beforeAll(() => {
   globalThis.cancelAnimationFrame = id => { frames.delete(id); };
 });
 afterAll(() => {
-  if (originalHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalHeight);
-  if (originalWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", originalWidth);
+  geometry.restore();
   globalThis.requestAnimationFrame = raf; globalThis.cancelAnimationFrame = caf;
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 beforeEach(() => { container = createContainer(); frames.clear(); });
 afterEach(() => { list?.destroy(); list = undefined; container.remove(); frames.clear(); });
 function make(axis = "y", plugins: VListPlugin<TestItem>[] = []) {
