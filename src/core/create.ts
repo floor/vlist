@@ -17,7 +17,7 @@ import type {
   Axis,
   AxisConfig,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE, BOUNDED_RUNWAY_MIN } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -25,9 +25,9 @@ import { createSizeCache } from "./sizes";
 import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
-import { createScrollHandler } from "./scroll";
-import { createBoundedScrollHandler, type BoundedScrollHandler, type BoundedScrollConfig, type WrapConfig } from "./runway";
-import type { ScrollHandler } from "./scroll";
+import { createScrollSource } from "./scroll-source";
+import type { BoundedScrollHandler, BoundedScrollConfig, WrapConfig } from "./runway";
+import type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
 import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
 import { render, createRenderConfig } from "./pipeline";
@@ -84,12 +84,11 @@ function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
     }
   }
 
-  // Validate scroll.runway (bounded mode runway multiple, only if provided)
-  if (raw.scroll?.runway !== undefined) {
-    if (typeof raw.scroll.runway !== "number" || !Number.isFinite(raw.scroll.runway) || raw.scroll.runway <= 0) {
-      throw new Error(`vlist: scroll.runway must be a positive number, got ${raw.scroll.runway}`);
-    }
+  const legacyScroll = raw.scroll as { mode?: unknown; runway?: unknown } | undefined;
+  if (legacyScroll?.mode !== undefined || legacyScroll?.runway !== undefined) {
+    throw new Error('vlist 3.0: scroll.mode and scroll.runway were removed; bounded mode is gone. Use "vlist" for huge lists or "vlist/native" for native scrolling.');
   }
+
 }
 
 // =============================================================================
@@ -189,14 +188,16 @@ export function createCore<T extends VListItem = VListItem>(
   plugins: VListPlugin<T>[] = [],
   /** @internal Omitted by the native entry. */
   logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
+  nativeOptions?: {
+    native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
+    wrap: (config: BoundedScrollConfig) => BoundedScrollHandler;
+    onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
+  },
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
   validateConfig(rawConfig);
   if (logicalHandlerFactory) {
-    if (rawConfig.scroll?.mode === "native" || rawConfig.scroll?.mode === "bounded") {
-      throw new Error('vlist: native and bounded modes require createVList from "vlist/native"');
-    }
     if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
       throw new Error('vlist: RTL horizontal lists require createVList from "vlist/native"');
     }
@@ -205,15 +206,12 @@ export function createCore<T extends VListItem = VListItem>(
         throw new Error(`vlist: ${plugin.name} requires createVList from "vlist/native"`);
       }
     }
-  } else if (rawConfig.scroll?.mode === "synthetic") {
-    throw new Error('vlist/native: synthetic mode requires createVList from "vlist"');
   }
 
   // ── Resolve config ──────────────────────────────────────────────
 
   const config = resolveConfig(rawConfig, plugins);
   const isX = config.axis.primary === "x";
-  const boundedMode = rawConfig.scroll?.mode === "bounded" || !!logicalHandlerFactory;
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
   const gappedSizeSpec: number | ((index: number) => number) = gap > 0
@@ -411,11 +409,6 @@ export function createCore<T extends VListItem = VListItem>(
         skipDefaultScroll = true;
       },
       commitScroll(pos): void { commitScroll!(pos); },
-      setScrollFns(_get: () => number, set: (pos: number) => void): void {
-        scrollSetFn = set;
-        onContentSize = undefined;
-        skipDefaultScroll = true;
-      },
       setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
       cancelScroll(): void { scrollHandler?.cancelScroll(); },
       setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
@@ -450,7 +443,6 @@ export function createCore<T extends VListItem = VListItem>(
         if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
         else ctx.scrollTo(typeof target === "function" ? target() : target);
       },
-      disableDefaultScroll(): void { skipDefaultScroll = true; },
       disableDefaultResize(): void { skipDefaultResize = true; },
       setScrollTarget(target: EventTarget): void { scrollTarget = target; },
       setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
@@ -549,8 +541,6 @@ export function createCore<T extends VListItem = VListItem>(
     }
   }
 
-  let sizeWarningEmitted = false;
-
   function updateContentSize(size: number, write = true): void {
     if (boundedHandler) {
       if (write) boundedHandler.refresh(size);
@@ -567,13 +557,7 @@ export function createCore<T extends VListItem = VListItem>(
     updateContentSize(totalSize, !customRenderIfNeeded);
     if (boundedHandler || customRenderIfNeeded) return;
 
-    if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
-      sizeWarningEmitted = true;
-      emitter.emit("error", {
-        error: new Error(`Content size (${totalSize}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Enable bounded scroll (scroll: { mode: "bounded" }) for large datasets.`),
-        context: "content:size:overflow",
-      });
-    }
+    nativeOptions?.onContentSize(totalSize, emitter);
   }
 
   /** A scroll asked for before the list had a length, once it has one. */
@@ -649,8 +633,8 @@ export function createCore<T extends VListItem = VListItem>(
     throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (!skipDefaultScroll && (boundedMode || boundedWrap)) {
-    boundedHandler = (logicalHandlerFactory ?? createBoundedScrollHandler)({
+  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
+    boundedHandler = (logicalHandlerFactory ?? nativeOptions!.wrap)({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
@@ -659,11 +643,6 @@ export function createCore<T extends VListItem = VListItem>(
       idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
-      // Clamp the user runway multiple up to the floor so native scroll always
-      // has room; undefined lets the handler use its BOUNDED_RUNWAY_FACTOR default.
-      ...(rawConfig.scroll?.runway !== undefined
-        ? { runwayFactor: Math.max(BOUNDED_RUNWAY_MIN, rawConfig.scroll.runway) }
-        : {}),
       ...(boundedWrap ? { wrap: boundedWrap } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
@@ -674,7 +653,7 @@ export function createCore<T extends VListItem = VListItem>(
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
     scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
   } else {
-    const nativeHandler = createScrollHandler({
+    const nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
       state,
       viewport: dom.viewport,
       isX,

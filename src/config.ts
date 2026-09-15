@@ -31,7 +31,6 @@ import type { MasonryPluginConfig } from "./plugins/masonry";
 import { groups } from "./plugins/groups";
 import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
-import { createScalePlugin } from "./plugins/scale/plugin";
 import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
 import { snapshots } from "./plugins/snapshots";
@@ -88,7 +87,7 @@ export interface VListConfig<T extends VListItem = VListItem>
 /**
  * Translate a {@link VListConfig} into the ordered plugin array that the core
  * `createVList` expects. Mirrors the adapters' historical behavior exactly:
- * `scale` and `snapshots` are always included, and `selection` is always
+ * `snapshots` is always included, and `selection` is always
  * present (in `"none"` mode when unset) so its API is available. Any user
  * `plugins` are appended last as an escape hatch.
  */
@@ -157,8 +156,6 @@ export function resolvePlugins<T extends VListItem = VListItem>(
   } else {
     plugins.push(selection<T>({ mode: "none" }));
   }
-
-  plugins.push(createScalePlugin<T>(false));
 
   // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
   // browser's native scrollbar). Core hides native only for "none"; "native"

@@ -39,9 +39,9 @@ const base = (over: Partial<VListConfig<TestItem>> = {}): VListConfig<TestItem> 
 });
 
 describe("resolvePlugins — baseline", () => {
-  it("always includes selection(none), scale, scrollbar, snapshots for a plain config", () => {
+  it("always includes selection(none), scrollbar, snapshots for a plain config", () => {
     const resolved = names(resolvePlugins(base()));
-    expect(resolved).toEqual(["selection", "scale", "scrollbar", "snapshots"]);
+    expect(resolved).toEqual(["selection", "scrollbar", "snapshots"]);
   });
 
   it("does not add page/autosize/data/grid/masonry/groups when not requested", () => {
@@ -254,7 +254,7 @@ it("factory receives resolved plugins and a copy of frozen config without factor
     expect(received).not.toHaveProperty("factory");
     expect(received).not.toBe(config);
     expect(received.item).toBe(config.item);
-    expect(receivedPlugins.map(plugin => plugin.name)).toEqual(["selection", "scale", "scrollbar", "snapshots", "custom"]);
+    expect(receivedPlugins.map(plugin => plugin.name)).toEqual(["selection", "scrollbar", "snapshots", "custom"]);
     expect(receivedPlugins[receivedPlugins.length - 1]).toBe(custom);
     expect(config.factory).toBe(factory);
     expect(Object.isFrozen(config)).toBe(true);

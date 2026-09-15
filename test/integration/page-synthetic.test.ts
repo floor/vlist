@@ -85,7 +85,7 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
     ctx.updateContentSize(80);
     expect(sizes).toEqual([60, 100]);
     expect(ctx.dom.content.style.height).toBe("100px");
-    ctx.setScrollFns(() => 0, px => ctx.commitScroll(px));
+    ctx.setScrollSource({ write: px => ctx.commitScroll(px) });
     list.appendItems([{ id: 2 }]);
     expect(sizes).toEqual([60, 100]);
     ctx.scrollTo(20);
