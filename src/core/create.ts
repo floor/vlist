@@ -198,6 +198,9 @@ export function createCore<T extends VListItem = VListItem>(
 
   validateConfig(rawConfig);
   if (logicalHandlerFactory) {
+    if (typeof rawConfig.scroll?.scrollbar === "string") {
+      throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist/native"; use the scrollbar() plugin with "vlist".');
+    }
     if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
       throw new Error('vlist: RTL horizontal lists require createVList from "vlist/native"');
     }
@@ -241,7 +244,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   // ── Scroll config: scrollbar & gutter CSS classes ──────────────
 
-  const scrollbarMode = rawConfig.scroll?.scrollbar;
+  const scrollbarMode = rawConfig.scroll?.scrollbar as unknown;
   if (scrollbarMode === "none") {
     dom.viewport.classList.add(`${config.classPrefix}-viewport--no-scrollbar`);
   }

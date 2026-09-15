@@ -15,13 +15,11 @@ it("core, alias and native entry supported configurations emit no warnings", () 
   console.warn = value => warnings.push(value);
   try {
     for (const create of [createVList, createSynthetic, createNative]) {
-      for (const mode of (create === createNative ? [undefined, "native", "bounded"] : [undefined, "synthetic"]) as (undefined | "native" | "bounded" | "synthetic")[]) {
         const host = createContainer();
         const list = create({ container: host, items: [{ id: 1 }],
-          item: { height: 40, template: () => "row" }, scroll: { mode },
+          item: { height: 40, template: () => "row" },
         });
         list.destroy(); host.remove();
-      }
     }
     expect(warnings).toHaveLength(0);
   } finally { console.warn = original; }

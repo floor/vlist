@@ -1,19 +1,10 @@
-/**
- * Groups + Data + bounded scroll (RFC-012) integration test.
- *
- * Regression guard for the groups plugin's bounded-mode awareness. The bounded
- * scroll model keeps `vlist-content` at the runway size (a small multiple of the
- * viewport) and positions items at `getOffset(index) - baseOffset`. The groups
- * plugin originally sized content to the full virtual height and positioned items
- * at their raw absolute offset — so in bounded mode the content blew past the
- * browser's element cap and every item rendered far outside the viewport (blank
- * list on scroll). This is the scenario behind the desk accounts list (868k rows
- * × 100px ≈ 87M px, well over the ~16-33M browser cap).
+/** Large grouped-list regressions formerly covered by bounded mode.
+ * Default synthetic input keeps the full logical range and viewport-sized content.
  */
 
 import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { createVList } from "../../src/native";
+import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, type TestItem } from "../helpers/factory";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
@@ -63,11 +54,11 @@ let list: VList<UserItem> | null = null;
 beforeEach(() => { container = createContainer({ width: 300, height: 500 }); });
 afterEach(() => { list?.destroy(); list = null; container.remove(); });
 
-describe("groups + data + bounded scroll", () => {
+describe("groups + data + synthetic scroll", () => {
   it("keeps content viewport-sized and renders items in-viewport when scrolled deep", async () => {
     const adapter = createUserAdapter();
     list = createVList(
-      { container, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") }, scroll: { mode: "bounded" } } as any,
+      { container, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") } } as any,
       [
         dataPlugin({ adapter, storage: { chunkSize: CHUNK, maxCachedItems: 100_000 } }),
         groups({ getGroupForIndex: dayGroup, header: { height: 28, template: (k) => k } }),
@@ -81,11 +72,13 @@ describe("groups + data + bounded scroll", () => {
     await new Promise((r) => setTimeout(r, 120));
 
     const content = container.querySelector(".vlist-content") as HTMLElement;
-    const contentHeight = parseFloat(content.style.height) || 0;
+    const contentHeight = container.querySelector<HTMLElement>(".vlist-viewport")!.clientHeight;
+    expect(content.style.height).toBe("100%");
+    expect(content.style.overflow).toBe("clip");
     const fullVirtual = TOTAL * ITEM_H; // ~50,000,000px
 
-    // Content stays bounded to the runway, not the full virtual height.
-    expect(contentHeight).toBeGreaterThan(0);
+    // Content stays viewport-sized regardless of virtual height.
+    expect(contentHeight).toBe(500);
     expect(contentHeight).toBeLessThan(fullVirtual / 100);
 
     const items = Array.from(container.querySelectorAll(".vlist-item")) as HTMLElement[];
@@ -97,16 +90,12 @@ describe("groups + data + bounded scroll", () => {
     expect(maxAbsY).toBeLessThan(contentHeight + 5 * ITEM_H);
   });
 
-  it("keeps items distinctly spaced during gradual scroll (rebase repositions all visible items)", async () => {
-    // Gradual (trackpad-style) scroll, unlike a scrollbar jump, keeps items in
-    // the visible range across frames — they hit the render's fast path. When
-    // the runway rebases (baseOffset shifts), those already-rendered items must
-    // be repositioned; otherwise they keep a stale transform and pile up at the
-    // same Y. A larger runway (matches the desk config) makes rebasing happen
-    // mid-scroll, exercising exactly that path.
+  it("keeps items distinctly spaced during gradual scroll (logical origin repositions all visible items)", async () => {
+    // Small wheel deltas retain rows across frames. Their transforms must
+    // follow every logical-origin change, even when the visible range stays put.
     const adapter = createUserAdapter();
     list = createVList(
-      { container, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") }, scroll: { mode: "bounded", runway: 12 } } as any,
+      { container, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") } } as any,
       [
         dataPlugin({ adapter, storage: { chunkSize: CHUNK, maxCachedItems: 100_000 } }),
         groups({ getGroupForIndex: dayGroup, header: { height: 28, template: (k) => k } }),
@@ -116,17 +105,16 @@ describe("groups + data + bounded scroll", () => {
 
     const vp = container.querySelector(".vlist-viewport") as HTMLElement;
     const content = container.querySelector(".vlist-content") as HTMLElement;
-    const maxTop = () => parseFloat(content.style.height) - 500;
 
     // Small (trackpad-like) steps keep items in the visible range across frames,
-    // so they hit the render's fast path while the runway rebases under them.
+    // so they hit the render's fast path while the logical origin changes.
     // Check overlap on EVERY step, not just the end — a coarse jump would turn
     // the whole range over and mask the bug.
     let maxRendered = 0;
     let worstOverlap = 0;
     for (let k = 0; k < 200; k++) {
-      vp.scrollTop = Math.min(vp.scrollTop + 35, maxTop());
-      vp.dispatchEvent(new Event("scroll", { bubbles: true }));
+      vp.dispatchEvent(new WheelEvent("wheel", { deltaY: 35, cancelable: true }));
+      expect(vp.scrollTop).toBe(0);
       const items = Array.from(container.querySelectorAll(".vlist-item")) as HTMLElement[];
       const ys = items.map(translateMain).filter((n) => !isNaN(n));
       const distinct = new Set(ys.map((y) => Math.round(y))).size;
@@ -134,17 +122,18 @@ describe("groups + data + bounded scroll", () => {
       worstOverlap = Math.max(worstOverlap, ys.length - distinct);
     }
 
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
     expect(maxRendered).toBeGreaterThan(3);   // items actually rendered
     expect(worstOverlap).toBe(0);             // no item ever shares another's Y
   });
 
-  it("grouped GRID renders items in-viewport when scrolled deep (bounded)", () => {
+  it("grouped GRID renders items in-viewport when scrolled deep (synthetic)", () => {
     // Covers buildTransform's grid branch (pos.rowY - baseOffset), which the
     // desk tracks grid view uses. Static items keep it synchronous/deterministic.
     const COLS = 4;
     const items = Array.from({ length: 5000 }, (_, i) => ({ id: i + 1, name: `U${i + 1}`, value: i, day: Math.floor(i / 40) }));
     list = createVList(
-      { container, items, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") }, scroll: { mode: "bounded", runway: 12 } } as any,
+      { container, items, item: { height: ITEM_H, template: (it: any) => (it ? it.name : "") } } as any,
       [
         grid({ columns: COLS, gap: 8 }),
         groups({ getGroupForIndex: dayGroup, header: { height: 28, template: (k) => k } }),
@@ -155,12 +144,14 @@ describe("groups + data + bounded scroll", () => {
     (list as any).scrollToIndex(2000);
 
     const content = container.querySelector(".vlist-content") as HTMLElement;
-    const contentHeight = parseFloat(content.style.height) || 0;
+    const contentHeight = container.querySelector<HTMLElement>(".vlist-viewport")!.clientHeight;
+    expect(content.style.height).toBe("100%");
+    expect(content.style.overflow).toBe("clip");
     const rows = 5000 / COLS;
     const fullVirtual = rows * ITEM_H; // grid: ~125,000px
 
     // Content bounded to the runway, not the full grid height.
-    expect(contentHeight).toBeGreaterThan(0);
+    expect(contentHeight).toBe(500);
     expect(contentHeight).toBeLessThan(fullVirtual / 10);
 
     const els = Array.from(container.querySelectorAll(".vlist-item")) as HTMLElement[];

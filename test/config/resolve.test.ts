@@ -264,7 +264,7 @@ it("factory receives resolved plugins and a copy of frozen config without factor
 it("config factory selects the synthetic driver with the public config type", () => {
   const host = createContainer();
   const config: VListConfig<TestItem> = {
-    ...base(), factory: createSynthetic, scroll: { mode: "synthetic" },
+    ...base(), factory: createSynthetic,
   };
   const list = createVListFromConfig({ ...config, container: host });
   try {
@@ -276,7 +276,7 @@ it("config factory selects the synthetic driver with the public config type", ()
 
 it("config defaults to synthetic input without an injected factory", () => {
   const host = createContainer();
-  const list = createVListFromConfig({ ...base(), container: host, scroll: { mode: "synthetic" } });
+  const list = createVListFromConfig({ ...base(), container: host });
   try {
     expect(host.querySelector<HTMLElement>(".vlist-viewport")!.style.touchAction).toBe("pan-x pinch-zoom");
   } finally { list.destroy(); host.remove(); }
@@ -286,8 +286,7 @@ for (const name of ["carousel", "sortable"]) {
   it(`synthetic factory preserves the ${name} entry guard`, () => {
     const host = createContainer();
     try {
-      expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
-        scroll: { mode: "synthetic" }, plugins: [{ name }],
+      expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic, plugins: [{ name }],
       })).toThrow(`${name} requires createVList from "vlist/native"`);
       expect(host.children.length).toBe(0);
     } finally { host.remove(); }
@@ -299,7 +298,7 @@ it("synthetic factory preserves the RTL horizontal entry guard", () => {
   host.style.direction = "rtl";
   try {
     expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
-      orientation: "horizontal", item: { width: 40, template }, scroll: { mode: "synthetic" },
+      orientation: "horizontal", item: { width: 40, template },
     })).toThrow("RTL horizontal lists require createVList");
     expect(host.children.length).toBe(0);
   } finally { host.remove(); }

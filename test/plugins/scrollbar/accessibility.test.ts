@@ -87,7 +87,7 @@ test('generated viewport ids are unique, preserve authored ids, and are cleaned 
 });
 test('scrollbar keys do not change list selection; a11y list navigation still works', async () => {
  const host=document.createElement('div'); document.body.append(host);
- const list=createVList({container:host, items:Array.from({length:100},(_,i)=>({id:i})), item:{height:40,template:item=>String(item.id)},scroll:{mode:'synthetic'}},[scrollbar(),a11y()]); cleanup=()=>list.destroy();
+ const list=createVList({container:host, items:Array.from({length:100},(_,i)=>({id:i})), item:{height:40,template:item=>String(item.id)}},[scrollbar(),a11y()]); cleanup=()=>list.destroy();
  let selections=0; list.on('selection:change',()=>{selections++;});
  const viewport=host.querySelector<HTMLElement>('.vlist-viewport')!, track=host.querySelector<HTMLElement>('.vlist-scrollbar')!;
  await Promise.resolve();

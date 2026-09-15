@@ -4,13 +4,23 @@ import { createBoundedScrollHandler } from "./core/runway";
 import { MAX_VIRTUAL_SIZE } from "./constants";
 import { createCore } from "./core/create";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
-import type { VListItem } from "./types";
+import type { ScrollConfig, VListItem } from "./types";
+
+/** Native scrollbar visibility is available only with this entry. */
+export interface NativeScrollConfig extends Omit<ScrollConfig, "scrollbar"> {
+  scrollbar?: ScrollConfig["scrollbar"] | "native" | "none";
+}
+
+export interface NativeCreateVListConfig<T extends VListItem = VListItem>
+  extends Omit<CreateVListConfig<T>, "scroll"> {
+  scroll?: NativeScrollConfig;
+}
 
 export function createVList<T extends VListItem = VListItem>(
-  config: CreateVListConfig<T>, plugins: VListPlugin<T>[] = [],
+  config: NativeCreateVListConfig<T>, plugins: VListPlugin<T>[] = [],
 ): VList<T> {
   let warned = false;
-  return createCore(config, plugins, undefined, {
+  return createCore(config as CreateVListConfig<T>, plugins, undefined, {
     native: createScrollHandler,
     wrap: createBoundedScrollHandler,
     onContentSize(size, emitter) {
