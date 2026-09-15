@@ -9,6 +9,7 @@ import { createScrollHandler } from "./scroll";
 import type { VListItem } from "../types";
 import type {
   CreateVListConfig,
+  PluginMethods,
   VListPlugin,
   VList,
   PluginContext,
@@ -176,11 +177,14 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
 // =============================================================================
 
 /** Create a list with native scrolling. Opt into synthetic input via vlist/synthetic. */
-export function createVList<T extends VListItem = VListItem>(
-  config: CreateVListConfig<T>, plugins: VListPlugin<T>[] = [],
-): VList<T> {
+export function createVList<
+  T extends VListItem = VListItem,
+  const P extends readonly VListPlugin<T, any>[] = VListPlugin<T>[],
+>(
+  config: CreateVListConfig<T>, plugins: P = [] as unknown as P,
+): VList<T> & PluginMethods<P> {
   let warned = false;
-  return createCore(config, plugins, undefined, {
+  return createCore(config, plugins as unknown as VListPlugin<T>[], undefined, {
     native: createScrollHandler,
     onContentSize(size, emitter) {
       if (!warned && size > MAX_VIRTUAL_SIZE) {
@@ -191,7 +195,7 @@ export function createVList<T extends VListItem = VListItem>(
         });
       }
     },
-  });
+  }) as VList<T> & PluginMethods<P>;
 }
 
 /** @internal Shared factory; entries select the input handler. */
@@ -1016,7 +1020,7 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Attach plugin-registered methods ────────────────────────────
 
   for (const [name, fn] of methods) {
-    (api as Record<string, unknown>)[name] = fn;
+    (api as unknown as Record<string, unknown>)[name] = fn;
   }
 
   return api;

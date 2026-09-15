@@ -52,9 +52,10 @@ export async function rebuild<T extends VListItem = VListItem>(
   const key = options?.key;
 
   // Capture scroll snapshot from old list
-  const getSnapshot = previous?.getScrollSnapshot as
-    | (() => ScrollSnapshot)
-    | undefined;
+  // The snapshot method exists only when the previous list had the snapshots
+  // plugin; rebuild works either way.
+  const getSnapshot = (previous as { getScrollSnapshot?: () => ScrollSnapshot } | null | undefined)
+    ?.getScrollSnapshot;
   const snapshot = typeof getSnapshot === "function" ? getSnapshot() : undefined;
 
   // Snapshots plugin: direct restore (no sessionStorage round-trip) + optional auto-save

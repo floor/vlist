@@ -28,3 +28,4 @@ export type {
   ColumnSortEvent,
   ColumnClickEvent,
 } from "./types";
+export type { TableMethods } from "./plugin";

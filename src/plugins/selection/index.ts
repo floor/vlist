@@ -34,3 +34,4 @@ export {
   claimPlaceholderSelection,
   setFocusedIndex,
 } from "./state";
+export type { SelectionMethods } from "./plugin";

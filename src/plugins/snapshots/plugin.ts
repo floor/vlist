@@ -38,9 +38,17 @@ const readSnapshot = (key: string): ScrollSnapshot | undefined => {
 // Factory
 // =============================================================================
 
+/** Methods the snapshots plugin adds to the list instance. */
+export interface SnapshotsMethods {
+  /** Capture the scroll position, anchor item and selection. */
+  getScrollSnapshot(): ScrollSnapshot;
+  /** Restore a snapshot; pass false to keep the current selection. */
+  restoreScroll(snapshot: ScrollSnapshot, restoreSelection?: boolean): Promise<void>;
+}
+
 export function snapshots<T extends VListItem = VListItem>(
   config?: SnapshotsPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SnapshotsMethods> {
   const autoSaveKey = config?.autoSave;
 
   const restoreSnapshot = config?.restore

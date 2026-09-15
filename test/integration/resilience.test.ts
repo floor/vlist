@@ -142,8 +142,8 @@ describe("plugin setup error isolation", () => {
       [failingPlugin, methodPlugin],
     );
 
-    expect((list as Record<string, unknown>)["customMethod"]).toBeDefined();
-    expect(((list as Record<string, unknown>)["customMethod"] as () => number)()).toBe(42);
+    expect((list as unknown as Record<string, unknown>)["customMethod"]).toBeDefined();
+    expect(((list as unknown as Record<string, unknown>)["customMethod"] as () => number)()).toBe(42);
   });
 
   it("should allow plugins after the failing one to register destroy handlers", () => {

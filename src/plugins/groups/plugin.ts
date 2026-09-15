@@ -40,9 +40,15 @@ const itemState: ItemState = { selected: false, focused: false };
 
 const DEBUG = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
 
+/** Methods the groups plugin adds to the list instance. */
+export interface GroupsMethods {
+  /** The current group layout: entries, boundaries and sticky state. */
+  getGroupLayout(): GroupLayout;
+}
+
 export function groups<T extends VListItem = VListItem>(
   config: GroupsPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, GroupsMethods> {
   if (!config.getGroupForIndex) {
     throw new Error("[vlist] groups: getGroupForIndex is required");
   }
@@ -394,7 +400,7 @@ export function groups<T extends VListItem = VListItem>(
       return false;
     }
 
-    const isPlaceholder = item._isPlaceholder === true;
+    const isPlaceholder = (item as { _isPlaceholder?: boolean })._isPlaceholder === true;
     const itemId = String(item.id);
 
     // Element already shows this item with real content — skip template
@@ -561,7 +567,7 @@ export function groups<T extends VListItem = VListItem>(
           expectedId = `__group_header_${entry.group.groupIndex}`;
         } else {
           const item = ctxGetItem(entry.dataIndex);
-          if (item && item._isPlaceholder !== true) {
+          if (item && (item as { _isPlaceholder?: boolean })._isPlaceholder !== true) {
             expectedId = String(item.id);
           }
         }

@@ -265,8 +265,9 @@ describe("synthetic entry and input", () => {
   it("snapshots and scrollbar navigate through logical state", () => {
     make("y", [snapshots<TestItem>(), scrollbar<TestItem>()]);
     list!.scrollToIndex(500, "start");
-    const saved = (list!.getScrollSnapshot as () => ScrollSnapshot)();
-    list!.scrollToIndex(0); (list!.restoreScroll as (snapshot: ScrollSnapshot) => void)(saved);
+    const saved = (list as unknown as { getScrollSnapshot(): ScrollSnapshot }).getScrollSnapshot();
+    list!.scrollToIndex(0);
+    (list as unknown as { restoreScroll(snapshot: ScrollSnapshot): void }).restoreScroll(saved);
     expect(list!.getScrollPosition()).toBe(25000);
     expect(container.querySelector(".vlist-scrollbar__thumb")).not.toBeNull();
   });

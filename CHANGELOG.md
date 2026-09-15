@@ -11,7 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the public types no longer rely on index signatures. `VListItem` requires only an `id`, so an ordinary `interface Row { id: number; name: string }` satisfies it, and `VList` no longer accepts any property name, so a mistyped method is a compile error. Plugins declare the methods they add, and `createVList` infers them from the plugins array: `createVList(config, [selection(), tree()])` types `select()` and `expand()`, while a plain list exposes only the core API. TypeScript does not allow a partial type argument list, so an explicit item type (`createVList<Row>(config, plugins)`) skips plugin inference; type the config instead (`const config: CreateVListConfig<Row> = { ... }`).
+- **Breaking:** removed the deprecated `ScrollbarConfig` export, unused since the scrollbar options moved to `scroll.scrollbar` and `ScrollbarPluginConfig`.
+
 ### Added
+
+- Export `GridPluginConfig` and `A11yPluginConfig`, which the public config types already referenced, plus the per-plugin method types (`SelectionMethods`, `TreeMethods`, `TableMethods`, `SearchMethods`, `DataMethods`, `GridMethods`, `GroupsMethods`, `MasonryMethods`, `CarouselMethods`, `SnapshotsMethods`, `SortableMethods`, `AutosizeMethods`, `ScrollbarMethods`) and the `PluginMethods` helper.
 
 - Support `sortable()` with `vlist/synthetic`. Both entries use a configurable 350 ms touch/pen long press without a handle; early movement scrolls, while handles retain threshold-based dragging. Claimed drags exclude scrolling and momentum, and a touch-only ghost class provides a visual cue.
 

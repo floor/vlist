@@ -9,3 +9,4 @@ export {
   type ScrollbarConfig,
   type ScrollCallback,
 } from "./scrollbar";
+export type { ScrollbarMethods } from "./plugin";

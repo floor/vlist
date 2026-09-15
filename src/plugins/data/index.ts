@@ -33,3 +33,4 @@ export {
   type PlaceholderManager,
   type PlaceholderConfig,
 } from "./placeholder";
+export type { DataMethods } from "./plugin";

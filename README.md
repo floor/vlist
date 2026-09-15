@@ -529,22 +529,37 @@ Live benchmarks against 9 competitors → **[vlist.io/benchmarks](https://vlist.
 
 ## TypeScript
 
-Fully typed. Generic over your item type:
+Fully typed and generic over your item type. An item only needs an `id`, so ordinary
+interfaces work:
 
 ```typescript
-import { createVList, grid, type VList } from 'vlist'
+import { createVList, grid, selection, type CreateVListConfig } from 'vlist'
 
 interface Photo { id: number; url: string; title: string }
 
-const list: VList<Photo> = createVList<Photo>({
+const config: CreateVListConfig<Photo> = {
   container: '#gallery',
   items: photos,
   item: {
     height: 200,
     template: (photo) => `<img src="${photo.url}" />`,
   },
-}, [grid({ columns: 4 })])
+}
+
+const list = createVList(config, [grid({ columns: 4 }), selection<Photo>({ mode: 'multiple' })])
+
+list.select(photos[0].id)                      // typed: selection is in the array
+const chosen: Photo[] = list.getSelectedItems()
+// list.expand(1)                              // compile error: no tree plugin here
 ```
+
+`createVList` infers the methods each plugin adds, so a list exposes exactly what its
+plugins provide, and a mistyped call does not compile.
+
+TypeScript does not allow a partial type argument list. Writing
+`createVList<Photo>(config, plugins)` supplies the item type and leaves the plugin list on
+its default, so plugin methods are not inferred. Type the config as above, or let the item
+type come from your data.
 
 ## Migrating from v1
 

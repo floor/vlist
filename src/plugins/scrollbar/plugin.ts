@@ -28,9 +28,15 @@ export interface ScrollbarPluginConfig extends ScrollbarConfig {
 // Factory
 // =============================================================================
 
+/** Methods the scrollbar plugin adds to the list instance. */
+export interface ScrollbarMethods {
+  /** Recompute the thumb from the current content size. */
+  refreshScrollbar(): void;
+}
+
 export function scrollbar<T extends VListItem = VListItem>(
   config?: ScrollbarPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, ScrollbarMethods> {
   let sb: Scrollbar | null = null;
   let engineState: EngineState;
   let mainAxisPadding = 0;

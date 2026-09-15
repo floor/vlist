@@ -52,9 +52,17 @@ const EMPTY_ID_SET: Set<string | number> = new Set();
 // Factory
 // =============================================================================
 
+/** Methods the masonry plugin adds to the list instance. */
+export interface MasonryMethods {
+  /** The current masonry layout. */
+  getMasonryLayout(): MasonryLayout;
+  /** Change columns or gap at runtime. */
+  updateMasonry(config: Partial<MasonryPluginConfig>): void;
+}
+
 export function masonry<T extends VListItem = VListItem>(
   config: MasonryPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, MasonryMethods> {
   if (!config.columns || config.columns < 1) {
     throw new Error("[vlist] masonry: columns must be >= 1");
   }

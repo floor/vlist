@@ -41,9 +41,17 @@ const itemState: ItemState = { selected: false, focused: false };
 // Factory
 // =============================================================================
 
+/** Methods the grid plugin adds to the list instance. */
+export interface GridMethods {
+  /** The current grid layout. */
+  getGridLayout(): GridLayout;
+  /** Change columns, gap or aspect ratio at runtime. */
+  updateGrid(config: Partial<GridPluginConfig>): void;
+}
+
 export function grid<T extends VListItem = VListItem>(
   config: GridPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, GridMethods> {
   if (!config.columns || config.columns < 1) {
     throw new Error("[vlist] grid: columns must be >= 1");
   }

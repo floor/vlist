@@ -4,7 +4,7 @@ import {createVList as createNative} from '../../../src/core/create';
 import {createVList as createSynthetic} from '../../../src/synthetic';
 import {carousel} from '../../../src/plugins/carousel/plugin';
 import type {PluginContext} from '../../../src/core/types';
-import type {CarouselState} from '../../../src/plugins/carousel/plugin';
+import type {CarouselMethods, CarouselState} from '../../../src/plugins/carousel/plugin';
 
 let width=400, height=250;
 let observer: ResizeObserverCallback;
@@ -37,8 +37,8 @@ for(const [entry,createVList] of [['native',createNative],['synthetic',createSyn
   const sizeProp=isX?'width':'height';
   const host=document.createElement('div');document.body.append(host);
   let ctx!:PluginContext;
-  const list=createVList({container:host,orientation,items:Array.from({length:10},(_,id)=>({id})),item:{width:200,height:200,template:()=>''}},[carousel({variant,initialIndex:3,peek:'20%'}),{name:'inspect',setup(value){ctx=value;}}]);
-  const state=()=> (list.getCarouselState as ()=>CarouselState)();
+  const list=createVList({container:host,orientation,items:Array.from({length:10},(_,id)=>({id})),item:{width:200,height:200,template:()=>''}},[carousel({variant,initialIndex:3,peek:'20%'}),{name:'inspect',setup(value){ctx=value;}}]) as ReturnType<typeof createVList> & CarouselMethods;
+  const state=():CarouselState=>list.getCarouselState();
   const focal=()=>[...host.querySelectorAll<HTMLElement>('[data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0')!;
   try {
    frame();await Bun.sleep(1);
@@ -55,9 +55,9 @@ for(const [entry,createVList] of [['native',createNative],['synthetic',createSyn
    if(isX)resize(800,350);else resize(350,800);
    expect(focal().style[sizeProp]).toBe(`${initialWidth*2}px`);expect(state().index).toBe(3);
    expect(state().scrollPosition).toBe(initialWidth*2*3);
-   list.scrollToIndex(9);(list.next as (n:number,options:{behavior:string})=>void)(1,{behavior:'auto'});
+   list.scrollToIndex(9);list.next(1,{behavior:'auto'});
    expect(state().index).toBe(0);expect(focal().style[sizeProp]).toBe(`${initialWidth*2}px`);
-   (list.prev as (n:number,options:{behavior:string})=>void)(1,{behavior:'auto'});
+   list.prev(1,{behavior:'auto'});
    expect(state().index).toBe(9);expect(focal().style[sizeProp]).toBe(`${initialWidth*2}px`);
   } finally {list.destroy();host.remove();frames.clear();}
  });

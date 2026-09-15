@@ -13,10 +13,14 @@ import {
 import type { VListItem, VListAdapter } from "../../../src/types";
 
 // Test type alias
-type TestItem = VListItem;
+interface TestItem extends VListItem {
+  name?: string;
+  type?: string;
+  country?: string;
+}
 
 // Test data helpers
-const createTestItems = (count: number, startId: number = 1): VListItem[] => {
+const createTestItems = (count: number, startId: number = 1): TestItem[] => {
   return Array.from({ length: count }, (_, i) => ({
     id: startId + i,
     name: `Item ${startId + i}`,
@@ -765,7 +769,7 @@ describe("createDataManager", () => {
 
   describe("updateItem advanced", () => {
     it("should handle ID change in update", () => {
-      const items: VListItem[] = [
+      const items: TestItem[] = [
         { id: 1, name: "Alice" },
         { id: 2, name: "Bob" },
         { id: 3, name: "Charlie" },
@@ -877,7 +881,7 @@ describe("createDataManager", () => {
       manager.getPlaceholders();
 
       // First setItems should analyze structure
-      const items: VListItem[] = [
+      const items: TestItem[] = [
         { id: 1, name: "Item 1", type: "track" },
         { id: 2, name: "Item 2", type: "track" },
       ];
@@ -906,7 +910,7 @@ describe("createDataManager", () => {
       expect(manager.getPlaceholders().hasAnalyzedStructure()).toBe(false);
 
       // First batch arrives (e.g. from loadInitial)
-      const items: VListItem[] = [
+      const items: TestItem[] = [
         { id: 1, name: "Alice", type: "artist", country: "FRA" },
         { id: 2, name: "Bob", type: "track", country: "USA" },
       ];
@@ -933,7 +937,7 @@ describe("createDataManager", () => {
         initialTotal: 100,
       });
 
-      const items: VListItem[] = [
+      const items: TestItem[] = [
         { id: 1, name: "Item 1" },
         { id: 2, name: "Item 2" },
       ];

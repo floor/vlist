@@ -93,7 +93,25 @@ export interface SearchPluginConfig<T extends VListItem = VListItem> {
   text?: SearchText;
 }
 
-export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T> {}
+/** Methods the search plugin adds to the list instance. */
+export interface SearchMethods {
+  /** Show the search bar. */
+  openSearch(): void;
+  /** Hide the search bar and clear the query. */
+  closeSearch(): void;
+  /** Set the query, opening the bar when needed. */
+  setQuery(query: string): void;
+  /** The current query. */
+  getQuery(): string;
+  /** Move to the next match. */
+  nextMatch(): void;
+  /** Move to the previous match. */
+  prevMatch(): void;
+  /** Indices of the matching items. */
+  getMatches(): number[];
+}
+
+export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T, SearchMethods> {}
 
 export function search<T extends VListItem = VListItem>(
   config: SearchPluginConfig<T> = {},

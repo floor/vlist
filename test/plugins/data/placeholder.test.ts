@@ -592,7 +592,7 @@ describe("filterPlaceholders", () => {
   });
 
   it("should return all items when no placeholders present", () => {
-    const items: VListItem[] = [
+    const items: Array<VListItem & { name: string }> = [
       { id: 1, name: "A" },
       { id: 2, name: "B" },
     ];
@@ -648,7 +648,7 @@ describe("countRealItems", () => {
   });
 
   it("should count all items when none are placeholders", () => {
-    const items: VListItem[] = [
+    const items: Array<VListItem & { name: string }> = [
       { id: 1, name: "A" },
       { id: 2, name: "B" },
       { id: 3, name: "C" },
