@@ -30,19 +30,6 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 | **Vanilla JS** | Native | Yes | — | — | — |
 | **Constant memory** | ~0.1 MB at 1M | No | No | No | No |
 
-### Sortable gestures
-
-`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
-
-```typescript
-sortable({ touchDelay: 350, dragThreshold: 5 })
-sortable({ handle: '.drag-handle' })
-```
-
-A touch during scrolling catches the motion and does not arm a hold for that contact. Lift and press again once the list is at rest. A second finger or `pointercancel` cancels the pending press or active drag. Edge auto-scroll uses the list's logical position and stops on drop.
-
-The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts on the pressed item. A claimed touch/pen drag adds `.vlist-sort-ghost--touch` to the ghost as a visual cue; override that class in CSS to customize it. Keyboard reordering remains Space to grab/drop, arrows to move and Escape to cancel.
-
 ## Framework Adapters
 
 | Framework | Package | Size |
@@ -158,6 +145,19 @@ Synthetic input limitations:
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
 Measurement corrections from autosize preserve ongoing synthetic motion. Existing plugin conflicts still apply. See the [scroll input contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
+
+### Sortable gestures
+
+`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
+
+```typescript
+sortable({ touchDelay: 350, dragThreshold: 5 })
+sortable({ handle: '.drag-handle' })
+```
+
+A touch during scrolling catches the motion and does not arm a hold for that contact. Lift and press again once the list is at rest. A second finger or `pointercancel` cancels the pending press or active drag. Edge auto-scroll uses the list's logical position and stops on drop.
+
+The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts on the pressed item. A claimed touch/pen drag adds `.vlist-sort-ghost--touch` to the ghost as a visual cue; override that class in CSS to customize it. Keyboard reordering remains Space to grab/drop, arrows to move and Escape to cancel.
 
 ## Migrating to 3.0
 

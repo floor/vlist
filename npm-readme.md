@@ -93,6 +93,19 @@ Synthetic input limitations:
 
 Measurement corrections from autosize preserve ongoing synthetic motion. Existing plugin conflicts still apply. See the [scroll input contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
 
+### Sortable gestures
+
+`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
+
+```typescript
+sortable({ touchDelay: 350, dragThreshold: 5 })
+sortable({ handle: '.drag-handle' })
+```
+
+A touch during scrolling catches the motion and does not arm a hold for that contact. Lift and press again once the list is at rest. A second finger or `pointercancel` cancels the pending press or active drag. Edge auto-scroll uses the list's logical position and stops on drop.
+
+The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts on the pressed item. A claimed touch/pen drag adds `.vlist-sort-ghost--touch` to the ghost as a visual cue; override that class in CSS to customize it. Keyboard reordering remains Space to grab/drop, arrows to move and Escape to cancel.
+
 ## Migrating to 3.0
 
 `3.0.0-next.1` used synthetic input by default. `3.0.0-next.2` restores the 2.x default. Import `vlist/synthetic` explicitly to retain synthetic behavior across these prereleases. `vlist/native` remains a deprecated compatibility alias; its `NativeScrollConfig` and `NativeCreateVListConfig` types alias the standard `ScrollConfig` and `CreateVListConfig`.
@@ -134,19 +147,6 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `vlist/synthetic` + `sortable()` | 43.0 KB | 15.1 KB |
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,514 bytes gzipped**, below the 9.9 KB target; synthetic input is **11,790 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
-
-### Sortable gestures
-
-`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
-
-```typescript
-sortable({ touchDelay: 350, dragThreshold: 5 })
-sortable({ handle: '.drag-handle' })
-```
-
-A touch during scrolling catches the motion and does not arm a hold for that contact. Lift and press again once the list is at rest. A second finger or `pointercancel` cancels the pending press or active drag. Edge auto-scroll uses the list's logical position and stops on drop.
-
-The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts on the pressed item. A claimed touch/pen drag adds `.vlist-sort-ghost--touch` to the ghost as a visual cue; override that class in CSS to customize it. Keyboard reordering remains Space to grab/drop, arrows to move and Escape to cancel.
 
 ## Framework Adapters
 

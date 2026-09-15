@@ -15,7 +15,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - Support `sortable()` with `vlist/synthetic`. Both entries use a configurable 350 ms touch/pen long press without a handle; early movement scrolls, while handles retain threshold-based dragging. Claimed drags exclude scrolling and momentum, and a touch-only ghost class provides a visual cue.
 
-- Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write. Sortable remains unsupported on the synthetic entry.
+- Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write.
 
 ### Fixed
 
