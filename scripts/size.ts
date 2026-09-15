@@ -159,6 +159,14 @@ for (const scenario of scenarios) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
   }
 
+  // The private runway engine belongs exclusively to the native entry.
+  // This property read is part of wrap folding; plugin config literals alone
+  // do not match it (carousel constructs a thresholdLaps property).
+  const runwayMarker = ".thresholdLaps";
+  if (new TextDecoder().decode(output).includes(runwayMarker) !== (scenario.name === "native")) {
+    treeShakeFailures.push({ scenario: scenario.name, leaked: "runway", marker: runwayMarker });
+  }
+
   // ── Tree-shaking verification ─────────────────────────────────
 
   if (scenario.mustNotContain.length > 0) {

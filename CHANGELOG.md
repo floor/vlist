@@ -13,9 +13,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed (3.0)
 
-- Synthetic scrolling is now the default in `vlist` and `vlist/config`. Import `createVList` from `vlist/native` for native or bounded scrolling, carousel, sortable, or horizontal RTL lists. Config consumers select that entry with `factory`.
-- Core accepts `scroll.mode: "synthetic"`; `"native"` and `"bounded"` report the required native import. The native entry rejects `"synthetic"` and points back to `vlist`. Page scrolling continues to use the external source.
+- Synthetic scrolling is now the default in `vlist` and `vlist/config`. Import `createVList` from `vlist/native` for native scrolling, carousel, sortable, or horizontal RTL lists. Config consumers select that entry with `factory`.
+- Remove `scroll.mode` and `scroll.runway` from both entries. Legacy values throw before DOM creation. Page scrolling continues to use the external source. Native carousel wrapping retains its private runway engine.
 - Deprecate `vlist/synthetic` as an alias of the default factory; it remains available in 3.0.
+
+### Removed (3.0)
+
+- Remove `scale()` and its automatic config stub, plus deprecated `PluginContext.setScrollFns` and `disableDefaultScroll`. Use the default synthetic entry for huge lists and `setScrollSource` for external scrolling.
+- Remove native scrollbar string values from core `ScrollConfig`; they remain available from `vlist/native` through `NativeScrollConfig` and `NativeCreateVListConfig`.
+
+### Internal (3.0)
+
+- Isolate the runway handler, native event listeners and native content-size warning behind the native entry. Retain shared external-source commits, animation and the generic render-origin guards.
+- Measure all 19 size scenarios and reject runway implementation leaks into the base bundle. Base size after removals is 11,670 bytes gzipped; optimization toward the 9.9 KB target is deferred.
 
 ## [2.8.0] - 2026-09-15
 

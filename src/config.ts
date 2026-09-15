@@ -161,8 +161,8 @@ export function resolvePlugins<T extends VListItem = VListItem>(
   }
 
   // Custom scrollbar. Skipped for "none" (no scrollbar) and "native" (use the
-  // browser's native scrollbar). Core hides native only for "none"; "native"
-  // simply leaves browser defaults in place. Any other
+  // browser's native scrollbar). These strings require the native factory;
+  // it hides the native scrollbar only for "none". Any other
   // value (or omitted) opts into vlist's custom overlay scrollbar.
   const scrollbarConfig = config.scroll?.scrollbar || config.scrollbar;
   if (scrollbarConfig !== "none" && scrollbarConfig !== "native") {

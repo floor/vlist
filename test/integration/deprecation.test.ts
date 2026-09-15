@@ -27,11 +27,12 @@ it("core, alias and native entry supported configurations emit no warnings", () 
 
 it("removed legacy scroll hooks are absent from the plugin context", () => {
   const host = createContainer();
+  let context!: PluginContext;
   const list = createVList({ container: host, items: [{ id: 1 }],
     item: { height: 40, template: () => "row" },
-  }, [{ name: "inspect", setup(ctx) {
-    expect(ctx).not.toHaveProperty("setScrollFns");
-    expect(ctx).not.toHaveProperty("disableDefaultScroll");
-  } }]);
-  list.destroy(); host.remove();
+  }, [{ name: "inspect", setup(ctx) { context = ctx; } }]);
+  try {
+    expect(context).not.toHaveProperty("setScrollFns");
+    expect(context).not.toHaveProperty("disableDefaultScroll");
+  } finally { list.destroy(); host.remove(); }
 });
