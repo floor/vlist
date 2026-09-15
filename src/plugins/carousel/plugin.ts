@@ -480,6 +480,9 @@ export function carousel<T extends VListItem = VListItem>(
           lapSize: () => lapSize,
           home: () => MIDDLE_CYCLE * lapSize,
           thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
+          onFold(shift: number) {
+            if (intendedVi >= 0) intendedVi -= Math.round(shift / lapSize) * realTotal;
+          },
         }, createBoundedScrollHandler);
 
         initialScrollPending = true;

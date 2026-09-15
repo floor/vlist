@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Keep pending carousel navigation targets in the folded coordinate space, so repeated next/previous calls do not animate through unintended laps before idle.
+
 - Prevent native carousel wrap folds from spiking public scroll velocity or suppressing a scroll event when the folded position equals the previous event position. Wheel folds now commit before emitting the frame.
 
 ## [3.0.0-next.2] - 2026-09-15
