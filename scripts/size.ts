@@ -85,6 +85,8 @@ const scenarios: Scenario[] = [
   { name: "synthetic", imports: ["createVList"] },
   { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
   { name: "synthetic + sortable", imports: ["createVList", "sortable"] },
+  { name: "createStats", imports: ["createVList", "createStats"] },
+  { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
   { name: "native", imports: ["createVList"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
