@@ -274,11 +274,11 @@ it("config factory selects the synthetic driver with the public config type", ()
   } finally { list.destroy(); host.remove(); }
 });
 
-it("config defaults to synthetic input without an injected factory", () => {
+it("config defaults to native input without an injected factory", () => {
   const host = createContainer();
   const list = createVListFromConfig({ ...base(), container: host });
   try {
-    expect(host.querySelector<HTMLElement>(".vlist-viewport")!.style.touchAction).toBe("pan-x pinch-zoom");
+    expect(host.querySelector<HTMLElement>(".vlist-viewport")!.style.touchAction).not.toBe("pan-x pinch-zoom");
   } finally { list.destroy(); host.remove(); }
 });
 
@@ -287,7 +287,7 @@ for (const name of ["carousel", "sortable"]) {
     const host = createContainer();
     try {
       expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic, plugins: [{ name }],
-      })).toThrow(`${name} requires createVList from "vlist/native"`);
+      })).toThrow(`${name} requires createVList from "vlist"`);
       expect(host.children.length).toBe(0);
     } finally { host.remove(); }
   });

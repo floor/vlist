@@ -4,7 +4,7 @@
 
 import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/synthetic";
 import type { VList } from "../../src/core/types";
 import { createContainer, type TestItem } from "../helpers/factory";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";

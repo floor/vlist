@@ -4,7 +4,7 @@ import { createPluginMockContext } from "../helpers/plugin-context";
 import { a11y } from "../../src/plugins/a11y/plugin";
 import { autosize } from "../../src/plugins/autosize/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/synthetic";
 import type { PluginContext, VListPlugin } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 import { snapshots } from "../../src/plugins/snapshots/plugin";

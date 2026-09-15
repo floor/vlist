@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- Restore native scrolling as the default in `vlist` and `vlist/config`. Synthetic scrolling is the opt-in `vlist/synthetic` entry; adapters select it with `factory`. This supersedes the synthetic default in `3.0.0-next.1`.
+- Restore `"native"`/`"none"` scrollbar strings to default `ScrollConfig`. Synthetic rejects those strings, carousel, sortable and horizontal RTL, pointing to `vlist`. `scroll.mode` and `scroll.runway` remain removed in both entries; huge lists use `vlist/synthetic`.
+- Carousel supplies its own private wrap handler, so its runway code is excluded from other bundles. The synthetic driver is excluded from the default and plugin scenarios.
+- The native content-size warning stays with the default entry and points to `vlist/synthetic`. Base measures 9,523 bytes gzipped; synthetic measures 11,687 bytes.
+
+### Deprecated
+
+- `vlist/native` is now a compatibility alias of `vlist`, retained for `3.0.0-next.1` consumers. Import the default factory and standard config types from `vlist`. `vlist/synthetic` is a first-class opt-in entry and is no longer deprecated.
+
 ## [3.0.0-next.1] - 2026-09-15
 
 Prerelease of 3.0, published under the npm `next` dist-tag; `latest` stays on 2.8.

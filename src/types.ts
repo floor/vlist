@@ -355,8 +355,11 @@ export interface ScrollConfig {
    */
   wrap?: boolean;
 
-  /** Options consumed by vlist/config; use scrollbar() with the core factory. */
-  scrollbar?: ScrollbarOptions;
+  /** Native visibility: "none" hides the browser scrollbar, "native" keeps it.
+   * Options are consumed by vlist/config; with the low-level factory install
+   * scrollbar() explicitly. The synthetic entry rejects both string values.
+   */
+  scrollbar?: "native" | "none" | ScrollbarOptions;
 
   /** External scroll element for window scrolling */
   element?: Window;

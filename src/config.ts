@@ -17,9 +17,8 @@
  * config (the adapters) pull in this module and, with it, every plugin it wires.
  */
 
-import type { VListItem, ItemConfig, GroupsConfig, VListAdapter } from "./types";
+import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
 import { createVList } from "./core/create";
-import type { NativeScrollConfig } from "./native";
 import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
 import { page } from "./plugins/page";
 import { autosize } from "./plugins/autosize";
@@ -47,10 +46,8 @@ export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T
  */
 export interface VListConfig<T extends VListItem = VListItem>
   extends Omit<CreateVListConfig<T>, "container" | "scroll"> {
-  /** Input model; native scrolling requires a factory imported from vlist/native. */
-  // The convenience layer also supports native factories. Core rejects native
-  // visibility strings at creation; they are meaningful only with that factory.
-  scroll?: NativeScrollConfig;
+  /** Scroll options; select synthetic input with a factory from vlist/synthetic. */
+  scroll?: ScrollConfig;
   /** List factory; defaults to core createVList. Fixed for this instance. */
   factory?: VListFactory<T>;
 

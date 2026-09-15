@@ -155,7 +155,7 @@ for (const scenario of scenarios) {
   });
 
   const syntheticMarker = "pan-x pinch-zoom";
-  if (new TextDecoder().decode(output).includes(syntheticMarker) === (scenario.name === "native")) {
+  if (new TextDecoder().decode(output).includes(syntheticMarker) !== (scenario.name === "synthetic")) {
     treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
   }
 

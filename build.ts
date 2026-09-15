@@ -60,8 +60,8 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
-  // Compatibility alias and opt-in native entry.
-  for (const name of ["synthetic", "native"]) {
+  // Opt-in synthetic entry and the native compatibility alias.
+  for (const name of ["synthetic"]) {
     const result = await Bun.build({
       entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
       format: "esm", target: "browser", minify: !isDev,
@@ -73,9 +73,11 @@ async function build() {
     }
   }
 
-  for (const name of ["index", "native"]) {
+  await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
+
+  for (const name of ["index", "native", "synthetic"]) {
     const hasDriver = (await Bun.file(`./dist/${name}.js`).text()).includes("pan-x pinch-zoom");
-    if (hasDriver !== (name === "index")) {
+    if (hasDriver !== (name === "synthetic")) {
       throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
     }
   }
@@ -228,7 +230,7 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
-      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") === (name === "native")) {
+      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name === "synthetic")) {
         throw new Error(`Unexpected synthetic driver presence in ${name}`);
       }
       if (new TextDecoder().decode(bytes).includes(".thresholdLaps") !== (name === "carousel")) {

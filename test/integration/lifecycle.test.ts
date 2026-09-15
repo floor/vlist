@@ -108,7 +108,7 @@ describe("lifecycle", () => {
       expect(indices.length).toBeLessThan(items.length);
     });
 
-    it("should keep content viewport-sized for the total items", () => {
+    it("should size native content for the total items", () => {
       const items = createTestItems(50);
       list = createVList(
         { container, items, item: { height: 40, template: simpleTemplate } },
@@ -118,7 +118,7 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      expect(content.style.height).toBe("100%");
+      expect(parseInt(content.style.height, 10)).toBe(50 * 40);
       expect(list.total).toBe(50);
     });
 
@@ -178,7 +178,7 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      expect(content.style.height).toBe("100%");
+      expect(parseInt(content.style.height, 10)).toBe(50 * 40);
       expect(list.total).toBe(50);
     });
 
@@ -472,7 +472,7 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      expect(content.style.width).toBe("100%");
+      expect(parseInt(content.style.width, 10)).toBe(100 * 120);
       expect(list.total).toBe(100);
     });
 
