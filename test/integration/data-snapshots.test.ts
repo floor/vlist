@@ -150,7 +150,9 @@ describe("async + snapshots integration", () => {
 
       await waitForLoad(list);
 
-      (list as any)._saveSnapshot();
+      // The plugin saves on unload, and on debounced scroll, selection and focus
+      // changes; _saveSnapshot is internal and no longer on the instance.
+      window.dispatchEvent(new Event("beforeunload"));
       const stored = sessionStorage.getItem(storageKey);
       expect(stored).not.toBeNull();
     });
@@ -166,7 +168,7 @@ describe("async + snapshots integration", () => {
       );
 
       await waitForLoad(list1);
-      (list1 as any)._saveSnapshot();
+      window.dispatchEvent(new Event("beforeunload")); // writes the snapshot
       list1.destroy();
       container1.remove();
 

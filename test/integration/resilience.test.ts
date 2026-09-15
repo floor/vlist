@@ -9,6 +9,9 @@ import {
   afterEach,
 } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
+
+/** Plugins fail on purpose here; core logs that, which is expected. */
+let expectedFailureConsole: typeof console.error;
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
@@ -46,9 +49,12 @@ let list: VList<TestItem> | null = null;
 
 beforeEach(() => {
   container = createContainer({ width: 300, height: 500 });
+  expectedFailureConsole = console.error;
+  console.error = () => {};
 });
 
 afterEach(() => {
+  console.error = expectedFailureConsole;
   if (list) {
     list.destroy();
     list = null;

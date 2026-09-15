@@ -150,11 +150,12 @@ describe("grid - Setup", () => {
   it("should expose scrollToIndex method", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
@@ -1023,22 +1024,24 @@ describe("grid - scrollToIndex", () => {
   it("should register scrollToIndex method", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
   it("should call scrollToIndex without errors", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(10);
@@ -1049,11 +1052,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex with center align", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(20, "center");
@@ -1064,11 +1068,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex with end align", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(20, "end");
@@ -1079,11 +1084,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex for empty list", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(0);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(0);
@@ -1094,8 +1100,8 @@ describe("grid - scrollToIndex", () => {
   it("should map item index to correct row for scrolling", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, dom, methods, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, dom, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
@@ -1111,7 +1117,7 @@ describe("grid - scrollToIndex", () => {
     expect(layout.getRow(5)).toBe(1);
 
     const viewport = dom.viewport;
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(8);
 
     // Should have set viewport.scrollTop to the row 2 offset

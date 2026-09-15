@@ -389,7 +389,16 @@ export function createCore<T extends VListItem = VListItem>(
       config,
       emitter,
       template: rawConfig.item.template,
-      registerMethod(name: string, fn: Function): void { methods.set(name, fn); },
+      registerMethod(name: string, fn: Function): void {
+        // Public names are a contract: two plugins claiming one used to be
+        // last-writer-wins, silently. Underscore names are the internal
+        // cross-plugin protocol, where overriding is deliberate (groups,
+        // masonry and page each provide _scrollItemIntoView, for example).
+        if (!name.startsWith("_") && methods.has(name)) {
+          throw new Error(`[vlist] duplicate method "${name}": another plugin already registers it. Rename it, or replace core behaviour through a setter such as setScrollToIndexFn, setGetItemFn or setRenderFn.`);
+        }
+        methods.set(name, fn);
+      },
       getMethod(name: string): Function | undefined { return methods.get(name); },
       registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
       registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
@@ -514,10 +523,14 @@ export function createCore<T extends VListItem = VListItem>(
         try {
           plugin.setup(ctx);
         } catch (err) {
-          emitter.emit("error", {
-            error: err instanceof Error ? err : new Error(String(err)),
-            context: `plugin:setup:${plugin.name}`,
-          });
+          const error = err instanceof Error ? err : new Error(String(err));
+          // The event fires before createVList returns, so a listener attached
+          // afterwards cannot hear it: without this the list comes back half
+          // wired, with no throw and nothing logged.
+          if (typeof process === "undefined" || process.env?.NODE_ENV !== "production") {
+            console.error(`[vlist] plugin "${plugin.name}" failed during setup; the list is missing its behaviour.`, error);
+          }
+          emitter.emit("error", { error, context: `plugin:setup:${plugin.name}` });
         }
       }
     }
@@ -585,12 +598,15 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function doRender(): void {
-    flushPendingScroll();
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
       render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
+    // After the render: layout plugins rebuild their own state during it (grid
+    // rows, masonry placements, group entries), and a scroll held from before
+    // the list had a total must land on that rebuilt layout, not the stale one.
+    flushPendingScroll();
   }
 
   function doScrollFrame(): void {
@@ -621,13 +637,15 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function doForceRender(): void {
-    flushPendingScroll();
     state.renderPending = true;
     if (customForceRender) {
       customForceRender();
     } else {
       render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
+    // Same ordering as doRender: the held scroll lands on the layout the
+    // plugins just rebuilt for the new items, not on the previous one.
+    flushPendingScroll();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 
     if (state.scrollPosition !== lastEventScrollPos) {
@@ -914,16 +932,22 @@ export function createCore<T extends VListItem = VListItem>(
         pendingScrollToIndex = { index, alignOrOptions };
         return;
       }
-      const clamped = Math.max(0, Math.min(index, total - 1));
-
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
       const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
       const easing = typeof alignOrOptions === "object" ? alignOrOptions.easing : undefined;
 
-      if (scrollToIndexFn && scrollToIndexFn(clamped, align, behavior, duration, easing) !== false) {
+      // The hook owns its own index space: grid counts rows, groups counts
+      // layout entries including headers, masonry counts placements. `total`
+      // here is whatever that plugin reported through setVirtualTotalFn, so
+      // clamping against it before the call would translate an item index into
+      // the wrong space. Each hook clamps in its own units; core clamps only
+      // for its own fallback below.
+      if (scrollToIndexFn && scrollToIndexFn(index, align, behavior, duration, easing) !== false) {
         return;
       }
+
+      const clamped = Math.max(0, Math.min(index, total - 1));
 
       const offset = sizeCache.getOffset(clamped);
       const itemSize = sizeCache.getSize(clamped);
@@ -1020,6 +1044,9 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Attach plugin-registered methods ────────────────────────────
 
   for (const [name, fn] of methods) {
+    // Underscore names are the internal cross-plugin protocol, reached through
+    // ctx.getMethod(); they stay off the public instance.
+    if (name.startsWith("_")) continue;
     (api as unknown as Record<string, unknown>)[name] = fn;
   }
 

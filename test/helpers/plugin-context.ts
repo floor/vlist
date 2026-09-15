@@ -32,6 +32,8 @@ export interface PluginTestContext<T extends VListItem> {
   renderFnReplaced: boolean;
   navConfig: any;
   scrollToPosFn: any;
+  /** The scroll-to-index hook a layout plugin installed via setScrollToIndexFn. */
+  scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null;
   cleanup: () => void;
 }
 
@@ -191,6 +193,7 @@ export function createPluginMockContext<T extends VListItem>(
   let _renderFnReplaced = false;
   let _navConfig: any = null;
   let _scrollToPosFn: any = null;
+  let _scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
   let itemStateFn: ((index: number, state: ItemState) => void) | null = null;
   let removeItemByIdFn: ((id: string | number) => number) | null = null;
@@ -277,7 +280,7 @@ export function createPluginMockContext<T extends VListItem>(
     disableDefaultResize: () => {},
     setScrollTarget: () => {},
     setScrollToPosFn: (fn: any) => { _scrollToPosFn = fn; },
-    setScrollToIndexFn: () => { return undefined; },
+    setScrollToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },
     onScrollFrame: () => {},
     onScrollIdle: () => {},
 
@@ -334,6 +337,10 @@ export function createPluginMockContext<T extends VListItem>(
     },
     get scrollToPosFn() {
       return _scrollToPosFn;
+    },
+    /** The scroll-to-index hook a layout plugin installed, if any. */
+    get scrollToIndexFn() {
+      return _scrollToIndexFn;
     },
     cleanup,
   };

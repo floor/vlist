@@ -1225,15 +1225,16 @@ describe("groups — scrollToIndex", () => {
   it("scrolls to start of a data item by default", () => {
     const plugin = makePlugin();
     const items = createTestItems(10);
-    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+    const mockContext = createPluginMockContext<TestItem>(items, {
       itemSize: 50,
       containerHeight: 200,
     });
+    const { ctx, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
-    scrollToIndex(0); // data index 0 → layout index 1
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(0, "start"); // data index 0 → layout index 1
     // Mock sizeCache: each entry is 50px, so layout index 1 offset = 50
     expect(scrollCalls.length).toBe(1);
     expect(scrollCalls[0]).toBe(50);
@@ -1243,14 +1244,15 @@ describe("groups — scrollToIndex", () => {
   it("scrolls to center of a data item", () => {
     const plugin = makePlugin();
     const items = createTestItems(10);
-    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+    const mockContext = createPluginMockContext<TestItem>(items, {
       itemSize: 50,
       containerHeight: 200,
     });
+    const { ctx, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(0, "center");
     // offset=32, itemSize=50, container=200 → 32 - (200-50)/2 = 32-75 = -43 → clamped to 0
     expect(scrollCalls[0]).toBe(0);
@@ -1260,15 +1262,16 @@ describe("groups — scrollToIndex", () => {
   it("scrolls to end alignment", () => {
     const plugin = makePlugin();
     const items = createTestItems(10);
-    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+    const mockContext = createPluginMockContext<TestItem>(items, {
       itemSize: 50,
       containerHeight: 200,
     });
+    const { ctx, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
-    scrollToIndex(5); // data index 5, first item of group B
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(5, "start"); // data index 5, first item of group B
     const pos = scrollCalls[0]!;
     expect(pos).toBeGreaterThan(0);
 
@@ -1282,15 +1285,16 @@ describe("groups — scrollToIndex", () => {
   it("scrolls with object options including smooth", () => {
     const plugin = makePlugin();
     const items = createTestItems(10);
-    const { ctx, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items, {
+    const mockContext = createPluginMockContext<TestItem>(items, {
       itemSize: 50,
       containerHeight: 200,
     });
+    const { ctx, scrollCalls, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = ctx.getMethod("scrollToIndex") as Function;
-    scrollToIndex(3, { align: "start", behavior: "smooth", duration: 300 });
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(3, "start", "smooth", 300);
     expect(scrollCalls.length).toBe(1);
     cleanup();
   });
