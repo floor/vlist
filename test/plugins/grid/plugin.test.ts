@@ -971,10 +971,13 @@ describe("grid - Edge Cases", () => {
     cleanup();
   });
 
-  it("should have conflicts with masonry and table plugins", () => {
+  it("should have conflicts with masonry, table and autosize plugins", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     expect(plugin.conflicts).toContain("masonry");
     expect(plugin.conflicts).toContain("table");
+    // autosize measures items; this size cache is indexed by row. Combined,
+    // row n took item n's measurement — 800px where 650px was right.
+    expect(plugin.conflicts).toContain("autosize");
   });
 
   it("should render correctly with horizontal mode", () => {

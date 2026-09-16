@@ -134,6 +134,15 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     ? item.estimatedWidth != null
     : item.estimatedHeight != null;
   if (!hasExplicitSize && hasEstimate) {
+    // This layer assembles the pair itself, so the core conflict would name two
+    // plugins the caller never mentioned. Name the fields they did write.
+    if (config.layout === "grid") {
+      throw new Error(
+        '[vlist] config: layout: "grid" needs a fixed item size. An estimate wires ' +
+          "autosize(), which grid() cannot combine with: grid indexes its size cache by " +
+          "row, autosize measures items. Use item.height (item.width when horizontal).",
+      );
+    }
     plugins.push(autosize<T>());
   }
 
