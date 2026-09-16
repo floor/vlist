@@ -27,6 +27,11 @@
  *     instance on purpose and requires the gate to fail; a heap gate that
  *     silently stopped detecting anything would otherwise pass forever.
  *
+ * The ratio is only applied above a floor of total growth. Both criteria are
+ * needed because each is blind where the other works: the ratio catches a leak
+ * buried under warm-up, and the absolute numbers catch the case where there is
+ * too little growth for a ratio to mean anything.
+ *
  * Usage:
  *   bun run scripts/heap.ts              # the gate
  *   bun run scripts/heap.ts --self-test  # prove it still detects a real leak
@@ -54,6 +59,22 @@ const RATE_RATIO_MAX = 0.65;
 
 /** Absolute growth ceiling across the measured cycles, per profile. */
 const TOTAL_GROWTH_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Below this much total growth, a profile passes on the absolute number alone.
+ *
+ * A ratio needs a curve to describe, and where almost nothing accumulates there
+ * is no curve — only jitter. Linux CI retained 89,598 bytes over 200 cycles on
+ * the 1000-item profile, twelve times less than the profile that passed, and
+ * still reported 1.11x: its first window was 405 bytes/cycle, so one ordinary
+ * allocation in the last window swamped the signal. A gate that fails hardest
+ * when the code is cleanest is measuring itself, not the library.
+ *
+ * This is not free. It admits a leak below ~1.3 KB/cycle, where retaining a
+ * whole list costs ~47 KB/cycle — a 35x margin, under which this measurement
+ * cannot resolve anything in the first place.
+ */
+const RATIO_FLOOR_BYTES = 256 * 1024;
 
 interface Profile {
   readonly name: string;
@@ -154,15 +175,19 @@ const report = (m: Measurement): void => {
         `  ${fmt(rate).padStart(8)}/cycle`,
     );
   }
+  const ratioApplies = m.total > RATIO_FLOOR_BYTES;
   console.log(
-    `    rate ratio ${m.ratio.toFixed(2)}x (max ${RATE_RATIO_MAX})` +
+    `    rate ratio ${m.ratio.toFixed(2)}x ` +
+      (ratioApplies
+        ? `(max ${RATE_RATIO_MAX})`
+        : `(not applied — growth under the ${fmt(RATIO_FLOOR_BYTES)} byte floor)`) +
       `  ·  total ${fmt(m.total)} bytes (max ${fmt(TOTAL_GROWTH_MAX_BYTES)})`,
   );
 };
 
 const failures = (m: Measurement): string[] => {
   const out: string[] = [];
-  if (m.ratio > RATE_RATIO_MAX) {
+  if (m.total > RATIO_FLOOR_BYTES && m.ratio > RATE_RATIO_MAX) {
     out.push(
       `${m.profile}: heap growth is not decaying — rate ratio ${m.ratio.toFixed(2)}x ` +
         `exceeds ${RATE_RATIO_MAX}. A flat rate across windows is what a retained ` +
