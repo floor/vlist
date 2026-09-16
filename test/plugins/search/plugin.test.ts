@@ -13,6 +13,7 @@ import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
 import { data } from "../../../src/plugins/data";
+import { tree } from "../../../src/plugins/tree";
 import type { VListItem, ItemState } from "../../../src/types";
 
 interface Fruit extends VListItem {
@@ -611,6 +612,33 @@ describe("search — conflicts with data", () => {
       expect(() =>
         createVList<Fruit>(config, [data<Fruit>({ adapter }), search<Fruit>()]),
       ).toThrow('Plugin "search" conflicts with "data"');
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
+  });
+});
+
+
+describe("search — conflicts with tree", () => {
+  it("declares the conflict", () => {
+    expect(search<Fruit>().conflicts).toContain("tree");
+  });
+
+  it("throws at creation in either plugin order", () => {
+    // tree() owns the layout index space but never implemented the filterTree
+    // hook search delegates to, so filtering fell through to flat indices into
+    // the source array: a 5-item tree reported 1, then 0, then 2 after clearing.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const config = { container, items: FRUITS, item: { height: 48, template: (f: Fruit) => f.name } };
+    try {
+      expect(() =>
+        createVList<Fruit>(config, [search<Fruit>(), tree<Fruit>({ parentId: "parentId" })]),
+      ).toThrow('Plugin "search" conflicts with "tree"');
+      expect(() =>
+        createVList<Fruit>(config, [tree<Fruit>({ parentId: "parentId" }), search<Fruit>()]),
+      ).toThrow('Plugin "search" conflicts with "tree"');
       expect(container.children.length).toBe(0);
     } finally {
       container.remove();
