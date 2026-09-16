@@ -77,10 +77,12 @@ describeCarousel("carousel — Factory", () => {
     }
   });
 
-  it("declares no conflicts", () => {
-    // Its only declared conflict was with scale(), which 3.0 removed.
+  it("declares a conflict with groups", () => {
+    // Its only declared conflict used to be with scale(), which 3.0 removed,
+    // leaving none at all — while groups silently broke it in both orders.
     const plugin = carousel();
-    expect(plugin.conflicts).toBeUndefined();
+    expect(plugin.conflicts).toContain("groups");
+    expect(plugin.conflicts).not.toContain("scale");
   });
 });
 

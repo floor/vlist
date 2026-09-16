@@ -14,6 +14,13 @@
  *
  * Public API (list.total, ARIA, selection, click events) stays at the
  * real item count. The inflated virtual window is strictly internal.
+ *
+ * Restrictions:
+ * - Cannot be combined with `groups()`: an infinite wrap has no sections to
+ *   group, and mechanically groups' `setSizeConfig` replaces the size cache
+ *   methods this plugin installs directly.
+ * - `page()` is rejected by core, since bounded page-mode scrolling does not
+ *   exist: document scrolling cannot wrap.
  */
 
 import type { VListItem } from "../../types";
@@ -397,6 +404,11 @@ export function carousel<T extends VListItem = VListItem>(
   return {
     name: "carousel",
     priority: 10,
+    // Layout tier, like groups, and both at priority 10 — so setup order was
+    // array order and the pair broke differently depending on which the caller
+    // wrote first. This plugin assigns its size-cache methods directly; groups
+    // calls setSizeConfig, which Object.assigns a fresh cache over them.
+    conflicts: ["groups"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
