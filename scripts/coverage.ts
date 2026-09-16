@@ -49,7 +49,14 @@ for (const line of lines) {
 }
 
 if (exitCode !== 0) {
-  console.error(`\n  ✗ Tests failed (exit code ${exitCode})`);
+  // Summary-only output is right while the suite is green and useless when it
+  // is not: a CI log reporting "1 fail" without naming the test cannot be
+  // diagnosed from anywhere but the machine that produced it, and that machine
+  // is gone. On failure, print everything bun said except the passing lines.
+  console.error(`\n  ✗ Tests failed (exit code ${exitCode})\n`);
+  for (const line of lines) {
+    if (!/^\s*\(pass\)/.test(line)) console.error(line);
+  }
   process.exit(exitCode);
 }
 
