@@ -194,7 +194,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `table()` | 44.2 KB | 15.4 KB |
 | `masonry()` | 37.0 KB | 13.6 KB |
 | `tree()` | 41.0 KB | 14.5 KB |
-| `search()` | 34.9 KB | 12.6 KB |
+| `search()` | 34.7 KB | 12.6 KB |
 | `carousel()` | 38.4 KB | 13.9 KB |
 | `vlist/synthetic` + `carousel()` | 44.4 KB | 16.1 KB |
 | `vlist/synthetic` + `sortable()` | 43.4 KB | 15.3 KB |
@@ -327,7 +327,9 @@ const list = createVList({
 Search filters client-side over the items the list holds, so it cannot be
 combined with `data()` — creating a list with both throws. With an adapter, the
 rows in memory are only the loaded window; query the remote dataset through the
-adapter instead.
+adapter instead. It cannot be combined with `tree()` either: filtering a tree
+means keeping the ancestors of each match, which belongs to the plugin that
+owns the layout, and `tree()` offers no such hook.
 
 ## Custom scrollbar (3.0 preview)
 

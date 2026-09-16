@@ -17,6 +17,9 @@
  * - Cannot be combined with `data()`. Filtering is client-side over the items
  *   the list holds, and with an adapter those are only the loaded window.
  *   Query the remote dataset through the adapter instead.
+ * - Cannot be combined with `tree()`. Filtering a tree means preserving the
+ *   ancestors of each match, which belongs to the plugin that owns the layout;
+ *   `tree()` provides no such hook.
  */
 
 import type { VListItem } from "../../types";
@@ -157,15 +160,11 @@ export function search<T extends VListItem = VListItem>(
   // Lazily-resolved cross-plugin methods.
   let resolved = false;
   let scrollToIndexFn: ((index: number, align?: string) => void) | null = null;
-  let filterTreeFn: ((predicate: (item: T) => boolean) => void) | null = null;
-  let clearFilterTreeFn: (() => void) | null = null;
 
   const resolveOnce = (): void => {
     if (resolved) return;
     resolved = true;
     scrollToIndexFn = (ctx.getMethod("scrollToIndex") as typeof scrollToIndexFn) ?? null;
-    filterTreeFn = (ctx.getMethod("filterTree") as typeof filterTreeFn) ?? null;
-    clearFilterTreeFn = (ctx.getMethod("clearTreeFilter") as typeof clearFilterTreeFn) ?? null;
   };
 
   // ── Matching ────────────────────────────────────────────────────────────
@@ -189,13 +188,6 @@ export function search<T extends VListItem = VListItem>(
 
   const applyFilter = (): void => {
     resolveOnce();
-    // Delegate to the tree plugin (ancestor-preserving filter) when present.
-    if (filterTreeFn) {
-      const needle = caseSensitive ? query : query.toLowerCase();
-      filterTreeFn((item) => textMatches(getText(item), needle, caseSensitive));
-      filtered = true;
-      return;
-    }
     const base = ctx.getItems();
     const idx = matches;
     ctx.setGetItemFn((i: number): T | undefined => base[idx[i]!]);
@@ -209,10 +201,6 @@ export function search<T extends VListItem = VListItem>(
   const restoreItems = (): void => {
     if (!filtered) return;
     filtered = false;
-    if (clearFilterTreeFn) {
-      clearFilterTreeFn();
-      return;
-    }
     ctx.setGetItemFn((i: number): T | undefined => ctx.getItems()[i]);
     ctx.setVirtualTotalFn(() => ctx.getItems().length);
     engineState.totalItems = ctx.getItems().length;
@@ -437,7 +425,12 @@ export function search<T extends VListItem = VListItem>(
     // restoreItems() reinstates static getItem/virtualTotal functions over the
     // ones data() installed, so the list keeps the empty total for good.
     // Searching a remote dataset belongs to the adapter's own query.
-    conflicts: ["data"],
+    //
+    // tree() owns the layout index space, and never implemented the filterTree
+    // hook this plugin was written to call. Filtering therefore fell through to
+    // flat indices into the source array: the total was corrupted, children
+    // were never matched, and clearing left the list a size it had never been.
+    conflicts: ["data", "tree"],
     // Run after selection (50) so its item-state fn is captured and composed
     // (state.search alongside state.selected), and so a filter override is the
     // outermost item transform.
