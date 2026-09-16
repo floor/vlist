@@ -62,7 +62,17 @@ try {
           return {index:row.dataset.index,y:row.getBoundingClientRect().top,pos:window.list.getScrollPosition()};
         });
         await probe.mouse.wheel({deltaY:12});
-        await wait(35);
+        // Wait for the step to land, not for a fixed 35ms. On a loaded CI runner
+        // one commit missed that deadline and the suite reported 19 of 20 steps
+        // moving — a harness race, not a dropped wheel event; the same commit
+        // passed on re-run. A step that genuinely never moves still fails the
+        // assert below, now through this timeout rather than by luck. The extra
+        // frame lets the transform commit before DOM and logical are compared.
+        await probe.waitForFunction(
+          prev => window.list.getScrollPosition() !== prev,
+          {timeout:2000, polling:'raf'}, before.pos,
+        ).catch(()=>{});
+        await probe.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve())));
         const after=await probe.evaluate(index=>{
           const row=document.querySelector(`.vlist-item[data-index="${index}"]`);
           return {y:row?.getBoundingClientRect().top,pos:window.list.getScrollPosition(),native:document.querySelector('.vlist-viewport').scrollTop};

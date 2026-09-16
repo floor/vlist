@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- The browser suites wait for each wheel step to land instead of for a fixed 35 ms. The first pull request checked by the new CI job failed on `19 !== 20` and passed on re-run with no change: one commit missed the deadline on a loaded runner, which is a race in the harness rather than a dropped wheel event. A step that never moves still fails, now through the wait's timeout. A gate that flakes is not a gate.
+
 - **Breaking:** `search()` declares a conflict with `data()`, so a list built with both throws instead of failing quietly. The combination never worked: matching reads the items the list holds, which an adapter leaves as an empty window, so every query matched nothing and filter mode reduced the list to zero rows — and clearing the query made it permanent, because the restore path reinstates static item and total functions over the ones `data()` installed. Search a remote dataset through the adapter's own query. The plugin's own header had always scoped server-side search out.
 
 - CI runs on `next` as well as `staging` and `main`. The 3.0 work happens on `next`, where no pull request has had a single automated check: every merge so far was gated by hand.
