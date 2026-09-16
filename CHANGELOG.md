@@ -13,6 +13,27 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- The render window has a ceiling again. Making the window the authority on capacity fixed the
+  truncation of small rows, and removed the only upper bound with it: a size spec reporting `0`
+  puts every item at the same offset, so `indexAtOffset` lands on `total - 1` and the window
+  becomes the whole dataset. Measured at **20,000 of 20,000 rows rendered**, each one a
+  TypedArray slot and a DOM node; at a million rows that is roughly 20 MB of buffers before the
+  DOM is counted. An item cannot occupy less than one physical pixel, so no more than
+  `containerSize + overscan * 2` rows can ever be visible, and the window is capped there — 406
+  rows for a 400px viewport, against the 20,000 it drew before.
+
+  A clamp on its own would have been the same class of defect it replaced: a short list, and
+  nothing to say why. So the list emits `error` with context `render:window-ceiling` when the cap
+  binds, once rather than once per frame. That report is deferred by a microtask, because the
+  first render happens inside `createVList` — the conventional
+  `const list = createVList(...); list.on("error", ...)` attaches a tick too late otherwise,
+  which is the trap plugin setup errors fell into. A listener added in a later task still misses
+  it; plugins, which subscribe during setup, hear it either way.
+
+  The cap is the one that used to sit in the pipeline and was removed as dead code. That removal
+  was correct at the time: capacity was the binding constraint, so the cap could never be the
+  minimum. Making the window the authority is exactly what revived it.
+
 - `masonry()` renders its items when used with `data()`. It rendered **nothing at all** — an empty list with a full-height scroll area and no error. The layout was fine: placements come from `engineState.totalItems`, so the content measured its proper 2000px and the list scrolled over blank space. Only the lookup failed. `masonry()` caches `items.all()` per render and reads it by index, and `data()` replaces the item accessors without ever filling that array, so every item resolved to `undefined` and the renderer drew an empty frame. It now asks through `_getLoadedItem`, resolved once at render time rather than per item, since `data()` registers the hook in a setup that runs after this plugin's.
 
   Found while checking whether the same fault reached further than `sortable()`, which had it for keyboard reordering. It did, and worse: there the pointer path still worked, here the list was simply empty. `carousel()` was checked too and does not have this defect — but not for the reason first recorded here, and the claim was written wider than the check. Under an adapter it installs no modulo accessor at all: the engine total is 0 when its setup runs, so the slot path never engages and the wrap that defines a carousel is silently absent. Rendering works; looping does not. That is its own defect, not this one.
