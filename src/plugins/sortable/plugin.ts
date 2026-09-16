@@ -275,10 +275,26 @@ export function sortable<T extends VListItem = VListItem>(
     liveRegion.textContent = message;
   };
 
+  /**
+   * The item at a data index, or undefined when it is not loaded.
+   *
+   * data() replaces the item accessors, not the raw array, so items.all() is
+   * empty under an adapter — reading it by index made every keyboard sort inert
+   * while pointer drag, which works off DOM elements, kept going. _getLoadedItem
+   * is the shared hook for "a real item or nothing"; items.at() would hand back
+   * a placeholder and defeat the guards below.
+   */
+  const itemAt = (index: number): T | undefined => {
+    if (!storedCtx) return undefined;
+    const loaded = storedCtx.hooks.get("_getLoadedItem") as
+      | ((i: number) => T | undefined)
+      | undefined;
+    return loaded ? loaded(index) : storedCtx.items.at(index);
+  };
+
   const getItemLabel = (index: number): string => {
     if (!storedCtx) return "";
-    const items = storedCtx.items.all();
-    const item = items[index];
+    const item = itemAt(index);
     if (!item) return "";
     const el = contentEl.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
     const text = el?.textContent?.trim();
@@ -528,8 +544,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     const focusIdx = getFocusedIndex();
     if (focusIdx >= 0) {
-      const items = storedCtx.items.all();
-      const focusItem = items[focusIdx];
+      const focusItem = itemAt(focusIdx);
       dragFocusedItemId = focusItem ? focusItem.id : null;
     } else {
       dragFocusedItemId = null;
@@ -693,8 +708,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const kbGrab = (index: number): void => {
     if (!storedCtx) return;
-    const items = storedCtx.items.all();
-    const item = items[index];
+    const item = itemAt(index);
     if (!item) return;
 
     kbGrabbed = true;
@@ -702,7 +716,9 @@ export function sortable<T extends VListItem = VListItem>(
     kbFromIndex = index;
     kbCurrentIndex = index;
 
-    kbOriginalItems = [...items] as T[];
+    // A snapshot, not an index read: under an adapter the list holds no full
+    // array, so sort:cancel reports what it has. Unchanged without data().
+    kbOriginalItems = [...storedCtx.items.all()] as T[];
 
     rootEl.classList.add(sortingClass);
     storedCtx.emitter.emit("sort:start" as never, { index } as never);

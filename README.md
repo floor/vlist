@@ -185,7 +185,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `selection()` | 35.1 KB | 12.3 KB |
 | `data()` | 39.4 KB | 14.3 KB |
 | `scrollbar()` | 33.9 KB | 12.4 KB |
-| `sortable()` | 37.4 KB | 13.0 KB |
+| `sortable()` | 37.5 KB | 13.0 KB |
 | `groups()` | 41.5 KB | 14.7 KB |
 | `page()` | 28.2 KB | 10.4 KB |
 | `snapshots()` | 29.0 KB | 10.6 KB |
@@ -198,7 +198,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `search()` | 34.7 KB | 12.6 KB |
 | `carousel()` | 38.5 KB | 13.9 KB |
 | `vlist/synthetic` + `carousel()` | 44.4 KB | 16.2 KB |
-| `vlist/synthetic` + `sortable()` | 43.4 KB | 15.3 KB |
+| `vlist/synthetic` + `sortable()` | 43.5 KB | 15.3 KB |
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,674 bytes gzipped**, below the 9.9 KB target that `bun run size` now enforces — the build fails above it; synthetic input is **11,960 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
