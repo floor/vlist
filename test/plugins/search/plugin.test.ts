@@ -12,6 +12,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
+import { data } from "../../../src/plugins/data";
 import type { VListItem, ItemState } from "../../../src/types";
 
 interface Fruit extends VListItem {
@@ -579,5 +580,40 @@ describe("type-ahead (invisible mode)", () => {
     expect(q(list, "getQuery")()).toBe("c");
     pressKey(root, "Backspace");
     expect(q(list, "getQuery")()).toBe("");
+  });
+});
+
+
+// =============================================================================
+// search + data
+// =============================================================================
+
+describe("search — conflicts with data", () => {
+  const adapter = { read: async () => ({ items: [] as Fruit[], total: 0 }) };
+
+  it("declares the conflict", () => {
+    expect(search<Fruit>().conflicts).toContain("data");
+  });
+
+  it("throws at creation in either plugin order", () => {
+    // It used to build a list that then broke in two steps: matching read the
+    // static items array, which an adapter leaves empty, so every query matched
+    // nothing and filtered the list to zero; clearing the filter then reinstated
+    // static item functions over the ones data() owns, so the total stayed zero.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const config = { container, item: { height: 48, template: (f: Fruit) => f.name } };
+    try {
+      expect(() =>
+        createVList<Fruit>(config, [search<Fruit>(), data<Fruit>({ adapter })]),
+      ).toThrow('Plugin "search" conflicts with "data"');
+      // The name set is complete before conflicts are checked, so order is moot.
+      expect(() =>
+        createVList<Fruit>(config, [data<Fruit>({ adapter }), search<Fruit>()]),
+      ).toThrow('Plugin "search" conflicts with "data"');
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });

@@ -324,6 +324,11 @@ const list = createVList({
 ])
 ```
 
+Search filters client-side over the items the list holds, so it cannot be
+combined with `data()` — creating a list with both throws. With an adapter, the
+rows in memory are only the loaded window; query the remote dataset through the
+adapter instead.
+
 ## Custom scrollbar (3.0 preview)
 
 On `next`, `scrollbar()` remains a plugin. macOS and Android default to thin,
