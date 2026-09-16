@@ -385,8 +385,17 @@ export function grid<T extends VListItem = VListItem>(
       installRebuildHook();
       rebuildAsRows(getRowCount());
 
-      // Virtual total = row count (not item count)
-      ctx.items.setTotalFn(() => getRowCount());
+      // The engine renders rows, so engineState.totalItems stays the row-space
+      // count that the size cache and the range math use. The public total is a
+      // different question — how many items a consumer has — and it is the item
+      // count. groups() and carousel() already publish it this way; grid was
+      // reporting 34 for a hundred items in three columns, while getItemAt(99)
+      // returned item 100 and items.length was 100.
+      ctx.items.setTotalFn(() => engineState.totalItems);
+      // Plugins ask through _getTotal rather than the public getter: selection,
+      // snapshots and the aria resolvers all read it. groups() and carousel()
+      // publish it; grid never did, so consumers fell back to the row count.
+      ctx.hooks.method("_getTotal", (): number => engineState.totalItems);
 
       // Add CSS class
       ctx.dom.root.classList.add(`${classPrefix}--grid`);

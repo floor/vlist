@@ -13,6 +13,22 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- `grid()` reports the item count as the list's total. It reported the row count: a hundred items
+  in three columns gave `list.total === 34`, while `getItemAt(99)` returned item 100 and
+  `items.length` was 100 — the accessor and the array in item space, the total in row space.
+
+  The engine genuinely renders a grid in rows, and that is unchanged: `engineState.totalItems`,
+  the size cache and the range math all still count rows. What changed is the answer to a
+  different question — how many items a consumer has. `groups()` was corrected the same way and
+  `carousel()` was already right, so all three now agree on the contract.
+
+  `grid()` also publishes `_getTotal` now, which it never did. `selection()`, `snapshots()` and
+  the ARIA resolvers ask through that hook rather than the public getter, and with no answer from
+  the layout plugin they fell back to whatever core held.
+
+  Nothing asserted a grid's public total, which is how it survived; `test/integration/grid-total.test.ts`
+  covers it, including under `data()`, where the adapter owns the engine's total.
+
 - A plugin that cannot serve the list's configuration throws again.
   `createVList({ reverse: true }, [table()])` returned a list — half wired, rendering fifteen
   ordinary rows, with nothing to say it was not a table. `table()` rejects reverse mode and
