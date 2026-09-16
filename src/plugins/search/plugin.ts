@@ -164,7 +164,7 @@ export function search<T extends VListItem = VListItem>(
   const resolveOnce = (): void => {
     if (resolved) return;
     resolved = true;
-    scrollToIndexFn = (ctx.getMethod("scrollToIndex") as typeof scrollToIndexFn) ?? null;
+    scrollToIndexFn = (ctx.hooks.get("scrollToIndex") as typeof scrollToIndexFn) ?? null;
   };
 
   // ── Matching ────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ export function search<T extends VListItem = VListItem>(
     matchSet.clear();
     if (query.length < minLength) return;
     const needle = caseSensitive ? query : query.toLowerCase();
-    const items = ctx.getItems();
+    const items = ctx.items.all();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item !== undefined && textMatches(getText(item), needle, caseSensitive)) {
@@ -188,24 +188,24 @@ export function search<T extends VListItem = VListItem>(
 
   const applyFilter = (): void => {
     resolveOnce();
-    const base = ctx.getItems();
+    const base = ctx.items.all();
     const idx = matches;
-    ctx.setGetItemFn((i: number): T | undefined => base[idx[i]!]);
-    ctx.setVirtualTotalFn(() => idx.length);
+    ctx.items.setGetFn((i: number): T | undefined => base[idx[i]!]);
+    ctx.items.setTotalFn(() => idx.length);
     engineState.totalItems = idx.length;
-    ctx.rebuildSizeCache();
-    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+    ctx.sizes.rebuild();
+    ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
     filtered = true;
   };
 
   const restoreItems = (): void => {
     if (!filtered) return;
     filtered = false;
-    ctx.setGetItemFn((i: number): T | undefined => ctx.getItems()[i]);
-    ctx.setVirtualTotalFn(() => ctx.getItems().length);
-    engineState.totalItems = ctx.getItems().length;
-    ctx.rebuildSizeCache();
-    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+    ctx.items.setGetFn((i: number): T | undefined => ctx.items.all()[i]);
+    ctx.items.setTotalFn(() => ctx.items.all().length);
+    engineState.totalItems = ctx.items.all().length;
+    ctx.sizes.rebuild();
+    ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
   };
 
   // ── Navigate mode ─────────────────────────────────────────────────────────
@@ -215,8 +215,8 @@ export function search<T extends VListItem = VListItem>(
     const original = matches[current];
     if (original === undefined) return;
     if (scrollToIndexFn) scrollToIndexFn(original, "center");
-    else ctx.scrollTo(Math.max(0, ctx.sizeCache.getOffset(original) - ctx.getState().containerSize / 2));
-    const item = ctx.getItem(original);
+    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(original) - ctx.getState().containerSize / 2));
+    const item = ctx.items.at(original);
     ctx.emitter.emit("search:match", {
       index: original,
       item,
@@ -260,14 +260,14 @@ export function search<T extends VListItem = VListItem>(
 
     setSearchingClass();
     updateCounter();
-    ctx.forceRender(); // fresh innerHTML so highlight re-applies for the new query
+    ctx.render.force(); // fresh innerHTML so highlight re-applies for the new query
 
     if (mode === "navigate" && matches.length > 0) scrollToMatch();
 
     ctx.emitter.emit("search:change", {
       query,
       matches: matches.length,
-      total: ctx.getItems().length,
+      total: ctx.items.all().length,
     });
     armCancelTimer();
   };
@@ -302,7 +302,7 @@ export function search<T extends VListItem = VListItem>(
     updateCounter();
     if (mode === "navigate") {
       scrollToMatch();
-      ctx.forceRender(); // re-evaluate the --current mark
+      ctx.render.force(); // re-evaluate the --current mark
     }
   };
 
@@ -332,7 +332,7 @@ export function search<T extends VListItem = VListItem>(
     const end = start + Math.max(0, state.visibleCount - 1);
     const currentOriginal = mode === "navigate" ? matches[current] : -1;
     for (let i = start; i <= end; i++) {
-      const el = ctx.getRenderedElement(i);
+      const el = ctx.dom.renderedElement(i);
       if (!el) continue;
       if (highlightWithin) {
         // Scope marking to the matching descendants only.
@@ -476,8 +476,8 @@ export function search<T extends VListItem = VListItem>(
       }
 
       // Compose search state into the template state.
-      const prevStateFn = ctx.getItemStateFn();
-      ctx.setItemStateFn((index: number, is: ItemState): void => {
+      const prevStateFn = ctx.render.getStateFn();
+      ctx.render.setStateFn((index: number, is: ItemState): void => {
         if (prevStateFn) prevStateFn(index, is);
         if (query.length < minLength) {
           delete is.search;
@@ -498,20 +498,20 @@ export function search<T extends VListItem = VListItem>(
       });
 
       // Public methods.
-      ctx.registerMethod("openSearch", openSearch);
-      ctx.registerMethod("closeSearch", closeSearch);
-      ctx.registerMethod("setQuery", (q: string) => {
+      ctx.hooks.method("openSearch", openSearch);
+      ctx.hooks.method("closeSearch", closeSearch);
+      ctx.hooks.method("setQuery", (q: string) => {
         if (!open) openSearch();
         applyQuery(q);
       });
-      ctx.registerMethod("getQuery", () => query);
-      ctx.registerMethod("nextMatch", () => step(1));
-      ctx.registerMethod("prevMatch", () => step(-1));
-      ctx.registerMethod("getMatches", () => matches.slice());
+      ctx.hooks.method("getQuery", () => query);
+      ctx.hooks.method("nextMatch", () => step(1));
+      ctx.hooks.method("prevMatch", () => step(-1));
+      ctx.hooks.method("getMatches", () => matches.slice());
 
-      ctx.registerKeydownHandler(onKeydown);
+      ctx.hooks.onKeydown(onKeydown);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         clearCancelTimer();
         restoreItems();
         bar?.destroy();

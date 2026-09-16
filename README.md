@@ -168,36 +168,37 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `scroll.mode` (all values, both entries) | Omit it. `vlist` provides native scrolling; import `vlist/synthetic` for synthetic input. |
 | `scroll.runway` (both entries) | Remove it. For huge lists use `vlist/synthetic`, which needs no native runway. |
 | `scroll.scrollbar: "native"` or `"none"` | Retained in default `ScrollConfig`. With synthetic input, omit the string and optionally install `scrollbar()`. |
-| `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `setScrollSource` to supply an external position source and commit callback. |
+| `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `ctx.scroll.setSource` to supply an external position source and commit callback. |
+| Flat `PluginContext` members (`registerMethod`, `forceRender`, `sizeCache`, `scrollTo`, …) | Grouped by capability: `ctx.hooks.method`, `ctx.render.force`, `ctx.sizes.cache`, `ctx.scroll.to`, `ctx.items.all`. `pool`, `config`, `emitter`, `template` and `getState()` stay at the top level. |
 | `scale()` and `ScalePluginConfig` | Remove them; use `vlist/synthetic` for the full logical range. Config no longer installs a scale stub. |
 
-Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.setBoundedWrap`.
+Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.scroll.setBoundedWrap`.
 
 ## Plugins
 
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
-| **Base (`vlist`)** | 25.7 KB | 9.4 KB |
-| `vlist/synthetic` | 31.7 KB | 11.7 KB |
-| `vlist/native` (alias) | 25.7 KB | 9.5 KB |
-| `a11y()` | 29.0 KB | 10.7 KB |
-| `selection()` | 35.1 KB | 12.3 KB |
-| `data()` | 39.4 KB | 14.3 KB |
-| `scrollbar()` | 33.9 KB | 12.3 KB |
-| `sortable()` | 37.4 KB | 12.9 KB |
-| `groups()` | 41.4 KB | 14.7 KB |
-| `page()` | 28.2 KB | 10.3 KB |
-| `snapshots()` | 29.0 KB | 10.6 KB |
-| `transition()` | 32.4 KB | 11.4 KB |
-| `autosize()` | 28.8 KB | 10.5 KB |
-| `grid()` | 32.6 KB | 11.8 KB |
-| `table()` | 44.2 KB | 15.3 KB |
-| `masonry()` | 37.0 KB | 13.5 KB |
-| `tree()` | 41.0 KB | 14.5 KB |
-| `search()` | 34.7 KB | 12.6 KB |
-| `carousel()` | 38.5 KB | 13.9 KB |
-| `vlist/synthetic` + `carousel()` | 44.4 KB | 16.1 KB |
-| `vlist/synthetic` + `sortable()` | 43.4 KB | 15.2 KB |
+| **Base (`vlist`)** | 25.5 KB | 9.4 KB |
+| `vlist/synthetic` | 31.5 KB | 11.6 KB |
+| `vlist/native` (alias) | 25.5 KB | 9.4 KB |
+| `a11y()` | 28.8 KB | 10.6 KB |
+| `selection()` | 34.9 KB | 12.3 KB |
+| `data()` | 39.2 KB | 14.2 KB |
+| `scrollbar()` | 33.7 KB | 12.3 KB |
+| `sortable()` | 37.3 KB | 12.9 KB |
+| `groups()` | 41.2 KB | 14.6 KB |
+| `page()` | 28.0 KB | 10.3 KB |
+| `snapshots()` | 28.8 KB | 10.6 KB |
+| `transition()` | 32.3 KB | 11.4 KB |
+| `autosize()` | 28.6 KB | 10.5 KB |
+| `grid()` | 32.4 KB | 11.8 KB |
+| `table()` | 44.0 KB | 15.3 KB |
+| `masonry()` | 36.8 KB | 13.5 KB |
+| `tree()` | 40.8 KB | 14.5 KB |
+| `search()` | 34.5 KB | 12.6 KB |
+| `carousel()` | 38.3 KB | 13.9 KB |
+| `vlist/synthetic` + `carousel()` | 44.2 KB | 16.1 KB |
+| `vlist/synthetic` + `sortable()` | 43.2 KB | 15.2 KB |
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,674 bytes gzipped**, below the 9.9 KB target that `bun run size` now enforces — the build fails above it; synthetic input is **11,960 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 

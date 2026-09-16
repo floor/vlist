@@ -239,19 +239,19 @@ export function carousel<T extends VListItem = VListItem>(
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
-    storedCtx?.smoothScrollTo(target, duration, snapEasing);
+    storedCtx?.scroll.smoothTo(target, duration, snapEasing);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
 
   function syncItemCount(): void {
     if (!storedCtx) return;
-    const currentTotal = storedCtx.getItems().length;
+    const currentTotal = storedCtx.items.all().length;
     if (currentTotal === realTotal) return;
     const savedIndex = currentIndex;
     realTotal = currentTotal;
     if (isVariableWidth) {
-      const rawSpec = storedCtx.rawSizeSpec;
+      const rawSpec = storedCtx.sizes.rawSpec;
       const getSz = typeof rawSpec === "function"
         ? (i: number) => (rawSpec as (index: number) => number)(i) + gapPx
         : () => (rawSpec as number) + gapPx;
@@ -264,7 +264,7 @@ export function carousel<T extends VListItem = VListItem>(
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
       currentIndex = safeIndex;
-      storedCtx.scrollTo(scrollPositionForVirtual(MIDDLE_CYCLE * realTotal + safeIndex));
+      storedCtx.scroll.to(scrollPositionForVirtual(MIDDLE_CYCLE * realTotal + safeIndex));
     }
   }
 
@@ -396,7 +396,7 @@ export function carousel<T extends VListItem = VListItem>(
     if (smooth) {
       smoothScrollTo(nearestPos, duration);
     } else {
-      storedCtx.scrollTo(nearestPos);
+      storedCtx.scroll.to(nearestPos);
       updateItemLayout();
     }
   }
@@ -413,7 +413,7 @@ export function carousel<T extends VListItem = VListItem>(
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       storedCtx = ctx;
       isX = ctx.config.axis.primary === "x";
       prefix = ctx.config.classPrefix;
@@ -434,9 +434,9 @@ export function carousel<T extends VListItem = VListItem>(
         stepSize = layoutEngine.stepSize;
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
-      } else if (typeof ctx.rawSizeSpec === "function") {
+      } else if (typeof ctx.sizes.rawSpec === "function") {
         textFade = presetResult?.textFade ?? "viewport";
-        const rawFn = ctx.rawSizeSpec as (index: number) => number;
+        const rawFn = ctx.sizes.rawSpec as (index: number) => number;
         buildStepCache(Array.from({ length: realTotal }, (_, i) => rawFn(i) + gapPx));
         stepSize = stepSizes[0] ?? baseItemSize;
         isVariableWidth = true;
@@ -452,9 +452,9 @@ export function carousel<T extends VListItem = VListItem>(
       // ── Virtual scroll window ─────────────────────────────────────
 
       if (realTotal > 1) {
-        ctx.setGetItemFn((i: number): T | undefined => {
+        ctx.items.setGetFn((i: number): T | undefined => {
           const logical = logicalIndexOf(i);
-          return ctx.getItems()[logical];
+          return ctx.items.all()[logical];
         });
 
         sizeCache.getTotalSize = (): number => lapSize * CYCLES;
@@ -490,20 +490,20 @@ export function carousel<T extends VListItem = VListItem>(
         // Engine needs virtualTotal for rendering at virtual indices.
         // Public API (list.total) returns realTotal via virtualTotalFn.
         engineState.totalItems = virtualTotal;
-        ctx.setVirtualTotalFn(() => realTotal);
-        ctx.setIndexMapFn(logicalIndexOf);
-        ctx.registerMethod("_layoutToDataIndex", logicalIndexOf);
+        ctx.items.setTotalFn(() => realTotal);
+        ctx.items.setIndexMapFn(logicalIndexOf);
+        ctx.hooks.method("_layoutToDataIndex", logicalIndexOf);
         // The engine total is the inflated virtual one (101 laps), which is
         // what rendering needs and what any plugin asking "how many items are
         // there" must not use. data() publishes the same answer the same way.
-        ctx.registerMethod("_getTotal", (): number => realTotal);
+        ctx.hooks.method("_getTotal", (): number => realTotal);
 
         // Route scroll through the bounded handler in wrap mode: the logical
         // position never clamps, and the handler folds it back toward the
         // middle cycle by whole laps once it drifts far enough. The carousel's
         // modulo getItemFn maps the shifted virtual indices to identical real
         // items at identical paint positions, so the fold is seamless.
-        ctx.setBoundedWrap({
+        ctx.scroll.setBoundedWrap({
           lapSize: () => lapSize,
           home: () => MIDDLE_CYCLE * lapSize,
           thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
@@ -517,14 +517,14 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── next / prev / goTo ──────────────────────────────────────
 
-      ctx.registerMethod("next", (step?: number, options?: { behavior?: string; duration?: number }): void => {
+      ctx.hooks.method("next", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
         const prevIndex = currentIndex;
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
         const baseVi = getBaseVi();
         const targetVi = baseVi + s;
         intendedVi = targetVi;
@@ -534,7 +534,7 @@ export function carousel<T extends VListItem = VListItem>(
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
         } else {
-          storedCtx!.scrollTo(nearestPos);
+          storedCtx!.scroll.to(nearestPos);
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -542,14 +542,14 @@ export function carousel<T extends VListItem = VListItem>(
         }
       });
 
-      ctx.registerMethod("prev", (step?: number, options?: { behavior?: string; duration?: number }): void => {
+      ctx.hooks.method("prev", (step?: number, options?: { behavior?: string; duration?: number }): void => {
         if (realTotal <= 1) return;
         const s = step ?? 1;
         const prevIndex = currentIndex;
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
         const baseVi = getBaseVi();
         const targetVi = baseVi - s;
         intendedVi = targetVi;
@@ -559,7 +559,7 @@ export function carousel<T extends VListItem = VListItem>(
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
         } else {
-          storedCtx!.scrollTo(nearestPos);
+          storedCtx!.scroll.to(nearestPos);
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -567,7 +567,7 @@ export function carousel<T extends VListItem = VListItem>(
         }
       });
 
-      ctx.registerMethod("goTo", (index: number, options?: {
+      ctx.hooks.method("goTo", (index: number, options?: {
         direction?: CarouselDirection;
         behavior?: string;
         duration?: number;
@@ -583,7 +583,7 @@ export function carousel<T extends VListItem = VListItem>(
           return;
         }
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
 
         if (direction === "forward" || direction === "backward") {
           const delta = shortestPath(currentIndex, target,
@@ -597,7 +597,7 @@ export function carousel<T extends VListItem = VListItem>(
           if (smooth) {
             smoothScrollTo(nearestPos, dur);
           } else {
-            storedCtx!.scrollTo(nearestPos);
+            storedCtx!.scroll.to(nearestPos);
             updateItemLayout();
           }
         } else {
@@ -607,7 +607,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── getCarouselState ────────────────────────────────────────
 
-      ctx.registerMethod("getCarouselState", (): CarouselState => {
+      ctx.hooks.method("getCarouselState", (): CarouselState => {
         const pos = scroll.getPixelEquivalent();
         const normalizedPos = realTotal > 0 && lapSize > 0
           ? ((pos % lapSize) + lapSize) % lapSize
@@ -624,7 +624,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Override scrollToIndex for wrap ──────────────────────────
 
-      ctx.setScrollToIndexFn((index, _align, behavior, duration, _easing): void | false => {
+      ctx.scroll.setToIndexFn((index, _align, behavior, duration, _easing): void | false => {
         if (realTotal <= 1) return false;
         const target = resolveIndex(index);
         const smooth = behavior === "smooth";
@@ -634,7 +634,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Keyboard nav integration with selection ─────────────────
 
-      ctx.setNavConfig({
+      ctx.nav.set({
         total: () => realTotal,
         navigate: (current: number, key: string, total: number): number => {
           let target = current;
@@ -649,7 +649,7 @@ export function carousel<T extends VListItem = VListItem>(
           }
           if (target !== current) {
             navigateTo(target, false, 0);
-            storedCtx?.forceRender();
+            storedCtx?.render.force();
             updateItemLayout();
           }
           return target;
@@ -662,11 +662,11 @@ export function carousel<T extends VListItem = VListItem>(
         ctx.dom.content.setAttribute("tabindex", "0");
       }
 
-      const navNext = ctx.getMethod("next") as Function;
-      const navPrev = ctx.getMethod("prev") as Function;
-      const navGoTo = ctx.getMethod("goTo") as Function;
+      const navNext = ctx.hooks.get("next") as Function;
+      const navPrev = ctx.hooks.get("prev") as Function;
+      const navGoTo = ctx.hooks.get("goTo") as Function;
 
-      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      ctx.hooks.onKeydown((event: KeyboardEvent): void => {
         const key = event.key;
         if (key === "ArrowRight" || key === "ArrowDown") {
           event.preventDefault();
@@ -685,13 +685,13 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Destroy handler ─────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
-        storedCtx?.cancelScroll();
+      ctx.hooks.onDestroy(() => {
+        storedCtx?.scroll.cancel();
       });
     },
 
     destroy(): void {
-      storedCtx?.cancelScroll();
+      storedCtx?.scroll.cancel();
       storedCtx = null;
     },
 
@@ -717,9 +717,9 @@ export function carousel<T extends VListItem = VListItem>(
         // interpret old pixels as a different focal item.
         intendedVi = virtualIndexOf(currentIndex);
         lastDirection = 0;
-        storedCtx.updateContentSize(sizeCache.getTotalSize());
-        storedCtx.scrollTo(scrollPositionForVirtual(intendedVi));
-        storedCtx.forceRender();
+        storedCtx.render.contentSize(sizeCache.getTotalSize());
+        storedCtx.scroll.to(scrollPositionForVirtual(intendedVi));
+        storedCtx.render.force();
         updateItemLayout();
         intendedVi = -1;
       },
@@ -732,8 +732,8 @@ export function carousel<T extends VListItem = VListItem>(
         // position through the handler so baseOffset/scrollTop stay
         // consistent, then re-render at the correct offset.
         const startPos = scrollPositionForVirtual(virtualIndexOf(currentIndex));
-        storedCtx.scrollTo(startPos);
-        storedCtx.forceRender();
+        storedCtx.scroll.to(startPos);
+        storedCtx.render.force();
         updateItemLayout();
       },
 

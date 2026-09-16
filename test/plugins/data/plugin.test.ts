@@ -82,16 +82,16 @@ function createContextWithRealEmitter(options?: {
 
   // Track forceRender calls
   let forceRenderCallCount = 0;
-  const originalForceRender = result.ctx.forceRender.bind(result.ctx);
-  (result.ctx as any).forceRender = () => {
+  const originalForceRender = result.ctx.render.force.bind(result.ctx);
+  (result.ctx as any).render.force = () => {
     forceRenderCallCount++;
     originalForceRender();
   };
 
   // Track renderIfNeeded calls
   let renderIfNeededCallCount = 0;
-  const originalRenderIfNeeded = result.ctx.renderIfNeeded.bind(result.ctx);
-  (result.ctx as any).renderIfNeeded = () => {
+  const originalRenderIfNeeded = result.ctx.render.ifNeeded.bind(result.ctx);
+  (result.ctx as any).render.ifNeeded = () => {
     renderIfNeededCallCount++;
     originalRenderIfNeeded();
   };

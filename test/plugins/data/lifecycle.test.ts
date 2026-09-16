@@ -455,8 +455,8 @@ describe("async lifecycle — reload", () => {
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     let forceRenderCount = 0;
-    const origForceRender = ctx.forceRender.bind(ctx);
-    (ctx as any).forceRender = () => { forceRenderCount++; origForceRender(); };
+    const origForceRender = ctx.render.force.bind(ctx);
+    (ctx as any).render.force = () => { forceRenderCount++; origForceRender(); };
 
     plugin.setup(ctx);
     engineState.initialized = true;
@@ -756,7 +756,7 @@ describe("async lifecycle — destroy cleanup", () => {
     engineState.initialized = true;
     await flush();
 
-    // Run destroy handlers registered via ctx.registerDestroyHandler
+    // Run destroy handlers registered via ctx.hooks.onDestroy
     const destroyHandlers = (ctx as any)._destroyHandlers ?? [];
     for (const handler of destroyHandlers) handler();
 

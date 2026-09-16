@@ -258,7 +258,7 @@ export function grid<T extends VListItem = VListItem>(
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {
       lastContentTotalSize = totalSize;
-      storedCtx?.updateContentSize(totalSize);
+      storedCtx?.render.contentSize(totalSize);
     }
 
     // Update engine state for other hooks/plugins
@@ -310,7 +310,7 @@ export function grid<T extends VListItem = VListItem>(
       gap = config.gap ?? 0;
 
       layout = createGridLayout({ columns: config.columns, gap });
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
       pool = ctx.pool;
       storedCtx = ctx;
@@ -319,8 +319,8 @@ export function grid<T extends VListItem = VListItem>(
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
-      getItem = ctx.getItem.bind(ctx);
-      resolveItemState = () => ctx.getItemStateFn();
+      getItem = ctx.items.at.bind(ctx);
+      resolveItemState = () => ctx.render.getStateFn();
 
       // Hoist class strings — built once, reused every frame
       gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
@@ -339,13 +339,13 @@ export function grid<T extends VListItem = VListItem>(
 
       // Size cache in ROW space: each row = itemHeight + gap
       // Inject grid context into dynamic height functions
-      const rawSpec = ctx.rawSizeSpec;
+      const rawSpec = ctx.sizes.rawSpec;
       let baseRowSize: number;
       if (typeof rawSpec === "function") {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
         baseRowSize = (rawSpec as Function)(0, gridCtx);
-        ctx.setSizeConfig((rowIndex: number): number => {
+        ctx.sizes.setConfig((rowIndex: number): number => {
           gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
           const firstItem = rowIndex * config.columns;
           return (rawSpec as Function)(firstItem, gridCtx) + gap;
@@ -353,7 +353,7 @@ export function grid<T extends VListItem = VListItem>(
       } else {
         baseRowSize = rawSpec;
         if (gap > 0) {
-          ctx.setSizeConfig(baseRowSize + gap);
+          ctx.sizes.setConfig(baseRowSize + gap);
         }
       }
 
@@ -377,7 +377,7 @@ export function grid<T extends VListItem = VListItem>(
         sizeCache.rebuild = currentHook;
       }
 
-      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+      ctx.hooks.method("_setSizeCacheBase", (fn: (n: number) => void): void => {
         baseRebuild = fn;
         rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
       });
@@ -396,20 +396,20 @@ export function grid<T extends VListItem = VListItem>(
       }
 
       // Virtual total = row count (not item count)
-      ctx.setVirtualTotalFn(() => getRowCount());
+      ctx.items.setTotalFn(() => getRowCount());
 
       // Add CSS class
       ctx.dom.root.classList.add(`${classPrefix}--grid`);
 
       // Replace render pipeline
-      ctx.setRenderFn(gridRenderIfNeeded, gridForceRender);
+      ctx.render.setFn(gridRenderIfNeeded, gridForceRender);
 
       // ── Public methods ─────────────────────────────────────────
 
-      ctx.registerMethod("getGridLayout", () => layout);
-      ctx.registerMethod("_getRowGap", () => layout.gap);
+      ctx.hooks.method("getGridLayout", () => layout);
+      ctx.hooks.method("_getRowGap", () => layout.gap);
 
-      ctx.registerMethod("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
+      ctx.hooks.method("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
         if (newConfig.columns !== undefined) {
           if (!Number.isInteger(newConfig.columns) || newConfig.columns < 1) {
             throw new Error("[vlist] updateGrid: columns must be >= 1");
@@ -427,20 +427,20 @@ export function grid<T extends VListItem = VListItem>(
           const newGap = layout.gap;
           if (typeof rawSpec === "function") {
             const gridCtx = { columnWidth: layout.getColumnWidth(containerWidth), columns: layout.columns, gap: newGap };
-            ctx.setSizeConfig((rowIndex: number): number => {
+            ctx.sizes.setConfig((rowIndex: number): number => {
               gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
               const firstItem = rowIndex * layout.columns;
               return (rawSpec as Function)(firstItem, gridCtx) + newGap;
             });
           } else {
-            ctx.setSizeConfig(baseRowSize + newGap);
+            ctx.sizes.setConfig(baseRowSize + newGap);
           }
           installRebuildHook();
           rebuildAsRows(getRowCount());
         }
 
         if (newConfig.columns !== undefined) {
-          ctx.setNavConfig({ ud: layout.columns });
+          ctx.nav.set({ ud: layout.columns });
         }
 
         containerWidth = engineState.crossSize - crossPadTotal;
@@ -452,7 +452,7 @@ export function grid<T extends VListItem = VListItem>(
       // Core owns the public method: it holds a scroll requested before the
       // total is known, clamps the index and resolves the options, then calls
       // this hook. Returning false falls back to the core implementation.
-      ctx.setScrollToIndexFn((
+      ctx.scroll.setToIndexFn((
         index: number,
         align: string,
         behavior?: string,
@@ -483,15 +483,15 @@ export function grid<T extends VListItem = VListItem>(
         pos = Math.max(0, Math.min(pos, maxScroll));
 
         if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
+          ctx.scroll.smoothTo(pos, duration);
         } else {
-          ctx.scrollTo(pos);
+          ctx.scroll.to(pos);
         }
       });
 
       // ── 2D keyboard navigation ─────────────────────────────────
 
-      ctx.setNavConfig({
+      ctx.nav.set({
         total: () => engineState.totalItems,
         ud: config.columns,
         lr: 1,
@@ -500,7 +500,7 @@ export function grid<T extends VListItem = VListItem>(
 
       // ── Cleanup ────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         for (const [, tracked] of rendered) {
           tracked.el.remove();
         }

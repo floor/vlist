@@ -124,7 +124,7 @@ createVList(config, [       → VList instance
 
 - **EngineState** — TypedArray-based state singleton. All hot-path data (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in typed arrays — zero allocation per frame.
 - **2-Phase Pipeline** — Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions. Phase 2 (`onCommit`) reads the buffers and updates DOM. Plugins hook into either phase.
-- **`PluginContext`** — The context object passed to every plugin's `setup()`. Plugins register handlers (`registerClickHandler`, `registerKeydownHandler`, `registerDestroyHandler`), add public methods (`registerMethod`), and can replace core functions (`setSizeConfig`, `setRenderFn`).
+- **`PluginContext`** — The context object passed to every plugin's `setup()`, grouped by capability: `ctx.dom`, `ctx.scroll`, `ctx.items`, `ctx.sizes`, `ctx.render`, `ctx.hooks` and `ctx.nav`, plus `config`, `emitter`, `template`, `pool` and `getState()` at the top level. Plugins register handlers through `ctx.hooks.onClick` / `onKeydown` / `onDestroy`, add public methods with `ctx.hooks.method`, and replace core functions through the `set*` members of the capability that owns them (`ctx.sizes.setConfig`, `ctx.render.setFn`, `ctx.items.setGetFn`). One owner per hook: a second plugin claiming the same one is how several 3.0 composition bugs began.
 - **`VListPlugin`** — The interface every plugin implements: `name`, optional `priority` (lower runs first), optional `conflicts` array, `setup(ctx)`, optional `hooks` object (`onCalculate`, `onCommit`, `onAfterScroll`, `onIdle`, `onResize`), optional `destroy()`.
 
 ## Development Workflow
@@ -263,23 +263,24 @@ export const myPlugin = <
     conflicts: ["grid"], // Cannot combine with grid
 
     setup(ctx: PluginContext<T>): void {
-      const { dom, config, emitter, sizeCache } = ctx;
+      const { dom, config, emitter } = ctx;
+      const sizeCache = ctx.sizes.cache;
 
       // Register click/keydown handlers:
-      ctx.registerClickHandler((event: MouseEvent) => {
+      ctx.hooks.onClick((event: MouseEvent) => {
         // Attached as DOM click listener on the root element
       });
 
-      ctx.registerKeydownHandler((event: KeyboardEvent) => {
+      ctx.hooks.onKeydown((event: KeyboardEvent) => {
         // Attached as DOM keydown listener on the root element
       });
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         // Cleanup: remove listeners, free resources
       });
 
       // Add public API methods:
-      ctx.registerMethod("myMethod", () => {
+      ctx.hooks.method("myMethod", () => {
         // Accessible as list.myMethod() on the VList instance
       });
     },

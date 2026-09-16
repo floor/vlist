@@ -40,8 +40,8 @@ it("page + grid uses only the listener's rect read for rendering and scroll even
     expect(t.rect).toHaveBeenCalledTimes(1);
     expect(position).toBe(200);
     expect(t.list.getScrollPosition()).toBe(200);
-    t.ctx.forceRender();
-    t.ctx.onScrollIdle();
+    t.ctx.render.force();
+    t.ctx.scroll.onIdle();
     expect(t.rect).toHaveBeenCalledTimes(1);
   } finally { t.cleanup(); }
 });
@@ -49,7 +49,7 @@ it("page + grid uses only the listener's rect read for rendering and scroll even
 it("page scroll writes are synchronously readable before a window scroll event", () => {
   const t = setup();
   try {
-    t.ctx.scrollTo(480);
+    t.ctx.scroll.to(480);
     expect(t.list.getScrollPosition()).toBe(480);
     t.ctx.scroll.setPixelEquivalent(640);
     expect(t.list.getScrollPosition()).toBe(640);
@@ -65,7 +65,7 @@ it("page writes commit direction, frame and configured idle once, then dedupe wi
     const idle = mock(() => {});
     t.list.on("scroll", frames);
     t.list.on("scroll:idle", idle);
-    t.ctx.scrollTo(200);
+    t.ctx.scroll.to(200);
     expect(t.ctx.getState().prevScrollPosition).toBe(0);
     expect(t.ctx.getState().scrollDirection).toBe(1);
     expect(frames).toHaveBeenCalledTimes(1);
@@ -77,7 +77,7 @@ it("page writes commit direction, frame and configured idle once, then dedupe wi
     await Bun.sleep(30);
     expect(t.ctx.getState().scrollDirection).toBe(0);
     expect(idle).toHaveBeenCalledTimes(1);
-    t.ctx.scrollTo(100.25);
+    t.ctx.scroll.to(100.25);
     expect(t.ctx.getState().prevScrollPosition).toBe(200);
     expect(t.ctx.getState().scrollDirection).toBe(-1);
   } finally { t.cleanup(); }
@@ -89,7 +89,7 @@ it("page smooth navigation renders once per animation frame", () => {
   let frame!: FrameRequestCallback;
   globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
   try {
-    t.ctx.smoothScrollTo(400, 100);
+    t.ctx.scroll.smoothTo(400, 100);
     frame(performance.now() + 200);
     expect(t.list.getScrollPosition()).toBe(400);
     expect(t.afterScroll).toHaveBeenCalledTimes(1);

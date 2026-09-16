@@ -138,7 +138,7 @@ describe("autosize setup", () => {
 
   it("should call setSizeConfig during setup", () => {
     let sizeFnRegistered = false;
-    mockCtx.ctx.setSizeConfig = () => { sizeFnRegistered = true; };
+    mockCtx.ctx.sizes.setConfig = () => { sizeFnRegistered = true; };
 
     const plugin = autosize();
     plugin.setup(mockCtx.ctx);
@@ -287,7 +287,7 @@ describe("autosize onCommit hook", () => {
     const el = document.createElement("div");
     el.setAttribute("data-index", "0");
     mockCtx.dom.content.appendChild(el);
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 0 ? el : null);
 
     const state = mockCtx.engineState;
     state.visibleCount = 1;
@@ -320,7 +320,7 @@ describe("autosize onCommit hook", () => {
     const el = document.createElement("div");
     el.setAttribute("data-index", "0");
     mockCtx.dom.content.appendChild(el);
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 0 ? el : null);
 
     const state = mockCtx.engineState;
     state.visibleCount = 1;
@@ -350,7 +350,7 @@ describe("autosize onCommit hook", () => {
     el.setAttribute("data-index", "0");
     el.style.height = "50px"; // explicit size set by commit phase
     mockCtx.dom.content.appendChild(el);
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 0 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 0 ? el : null);
 
     const state = mockCtx.engineState;
     state.visibleCount = 1;
@@ -487,7 +487,7 @@ describe("autosize gap config", () => {
   it("should use gap=0 by default (sizeFn returns estimated size)", () => {
     let capturedSizeFn: ((index: number) => number) | null = null;
     const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 60 });
-    mockCtx.ctx.setSizeConfig = (fn: (index: number) => number) => {
+    mockCtx.ctx.sizes.setConfig = (fn: (index: number) => number) => {
       capturedSizeFn = fn;
     };
 
@@ -555,17 +555,17 @@ describe("autosize anchor preservation", () => {
 
     // Wire setSizeConfig so the plugin's sizeFn is actually used
     let pluginSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: (index: number) => number) => {
+    mockCtx.ctx.sizes.setConfig = (fn: (index: number) => number) => {
       pluginSizeFn = fn;
     };
 
     // rebuildSizeCache is called after measurements — track calls
     let rebuildCount = 0;
-    mockCtx.ctx.rebuildSizeCache = () => { rebuildCount++; };
+    mockCtx.ctx.sizes.rebuild = () => { rebuildCount++; };
 
     // forceRender tracking
     let forceRenderCount = 0;
-    mockCtx.ctx.forceRender = () => { forceRenderCount++; };
+    mockCtx.ctx.render.force = () => { forceRenderCount++; };
 
     const plugin = autosize();
     plugin.setup(mockCtx.ctx);
@@ -677,7 +677,7 @@ describe("autosize anchor preservation", () => {
     const viewport = mockCtx.dom.viewport;
 
     // Make scrollTo update engineState so snapToEnd works correctly
-    mockCtx.ctx.scrollTo = (pos: number) => {
+    mockCtx.ctx.scroll.to = (pos: number) => {
       mockCtx.scrollCalls.push(pos);
       state.scrollPosition = pos;
     };
@@ -710,8 +710,8 @@ describe("autosize anchor preservation", () => {
     Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
 
     // rebuildSizeCache + updateContentSize simulate the total growing by 30
-    mockCtx.ctx.rebuildSizeCache = () => {};
-    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1030; };
+    mockCtx.ctx.sizes.rebuild = () => {};
+    mockCtx.ctx.render.contentSize = () => { fakeScrollHeight = 1030; };
 
     triggerMeasurement(el, 80);
 
@@ -842,18 +842,18 @@ describe("autosize end-pinning", () => {
     });
 
     let pluginSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: (index: number) => number) => {
+    mockCtx.ctx.sizes.setConfig = (fn: (index: number) => number) => {
       pluginSizeFn = fn;
     };
 
-    mockCtx.ctx.rebuildSizeCache = () => {};
+    mockCtx.ctx.sizes.rebuild = () => {};
 
     let forceRenderCount = 0;
-    mockCtx.ctx.forceRender = () => { forceRenderCount++; };
+    mockCtx.ctx.render.force = () => { forceRenderCount++; };
 
     // Capture the scrollToIndexFn registered by the plugin
     let scrollToIndexFn: ((index: number, align: string, behavior?: string) => void | false) | null = null;
-    mockCtx.ctx.setScrollToIndexFn = (fn: any) => { scrollToIndexFn = fn; };
+    mockCtx.ctx.scroll.setToIndexFn = (fn: any) => { scrollToIndexFn = fn; };
 
     const plugin = autosize();
     plugin.setup(mockCtx.ctx);
@@ -920,8 +920,8 @@ describe("autosize end-pinning", () => {
     // native scrollHeight — so under bounded mode the runway edge is never
     // mistaken for the list end. Grow the cache total when content size updates.
     let total = 1000;
-    mockCtx.ctx.sizeCache.getTotalSize = () => total;
-    mockCtx.ctx.updateContentSize = () => { total = 1050; };
+    mockCtx.ctx.sizes.cache.getTotalSize = () => total;
+    mockCtx.ctx.render.contentSize = () => { total = 1050; };
 
     // Measure item 18 at 80px (bigger than 50px estimated)
     triggerMeasurement(el, 80);
@@ -959,7 +959,7 @@ describe("autosize end-pinning", () => {
     });
     Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
 
-    mockCtx.ctx.updateContentSize = () => { fakeScrollHeight = 1050; };
+    mockCtx.ctx.render.contentSize = () => { fakeScrollHeight = 1050; };
 
     triggerMeasurement(el, 80);
 
@@ -1100,11 +1100,11 @@ describe("autosize remeasure on late content", () => {
     plugin = autosize<TestItem>();
     plugin.setup(mockCtx.ctx);
     // Stand in for the pipeline: a forced render commits the visible range.
-    mockCtx.ctx.forceRender = () => {
+    mockCtx.ctx.render.force = () => {
       forceRenders++;
       plugin.hooks!.onCommit!(mockCtx.engineState);
     };
-    mockCtx.ctx.rebuildSizeCache = () => { rebuilds++; };
+    mockCtx.ctx.sizes.rebuild = () => { rebuilds++; };
   });
 
   afterEach(() => {
@@ -1171,7 +1171,7 @@ describe("autosize remeasure on late content", () => {
     plugin.destroy();
     plugin = autosize<TestItem>();
     plugin.setup(mockCtx.ctx);
-    mockCtx.ctx.forceRender = () => { forceRenders++; };
+    mockCtx.ctx.render.force = () => { forceRenders++; };
 
     const { img } = renderItem(0);
     commit(0);
@@ -1241,7 +1241,7 @@ describe("autosize remeasure on late content", () => {
     const a = renderItem(0);
     const b = renderItem(1, false);
     commit(0, 1);
-    mockCtx.ctx.forceRender = () => { forceRenders++; };
+    mockCtx.ctx.render.force = () => { forceRenders++; };
     a.img.dispatchEvent(new Event("load"));
     method<(i?: number) => void>("remeasure")(1);
     expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(false);
@@ -1260,7 +1260,7 @@ describe("autosize remeasure on late content", () => {
     renderItem(0);
     renderItem(1, false);
     commit(0, 1);
-    mockCtx.ctx.forceRender = () => { forceRenders++; };
+    mockCtx.ctx.render.force = () => { forceRenders++; };
     method<(i?: number) => void>("remeasure")(1);
     expect(method<(i: number) => boolean>("isMeasured")(1)).toBe(false);
 

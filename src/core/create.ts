@@ -388,140 +388,157 @@ export function createCore<T extends VListItem = VListItem>(
 
   if (plugins.length > 0) {
     const ctx: PluginContext<T> = {
-      dom,
-      sizeCache,
-      scroll: scrollAdapter,
       pool,
       config,
       emitter,
       template: rawConfig.item.template,
-      registerMethod(name: string, fn: Function): void {
-        // Public names are a contract: two plugins claiming one used to be
-        // last-writer-wins, silently. Underscore names are the internal
-        // cross-plugin protocol, where overriding is deliberate (groups,
-        // masonry and page each provide _scrollItemIntoView, for example).
-        if (!name.startsWith("_") && methods.has(name)) {
-          throw new Error(`[vlist] duplicate method "${name}"; rename it or use a set*Fn hook`);
-        }
-        methods.set(name, fn);
-      },
-      getMethod(name: string): Function | undefined { return methods.get(name); },
-      registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
-      registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
-      registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
-      enableListboxRole(): void {
-        const currentRole = dom.content.getAttribute("role");
-        if (!currentRole || currentRole === "list") {
-          dom.content.setAttribute("role", "listbox");
-          dom.content.setAttribute("tabindex", "0");
-        }
-        rc.itemRole = "option";
-        rc.interactive = true;
-      },
-      setSizeConfig(sc: number | ((index: number) => number)): void {
-        const newCache = createSizeCache(sc, state.totalItems);
-        const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
-        if (setBase) {
-          // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
-          // hook and update its delegate to the new cache's internal rebuild.
-          const hooked = sizeCache.rebuild;
-          Object.assign(sizeCache, newCache);
-          sizeCache.rebuild = hooked;
-          setBase(newCache.rebuild);
-        } else {
-          Object.assign(sizeCache, newCache);
-        }
-      },
-      setScrollSource(source): void {
-        scrollSetFn = source.write;
-        onContentSize = source.onContentSize;
-        skipDefaultScroll = true;
-      },
-      commitScroll(pos): void { commitScroll!(pos); },
-      setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
-      cancelScroll(): void { scrollHandler?.cancelScroll(); },
-      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
-      setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
-      getItems,
-      getItem(index: number): T | undefined {
-        return getItemFn ? getItemFn(index) : items[index];
-      },
       getState(): EngineState { return state; },
-      rebuildSizeCache(): void {
-        sizeCache.rebuild(state.totalItems);
+
+      dom: {
+        ...dom,
+        renderedElement(index: number): HTMLElement | null {
+          const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
+          if (override) return override(index);
+          return rendered.get(index) ?? null;
+        },
+        enableListbox(): void {
+          const currentRole = dom.content.getAttribute("role");
+          if (!currentRole || currentRole === "list") {
+            dom.content.setAttribute("role", "listbox");
+            dom.content.setAttribute("tabindex", "0");
+          }
+          rc.itemRole = "option";
+          rc.interactive = true;
+        },
       },
-      updateContentSize,
-      setRenderFn(renderFn: () => void, forceFn: () => void): void {
-        customRenderIfNeeded = renderFn;
-        customForceRender = forceFn;
+
+      scroll: {
+        ...scrollAdapter,
+        to: writeScroll,
+        shiftBy(delta: number): void {
+          if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
+          else ctx.scroll.to(state.scrollPosition + delta);
+        },
+        smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
+          if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
+          else ctx.scroll.to(typeof target === "function" ? target() : target);
+        },
+        cancel(): void { scrollHandler?.cancelScroll(); },
+        commit(pos: number): void { commitScroll!(pos); },
+        setSource(source): void {
+          scrollSetFn = source.write;
+          onContentSize = source.onContentSize;
+          skipDefaultScroll = true;
+        },
+        setTarget(target: EventTarget): void { scrollTarget = target; },
+        setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
+        setToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
+        setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
+        onFrame: doScrollFrame,
+        onIdle: doScrollIdle,
+        disableResize(): void { skipDefaultResize = true; },
       },
-      renderIfNeeded(): void { doRender(); },
-      forceRender(): void {
-        doForceRender();
+
+      items: {
+        all: getItems,
+        at(index: number): T | undefined {
+          return getItemFn ? getItemFn(index) : items[index];
+        },
+        removeById(id: string | number): number {
+          if (removeItemByIdFn) return removeItemByIdFn(id);
+          const idx = items.findIndex((item) => item.id === id);
+          if (idx === -1) return -1;
+          items.splice(idx, 1);
+          state.totalItems = items.length;
+          sizeCache.rebuild(state.totalItems);
+          syncContentSize();
+          return idx;
+        },
+        insertAt(item: T, index: number): void {
+          if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+          items.splice(index, 0, item);
+          state.totalItems = items.length;
+          sizeCache.rebuild(state.totalItems);
+          syncContentSize();
+        },
+        setGetFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
+        setRemoveFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
+        setInsertFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
+        setUpdateFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
+        setIndexByIdFn(fn: (id: string | number) => number): void { getIndexByIdFn = fn; },
+        setTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
+        setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
       },
-      setGetItemFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
-      setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
-      getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
-      get rawSizeSpec() { return sizeSpec; },
-      scrollTo: writeScroll,
-      shiftScroll(delta: number): void {
-        if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
-        else ctx.scrollTo(state.scrollPosition + delta);
+
+      sizes: {
+        cache: sizeCache,
+        get rawSpec() { return sizeSpec; },
+        setConfig(sc: number | ((index: number) => number)): void {
+          const newCache = createSizeCache(sc, state.totalItems);
+          const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
+          if (setBase) {
+            // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
+            // hook and update its delegate to the new cache's internal rebuild.
+            const hooked = sizeCache.rebuild;
+            Object.assign(sizeCache, newCache);
+            sizeCache.rebuild = hooked;
+            setBase(newCache.rebuild);
+          } else {
+            Object.assign(sizeCache, newCache);
+          }
+        },
+        rebuild(): void { sizeCache.rebuild(state.totalItems); },
       },
-      smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
-        if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
-        else ctx.scrollTo(typeof target === "function" ? target() : target);
+
+      render: {
+        force(): void { doForceRender(); },
+        ifNeeded(): void { doRender(); },
+        contentSize: updateContentSize,
+        setFn(renderFn: () => void, forceFn: () => void): void {
+          customRenderIfNeeded = renderFn;
+          customForceRender = forceFn;
+        },
+        setStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
+        getStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
       },
-      disableDefaultResize(): void { skipDefaultResize = true; },
-      setScrollTarget(target: EventTarget): void { scrollTarget = target; },
-      setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
-      setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
-      onScrollFrame: doScrollFrame,
-      onScrollIdle: doScrollIdle,
-      removeItemById(id: string | number): number {
-        if (removeItemByIdFn) return removeItemByIdFn(id);
-        const idx = items.findIndex((item) => item.id === id);
-        if (idx === -1) return -1;
-        items.splice(idx, 1);
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
-        return idx;
+
+      hooks: {
+        method(name: string, fn: Function): void {
+          // Public names are a contract: two plugins claiming one used to be
+          // last-writer-wins, silently. Underscore names are the internal
+          // cross-plugin protocol, where overriding is deliberate (groups,
+          // masonry and page each provide _scrollItemIntoView, for example).
+          if (!name.startsWith("_") && methods.has(name)) {
+            throw new Error(`[vlist] duplicate method "${name}"; rename it or use a set*Fn hook`);
+          }
+          methods.set(name, fn);
+        },
+        get(name: string): Function | undefined { return methods.get(name); },
+        onClick(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
+        onKeydown(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
+        onDestroy(handler: () => void): void { destroyHandlers.push(handler); },
       },
-      insertItemAt(item: T, index: number): void {
-        if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-        items.splice(index, 0, item);
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
+
+      nav: {
+        set(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
+          if (cfg.ud !== undefined) navUd = cfg.ud;
+          if (cfg.lr !== undefined) navLr = cfg.lr;
+          if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
+          if (cfg.navigate) navNavigateFn = cfg.navigate;
+          if (cfg.total) navTotalFn = cfg.total;
+        },
+        get: (() => {
+          const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null };
+          return (): typeof _nav => {
+            _nav.ud = navUd;
+            _nav.lr = navLr;
+            _nav.scrollIndex = navScrollIndexFn;
+            _nav.navigate = navNavigateFn;
+            _nav.total = navTotalFn;
+            return _nav;
+          };
+        })(),
       },
-      setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
-      setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
-      setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
-      setGetIndexByIdFn(fn: (id: string | number) => number): void { getIndexByIdFn = fn; },
-      getRenderedElement(index: number): HTMLElement | null {
-        const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
-        if (override) return override(index);
-        return rendered.get(index) ?? null;
-      },
-      setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
-        if (cfg.ud !== undefined) navUd = cfg.ud;
-        if (cfg.lr !== undefined) navLr = cfg.lr;
-        if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
-        if (cfg.navigate) navNavigateFn = cfg.navigate;
-        if (cfg.total) navTotalFn = cfg.total;
-      },
-      getNavConfig: (() => {
-        const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null };
-        return (): typeof _nav => {
-          _nav.ud = navUd;
-          _nav.lr = navLr;
-          _nav.scrollIndex = navScrollIndexFn;
-          _nav.navigate = navNavigateFn;
-          _nav.total = navTotalFn;
-          return _nav;
-        };
-      })(),
     };
 
     for (const plugin of sorted) {
@@ -690,7 +707,7 @@ export function createCore<T extends VListItem = VListItem>(
       onIdle: doScrollIdle,
     });
     scrollHandler = boundedHandler;
-    // Route every scroll write (ctx.scrollTo, scrollToIndex, adapter.setPixel)
+    // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
     // through the logical setter so the runway split stays consistent. The
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
     scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
@@ -1064,7 +1081,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   for (const [name, fn] of methods) {
     // Underscore names are the internal cross-plugin protocol, reached through
-    // ctx.getMethod(); they stay off the public instance.
+    // ctx.hooks.get(); they stay off the public instance.
     if (name.startsWith("_")) continue;
     (api as unknown as Record<string, unknown>)[name] = fn;
   }

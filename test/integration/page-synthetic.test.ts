@@ -32,7 +32,7 @@ for (const mode of ["native", "synthetic"] as const) {
       ctx.dom.viewport.scrollTop = 150;
       ctx.dom.viewport.dispatchEvent(new Event("scroll"));
       expect(list.getScrollPosition()).toBe(400);
-      ctx.commitScroll(500);
+      ctx.scroll.commit(500);
       expect(list.getScrollPosition()).toBe(500);
       expect(ctx.getState().prevScrollPosition).toBe(400);
       expect(ctx.getState().scrollDirection).toBe(1);
@@ -78,17 +78,17 @@ it("external sizing reports initial and custom-layout sizes through the same hoo
     item: { height: 40, template: () => "row" }, padding: [10, 0],
   }, [{ name: "external", setup(c) {
     ctx = c;
-    c.setScrollSource({ write: px => c.commitScroll(px), onContentSize: px => sizes.push(px) });
+    c.scroll.setSource({ write: px => c.scroll.commit(px), onContentSize: px => sizes.push(px) });
   } }]);
   try {
     expect(sizes).toEqual([60]);
-    ctx.updateContentSize(80);
+    ctx.render.contentSize(80);
     expect(sizes).toEqual([60, 100]);
     expect(ctx.dom.content.style.height).toBe("100px");
-    ctx.setScrollSource({ write: px => ctx.commitScroll(px) });
+    ctx.scroll.setSource({ write: px => ctx.scroll.commit(px) });
     list.appendItems([{ id: 2 }]);
     expect(sizes).toEqual([60, 100]);
-    ctx.scrollTo(20);
+    ctx.scroll.to(20);
     expect(list.getScrollPosition()).toBe(20);
   } finally { list.destroy(); host.remove(); }
 });
@@ -101,8 +101,8 @@ for (const defer of [false, true]) it(`custom layout initial sizing guards befor
     expect(() => createVList({ container: host, defer, items: [{ id: 1 }],
       item: { height: 40, template: () => "row" },
     }, [page(), { name: "layout", priority: 10, setup(ctx) {
-      ctx.setRenderFn(() => {}, () => {});
-      ctx.updateContentSize(20_000_000);
+      ctx.render.setFn(() => {}, () => {});
+      ctx.render.contentSize(20_000_000);
     } }])).toThrow(/20000000px.*16777216px/);
     expect(host.children.length).toBe(0);
   } finally { console.error = expectedFailureConsole; host.remove(); }
@@ -153,7 +153,7 @@ it("a synthetic custom renderer refreshes its handler only once when items chang
   const list = createCore({ container: host, items: [{ id: 1 }],
     item: { height: 40, template: () => "row" },
   }, [{ name: "custom", setup(ctx) {
-    ctx.setRenderFn(() => {}, () => ctx.updateContentSize(ctx.sizeCache.getTotalSize()));
+    ctx.render.setFn(() => {}, () => ctx.render.contentSize(ctx.sizes.cache.getTotalSize()));
   } }], config => {
     const handler = createSyntheticScrollHandler(config);
     return { ...handler, refresh(size) { refreshes++; handler.refresh(size); } };

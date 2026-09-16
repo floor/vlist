@@ -14,7 +14,7 @@ import { createTestItems, createContainer, simpleTemplate } from "../helpers/fac
 import type { TestItem } from "../helpers/factory";
 import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/core/create";
-import type { VList, VListPlugin } from "../../src/core/types";
+import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
 
 // =============================================================================
 // DOM Setup
@@ -226,16 +226,16 @@ describe("createVList — plugin validation", () => {
     );
 
     expect(receivedCtx).not.toBeNull();
-    const ctx = receivedCtx as Record<string, unknown>;
+    const ctx = receivedCtx as PluginContext<TestItem>;
     expect(ctx.dom).toBeDefined();
-    expect(ctx.sizeCache).toBeDefined();
+    expect(ctx.sizes.cache).toBeDefined();
     expect(ctx.pool).toBeDefined();
     expect(ctx.config).toBeDefined();
     expect(ctx.emitter).toBeDefined();
     expect(ctx.template).toBe(simpleTemplate);
-    expect(typeof ctx.registerMethod).toBe("function");
-    expect(typeof ctx.registerDestroyHandler).toBe("function");
-    expect(typeof ctx.getItems).toBe("function");
+    expect(typeof ctx.hooks.method).toBe("function");
+    expect(typeof ctx.hooks.onDestroy).toBe("function");
+    expect(typeof ctx.items.all).toBe("function");
     expect(typeof ctx.getState).toBe("function");
   });
 });
@@ -526,7 +526,7 @@ describe("createVList — destroy safety", () => {
       name: "destroy-c",
       priority: 30,
       setup(ctx) {
-        ctx.registerDestroyHandler(() => { order.push("c-handler"); });
+        ctx.hooks.onDestroy(() => { order.push("c-handler"); });
       },
       destroy() { order.push("c"); },
     };

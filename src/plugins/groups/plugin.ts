@@ -69,7 +69,7 @@ export function groups<T extends VListItem = VListItem>(
   let scroll: PluginContext<T>["scroll"];
   let pool: ElementPool;
   let contentElement: HTMLElement;
-  // Bounded-mode (RFC-012): route content sizing through ctx.updateContentSize so
+  // Bounded-mode (RFC-012): route content sizing through ctx.render.contentSize so
   // the bounded scroll handler keeps vlist-content at the runway size instead of
   // the full virtual height (which would blow the browser's element cap on huge
   // lists). Null until setup; in native mode it just sets the style height.
@@ -729,20 +729,20 @@ export function groups<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
       pool = ctx.pool;
       contentElement = ctx.dom.content;
-      updateContentSize = ctx.updateContentSize.bind(ctx);
+      updateContentSize = ctx.render.contentSize.bind(ctx);
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       mainAxisPadding = ctx.config.mainAxisPadding;
-      ctxGetItem = ctx.getItem.bind(ctx);
-      resolveItemState = () => ctx.getItemStateFn();
-      getMethod = ctx.getMethod.bind(ctx);
+      ctxGetItem = ctx.items.at.bind(ctx);
+      resolveItemState = () => ctx.render.getStateFn();
+      getMethod = ctx.hooks.get.bind(ctx);
       interactive = null;
       groupItemClass = `${classPrefix}-item`;
       groupHeaderClass = `${classPrefix}-group-header`;
@@ -767,7 +767,7 @@ export function groups<T extends VListItem = VListItem>(
         gridCrossPadStart = ctx.config.crossPadStart;
         gridCrossPadTotal = ctx.config.crossAxisPadding;
         isMasonry = true;
-        const rawSpec = ctx.rawSizeSpec;
+        const rawSpec = ctx.sizes.rawSpec;
         if (typeof rawSpec === "function") {
           masonryItemSize = (dataIndex: number) => {
             return rawSpec(dataIndex, { columnWidth: gridColWidth });
@@ -806,13 +806,13 @@ export function groups<T extends VListItem = VListItem>(
         return origGetSize(entry.dataIndex);
       };
 
-      ctx.setSizeConfig(groupedSizeFn);
+      ctx.sizes.setConfig(groupedSizeFn);
 
       // Intercept sizeCache.rebuild so groups can map between data indices
       // and layout indices (which include group header pseudo-entries).
       let tableMode = false;
       let lastTableLoadedCount = -1;
-      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+      ctx.hooks.method("_setSizeCacheBase", (fn: (n: number) => void): void => {
         origSizeCacheRebuild = fn;
       });
 
@@ -829,7 +829,7 @@ export function groups<T extends VListItem = VListItem>(
             if (!getLoadedItem) {
               getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
             }
-            layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.getItems()[i] as T | undefined));
+            layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
             engineState.totalItems = layout.totalEntries;
             if (stickyHeader) {
               stickyHeader.refresh();
@@ -842,7 +842,7 @@ export function groups<T extends VListItem = VListItem>(
 
       sizeCache.rebuild(layout.totalEntries);
       rebuildGridPositions();
-      ctx.setVirtualTotalFn(() => layout.totalEntries);
+      ctx.items.setTotalFn(() => layout.totalEntries);
 
       rootElement.classList.add(`${classPrefix}--grouped`);
 
@@ -916,9 +916,9 @@ export function groups<T extends VListItem = VListItem>(
           // (returns undefined for unloaded items). Placeholders let the
           // table renderer show shimmer rows while data loads.
           const asyncGetItem = (getMethod?.("_getItem") as ((i: number) => T | undefined)) ?? null;
-          const rawItems = ctx.getItems.bind(ctx);
+          const rawItems = ctx.items.all.bind(ctx);
 
-          ctx.setGetItemFn((layoutIndex: number): T | undefined => {
+          ctx.items.setGetFn((layoutIndex: number): T | undefined => {
             const entry = layout.getEntry(layoutIndex);
             if (entry.type === "header") {
               return {
@@ -945,10 +945,10 @@ export function groups<T extends VListItem = VListItem>(
 
         });
       } else {
-        ctx.setRenderFn(groupsRenderIfNeeded, groupsForceRender);
+        ctx.render.setFn(groupsRenderIfNeeded, groupsForceRender);
       }
 
-      ctx.registerMethod("getGroupLayout", () => layout);
+      ctx.hooks.method("getGroupLayout", () => layout);
 
       // The engine total counts headers, because that is what the layout
       // renders. Anything asking how many *items* there are needs this
@@ -956,37 +956,37 @@ export function groups<T extends VListItem = VListItem>(
       // of item ids against entries and never matched. data() publishes the
       // same hook, and wins when both are present, which is correct: then the
       // data manager knows the real count.
-      ctx.registerMethod("_getTotal", (): number => layout.totalEntries - layout.groupCount);
+      ctx.hooks.method("_getTotal", (): number => layout.totalEntries - layout.groupCount);
 
-      ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number =>
+      ctx.hooks.method("_dataToLayoutIndex", (dataIndex: number): number =>
         layout.dataToLayoutIndex(dataIndex),
       );
-      ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number =>
+      ctx.hooks.method("_layoutToDataIndex", (layoutIndex: number): number =>
         layout.layoutToDataIndex(layoutIndex),
       );
-      ctx.registerMethod("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
         rendered.get(layoutIndex) ?? null,
       );
-      ctx.registerMethod("_isGroupHeader", (layoutIndex: number): boolean => {
+      ctx.hooks.method("_isGroupHeader", (layoutIndex: number): boolean => {
         const entry = layout.getEntry(layoutIndex);
         return entry.type === "header";
       });
-      ctx.registerMethod("_getItemLane", (layoutIndex: number): number => {
+      ctx.hooks.method("_getItemLane", (layoutIndex: number): number => {
         const pos = gridItemPositions?.get(layoutIndex);
         return pos ? pos.col : -1;
       });
-      ctx.registerMethod("_getItemY", (layoutIndex: number): number => {
+      ctx.hooks.method("_getItemY", (layoutIndex: number): number => {
         const pos = gridItemPositions?.get(layoutIndex);
         return pos ? pos.rowY : -1;
       });
-      ctx.registerMethod("_getItemH", (layoutIndex: number): number => {
+      ctx.hooks.method("_getItemH", (layoutIndex: number): number => {
         const pos = gridItemPositions?.get(layoutIndex);
         return pos?.h ?? -1;
       });
 
       const mainPadStart = ctx.config.startPadding;
       const mainPadEnd = mainAxisPadding - mainPadStart;
-      ctx.registerMethod("_scrollItemIntoView", (layoutIndex: number): void => {
+      ctx.hooks.method("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
         const pos = gridItemPositions?.get(layoutIndex);
         const offset = pos ? pos.rowY : sizeCache.getOffset(layoutIndex);
@@ -995,16 +995,16 @@ export function groups<T extends VListItem = VListItem>(
         const sp = scroll.getPixelEquivalent();
 
         if (offset < sp + mainPadStart) {
-          ctx.scrollTo(Math.max(0, offset - mainPadStart));
+          ctx.scroll.to(Math.max(0, offset - mainPadStart));
         } else if (offset + size + mainPadEnd > sp + cs) {
-          ctx.scrollTo(offset + size + mainPadEnd - cs);
+          ctx.scroll.to(offset + size + mainPadEnd - cs);
         }
       });
 
       // Core owns the public method: it holds a scroll requested before the
       // total is known, clamps the index and resolves the options, then calls
       // this hook. Returning false falls back to the core implementation.
-      ctx.setScrollToIndexFn((
+      ctx.scroll.setToIndexFn((
         index: number,
         align: string,
         behavior?: string,
@@ -1056,13 +1056,13 @@ export function groups<T extends VListItem = VListItem>(
         pos = Math.max(0, Math.min(pos, maxScroll));
 
         if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
+          ctx.scroll.smoothTo(pos, duration);
         } else {
-          ctx.scrollTo(pos);
+          ctx.scroll.to(pos);
         }
       });
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         for (const [, element] of rendered) {
           element.remove();
         }

@@ -198,14 +198,14 @@ describe("masonry - Render Functions", () => {
     });
     plugin.setup!(ctx);
     engineState.containerSize = 600;
-    ctx.forceRender();
+    ctx.render.force();
     const firstRendered = dom.content.querySelectorAll("[data-index]").length;
     expect(firstRendered).toBeGreaterThan(0);
 
     // Programmatic jump far down: logical position and runway origin move together.
     engineState.scrollPosition = 20_000;
     engineState.baseOffset = 20_000;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Items from the old range are kept for the release grace period, but must
     // sit where their absolute placement says relative to the new runway
@@ -221,7 +221,7 @@ describe("masonry - Render Functions", () => {
     cleanup();
   });
 
-  it("should replace render functions so ctx.renderIfNeeded calls masonry render", () => {
+  it("should replace render functions so ctx.render.ifNeeded calls masonry render", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(20);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
@@ -229,12 +229,12 @@ describe("masonry - Render Functions", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
     cleanup();
   });
 
-  it("should replace render functions so ctx.forceRender calls masonry render", () => {
+  it("should replace render functions so ctx.render.force calls masonry render", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(20);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
@@ -242,7 +242,7 @@ describe("masonry - Render Functions", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.forceRender();
+      ctx.render.force();
     }).not.toThrow();
     cleanup();
   });
@@ -256,7 +256,7 @@ describe("masonry - Render Functions", () => {
     engineState.destroyed = true;
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
     cleanup();
   });
@@ -267,7 +267,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const renderedCount = dom.content.children.length;
     expect(renderedCount).toBeGreaterThan(0);
@@ -280,7 +280,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild).toBeDefined();
@@ -295,7 +295,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild.dataset.lane).toBeDefined();
@@ -311,7 +311,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const lanes = new Set<string>();
     for (const child of dom.content.children) {
@@ -329,7 +329,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const xPositions = new Set<string>();
     for (const child of dom.content.children) {
@@ -348,7 +348,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild.style.width).not.toBe("");
@@ -365,7 +365,7 @@ describe("masonry - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     const width = parseInt(firstChild.style.width, 10);
@@ -389,7 +389,7 @@ describe("masonry - Variable Heights", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const heightValues = new Set<string>();
     for (const child of dom.content.children) {
@@ -407,7 +407,7 @@ describe("masonry - Variable Heights", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     for (const child of dom.content.children) {
       expect((child as HTMLElement).style.height).toBe("150px");
@@ -443,7 +443,7 @@ describe("masonry - Engine State", () => {
     const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     expect(engineState.prevRangeEnd).toBeGreaterThan(engineState.prevRangeStart);
@@ -456,7 +456,7 @@ describe("masonry - Engine State", () => {
     const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.visibleCount).toBeGreaterThan(0);
     cleanup();
@@ -468,7 +468,7 @@ describe("masonry - Engine State", () => {
     const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.scrollPosition).toBe(0);
     cleanup();
@@ -484,7 +484,7 @@ describe("masonry - Engine State", () => {
     // Before render, prevRangeEnd is -1 (from EngineState constructor)
     expect(engineState.prevRangeEnd).toBe(-1);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     expect(engineState.prevRangeEnd).toBeGreaterThanOrEqual(0);
@@ -520,7 +520,7 @@ describe("masonry - Resize Handler", () => {
       createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const heightBefore = dom.content.style.height;
 
@@ -562,7 +562,7 @@ describe("masonry - Data Changes", () => {
     const mock = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(mock.ctx);
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
 
     const heightBefore = mock.dom.content.style.height;
 
@@ -572,7 +572,7 @@ describe("masonry - Data Changes", () => {
     }
     mock.engineState.totalItems = 50;
 
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
 
     const heightAfter = parseInt(mock.dom.content.style.height, 10);
     const heightBeforeNum = parseInt(heightBefore, 10);
@@ -721,7 +721,7 @@ describe("masonry - Destroy", () => {
       createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.content.children.length).toBeGreaterThan(0);
 
@@ -805,7 +805,7 @@ describe("masonry - Column Count", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     for (const child of dom.content.children) {
       expect((child as HTMLElement).dataset.lane).toBe("0");
@@ -819,7 +819,7 @@ describe("masonry - Column Count", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const lanes = new Set<string>();
     for (const child of dom.content.children) {
@@ -843,7 +843,7 @@ describe("masonry - Edge Cases", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.forceRender();
+      ctx.render.force();
     }).not.toThrow();
 
     expect(dom.content.children.length).toBe(0);
@@ -857,7 +857,7 @@ describe("masonry - Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.content.children.length).toBe(1);
     const el = dom.content.children[0] as HTMLElement;
@@ -876,7 +876,7 @@ describe("masonry - Edge Cases", () => {
     const height = parseInt(dom.content.style.height, 10);
     expect(height).toBeGreaterThan(0);
 
-    ctx.forceRender();
+    ctx.render.force();
     const renderedCount = dom.content.children.length;
     expect(renderedCount).toBeLessThan(10000);
     expect(renderedCount).toBeGreaterThan(0);
@@ -889,7 +889,7 @@ describe("masonry - Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const renderedCount = dom.content.children.length;
     expect(renderedCount).toBeLessThan(100);
@@ -914,7 +914,7 @@ describe("masonry - Selection Integration", () => {
     methods.set("_getFocusedIndex", () => 2);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     let foundSelected = false;
     for (const child of dom.content.children) {
@@ -938,7 +938,7 @@ describe("masonry - Selection Integration", () => {
     methods.set("_getFocusedIndex", () => 0);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const el0 = dom.content.querySelector('[data-index="0"]') as HTMLElement;
     if (el0) {
@@ -955,7 +955,7 @@ describe("masonry - Selection Integration", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.forceRender();
+      ctx.render.force();
     }).not.toThrow();
 
     for (const child of dom.content.children) {
@@ -978,7 +978,7 @@ describe("masonry - Render Consistency", () => {
     const { ctx, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     expect(engineState.prevRangeEnd).toBeGreaterThan(0);
@@ -992,12 +992,12 @@ describe("masonry - Render Consistency", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const childCountAfterFirst = dom.content.children.length;
 
     // renderIfNeeded with same scroll position should be a no-op
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     expect(dom.content.children.length).toBe(childCountAfterFirst);
     cleanup();
@@ -1032,7 +1032,7 @@ describe("masonry - navigate", () => {
     mock.engineState.containerSize = 500;
     mock.engineState.crossSize = 400;
     plugin.setup!(mock.ctx);
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
     const nav = mock.navConfig;
     return { plugin, ctx: mock.ctx, engineState: mock.engineState, nav, scrollCalls: mock.scrollCalls, cleanup: mock.cleanup };
   }
@@ -1165,7 +1165,7 @@ describe("masonry - navigate", () => {
     });
 
     plugin.setup!(mock.ctx);
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
     const nav = mock.navConfig;
 
     // Navigate: ArrowDown from layout 1 (lane 0) to layout 5 (lane 0, next row)
@@ -1210,7 +1210,7 @@ describe("masonry - navigate", () => {
     });
 
     plugin.setup!(mock.ctx);
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
     const nav = mock.navConfig;
 
     // Start at layout 1 (lane 0), ArrowDown should stay in lane 0
@@ -1237,7 +1237,7 @@ describe("masonry - updateMasonry", () => {
     const items = createTestItems(20, () => 100);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const updateFn = methods.get("updateMasonry");
     expect(updateFn).toBeDefined();
@@ -1281,7 +1281,7 @@ describe("masonry - _scrollItemIntoView", () => {
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 500;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1298,7 +1298,7 @@ describe("masonry - _scrollItemIntoView", () => {
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 500;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1314,7 +1314,7 @@ describe("masonry - _scrollItemIntoView", () => {
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 0;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1330,7 +1330,7 @@ describe("masonry - _scrollItemIntoView", () => {
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 0;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1346,7 +1346,7 @@ describe("masonry - _scrollItemIntoView", () => {
     const items = createTestItems(10, () => 100);
     const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext<TestItem>(items);
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const scrollFn = methods.get("_scrollItemIntoView");
     scrollFn!(999);
@@ -1364,7 +1364,7 @@ describe("masonry - _scrollItemIntoView", () => {
     mutableConfig.startPadding = 16;
     mutableConfig.mainAxisPadding = 32;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 500;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1386,7 +1386,7 @@ describe("masonry - _scrollItemIntoView", () => {
     mutableConfig.endPadding = 10;
     mutableConfig.mainAxisPadding = 20;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 0;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1406,7 +1406,7 @@ describe("masonry - _scrollItemIntoView", () => {
     engineState.crossSize = 400;
     // No padding (defaults to 0)
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     engineState.scrollPosition = 500;
     const scrollFn = methods.get("_scrollItemIntoView");
@@ -1429,7 +1429,7 @@ describe("masonry - scrollToIndex smooth", () => {
     const mockContext = createPluginMockContext<TestItem>(items);
     const { ctx, methods, scrollCalls, cleanup } = mockContext;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(5, "start", "smooth", 300);
@@ -1445,7 +1445,7 @@ describe("masonry - scrollToIndex smooth", () => {
     engineState.containerSize = 300;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(19, "end");
@@ -1465,7 +1465,7 @@ describe("masonry - custom size function", () => {
     const items = createTestItems(10, () => 100);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     cleanup();
   });
 });
@@ -1480,7 +1480,7 @@ describe("masonry - onIdle and destroy", () => {
     const items = createTestItems(20, () => 100);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(() => plugin.hooks!.onIdle!()).not.toThrow();
     cleanup();
@@ -1491,7 +1491,7 @@ describe("masonry - onIdle and destroy", () => {
     const items = createTestItems(10, () => 100);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(() => plugin.destroy!()).not.toThrow();
     cleanup();
@@ -1504,11 +1504,11 @@ describe("masonry - onIdle and destroy", () => {
     engineState.containerSize = 500;
     engineState.crossSize = 400;
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const childrenBefore = dom.content.children.length;
     engineState.totalItems = 30;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     cleanup();
   });
 });
@@ -1526,14 +1526,14 @@ describe("masonry — item identity by reference", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     const originalHTML = firstChild.innerHTML;
 
     // Replace item 0 with a new object — same id, different name
     items[0] = { id: 1, name: "Updated", height: 100 };
-    ctx.forceRender();
+    ctx.render.force();
 
     const updatedHTML = firstChild.innerHTML;
     expect(updatedHTML).not.toBe(originalHTML);
@@ -1549,11 +1549,11 @@ describe("masonry — item identity by reference", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     firstChild.innerHTML = "<div>Manually changed</div>";
-    ctx.forceRender();
+    ctx.render.force();
 
     // Should skip re-render because reference hasn't changed
     expect(firstChild.innerHTML).toBe("<div>Manually changed</div>");

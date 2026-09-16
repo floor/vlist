@@ -125,7 +125,7 @@ it("native creates the wrap handler supplied by the requesting plugin", () => {
   let created = 0;
   const list = createNative({container, items:createTestItems(100), item:{height:40,template:simpleTemplate}}, [{
     name:"wrap-owner", setup(ctx) {
-      ctx.setBoundedWrap({lapSize:()=>4000,home:()=>4000,thresholdLaps:2}, config => {
+      ctx.scroll.setBoundedWrap({lapSize:()=>4000,home:()=>4000,thresholdLaps:2}, config => {
         created++;
         return createBoundedScrollHandler(config);
       });

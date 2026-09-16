@@ -48,13 +48,14 @@ export function page<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
-      const { dom, sizeCache, config: cfg, emitter } = ctx;
+      const { dom, config: cfg, emitter } = ctx;
+      const sizeCache = ctx.sizes.cache;
       const isX = cfg.axis.primary === "x";
       const win = window;
       const state = ctx.getState();
 
       // ── 1. Own window resize ────────────
-      ctx.disableDefaultResize();
+      ctx.scroll.disableResize();
 
       // ── 2. Modify DOM for window scroll ────────────────────────
       dom.root.style.overflow = "visible";
@@ -72,7 +73,7 @@ export function page<T extends VListItem = VListItem>(
       // ── 3. Install the external scroll writer ─────────────────────
       let sized = false;
       let warned = false;
-      ctx.setScrollSource({
+      ctx.scroll.setSource({
         onContentSize(pixels): void {
           if (pixels > MAX_ELEMENT_SIZE && !warned) {
             const message = `vlist: page() native document size ${pixels}px exceeds the ${MAX_ELEMENT_SIZE}px limit. Use the viewport-scrolled default for larger lists. See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model`;
@@ -96,7 +97,7 @@ export function page<T extends VListItem = VListItem>(
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
           // Read-after-write must not wait for the asynchronous window event.
-          ctx.commitScroll(pos);
+          ctx.scroll.commit(pos);
         },
       });
 
@@ -110,7 +111,7 @@ export function page<T extends VListItem = VListItem>(
         const pos = Math.max(0, isX ? -rect.left : -rect.top);
 
         if (Math.abs(pos - ctx.scroll.getPixelEquivalent()) < 0.5) return;
-        ctx.commitScroll(pos);
+        ctx.scroll.commit(pos);
       };
 
       win.addEventListener("scroll", onWindowScroll, { passive: true });
@@ -132,7 +133,7 @@ export function page<T extends VListItem = VListItem>(
         state.containerSize = isX ? w : h;
         state.crossSize = isX ? h : w;
 
-        ctx.forceRender();
+        ctx.render.force();
         emitter.emit("resize", { width: w, height: h });
       };
 
@@ -141,7 +142,7 @@ export function page<T extends VListItem = VListItem>(
 
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
       if (scrollPadding) {
-        ctx.setScrollToPosFn((index, sc, containerSize, totalItems, align) => {
+        ctx.scroll.setToPosFn((index, sc, containerSize, totalItems, align) => {
           const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
           const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
           if (totalItems === 0) return 0;
@@ -164,7 +165,7 @@ export function page<T extends VListItem = VListItem>(
           return Math.max(-startPad, Math.min(pos, maxScroll));
         });
 
-        ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+        ctx.hooks.method("_scrollItemIntoView", (index: number): void => {
           const containerSize = isX ? win.innerWidth : win.innerHeight;
           const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
           const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
@@ -198,7 +199,7 @@ export function page<T extends VListItem = VListItem>(
       }
 
       // ── 8. Register cleanup ────────────────────────────────────
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         cleanupScroll?.();
         cleanupResize?.();
       });

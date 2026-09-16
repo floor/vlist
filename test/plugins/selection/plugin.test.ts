@@ -469,7 +469,7 @@ describe("selection — Methods Behavior", () => {
     const { ctx, methods, engineState, cleanup } = createPluginMockContext(loaded);
     engineState.totalItems = 20;
 
-    ctx.registerMethod("_getLoadedItem", (index: number): TestItem | undefined => {
+    ctx.hooks.method("_getLoadedItem", (index: number): TestItem | undefined => {
       return index < 5 ? loaded[index] : undefined;
     });
 
@@ -1259,7 +1259,7 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
     const sivCalls: number[] = [];
     methods.set("_scrollItemIntoView", (index: number) => { sivCalls.push(index); });
 
-    ctx.setNavConfig({
+    ctx.nav.set({
       total: () => 20,
       navigate: (current: number, key: string, _total: number): number => {
         if (key === "ArrowDown") return Math.min(current + 1, 19);
@@ -1287,7 +1287,7 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
       { itemSize: 50, containerHeight: 200 },
     );
 
-    ctx.setNavConfig({
+    ctx.nav.set({
       total: () => 20,
       navigate: (current: number, key: string, _total: number): number => {
         if (key === "ArrowDown") return Math.min(current + 1, 19);
@@ -1994,7 +1994,7 @@ describe("selection — Internal Methods", () => {
     plugin.setup!(ctx);
 
     const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
-    const itemStateFn = ctx.getItemStateFn?.();
+    const itemStateFn = ctx.render.getStateFn?.();
     expect(itemStateFn).toBeDefined();
 
     focusByIdFn(3);
@@ -2018,7 +2018,7 @@ describe("selection — Internal Methods", () => {
     plugin.setup!(ctx);
 
     const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
-    const itemStateFn = ctx.getItemStateFn?.();
+    const itemStateFn = ctx.render.getStateFn?.();
 
     focusByIdFn(3);
 

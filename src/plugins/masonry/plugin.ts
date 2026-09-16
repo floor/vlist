@@ -110,8 +110,8 @@ export function masonry<T extends VListItem = VListItem>(
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
-    selectedIdsGetter = (storedCtx.getMethod("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
+    selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
   }
 
   // ── Per-lane navigation index ──
@@ -127,10 +127,10 @@ export function masonry<T extends VListItem = VListItem>(
 
   function resolveNavFns(): void {
     if (navFnsResolved || !storedCtx) return;
-    getItemLaneFn = (storedCtx.getMethod("_getItemLane") as typeof getItemLaneFn) ?? null;
-    getItemYFn = (storedCtx.getMethod("_getItemY") as typeof getItemYFn) ?? null;
-    getItemHFn = (storedCtx.getMethod("_getItemH") as typeof getItemHFn) ?? null;
-    isGroupHeaderFn = (storedCtx.getMethod("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
+    getItemLaneFn = (storedCtx.hooks.get("_getItemLane") as typeof getItemLaneFn) ?? null;
+    getItemYFn = (storedCtx.hooks.get("_getItemY") as typeof getItemYFn) ?? null;
+    getItemHFn = (storedCtx.hooks.get("_getItemH") as typeof getItemHFn) ?? null;
+    isGroupHeaderFn = (storedCtx.hooks.get("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
     if (getItemLaneFn || isGroupHeaderFn) navFnsResolved = true;
   }
 
@@ -290,7 +290,7 @@ export function masonry<T extends VListItem = VListItem>(
     if (rawSizeSpec !== null && typeof rawSizeSpec === "function") {
       return (index: number): number => (rawSizeSpec as Function)(index, masonryCtx);
     }
-    return (index: number): number => storedCtx!.sizeCache.getSize(index);
+    return (index: number): number => storedCtx!.sizes.cache.getSize(index);
   }
 
   function updateMasonryContext(): void {
@@ -323,7 +323,7 @@ export function masonry<T extends VListItem = VListItem>(
     const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
     if (totalSize === lastContentTotalSize) return;
     lastContentTotalSize = totalSize;
-    storedCtx.updateContentSize(totalSize);
+    storedCtx.render.contentSize(totalSize);
   }
 
   function masonryRenderIfNeeded(): void {
@@ -364,7 +364,7 @@ export function masonry<T extends VListItem = VListItem>(
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
-    cachedItems = storedCtx.getItems();
+    cachedItems = storedCtx.items.all();
 
     renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex, origin);
     lastOrigin = origin;
@@ -410,7 +410,7 @@ export function masonry<T extends VListItem = VListItem>(
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
-      rawSizeSpec = ctx.rawSizeSpec;
+      rawSizeSpec = ctx.sizes.rawSpec;
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;
@@ -448,16 +448,16 @@ export function masonry<T extends VListItem = VListItem>(
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);
 
       // Replace render pipeline
-      ctx.setRenderFn(masonryRenderIfNeeded, masonryForceRender);
+      ctx.render.setFn(masonryRenderIfNeeded, masonryForceRender);
 
       // Initial layout
       calculateLayout();
 
       // ── Public methods ─────────────────────────────────────────
 
-      ctx.registerMethod("getMasonryLayout", () => layout);
+      ctx.hooks.method("getMasonryLayout", () => layout);
 
-      ctx.registerMethod("updateMasonry", (newConfig: Partial<MasonryPluginConfig>) => {
+      ctx.hooks.method("updateMasonry", (newConfig: Partial<MasonryPluginConfig>) => {
         if (newConfig.columns !== undefined && newConfig.columns < 1) {
           throw new Error("[vlist] updateMasonry: columns must be >= 1");
         }
@@ -476,7 +476,7 @@ export function masonry<T extends VListItem = VListItem>(
       // Core owns the public method: it holds a scroll requested before the
       // total is known, clamps the index and resolves the options, then calls
       // this hook. Returning false falls back to the core implementation.
-      ctx.setScrollToIndexFn((
+      ctx.scroll.setToIndexFn((
         index: number,
         align: string,
         behavior?: string,
@@ -502,14 +502,14 @@ export function masonry<T extends VListItem = VListItem>(
         pos = Math.max(0, Math.min(pos, maxScroll));
 
         if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
+          ctx.scroll.smoothTo(pos, duration);
         } else {
-          ctx.scrollTo(pos);
+          ctx.scroll.to(pos);
         }
       });
 
       // Placement-based scroll into view (used by selection focus)
-      ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+      ctx.hooks.method("_scrollItemIntoView", (index: number): void => {
         const placement = cachedPlacements[index];
         if (!placement) return;
 
@@ -521,28 +521,28 @@ export function masonry<T extends VListItem = VListItem>(
         const itemBottom = itemTop + placement.size;
 
         if (itemTop - mainPadStart < scrollPos) {
-          ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
+          ctx.scroll.to(Math.max(0, itemTop - mainPadStart));
         } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
           const lastLane = laneItems[layout.columns - 1];
           const isEndTarget = lastLane && lastLane.length > 0 && index === lastLane[lastLane.length - 1];
           if (isEndTarget && itemTop >= maxScroll) {
-            ctx.scrollTo(maxScroll);
+            ctx.scroll.to(maxScroll);
           } else {
-            ctx.scrollTo(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+            ctx.scroll.to(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
           }
         }
       });
 
       // ── Lane-aware 2D keyboard navigation ─────────────────────
 
-      ctx.setNavConfig({
+      ctx.nav.set({
         total: () => engineState.totalItems,
         navigate,
       });
 
       // ── Cleanup ────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         renderer?.destroy();
         renderer = null;
         ctx.dom.root.classList.remove(`${classPrefix}--masonry`);

@@ -185,7 +185,7 @@ describe("groups — Setup", () => {
     });
     const items = createTestItems(20);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
-    ctx.setSizeConfig = () => { sizeConfigReplaced = true; };
+    ctx.sizes.setConfig = () => { sizeConfigReplaced = true; };
 
     plugin.setup!(ctx);
 
@@ -201,7 +201,7 @@ describe("groups — Setup", () => {
     });
     const items = createTestItems(20);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items);
-    ctx.setVirtualTotalFn = () => { virtualTotalReplaced = true; };
+    ctx.items.setTotalFn = () => { virtualTotalReplaced = true; };
 
     plugin.setup!(ctx);
 
@@ -297,7 +297,7 @@ describe("groups — Setup", () => {
 
     plugin.setup!(ctx);
     // Trigger a render cycle
-    ctx.forceRender();
+    ctx.render.force();
 
     const height = parseInt(dom.content.style.height, 10);
     expect(height).toBeGreaterThan(0);
@@ -338,7 +338,7 @@ describe("groups — Setup", () => {
 // =============================================================================
 
 describe("groups — Render Functions", () => {
-  it("ctx.renderIfNeeded calls groups render without throwing", () => {
+  it("ctx.render.ifNeeded calls groups render without throwing", () => {
     const plugin = groups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       header: { height: 40, template: () => "Header" },
@@ -348,11 +348,11 @@ describe("groups — Render Functions", () => {
 
     plugin.setup!(ctx);
 
-    expect(() => ctx.renderIfNeeded()).not.toThrow();
+    expect(() => ctx.render.ifNeeded()).not.toThrow();
     cleanup();
   });
 
-  it("ctx.forceRender calls groups render without throwing", () => {
+  it("ctx.render.force calls groups render without throwing", () => {
     const plugin = groups<TestItem>({
       getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
       header: { height: 40, template: () => "Header" },
@@ -362,7 +362,7 @@ describe("groups — Render Functions", () => {
 
     plugin.setup!(ctx);
 
-    expect(() => ctx.forceRender()).not.toThrow();
+    expect(() => ctx.render.force()).not.toThrow();
     cleanup();
   });
 
@@ -375,10 +375,10 @@ describe("groups — Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstHeight = dom.content.style.height;
-    ctx.forceRender();
+    ctx.render.force();
 
     // Content size should remain set (render ran twice without error)
     expect(dom.content.style.height).toBe(firstHeight);
@@ -395,7 +395,7 @@ describe("groups — Render Functions", () => {
 
     engineState.containerSize = 0;
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // With containerSize=0 the render bails early — content height stays unset
     expect(dom.content.style.height).toBe("");
@@ -412,7 +412,7 @@ describe("groups — Render Functions", () => {
 
     plugin.setup!(ctx);
     engineState.destroyed = true;
-    ctx.forceRender();
+    ctx.render.force();
 
     // After destroyed flag is set, render is a no-op
     expect(dom.content.style.height).toBe("");
@@ -733,7 +733,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // Some items should have been rendered into the content element
     const rendered = dom.content.querySelectorAll("[data-index]");
@@ -750,7 +750,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const elements = dom.content.querySelectorAll("[data-index]");
     for (const el of Array.from(elements)) {
@@ -769,7 +769,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // First rendered element (layout index 0) is a group header
     const firstEl = dom.content.querySelector("[data-index='0']");
@@ -817,9 +817,9 @@ describe("groups — Edge Cases", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    ctx.registerMethod("_getSelectedIds", () => new Set());
+    ctx.hooks.method("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const dataItems = Array.from(dom.content.querySelectorAll('[role="option"]'));
     expect(dataItems.length).toBeGreaterThan(0);
@@ -841,7 +841,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const dataItems = Array.from(dom.content.querySelectorAll('[role="listitem"]'));
     expect(dataItems.length).toBeGreaterThan(0);
@@ -862,9 +862,9 @@ describe("groups — Edge Cases", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    ctx.registerMethod("_getSelectedIds", () => new Set());
+    ctx.hooks.method("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const headers = Array.from(dom.content.querySelectorAll('[role="presentation"]'));
     expect(headers.length).toBeGreaterThan(0);
@@ -928,7 +928,7 @@ describe("groups — Registered Methods", () => {
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const getEl = methods.get("_getRenderedElement") as (i: number) => HTMLElement | null;
     expect(getEl).toBeDefined();
@@ -978,7 +978,7 @@ describe("groups — _scrollItemIntoView", () => {
 
     plugin.setup!(ctx);
     engineState.containerSize = 300;
-    ctx.forceRender();
+    ctx.render.force();
 
     const sivFn = methods.get("_scrollItemIntoView") as (i: number) => void;
     expect(sivFn).toBeDefined();
@@ -1014,7 +1014,7 @@ describe("groups — _scrollItemIntoView", () => {
 
     plugin.setup!(ctx);
     engineState.containerSize = 300;
-    ctx.forceRender();
+    ctx.render.force();
 
     const sivFn = methods.get("_scrollItemIntoView") as (i: number) => void;
 
@@ -1048,7 +1048,7 @@ describe("groups — _scrollItemIntoView", () => {
     methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const getItemLane = methods.get("_getItemLane") as (i: number) => number;
     expect(getItemLane).toBeDefined();
@@ -1078,7 +1078,7 @@ describe("groups — _scrollItemIntoView", () => {
     methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const getItemY = methods.get("_getItemY") as (i: number) => number;
     expect(getItemY).toBeDefined();
@@ -1111,7 +1111,7 @@ describe("groups — _scrollItemIntoView", () => {
     methods.set("getMasonryLayout", () => ({ columns: 2, gap: 8, containerSize: 300 }));
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const getItemH = methods.get("_getItemH") as (i: number) => number;
     expect(getItemH).toBeDefined();
@@ -1152,11 +1152,11 @@ describe("groups — rebuild hook survives setSizeConfig", () => {
     methods.set("_updateTableForGroups", () => {});
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // In table mode, rebuild calls layout.rebuild → totalItems = layout.totalEntries
     // Layout: [hdrA, 5 items, hdrB, 5 items] = 12 entries
-    ctx.sizeCache.rebuild(10);
+    ctx.sizes.cache.rebuild(10);
     expect(engineState.totalItems).toBe(12);
 
     cleanup();
@@ -1175,9 +1175,9 @@ describe("groups — rebuild hook survives setSizeConfig", () => {
 
     methods.set("_updateTableForGroups", () => {});
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
-    ctx.sizeCache.rebuild(10);
+    ctx.sizes.cache.rebuild(10);
     expect(engineState.totalItems).toBe(12);
 
     // Simulate setSizeConfig updating the base via _setSizeCacheBase
@@ -1187,7 +1187,7 @@ describe("groups — rebuild hook survives setSizeConfig", () => {
     setBase(mockNewBase);
 
     // The hook should still work with the updated base
-    ctx.sizeCache.rebuild(10);
+    ctx.sizes.cache.rebuild(10);
     expect(engineState.totalItems).toBe(12);
 
     cleanup();
@@ -1318,7 +1318,7 @@ describe("groups — Horizontal Mode", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstItem = dom.content.querySelector('[role="listitem"]') as HTMLElement;
     expect(firstItem).not.toBeNull();
@@ -1343,11 +1343,11 @@ describe("groups — Render Lifecycle", () => {
     const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     expect(dom.content.children.length).toBeGreaterThan(0);
 
     engineState.containerSize = 0;
-    ctx.forceRender();
+    ctx.render.force();
     expect(dom.content.children.length).toBe(0);
     cleanup();
   });
@@ -1366,14 +1366,14 @@ describe("groups — Render Lifecycle", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const initialCount = dom.content.children.length;
     expect(initialCount).toBeGreaterThan(0);
 
     // Scroll far down — old elements should be recycled
     engineState.scrollPosition = 1000;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const afterScrollCount = dom.content.children.length;
     expect(afterScrollCount).toBeGreaterThan(0);
@@ -1390,12 +1390,12 @@ describe("groups — Render Lifecycle", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const countAfterFirst = dom.content.children.length;
 
     // Second render with same state — should be a no-op
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     expect(dom.content.children.length).toBe(countAfterFirst);
     cleanup();
   });
@@ -1413,9 +1413,9 @@ describe("groups — Render Lifecycle", () => {
       overscan: 0,
     });
 
-    ctx.registerMethod("_getSelectedIds", () => new Set());
+    ctx.hooks.method("_getSelectedIds", () => new Set());
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // Record initial state
     const firstOption = dom.content.querySelector('[role="option"]') as HTMLElement;
@@ -1424,7 +1424,7 @@ describe("groups — Render Lifecycle", () => {
 
     // Scroll to trigger re-render with different items in view
     engineState.scrollPosition = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     // Items should still have valid ARIA attributes
     const options = Array.from(dom.content.querySelectorAll('[role="option"]'));
@@ -1445,7 +1445,7 @@ describe("groups — Render Lifecycle", () => {
     const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     const firstCount = dom.content.children.length;
 
     // Add more items and re-render
@@ -1453,7 +1453,7 @@ describe("groups — Render Lifecycle", () => {
       items.push({ id: i, name: `Item ${i}`, category: "C" });
     }
     engineState.totalItems = items.length;
-    ctx.forceRender();
+    ctx.render.force();
 
     // Should have re-rendered (layout rebuilds on totalItems change)
     expect(dom.content.children.length).toBeGreaterThan(0);
@@ -1476,7 +1476,7 @@ describe("groups — Render Lifecycle", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const option = dom.content.querySelector('[role="listitem"]') as HTMLElement;
     expect(option).not.toBeNull();
@@ -1500,7 +1500,7 @@ describe("groups — Render Lifecycle", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(placeholderItems);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const placeholders = dom.content.querySelectorAll(".vlist-item--placeholder");
     expect(placeholders.length).toBeGreaterThan(0);
@@ -1517,13 +1517,13 @@ describe("groups — Render Lifecycle", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     // Register an itemStateFn that marks index 1 as selected
-    ctx.setItemStateFn((layoutIndex: number, state) => {
+    ctx.render.setStateFn((layoutIndex: number, state) => {
       state.selected = layoutIndex === 1;
       state.focused = layoutIndex === 2;
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const selectedEls = dom.content.querySelectorAll(".vlist-item--selected");
     expect(selectedEls.length).toBe(1);
@@ -1543,13 +1543,13 @@ describe("groups — Render Lifecycle", () => {
     const items = createTestItems(10);
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
-    ctx.setItemStateFn((_layoutIndex: number, state) => {
+    ctx.render.setStateFn((_layoutIndex: number, state) => {
       state.selected = false;
       state.focused = false;
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const items_els = dom.content.querySelectorAll('[role="listitem"]');
     expect(items_els.length).toBeGreaterThan(0);
@@ -1582,7 +1582,7 @@ describe("groups — Placeholder → Real Data Transition", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const placeholdersBefore = dom.content.querySelectorAll(".vlist-item--placeholder").length;
     expect(placeholdersBefore).toBeGreaterThan(0);
@@ -1592,7 +1592,7 @@ describe("groups — Placeholder → Real Data Transition", () => {
       items[i] = { id: i, name: `Item ${i}`, category: i < 5 ? "A" : "B" };
     }
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const placeholdersAfter = dom.content.querySelectorAll(".vlist-item--placeholder").length;
     expect(placeholdersAfter).toBe(0);
@@ -1615,13 +1615,13 @@ describe("groups — Null Item Handling", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     // Override getItem to return undefined for some indices
-    ctx.setGetItemFn((index: number) => {
+    ctx.items.setGetFn((index: number) => {
       if (index >= 5) return undefined;
       return items[index];
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // Should still render without errors
     expect(dom.content.children.length).toBeGreaterThan(0);
@@ -1644,13 +1644,13 @@ describe("groups — Range Early Exit", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const count1 = dom.content.children.length;
 
     // renderIfNeeded with same scroll position — should hit the range-unchanged early exit
-    ctx.renderIfNeeded();
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
+    ctx.render.ifNeeded();
 
     expect(dom.content.children.length).toBe(count1);
     cleanup();
@@ -1681,12 +1681,12 @@ describe("groups — forceRender with async data", () => {
     methods.set("_getLoadedCount", () => loadedCount);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     expect(dom.content.children.length).toBeGreaterThan(0);
 
     // Simulate async data arriving
     loadedCount = 5;
-    ctx.forceRender();
+    ctx.render.force();
     expect(dom.content.children.length).toBeGreaterThan(0);
     cleanup();
   });
@@ -1710,13 +1710,13 @@ describe("groups — forceRender with async data", () => {
     methods.set("_getLoadedItem", (i: number) => items[i]);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     const initialCount = dom.content.children.length;
 
     // Change grouping so boundaries shift within rendered range
     loadedCount = 10;
     items[4]!.category = "B";
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.content.children.length).toBeGreaterThan(0);
     cleanup();

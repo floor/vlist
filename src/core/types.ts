@@ -99,90 +99,132 @@ export interface ElementPool {
 // Plugin Context — cold path only, scoped access for setup()
 // =============================================================================
 
-export interface PluginContext<T extends VListItem = VListItem> {
-  readonly dom: DOMStructure;
-  readonly sizeCache: SizeCache;
-  /**
-   * Logical scroll model boundary (RFC-012). Plugins read and write scroll
-   * position through this adapter rather than touching `getState().scrollPosition`
-   * or raw `scrollTop`/`scrollLeft`. Its pixel-equivalent view keeps existing
-   * pixel-based code paths working during the migration.
-   */
-  readonly scroll: ScrollAdapter;
-  readonly pool: ElementPool;
-  readonly config: ResolvedConfig;
-  readonly emitter: Emitter<import("../types").VListEvents<T>>;
-  readonly template: ItemTemplate<T>;
+/**
+ * DOM structure, plus the element and role helpers that act on it.
+ */
+export interface DomCapability extends DOMStructure {
+  /** The rendered element for a layout index, honouring a plugin's override. */
+  renderedElement(index: number): HTMLElement | null;
+  /** Adopt the WAI-ARIA listbox roles. Selection and a11y call this; a list
+   * with neither stays a display-only `role="list"`. */
+  enableListbox(): void;
+}
 
-  registerMethod(name: string, fn: Function): void;
-  getMethod(name: string): Function | undefined;
-  registerClickHandler(handler: (event: MouseEvent) => void): void;
-  registerKeydownHandler(handler: (event: KeyboardEvent) => void): void;
-  registerDestroyHandler(handler: () => void): void;
-  enableListboxRole(): void;
-
-  setSizeConfig(config: number | ((index: number) => number)): void;
+/**
+ * Logical scroll model boundary (RFC-012): the adapter's reads, plus the
+ * controls that write. Plugins go through this rather than touching
+ * `getState().scrollPosition` or raw `scrollTop`/`scrollLeft`.
+ */
+export interface ScrollCapability extends ScrollAdapter {
+  to(position: number): void;
+  /** Preserve synthetic motion during a measurement/anchor correction. */
+  shiftBy(delta: number): void;
+  smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
+  /** Cancel any in-flight smooth-scroll animation on the active handler. */
+  cancel(): void;
+  /** Commit an external position, render synchronously and schedule idle. */
+  commit(px: number): void;
   /** Install an external writer and disable default scroll/wheel listeners. */
-  setScrollSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
-  /** Commit an external position, render synchronously and schedule configured idle. */
-  commitScroll(px: number): void;
+  setSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
+  setTarget(target: EventTarget): void;
   /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
   setBoundedWrap(
     config: import("./runway").WrapConfig,
     createHandler: (config: import("./runway").BoundedScrollConfig) => import("./runway").BoundedScrollHandler,
   ): void;
-  setVirtualTotalFn(fn: () => number): void;
+  setToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
+  setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
+  onFrame(): void;
+  onIdle(): void;
+  disableResize(): void;
+}
+
+/**
+ * The item space: reads, mutations, and the inversion hooks a plugin installs
+ * to own them. One owner per hook — two plugins claiming the same one is how
+ * tree with data rendered nothing.
+ */
+export interface ItemsCapability<T extends VListItem = VListItem> {
+  all(): readonly T[];
+  at(index: number): T | undefined;
+  removeById(id: string | number): number;
+  insertAt(item: T, index: number): void;
+  setGetFn(fn: (index: number) => T | undefined): void;
+  setRemoveFn(fn: (id: string | number) => number): void;
+  setInsertFn(fn: (item: T, index: number) => void): void;
+  setUpdateFn(fn: (id: string | number, updates: Partial<T>) => boolean): void;
+  setIndexByIdFn(fn: (id: string | number) => number): void;
+  /** The public total. Also feeds `aria-setsize`. */
+  setTotalFn(fn: () => number): void;
   setIndexMapFn(fn: (renderIndex: number) => number): void;
+}
 
-  getItems(): readonly T[];
-  getItem(index: number): T | undefined;
-  getState(): EngineState;
-  rebuildSizeCache(): void;
-  updateContentSize(size: number): void;
-  setRenderFn(renderIfNeeded: () => void, forceRender: () => void): void;
-  renderIfNeeded(): void;
-  forceRender(): void;
+/** The size cache and the spec behind it. */
+export interface SizesCapability {
+  readonly cache: SizeCache;
+  readonly rawSpec: number | ((index: number, ...args: unknown[]) => number);
+  setConfig(config: number | ((index: number) => number)): void;
+  rebuild(): void;
+}
 
-  setGetItemFn(fn: (index: number) => T | undefined): void;
-  setItemStateFn(fn: (index: number, state: ItemState) => void): void;
-  getItemStateFn(): ((index: number, state: ItemState) => void) | null;
-  readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
+/** The render pipeline: run it, replace it, or describe item state to it. */
+export interface RenderCapability {
+  force(): void;
+  ifNeeded(): void;
+  contentSize(size: number): void;
+  setFn(renderIfNeeded: () => void, forceRender: () => void): void;
+  setStateFn(fn: (index: number, state: ItemState) => void): void;
+  getStateFn(): ((index: number, state: ItemState) => void) | null;
+}
 
-  scrollTo(position: number): void;
-  /** Preserve synthetic motion during a measurement/anchor correction. */
-  shiftScroll(delta: number): void;
-  smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
-  /** Cancel any in-flight smooth-scroll animation on the active handler. */
-  cancelScroll(): void;
-  disableDefaultResize(): void;
-  setScrollTarget(target: EventTarget): void;
-  setScrollToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
-  setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
-  onScrollFrame(): void;
-  onScrollIdle(): void;
+/** The cross-plugin method bus and the shared event handlers. */
+export interface HooksCapability {
+  /** Register a public method on the list. Public names are a contract:
+   * a second claimant throws. Underscore names are the internal protocol. */
+  method(name: string, fn: Function): void;
+  get(name: string): Function | undefined;
+  onClick(handler: (event: MouseEvent) => void): void;
+  onKeydown(handler: (event: KeyboardEvent) => void): void;
+  onDestroy(handler: () => void): void;
+}
 
-  removeItemById(id: string | number): number;
-  insertItemAt(item: T, index: number): void;
-  setRemoveItemFn(fn: (id: string | number) => number): void;
-  setInsertItemFn(fn: (item: T, index: number) => void): void;
-  setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void;
-  setGetIndexByIdFn(fn: (id: string | number) => number): void;
-  getRenderedElement(index: number): HTMLElement | null;
-
-  setNavConfig(config: {
+/** Keyboard navigation geometry, shared between layout plugins and selection. */
+export interface NavCapability {
+  set(config: {
     total?: () => number;
     ud?: number;
     lr?: number;
     scrollIndex?: (itemIndex: number) => number;
     navigate?: (currentIndex: number, key: string, total: number) => number;
   }): void;
-  getNavConfig(): {
+  get(): {
     ud: number;
     lr: number;
     scrollIndex: ((itemIndex: number) => number) | null;
     navigate: ((currentIndex: number, key: string, total: number) => number) | null;
     total: (() => number) | null;
   };
+}
+
+/**
+ * What a plugin receives in `setup()`. Grouped by capability rather than laid
+ * out flat: the flat form had fifty members with no map from a member to the
+ * part of the engine it reached.
+ */
+export interface PluginContext<T extends VListItem = VListItem> {
+  readonly dom: DomCapability;
+  readonly scroll: ScrollCapability;
+  readonly items: ItemsCapability<T>;
+  readonly sizes: SizesCapability;
+  readonly render: RenderCapability;
+  readonly hooks: HooksCapability;
+  readonly nav: NavCapability;
+
+  readonly pool: ElementPool;
+  readonly config: ResolvedConfig;
+  readonly emitter: Emitter<import("../types").VListEvents<T>>;
+  readonly template: ItemTemplate<T>;
+  getState(): EngineState;
 }
 
 // =============================================================================

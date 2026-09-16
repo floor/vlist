@@ -95,13 +95,13 @@ export function autosize<T extends VListItem = VListItem>(
       if (measuredSizes.size === 0) return;
       measuredSizes.clear();
       pendingRemeasure.clear();
-      storedCtx.rebuildSizeCache();
+      storedCtx.sizes.rebuild();
       updateContentSize();
     } else {
       if (!measuredSizes.has(index)) return;
       pendingRemeasure.add(index);
     }
-    storedCtx.forceRender();
+    storedCtx.render.force();
   }
 
   // Maximum logical scroll position, derived from the size cache rather than
@@ -112,7 +112,7 @@ export function autosize<T extends VListItem = VListItem>(
   function maxScrollPos(): number {
     return Math.max(
       0,
-      storedCtx!.sizeCache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
+      storedCtx!.sizes.cache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
     );
   }
 
@@ -124,12 +124,12 @@ export function autosize<T extends VListItem = VListItem>(
   function snapToEnd(): void {
     const maxScroll = maxScrollPos();
     if (maxScroll > scroll.getPixelEquivalent()) {
-      storedCtx!.scrollTo(maxScroll);
+      storedCtx!.scroll.to(maxScroll);
     }
   }
 
   function updateContentSize(): void {
-    storedCtx!.updateContentSize(storedCtx!.sizeCache.getTotalSize());
+    storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
   }
 
   return {
@@ -146,15 +146,15 @@ export function autosize<T extends VListItem = VListItem>(
 
       // Read estimated size from the current sizeCache before replacing it.
       // The initial cache already has gap baked in — read the raw spec size.
-      estimatedSize = typeof ctx.rawSizeSpec === "function"
-        ? (ctx.rawSizeSpec as (i: number) => number)(0) + gap
-        : (ctx.rawSizeSpec as number) + gap;
+      estimatedSize = typeof ctx.sizes.rawSpec === "function"
+        ? (ctx.sizes.rawSpec as (i: number) => number)(0) + gap
+        : (ctx.sizes.rawSpec as number) + gap;
 
       // Replace the fixed sizeCache with a variable one backed by measurements
-      ctx.setSizeConfig(sizeFn);
+      ctx.sizes.setConfig(sizeFn);
       if (gap > 0) {
-        const orig = ctx.sizeCache.getTotalSize;
-        ctx.sizeCache.getTotalSize = (): number => {
+        const orig = ctx.sizes.cache.getTotalSize;
+        ctx.sizes.cache.getTotalSize = (): number => {
           const t = orig();
           return t > 0 ? t - gap : 0;
         };
@@ -165,7 +165,7 @@ export function autosize<T extends VListItem = VListItem>(
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
-        const firstVisible = ctx.sizeCache.indexAtOffset(scroll.getPixelEquivalent());
+        const firstVisible = ctx.sizes.cache.indexAtOffset(scroll.getPixelEquivalent());
 
         for (const entry of entries) {
           const el = entry.target as HTMLElement;
@@ -210,11 +210,11 @@ export function autosize<T extends VListItem = VListItem>(
         const atEnd = isAtEnd();
 
         // Rebuild prefix sums with new measurements
-        ctx.rebuildSizeCache();
+        ctx.sizes.rebuild();
 
         // Apply scroll correction for items above viewport
         if (pendingScrollDelta) {
-          ctx.shiftScroll(pendingScrollDelta);
+          ctx.scroll.shiftBy(pendingScrollDelta);
           pendingScrollDelta = 0;
         }
 
@@ -234,7 +234,7 @@ export function autosize<T extends VListItem = VListItem>(
           pendingContentSizeUpdate = true;
         }
 
-        ctx.forceRender();
+        ctx.render.force();
       });
 
       // End-pinning with dynamic scroll target: when scrollToIndex targets
@@ -242,7 +242,7 @@ export function autosize<T extends VListItem = VListItem>(
       // the smooth scroll tracks the real maxScroll as measurements change it.
       // After the animation, pinnedToEnd keeps snapping on subsequent
       // measurements until the user scrolls away.
-      ctx.setScrollToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
+      ctx.scroll.setToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
         const isEndAligned = index >= engineState.totalItems - 1 && align === "end";
         pinnedToEnd = isEndAligned;
         animatingToEnd = false;
@@ -251,17 +251,17 @@ export function autosize<T extends VListItem = VListItem>(
 
         const mp = ctx.config.mainAxisPadding;
         const dynamicTarget = (): number => {
-          const totalSize = ctx.sizeCache.getTotalSize();
+          const totalSize = ctx.sizes.cache.getTotalSize();
           return Math.max(0, totalSize + mp - engineState.containerSize);
         };
 
         if (behavior === "smooth") {
           animatingToEnd = true;
-          ctx.smoothScrollTo(dynamicTarget, duration ?? 300, easing, () => {
+          ctx.scroll.smoothTo(dynamicTarget, duration ?? 300, easing, () => {
             animatingToEnd = false;
           });
         } else {
-          ctx.scrollTo(dynamicTarget());
+          ctx.scroll.to(dynamicTarget());
         }
       });
 
@@ -270,7 +270,7 @@ export function autosize<T extends VListItem = VListItem>(
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
 
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         viewport.removeEventListener("wheel", unpinOnUserScroll);
         viewport.removeEventListener("touchstart", unpinOnUserScroll);
       });
@@ -291,23 +291,23 @@ export function autosize<T extends VListItem = VListItem>(
       content.addEventListener("load", onMediaEvent, true);
       content.addEventListener("error", onMediaEvent, true);
 
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         content.removeEventListener("load", onMediaEvent, true);
         content.removeEventListener("error", onMediaEvent, true);
       });
 
       // Public methods
-      ctx.registerMethod("isMeasured", isMeasured);
-      ctx.registerMethod("remeasure", remeasure);
+      ctx.hooks.method("isMeasured", isMeasured);
+      ctx.hooks.method("remeasure", remeasure);
 
-      ctx.registerMethod("setMeasuredSize", (index: number, size: number): void => {
+      ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
         measuredSizes.set(index, size);
       });
 
-      ctx.registerMethod("getMeasuredCount", (): number => measuredSizes.size);
+      ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);
 
       // Cleanup
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         if (observer) {
           observer.disconnect();
           observer = null;
@@ -323,7 +323,7 @@ export function autosize<T extends VListItem = VListItem>(
           const idx = state.visibleIndices[i]!;
           if (isMeasured(idx)) continue;
 
-          const el = storedCtx.getRenderedElement(idx);
+          const el = storedCtx.dom.renderedElement(idx);
           if (!el) continue;
 
           // Clear the explicit size set by phase2Commit so
@@ -343,7 +343,7 @@ export function autosize<T extends VListItem = VListItem>(
 
         if (atEnd) {
           snapToEnd();
-          storedCtx.forceRender();
+          storedCtx.render.force();
         }
       },
     },

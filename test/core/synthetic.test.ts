@@ -195,8 +195,8 @@ describe("synthetic entry and input", () => {
   });
   it("plugin-owned keyboard navigation runs before the synthetic fallback", () => {
     const plugin: VListPlugin<TestItem> = { name: "test-keyboard", setup(ctx) {
-      ctx.registerKeydownHandler(e => {
-        if (e.key === "ArrowDown") { ctx.scrollTo(200); e.preventDefault(); }
+      ctx.hooks.onKeydown(e => {
+        if (e.key === "ArrowDown") { ctx.scroll.to(200); e.preventDefault(); }
       });
     } };
     const { content } = make("y", [plugin]);
@@ -297,10 +297,10 @@ describe("synthetic correction integration", () => {
     let ctx!: PluginContext<TestItem>;
     make("y", [{ name: "capture-context", setup(value) { ctx = value; } }]);
     let completed = 0;
-    ctx.smoothScrollTo(2000, 200, t => t, () => completed++);
+    ctx.scroll.smoothTo(2000, 200, t => t, () => completed++);
     frame(0); frame(50);
     const pending = [...frames.keys()];
-    ctx.shiftScroll(75);
+    ctx.scroll.shiftBy(75);
     expect([...frames.keys()]).toEqual(pending);
     expect(ctx.getState().baseOffset).toBe(list!.getScrollPosition());
     for (const t of [100, 150, 200]) frame(t);
@@ -326,11 +326,11 @@ describe("synthetic correction integration", () => {
       viewport.setPointerCapture = () => {}; viewport.hasPointerCapture = () => false;
       list.scrollToIndex(10); drag(viewport, "y"); frame(40); frame(56);
       const before = list.getScrollPosition();
-      const above = [...observed].find(el => el.isConnected && ctx.getRenderedElement(Number(el.getAttribute("data-index"))) === el && Number(el.getAttribute("data-index")) < ctx.sizeCache.indexAtOffset(before));
+      const above = [...observed].find(el => el.isConnected && ctx.dom.renderedElement(Number(el.getAttribute("data-index"))) === el && Number(el.getAttribute("data-index")) < ctx.sizes.cache.indexAtOffset(before));
       expect(above).toBeDefined();
       measure([{ target: above!, borderBoxSize: [{ blockSize: 80, inlineSize: 300 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
       expect(list.getScrollPosition()).toBeCloseTo(before + 30, 8);
-      ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+      ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
       frame(72);
       expect(list.getScrollPosition()).toBeGreaterThan(before + 30);
       expect(ctx.getState().baseOffset).toBe(list.getScrollPosition());
@@ -342,14 +342,14 @@ describe("synthetic correction integration", () => {
       let ctx!: PluginContext<TestItem>;
       list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } },
         [{ name: "capture-context", setup(value) { ctx = value; } }]);
-      ctx.scrollTo(500);
+      ctx.scroll.to(500);
       const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
       viewport.dispatchEvent(new Event("scroll")); frame(0);
       const before = ctx.getState().scrollPosition;
-      ctx.shiftScroll(75);
+      ctx.scroll.shiftBy(75);
       const actualNative = viewport.scrollTop;
       const actualLogical = list.getScrollPosition();
-      ctx.scrollTo(before + 75);
+      ctx.scroll.to(before + 75);
       expect(viewport.scrollTop).toBe(actualNative);
       expect(list.getScrollPosition()).toBe(actualLogical);
       list.destroy(); list = undefined;

@@ -690,22 +690,22 @@ export function tree<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
       pool = ctx.pool;
       contentElement = ctx.dom.content;
-      updateContentSize = ctx.updateContentSize.bind(ctx);
+      updateContentSize = ctx.render.contentSize.bind(ctx);
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       emitter = ctx.emitter;
-      getItemStateFn = ctx.getItemStateFn.bind(ctx);
-      getMethod = ctx.getMethod.bind(ctx);
-      scrollTo = ctx.scrollTo.bind(ctx);
-      doForceRender = ctx.forceRender.bind(ctx);
-      ctxGetItems = ctx.getItems.bind(ctx) as () => readonly T[];
+      getItemStateFn = ctx.render.getStateFn.bind(ctx);
+      getMethod = ctx.hooks.get.bind(ctx);
+      scrollTo = ctx.scroll.to.bind(ctx);
+      doForceRender = ctx.render.force.bind(ctx);
+      ctxGetItems = ctx.items.all.bind(ctx) as () => readonly T[];
 
       treeItemClass = `${classPrefix}-item ${classPrefix}-tree-node`;
       expandedClass = `${classPrefix}-tree-node--expanded`;
@@ -715,7 +715,7 @@ export function tree<T extends VListItem = VListItem>(
       selectedClass = `${classPrefix}-item--selected`;
       focusedClass = `${classPrefix}-item--focused`;
 
-      const rawItems = ctx.getItems() as readonly T[];
+      const rawItems = ctx.items.all() as readonly T[];
       lastItems = rawItems;
       lastItemsLength = rawItems.length;
 
@@ -748,35 +748,35 @@ export function tree<T extends VListItem = VListItem>(
 
       engineState.totalItems = layout.totalVisible;
 
-      ctx.setVirtualTotalFn(() => layout.totalVisible);
-      ctx.setGetItemFn((index: number): T | undefined => {
+      ctx.items.setTotalFn(() => layout.totalVisible);
+      ctx.items.setGetFn((index: number): T | undefined => {
         const node = layout.flatNodes[index];
         return node ? node.item : undefined;
       });
-      ctx.setGetIndexByIdFn((id: string | number): number => {
+      ctx.items.setIndexByIdFn((id: string | number): number => {
         return layout.idToIndex.get(id) ?? -1;
       });
-      ctx.setRenderFn(treeRenderIfNeeded, treeForceRender);
+      ctx.render.setFn(treeRenderIfNeeded, treeForceRender);
 
-      ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
-      ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number => dataIndex);
-      ctx.registerMethod("_getLoadedItem", (index: number): T | undefined => {
+      ctx.hooks.method("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
+      ctx.hooks.method("_dataToLayoutIndex", (dataIndex: number): number => dataIndex);
+      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => {
         const node = layout.flatNodes[index];
         return node ? node.item : undefined;
       });
-      ctx.registerMethod("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
         rendered.get(layoutIndex) ?? null,
       );
 
       // ── Detect external focus management ─────────────────────────
 
       queueMicrotask(() => {
-        hasExternalFocus = !!(getMethod("_getFocusedIndex") || ctx.getItemStateFn());
+        hasExternalFocus = !!(getMethod("_getFocusedIndex") || ctx.render.getStateFn());
       });
 
       // ── Mutation interceptors ────────────────────────────────────
 
-      ctx.setInsertItemFn((item: T, index: number): void => {
+      ctx.items.setInsertFn((item: T, index: number): void => {
         const rawItems = ctxGetItems() as T[];
         const clampedIdx = Math.min(index, rawItems.length);
         rawItems.splice(clampedIdx, 0, item);
@@ -785,7 +785,7 @@ export function tree<T extends VListItem = VListItem>(
         invalidateTree();
       });
 
-      ctx.setRemoveItemFn((id: string | number): number => {
+      ctx.items.setRemoveFn((id: string | number): number => {
         const idx = layout.idToIndex.get(id);
 
         let removedIds: Set<string | number> | null = null;
@@ -815,7 +815,7 @@ export function tree<T extends VListItem = VListItem>(
         return removed;
       });
 
-      ctx.setUpdateItemFn((id: string | number, updates: Partial<T>): boolean => {
+      ctx.items.setUpdateFn((id: string | number, updates: Partial<T>): boolean => {
         const idx = layout.idToIndex.get(id);
         if (idx === undefined) return false;
         const node = layout.flatNodes[idx]!;
@@ -830,7 +830,7 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Click handler ────────────────────────────────────────────
 
-      ctx.registerClickHandler((event: MouseEvent): void => {
+      ctx.hooks.onClick((event: MouseEvent): void => {
         const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
         const idx = parseInt(el.dataset.index ?? "-1", 10);
@@ -886,7 +886,7 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Keyboard handler ─────────────────────────────────────────
 
-      ctx.registerKeydownHandler((e: KeyboardEvent): void => {
+      ctx.hooks.onKeydown((e: KeyboardEvent): void => {
         if (engineState.destroyed) return;
         const total = layout.totalVisible;
         if (total === 0) return;
@@ -952,9 +952,9 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Public methods ───────────────────────────────────────────
 
-      ctx.registerMethod("expand", doExpand);
-      ctx.registerMethod("collapse", doCollapse);
-      ctx.registerMethod("toggle", (id: string | number): void => {
+      ctx.hooks.method("expand", doExpand);
+      ctx.hooks.method("collapse", doCollapse);
+      ctx.hooks.method("toggle", (id: string | number): void => {
         const idx = layout.idToIndex.get(id);
         if (idx === undefined) return;
         const node = layout.flatNodes[idx]!;
@@ -962,29 +962,29 @@ export function tree<T extends VListItem = VListItem>(
         else doExpand(id);
       });
 
-      ctx.registerMethod("expandAll", (): void => {
+      ctx.hooks.method("expandAll", (): void => {
         layout.expandAll(layout.rootItems as T[]);
         invalidateTree();
       });
 
-      ctx.registerMethod("collapseAll", (): void => {
+      ctx.hooks.method("collapseAll", (): void => {
         layout.collapseAll();
         invalidateTree();
       });
 
-      ctx.registerMethod("expandTo", (id: string | number): void => {
+      ctx.hooks.method("expandTo", (id: string | number): void => {
         layout.expandTo(id);
         invalidateTree();
         const idx = layout.idToIndex.get(id);
         if (idx !== undefined) scrollIntoView(idx);
       });
 
-      ctx.registerMethod("getExpanded", (): (string | number)[] => Array.from(layout.expandedIds));
-      ctx.registerMethod("isExpanded", (id: string | number): boolean => layout.expandedIds.has(id));
+      ctx.hooks.method("getExpanded", (): (string | number)[] => Array.from(layout.expandedIds));
+      ctx.hooks.method("isExpanded", (id: string | number): boolean => layout.expandedIds.has(id));
 
       const parentIdKey = isParentIdMode && typeof cfg.parentId === "string" ? cfg.parentId : null;
 
-      ctx.registerMethod("addChild", (parentId: string | number | null, item: T, index?: number): void => {
+      ctx.hooks.method("addChild", (parentId: string | number | null, item: T, index?: number): void => {
         if (parentIdKey) (item as Record<string, unknown>)[parentIdKey] = parentId;
         if (isParentIdMode) {
           const rawItems = ctxGetItems() as T[];
@@ -996,7 +996,7 @@ export function tree<T extends VListItem = VListItem>(
         emitter.emit("data:change", { type: "add", id: item.id });
       });
 
-      ctx.registerMethod("moveNode", (id: string | number, newParentId: string | number | null, index?: number): void => {
+      ctx.hooks.method("moveNode", (id: string | number, newParentId: string | number | null, index?: number): void => {
         if (parentIdKey) {
           const flatIdx = layout.idToIndex.get(id);
           if (flatIdx !== undefined) {
@@ -1007,14 +1007,14 @@ export function tree<T extends VListItem = VListItem>(
         invalidateTree();
       });
 
-      ctx.registerMethod("getTreeLayout", () => ({
+      ctx.hooks.method("getTreeLayout", () => ({
         totalVisible: layout.totalVisible,
         flatNodes: layout.flatNodes,
       }));
 
       // ── Destroy ──────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         rootElement.removeEventListener("focusin", onFocusIn);
         rootElement.removeEventListener("focusout", onFocusOut);
         detachAll();
