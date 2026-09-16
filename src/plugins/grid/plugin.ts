@@ -67,6 +67,9 @@ export function grid<T extends VListItem = VListItem>(
   let lastOrigin = 0;
   let pool: ElementPool;
   let storedCtx: PluginContext<T> | null = null;
+  /** null until the render path resolves it; a11y() or selection() may enable it. */
+  let interactive: boolean | null = null;
+  let lastAriaTotal = -1;
   let contentElement: HTMLElement;
   let template: ItemTemplate<T>;
   let getItem: (index: number) => T | undefined;
@@ -116,6 +119,21 @@ export function grid<T extends VListItem = VListItem>(
     if (isfResolved) return;
     isfResolved = true;
     isf = resolveItemState?.() ?? null;
+  }
+
+  // Listbox semantics, resolved on the same schedule and for the same reason:
+  // grid sets up at priority 10, before a11y (55) and selection (50), so this
+  // cannot be read during setup.
+  //
+  // Both a11y() and selection() call ctx.dom.enableListbox(), which marks the
+  // content element, and core renders role="option" with aria-posinset and
+  // aria-setsize for either. Reading that marker is what keeps an a11y()-only
+  // list right: groups() asks for _getSelectedIds instead, which only
+  // selection() publishes, so it renders listitem there and drops both
+  // attributes.
+  function resolveInteractive(): void {
+    if (interactive !== null || storedCtx === null) return;
+    interactive = storedCtx.dom.content.getAttribute("role") === "listbox";
   }
 
   function getRowCount(): number {
@@ -176,6 +194,7 @@ export function grid<T extends VListItem = VListItem>(
 
     // Visible row range
     resolveItemStateFn();
+    resolveInteractive();
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
     if (visEnd < totalRows - 1) visEnd++;
@@ -204,6 +223,15 @@ export function grid<T extends VListItem = VListItem>(
       }
     }
 
+    // aria-setsize is the same for every row, so it only needs rewriting when
+    // the total moves — appending items must not leave the rendered rows
+    // announcing the old count.
+    if (interactive && engineState.totalItems !== lastAriaTotal) {
+      lastAriaTotal = engineState.totalItems;
+      const setSize = String(engineState.totalItems);
+      for (const [, tracked] of rendered) tracked.el.setAttribute("aria-setsize", setSize);
+    }
+
     for (let i = rangeStart; i <= rangeEnd; i++) {
       const item = getItem(i);
       if (!item) continue;
@@ -220,6 +248,15 @@ export function grid<T extends VListItem = VListItem>(
         el.className = gridItemClass;
         el.setAttribute("data-index", String(i));
         el.setAttribute("data-id", String(item.id));
+        // Core sets role on every item and the position attributes only for an
+        // interactive list. Grid replaces the render pipeline, so none of that
+        // reached a grid row: they carried no role at all.
+        el.setAttribute("role", interactive ? "option" : "listitem");
+        if (interactive) {
+          el.id = `${classPrefix}-item-${i}`;
+          el.setAttribute("aria-posinset", String(i + 1));
+          el.setAttribute("aria-setsize", String(engineState.totalItems));
+        }
         applyTemplate(el, item, i);
         tracked = { el, lastItem: item };
         rendered.set(i, tracked);
@@ -504,6 +541,8 @@ export function grid<T extends VListItem = VListItem>(
           tracked.el.remove();
         }
         rendered.clear();
+        interactive = null;
+        lastAriaTotal = -1;
         ctx.dom.root.classList.remove(`${classPrefix}--grid`);
       });
     },

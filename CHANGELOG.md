@@ -13,6 +13,22 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- Grid rows carry listbox semantics. They carried **no `role` at all**, and no `aria-posinset` or
+  `aria-setsize`, while a plain list gave `role="option"` with both and a masonry list gave
+  `role="listitem"` with both. Core sets these in its render pipeline, and `grid()` replaces that
+  pipeline outright, so nothing reached a grid row.
+
+  A row is now `option` when the list is interactive and `listitem` when it is not, matching core,
+  with `aria-posinset` and `aria-setsize` on an interactive list and `aria-setsize` rewritten when
+  the total changes.
+
+  What counts as interactive is the marker `ctx.dom.enableListbox()` leaves on the content
+  element, because **both** `a11y()` and `selection()` call it. `groups()` instead asks whether
+  `_getSelectedIds` exists, which only `selection()` publishes — so an `a11y()`-only grouped list
+  renders `listitem` and drops both attributes. Grid reads the marker for that reason, and
+  `masonry()` never passes an interactive flag to its renderer at all, so it always says
+  `listitem`. Both remain open.
+
 - `grid()` reports the item count as the list's total. It reported the row count: a hundred items
   in three columns gave `list.total === 34`, while `getItemAt(99)` returned item 100 and
   `items.length` was 100 — the accessor and the array in item space, the total in row space.
