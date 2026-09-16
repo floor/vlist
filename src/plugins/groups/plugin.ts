@@ -960,6 +960,14 @@ export function groups<T extends VListItem = VListItem>(
 
       ctx.registerMethod("getGroupLayout", () => layout);
 
+      // The engine total counts headers, because that is what the layout
+      // renders. Anything asking how many *items* there are needs this
+      // instead — selection's "is everything selected?" test compared a set
+      // of item ids against entries and never matched. data() publishes the
+      // same hook, and wins when both are present, which is correct: then the
+      // data manager knows the real count.
+      ctx.registerMethod("_getTotal", (): number => layout.totalEntries - layout.groupCount);
+
       ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number =>
         layout.dataToLayoutIndex(dataIndex),
       );

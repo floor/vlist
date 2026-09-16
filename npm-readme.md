@@ -142,7 +142,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `masonry()` | 37.0 KB | 13.6 KB |
 | `tree()` | 41.0 KB | 14.5 KB |
 | `search()` | 34.7 KB | 12.6 KB |
-| `carousel()` | 38.4 KB | 13.9 KB |
+| `carousel()` | 38.5 KB | 13.9 KB |
 | `vlist/synthetic` + `carousel()` | 44.4 KB | 16.1 KB |
 | `vlist/synthetic` + `sortable()` | 43.4 KB | 15.3 KB |
 
