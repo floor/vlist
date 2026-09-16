@@ -121,6 +121,91 @@ describe("data ops — appendItems", () => {
 });
 
 // =============================================================================
+// appendItems — reverse mode
+// =============================================================================
+
+describe("data ops — appendItems in reverse mode", () => {
+  // 50px items in a 500px viewport, so 40 items leave 1,500px of scroll.
+  function makeReverseList(count: number, reverse = true) {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(count),
+        item: { height: 50, template: simpleTemplate },
+        reverse,
+      },
+      [],
+    );
+    return list;
+  }
+
+  it("keeps a list sitting at the end pinned to it", () => {
+    const vlist = makeReverseList(40);
+    vlist.scrollToIndex(39, "end");
+    const atEnd = vlist.getScrollPosition();
+    expect(atEnd).toBeGreaterThan(0);
+
+    vlist.appendItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBeGreaterThan(atEnd);
+    expect(vlist.getScrollPosition()).toBe(44 * 50 - 500);
+  });
+
+  it("leaves a list scrolled back through history where it is", () => {
+    const vlist = makeReverseList(40);
+    vlist.scrollToIndex(5, "start");
+    const before = vlist.getScrollPosition();
+
+    vlist.appendItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBe(before);
+  });
+
+  it("does not follow the end without reverse", () => {
+    const vlist = makeReverseList(40, false);
+    vlist.scrollToIndex(39, "end");
+    const atEnd = vlist.getScrollPosition();
+
+    vlist.appendItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBe(atEnd);
+  });
+});
+
+// =============================================================================
+// items copied at construction
+// =============================================================================
+
+describe("data ops — the items array is copied at construction", () => {
+  it("does not splice the caller's array", () => {
+    // removeItem/insertItem splice in place; with the caller's own array that
+    // rewrote it from under them, while setItems had always copied.
+    const source = createTestItems(5);
+    list = createVList<TestItem>(
+      { container, items: source, item: { height: 50, template: simpleTemplate } },
+      [],
+    );
+
+    list.removeItem(source[2]!.id);
+
+    expect(list.total).toBe(4);
+    expect(source.length).toBe(5);
+  });
+
+  it("does not pick up later edits to the caller's array", () => {
+    const source = createTestItems(5);
+    list = createVList<TestItem>(
+      { container, items: source, item: { height: 50, template: simpleTemplate } },
+      [],
+    );
+
+    source.push(...createTestItems(3, 100));
+
+    expect(list.total).toBe(5);
+  });
+});
+
+// =============================================================================
 // prependItems
 // =============================================================================
 

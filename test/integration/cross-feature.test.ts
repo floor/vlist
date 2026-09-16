@@ -703,6 +703,10 @@ describe("cross-feature — group header interaction", () => {
 
     expect(clickedItems.length).toBe(1);
     expect(clickedItems[0]!.id).toBe(2); // data item at index 1 has id=2
+    // The index is the data index too, not the layout index: feeding it back to
+    // getItemAt or removeItem used to land one row off per header above it.
+    expect(clickedItems[0]!.index).toBe(1);
+    expect(list!.getItemAt(clickedItems[0]!.index)!.id).toBe(2);
   });
 
   it("item:click on group header is suppressed", () => {

@@ -283,7 +283,10 @@ export function createCore<T extends VListItem = VListItem>(
 
   // ── Items storage ───────────────────────────────────────────────
 
-  let items: T[] = rawConfig.items ?? [];
+  // Copied, not aliased. `setItems` already copies, while `insertItem`,
+  // `removeItem` and `removeItems` splice this array in place: sharing the
+  // caller's array meant the list quietly rewrote it from under them.
+  let items: T[] = rawConfig.items ? [...rawConfig.items] : [];
   const getItems = (): readonly T[] => items;
 
   // ── Rendered elements tracking ──────────────────────────────────
@@ -722,16 +725,21 @@ export function createCore<T extends VListItem = VListItem>(
     // (groups plugin in table mode).
     const layoutToData = methods.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
     let item: T | undefined;
+    // The index reported is the data index — the space `getItemAt`,
+    // `scrollToIndex` and `removeItem` take. Reporting the layout index made a
+    // grouped list announce data row 3 as row 5, one off per header above it.
+    let index = layoutIndex;
     if (layoutToData) {
       const dataIndex = layoutToData(layoutIndex);
       if (dataIndex < 0) return null;
       const getDataItem = methods.get("_getItem") as ((i: number) => T | undefined) | undefined;
       item = getDataItem ? getDataItem(dataIndex) : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+      index = dataIndex;
     } else {
       item = getItemFn ? getItemFn(layoutIndex) : items[layoutIndex];
     }
     if (item === undefined) return null;
-    return { item, index: layoutIndex };
+    return { item, index };
   }
 
   function onContentClick(e: MouseEvent): void {
@@ -833,11 +841,19 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     appendItems(newItems: T[]): void {
+      // Reverse mode is documented for chat UIs: a view sitting at the end
+      // stays there as messages arrive. Core never read `reverse`, so the view
+      // held its pixel position while content grew past it. Only a list
+      // already at the end follows — scrolled back through history, it stays.
+      const endOf = (): number =>
+        Math.max(0, sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize);
+      const wasAtEnd = config.reverse && state.scrollPosition >= endOf() - 1;
       items.push(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
       syncContentSize();
       doForceRender();
+      if (wasAtEnd) writeScroll(endOf());
     },
 
     prependItems(newItems: T[]): void {

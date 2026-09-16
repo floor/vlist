@@ -573,13 +573,17 @@ export interface ErrorViewportSnapshot {
 
 /** Event types and their payloads */
 export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
-  /** Item clicked */
+  /**
+   * Item clicked. `index` is the DATA index — what `getItemAt`,
+   * `scrollToIndex` and `removeItem` take — not the layout index, which counts
+   * group headers and carousel laps as well.
+   */
   "item:click": { item: T; index: number; event: MouseEvent };
 
-  /** Item double-clicked */
+  /** Item double-clicked. `index` is the data index, as for `item:click`. */
   "item:dblclick": { item: T; index: number; event: MouseEvent };
 
-  /** Item right-clicked */
+  /** Item right-clicked. `index` is the data index, as for `item:click`. */
   "item:contextmenu": { item: T; index: number; event: MouseEvent };
 
   /** Selection changed */
