@@ -136,17 +136,19 @@ try {
     try {
       for (const target of [container, '#rtl-probe']) {
         try { const list=createVList({container:target,orientation:'horizontal',items:[{id:1}],item:{width:50,template:()=>''}});list.destroy();results.rejected.push(false); }
-        catch(error) { results.rejected.push(error.message.includes('RTL horizontal lists') && container.children.length===0); }
+        catch(error) { results.rejected.push(error.message.includes('horizontal RTL lists are not supported') && container.children.length===0); }
       }
-      for(const [mode,orientation] of [['synthetic','vertical'],['native','horizontal']]) {
+      try { const list=createNative({container,orientation:'horizontal',items:[{id:1}],item:{width:50,template:()=>''}});list.destroy();results.rejected.push(false); }
+      catch(error) { results.rejected.push(error.message.includes('horizontal RTL lists are not supported') && container.children.length===0); }
+      for(const [mode,orientation] of [['synthetic','vertical'],['native','vertical']]) {
         const list=(mode==='synthetic'?createVList:createNative)({container,orientation,items:[{id:1}],item:{height:50,width:50,template:()=>''}});
         results.allowed.push(mode);list.destroy();
       }
       return results;
     } finally { parent.remove(); }
   });
-  assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true],allowed:['synthetic','native']});
-  console.log('PASS inherited RTL: horizontal synthetic rejects before DOM creation; vertical/native allowed');
+  assert.deepEqual(rtl,{direction:'rtl',rejected:[true,true,true],allowed:['synthetic','native']});
+  console.log('PASS inherited RTL: horizontal rejects before DOM creation in both entries; vertical allowed in both');
   await rtlPage.close();
   for (const axis of ['y', 'x']) {
     const page = await browser.newPage();

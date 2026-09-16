@@ -413,14 +413,14 @@ describe("synthetic unsupported-combination guards", () => {
   });
 });
 
-describe("synthetic horizontal RTL creation guard", () => {
+describe("horizontal RTL creation guard", () => {
   it("rejects computed RTL for element and selector containers before creating DOM", () => {
     container.style.direction = "rtl";
     container.id = "rtl-synthetic-container";
     for (const target of [container, "#rtl-synthetic-container"]) {
       expect(() => createVList({ container: target, orientation: "horizontal", items: createTestItems(10),
         item: { width: 50, template: simpleTemplate } }))
-        .toThrow('RTL horizontal lists require createVList from "vlist"');
+        .toThrow("horizontal RTL lists are not supported");
       expect(container.children.length).toBe(0);
     }
   });
@@ -431,13 +431,13 @@ describe("synthetic horizontal RTL creation guard", () => {
     container.style.direction = "ltr";
     make("x"); list!.scrollToIndex(10); expect(list!.getScrollPosition()).toBe(500);
   });
-  it("leaves horizontal RTL handling in the native entry unchanged", () => {
+  it("rejects horizontal RTL in the native entry too", () => {
+    // It used to build the list and render a first page that never moved.
     container.style.direction = "rtl";
-    for (const mode of ["native"] as const) {
-      list = factoryFor(mode)({ container, orientation: "horizontal", items: createTestItems(100),
-        item: { width: 50, template: simpleTemplate } });
-      expect(list.element).toBeDefined(); list.destroy(); list = undefined;
-    }
+    expect(() => factoryFor("native")({ container, orientation: "horizontal", items: createTestItems(100),
+      item: { width: 50, template: simpleTemplate } }))
+      .toThrow("horizontal RTL lists are not supported");
+    expect(container.children.length).toBe(0);
   });
 });
 

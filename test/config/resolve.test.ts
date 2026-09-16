@@ -429,13 +429,13 @@ it("config permits sortable with the synthetic factory", () => {
   finally {list.destroy();host.remove();}
 });
 
-it("synthetic factory preserves the RTL horizontal entry guard", () => {
+it("config preserves the horizontal RTL guard", () => {
   const host = createContainer();
   host.style.direction = "rtl";
   try {
     expect(() => createVListFromConfig({ ...base(), container: host, factory: createSynthetic,
       orientation: "horizontal", item: { width: 40, template },
-    })).toThrow("RTL horizontal lists require createVList");
+    })).toThrow("horizontal RTL lists are not supported");
     expect(host.children.length).toBe(0);
   } finally { host.remove(); }
 });
