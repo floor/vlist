@@ -136,7 +136,9 @@ export const createGridLayout = (config: GridConfigWithGroups): GridLayout => {
       }
     }
 
-    console.warn(`⚠️ getRow(${itemIndex}) fell through - returning ${row}`);
+    // Only reachable for a negative index: the loop returns at i === itemIndex
+    // for every index from 0 up. Row 0 is the right answer there, so this was
+    // warning about a defensive branch working correctly.
     return row;
   };
 
