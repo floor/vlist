@@ -127,10 +127,12 @@ export function phase1Calculate(
   const renderStart = Math.max(0, visStart - overscan);
   const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-  // Safety cap
-  const maxRender = Math.ceil(containerSize / 1) + overscan * 2 + 10;
+  // The buffers bound the window: capacity is ceil(containerSize / minItemSize)
+  // + overscan * 2, and minItemSize is at least 1, so a third cap of
+  // ceil(containerSize / 1) + overscan * 2 + 10 sat ten above it and could
+  // never be the minimum. The `/ 1` was left over from a division by row size.
   const count = renderEnd - renderStart + 1;
-  const safeCap = Math.min(count, state.capacity, maxRender);
+  const safeCap = Math.min(count, state.capacity);
 
   // Range-unchanged fast path. Item transforms are `offset - baseOffset`, so a
   // logical provider that moves baseOffset without changing the range (bounded

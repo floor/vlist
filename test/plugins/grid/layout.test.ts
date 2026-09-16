@@ -124,6 +124,25 @@ describe("getRow", () => {
     expect(layout.getRow(99)).toBe(24);
     expect(layout.getRow(100)).toBe(25);
   });
+
+  it("places headers on their own row and items after them", () => {
+    // The grouped branch had no coverage at all: every existing case above
+    // takes the isHeaderFn-less fast path.
+    const grouped = createGridLayout({ columns: 4, isHeaderFn: (i: number) => i === 0 || i === 5 });
+    expect(grouped.getRow(0)).toBe(0); // header
+    expect(grouped.getRow(1)).toBe(1); // first item of its row
+    expect(grouped.getRow(4)).toBe(1); // fourth column of that row
+    expect(grouped.getRow(5)).toBe(2); // second header, own row
+    expect(grouped.getRow(6)).toBe(3);
+  });
+
+  it("returns row 0 for a negative index instead of warning", () => {
+    // The loop returns at i === itemIndex for every index from 0 up, so the
+    // line past it is reachable only here — where row 0 is correct. It used to
+    // log an emoji warning about a defensive branch behaving properly.
+    const grouped = createGridLayout({ columns: 4, isHeaderFn: (i: number) => i === 0 });
+    expect(grouped.getRow(-1)).toBe(0);
+  });
 });
 
 describe("getCol", () => {
