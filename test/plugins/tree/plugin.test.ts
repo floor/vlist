@@ -2,6 +2,8 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { tree } from "../../../src/plugins/tree/plugin";
+import { createVList } from "../../../src/core/create";
+import { data } from "../../../src/plugins/data";
 import type { TreePluginConfig } from "../../../src/plugins/tree/types";
 import { selection } from "../../../src/plugins/selection/plugin";
 import type { SelectionPluginConfig } from "../../../src/plugins/selection/plugin";
@@ -45,7 +47,7 @@ describe("tree plugin — factory", () => {
     const plugin = tree();
     expect(plugin.name).toBe("tree");
     expect(plugin.priority).toBe(10);
-    expect(plugin.conflicts).toEqual(["groups", "grid", "masonry", "table"]);
+    expect(plugin.conflicts).toEqual(["groups", "grid", "masonry", "table", "data"]);
   });
 });
 
@@ -855,5 +857,43 @@ describe("tree + selection — click handler", () => {
     expect(getItem(4)?.id).toBe("3");
 
     cleanup();
+  });
+});
+
+
+// =============================================================================
+// tree + data
+// =============================================================================
+
+describe("tree plugin — conflicts with data", () => {
+  const adapter = { read: async () => ({ items: [] as TreeItem[], total: 0 }) };
+
+  test("declares the conflict", () => {
+    expect(tree().conflicts).toContain("data");
+  });
+
+  test("throws at creation in either plugin order", () => {
+    // data() claims six of the seven hooks tree() installs and runs later
+    // (priority 20 against 10), replacing the whole data-access surface under
+    // the tree. The one hook it does not claim is tree's renderer, which stayed
+    // installed and kept reading through the replaced functions: zero rows.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const config = {
+      container,
+      items: makeTree(),
+      item: { height: 32, template: (node: TreeItem) => node.name },
+    };
+    try {
+      expect(() =>
+        createVList<TreeItem>(config, [tree<TreeItem>(), data<TreeItem>({ adapter })]),
+      ).toThrow('Plugin "tree" conflicts with "data"');
+      expect(() =>
+        createVList<TreeItem>(config, [data<TreeItem>({ adapter }), tree<TreeItem>()]),
+      ).toThrow('Plugin "tree" conflicts with "data"');
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
