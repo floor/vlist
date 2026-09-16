@@ -10,6 +10,12 @@
  *
  * Replaces the render pipeline (like groups/grid/table) to maintain full
  * control over tree-specific ARIA, CSS classes, indent, and expand/collapse.
+ *
+ * Restrictions:
+ * - Cannot be combined with `groups()`, `grid()`, `masonry()` or `table()`:
+ *   each of those owns the layout, and so does this one.
+ * - Cannot be combined with `data()`, which claims the same data-access hooks
+ *   and would replace them. Use `loadChildren` for async tree data.
  */
 
 import type { VListItem, ItemState, ItemTemplate, TreeState, VListEvents } from "../../types";
@@ -674,7 +680,13 @@ export function tree<T extends VListItem = VListItem>(
   return {
     name: "tree",
     priority: 10,
-    conflicts: ["groups", "grid", "masonry", "table"],
+    // data() installs six of the seven hooks this plugin installs — total,
+    // item, index-by-id, insert, remove and update — and runs later (priority
+    // 20 against 10), so it replaced the whole data-access surface underneath
+    // the tree. The one hook it does not claim is the renderer, which stayed
+    // installed and kept reading through the replaced functions: nothing
+    // rendered. Async tree data has its own path in `loadChildren`.
+    conflicts: ["groups", "grid", "masonry", "table", "data"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
