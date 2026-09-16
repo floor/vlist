@@ -239,6 +239,17 @@ export interface VListPlugin<T extends VListItem = VListItem, M = {}> {
   readonly priority?: number;
   readonly conflicts?: readonly string[];
 
+  /**
+   * Cold path: reject a list configuration this plugin cannot support.
+   *
+   * Runs before setup and outside its catch, so throwing here reaches the
+   * caller. A throw from `setup()` cannot: it is reported as an `error` event
+   * so that one plugin's failure does not stop the others, which is the right
+   * behaviour for a fault and the wrong one for a configuration the plugin has
+   * already decided it cannot serve.
+   */
+  validateConfig?(config: ResolvedConfig): void;
+
   /** Cold path: one-time wiring during createVList(). */
   setup?(ctx: PluginContext<T>): void;
 

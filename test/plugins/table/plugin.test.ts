@@ -212,7 +212,7 @@ describe("table - Setup", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { isX: true });
 
-    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with horizontal orientation");
+    expect(() => plugin.validateConfig!(ctx.config)).toThrow("cannot be used with horizontal orientation");
     cleanup();
   });
 
@@ -221,7 +221,7 @@ describe("table - Setup", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { reverse: true });
 
-    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with reverse mode");
+    expect(() => plugin.validateConfig!(ctx.config)).toThrow("cannot be used with reverse mode");
     cleanup();
   });
 

@@ -13,6 +13,29 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- A plugin that cannot serve the list's configuration throws again.
+  `createVList({ reverse: true }, [table()])` returned a list — half wired, rendering fifteen
+  ordinary rows, with nothing to say it was not a table. `table()` rejects reverse mode and
+  horizontal orientation, and `masonry()` rejects reverse mode, by throwing; making plugin setup
+  errors observable had wrapped every `setup()` in a catch, so those rejections became an `error`
+  event fired before `createVList` returns — which no caller can hear.
+
+  Two failures had collapsed into one. A plugin that throws while wiring itself is a fault: it is
+  still caught and reported, and the plugins after it still set up, so one bad plugin cannot take
+  a list down. A plugin that has already decided it cannot serve this configuration is a
+  programming error, and handing back a plausible-looking wrong list is worse than failing.
+
+  Plugins declare the second kind through a new optional `validateConfig(config)`, which runs
+  beside the declared-conflict check and outside the setup catch. `table()` and `masonry()` use
+  it; a declared conflict such as `table` with `grid` already threw from there, so both kinds of
+  "this plugin cannot work here" now fail the same way, in the same place. Third-party plugins
+  can use it too.
+
+  The three tests covering these rejections all called `plugin.setup!(ctx)` directly, which is
+  why they stayed green while the path every caller uses was broken. They now exercise the hook,
+  and `test/core/plugin-validation.test.ts` covers both halves of the boundary through
+  `createVList`.
+
 - The render window has a ceiling again. Making the window the authority on capacity fixed the
   truncation of small rows, and removed the only upper bound with it: a size spec reporting `0`
   puts every item at the same offset, so `indexAtOffset` lands on `total - 1` and the window

@@ -13,7 +13,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, PluginContext } from "../../core/types";
+import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
@@ -423,6 +423,12 @@ export function masonry<T extends VListItem = VListItem>(
     priority: 10,
     conflicts: ["grid", "table"],
 
+    validateConfig(config: ResolvedConfig): void {
+      if (config.reverse) {
+        throw new Error("[vlist] masonry: cannot be combined with reverse mode");
+      }
+    },
+
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
       storedCtx = ctx;
@@ -431,10 +437,6 @@ export function masonry<T extends VListItem = VListItem>(
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;
-
-      if (ctx.config.reverse) {
-        throw new Error("[vlist] masonry: cannot be combined with reverse mode");
-      }
 
       crossPadTotal = ctx.config.crossAxisPadding;
       crossPadStart = ctx.config.crossPadStart;
