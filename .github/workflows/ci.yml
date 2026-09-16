@@ -39,6 +39,9 @@ jobs:
       - name: Bundle size + tree-shaking
         run: bun run size
 
+      - name: Heap growth
+        run: bun run heap
+
   browser:
     name: Browser suites
     runs-on: ubuntu-latest
