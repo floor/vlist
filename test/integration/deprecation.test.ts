@@ -27,7 +27,7 @@ it("core, alias and native entry supported configurations emit no warnings", () 
 
 it("removed legacy scroll hooks are absent from the plugin context", () => {
   const host = createContainer();
-  let context!: PluginContext;
+  let context!: PluginContext<{id:number}>;
   const list = createVList({ container: host, items: [{ id: 1 }],
     item: { height: 40, template: () => "row" },
   }, [{ name: "inspect", setup(ctx) { context = ctx; } }]);

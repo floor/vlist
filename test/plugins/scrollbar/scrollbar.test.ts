@@ -1137,7 +1137,7 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
-      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeLessThan(400);
     });
 
@@ -1162,7 +1162,7 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
-      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeGreaterThan(0);
     });
 
@@ -1207,7 +1207,7 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
-      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1][0] as number;
+      const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeLessThan(400);
     });
   });
@@ -1851,7 +1851,7 @@ describe("createScrollbar", () => {
       if (onScrollMock.mock.calls.length > 0) {
         const lastCall =
           onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1];
-        const position = lastCall[0];
+        const position = lastCall![0];
         // Position should not exceed maxScroll (2000 - 400 = 1600)
         expect(position).toBeLessThanOrEqual(1600);
         expect(position).toBeGreaterThanOrEqual(0);

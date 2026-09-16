@@ -6,17 +6,13 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, mock } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
-import { createContainer, createTestItems, simpleTemplate } from "../helpers";
+import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers";
 import { createVList } from "../../src/core/create";
 import { grid } from "../../src/plugins/grid";
 import { masonry } from "../../src/plugins/masonry";
 import { groups } from "../../src/plugins/groups";
 import type { PluginContext, VListPlugin } from "../../src/core/types";
 import type { VListItem } from "../../src/types";
-
-interface TestItem extends VListItem {
-  id: number;
-}
 
 let container: HTMLElement;
 let consoleError: typeof console.error;
@@ -42,7 +38,7 @@ const errorSpy = (): { plugin: VListPlugin<TestItem>; calls: { error: Error; con
       name: "error-listener",
       priority: 0,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.emitter.on("error", (payload: never) => calls.push(payload as unknown as { error: Error; context: string }));
+        ctx.emitter.on("error", (payload) => calls.push(payload as unknown as { error: Error; context: string }));
       },
     },
   };

@@ -164,8 +164,8 @@ describe("async + selection integration", () => {
       (list as any).select(1, 2);
       const items: TestItem[] = (list as any).getSelectedItems();
       expect(items.length).toBe(2);
-      expect(items[0].id).toBe(1);
-      expect(items[1].id).toBe(2);
+      expect(items[0]!.id).toBe(1);
+      expect(items[1]!.id).toBe(2);
     });
   });
 

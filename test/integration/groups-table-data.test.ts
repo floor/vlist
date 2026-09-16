@@ -366,12 +366,12 @@ describe("groups + table + data", () => {
           { container: c1, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
             }),
-            snapshots({ autoSave: STORAGE_KEY }),
+            snapshots<CityItem>({ autoSave: STORAGE_KEY }),
           ],
         );
 
@@ -394,12 +394,12 @@ describe("groups + table + data", () => {
           { container: c2, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
             }),
-            snapshots({ autoSave: STORAGE_KEY }),
+            snapshots<CityItem>({ autoSave: STORAGE_KEY }),
           ],
         );
 
@@ -464,8 +464,8 @@ describe("groups + table + data", () => {
           { container: c, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
               sticky: true,

@@ -765,7 +765,7 @@ describe("snapshots - Auto-Restore", () => {
   it("should NOT schedule restore when restore is undefined", async () => {
     const { ctx, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
-    const plugin = snapshots<TestItem>({ restore: undefined });
+    const plugin = snapshots<TestItem>({});
     plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));

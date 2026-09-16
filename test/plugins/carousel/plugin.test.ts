@@ -52,20 +52,20 @@ function createTestItems(count: number): TestItem[] {
 
 describe("carousel — Factory", () => {
   it("should create a plugin with correct name and priority", () => {
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     expect(plugin.name).toBe("carousel");
     expect(plugin.priority).toBe(10);
   });
 
   it("should accept empty config (defaults to full variant)", () => {
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     expect(plugin).toBeDefined();
     expect(typeof plugin.setup).toBe("function");
   });
 
   it("should accept all variant configs", () => {
     for (const variant of ["full", "hero", "hero-center", "multi", "uncontained", "free"] as const) {
-      const plugin = carousel({ variant });
+      const plugin = carousel<TestItem>({ variant });
       expect(plugin).toBeDefined();
     }
   });
@@ -73,7 +73,7 @@ describe("carousel — Factory", () => {
   it("declares a conflict with groups", () => {
     // Its only declared conflict used to be with scale(), which 3.0 removed,
     // leaving none at all — while groups silently broke it in both orders.
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     expect(plugin.conflicts).toContain("groups");
     expect(plugin.conflicts).not.toContain("scale");
   });
@@ -91,7 +91,7 @@ describe("carousel — Registered Methods", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(methods.has("next")).toBe(true);
     expect(typeof methods.get("next")).toBe("function");
@@ -106,7 +106,7 @@ describe("carousel — Registered Methods", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(methods.has("prev")).toBe(true);
     expect(typeof methods.get("prev")).toBe("function");
@@ -121,7 +121,7 @@ describe("carousel — Registered Methods", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(methods.has("goTo")).toBe(true);
     expect(typeof methods.get("goTo")).toBe("function");
@@ -136,7 +136,7 @@ describe("carousel — Registered Methods", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(methods.has("getCarouselState")).toBe(true);
 
@@ -164,7 +164,7 @@ describe("carousel — Infinite Loop", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const next = methods.get("next") as Function;
@@ -188,7 +188,7 @@ describe("carousel — Infinite Loop", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const prev = methods.get("prev") as Function;
@@ -212,7 +212,7 @@ describe("carousel — Infinite Loop", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const next = methods.get("next") as Function;
@@ -238,7 +238,7 @@ describe("carousel — Logical Totals", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     // list.total uses virtualTotalFn which returns the real count.
     // engineState.totalItems is inflated for the render pipeline
@@ -256,7 +256,7 @@ describe("carousel — Logical Totals", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -283,7 +283,7 @@ describe("carousel — Edge Cases", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     const prev = methods.get("prev") as Function;
@@ -303,7 +303,7 @@ describe("carousel — Edge Cases", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     const prev = methods.get("prev") as Function;
@@ -325,18 +325,18 @@ describe("carousel — Edge Cases", () => {
 
 describe("carousel — Snap", () => {
   it("snap should be enabled by default", () => {
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     expect(plugin).toBeDefined();
     // Snap is internal — verified by behavior, not config inspection
   });
 
   it("snap should be disabled for free variant by default", () => {
-    const plugin = carousel({ variant: "free", snap: false });
+    const plugin = carousel<TestItem>({ variant: "free", snap: false });
     expect(plugin).toBeDefined();
   });
 
   it("snap should be optional for uncontained variant", () => {
-    const plugin = carousel({ variant: "uncontained" });
+    const plugin = carousel<TestItem>({ variant: "uncontained" });
     expect(plugin).toBeDefined();
   });
 });
@@ -353,7 +353,7 @@ describe("carousel — Variant: full", () => {
       itemSize: 400,
     });
 
-    carousel({ variant: "full" }).setup!(ctx);
+    carousel<TestItem>({ variant: "full" }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
@@ -374,7 +374,7 @@ describe("carousel — goTo direction", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -396,7 +396,7 @@ describe("carousel — goTo direction", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -423,7 +423,7 @@ describe("carousel — Destroy", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     plugin.setup!(ctx);
 
     expect(() => plugin.destroy?.()).not.toThrow();
@@ -444,7 +444,7 @@ describe("carousel — Virtual Item Mapping", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     // The plugin should set getItemFn so that indices beyond total wrap
     const getItem = ctx.items.at.bind(ctx);
@@ -464,7 +464,7 @@ describe("carousel — Virtual Item Mapping", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -488,7 +488,7 @@ describe("carousel — Virtual Item Mapping", () => {
       itemSize: 200,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const prev = methods.get("prev") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -518,7 +518,7 @@ describe("carousel — Variant: hero-center", () => {
       itemSize: 400,
     });
 
-    carousel({ variant: "hero-center" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero-center" }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
@@ -533,32 +533,32 @@ describe("carousel — Variant: hero-center", () => {
 
 describe("carousel — MD3 Config", () => {
   it("should accept largeItemMaxWidth config", () => {
-    const plugin = carousel({ largeItemMaxWidth: 600 });
+    const plugin = carousel<TestItem>({ largeItemMaxWidth: 600 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept parallax config", () => {
-    const plugin = carousel({ parallax: 0.5 });
+    const plugin = carousel<TestItem>({ parallax: 0.5 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept cornerRadius config", () => {
-    const plugin = carousel({ cornerRadius: 28 });
+    const plugin = carousel<TestItem>({ cornerRadius: 28 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept peek as number", () => {
-    const plugin = carousel({ peek: 56 });
+    const plugin = carousel<TestItem>({ peek: 56 });
     expect(plugin).toBeDefined();
   });
 
   it("should accept peek as percentage string", () => {
-    const plugin = carousel({ peek: "20%" });
+    const plugin = carousel<TestItem>({ peek: "20%" });
     expect(plugin).toBeDefined();
   });
 
   it("should accept peek as auto", () => {
-    const plugin = carousel({ peek: "auto" });
+    const plugin = carousel<TestItem>({ peek: "auto" });
     expect(plugin).toBeDefined();
   });
 });
@@ -575,7 +575,7 @@ describe("carousel — initialIndex", () => {
       itemSize: 400,
     });
 
-    carousel({ initialIndex: 5 }).setup!(ctx);
+    carousel<TestItem>({ initialIndex: 5 }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(5);
@@ -590,7 +590,7 @@ describe("carousel — initialIndex", () => {
       itemSize: 400,
     });
 
-    carousel({ initialIndex: 7 }).setup!(ctx);
+    carousel<TestItem>({ initialIndex: 7 }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(2); // 7 % 5 = 2
@@ -618,7 +618,7 @@ describe("carousel — Variant: hero — step size", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 56 }).setup!(ctx);
 
     // All items have the same step size = 800 - 56 = 744
     const size0 = ctx.sizes.cache.getSize(0);
@@ -638,7 +638,7 @@ describe("carousel — Variant: hero — step size", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 56 }).setup!(ctx);
 
     const stepSize = 800 - 56;
     expect(ctx.sizes.cache.getOffset(0)).toBe(0);
@@ -657,7 +657,7 @@ describe("carousel — Variant: hero — step size", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 56 }).setup!(ctx);
 
     const next = methods.get("next") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -683,7 +683,7 @@ describe("carousel — Variant: hero — state", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().role).toBe("large");
@@ -700,7 +700,7 @@ describe("carousel — Variant: hero — state", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     const next = methods.get("next") as Function;
     const prev = methods.get("prev") as Function;
@@ -734,7 +734,7 @@ describe("carousel — Variant: hero — state", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -762,7 +762,7 @@ describe("carousel — Variant: hero — peek config", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: 48 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 48 }).setup!(ctx);
 
     expect(ctx.sizes.cache.getSize(0)).toBe(800 - 48);
 
@@ -778,7 +778,7 @@ describe("carousel — Variant: hero — peek config", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: "10%" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: "10%" }).setup!(ctx);
 
     // 10% of 800 = 80 → stepSize = 800 - 80 = 720
     expect(ctx.sizes.cache.getSize(0)).toBe(720);
@@ -795,7 +795,7 @@ describe("carousel — Variant: hero — peek config", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: "auto" }).setup!(ctx);
 
     // 15% of 800 = 120, capped at 120
     expect(ctx.sizes.cache.getSize(0)).toBe(800 - 120);
@@ -812,7 +812,7 @@ describe("carousel — Variant: hero — peek config", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: "auto" }).setup!(ctx);
 
     // 15% of 200 = 30, clamped to min 40
     const stepSize = ctx.sizes.cache.getSize(0);
@@ -837,7 +837,7 @@ describe("carousel — Variant: hero-center — layout", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero-center" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero-center" }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
@@ -855,7 +855,7 @@ describe("carousel — Variant: hero-center — layout", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero-center", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero-center", peek: 56 }).setup!(ctx);
 
     // hero-center: stepSize = containerSize - 2*peek = 800 - 112 = 688
     expect(ctx.sizes.cache.getSize(0)).toBe(688);
@@ -873,7 +873,7 @@ describe("carousel — Variant: hero-center — layout", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero-center" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero-center" }).setup!(ctx);
 
     const next = methods.get("next") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -897,7 +897,7 @@ describe("carousel — Variant: hero-center — layout", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "hero-center", peek: 100 });
+    const plugin = carousel<TestItem>({ variant: "hero-center", peek: 100 });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -910,15 +910,15 @@ describe("carousel — Variant: hero-center — layout", () => {
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Left peek at viewport position 0
-    const leftVpLeft = Math.round(parseFloat(els[0].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+    const leftVpLeft = Math.round(parseFloat(els[0]!.style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
     // Focal at viewport position 100 (after left peek)
-    const focalVpLeft = Math.round(parseFloat(els[1].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+    const focalVpLeft = Math.round(parseFloat(els[1]!.style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
     // Right peek after focal
-    const rightVpLeft = Math.round(parseFloat(els[2].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
+    const rightVpLeft = Math.round(parseFloat(els[2]!.style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
 
-    const leftW = parseInt(els[0].style.width);
-    const focalW = parseInt(els[1].style.width);
-    const rightW = parseInt(els[2].style.width);
+    const leftW = parseInt(els[0]!.style.width);
+    const focalW = parseInt(els[1]!.style.width);
+    const rightW = parseInt(els[2]!.style.width);
 
     // Left peek starts at 0
     expect(leftVpLeft).toBe(0);
@@ -951,7 +951,7 @@ describe("carousel — Variant: hero — vertical", () => {
       isX: false,
     });
 
-    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 56 }).setup!(ctx);
 
     // Vertical: containerSize = 600, stepSize = 600 - 56 = 544
     expect(ctx.sizes.cache.getSize(0)).toBe(544);
@@ -974,7 +974,7 @@ describe("carousel — Variant: hero — infinite loop", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const next = methods.get("next") as Function;
@@ -998,7 +998,7 @@ describe("carousel — Variant: hero — infinite loop", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     const prev = methods.get("prev") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -1019,7 +1019,7 @@ describe("carousel — Variant: hero — infinite loop", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero" }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero" }).setup!(ctx);
 
     expect(ctx.items.all().length).toBe(8);
 
@@ -1058,7 +1058,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full" });
+    const plugin = carousel<TestItem>({ variant: "full" });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1071,10 +1071,10 @@ describe("carousel — CSS Variables", () => {
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     // Focal element (offset 0) should have progress ~0
-    const p0 = parseFloat(els[0].style.getPropertyValue("--vlist-carousel-progress"));
+    const p0 = parseFloat(els[0]!.style.getPropertyValue("--vlist-carousel-progress"));
     expect(p0).toBeLessThanOrEqual(0.001);
     // Adjacent elements should have progress > 0
-    const p1 = parseFloat(els[1].style.getPropertyValue("--vlist-carousel-progress"));
+    const p1 = parseFloat(els[1]!.style.getPropertyValue("--vlist-carousel-progress"));
     expect(p1).toBeGreaterThan(0);
 
     cleanup();
@@ -1089,7 +1089,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full" });
+    const plugin = carousel<TestItem>({ variant: "full" });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1099,10 +1099,10 @@ describe("carousel — CSS Variables", () => {
     const scrollPos = middleStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
-    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
-    expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
-    expect(els[3].style.getPropertyValue("--vlist-carousel-offset")).toBe("2");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
+    expect(els[1]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[2]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+    expect(els[3]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("2");
 
     cleanup();
   });
@@ -1116,7 +1116,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "hero", peek: 56 });
+    const plugin = carousel<TestItem>({ variant: "hero", peek: 56 });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1127,8 +1127,8 @@ describe("carousel — CSS Variables", () => {
     const scrollPos = middleStart * stepSz;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
-    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-role")).toBe("small");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-role")).toBe("large");
+    expect(els[1]!.style.getPropertyValue("--vlist-carousel-role")).toBe("small");
 
     cleanup();
   });
@@ -1142,7 +1142,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full" });
+    const plugin = carousel<TestItem>({ variant: "full" });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1154,15 +1154,15 @@ describe("carousel — CSS Variables", () => {
     // At item 0 — els[0] is focal
     es.scrollPosition = middleStart * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
-    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[1]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
 
     // Scroll to item 1 — els[1] is now focal
     es.scrollPosition = (middleStart + 1) * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
-    expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
-    expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
-    expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
+    expect(els[1]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
+    expect(els[2]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
 
     cleanup();
   });
@@ -1176,7 +1176,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "hero", peek: 56 });
+    const plugin = carousel<TestItem>({ variant: "hero", peek: 56 });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1188,9 +1188,9 @@ describe("carousel — CSS Variables", () => {
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Focal item should have width = stepSize (744)
-    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("744px");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-width")).toBe("744px");
     // Peek item should have width = peekSize (56)
-    expect(els[1].style.getPropertyValue("--vlist-carousel-width")).toBe("56px");
+    expect(els[1]!.style.getPropertyValue("--vlist-carousel-width")).toBe("56px");
 
     cleanup();
   });
@@ -1204,7 +1204,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full" });
+    const plugin = carousel<TestItem>({ variant: "full" });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1215,10 +1215,10 @@ describe("carousel — CSS Variables", () => {
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Full: focal = containerSize, next = 0 (no peek at rest)
-    expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("600px");
-    expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-width")).toBe("600px");
+    expect(els[0]!.style.getPropertyValue("--vlist-carousel-role")).toBe("large");
     // Next item has 0 width — hidden
-    expect(els[1].style.display).toBe("none");
+    expect(els[1]!.style.display).toBe("none");
 
     cleanup();
   });
@@ -1232,7 +1232,7 @@ describe("carousel — CSS Variables", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full" });
+    const plugin = carousel<TestItem>({ variant: "full" });
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
@@ -1245,8 +1245,8 @@ describe("carousel — CSS Variables", () => {
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Both items visible, sharing the container
-    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
-    const w1 = parseInt(els[1].style.getPropertyValue("--vlist-carousel-width"));
+    const w0 = parseInt(els[0]!.style.getPropertyValue("--vlist-carousel-width"));
+    const w1 = parseInt(els[1]!.style.getPropertyValue("--vlist-carousel-width"));
     expect(w0).toBe(300); // outgoing shrinks to 50%
     expect(w1).toBe(300); // incoming grows to 50%
     expect(w0 + w1).toBe(600); // sum = container
@@ -1273,7 +1273,7 @@ describe("carousel — Gap", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "hero", peek: 120, gap: 8 });
+    const plugin = carousel<TestItem>({ variant: "hero", peek: 120, gap: 8 });
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
@@ -1289,8 +1289,8 @@ describe("carousel — Gap", () => {
     es.scrollPosition = middleStart * 681;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
-    const w1 = parseInt(els[1].style.getPropertyValue("--vlist-carousel-width"));
+    const w0 = parseInt(els[0]!.style.getPropertyValue("--vlist-carousel-width"));
+    const w1 = parseInt(els[1]!.style.getPropertyValue("--vlist-carousel-width"));
 
     expect(w0).toBeLessThan(800 - 120);
     expect(w1).toBeGreaterThan(0);
@@ -1308,7 +1308,7 @@ describe("carousel — Gap", () => {
       isX: true,
     });
 
-    const plugin = carousel({ variant: "full", gap: 8 });
+    const plugin = carousel<TestItem>({ variant: "full", gap: 8 });
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
@@ -1321,7 +1321,7 @@ describe("carousel — Gap", () => {
     es.scrollPosition = middleStart * 608;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
+    const w0 = parseInt(els[0]!.style.getPropertyValue("--vlist-carousel-width"));
     expect(w0).toBe(600);
 
     cleanup();
@@ -1336,7 +1336,7 @@ describe("carousel — Gap", () => {
       isX: false,
     });
 
-    const plugin = carousel({ variant: "hero", peek: 100, gap: 12 });
+    const plugin = carousel<TestItem>({ variant: "hero", peek: 100, gap: 12 });
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
@@ -1350,8 +1350,8 @@ describe("carousel — Gap", () => {
     es.scrollPosition = middleStart * 502;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const h0 = parseInt(els[0].style.height);
-    const h1 = parseInt(els[1].style.height);
+    const h0 = parseInt(els[0]!.style.height);
+    const h1 = parseInt(els[1]!.style.height);
 
     expect(h0).toBeGreaterThan(h1);
     expect(h0 + h1 + 12).toBe(600);
@@ -1372,7 +1372,7 @@ describe("carousel — Keyboard", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(keydownHandlers.length).toBeGreaterThan(0);
 
@@ -1386,7 +1386,7 @@ describe("carousel — Keyboard", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(dom.content.getAttribute("tabindex")).toBe("0");
 
@@ -1418,7 +1418,7 @@ describe("carousel — carousel:change event", () => {
       if (event === "carousel:change") events.push(payload);
     }) as any;
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     next(1, { behavior: "auto" });
@@ -1444,7 +1444,7 @@ describe("carousel — carousel:change event", () => {
       if (event === "carousel:change") events.push(payload);
     }) as any;
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const prev = methods.get("prev") as Function;
     prev(1, { behavior: "auto" });
@@ -1468,7 +1468,7 @@ describe("carousel — Index Mapping", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(methods.has("_layoutToDataIndex")).toBe(true);
 
@@ -1494,7 +1494,7 @@ describe("carousel — Mutation Sync", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const next = methods.get("next") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -1508,7 +1508,7 @@ describe("carousel — Mutation Sync", () => {
     items.push({ id: 5, name: "Item 5" });
 
     // Trigger onAfterScroll which calls syncItemCount
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     plugin.setup!(ctx);
     // The new plugin instance won't have the same state,
     // so we verify via getItems().length
@@ -1524,7 +1524,7 @@ describe("carousel — Mutation Sync", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     expect(ctx.items.all().length).toBe(5);
 
     items.push({ id: 5, name: "Item 5" });
@@ -1546,7 +1546,7 @@ describe("carousel — Normalized Scroll", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     const state = getState();
@@ -1607,7 +1607,7 @@ describe("carousel — Presets", () => {
       isX: true,
     });
 
-    carousel({ variant: "multi" }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi" }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1623,7 +1623,7 @@ describe("carousel — Presets", () => {
       isX: true,
     });
 
-    carousel({ variant: "uncontained" }).setup!(ctx);
+    carousel<TestItem>({ variant: "uncontained" }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1689,7 +1689,7 @@ describe("carousel — Presets", () => {
       slots: [0.7, 0.3],
       focalSlot: 0,
     });
-    carousel({ variant: resolver }).setup!(ctx);
+    carousel<TestItem>({ variant: resolver }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1710,7 +1710,7 @@ describe("carousel — Presets", () => {
       isX: true,
     });
 
-    carousel({ variant: "panorama" }).setup!(ctx);
+    carousel<TestItem>({ variant: "panorama" }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1732,7 +1732,7 @@ describe("carousel — normalizeVariant SlotConfig object", () => {
       isX: true,
     });
 
-    carousel({ variant: { slots: [0.7, 0.3], focalSlot: 0 } }).setup!(ctx);
+    carousel<TestItem>({ variant: { slots: [0.7, 0.3], focalSlot: 0 } }).setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
@@ -1752,7 +1752,7 @@ describe("carousel — syncItemCount", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1777,7 +1777,7 @@ describe("carousel — syncItemCount", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1799,11 +1799,11 @@ describe("carousel — syncItemCount", () => {
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
       containerWidth: 800,
       containerHeight: 400,
-      itemSize: (i: number) => widths[i % widths.length],
+      itemSize: (i: number) => widths[i % widths.length]!,
       isX: true,
     });
 
-    const plugin = carousel({ variant: "multi-aspect" });
+    const plugin = carousel<TestItem>({ variant: "multi-aspect" });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1840,7 +1840,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
 
     fireKey(keydownHandlers, "ArrowRight");
@@ -1856,7 +1856,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
 
     fireKey(keydownHandlers, "ArrowDown");
@@ -1872,7 +1872,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
 
     fireKey(keydownHandlers, "ArrowLeft");
@@ -1888,7 +1888,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const getState = methods.get("getCarouselState") as Function;
 
     fireKey(keydownHandlers, "ArrowUp");
@@ -1904,7 +1904,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const goTo = methods.get("goTo") as Function;
     goTo(3);
 
@@ -1921,7 +1921,7 @@ describe("carousel — Keyboard Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     fireKey(keydownHandlers, "End");
     expect((methods.get("getCarouselState") as Function)().index).toBe(4);
@@ -1942,7 +1942,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ snap: true });
+    const plugin = carousel<TestItem>({ snap: true });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1962,7 +1962,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ snap: true });
+    const plugin = carousel<TestItem>({ snap: true });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1982,7 +1982,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ variant: "free", snap: false });
+    const plugin = carousel<TestItem>({ variant: "free", snap: false });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -1998,7 +1998,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ snap: true, snapDirection: true });
+    const plugin = carousel<TestItem>({ snap: true, snapDirection: true });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -2027,7 +2027,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ snap: true, snapDirection: true });
+    const plugin = carousel<TestItem>({ snap: true, snapDirection: true });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -2056,7 +2056,7 @@ describe("carousel — onIdle snap", () => {
       itemSize: 400,
     });
 
-    const plugin = carousel({ snap: true, snapDirection: false });
+    const plugin = carousel<TestItem>({ snap: true, snapDirection: false });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -2099,7 +2099,7 @@ describe("carousel — scrollToIndexFn", () => {
       origSetFn(fn);
     };
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     expect(capturedFn).not.toBeNull();
 
     const result = capturedFn!(3, "start", "smooth", 300);
@@ -2123,7 +2123,7 @@ describe("carousel — scrollToIndexFn", () => {
       origSetFn(fn);
     };
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     expect(capturedFn).not.toBeNull();
 
     const result = capturedFn!(0, "start");
@@ -2145,7 +2145,7 @@ describe("carousel — goTo direction instant", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
 
@@ -2163,7 +2163,7 @@ describe("carousel — goTo direction instant", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
 
@@ -2181,7 +2181,7 @@ describe("carousel — goTo direction instant", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
 
@@ -2205,7 +2205,7 @@ describe("carousel — Destroy Handler", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     expect(destroyHandlers.length).toBeGreaterThan(0);
     expect(() => destroyHandlers.forEach(h => h())).not.toThrow();
@@ -2226,7 +2226,7 @@ describe("carousel — NavConfig navigate", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const navCfg = ctx.nav.get();
     expect(navCfg.navigate).not.toBeNull();
 
@@ -2243,7 +2243,7 @@ describe("carousel — NavConfig navigate", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(0, "ArrowLeft", 5);
@@ -2259,7 +2259,7 @@ describe("carousel — NavConfig navigate", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(3, "Home", 5);
@@ -2275,7 +2275,7 @@ describe("carousel — NavConfig navigate", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(0, "End", 5);
@@ -2291,7 +2291,7 @@ describe("carousel — NavConfig navigate", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(2, "Tab", 5);
@@ -2313,7 +2313,7 @@ describe("carousel — sizeCache.indexAtOffset", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
 
     const idx = ctx.sizes.cache.indexAtOffset(1200);
     expect(idx).toBe(3);
@@ -2335,7 +2335,7 @@ describe("carousel — goTo single item", () => {
       itemSize: 400,
     });
 
-    carousel().setup!(ctx);
+    carousel<TestItem>().setup!(ctx);
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
 
@@ -2367,7 +2367,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
   it("should accept multi-aspect variant", () => {
     const { ctx, methods, cleanup } = createVariableWidthContext();
 
-    carousel({ variant: "multi-aspect" }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect" }).setup!(ctx);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
@@ -2378,7 +2378,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
   it("sizeCache.getSize should return per-item step sizes", () => {
     const { ctx, cleanup } = createVariableWidthContext();
 
-    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
 
     for (let i = 0; i < 5; i++) {
       expect(ctx.sizes.cache.getSize(i)).toBe(WIDTHS[i]! + 8);
@@ -2390,7 +2390,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
   it("sizeCache.getSize should wrap for virtual indices", () => {
     const { ctx, cleanup } = createVariableWidthContext();
 
-    carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
 
     expect(ctx.sizes.cache.getSize(5)).toBe(WIDTHS[0]! + 8);
     expect(ctx.sizes.cache.getSize(6)).toBe(WIDTHS[1]! + 8);
@@ -2402,7 +2402,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     const { ctx, cleanup } = createVariableWidthContext();
     const gap = 8;
 
-    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect", gap }).setup!(ctx);
 
     expect(ctx.sizes.cache.getOffset(0)).toBe(0);
     expect(ctx.sizes.cache.getOffset(1)).toBe(WIDTHS[0]! + gap);
@@ -2414,7 +2414,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
   it("next/prev should cycle correctly with variable widths", () => {
     const { ctx, methods, cleanup } = createVariableWidthContext();
 
-    carousel({ variant: "multi-aspect" }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect" }).setup!(ctx);
 
     const next = methods.get("next") as Function;
     const prev = methods.get("prev") as Function;
@@ -2440,7 +2440,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
   it("goTo should work with variable widths", () => {
     const { ctx, methods, cleanup } = createVariableWidthContext();
 
-    carousel({ variant: "multi-aspect" }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect" }).setup!(ctx);
 
     const goTo = methods.get("goTo") as Function;
     const getState = methods.get("getCarouselState") as Function;
@@ -2458,7 +2458,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     const { ctx, cleanup } = createVariableWidthContext();
     const gap = 8;
 
-    carousel({ variant: "multi-aspect", gap }).setup!(ctx);
+    carousel<TestItem>({ variant: "multi-aspect", gap }).setup!(ctx);
 
     expect(ctx.sizes.cache.indexAtOffset(0)).toBe(0);
     expect(ctx.sizes.cache.indexAtOffset(WIDTHS[0]! + gap)).toBe(1);
@@ -2471,7 +2471,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     const { ctx, dom, cleanup } = createVariableWidthContext();
     const gap = 8;
 
-    const plugin = carousel({ variant: "multi-aspect", gap });
+    const plugin = carousel<TestItem>({ variant: "multi-aspect", gap });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -2482,9 +2482,9 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     es.scrollPosition = 50 * totalLap;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const w0 = parseInt(els[0].style.width);
-    const w1 = parseInt(els[1].style.width);
-    const w2 = parseInt(els[2].style.width);
+    const w0 = parseInt(els[0]!.style.width);
+    const w1 = parseInt(els[1]!.style.width);
+    const w2 = parseInt(els[2]!.style.width);
 
     expect(w0).toBe(WIDTHS[0]!);
     expect(w1).toBe(WIDTHS[1]!);
@@ -2501,7 +2501,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
       itemSize: 480,
     });
 
-    const plugin = carousel({ variant: "static", snap: true });
+    const plugin = carousel<TestItem>({ variant: "static", snap: true });
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
@@ -2513,14 +2513,14 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     es.baseOffset = es.scrollPosition - 240;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const t0 = els[0].style.transform;
+    const t0 = els[0]!.style.transform;
     expect(t0).toBeTruthy();
 
     es.scrollPosition = middleStart * 480 + 240;
     es.baseOffset = es.scrollPosition - 240;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
-    const t0After = els[0].style.transform;
+    const t0After = els[0]!.style.transform;
     expect(t0After).not.toBe(t0);
 
     cleanup();
@@ -2535,7 +2535,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
       isX: true,
     });
 
-    carousel({ variant: "hero", peek: 56 }).setup!(ctx);
+    carousel<TestItem>({ variant: "hero", peek: 56 }).setup!(ctx);
 
     const stepSz = 800 - 56;
     expect(ctx.sizes.cache.getSize(0)).toBe(stepSz);
@@ -2579,7 +2579,7 @@ describe("carousel — snapEasing", () => {
       return realSmooth(target, duration, easing, onComplete);
     }) as typeof ctx.scroll.smoothTo;
 
-    carousel({ snapEasing }).setup!(ctx);
+    carousel<TestItem>({ snapEasing }).setup!(ctx);
 
     const goTo = methods.get("goTo") as (index: number, options?: Record<string, unknown>) => void;
     // A smooth programmatic navigation triggers a snap animation.
@@ -2598,7 +2598,7 @@ describe("carousel adapter position", () => {
     const t = createPluginMockContext(createTestItems(10), { itemSize: 100 });
     let position = 42;
     t.ctx.scroll.getPixelEquivalent = () => position;
-    const plugin = carousel();
+    const plugin = carousel<TestItem>();
     try {
       plugin.setup!(t.ctx);
       t.engineState.scrollPosition = 0;

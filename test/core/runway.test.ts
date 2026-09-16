@@ -441,7 +441,7 @@ describe("bounded scroll — resize", () => {
     const l = makeBoundedIn(c, 1_000_000);
 
     globalThis.setTimeout = origSetTimeout;
-    if (pendingInit) pendingInit();
+    if (pendingInit) (pendingInit as () => void)();
     // Restore immediately — the observer callback is captured, mock no longer needed.
     globalThis.ResizeObserver = saved;
 

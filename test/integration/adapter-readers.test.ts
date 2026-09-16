@@ -22,7 +22,7 @@ it("a11y routes focus navigation through the adapter without pre-committing stat
     get: () => 400, set: () => { throw new Error("a11y wrote source-owned position"); },
   });
   try {
-    a11y().setup!(t.ctx);
+    a11y<{id:number}>().setup!(t.ctx);
     for (const handler of t.keydownHandlers) handler(new KeyboardEvent("keydown", { key: "ArrowDown", cancelable: true }));
     expect(set).toHaveBeenCalledWith(0);
   } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
@@ -33,7 +33,7 @@ it("selection compares the focused item with the adapter position", () => {
   t.ctx.scroll.getPixelEquivalent = () => 400;
   t.engineState.scrollPosition = 0;
   try {
-    selection({ mode: "single" }).setup!(t.ctx);
+    selection<{id:number}>({ mode: "single" }).setup!(t.ctx);
     for (const handler of t.keydownHandlers) handler(new KeyboardEvent("keydown", { key: "ArrowDown", cancelable: true }));
     expect(t.scrollCalls).toEqual([0]);
   } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
@@ -44,7 +44,7 @@ it("snapshots derives the anchor index and offset from adapter pixels", () => {
   t.ctx.scroll.getPixelEquivalent = () => 125;
   t.engineState.scrollPosition = 0;
   try {
-    snapshots().setup!(t.ctx);
+    snapshots<{id:number}>().setup!(t.ctx);
     expect(t.methods.get("getScrollSnapshot")!()).toMatchObject({ index: 3, offsetInItem: 5 });
   } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
 });
@@ -61,7 +61,7 @@ it("autosize corrects measurements above the adapter's first visible item", () =
   t.ctx.scroll.shiftBy = delta => { shifts.push(delta); };
   t.ctx.scroll.getPixelEquivalent = () => 200;
   t.engineState.scrollPosition = 0;
-  const plugin = autosize();
+  const plugin = autosize<{id:number}>();
   try {
     plugin.setup!(t.ctx);
     const row = document.createElement("div"); row.dataset.index = "0";

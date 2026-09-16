@@ -862,7 +862,7 @@ describe("selection — Keyboard Handler", () => {
 
   it("ArrowDown should not throw when items is empty", () => {
     const plugin = selection<TestItem>({ mode: "single" });
-    const { ctx, keydownHandlers, cleanup } = createPluginMockContext([], {
+    const { ctx, keydownHandlers, cleanup } = createPluginMockContext<TestItem>([], {
 
     });
 

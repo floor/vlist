@@ -181,7 +181,7 @@ describe("async lifecycle — velocity-gated loading", () => {
     expect(adapter.read).toHaveBeenCalled();
     // It loaded the chunk covering the visible range [100..109], not the top.
     const calls = (adapter.read as any).mock.calls.map((c: any[]) => c[0] as { offset: number; limit: number });
-    expect(calls.some((p) => p.offset <= 100 && 100 < p.offset + p.limit)).toBe(true);
+    expect(calls.some((p: { offset: number; limit: number }) => p.offset <= 100 && 100 < p.offset + p.limit)).toBe(true);
   });
 
   it("does not load on afterScroll when destroyed", async () => {

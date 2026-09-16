@@ -1,3 +1,4 @@
+import type { VListItem } from "../../src/types";
 import { beforeAll, afterAll, describe, expect, it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../helpers/plugin-context";
@@ -21,7 +22,7 @@ const factories = [
 for (const factory of factories) describe(`${factory().name} adapter boundary`, () => {
   it("positions from the adapter and commits an origin-only change once per frame", () => {
     const items = Array.from({ length: 100 }, (_, id) => ({ id }));
-    const t = createPluginMockContext(items, { itemSize: 40, containerHeight: 400 });
+    const t = createPluginMockContext<VListItem>(items, { itemSize: 40, containerHeight: 400 });
     let origin = 100;
     let originReads = 0;
     let positionReads = 0;

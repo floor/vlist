@@ -1176,8 +1176,8 @@ describe("masonry - navigate", () => {
     expect(right).not.toBe(down1);
 
     // The right item should be in lane 1
-    const rightLane = mock.methods.get("_getItemLane")(right);
-    const downLane = mock.methods.get("_getItemLane")(down1);
+    const rightLane = mock.methods.get("_getItemLane")!(right);
+    const downLane = mock.methods.get("_getItemLane")!(down1);
     expect(rightLane).toBe(downLane + 1);
 
     mock.cleanup();
