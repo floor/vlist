@@ -69,6 +69,15 @@ export interface EngineState {
    * Resize buffers when container changes. Cold path only.
    * Heuristic: capacity = ceil(containerSize / minItemSize) + overscan * 2
    */
+  /**
+   * Grow buffers to hold at least `needed` entries. Cold path only.
+   *
+   * The render window is the authority on how many entries are required. The
+   * container/minItemSize heuristic below is only an estimate, and for a size
+   * function there is no knowable minimum to estimate from.
+   */
+  ensureCapacity(needed: number): void;
+
   resizeCapacity(containerSize: number, minItemSize: number, overscan?: number): void;
 
   /** Reset to empty range sentinel. */
@@ -103,10 +112,7 @@ export function createEngineState(initialCapacity: number): EngineState {
 
     prevAriaTotal: -1,
 
-    resizeCapacity(containerSize: number, minItemSize: number, overscan: number = OVERSCAN): void {
-      if (minItemSize <= 0 || containerSize <= 0) return;
-
-      const needed = Math.ceil(containerSize / minItemSize) + overscan * 2;
+    ensureCapacity(needed: number): void {
       if (needed <= state.capacity) return;
 
       const newCapacity = needed + 8;
@@ -120,6 +126,11 @@ export function createEngineState(initialCapacity: number): EngineState {
       state.visibleOffsets = newOffsets;
       state.visibleSizes = newSizes;
       state.capacity = newCapacity;
+    },
+
+    resizeCapacity(containerSize: number, minItemSize: number, overscan: number = OVERSCAN): void {
+      if (minItemSize <= 0 || containerSize <= 0) return;
+      state.ensureCapacity(Math.ceil(containerSize / minItemSize) + overscan * 2);
     },
 
     clear(): void {
