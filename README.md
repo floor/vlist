@@ -179,7 +179,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
 | **Base (`vlist`)** | 25.6 KB | 9.4 KB |
-| `vlist/synthetic` | 31.5 KB | 11.7 KB |
+| `vlist/synthetic` | 31.5 KB | 11.6 KB |
 | `vlist/native` (alias) | 25.6 KB | 9.4 KB |
 | `a11y()` | 28.8 KB | 10.6 KB |
 | `selection()` | 34.9 KB | 12.3 KB |
@@ -190,8 +190,8 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `page()` | 28.1 KB | 10.3 KB |
 | `snapshots()` | 28.9 KB | 10.6 KB |
 | `transition()` | 32.3 KB | 11.4 KB |
-| `autosize()` | 28.7 KB | 10.5 KB |
-| `grid()` | 32.5 KB | 11.8 KB |
+| `autosize()` | 28.6 KB | 10.5 KB |
+| `grid()` | 32.4 KB | 11.8 KB |
 | `table()` | 44.0 KB | 15.3 KB |
 | `masonry()` | 36.8 KB | 13.5 KB |
 | `tree()` | 40.8 KB | 14.5 KB |

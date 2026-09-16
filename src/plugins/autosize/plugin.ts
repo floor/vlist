@@ -151,14 +151,7 @@ export function autosize<T extends VListItem = VListItem>(
         : (ctx.sizes.rawSpec as number) + gap;
 
       // Replace the fixed sizeCache with a variable one backed by measurements
-      ctx.sizes.setConfig(sizeFn);
-      if (gap > 0) {
-        const orig = ctx.sizes.cache.getTotalSize;
-        ctx.sizes.cache.getTotalSize = (): number => {
-          const t = orig();
-          return t > 0 ? t - gap : 0;
-        };
-      }
+      ctx.sizes.setConfig(sizeFn, gap);
 
       // ResizeObserver for measuring items
       observer = new ResizeObserver((entries) => {

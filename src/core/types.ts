@@ -163,7 +163,10 @@ export interface ItemsCapability<T extends VListItem = VListItem> {
 export interface SizesCapability {
   readonly cache: SizeCache;
   readonly rawSpec: number | ((index: number, ...args: unknown[]) => number);
-  setConfig(config: number | ((index: number) => number)): void;
+  /** Replace the size spec. `gap` is the spacing baked into the spec, so the
+   * cache can keep excluding one trailing gap from the total; omit it when the
+   * spec carries none (table's fixed row height, for instance). */
+  setConfig(config: number | ((index: number) => number), gap?: number): void;
   rebuild(): void;
 }
 

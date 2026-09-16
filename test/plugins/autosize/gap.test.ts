@@ -177,11 +177,11 @@ describe("autosize — gap config", () => {
     const plugin = autosize({ gap: 8 });
     plugin.setup(mockCtx.ctx);
 
-    // The plugin wraps sizeCache.getTotalSize to subtract gap
+    // The gap is a size-cache parameter now, so each slot is 50 + 8 and the
+    // total drops one trailing gap. Checked against a real list: the same
+    // configuration totals 572 with autosize and without it.
     const totalSize = mockCtx.ctx.sizes.cache.getTotalSize();
-    const rawTotal = 10 * 50; // 10 items × 50px
-    // Adjusted: rawTotal - gap = 500 - 8 = 492
-    expect(totalSize).toBe(rawTotal - 8);
+    expect(totalSize).toBe(10 * (50 + 8) - 8);
 
     plugin.destroy!();
   });

@@ -93,6 +93,10 @@ export function groups<T extends VListItem = VListItem>(
   let mainAxisPadding = 0;
   let isMasonry = false;
   let masonryItemSize: ((dataIndex: number) => number) | null = null;
+  // The item accessor as it was before setSizeConfig replaced the cache with a
+  // layout-indexed one. Masonry placement needs data-space heights, and reading
+  // them back through the replaced cache asks it for a layout entry.
+  let dataItemSize: ((dataIndex: number) => number) | null = null;
 
   const rendered = new Map<number, HTMLElement>();
   // Track which layout indices currently show placeholder content
@@ -173,7 +177,13 @@ export function groups<T extends VListItem = VListItem>(
       // Masonry: shortest-lane placement per group.
       // Item heights come from the raw size spec (not sizeCache, which
       // stores fallback heights without the masonry context).
-      const getItemH = masonryItemSize ?? ((di: number) => sizeCache.getSize(di));
+      // masonryItemSize is only set when the size spec is a function. With a
+      // numeric item height it stayed null and this fell back to the size cache
+      // — which groups had already replaced with a layout-indexed one, so a data
+      // index read a layout entry, and index 0 read the sticky first header at
+      // height 0. Every masonry height came back 0.
+      const getItemH =
+        masonryItemSize ?? dataItemSize ?? ((di: number) => sizeCache.getSize(di));
       const laneSizes = new Float64Array(gridColumns);
       const groupBottoms: number[] = [];
       let groupY = 0;
@@ -796,6 +806,7 @@ export function groups<T extends VListItem = VListItem>(
             };
 
       const origGetSize = sizeCache.getSize;
+      dataItemSize = origGetSize;
 
       const groupedSizeFn = (layoutIndex: number): number => {
         const entry = layout.getEntry(layoutIndex);
@@ -806,7 +817,10 @@ export function groups<T extends VListItem = VListItem>(
         return origGetSize(entry.dataIndex);
       };
 
-      ctx.sizes.setConfig(groupedSizeFn);
+      // Data entries carry the gap the core spec baked in; headers do not. The
+      // total must still drop the one trailing gap, which replacing the config
+      // used to discard along with core's wrapper.
+      ctx.sizes.setConfig(groupedSizeFn, ctx.config.gap);
 
       // Intercept sizeCache.rebuild so groups can map between data indices
       // and layout indices (which include group header pseudo-entries).
