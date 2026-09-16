@@ -100,7 +100,8 @@ export function masonry<T extends VListItem = VListItem>(
 
   // Persistent getItem closure — avoids per-render allocation
   let cachedItems: readonly T[] = [];
-  const getItem = (index: number): T | undefined => cachedItems[index];
+  const getItem = (index: number): T | undefined =>
+    loadedItemFn ? loadedItemFn(index) : cachedItems[index];
 
   // Selection method references (resolved lazily)
   let selectedIdsGetter: (() => Set<string | number>) | null = null;
@@ -124,6 +125,21 @@ export function masonry<T extends VListItem = VListItem>(
   let isGroupHeaderFn: ((i: number) => boolean) | null = null;
   let navFnsResolved = false;
   let laneIndexDirty = true;
+
+  // data() leaves the raw items array empty — it replaces the accessors, not the
+  // array — so rendering from cachedItems drew nothing at all while the layout,
+  // which counts engineState.totalItems, reported a full content height. It is
+  // registered in data()'s own setup, which runs after this plugin's (priority
+  // 20 against 10), so it cannot be read during setup. Latched only once found,
+  // because a plugin may register late.
+  let loadedItemFn: ((index: number) => T | undefined) | null = null;
+  let loadedItemResolved = false;
+
+  function resolveLoadedItemFn(): void {
+    if (loadedItemResolved || !storedCtx) return;
+    loadedItemFn = (storedCtx.hooks.get("_getLoadedItem") as typeof loadedItemFn) ?? null;
+    if (loadedItemFn) loadedItemResolved = true;
+  }
 
   function resolveNavFns(): void {
     if (navFnsResolved || !storedCtx) return;
@@ -342,6 +358,7 @@ export function masonry<T extends VListItem = VListItem>(
     }
 
     resolveSelectionMethods();
+    resolveLoadedItemFn();
 
     const origin = scroll.getRenderOrigin();
     const scrollPosition = scroll.getPixelEquivalent();
