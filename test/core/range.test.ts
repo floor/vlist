@@ -374,3 +374,55 @@ describe("range — overscan edge cases", () => {
     expect(content.children.length).toBe(0);
   });
 });
+
+
+// =============================================================================
+// Capacity for a function size spec (C7)
+// =============================================================================
+
+describe("range — capacity with a function size spec", () => {
+  it("fills a tall viewport whose rows are smaller than the 20px estimate", () => {
+    // A size function has no knowable minimum, so the engine estimates 20px to
+    // size the render buffers — and resizeCapacity re-derived demand from that
+    // same estimate, so it could never see a shortfall. A 10px row in a 3050px
+    // viewport rendered 219 of the 305 rows that fit and left the rest of the
+    // viewport blank.
+    //
+    // This needs a tall viewport: at the 500px this file pins, the estimate is
+    // ample and the defect does not appear at all. The override is restored
+    // below, so the file's geometry guard still holds.
+    const tall = 3050;
+    const rowSize = 10;
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      get: () => tall,
+      configurable: true,
+    });
+
+    let host: HTMLElement | null = null;
+    try {
+      host = createContainer({ width: 300, height: tall });
+      list = createVList<TestItem>(
+        {
+          container: host,
+          items: createTestItems(2000),
+          item: { height: () => rowSize, template: simpleTemplate },
+        },
+        [],
+      );
+
+      const fits = Math.ceil(tall / rowSize); // 305
+      const rendered = host.querySelectorAll("[data-index]").length;
+
+      // The window must cover the viewport — this was 219 against 305.
+      expect(rendered).toBeGreaterThanOrEqual(fits);
+      // ...and must not over-render beyond the window and its overscan.
+      expect(rendered).toBeLessThanOrEqual(fits + OVERSCAN * 2 + 2);
+    } finally {
+      host?.remove();
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+        get: () => 500,
+        configurable: true,
+      });
+    }
+  });
+});

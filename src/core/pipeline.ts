@@ -132,6 +132,12 @@ export function phase1Calculate(
   // ceil(containerSize / 1) + overscan * 2 + 10 sat ten above it and could
   // never be the minimum. The `/ 1` was left over from a division by row size.
   const count = renderEnd - renderStart + 1;
+  // A size function has no knowable minimum, so create.ts estimates 20px and
+  // resizeCapacity re-derives demand from that same estimate — it can never see
+  // a shortfall, and the window was silently truncated: 219 of 305 rows for a
+  // 10px size function in a 3050px viewport, the tail left blank. The window is
+  // the authority on what is needed. safeCap stays as a guard.
+  if (count > state.capacity) state.ensureCapacity(count);
   const safeCap = Math.min(count, state.capacity);
 
   // Range-unchanged fast path. Item transforms are `offset - baseOffset`, so a
