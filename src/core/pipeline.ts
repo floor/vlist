@@ -466,10 +466,7 @@ export function render<T extends VListItem>(
     queueMicrotask(() => {
       if (state.destroyed) return;
       rc.emitter?.emit("error", {
-        error: new Error(
-          "[vlist] the render window hit its ceiling: the item size spec reports sizes below one pixel, " +
-            "so every item resolves to the same offset. Rendering is capped to the viewport — check the size function.",
-        ),
+        error: new Error("[vlist] render window capped to the viewport: the item size spec reports sizes below 1px"),
         context: "render:window-ceiling",
       });
     });
