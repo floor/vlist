@@ -951,6 +951,15 @@ export function createCore<T extends VListItem = VListItem>(
 
     getItemAt(index: number): T | undefined {
       if (rc.indexMap) return items[index];
+      // groups() in table mode replaces getItemFn with a layout-aware accessor,
+      // which would make this public method take layout indices in that one
+      // combination and data indices everywhere else. It publishes both halves
+      // of the mapping, so ask in the documented space.
+      const atLayout = methods.get("_getItemAtLayout") as ((i: number) => T | undefined) | undefined;
+      if (atLayout) {
+        const toLayout = methods.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
+        return atLayout(toLayout ? toLayout(index) : index);
+      }
       return getItemFn ? getItemFn(index) : items[index];
     },
 

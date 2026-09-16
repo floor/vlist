@@ -86,8 +86,11 @@ describe("carousel + groups", () => {
       { container, items, item: { height: 50, template: simpleTemplate } },
       [groups<TestItem>(groupsConfig)],
     );
-    // Ten items and two headers.
-    expect(grouped.total).toBe(12);
+    // The public total is the item count. The two headers are layout entries:
+    // they render and take space, but list.total is what a consumer counts.
+    // This expectation encoded the defect recorded as P9 — I wrote it here in
+    // #180, asserting the behaviour rather than the contract.
+    expect(grouped.total).toBe(10);
     grouped.destroy();
   });
 });
