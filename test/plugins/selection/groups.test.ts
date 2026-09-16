@@ -63,7 +63,7 @@ function setupWithGroups(mode: "single" | "multiple" = "multiple") {
   mockCtx.ctx.hooks.method("_dataToLayoutIndex", (dataIdx: number): number => dataIdx);
 
   const plugin = selection<TestItem>({ mode });
-  plugin.setup(mockCtx.ctx);
+  plugin.setup!(mockCtx.ctx);
 
   const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
 
@@ -369,7 +369,7 @@ describe("selection + groups — followFocus=false desync", () => {
     mockCtx.ctx.hooks.method("_dataToLayoutIndex", (i: number): number => i);
 
     const plugin = selection<TestItem>({ mode: "multiple", followFocus: false });
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const handler = mockCtx.keydownHandlers[0]!;
     const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
@@ -403,7 +403,7 @@ describe("selection + groups — followFocus=false desync", () => {
     mockCtx.ctx.hooks.method("_dataToLayoutIndex", (i: number): number => i);
 
     const plugin = selection<TestItem>({ mode: "single", followFocus: true });
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const handler = mockCtx.keydownHandlers[0]!;
     const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
@@ -464,7 +464,7 @@ describe("selection + groups — click with layout/data offset", () => {
     });
 
     const plugin = selection<TestItem>({ mode });
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const getSelected = mockCtx.methods.get("getSelected") as () => Array<string | number>;
 

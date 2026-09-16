@@ -519,7 +519,7 @@ describe("memory — async lifecycle cleanup", () => {
 
     // Resolve after destroy to simulate late callback
     if (resolveRead) {
-      resolveRead({ items: createTestItems(10), total: 10, hasMore: false });
+      (resolveRead as (v: unknown) => void)({ items: createTestItems(10), total: 10, hasMore: false });
     }
 
     await new Promise((r) => setTimeout(r, 50));

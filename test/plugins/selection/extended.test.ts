@@ -62,7 +62,7 @@ function makeList(
 }
 
 function getSelected(vlist: VList<TestItem>): Array<string | number> {
-  return (vlist as unknown as Record<string, Function>)["getSelected"]() as Array<string | number>;
+  return (vlist as unknown as Record<string, Function>)["getSelected"]!() as Array<string | number>;
 }
 
 // =============================================================================

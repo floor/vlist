@@ -17,7 +17,7 @@ export function carouselEntry(create: typeof native, options: CarouselPluginConf
  Object.defineProperty(performance,"now",{configurable:true,value:()=>time});
  globalThis.requestAnimationFrame=fn=>{frames.set(++next,fn);return next;};
  globalThis.cancelAnimationFrame=id=>{frames.delete(id);};
- const host=document.createElement('div');document.body.append(host);let ctx!:PluginContext;
+ const host=document.createElement('div');document.body.append(host);let ctx!:PluginContext<{id:number}>;
  // The entry factories are passed in as values, so the plugin methods are not
  // inferred here: name them explicitly for the fixture's callers.
  const list=create({container:host,orientation:isX?'horizontal':'vertical',items:Array.from({length:10},(_,id)=>({id})),item:{height:100,width:100,template:item=>String(item.id)}},[

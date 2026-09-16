@@ -19,7 +19,7 @@ for(const [entry,create] of carouselEntries) for(const direction of [1,-1]) for(
    const foldedCount=entry==='native'?count%10:count;
    const start=50000+direction*foldedCount*100+direction;
    expect(f.list.getScrollPosition()).toBe(start);
-   const positions:number[]=[];f.list.on('scroll',e=>positions.push(e.scrollPosition));
+   const positions:number[]=[];f.list.on('scroll',(e:{scrollPosition:number})=>positions.push(e.scrollPosition));
    navigate(1,{behavior:'smooth',duration:64});f.advance();
    const target=50000+direction*(foldedCount+1)*100;
    expect(f.list.getScrollPosition()).toBe(target);

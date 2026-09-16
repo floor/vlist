@@ -638,7 +638,7 @@ describe("Binary search correctness", () => {
     const cache = createSizeCache(sizeFn, 5);
 
     // Test every pixel offset
-    const expected = [
+    const expected: Array<[number, number]> = [
       // Item 0: [0, 10)
       [0, 0],
       [5, 0],

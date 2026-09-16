@@ -16,16 +16,16 @@ function fixture(create:typeof native,isX=false,handle=false,keyboard=false){
  const frames=new Map<number,FrameRequestCallback>();let id=0,clock=0;
  globalThis.requestAnimationFrame=fn=>{frames.set(++id,fn);return id;};globalThis.cancelAnimationFrame=id=>{frames.delete(id);};
  Object.defineProperty(performance,'now',{configurable:true,value:()=>clock});const timers=useFakeTimers();
- const host=document.createElement('div');document.body.append(host);let ctx!:PluginContext;let list:ReturnType<typeof native>|undefined;
+ const host=document.createElement('div');document.body.append(host);let ctx!:PluginContext<{id:number}>;let list:ReturnType<typeof native>|undefined;
  dispose=()=>{list?.destroy();timers.restore();host.remove();geometry.restore();geometry.assertRestored();globalThis.requestAnimationFrame=raf;globalThis.cancelAnimationFrame=caf;if(nowDescriptor)Object.defineProperty(performance,'now',nowDescriptor);else Reflect.deleteProperty(performance,'now');};
- list=create({container:host,orientation:isX?'horizontal':'vertical',items:Array.from({length:100},(_,id)=>({id})),item:{width:100,height:100,template:i=>'<span class="handle">Grip</span><span class="body">Item '+i.id+'</span>'}},[...(keyboard?[selection({mode:"single",focusOnClick:true})]:[]),sortable(handle?{handle:'.handle'}:{}),{name:'inspect',setup(c){ctx=c;}}]);
+ list=create({container:host,orientation:isX?'horizontal':'vertical',items:Array.from({length:100},(_,id)=>({id})),item:{width:100,height:100,template:i=>'<span class="handle">Grip</span><span class="body">Item '+i.id+'</span>'}},[...(keyboard?[selection<{id:number}>({mode:"single",focusOnClick:true})]:[]),sortable<{id:number}>(handle?{handle:'.handle'}:{}),{name:'inspect',setup(c:PluginContext<{id:number}>){ctx=c;}}]);
  ctx.dom.viewport.getBoundingClientRect=()=>new DOMRect(0,0,400,400);
  const ownCapture=new Set<number>();ctx.dom.content.hasPointerCapture=i=>ownCapture.has(i);ctx.dom.content.setPointerCapture=i=>{ownCapture.add(i);};ctx.dom.content.releasePointerCapture=i=>{ownCapture.delete(i);};
  const captures=new Set<number>();ctx.dom.viewport.hasPointerCapture=i=>captures.has(i);ctx.dom.viewport.setPointerCapture=i=>{captures.add(i);};ctx.dom.viewport.releasePointerCapture=i=>{captures.delete(i);};
  function advance(ms:number){for(let elapsed=0;elapsed<ms;elapsed+=16){const dt=Math.min(16,ms-elapsed);clock+=dt;timers.tick(dt);const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(clock);}}
  list.scrollToIndex(10);advance(200);
  const item=host.querySelector<HTMLElement>('[data-index="12"]')!;item.getBoundingClientRect=()=>new DOMRect(isX?200:0,isX?0:200,isX?100:400,isX?400:100);
- const events:{name:string;data:any}[]=[];for(const name of ['sort:start','sort:move','sort:end','sort:cancel'] as const)list.on(name,e=>events.push({name,data:e}));
+ const events:{name:string;data:any}[]=[];for(const name of ['sort:start','sort:move','sort:end','sort:cancel'] as const)list.on(name,(e:unknown)=>events.push({name,data:e}));
  function pointer(type:string,main=250,kind='touch',target:EventTarget|undefined=undefined,pointerId=1){const e=new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:kind,pointerId,isPrimary:pointerId===1,button:0,clientX:isX?main:50,clientY:isX?50:main});Object.defineProperty(e,'timeStamp',{value:clock});(target??(ownCapture.has(pointerId)?ctx.dom.content:item.querySelector(handle?'.handle':'.body')??ctx.dom.content)).dispatchEvent(e);return e;}
  return {list,ctx,item,host,events,pointer,advance,captures};
 }

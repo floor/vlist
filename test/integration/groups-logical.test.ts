@@ -54,7 +54,7 @@ const dayGroup = (_index: number, item?: any): string => (item ? `day-${item.day
 function translateMain(el: HTMLElement): number {
   // groups buildTransform emits `translate(0, Ypx)` (vertical) — grab the Y.
   const m = /,\s*([-\d.]+)px/.exec(el.style.transform || "");
-  return m ? parseFloat(m[1]) : NaN;
+  return m ? parseFloat(m[1]!) : NaN;
 }
 
 let container: HTMLElement;
@@ -175,7 +175,7 @@ describe("groups + data + synthetic scroll", () => {
       els
         .map((el) => /translate\(\s*([-\d.]+)px/.exec(el.style.transform || ""))
         .filter(Boolean)
-        .map((m) => Math.round(parseFloat(m![1]))),
+        .map((m) => Math.round(parseFloat(m![1]!))),
     );
     expect(xs.size).toBeGreaterThan(1);
   });

@@ -2,12 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["@types/bun"],
+    // Hygiene, not type safety: 120 errors across 45 files, every one fixed by
+    // deleting a binding. Tests often destructure for documentation value, so
+    // this is a separate decision from compiling them as strictly as the
+    // library they test.
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false,
-    "skipLibCheck": true,
-    "strict": false
+    "skipLibCheck": true
   },
   "include": ["test/**/*.test.ts", "src/**/*"],
   "exclude": ["node_modules", "dist"]

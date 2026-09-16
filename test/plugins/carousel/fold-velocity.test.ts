@@ -22,14 +22,14 @@ afterEach(()=>{cleanup?.();cleanup=undefined;clock=0;frames.clear();});
 afterAll(()=>{geometry.restore();if(nowDescriptor)Object.defineProperty(performance,"now",nowDescriptor);else Reflect.deleteProperty(performance,"now");globalThis.requestAnimationFrame=raf;globalThis.cancelAnimationFrame=caf;teardownDOM();});
 afterAll(()=>geometry.assertRestored());
 function fixture(create=createVList,snap=false){
- const host=document.createElement("div");document.body.append(host);let ctx!:PluginContext;
+ const host=document.createElement("div");document.body.append(host);let ctx!:PluginContext<{id:number}>;
  // `create` arrives as a value, so plugin methods are not inferred here.
  const list=create({container:host,items:Array.from({length:10},(_,id)=>({id})),item:{height:100,template:()=>""}},[carousel({variant:"free",snap,snapDuration:64}),{name:"inspect",setup(value){ctx=value;}}]) as ReturnType<typeof create> & CarouselMethods;
  const captured=new Set<number>();let pointerY=100000;let started=false;
  ctx.dom.viewport.hasPointerCapture=id=>captured.has(id);ctx.dom.viewport.setPointerCapture=id=>{captured.add(id);};ctx.dom.viewport.releasePointerCapture=id=>{captured.delete(id);};
  function pointer(type:string,time:number){const e=new PointerEvent(type,{pointerType:"touch",pointerId:1,isPrimary:true,bubbles:true,cancelable:true,clientY:pointerY});Object.defineProperty(e,"timeStamp",{value:time});ctx.dom.viewport.dispatchEvent(e);}
  const velocities:number[]=[],positions:number[]=[];
- list.on("velocity:change",e=>velocities.push(e.velocity));list.on("scroll",e=>positions.push(e.scrollPosition));
+ list.on("velocity:change",(e:{velocity:number})=>velocities.push(e.velocity));list.on("scroll",(e:{scrollPosition:number})=>positions.push(e.scrollPosition));
  cleanup=()=>{list.destroy();host.remove();};
  return {list,ctx,velocities,positions,move(delta:number,native=false){clock+=16;if(native){if(create===createSynthetic){if(!started){pointer("pointerdown",clock-16);started=true;}pointerY-=delta;pointer("pointermove",clock);}else{ctx.dom.viewport.scrollTop+=delta;ctx.dom.viewport.dispatchEvent(new Event("scroll"));}}else ctx.dom.viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:delta,cancelable:true}));}};
 }

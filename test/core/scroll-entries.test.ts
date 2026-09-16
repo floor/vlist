@@ -144,7 +144,7 @@ it("native without carousel excludes the runway implementation", async () => {
     }}],
   });
   expect(result.success).toBe(true);
-  expect(await result.outputs[0].text()).not.toContain(".thresholdLaps");
+  expect(await result.outputs[0]!.text()).not.toContain(".thresholdLaps");
   const container=createContainer();
   const list=createNative({container,items:createTestItems(1000),item:{height:40,template:simpleTemplate}});
   try {

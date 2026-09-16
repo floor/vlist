@@ -482,9 +482,9 @@ describe("keyboard", () => {
       key,
       bubbles: true,
       cancelable: true,
-      ctrlKey: opts?.ctrlKey,
-      metaKey: opts?.metaKey,
-      shiftKey: opts?.shiftKey,
+      ctrlKey: opts?.ctrlKey ?? false,
+      metaKey: opts?.metaKey ?? false,
+      shiftKey: opts?.shiftKey ?? false,
     });
     (event as any).preventDefault = () => {};
     root.dispatchEvent(event);
@@ -555,9 +555,9 @@ describe("type-ahead (invisible mode)", () => {
       key,
       bubbles: true,
       cancelable: true,
-      ctrlKey: opts?.ctrlKey,
-      metaKey: opts?.metaKey,
-      shiftKey: opts?.shiftKey,
+      ctrlKey: opts?.ctrlKey ?? false,
+      metaKey: opts?.metaKey ?? false,
+      shiftKey: opts?.shiftKey ?? false,
     });
     (event as any).preventDefault = () => {};
     root.dispatchEvent(event);

@@ -36,7 +36,7 @@ for(const [entry,createVList] of [['native',createNative],['synthetic',createSyn
   const isX=orientation==='horizontal';if(!isX){width=250;height=400;}
   const sizeProp=isX?'width':'height';
   const host=document.createElement('div');document.body.append(host);
-  let ctx!:PluginContext;
+  let ctx!:PluginContext<{id:number}>;
   const list=createVList({container:host,orientation,items:Array.from({length:10},(_,id)=>({id})),item:{width:200,height:200,template:()=>''}},[carousel({variant,initialIndex:3,peek:'20%'}),{name:'inspect',setup(value){ctx=value;}}]) as ReturnType<typeof createVList> & CarouselMethods;
   const state=():CarouselState=>list.getCarouselState();
   const focal=()=>[...host.querySelectorAll<HTMLElement>('[data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0')!;

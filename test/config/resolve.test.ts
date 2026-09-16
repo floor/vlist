@@ -419,7 +419,7 @@ it("factory receives resolved plugins and a copy of frozen config without factor
   const factory = (config: any, plugins: VListPlugin<TestItem>[] = []) => {
     received = config;
     receivedPlugins = plugins;
-    return createCore(config, plugins);
+    return createCore<TestItem>(config, plugins);
   };
   const custom: VListPlugin<TestItem> = { name: "custom" };
   const config = Object.freeze({ ...base(), container: host, factory, plugins: [custom] });

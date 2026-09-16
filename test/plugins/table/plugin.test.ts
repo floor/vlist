@@ -83,7 +83,7 @@ function createTableMockContext(overrides?: {
     result.engineState.scrollPosition = overrides.scrollTop;
   }
 
-  // Inject a tracking emitter BEFORE plugin.setup() so plugin captures it
+  // Inject a tracking emitter BEFORE plugin.setup!() so plugin captures it
   const emitted: Array<{ event: string; payload: any }> = [];
   const trackingEmitter = {
     on: () => () => {},
