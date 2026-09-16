@@ -90,6 +90,12 @@ export function selection<T extends VListItem = VListItem>(
   let isGHFn: ((i: number) => boolean) | null = null;
   let sivFn: ((i: number) => void) | null = null;
   let getTotalFn: () => number;
+  // getTotalFn is a layout-space bound: it walks focus across entries, so with
+  // groups it counts headers too. Questions of the form "how many items are
+  // there" need the data total instead — the engine's count is render-space,
+  // and carousel inflates it to 101 laps. Plugins that know better publish
+  // _getTotal; with none, the two spaces coincide.
+  let getDataTotalFn: () => number;
   let resolved = false;
 
   function resolveOnce(ctx: PluginContext<T>): void {
@@ -100,6 +106,8 @@ export function selection<T extends VListItem = VListItem>(
     isGHFn = (ctx.getMethod("_isGroupHeader") as typeof isGHFn) ?? null;
     sivFn = (ctx.getMethod("_scrollItemIntoView") as typeof sivFn) ?? null;
     loadedItemFn = (ctx.getMethod("_getLoadedItem") as typeof loadedItemFn) ?? null;
+    const dataTotal = ctx.getMethod("_getTotal") as (() => number) | undefined;
+    if (dataTotal) getDataTotalFn = dataTotal;
     const gl = ctx.getMethod("getGroupLayout") as (() => { totalEntries: number }) | undefined;
     if (gl) {
       const layout = gl();
@@ -183,7 +191,11 @@ export function selection<T extends VListItem = VListItem>(
   }
 
   function doSelectAll(): void {
-    const total = engineState.totalItems;
+    // Layout space: this walks entries and skips headers, so it needs the
+    // layout count. The engine's total is not it under groups — with ten items
+    // in two groups this looped to ten and stopped two entries short, quietly
+    // selecting eight.
+    const total = getTotalFn();
     for (let i = 0; i < total; i++) {
       if (isGHFn?.(i)) continue;
       const item = getDataItemAtLayout(i);
@@ -211,7 +223,8 @@ export function selection<T extends VListItem = VListItem>(
 
     const result: T[] = [];
     const remaining = new Set(state.selected);
-    const total = engineState.totalItems;
+    // Layout space, as in doSelectAll.
+    const total = getTotalFn();
     for (let i = 0; i < total && remaining.size > 0; i++) {
       if (isGHFn?.(i)) continue;
       const item = getDataItemAtLayout(i);
@@ -250,6 +263,7 @@ export function selection<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       scrollTo = ctx.scrollTo.bind(ctx);
       getTotalFn = () => engineState.totalItems;
+      getDataTotalFn = () => engineState.totalItems;
 
       if (mode === "none") {
         ctx.registerMethod("select", () => {});
@@ -517,7 +531,7 @@ export function selection<T extends VListItem = VListItem>(
               if (l2dFn && d2lFn) {
                 const curData = l2dFn(state.focusedIndex);
                 const step = event.key === "PageUp" ? -pageSize : pageSize;
-                const maxData = engineState.totalItems - 1;
+                const maxData = getDataTotalFn() - 1;
                 // Column-preserving clamp so PageUp/Down at the top/bottom row
                 // stays in the same column rather than jumping to the corner
                 // (Home/End). #60
@@ -565,7 +579,7 @@ export function selection<T extends VListItem = VListItem>(
 
             case "a":
               if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
-                if (state.selected.size === engineState.totalItems) {
+                if (state.selected.size === getDataTotalFn()) {
                   doClear();
                 } else {
                   doSelectAll();
@@ -726,7 +740,8 @@ export function selection<T extends VListItem = VListItem>(
       });
 
       ctx.registerMethod("_focusById", (id: string | number): void => {
-        const total = engineState.totalItems;
+        // Layout space: it scans entries for the one holding this id.
+        const total = getTotalFn();
         for (let i = 0; i < total; i++) {
           if (isGHFn?.(i)) continue;
           const item = getDataItemAtLayout(i);

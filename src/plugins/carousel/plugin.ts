@@ -481,6 +481,10 @@ export function carousel<T extends VListItem = VListItem>(
         ctx.setVirtualTotalFn(() => realTotal);
         ctx.setIndexMapFn(logicalIndexOf);
         ctx.registerMethod("_layoutToDataIndex", logicalIndexOf);
+        // The engine total is the inflated virtual one (101 laps), which is
+        // what rendering needs and what any plugin asking "how many items are
+        // there" must not use. data() publishes the same answer the same way.
+        ctx.registerMethod("_getTotal", (): number => realTotal);
 
         // Route scroll through the bounded handler in wrap mode: the logical
         // position never clamps, and the handler folds it back toward the
