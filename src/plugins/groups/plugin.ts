@@ -918,7 +918,7 @@ export function groups<T extends VListItem = VListItem>(
           const asyncGetItem = (getMethod?.("_getItem") as ((i: number) => T | undefined)) ?? null;
           const rawItems = ctx.items.all.bind(ctx);
 
-          ctx.items.setGetFn((layoutIndex: number): T | undefined => {
+          const getItemAtLayout = (layoutIndex: number): T | undefined => {
             const entry = layout.getEntry(layoutIndex);
             if (entry.type === "header") {
               return {
@@ -929,7 +929,15 @@ export function groups<T extends VListItem = VListItem>(
               } as unknown as T;
             }
             return asyncGetItem ? asyncGetItem(entry.dataIndex) : rawItems()[entry.dataIndex];
-          });
+          };
+          ctx.items.setGetFn(getItemAtLayout);
+
+          // In table mode this replaces the core item accessor with a layout-aware
+          // one. Core resolves a click through the layout index but reports the
+          // documented data index, so it needs a way to ask for an item by layout
+          // index; without it, it falls back to getItemFn with a data index and
+          // lands one header early — the first row of a group reports its header.
+          ctx.hooks.method("_getItemAtLayout", getItemAtLayout);
 
           // Tell table renderer about group headers
           const tableGroupsFn = getMethod?.("_updateTableForGroups") as ((
@@ -943,6 +951,12 @@ export function groups<T extends VListItem = VListItem>(
             );
           }
 
+          // The first render can land before this microtask, leaving rows whose
+          // data-index is a data index and no header rows at all, while core
+          // resolves clicks through the layout index space — so a click on the
+          // first row of a group mapped to -1 and was dropped, permanently,
+          // because nothing re-rendered afterwards.
+          ctx.render.force();
         });
       } else {
         ctx.render.setFn(groupsRenderIfNeeded, groupsForceRender);

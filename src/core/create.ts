@@ -752,8 +752,16 @@ export function createCore<T extends VListItem = VListItem>(
     if (layoutToData) {
       const dataIndex = layoutToData(layoutIndex);
       if (dataIndex < 0) return null;
+      // groups in table mode replaces getItemFn with a layout-aware accessor, so
+      // getItemFn(dataIndex) would double-map. It publishes _getItemAtLayout for
+      // exactly this; the reported index stays the data index either way.
+      const getAtLayout = methods.get("_getItemAtLayout") as ((i: number) => T | undefined) | undefined;
       const getDataItem = methods.get("_getItem") as ((i: number) => T | undefined) | undefined;
-      item = getDataItem ? getDataItem(dataIndex) : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+      item = getAtLayout
+        ? getAtLayout(layoutIndex)
+        : getDataItem
+          ? getDataItem(dataIndex)
+          : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
       index = dataIndex;
     } else {
       item = getItemFn ? getItemFn(layoutIndex) : items[layoutIndex];
