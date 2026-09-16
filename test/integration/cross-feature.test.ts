@@ -671,10 +671,11 @@ describe("cross-feature — group header interaction", () => {
 
     const content = getContent(container);
     const itemEl = content.querySelector("[data-index]:not(.vlist-group-header)");
-    if (itemEl) {
-      itemEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      expect(itemClicked).toBe(true);
-    }
+    // This was wrapped in `if (itemEl)`, so a list that rendered nothing at all
+    // passed the test in silence.
+    expect(itemEl).not.toBeNull();
+    itemEl!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(itemClicked).toBe(true);
   });
 
   it("item:click delivers the correct item (not off-by-one from group header)", () => {
@@ -727,16 +728,53 @@ describe("cross-feature — group header interaction", () => {
     const content = getContent(container);
     // Layout index 0 is the group header
     const headerEl = content.querySelector('[data-index="0"]');
-    if (headerEl) {
-      headerEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      expect(clicked).toBe(false);
-    }
+    // Same guard as above: without the header rendered, "no click fired" was
+    // true for the wrong reason.
+    expect(headerEl).not.toBeNull();
+    headerEl!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(clicked).toBe(false);
   });
 
-  // NOTE: table+groups click test requires a real browser (table plugin
-  // rendering in happy-dom doesn't produce clickable data-index rows).
-  // The resolveClickedItem fix is covered by the list+groups tests above
-  // and verified manually in the desk's table view.
+  // Skipped deliberately, and named: this asserts correct behaviour that the
+  // library does not yet have. See review finding P8.
+  //
+  // The case previously carried a comment claiming it "requires a real browser"
+  // because table rendering "doesn't produce clickable data-index rows". That
+  // reason is wrong — the rows are there and queryable in happy-dom — but the
+  // conclusion happened to hold, for a different reason. Probed directly:
+  // table alone emits 1 click event, table with groups emits 0. `table` writes
+  // the row's own index into data-index (renderer.ts:456) while groups'
+  // layoutToDataIndex returns −1 for a header layout index (layout.ts:293), so
+  // resolveClickedItem drops the click for the first row of each group.
+  //
+  // Nothing in the suite had ever asserted item:click under table, which is how
+  // a defect sat behind a sentence saying it had been checked by hand.
+  it.skip("item:click reports the data index with table and groups together (P8)", () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>(
+      { container, items, item: { height: 40, template: simpleTemplate } },
+      [
+        table({ columns: [{ key: "id", label: "ID", width: 100 }], rowHeight: 40 }),
+        groups({
+          getGroupForIndex: (i: number) => (i < 25 ? "A" : "B"),
+          header: { height: 30, template: (g: string) => `<div>${g}</div>` },
+        }),
+      ],
+    );
+
+    const seen: Array<{ id: string | number; index: number }> = [];
+    list.on("item:click", ({ item, index }) => seen.push({ id: item.id, index }));
+
+    const content = getContent(container);
+    const rows = content.querySelectorAll("[data-index]:not(.vlist-table-group-header)");
+    expect(rows.length).toBeGreaterThan(0);
+
+    (rows[0] as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(seen.length).toBe(1);
+    // The reported index addresses the same row through the public API.
+    expect(String(list.getItemAt(seen[0]!.index)!.id)).toBe(String(seen[0]!.id));
+  });
 });
 
 // =============================================================================
