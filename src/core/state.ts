@@ -60,6 +60,10 @@ export interface EngineState {
   renderPending: boolean;
   initialized: boolean;
   destroyed: boolean;
+  /** Set when the render window hit its ceiling, which only a degenerate size spec does. */
+  windowClamped: boolean;
+  /** Latch, so the ceiling is reported once rather than once per frame. */
+  windowClampReported: boolean;
 
   // ── ARIA tracking (for aria-setsize freshness) ───────────────────
 
@@ -109,6 +113,8 @@ export function createEngineState(initialCapacity: number): EngineState {
     renderPending: false,
     initialized: false,
     destroyed: false,
+    windowClamped: false,
+    windowClampReported: false,
 
     prevAriaTotal: -1,
 
