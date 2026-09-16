@@ -281,7 +281,39 @@ export function createPluginMockContext<T extends VListItem>(
     sizes: {
       cache: sizeCache,
       get rawSpec() { return itemSizeConfig; },
-      setConfig: () => {},
+      setConfig: (sc: number | ((index: number) => number), gap = 0) => {
+        // Mimic core: build fresh implementations and assign them over the cache
+        // object. Core replaces the cache wholesale, so a reference captured
+        // before the swap keeps the OLD spec — groups captures sizeCache.getSize
+        // and feeds it data indices, which recurses if the swap mutates shared
+        // state instead. This was a no-op until now, so no plugin's replacement
+        // of the size config was ever exercised here.
+        const spec: (index: number) => number =
+          typeof sc === "function" ? sc : () => sc;
+        Object.assign(sizeCache, {
+          getOffset: (index: number) => {
+            let offset = 0;
+            for (let i = 0; i < index; i++) offset += spec(i);
+            return offset;
+          },
+          getSize: (index: number) => spec(index),
+          indexAtOffset: (offset: number) => {
+            let pos = 0;
+            const count = items.length;
+            for (let i = 0; i < count; i++) {
+              if (pos + spec(i) > offset) return i;
+              pos += spec(i);
+            }
+            return Math.max(0, count - 1);
+          },
+          getTotalSize: () => {
+            let total = 0;
+            for (let i = 0; i < items.length; i++) total += spec(i);
+            return total > 0 ? total - gap : 0;
+          },
+          isVariable: () => typeof sc === "function",
+        });
+      },
       rebuild: () => {},
     },
 

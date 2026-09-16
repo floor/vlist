@@ -616,16 +616,18 @@ describe("grid - render correctness (optimized hot path)", () => {
     ctx.render.force();
 
     // columnWidth = (800 - 3*8) / 4 = 194; col offset = col*(194+8)=col*202
-    // row offset = row * 100 (itemSize)
+    // row offset = row * (100 + 8): rows are spaced by the gap too. This read
+    // row*100 while the mock's setConfig was a no-op and swallowed grid's
+    // gapped row spec; a real list puts row 1 at 108 and row 2 at 216.
     const get = (i: number) =>
       transformXY(dom.content.querySelector(`[data-index='${i}']`) as HTMLElement);
 
     expect(get(0)).toEqual({ x: 0, y: 0 });    // row 0, col 0
     expect(get(1)).toEqual({ x: 202, y: 0 });  // row 0, col 1
     expect(get(3)).toEqual({ x: 606, y: 0 });  // row 0, col 3
-    expect(get(4)).toEqual({ x: 0, y: 100 });  // row 1, col 0
-    expect(get(5)).toEqual({ x: 202, y: 100 }); // row 1, col 1
-    expect(get(8)).toEqual({ x: 0, y: 200 });  // row 2, col 0
+    expect(get(4)).toEqual({ x: 0, y: 108 });  // row 1, col 0
+    expect(get(5)).toEqual({ x: 202, y: 108 }); // row 1, col 1
+    expect(get(8)).toEqual({ x: 0, y: 216 });  // row 2, col 0
     cleanup();
   });
 

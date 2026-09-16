@@ -1065,9 +1065,15 @@ describe("groups — _scrollItemIntoView", () => {
   });
 
   it("registers _getItemY returning masonry Y position", () => {
+    // sticky: false matters here. A sticky header overlays the list and takes no
+    // space in the layout, so with the default the first group's items correctly
+    // start at Y=0 and the assertions below would be wrong. This passed while
+    // the mock's setSizeConfig was a no-op, which reported the header as a
+    // 50px row; a real list gives Y=0 sticky and Y=32 non-sticky.
     const plugin = groups<TestItem>({
       getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
       header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
     });
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1235,9 +1241,12 @@ describe("groups — scrollToIndex", () => {
 
     const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(0, "start"); // data index 0 → layout index 1
-    // Mock sizeCache: each entry is 50px, so layout index 1 offset = 50
+    // Layout is [header(32), item(50), ...], so layout index 1 starts at 32.
+    // This read 50 while the mock's setConfig was a no-op and every entry was
+    // 50px, which could not tell a header from a row. A real list with the same
+    // configuration reports entry sizes 32, 50, 50 and offsets 0, 32, 82.
     expect(scrollCalls.length).toBe(1);
-    expect(scrollCalls[0]).toBe(50);
+    expect(scrollCalls[0]).toBe(32);
     cleanup();
   });
 

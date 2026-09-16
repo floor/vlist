@@ -15,6 +15,8 @@ import { phase1Calculate, phase2Commit, createRenderConfig } from "../../src/cor
 import { createPool } from "../../src/core/pool";
 import { compileHooks } from "../../src/core/hooks";
 import { createSizeCache } from "../../src/core/sizes";
+import type { VListPlugin } from "../../src/core/types";
+import { groups } from "../../src/plugins/groups/plugin";
 import { createVList } from "../../src/native";
 
 // =============================================================================
@@ -154,27 +156,29 @@ describe("size cache with gap", () => {
     expect(cache.getOffset(2)).toBe(30 + GAP + 50 + GAP);
   });
 
-  it("trailing gap fix: totalSize excludes last gap", () => {
-    const cache = createSizeCache(ITEM_SIZE + GAP, 5);
-    const orig = cache.getTotalSize;
-    cache.getTotalSize = () => {
-      const t = orig();
-      return t > 0 ? t - GAP : 0;
-    };
-
-    // 5 items × (40 + 12) = 260, minus trailing gap = 248
+  // These two used to build the correction inside the test and then assert it,
+  // so they could not fail on anything the library did. The cache takes the gap
+  // now, and they assert the library instead.
+  it("trailing gap: totalSize excludes the last gap", () => {
+    const cache = createSizeCache(ITEM_SIZE + GAP, 5, GAP);
+    // 5 items × (40 + 12) = 260, minus one trailing gap = 248
     expect(cache.getTotalSize()).toBe(5 * (ITEM_SIZE + GAP) - GAP);
   });
 
-  it("trailing gap fix: 0 items returns 0", () => {
-    const cache = createSizeCache(ITEM_SIZE + GAP, 0);
-    const orig = cache.getTotalSize;
-    cache.getTotalSize = () => {
-      const t = orig();
-      return t > 0 ? t - GAP : 0;
-    };
-
+  it("trailing gap: 0 items returns 0", () => {
+    const cache = createSizeCache(ITEM_SIZE + GAP, 0, GAP);
     expect(cache.getTotalSize()).toBe(0);
+  });
+
+  it("trailing gap: variable sizes drop one gap, not one per item", () => {
+    const sizes = [30, 50, 70];
+    const cache = createSizeCache((i: number) => (sizes[i] ?? 40) + GAP, 3, GAP);
+    expect(cache.getTotalSize()).toBe(30 + 50 + 70 + 3 * GAP - GAP);
+  });
+
+  it("no gap argument: the total keeps every slot", () => {
+    const cache = createSizeCache(ITEM_SIZE + GAP, 5);
+    expect(cache.getTotalSize()).toBe(5 * (ITEM_SIZE + GAP));
   });
 });
 
@@ -290,5 +294,48 @@ describe("createVList with gap", () => {
     expect(content.style.height).toBe("0px");
 
     list.destroy();
+  });
+});
+
+
+// =============================================================================
+// A plugin that replaces the size config must not lose the gap correction (C6)
+// =============================================================================
+
+describe("gap survives a size-config replacement (C6)", () => {
+  it("groups keeps the trailing gap out of the total", () => {
+    let total = -1;
+    const probe: VListPlugin<TestItem> = {
+      name: "gap-probe",
+      priority: 99,
+      setup(ctx) {
+        total = ctx.sizes.cache.getTotalSize();
+      },
+    };
+
+    const container = createContainer();
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(10),
+        item: { height: 50, gap: 10, template: simpleTemplate },
+      },
+      [
+        groups({
+          getGroupForIndex: (i: number) => (i < 5 ? "A" : "B"),
+          header: { height: 30, template: (g: string) => g },
+        }),
+        probe,
+      ],
+    );
+
+    // groups replaces the size config, which used to install a fresh cache over
+    // the one core had wrapped, taking the trailing-gap correction with it and
+    // leaving 630. The gap is a cache parameter now, so the replacement carries
+    // it: one gap of empty space at the bottom, not two.
+    expect(total).toBe(620);
+
+    list.destroy();
+    container.remove();
   });
 });

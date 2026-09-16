@@ -349,11 +349,11 @@ export function grid<T extends VListItem = VListItem>(
           gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
           const firstItem = rowIndex * config.columns;
           return (rawSpec as Function)(firstItem, gridCtx) + gap;
-        });
+        }, gap);
       } else {
         baseRowSize = rawSpec;
         if (gap > 0) {
-          ctx.sizes.setConfig(baseRowSize + gap);
+          ctx.sizes.setConfig(baseRowSize + gap, gap);
         }
       }
 
@@ -384,16 +384,6 @@ export function grid<T extends VListItem = VListItem>(
 
       installRebuildHook();
       rebuildAsRows(getRowCount());
-
-      // Fix trailing gap: last row's cached size includes gap that
-      // shouldn't add empty space at the bottom.
-      if (gap > 0) {
-        const origGetTotalSize = sizeCache.getTotalSize;
-        sizeCache.getTotalSize = (): number => {
-          const t = origGetTotalSize();
-          return t > 0 ? t - gap : 0;
-        };
-      }
 
       // Virtual total = row count (not item count)
       ctx.items.setTotalFn(() => getRowCount());
@@ -431,9 +421,9 @@ export function grid<T extends VListItem = VListItem>(
               gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
               const firstItem = rowIndex * layout.columns;
               return (rawSpec as Function)(firstItem, gridCtx) + newGap;
-            });
+            }, newGap);
           } else {
-            ctx.sizes.setConfig(baseRowSize + newGap);
+            ctx.sizes.setConfig(baseRowSize + newGap, newGap);
           }
           installRebuildHook();
           rebuildAsRows(getRowCount());

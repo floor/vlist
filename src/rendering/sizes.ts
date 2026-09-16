@@ -49,6 +49,7 @@ export interface SizeCache {
 const createFixedSizeCache = (
   size: number,
   initialTotal: number,
+  gap: number,
 ): SizeCache => {
   let total = initialTotal;
 
@@ -62,7 +63,12 @@ const createFixedSizeCache = (
       return Math.max(0, Math.min(Math.floor(offset / size), total - 1));
     },
 
-    getTotalSize: (): number => total * size,
+    getTotalSize: (): number => {
+      // One trailing gap: the last slot carries a gap that is spacing between
+      // items, not content. Every caller used to correct this by hand.
+      const t = total * size;
+      return t > 0 ? t - gap : 0;
+    },
 
     getTotal: (): number => total,
 
@@ -94,6 +100,7 @@ const createFixedSizeCache = (
 const createVariableSizeCache = (
   sizeFn: (index: number) => number,
   initialTotal: number,
+  gap: number,
 ): SizeCache => {
   let total = initialTotal;
   let prefixSums: Float64Array = new Float64Array(0);
@@ -151,7 +158,10 @@ const createVariableSizeCache = (
 
     indexAtOffset: (offset: number): number => binarySearch(offset),
 
-    getTotalSize: (): number => (prefixSums[total] as number) ?? 0,
+    getTotalSize: (): number => {
+      const t = (prefixSums[total] as number) ?? 0;
+      return t > 0 ? t - gap : 0;
+    },
 
     getTotal: (): number => total,
 
@@ -170,15 +180,22 @@ const createVariableSizeCache = (
  *
  * When size is a number, returns a zero-overhead fixed implementation.
  * When size is a function, builds a prefix-sum array for efficient lookups.
+ *
+ * `gap` is the spacing already baked into each slot by the caller's size spec.
+ * The cache subtracts one trailing gap from the total, because the space after
+ * the last item is not content. Pass 0 when the spec carries no gap. Core,
+ * autosize and grid each re-implemented this correction, and a plugin that
+ * replaced the size config silently dropped whichever copy was installed.
  */
 export const createSizeCache = (
   size: number | ((index: number) => number),
   initialTotal: number,
+  gap = 0,
 ): SizeCache => {
   if (typeof size === "number") {
-    return createFixedSizeCache(size, initialTotal);
+    return createFixedSizeCache(size, initialTotal, gap);
   }
-  return createVariableSizeCache(size, initialTotal);
+  return createVariableSizeCache(size, initialTotal, gap);
 };
 
 // =============================================================================

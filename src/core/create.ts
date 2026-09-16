@@ -268,14 +268,7 @@ export function createCore<T extends VListItem = VListItem>(
   // Padding is handled via transform offsets (main axis) and inline
   // left/right or top/bottom (cross axis) in the pipeline, since items
   // are position:absolute and CSS padding on the container has no effect.
-  const sizeCache: SizeCache = createSizeCache(gappedSizeSpec, totalItems);
-  if (gap > 0) {
-    const origGetTotalSize = sizeCache.getTotalSize;
-    sizeCache.getTotalSize = (): number => {
-      const total = origGetTotalSize();
-      return total > 0 ? total - gap : 0;
-    };
-  }
+  const sizeCache: SizeCache = createSizeCache(gappedSizeSpec, totalItems, gap);
   const pool = createPool(config.classPrefix);
 
   // ── Initialize engine state ─────────────────────────────────────
@@ -473,8 +466,8 @@ export function createCore<T extends VListItem = VListItem>(
       sizes: {
         cache: sizeCache,
         get rawSpec() { return sizeSpec; },
-        setConfig(sc: number | ((index: number) => number)): void {
-          const newCache = createSizeCache(sc, state.totalItems);
+        setConfig(sc: number | ((index: number) => number), specGap = 0): void {
+          const newCache = createSizeCache(sc, state.totalItems, specGap);
           const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
           if (setBase) {
             // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
