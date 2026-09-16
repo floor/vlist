@@ -16,16 +16,11 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
+import type { EngineState } from "../../../src/core/state";
 import { resolvePreset, registerPreset, getPreset, hasSlots, multi, uncontained } from "../../../src/plugins/carousel/presets";
 import type { SlotConfigResolver } from "../../../src/plugins/carousel/presets";
 
-// Import will fail until plugin is created — that's expected for TDD
-let carousel: any;
-try {
-  carousel = (await import("../../../src/plugins/carousel/plugin")).carousel;
-} catch {
-  carousel = null;
-}
+import { carousel } from "../../../src/plugins/carousel/plugin";
 
 // =============================================================================
 // DOM Setup
@@ -50,14 +45,12 @@ function createTestItems(count: number): TestItem[] {
   }));
 }
 
-const skip = !carousel;
-const describeCarousel = skip ? describe.skip : describe;
 
 // =============================================================================
 // Factory
 // =============================================================================
 
-describeCarousel("carousel — Factory", () => {
+describe("carousel — Factory", () => {
   it("should create a plugin with correct name and priority", () => {
     const plugin = carousel();
     expect(plugin.name).toBe("carousel");
@@ -90,7 +83,7 @@ describeCarousel("carousel — Factory", () => {
 // Registered methods
 // =============================================================================
 
-describeCarousel("carousel — Registered Methods", () => {
+describe("carousel — Registered Methods", () => {
   it("should register next method", () => {
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -163,7 +156,7 @@ describeCarousel("carousel — Registered Methods", () => {
 // Infinite loop — acceptance tests from RFC-011
 // =============================================================================
 
-describeCarousel("carousel — Infinite Loop", () => {
+describe("carousel — Infinite Loop", () => {
   it("next() from last item should move forward to item 0", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -237,7 +230,7 @@ describeCarousel("carousel — Infinite Loop", () => {
 // Logical totals — public API stays at real item count
 // =============================================================================
 
-describeCarousel("carousel — Logical Totals", () => {
+describe("carousel — Logical Totals", () => {
   it("public total (virtualTotalFn) should reflect real item count", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -283,7 +276,7 @@ describeCarousel("carousel — Logical Totals", () => {
 // Edge cases
 // =============================================================================
 
-describeCarousel("carousel — Edge Cases", () => {
+describe("carousel — Edge Cases", () => {
   it("empty list: methods should not throw", () => {
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>([], {
       containerHeight: 400,
@@ -330,7 +323,7 @@ describeCarousel("carousel — Edge Cases", () => {
 // Snap behavior
 // =============================================================================
 
-describeCarousel("carousel — Snap", () => {
+describe("carousel — Snap", () => {
   it("snap should be enabled by default", () => {
     const plugin = carousel();
     expect(plugin).toBeDefined();
@@ -352,7 +345,7 @@ describeCarousel("carousel — Snap", () => {
 // Variant: full
 // =============================================================================
 
-describeCarousel("carousel — Variant: full", () => {
+describe("carousel — Variant: full", () => {
   it("should show one item at a time", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -373,7 +366,7 @@ describeCarousel("carousel — Variant: full", () => {
 // goTo with direction
 // =============================================================================
 
-describeCarousel("carousel — goTo direction", () => {
+describe("carousel — goTo direction", () => {
   it("goTo with direction: forward should always scroll forward", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -422,7 +415,7 @@ describeCarousel("carousel — goTo direction", () => {
 // Destroy
 // =============================================================================
 
-describeCarousel("carousel — Destroy", () => {
+describe("carousel — Destroy", () => {
   it("destroy should not throw", () => {
     const items = createTestItems(5);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -443,7 +436,7 @@ describeCarousel("carousel — Destroy", () => {
 // Virtual scroll window — getItemFn maps virtual→real via modulo
 // =============================================================================
 
-describeCarousel("carousel — Virtual Item Mapping", () => {
+describe("carousel — Virtual Item Mapping", () => {
   it("getItemFn should wrap indices via modulo", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -517,7 +510,7 @@ describeCarousel("carousel — Virtual Item Mapping", () => {
 // Variant: hero-center
 // =============================================================================
 
-describeCarousel("carousel — Variant: hero-center", () => {
+describe("carousel — Variant: hero-center", () => {
   it("should accept hero-center variant", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -538,7 +531,7 @@ describeCarousel("carousel — Variant: hero-center", () => {
 // MD3-aligned config options
 // =============================================================================
 
-describeCarousel("carousel — MD3 Config", () => {
+describe("carousel — MD3 Config", () => {
   it("should accept largeItemMaxWidth config", () => {
     const plugin = carousel({ largeItemMaxWidth: 600 });
     expect(plugin).toBeDefined();
@@ -574,7 +567,7 @@ describeCarousel("carousel — MD3 Config", () => {
 // initialIndex
 // =============================================================================
 
-describeCarousel("carousel — initialIndex", () => {
+describe("carousel — initialIndex", () => {
   it("should start at the specified initial index", () => {
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -615,7 +608,7 @@ describeCarousel("carousel — initialIndex", () => {
 // Visual item widths (large/small roles) are handled via CSS variables, not sizeCache.
 // =============================================================================
 
-describeCarousel("carousel — Variant: hero — step size", () => {
+describe("carousel — Variant: hero — step size", () => {
   it("stepSize should be containerSize minus peekSize", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -680,7 +673,7 @@ describeCarousel("carousel — Variant: hero — step size", () => {
   });
 });
 
-describeCarousel("carousel — Variant: hero — state", () => {
+describe("carousel — Variant: hero — state", () => {
   it("getCarouselState should report role 'large' for focal item", () => {
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -759,7 +752,7 @@ describeCarousel("carousel — Variant: hero — state", () => {
   });
 });
 
-describeCarousel("carousel — Variant: hero — peek config", () => {
+describe("carousel — Variant: hero — peek config", () => {
   it("peek: number should set step size to containerSize - peek", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -834,7 +827,7 @@ describeCarousel("carousel — Variant: hero — peek config", () => {
 // Phase 2: Hero-center variant — large centered + two small peek items
 // =============================================================================
 
-describeCarousel("carousel — Variant: hero-center — layout", () => {
+describe("carousel — Variant: hero-center — layout", () => {
   it("should default focalAlign to center", () => {
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -906,7 +899,7 @@ describeCarousel("carousel — Variant: hero-center — layout", () => {
 
     const plugin = carousel({ variant: "hero-center", peek: 100 });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [9, 0, 1]);
@@ -914,7 +907,7 @@ describeCarousel("carousel — Variant: hero-center — layout", () => {
     // stepSize = focalSlotWidth = containerSize - 2*peek = 600
     const es = ctx.getState();
     es.scrollPosition = middleStart * 600;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Left peek at viewport position 0
     const leftVpLeft = Math.round(parseFloat(els[0].style.transform.match(/translate[XY]\(([^)]+)\)/)?.[1] ?? "0") - es.scrollPosition);
@@ -948,7 +941,7 @@ describeCarousel("carousel — Variant: hero-center — layout", () => {
 // Phase 2: Hero vertical orientation
 // =============================================================================
 
-describeCarousel("carousel — Variant: hero — vertical", () => {
+describe("carousel — Variant: hero — vertical", () => {
   it("should use containerHeight for step size in vertical orientation", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -971,7 +964,7 @@ describeCarousel("carousel — Variant: hero — vertical", () => {
 // Phase 2: Hero with infinite loop — core behavior preserved
 // =============================================================================
 
-describeCarousel("carousel — Variant: hero — infinite loop", () => {
+describe("carousel — Variant: hero — infinite loop", () => {
   it("next from last item wraps to first", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1050,10 +1043,10 @@ function addRenderedItems(content: HTMLElement, indices: number[]): HTMLElement[
   return els;
 }
 
-describeCarousel("carousel — CSS Variables", () => {
+describe("carousel — CSS Variables", () => {
   // Helper: clear initialScrollPending by calling onCommit
-  function initPlugin(plugin: any): void {
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+  function initPlugin(plugin: any, state: EngineState): void {
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(state);
   }
 
   it("should set --vlist-carousel-progress on rendered elements", () => {
@@ -1067,7 +1060,7 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "full" });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     // Simulate rendered elements near the focal index in the middle cycle
     const middleStart = 50 * 10; // MIDDLE_CYCLE * realTotal
@@ -1075,7 +1068,7 @@ describeCarousel("carousel — CSS Variables", () => {
 
     // Trigger onAfterScroll at the initial position (middle cycle, item 0)
     const scrollPos = middleStart * 400;
-    plugin.hooks!.onAfterScroll!(scrollPos);
+    plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     // Focal element (offset 0) should have progress ~0
     const p0 = parseFloat(els[0].style.getPropertyValue("--vlist-carousel-progress"));
@@ -1098,13 +1091,13 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "full" });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [9, 0, 1, 2]);
 
     const scrollPos = middleStart * 400;
-    plugin.hooks!.onAfterScroll!(scrollPos);
+    plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
@@ -1125,14 +1118,14 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "hero", peek: 56 });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
     const scrollPos = middleStart * stepSz;
-    plugin.hooks!.onAfterScroll!(scrollPos);
+    plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     expect(els[0].style.getPropertyValue("--vlist-carousel-role")).toBe("large");
     expect(els[1].style.getPropertyValue("--vlist-carousel-role")).toBe("small");
@@ -1151,7 +1144,7 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "full" });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1, 2]);
@@ -1160,13 +1153,13 @@ describeCarousel("carousel — CSS Variables", () => {
 
     // At item 0 — els[0] is focal
     es.scrollPosition = middleStart * 600;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
 
     // Scroll to item 1 — els[1] is now focal
     es.scrollPosition = (middleStart + 1) * 600;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
     expect(els[0].style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
     expect(els[1].style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
     expect(els[2].style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
@@ -1185,14 +1178,14 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "hero", peek: 56 });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
     ctx.getState().scrollPosition = middleStart * stepSz;
-    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Focal item should have width = stepSize (744)
     expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("744px");
@@ -1213,13 +1206,13 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "full" });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
 
     ctx.getState().scrollPosition = middleStart * 600;
-    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Full: focal = containerSize, next = 0 (no peek at rest)
     expect(els[0].style.getPropertyValue("--vlist-carousel-width")).toBe("600px");
@@ -1241,7 +1234,7 @@ describeCarousel("carousel — CSS Variables", () => {
 
     const plugin = carousel({ variant: "full" });
     plugin.setup!(ctx);
-    initPlugin(plugin);
+    initPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
@@ -1249,7 +1242,7 @@ describeCarousel("carousel — CSS Variables", () => {
     // Scroll 50% between items
     const es = ctx.getState();
     es.scrollPosition = middleStart * 600 + 300;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Both items visible, sharing the container
     const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
@@ -1266,9 +1259,9 @@ describeCarousel("carousel — CSS Variables", () => {
 // Gap — spacing between items, handled by the engine
 // =============================================================================
 
-describeCarousel("carousel — Gap", () => {
-  function commitPlugin(plugin: any): void {
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+describe("carousel — Gap", () => {
+  function commitPlugin(plugin: any, state: EngineState): void {
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(state);
   }
 
   it("hero with gap should reduce item sizes and add spacing", () => {
@@ -1282,7 +1275,7 @@ describeCarousel("carousel — Gap", () => {
 
     const plugin = carousel({ variant: "hero", peek: 120, gap: 8 });
     plugin.setup!(ctx);
-    commitPlugin(plugin);
+    commitPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
@@ -1294,7 +1287,7 @@ describeCarousel("carousel — Gap", () => {
     // smallSlotWidth = 792 - 673 = 119
     // stepSize = 673 + 8 = 681
     es.scrollPosition = middleStart * 681;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
     const w1 = parseInt(els[1].style.getPropertyValue("--vlist-carousel-width"));
@@ -1317,7 +1310,7 @@ describeCarousel("carousel — Gap", () => {
 
     const plugin = carousel({ variant: "full", gap: 8 });
     plugin.setup!(ctx);
-    commitPlugin(plugin);
+    commitPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
@@ -1326,7 +1319,7 @@ describeCarousel("carousel — Gap", () => {
     // full: 1 slot, 0 gaps at rest → availableSize = 600
     // stepSize = 600 + 8 = 608
     es.scrollPosition = middleStart * 608;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0].style.getPropertyValue("--vlist-carousel-width"));
     expect(w0).toBe(600);
@@ -1345,7 +1338,7 @@ describeCarousel("carousel — Gap", () => {
 
     const plugin = carousel({ variant: "hero", peek: 100, gap: 12 });
     plugin.setup!(ctx);
-    commitPlugin(plugin);
+    commitPlugin(plugin, ctx.getState());
 
     const middleStart = 50 * 10;
     const els = addRenderedItems(dom.content, [0, 1]);
@@ -1355,7 +1348,7 @@ describeCarousel("carousel — Gap", () => {
     // focalRatio=(600-100)/600=0.833, focalSlot=round(588*0.833)=490
     // smallSlot=588-490=98, stepSize=490+12=502
     es.scrollPosition = middleStart * 502;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const h0 = parseInt(els[0].style.height);
     const h1 = parseInt(els[1].style.height);
@@ -1371,7 +1364,7 @@ describeCarousel("carousel — Gap", () => {
 // Keyboard navigation — built-in handler
 // =============================================================================
 
-describeCarousel("carousel — Keyboard", () => {
+describe("carousel — Keyboard", () => {
   it("should register a keydown handler", () => {
     const items = createTestItems(10);
     const { ctx, keydownHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1405,7 +1398,7 @@ describeCarousel("carousel — Keyboard", () => {
 // carousel:change event — emitted by next/prev
 // =============================================================================
 
-describeCarousel("carousel — carousel:change event", () => {
+describe("carousel — carousel:change event", () => {
   it("next() should emit carousel:change with the new logical index", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1467,7 +1460,7 @@ describeCarousel("carousel — carousel:change event", () => {
 // Index mapping — virtual indices don't leak
 // =============================================================================
 
-describeCarousel("carousel — Index Mapping", () => {
+describe("carousel — Index Mapping", () => {
   it("should register _layoutToDataIndex method", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1493,7 +1486,7 @@ describeCarousel("carousel — Index Mapping", () => {
 // Mutation sync — item count changes
 // =============================================================================
 
-describeCarousel("carousel — Mutation Sync", () => {
+describe("carousel — Mutation Sync", () => {
   it("should preserve currentIndex when items are added", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1545,7 +1538,7 @@ describeCarousel("carousel — Mutation Sync", () => {
 // Normalized scroll position
 // =============================================================================
 
-describeCarousel("carousel — Normalized Scroll", () => {
+describe("carousel — Normalized Scroll", () => {
   it("getCarouselState().scrollPosition should be normalized within one lap", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1570,7 +1563,7 @@ describeCarousel("carousel — Normalized Scroll", () => {
 // Presets — multi, uncontained, resolvePreset branches
 // =============================================================================
 
-describeCarousel("carousel — Presets", () => {
+describe("carousel — Presets", () => {
   it("multi() returns 4 slots summing to 1.0", () => {
     const cfg = multi(800, 56);
     expect(cfg).not.toBeNull();
@@ -1729,7 +1722,7 @@ describeCarousel("carousel — Presets", () => {
 // normalizeVariant — SlotConfig object branch
 // =============================================================================
 
-describeCarousel("carousel — normalizeVariant SlotConfig object", () => {
+describe("carousel — normalizeVariant SlotConfig object", () => {
   it("carousel accepts a SlotConfig object and uses the layout engine", () => {
     const items = createTestItems(10);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1751,7 +1744,7 @@ describeCarousel("carousel — normalizeVariant SlotConfig object", () => {
 // syncItemCount — item mutations trigger resync on scroll
 // =============================================================================
 
-describeCarousel("carousel — syncItemCount", () => {
+describe("carousel — syncItemCount", () => {
   it("onAfterScroll detects added items and resyncs virtual total", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1761,7 +1754,7 @@ describeCarousel("carousel — syncItemCount", () => {
 
     const plugin = carousel();
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const getState = methods.get("getCarouselState") as Function;
     const next = methods.get("next") as Function;
@@ -1769,7 +1762,7 @@ describeCarousel("carousel — syncItemCount", () => {
     expect(getState().index).toBe(1);
 
     items.push({ id: 5, name: "Item 5" });
-    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     expect(ctx.getItems().length).toBe(6);
     expect(getState().index).toBe(1);
@@ -1786,13 +1779,13 @@ describeCarousel("carousel — syncItemCount", () => {
 
     const plugin = carousel();
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const goTo = methods.get("goTo") as Function;
     goTo(4);
 
     items.splice(2);
-    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
@@ -1812,14 +1805,14 @@ describeCarousel("carousel — syncItemCount", () => {
 
     const plugin = carousel({ variant: "multi-aspect" });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const getState = methods.get("getCarouselState") as Function;
     expect(getState().index).toBe(0);
 
     items.push({ id: 5, name: "Item 5" });
     items.push({ id: 6, name: "Item 6" });
-    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition);
+    plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     expect(ctx.getItems().length).toBe(7);
     expect(getState().index).toBe(0);
@@ -1832,7 +1825,7 @@ describeCarousel("carousel — syncItemCount", () => {
 // Built-in keyboard handler — fires actual key events
 // =============================================================================
 
-describeCarousel("carousel — Keyboard Handler", () => {
+describe("carousel — Keyboard Handler", () => {
   function fireKey(handlers: ((e: KeyboardEvent) => void)[], key: string): void {
     const event = new KeyboardEvent("keydown", { key, bubbles: true });
     let prevented = false;
@@ -1941,7 +1934,7 @@ describeCarousel("carousel — Keyboard Handler", () => {
 // onIdle — snap to nearest item
 // =============================================================================
 
-describeCarousel("carousel — onIdle snap", () => {
+describe("carousel — onIdle snap", () => {
   it("snaps to nearest item when position is misaligned", () => {
     const items = createTestItems(5);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -1951,11 +1944,11 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ snap: true });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
     es.scrollPosition = 50 * 5 * 400 + 150;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     plugin.hooks!.onIdle!();
 
@@ -1971,11 +1964,11 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ snap: true });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
     es.scrollPosition = 50 * 5 * 400;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     plugin.hooks!.onIdle!();
 
@@ -1991,7 +1984,7 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ variant: "free", snap: false });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     plugin.hooks!.onIdle!();
 
@@ -2007,7 +2000,7 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ snap: true, snapDirection: true });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
     // Position slightly past item boundary (frac ~0.1 — would round backward without direction)
@@ -2015,7 +2008,7 @@ describeCarousel("carousel — onIdle snap", () => {
     es.scrollPosition = misaligned;
     es.scrollDirection = 1;
     scrollCalls.length = 0;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     es.scrollDirection = 0;
     plugin.hooks!.onIdle!();
@@ -2036,7 +2029,7 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ snap: true, snapDirection: true });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
     // Position mostly through item (frac ~0.9 — would round forward without direction)
@@ -2044,7 +2037,7 @@ describeCarousel("carousel — onIdle snap", () => {
     es.scrollPosition = misaligned;
     es.scrollDirection = -1;
     scrollCalls.length = 0;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     es.scrollDirection = 0;
     plugin.hooks!.onIdle!();
@@ -2065,7 +2058,7 @@ describeCarousel("carousel — onIdle snap", () => {
 
     const plugin = carousel({ snap: true, snapDirection: false });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
     // Small forward offset — nearest-snap rounds backward
@@ -2073,7 +2066,7 @@ describeCarousel("carousel — onIdle snap", () => {
     es.scrollPosition = misaligned;
     es.scrollDirection = 1;
     scrollCalls.length = 0;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     es.scrollDirection = 0;
     plugin.hooks!.onIdle!();
@@ -2090,7 +2083,7 @@ describeCarousel("carousel — onIdle snap", () => {
 // scrollToIndexFn override
 // =============================================================================
 
-describeCarousel("carousel — scrollToIndexFn", () => {
+describe("carousel — scrollToIndexFn", () => {
   it("scrollToIndex navigates to the resolved index", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2144,7 +2137,7 @@ describeCarousel("carousel — scrollToIndexFn", () => {
 // goTo direction — non-smooth (instant) paths
 // =============================================================================
 
-describeCarousel("carousel — goTo direction instant", () => {
+describe("carousel — goTo direction instant", () => {
   it("goTo with direction: forward, behavior: auto (instant)", () => {
     const items = createTestItems(5);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2204,7 +2197,7 @@ describeCarousel("carousel — goTo direction instant", () => {
 // Destroy handler
 // =============================================================================
 
-describeCarousel("carousel — Destroy Handler", () => {
+describe("carousel — Destroy Handler", () => {
   it("registerDestroyHandler is called during setup", () => {
     const items = createTestItems(5);
     const { ctx, destroyHandlers, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2225,7 +2218,7 @@ describeCarousel("carousel — Destroy Handler", () => {
 // NavConfig — navigate function
 // =============================================================================
 
-describeCarousel("carousel — NavConfig navigate", () => {
+describe("carousel — NavConfig navigate", () => {
   it("navigate ArrowRight advances and returns new index", () => {
     const items = createTestItems(5);
     const { ctx, dom, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2312,7 +2305,7 @@ describeCarousel("carousel — NavConfig navigate", () => {
 // sizeCache.indexAtOffset override
 // =============================================================================
 
-describeCarousel("carousel — sizeCache.indexAtOffset", () => {
+describe("carousel — sizeCache.indexAtOffset", () => {
   it("indexAtOffset maps pixel offset to virtual index", () => {
     const items = createTestItems(5);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2334,7 +2327,7 @@ describeCarousel("carousel — sizeCache.indexAtOffset", () => {
 // goTo on single-item list
 // =============================================================================
 
-describeCarousel("carousel — goTo single item", () => {
+describe("carousel — goTo single item", () => {
   it("goTo on single-item list sets index without scrolling", () => {
     const items = createTestItems(1);
     const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -2357,7 +2350,7 @@ describeCarousel("carousel — goTo single item", () => {
 // Variable-width (multi-aspect) — per-item step sizes
 // =============================================================================
 
-describeCarousel("carousel — Variable-width (multi-aspect)", () => {
+describe("carousel — Variable-width (multi-aspect)", () => {
   const WIDTHS = [300, 200, 400, 150, 250];
 
   function createVariableWidthContext() {
@@ -2480,14 +2473,14 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
 
     const plugin = carousel({ variant: "multi-aspect", gap });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const els = addRenderedItems(dom.content, [0, 1, 2]);
     const es = ctx.getState();
 
     const totalLap = WIDTHS.reduce((a, b) => a + b, 0) + gap * 5;
     es.scrollPosition = 50 * totalLap;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0].style.width);
     const w1 = parseInt(els[1].style.width);
@@ -2510,7 +2503,7 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
 
     const plugin = carousel({ variant: "static", snap: true });
     plugin.setup!(ctx);
-    if (plugin.hooks?.onCommit) plugin.hooks.onCommit();
+    if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const els = addRenderedItems(dom.content, [0, 1, 2]);
     const es = ctx.getState();
@@ -2518,14 +2511,14 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
     const middleStart = 50 * 10;
     es.scrollPosition = middleStart * 480;
     es.baseOffset = es.scrollPosition - 240;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const t0 = els[0].style.transform;
     expect(t0).toBeTruthy();
 
     es.scrollPosition = middleStart * 480 + 240;
     es.baseOffset = es.scrollPosition - 240;
-    plugin.hooks!.onAfterScroll!(es.scrollPosition);
+    plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const t0After = els[0].style.transform;
     expect(t0After).not.toBe(t0);
@@ -2559,7 +2552,7 @@ describeCarousel("carousel — Variable-width (multi-aspect)", () => {
 // snapEasing wiring
 // =============================================================================
 
-describeCarousel("carousel — snapEasing", () => {
+describe("carousel — snapEasing", () => {
   it("forwards the configured snapEasing to smoothScrollTo as the easing argument", () => {
     // Regression: the carousel called smoothScrollTo(target, duration, undefined,
     // snapEasing), parking snapEasing in the onComplete slot — so a configured
@@ -2600,7 +2593,7 @@ describeCarousel("carousel — snapEasing", () => {
 });
 
 
-describeCarousel("carousel adapter position", () => {
+describe("carousel adapter position", () => {
   it("reads its public pixel position from the adapter", () => {
     const t = createPluginMockContext(createTestItems(10), { itemSize: 100 });
     let position = 42;
