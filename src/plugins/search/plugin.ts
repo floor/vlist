@@ -12,6 +12,11 @@
  *
  * Phase 2 (server-side search via `data()`, column-aware, fuzzy, query syntax)
  * is out of scope here.
+ *
+ * Restrictions:
+ * - Cannot be combined with `data()`. Filtering is client-side over the items
+ *   the list holds, and with an adapter those are only the loaded window.
+ *   Query the remote dataset through the adapter instead.
  */
 
 import type { VListItem } from "../../types";
@@ -426,6 +431,13 @@ export function search<T extends VListItem = VListItem>(
 
   return {
     name: "search",
+    // Filtering is client-side over the items the list holds. Under data() those
+    // are a sliding window of loaded rows, so a query could only ever match what
+    // happened to be loaded — and clearing a filter is worse than useless there:
+    // restoreItems() reinstates static getItem/virtualTotal functions over the
+    // ones data() installed, so the list keeps the empty total for good.
+    // Searching a remote dataset belongs to the adapter's own query.
+    conflicts: ["data"],
     // Run after selection (50) so its item-state fn is captured and composed
     // (state.search alongside state.selected), and so a filter override is the
     // outermost item transform.

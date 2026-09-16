@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- **Breaking:** `search()` declares a conflict with `data()`, so a list built with both throws instead of failing quietly. The combination never worked: matching reads the items the list holds, which an adapter leaves as an empty window, so every query matched nothing and filter mode reduced the list to zero rows — and clearing the query made it permanent, because the restore path reinstates static item and total functions over the ones `data()` installed. Search a remote dataset through the adapter's own query. The plugin's own header had always scoped server-side search out.
+
 - CI runs on `next` as well as `staging` and `main`. The 3.0 work happens on `next`, where no pull request has had a single automated check: every merge so far was gated by hand.
 
 - `bun run size` fails when the base bundle passes its gzip budget, and prints exact byte counts. The README has always quoted bytes and called 9.9 KB the target, but nothing enforced it, so the number could be spent a hundred bytes at a time with only a human reading the table to notice. Base is 9,688 bytes against a 10,137 budget.
