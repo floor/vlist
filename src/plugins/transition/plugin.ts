@@ -82,11 +82,11 @@ export function transition<T extends VListItem = VListItem>(
       const maxScroll = (): number => Math.max(0, sc.getTotalSize() + cfg.mainAxisPadding - state.containerSize);
       const clampScroll = (): void => {
         const delta = Math.min(0, maxScroll() - scroll.getPixelEquivalent());
-        if (delta) ctx.shiftScroll(delta);
+        if (delta) ctx.scroll.shiftBy(delta);
       };
       const visualOffset = (logical: number, renderOrigin: number): number => Math.round(logical - renderOrigin);
 
-      const toLayout = (ctx.getMethod("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
+      const toLayout = (ctx.hooks.get("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       const dataToLayout = (dataIndex: number): number =>
         toLayout ? toLayout(dataIndex) : dataIndex;
 
@@ -126,15 +126,15 @@ export function transition<T extends VListItem = VListItem>(
           const originalOffset = layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0;
 
           if (!removedEl || layoutIndex < 0) {
-            const result = ctx.removeItemById(id);
+            const result = ctx.items.removeById(id);
             if (result < 0) return false;
             clampScroll();
-            ctx.forceRender();
+            ctx.render.force();
             commitStyles();
             emitter.emit("data:change", { type: "remove", id });
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             emitter.emit("remove:end", { id });
             return true;
@@ -153,10 +153,10 @@ export function transition<T extends VListItem = VListItem>(
           const oldScroll = scroll.getPixelEquivalent();
 
           // LAST — remove data + reconcile
-          const result = ctx.removeItemById(id);
+          const result = ctx.items.removeById(id);
           if (result < 0) return false;
           clampScroll();
-          ctx.forceRender();
+          ctx.render.force();
           commitStyles();
           emitter.emit("data:change", { type: "remove", id });
 
@@ -206,7 +206,7 @@ export function transition<T extends VListItem = VListItem>(
             }
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             emitter.emit("remove:end", { id });
           };
@@ -287,14 +287,14 @@ export function transition<T extends VListItem = VListItem>(
           // Remove all items (descending order preserved)
           const removedIds: (string | number)[] = [];
           for (const t of targets) {
-            const result = ctx.removeItemById(t.id);
+            const result = ctx.items.removeById(t.id);
             if (result >= 0) removedIds.push(t.id);
           }
 
           if (removedIds.length === 0) return 0;
 
           clampScroll();
-          ctx.forceRender();
+          ctx.render.force();
           commitStyles();
 
           for (const rid of removedIds) {
@@ -304,7 +304,7 @@ export function transition<T extends VListItem = VListItem>(
           if (clones.length === 0) {
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
             return removedIds.length;
@@ -361,7 +361,7 @@ export function transition<T extends VListItem = VListItem>(
             }
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
           };
@@ -373,8 +373,8 @@ export function transition<T extends VListItem = VListItem>(
           return removedIds.length;
         };
 
-        ctx.registerMethod("removeItem", removeItem);
-        ctx.registerMethod("removeItems", removeItems);
+        ctx.hooks.method("removeItem", removeItem);
+        ctx.hooks.method("removeItems", removeItems);
       }
 
       // ── Animated insertItem ────────────────────────────────────
@@ -399,8 +399,8 @@ export function transition<T extends VListItem = VListItem>(
           const oldMaxScroll = maxScroll();
           const wasAtEnd = oldScroll >= oldMaxScroll - 1;
 
-          ctx.insertItemAt(item, insertDataIndex);
-          ctx.forceRender();
+          ctx.items.insertAt(item, insertDataIndex);
+          ctx.render.force();
           commitStyles();
           emitter.emit("data:change", { type: "insert", id: item.id });
 
@@ -409,15 +409,15 @@ export function transition<T extends VListItem = VListItem>(
 
           if (cfg.reverse && scrollDelta === 0 && wasAtEnd) {
             const target = maxScroll();
-            ctx.shiftScroll(target - scroll.getPixelEquivalent());
+            ctx.scroll.shiftBy(target - scroll.getPixelEquivalent());
             scrollDelta = target - oldScroll;
             if (scrollDelta > 0) {
-              ctx.forceRender();
+              ctx.render.force();
               commitStyles();
             }
           }
 
-          const newEl = ctx.getRenderedElement(postInsertLayoutIndex);
+          const newEl = ctx.dom.renderedElement(postInsertLayoutIndex);
           const at = insertTiming;
           const animOptions: KeyframeAnimationOptions = { duration: at.duration, easing: at.easing };
           const renderOrigin = scroll.getRenderOrigin();
@@ -466,7 +466,7 @@ export function transition<T extends VListItem = VListItem>(
           setTimeout(finalize, at.duration + 50);
         };
 
-        ctx.registerMethod("insertItem", insertItem);
+        ctx.hooks.method("insertItem", insertItem);
       }
     },
 

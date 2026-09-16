@@ -93,8 +93,8 @@ export function table<T extends VListItem = VListItem>(
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
-    selectedIdsGetter = (storedCtx.getMethod("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
+    selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
   }
 
   // =========================================================================
@@ -151,7 +151,7 @@ export function table<T extends VListItem = VListItem>(
 
     rangeItems.length = 0;
     for (let i = renderStart; i <= renderEnd; i++) {
-      const item = storedCtx.getItem(i);
+      const item = storedCtx.items.at(i);
       if (item) rangeItems.push(item);
     }
 
@@ -179,7 +179,7 @@ export function table<T extends VListItem = VListItem>(
     if (!layoutToDataResolved) {
       layoutToDataResolved = true;
       layoutToDataFn =
-        (storedCtx.getMethod?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
+        (storedCtx.hooks.get?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
     }
 
     if (layoutToDataFn) {
@@ -210,7 +210,7 @@ export function table<T extends VListItem = VListItem>(
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {
       lastContentTotalSize = totalSize;
-      storedCtx.updateContentSize(totalSize);
+      storedCtx.render.contentSize(totalSize);
     }
   }
 
@@ -236,7 +236,7 @@ export function table<T extends VListItem = VListItem>(
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
 
       const { dom, config: resolvedConfig, emitter } = ctx;
       const { classPrefix } = resolvedConfig;
@@ -281,9 +281,9 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Set row height ──────────────────────────────────────────
       if (typeof rowHeight === "function" || typeof rowHeight === "number") {
-        ctx.setSizeConfig(rowHeight);
+        ctx.sizes.setConfig(rowHeight);
       }
-      ctx.rebuildSizeCache();
+      ctx.sizes.rebuild();
 
       // ── CSS classes ─────────────────────────────────────────────
       dom.root.classList.add(`${classPrefix}--table`);
@@ -292,7 +292,7 @@ export function table<T extends VListItem = VListItem>(
 
       // ── ARIA ────────────────────────────────────────────────────
       queueMicrotask(() => {
-        if (ctx.getMethod("_getSelectedIds")) {
+        if (ctx.hooks.get("_getSelectedIds")) {
           dom.root.setAttribute("tabindex", "0");
         }
       });
@@ -365,7 +365,7 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Wire render pipeline ────────────────────────────────────
-      ctx.setRenderFn(tableRenderIfNeeded, tableForceRender);
+      ctx.render.setFn(tableRenderIfNeeded, tableForceRender);
 
       // ── Header scroll sync ──────────────────────────────────────
       const headerWithSync = tableHeader as typeof tableHeader &
@@ -384,7 +384,7 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Public methods ──────────────────────────────────────────
 
-      ctx.registerMethod("updateColumns", (columns: TableColumn<T>[]): void => {
+      ctx.hooks.method("updateColumns", (columns: TableColumn<T>[]): void => {
         if (!tableLayout || !tableHeader) return;
         tableLayout.updateColumns(columns);
         tableLayout.resolve(engineState.crossSize);
@@ -393,10 +393,10 @@ export function table<T extends VListItem = VListItem>(
         updateContentWidth();
         tableRenderer?.updateColumnLayout(tableLayout);
         tableRenderer?.clear();
-        ctx.forceRender();
+        ctx.render.force();
       });
 
-      ctx.registerMethod("resizeColumn", (keyOrIndex: string | number, width: number): void => {
+      ctx.hooks.method("resizeColumn", (keyOrIndex: string | number, width: number): void => {
         if (!tableLayout) return;
         let columnIndex: number;
         if (typeof keyOrIndex === "string") {
@@ -412,7 +412,7 @@ export function table<T extends VListItem = VListItem>(
         onColumnResize(columnIndex, width);
       });
 
-      ctx.registerMethod("getColumnWidths", (): Record<string, number> => {
+      ctx.hooks.method("getColumnWidths", (): Record<string, number> => {
         if (!tableLayout) return {};
         const result: Record<string, number> = {};
         const cols = tableLayout.columns;
@@ -422,30 +422,30 @@ export function table<T extends VListItem = VListItem>(
         return result;
       });
 
-      ctx.registerMethod("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
+      ctx.hooks.method("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
         sortKey = key;
         sortDirection = direction ?? "asc";
         tableHeader?.updateSort(sortKey, sortDirection);
       });
 
-      ctx.registerMethod("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
+      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
         return { key: sortKey, direction: sortDirection };
       });
 
-      ctx.registerMethod("_getTableLayout", () => tableLayout);
-      ctx.registerMethod("_getTableHeaderHeight", () => headerHeight);
+      ctx.hooks.method("_getTableLayout", () => tableLayout);
+      ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
 
-      ctx.registerMethod("_updateRenderedItem", (
+      ctx.hooks.method("_updateRenderedItem", (
         index: number, item: T, isSelected: boolean, isFocused: boolean,
       ) => {
         tableRenderer?.updateItem(index, item, isSelected, isFocused);
       });
 
-      ctx.registerMethod("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
+      ctx.hooks.method("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
         tableRenderer = newRenderer;
       });
 
-      ctx.registerMethod("_updateTableForGroups", (
+      ctx.hooks.method("_updateTableForGroups", (
         isHeaderFn: (item: T) => boolean,
         headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
       ) => {
@@ -453,7 +453,7 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // Replace item-class updater for selection integration
-      ctx.registerMethod("_updateItemClasses", (
+      ctx.hooks.method("_updateItemClasses", (
         index: number, isSelected: boolean, isFocused: boolean,
       ): void => {
         tableRenderer?.updateItemClasses(index, isSelected, isFocused);
@@ -461,7 +461,7 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Keyboard horizontal scroll ─────────────────────────────
       const crossRTL = getComputedStyle(dom.viewport).direction === 'rtl';
-      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      ctx.hooks.onKeydown((event: KeyboardEvent): void => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         if (!tableLayout) return;
 
@@ -500,7 +500,7 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
         tableHeader?.destroy();
         tableHeader = null;

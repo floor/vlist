@@ -31,12 +31,12 @@ export function a11y<T extends VListItem = VListItem>(
     priority: 55,
 
     setup(ctx: PluginContext<T>): void {
-      if (ctx.getItemStateFn()) return;
+      if (ctx.render.getStateFn()) return;
 
-      ctx.enableListboxRole();
+      ctx.dom.enableListbox();
       const dom = ctx.dom;
       const config = ctx.config;
-      const sizeCache = ctx.sizeCache;
+      const sizeCache = ctx.sizes.cache;
       const engineState = ctx.getState();
       const emitter = ctx.emitter;
       const classPrefix = config.classPrefix;
@@ -47,13 +47,13 @@ export function a11y<T extends VListItem = VListItem>(
       let selId: string | number | undefined;
       let selIdx = -1;
 
-      const getItem = (i: number): T | undefined => ctx.getItem(i);
+      const getItem = (i: number): T | undefined => ctx.items.at(i);
       const getTotal = (): number => engineState.totalItems;
 
       const _focusEvt = { id: 0 as string | number, index: 0 };
       const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
 
-      ctx.setItemStateFn((_i: number, is: ItemState): void => {
+      ctx.render.setStateFn((_i: number, is: ItemState): void => {
         is.selected = selIdx === _i;
         is.focused = focusVis && focusIdx === _i;
       });
@@ -80,7 +80,7 @@ export function a11y<T extends VListItem = VListItem>(
       };
 
       const scrollIntoView = (idx: number): void => {
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
         const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
@@ -103,7 +103,7 @@ export function a11y<T extends VListItem = VListItem>(
       const commit = (idx: number, scroll: boolean): void => {
         dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${idx}`);
         if (scroll) scrollIntoView(idx);
-        ctx.forceRender();
+        ctx.render.force();
       };
 
       const move = (next: number): void => {
@@ -163,7 +163,7 @@ export function a11y<T extends VListItem = VListItem>(
         if (rel && dom.root.contains(rel)) return;
         focusVis = false;
         dom.content.removeAttribute("aria-activedescendant");
-        ctx.forceRender();
+        ctx.render.force();
       };
 
       dom.content.addEventListener("focusin", onFocusIn);
@@ -173,7 +173,7 @@ export function a11y<T extends VListItem = VListItem>(
       // Skipped when keyboard:false — click-selection, focus, and ARIA stay
       // active, but keyboard navigation is left to an outer system.
 
-      if (keyboard) ctx.registerKeydownHandler((e: KeyboardEvent): void => {
+      if (keyboard) ctx.hooks.onKeydown((e: KeyboardEvent): void => {
         if (engineState.destroyed) return;
         const total = getTotal();
         if (total === 0) return;
@@ -191,7 +191,7 @@ export function a11y<T extends VListItem = VListItem>(
           return;
         }
 
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
         if (nav.navigate) {
           switch (e.key) {
             case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
@@ -236,7 +236,7 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Click handler ───────────────────────────────────────────
 
-      ctx.registerClickHandler((e: MouseEvent): void => {
+      ctx.hooks.onClick((e: MouseEvent): void => {
         if (engineState.destroyed) return;
         const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
@@ -251,7 +251,7 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Cleanup ─────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         dom.content.removeEventListener("focusin", onFocusIn);
         dom.content.removeEventListener("focusout", onFocusOut);
       });

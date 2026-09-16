@@ -262,9 +262,9 @@ export function sortable<T extends VListItem = VListItem>(
     const itemBottom = itemTop + sizeCache.getSize(index);
 
     if (itemTop < scrollPos) {
-      storedCtx.scrollTo(Math.max(0, itemTop));
+      storedCtx.scroll.to(Math.max(0, itemTop));
     } else if (itemBottom > scrollPos + containerSize) {
-      storedCtx.scrollTo(itemBottom - containerSize);
+      storedCtx.scroll.to(itemBottom - containerSize);
     }
   };
 
@@ -277,7 +277,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const getItemLabel = (index: number): string => {
     if (!storedCtx) return "";
-    const items = storedCtx.getItems();
+    const items = storedCtx.items.all();
     const item = items[index];
     if (!item) return "";
     const el = contentEl.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
@@ -343,7 +343,7 @@ export function sortable<T extends VListItem = VListItem>(
           inEdgeZone = outsideViewport;
         } else {
           inEdgeZone = true;
-          storedCtx.scrollTo(currentScroll + delta);
+          storedCtx.scroll.to(currentScroll + delta);
         }
       } else {
         inEdgeZone = outsideViewport;
@@ -398,7 +398,7 @@ export function sortable<T extends VListItem = VListItem>(
     document.removeEventListener("pointercancel", onPointerCancel);
 
     if (!skipRender && storedCtx) {
-      storedCtx.forceRender();
+      storedCtx.render.force();
     }
   };
 
@@ -507,7 +507,7 @@ export function sortable<T extends VListItem = VListItem>(
     if (!storedCtx || !draggedElement) return;
     if (touchPointer !== null) {
       touchClaimed = true;
-      storedCtx.cancelScroll();
+      storedCtx.scroll.cancel();
       if (viewportEl.hasPointerCapture(touchPointer)) viewportEl.releasePointerCapture(touchPointer);
       // The source row can be recycled during edge scrolling; capture on the
       // stable content element so the claimed gesture keeps reaching document.
@@ -528,7 +528,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     const focusIdx = getFocusedIndex();
     if (focusIdx >= 0) {
-      const items = storedCtx.getItems();
+      const items = storedCtx.items.all();
       const focusItem = items[focusIdx];
       dragFocusedItemId = focusItem ? focusItem.id : null;
     } else {
@@ -592,7 +592,7 @@ export function sortable<T extends VListItem = VListItem>(
       contentEl.addEventListener("selectstart", blockCallout);
       if (handleSelector) {
         // Reserve handle input before the viewport can begin tracking it.
-        storedCtx.cancelScroll();
+        storedCtx.scroll.cancel();
         event.stopPropagation();
       } else {
         pressTimer = setTimeout(() => { pressTimer = null; startDrag(); }, touchDelay);
@@ -693,7 +693,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const kbGrab = (index: number): void => {
     if (!storedCtx) return;
-    const items = storedCtx.getItems();
+    const items = storedCtx.items.all();
     const item = items[index];
     if (!item) return;
 
@@ -726,7 +726,7 @@ export function sortable<T extends VListItem = VListItem>(
     clearKbGrabbedClass();
 
     focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    storedCtx.render.force();
 
     announce(`${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`);
     kbOriginalItems = [];
@@ -749,7 +749,7 @@ export function sortable<T extends VListItem = VListItem>(
     }
 
     focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    storedCtx.render.force();
     scrollIntoView(originalIndex);
 
     announce(`Reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`);
@@ -772,7 +772,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     kbCurrentIndex = toIndex;
     focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    storedCtx.render.force();
     scrollIntoView(toIndex);
     applyKbGrabbedClass();
 
@@ -853,7 +853,7 @@ export function sortable<T extends VListItem = VListItem>(
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       contentEl = ctx.dom.content;
       viewportEl = ctx.dom.viewport;
       rootEl = ctx.dom.root;
@@ -869,13 +869,13 @@ export function sortable<T extends VListItem = VListItem>(
       dragSourceClass = `${classPrefix}-item--drag-source`;
       kbGrabbedClassName = `${classPrefix}-item--kb-sorting`;
 
-      ctx.registerMethod("isSorting", (): boolean => sorting || kbGrabbed);
+      ctx.hooks.method("isSorting", (): boolean => sorting || kbGrabbed);
 
       // ── Pointer handler on items container ──
       contentEl.addEventListener("pointerdown", onPointerDown);
 
       // ── Keyboard handler directly on root ──
-      // Registered directly (not via ctx.registerKeydownHandler) so
+      // Registered directly (not via ctx.hooks.onKeydown) so
       // stopImmediatePropagation prevents selection from processing keys
       rootEl.addEventListener("keydown", onKeydown);
 
@@ -901,7 +901,7 @@ export function sortable<T extends VListItem = VListItem>(
       rootEl.appendChild(liveRegion);
 
       // ── Cleanup ──
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         if (kbGrabbed) kbCancel();
         cleanupDrag();
         contentEl.removeEventListener("pointerdown", onPointerDown);

@@ -101,14 +101,14 @@ export function selection<T extends VListItem = VListItem>(
   function resolveOnce(ctx: PluginContext<T>): void {
     if (resolved) return;
     resolved = true;
-    l2dFn = (ctx.getMethod("_layoutToDataIndex") as typeof l2dFn) ?? null;
-    d2lFn = (ctx.getMethod("_dataToLayoutIndex") as typeof d2lFn) ?? null;
-    isGHFn = (ctx.getMethod("_isGroupHeader") as typeof isGHFn) ?? null;
-    sivFn = (ctx.getMethod("_scrollItemIntoView") as typeof sivFn) ?? null;
-    loadedItemFn = (ctx.getMethod("_getLoadedItem") as typeof loadedItemFn) ?? null;
-    const dataTotal = ctx.getMethod("_getTotal") as (() => number) | undefined;
+    l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
+    d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+    isGHFn = (ctx.hooks.get("_isGroupHeader") as typeof isGHFn) ?? null;
+    sivFn = (ctx.hooks.get("_scrollItemIntoView") as typeof sivFn) ?? null;
+    loadedItemFn = (ctx.hooks.get("_getLoadedItem") as typeof loadedItemFn) ?? null;
+    const dataTotal = ctx.hooks.get("_getTotal") as (() => number) | undefined;
     if (dataTotal) getDataTotalFn = dataTotal;
-    const gl = ctx.getMethod("getGroupLayout") as (() => { totalEntries: number }) | undefined;
+    const gl = ctx.hooks.get("getGroupLayout") as (() => { totalEntries: number }) | undefined;
     if (gl) {
       const layout = gl();
       getTotalFn = () => layout.totalEntries;
@@ -254,41 +254,41 @@ export function selection<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       state = createSelectionState(config?.initial);
-      getItems = ctx.getItems.bind(ctx);
-      forceRender = ctx.forceRender.bind(ctx);
+      getItems = ctx.items.all.bind(ctx);
+      forceRender = ctx.render.force.bind(ctx);
       emitter = ctx.emitter;
       dom = ctx.dom;
       const resolvedConfig = ctx.config;
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
-      scrollTo = ctx.scrollTo.bind(ctx);
+      scrollTo = ctx.scroll.to.bind(ctx);
       getTotalFn = () => engineState.totalItems;
       getDataTotalFn = () => engineState.totalItems;
 
       if (mode === "none") {
-        ctx.registerMethod("select", () => {});
-        ctx.registerMethod("deselect", () => {});
-        ctx.registerMethod("toggleSelect", () => {});
-        ctx.registerMethod("selectAll", () => {});
-        ctx.registerMethod("clearSelection", () => {});
-        ctx.registerMethod("getSelected", () => []);
-        ctx.registerMethod("getSelectedItems", () => []);
-        ctx.registerMethod("selectNext", () => {});
-        ctx.registerMethod("selectPrevious", () => {});
-        ctx.registerMethod("_seedSelection", () => {});
-        ctx.registerMethod("_getFocusedId", () => undefined);
-        ctx.registerMethod("_focusById", () => {});
+        ctx.hooks.method("select", () => {});
+        ctx.hooks.method("deselect", () => {});
+        ctx.hooks.method("toggleSelect", () => {});
+        ctx.hooks.method("selectAll", () => {});
+        ctx.hooks.method("clearSelection", () => {});
+        ctx.hooks.method("getSelected", () => []);
+        ctx.hooks.method("getSelectedItems", () => []);
+        ctx.hooks.method("selectNext", () => {});
+        ctx.hooks.method("selectPrevious", () => {});
+        ctx.hooks.method("_seedSelection", () => {});
+        ctx.hooks.method("_getFocusedId", () => undefined);
+        ctx.hooks.method("_focusById", () => {});
         return;
       }
 
       // Past the "none" early return: a list with no selection semantics is not
       // a listbox. Claiming the role there put the list in the tab order and
       // announced every item as an option, with no keyboard handler behind it.
-      ctx.enableListboxRole();
+      ctx.dom.enableListbox();
 
       const classPrefix = resolvedConfig.classPrefix;
 
-      ctx.setItemStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
+      ctx.render.setStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
         resolveOnce(ctx);
         if (state.selected.size > 0) {
           const di = toDataIndex(index);
@@ -313,8 +313,8 @@ export function selection<T extends VListItem = VListItem>(
         is.focused = state.focusVisible && state.focusedIndex === index;
       });
 
-      ctx.registerMethod("_getSelectedIds", (): Set<string | number> => state.selected);
-      ctx.registerMethod("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
+      ctx.hooks.method("_getSelectedIds", (): Set<string | number> => state.selected);
+      ctx.hooks.method("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
 
       dom.root.classList.add(`${classPrefix}--selectable`);
 
@@ -342,10 +342,10 @@ export function selection<T extends VListItem = VListItem>(
         if (index < 0) return;
         if (sivFn) { sivFn(index); return; }
         if (!selGridGap) {
-          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          const gapFn = ctx.hooks.get("_getRowGap") as (() => number) | undefined;
           selGridGap = gapFn ? gapFn() : 0;
         }
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
         const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;
         const offset = sizeCache.getOffset(ci);
         const size = sizeCache.getSize(ci) - selGridGap;
@@ -400,14 +400,14 @@ export function selection<T extends VListItem = VListItem>(
       };
       dom.root.addEventListener("focusout", onFocusOut);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         dom.root.removeEventListener("focusin", onFocusIn);
         dom.root.removeEventListener("focusout", onFocusOut);
       });
 
       // ── Click handler ─────────────────────────────────────────
 
-      ctx.registerClickHandler((event: MouseEvent): void => {
+      ctx.hooks.onClick((event: MouseEvent): void => {
         resolveOnce(ctx);
         if (!findItemFromEvent(event)) return;
 
@@ -443,12 +443,12 @@ export function selection<T extends VListItem = VListItem>(
       // model stay active, but arrow/Home/End/PageUp-Down/Enter/Space
       // navigation is left to an outer system (e.g. a global hotkey layer).
 
-      if (keyboard) ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      if (keyboard) ctx.hooks.onKeydown((event: KeyboardEvent): void => {
           resolveOnce(ctx);
           const total = getTotalFn();
           if (total === 0) return;
 
-          const nav = ctx.getNavConfig();
+          const nav = ctx.nav.get();
           const prevFocus = state.focusedIndex;
           let handled = false;
           let selectionChanged = false;
@@ -665,42 +665,42 @@ export function selection<T extends VListItem = VListItem>(
 
       // ── Public methods ────────────────────────────────────────
 
-      ctx.registerMethod("select", (...ids: Array<string | number>): void => {
+      ctx.hooks.method("select", (...ids: Array<string | number>): void => {
         for (const id of ids) doSelect(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("deselect", (...ids: Array<string | number>): void => {
+      ctx.hooks.method("deselect", (...ids: Array<string | number>): void => {
         for (const id of ids) doDeselect(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("toggleSelect", (id: string | number): void => {
+      ctx.hooks.method("toggleSelect", (id: string | number): void => {
         doToggle(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("selectAll", (): void => {
+      ctx.hooks.method("selectAll", (): void => {
         if (mode !== "multiple") return;
         resolveOnce(ctx);
         doSelectAll();
         emitSelectionChange();
       });
 
-      ctx.registerMethod("clearSelection", (): void => {
+      ctx.hooks.method("clearSelection", (): void => {
         doClear();
         emitSelectionChange();
       });
 
-      ctx.registerMethod("getSelected", (): Array<string | number> => {
+      ctx.hooks.method("getSelected", (): Array<string | number> => {
         return getSelectedArray(state.selected);
       });
 
-      ctx.registerMethod("getSelectedItems", (): T[] => {
+      ctx.hooks.method("getSelectedItems", (): T[] => {
         return collectSelectedItems();
       });
 
-      ctx.registerMethod("selectNext", (): void => {
+      ctx.hooks.method("selectNext", (): void => {
         resolveOnce(ctx);
         const total = getTotalFn();
         if (total === 0) return;
@@ -711,7 +711,7 @@ export function selection<T extends VListItem = VListItem>(
         emitSelectionChange();
       });
 
-      ctx.registerMethod("selectPrevious", (): void => {
+      ctx.hooks.method("selectPrevious", (): void => {
         resolveOnce(ctx);
         const total = getTotalFn();
         if (total === 0) return;
@@ -724,7 +724,7 @@ export function selection<T extends VListItem = VListItem>(
 
       // ── Internal methods (used by snapshots, sortable) ────────
 
-      ctx.registerMethod("_seedSelection", (ids: Array<string | number>): void => {
+      ctx.hooks.method("_seedSelection", (ids: Array<string | number>): void => {
         if (mode === "single") {
           if (ids.length === 1) state.selected.add(ids[0]!);
         } else {
@@ -732,14 +732,14 @@ export function selection<T extends VListItem = VListItem>(
         }
       });
 
-      ctx.registerMethod("_isFollowFocus", (): boolean => followFocus);
+      ctx.hooks.method("_isFollowFocus", (): boolean => followFocus);
 
-      ctx.registerMethod("_getFocusedId", (): string | number | undefined => {
+      ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
         if (state.focusedIndex < 0) return undefined;
         return getDataItemAtLayout(state.focusedIndex)?.id;
       });
 
-      ctx.registerMethod("_focusById", (id: string | number): void => {
+      ctx.hooks.method("_focusById", (id: string | number): void => {
         // Layout space: it scans entries for the one holding this id.
         const total = getTotalFn();
         for (let i = 0; i < total; i++) {

@@ -201,118 +201,136 @@ export function createPluginMockContext<T extends VListItem>(
 
   // ── Context ─────────────────────────────────────────────────────
   const ctx: PluginContext<T> = {
-    dom,
-    sizeCache,
-    scroll,
     pool,
     config,
     emitter,
     template,
-
-    registerMethod: (name: string, fn: Function) => {
-      methods.set(name, fn);
-    },
-    getMethod: (name: string) => methods.get(name),
-    registerClickHandler: (handler) => {
-      clickHandlers.push(handler);
-    },
-    registerKeydownHandler: (handler) => {
-      keydownHandlers.push(handler);
-    },
-    registerDestroyHandler: (handler) => {
-      destroyHandlers.push(handler);
-    },
-
-    setSizeConfig: () => {},
-    setScrollSource: () => {},
-    commitScroll(pos) {
-      engineState.prevScrollPosition = engineState.scrollPosition;
-      engineState.scrollPosition = pos;
-      engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : pos < engineState.prevScrollPosition ? -1 : 0;
-      this.onScrollFrame();
-    },
-    setBoundedWrap: () => {},
-    setVirtualTotalFn: () => {},
-    setIndexMapFn: () => {},
-
-    getItems: () => items,
-    getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],
     getState: () => engineState,
-    rebuildSizeCache: () => {},
-    updateContentSize: (size: number) => {
-      engineState.totalSize = size;
-      if (isX) {
-        content.style.width = `${size}px`;
-      } else {
-        content.style.height = `${size}px`;
-      }
-    },
-    setRenderFn: (renderFn, forceFn) => {
-      customRenderIfNeeded = renderFn;
-      customForceRender = forceFn;
-      _renderFnReplaced = true;
-    },
-    renderIfNeeded: () => {
-      if (customRenderIfNeeded) customRenderIfNeeded();
-    },
-    forceRender: () => {
-      if (customForceRender) customForceRender();
+
+    dom: {
+      ...dom,
+      renderedElement: (index: number) => {
+        const children = content.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i] as HTMLElement;
+          if (el.dataset.index === String(index)) return el;
+        }
+        return null;
+      },
+      enableListbox: () => {},
     },
 
-    setGetItemFn: (fn: (index: number) => T | undefined) => { getItemFn = fn; },
-    setItemStateFn: (fn: (index: number, state: ItemState) => void) => { itemStateFn = fn; },
-    getItemStateFn: () => itemStateFn,
-    get rawSizeSpec() { return itemSizeConfig; },
-
-    shiftScroll(delta: number) { this.scrollTo(this.getState().scrollPosition + delta); },
-    scrollTo: (pos: number) => {
-      // Mirror the real adapter: a scroll write moves the logical position.
-      engineState.scrollPosition = pos;
-      scrollCalls.push(pos);
-    },
-    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
-      const dest = typeof target === "function" ? target() : target;
-      engineState.scrollPosition = dest;
-      scrollCalls.push(dest);
-      onComplete?.();
-    },
-    cancelScroll: () => {},
-    disableDefaultResize: () => {},
-    setScrollTarget: () => {},
-    setScrollToPosFn: (fn: any) => { _scrollToPosFn = fn; },
-    setScrollToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },
-    onScrollFrame: () => {},
-    onScrollIdle: () => {},
-
-    removeItemById: (id: string | number) => {
-      if (removeItemByIdFn) return removeItemByIdFn(id);
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx === -1) return -1;
-      items.splice(idx, 1);
-      engineState.totalItems = items.length;
-      return idx;
-    },
-    insertItemAt: (item: T, index: number) => {
-      if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-      items.splice(index, 0, item);
-      engineState.totalItems = items.length;
-    },
-    setRemoveItemFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
-    setInsertItemFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
-    setUpdateItemFn: (_fn: (id: string | number, updates: Partial<T>) => boolean) => {},
-    setGetIndexByIdFn: (_fn: (id: string | number) => number) => {},
-    getRenderedElement: (index: number) => {
-      const children = content.children;
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        if (el.dataset.index === String(index)) return el;
-      }
-      return null;
+    scroll: {
+      ...scroll,
+      to: (pos: number) => {
+        // Mirror the real adapter: a scroll write moves the logical position.
+        engineState.scrollPosition = pos;
+        scrollCalls.push(pos);
+      },
+      // The real context self-references through `ctx`; `this` would not
+      // survive being nested inside a capability object.
+      shiftBy: (delta: number) => { ctx.scroll.to(engineState.scrollPosition + delta); },
+      smoothTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
+        const dest = typeof target === "function" ? target() : target;
+        engineState.scrollPosition = dest;
+        scrollCalls.push(dest);
+        onComplete?.();
+      },
+      cancel: () => {},
+      commit: (pos: number) => {
+        engineState.prevScrollPosition = engineState.scrollPosition;
+        engineState.scrollPosition = pos;
+        engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : pos < engineState.prevScrollPosition ? -1 : 0;
+        ctx.scroll.onFrame();
+      },
+      setSource: () => {},
+      setTarget: () => {},
+      setBoundedWrap: () => {},
+      setToPosFn: (fn: any) => { _scrollToPosFn = fn; },
+      setToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },
+      onFrame: () => {},
+      onIdle: () => {},
+      disableResize: () => {},
     },
 
-    setNavConfig: (cfg: any) => { _navConfig = cfg; },
-    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
-    enableListboxRole: () => {},
+    items: {
+      all: () => items,
+      at: (index: number) => getItemFn ? getItemFn(index) : items[index],
+      removeById: (id: string | number) => {
+        if (removeItemByIdFn) return removeItemByIdFn(id);
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx === -1) return -1;
+        items.splice(idx, 1);
+        engineState.totalItems = items.length;
+        return idx;
+      },
+      insertAt: (item: T, index: number) => {
+        if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+        items.splice(index, 0, item);
+        engineState.totalItems = items.length;
+      },
+      setGetFn: (fn: (index: number) => T | undefined) => { getItemFn = fn; },
+      setRemoveFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
+      setInsertFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
+      setUpdateFn: (_fn: (id: string | number, updates: Partial<T>) => boolean) => {},
+      setIndexByIdFn: (_fn: (id: string | number) => number) => {},
+      setTotalFn: () => {},
+      setIndexMapFn: () => {},
+    },
+
+    sizes: {
+      cache: sizeCache,
+      get rawSpec() { return itemSizeConfig; },
+      setConfig: () => {},
+      rebuild: () => {},
+    },
+
+    render: {
+      force: () => {
+        if (customForceRender) customForceRender();
+      },
+      ifNeeded: () => {
+        if (customRenderIfNeeded) customRenderIfNeeded();
+      },
+      contentSize: (size: number) => {
+        engineState.totalSize = size;
+        if (isX) {
+          content.style.width = `${size}px`;
+        } else {
+          content.style.height = `${size}px`;
+        }
+      },
+      setFn: (renderFn, forceFn) => {
+        customRenderIfNeeded = renderFn;
+        customForceRender = forceFn;
+        _renderFnReplaced = true;
+      },
+      setStateFn: (fn: (index: number, state: ItemState) => void) => { itemStateFn = fn; },
+      getStateFn: () => itemStateFn,
+    },
+
+    hooks: {
+      method: (name: string, fn: Function) => {
+        methods.set(name, fn);
+      },
+      get: (name: string) => methods.get(name),
+      onClick: (handler) => {
+        clickHandlers.push(handler);
+      },
+      onKeydown: (handler) => {
+        keydownHandlers.push(handler);
+      },
+      onDestroy: (handler) => {
+        destroyHandlers.push(handler);
+      },
+    },
+
+    nav: {
+      set: (cfg: any) => { _navConfig = cfg; },
+      get: () => _navConfig
+        ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null }
+        : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
+    },
   };
 
   const cleanup = () => {

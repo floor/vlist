@@ -227,17 +227,17 @@ export function data<T extends VListItem = VListItem>(
 
     setup(ctx: PluginContext<T>): void {
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       emitter = ctx.emitter;
       dom = ctx.dom;
-      forceRender = ctx.forceRender.bind(ctx);
+      forceRender = ctx.render.force.bind(ctx);
 
       // Create data manager — but first wire up virtualTotalFn and
       // getIndexByIdFn so scrollToIndex, api.total, and api.getIndexById
       // all reflect the async data store (not the empty static items array).
       let dataManagerRef: DataManager<T> | null = null;
-      ctx.setVirtualTotalFn(() => dataManagerRef?.getTotal() ?? 0);
-      ctx.setGetIndexByIdFn((id: string | number) => dataManagerRef?.getIndexById(id) ?? -1);
+      ctx.items.setTotalFn(() => dataManagerRef?.getTotal() ?? 0);
+      ctx.items.setIndexByIdFn((id: string | number) => dataManagerRef?.getIndexById(id) ?? -1);
 
       dataManager = dataManagerRef = createDataManager({
         adapter,
@@ -267,8 +267,8 @@ export function data<T extends VListItem = VListItem>(
               lastRebuildCached = newCached;
               sizeCache.rebuild(newTotal);
             }
-            ctx.updateContentSize(sizeCache.getTotalSize());
-            ctx.renderIfNeeded();
+            ctx.render.contentSize(sizeCache.getTotalSize());
+            ctx.render.ifNeeded();
           }
         },
         onItemsLoaded: (loadedItems) => {
@@ -278,7 +278,7 @@ export function data<T extends VListItem = VListItem>(
           if (engineState.initialized) {
             // onDataChange fires first and already rebuilt the size cache (the
             // loaded count changed) — just commit the size and render.
-            ctx.updateContentSize(sizeCache.getTotalSize());
+            ctx.render.contentSize(sizeCache.getTotalSize());
             forceRender();
             emitter.emit("load:end", { items: loadedItems, total: dataManager.getTotal() });
           }
@@ -287,15 +287,15 @@ export function data<T extends VListItem = VListItem>(
           emitter.emit("error", { error, context: "load" });
           // Re-render so the failed range shows placeholders, then schedule a
           // backoff retry that replaces them once the load succeeds.
-          if (engineState.initialized) ctx.renderIfNeeded();
+          if (engineState.initialized) ctx.render.ifNeeded();
           scheduleRetry();
         },
       });
 
       // Bridge async data manager to the render pipeline
-      ctx.setGetItemFn((index: number) => dataManager.getItem(index) as T | undefined);
+      ctx.items.setGetFn((index: number) => dataManager.getItem(index) as T | undefined);
 
-      ctx.setRemoveItemFn((id: string | number): number => {
+      ctx.items.setRemoveFn((id: string | number): number => {
         const index = dataManager.getIndexById(id);
         if (index < 0) return -1;
         const removed = dataManager.removeItem(id);
@@ -303,39 +303,39 @@ export function data<T extends VListItem = VListItem>(
         return index;
       });
 
-      ctx.setInsertItemFn((item: T, index: number): void => {
+      ctx.items.setInsertFn((item: T, index: number): void => {
         dataManager.insertItem(item, index);
       });
 
-      ctx.setUpdateItemFn((id: string | number, updates: Partial<T>): boolean => {
+      ctx.items.setUpdateFn((id: string | number, updates: Partial<T>): boolean => {
         const index = dataManager.getIndexById(id);
         if (index < 0) return false;
         return dataManager.updateItem(index, updates);
       });
 
       // Register public methods
-      ctx.registerMethod("reload", async (): Promise<void> => {
+      ctx.hooks.method("reload", async (): Promise<void> => {
         pendingRange = null;
         lastFirstChunk = -1;
         lastLastChunk = -1;
         resetRetry();
 
-        ctx.forceRender();
+        ctx.render.force();
 
         await dataManager.reload();
-        ctx.scrollTo(0);
+        ctx.scroll.to(0);
 
         if (autoLoad) {
           emitLoadStart(0);
           await dataManager.loadInitial();
-          ctx.forceRender();
+          ctx.render.force();
         }
       });
 
-      ctx.registerMethod("loadVisibleRange", async (): Promise<void> => {
+      ctx.hooks.method("loadVisibleRange", async (): Promise<void> => {
         pendingRange = null;
 
-        ctx.forceRender();
+        ctx.render.force();
 
         const total = dataManager.getTotal();
         if (engineState.visibleCount > 0 && engineState.startIndex < total) {
@@ -352,39 +352,39 @@ export function data<T extends VListItem = VListItem>(
       // dimensions. Use when you need data loaded from the top regardless of
       // layout state (e.g. an explicit reload before the viewport is measured);
       // loadVisibleRange is a no-op until the container has a measured height.
-      ctx.registerMethod("loadInitial", async (): Promise<void> => {
+      ctx.hooks.method("loadInitial", async (): Promise<void> => {
         emitLoadStart(0);
         await dataManager.loadInitial();
-        ctx.forceRender();
+        ctx.render.force();
       });
 
-      ctx.registerMethod("getTotal", (): number => {
+      ctx.hooks.method("getTotal", (): number => {
         return dataManager.getTotal();
       });
 
-      ctx.registerMethod("setTotal", (total: number): void => {
+      ctx.hooks.method("setTotal", (total: number): void => {
         dataManager.setTotal(total);
       });
 
-      ctx.registerMethod("_getTotal", (): number => dataManager.getTotal());
+      ctx.hooks.method("_getTotal", (): number => dataManager.getTotal());
 
-      ctx.registerMethod("_setTotal", (t: number): void => {
+      ctx.hooks.method("_setTotal", (t: number): void => {
         dataManager.setTotal(t);
       });
 
-      ctx.registerMethod("_cancelAutoLoad", (): void => {
+      ctx.hooks.method("_cancelAutoLoad", (): void => {
         autoLoadCancelled = true;
       });
 
-      ctx.registerMethod("_getLoadedItem", (index: number): T | undefined => {
+      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => {
         return dataManager.getStorage().get(index) as T | undefined;
       });
 
-      ctx.registerMethod("_getItem", (index: number): T | undefined => {
+      ctx.hooks.method("_getItem", (index: number): T | undefined => {
         return dataManager.getItem(index) as T | undefined;
       });
 
-      ctx.registerMethod("_getLoadedCount", (): number => dataManager.getCached());
+      ctx.hooks.method("_getLoadedCount", (): number => dataManager.getCached());
 
       // ARIA: aria-busy for loading state
       emitter.on("load:start", () => {
@@ -394,7 +394,7 @@ export function data<T extends VListItem = VListItem>(
         dom.root.removeAttribute("aria-busy");
       });
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         if (idleTimer !== null) {
           clearTimeout(idleTimer);
           idleTimer = null;
@@ -419,7 +419,7 @@ export function data<T extends VListItem = VListItem>(
 
       window.addEventListener("online", handleOnline);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         window.removeEventListener("online", handleOnline);
       });
 
