@@ -99,7 +99,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -120,7 +120,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -140,7 +140,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -170,7 +170,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -192,7 +192,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -219,7 +219,7 @@ describe("async lifecycle — preload behavior", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -245,7 +245,7 @@ describe("async lifecycle — preload behavior", () => {
       startIndex: 200,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -271,7 +271,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -295,7 +295,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -321,7 +321,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     engineState.destroyed = true;
 
@@ -337,7 +337,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -379,7 +379,7 @@ describe("async lifecycle — error handling", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -397,7 +397,7 @@ describe("async lifecycle — error handling", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     // loadInitial uses queueMicrotask → loadRange which catches errors internally
     await wait(100);
@@ -417,7 +417,7 @@ describe("async lifecycle — error handling", () => {
     const errors: Array<{ error: Error; context: string }> = [];
     emitter.on("error", (e) => errors.push(e as any));
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -435,7 +435,7 @@ describe("async lifecycle — error handling", () => {
     const errors: Array<{ error: Error; context: string }> = [];
     emitter.on("error", (e) => errors.push(e as any));
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -458,7 +458,7 @@ describe("async lifecycle — reload", () => {
     const origForceRender = ctx.render.force.bind(ctx);
     (ctx as any).render.force = () => { forceRenderCount++; origForceRender(); };
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -477,7 +477,7 @@ describe("async lifecycle — reload", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -511,7 +511,7 @@ describe("async lifecycle — ARIA attributes", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -525,7 +525,7 @@ describe("async lifecycle — ARIA attributes", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -545,7 +545,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -557,7 +557,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -569,7 +569,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 500 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -594,7 +594,7 @@ describe("async lifecycle — loadVisibleRange", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -614,7 +614,7 @@ describe("async lifecycle — loadVisibleRange", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -640,7 +640,7 @@ describe("async lifecycle — network recovery", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -659,7 +659,7 @@ describe("async lifecycle — network recovery", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     engineState.destroyed = true;
 
@@ -684,7 +684,7 @@ describe("async lifecycle — chunk deduplication", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -710,7 +710,7 @@ describe("async lifecycle — chunk deduplication", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -738,7 +738,7 @@ describe("async lifecycle — destroy cleanup", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
 
     expect(() => plugin.destroy!()).not.toThrow();
@@ -752,7 +752,7 @@ describe("async lifecycle — destroy cleanup", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -776,7 +776,7 @@ describe("async lifecycle — destroy cleanup", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 

@@ -2600,7 +2600,7 @@ describe("carousel adapter position", () => {
     t.ctx.scroll.getPixelEquivalent = () => position;
     const plugin = carousel();
     try {
-      plugin.setup(t.ctx);
+      plugin.setup!(t.ctx);
       t.engineState.scrollPosition = 0;
       expect(t.methods.get("getCarouselState")!().scrollPosition).toBe(42);
       position = 84;

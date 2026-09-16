@@ -141,7 +141,7 @@ describe("autosize setup", () => {
     mockCtx.ctx.sizes.setConfig = () => { sizeFnRegistered = true; };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
     plugin.destroy();
 
     expect(sizeFnRegistered).toBe(true);
@@ -149,7 +149,7 @@ describe("autosize setup", () => {
 
   it("should register destroy handler during setup", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     expect(mockCtx.destroyHandlers.length).toBeGreaterThan(0);
 
@@ -158,7 +158,7 @@ describe("autosize setup", () => {
 
   it("should register isMeasured method", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const isMeasured = mockCtx.methods.get("isMeasured") as ((index: number) => boolean) | undefined;
     expect(typeof isMeasured).toBe("function");
@@ -169,7 +169,7 @@ describe("autosize setup", () => {
 
   it("should register setMeasuredSize method", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as ((index: number, size: number) => void) | undefined;
     expect(typeof setMeasuredSize).toBe("function");
@@ -179,7 +179,7 @@ describe("autosize setup", () => {
 
   it("should register getMeasuredCount method", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const getMeasuredCount = mockCtx.methods.get("getMeasuredCount") as (() => number) | undefined;
     expect(typeof getMeasuredCount).toBe("function");
@@ -219,7 +219,7 @@ describe("autosize measured size tracking", () => {
 
   it("isMeasured returns false before measurement, true after setMeasuredSize", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const isMeasured = mockCtx.methods.get("isMeasured") as (index: number) => boolean;
     const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
@@ -238,7 +238,7 @@ describe("autosize measured size tracking", () => {
 
   it("getMeasuredCount increments for each measured item", () => {
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
     const getMeasuredCount = mockCtx.methods.get("getMeasuredCount") as () => number;
@@ -281,7 +281,7 @@ describe("autosize onCommit hook", () => {
     };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // Simulate a rendered element for index 0
     const el = document.createElement("div");
@@ -311,7 +311,7 @@ describe("autosize onCommit hook", () => {
     };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // Pre-measure index 0
     const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (index: number, size: number) => void;
@@ -344,7 +344,7 @@ describe("autosize onCommit hook", () => {
     };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     const el = document.createElement("div");
     el.setAttribute("data-index", "0");
@@ -373,7 +373,7 @@ describe("autosize onIdle hook", () => {
   it("onIdle is safe to call when no pending content update", () => {
     const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // onIdle with no pending update should not throw
     expect(() => plugin.hooks!.onIdle!()).not.toThrow();
@@ -391,7 +391,7 @@ describe("autosize destroy", () => {
   it("should clean up on destroy without errors", () => {
     const mockCtx = createPluginMockContext(createTestItems(10), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     expect(() => plugin.destroy()).not.toThrow();
 
@@ -401,7 +401,7 @@ describe("autosize destroy", () => {
   it("should be safe to call destroy twice", () => {
     const mockCtx = createPluginMockContext(createTestItems(10), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     plugin.destroy();
     expect(() => plugin.destroy()).not.toThrow();
@@ -426,7 +426,7 @@ describe("autosize destroy", () => {
 
     const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // Run the registered destroy handlers (simulates what createVList does on destroy)
     for (const handler of mockCtx.destroyHandlers) handler();
@@ -448,7 +448,7 @@ describe("autosize destroy", () => {
 
     const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     plugin.destroy();
 
@@ -469,7 +469,7 @@ describe("autosize destroy", () => {
 
     const mockCtx = createPluginMockContext(createTestItems(5), { itemSize: 50 });
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // Simulate normal lifecycle: handler runs first, then plugin.destroy() is called
     for (const handler of mockCtx.destroyHandlers) handler();
@@ -492,7 +492,7 @@ describe("autosize gap config", () => {
     };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     // Before any measurements, sizeFn returns the estimated size (60)
     expect(capturedSizeFn).not.toBeNull();
@@ -568,7 +568,7 @@ describe("autosize anchor preservation", () => {
     mockCtx.ctx.render.force = () => { forceRenderCount++; };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     return {
       mockCtx,
@@ -856,7 +856,7 @@ describe("autosize end-pinning", () => {
     mockCtx.ctx.scroll.setToIndexFn = (fn: any) => { scrollToIndexFn = fn; };
 
     const plugin = autosize();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
 
     return {
       mockCtx,
@@ -1098,7 +1098,7 @@ describe("autosize remeasure on late content", () => {
     rebuilds = 0;
     installObserver(true);
     plugin = autosize<TestItem>();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
     // Stand in for the pipeline: a forced render commits the visible range.
     mockCtx.ctx.render.force = () => {
       forceRenders++;
@@ -1170,7 +1170,7 @@ describe("autosize remeasure on late content", () => {
     installObserver(false);
     plugin.destroy();
     plugin = autosize<TestItem>();
-    plugin.setup(mockCtx.ctx);
+    plugin.setup!(mockCtx.ctx);
     mockCtx.ctx.render.force = () => { forceRenders++; };
 
     const { img } = renderItem(0);

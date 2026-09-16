@@ -225,7 +225,7 @@ describe("snapshots - Setup", () => {
   it("should register getScrollSnapshot method", () => {
     const { ctx, methods, cleanup } = createMockContext();
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     expect(methods.has("getScrollSnapshot")).toBe(true);
     expect(methods.get("getScrollSnapshot")).toBeInstanceOf(Function);
@@ -235,7 +235,7 @@ describe("snapshots - Setup", () => {
   it("should register restoreScroll method", () => {
     const { ctx, methods, cleanup } = createMockContext();
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     expect(methods.has("restoreScroll")).toBe(true);
     expect(methods.get("restoreScroll")).toBeInstanceOf(Function);
@@ -251,7 +251,7 @@ describe("snapshots - getScrollSnapshot", () => {
   it("should return index 0 and offsetInItem 0 when totalItems is 0", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 0 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -272,7 +272,7 @@ describe("snapshots - getScrollSnapshot", () => {
       itemHeight: 48,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -290,7 +290,7 @@ describe("snapshots - getScrollSnapshot", () => {
       itemHeight: 48,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -307,7 +307,7 @@ describe("snapshots - getScrollSnapshot", () => {
       itemHeight: 48,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -319,7 +319,7 @@ describe("snapshots - getScrollSnapshot", () => {
   it("should include total in snapshot", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 1000000 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -333,7 +333,7 @@ describe("snapshots - getScrollSnapshot", () => {
     methods.set("getSelected", () => [5, 10, 15]);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -347,7 +347,7 @@ describe("snapshots - getScrollSnapshot", () => {
     methods.set("getSelected", () => []);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -360,7 +360,7 @@ describe("snapshots - getScrollSnapshot", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -379,7 +379,7 @@ describe("snapshots - restoreScroll", () => {
   it("should do nothing when totalItems is 0 and snapshot has no total", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 0 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 50, offsetInItem: 10 });
@@ -391,7 +391,7 @@ describe("snapshots - restoreScroll", () => {
   it("should do nothing when totalItems is 0 and snapshot.total is 0", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 0 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 50, offsetInItem: 10, total: 0 });
@@ -417,7 +417,7 @@ describe("snapshots - restoreScroll", () => {
     methods.set("_setTotal", setTotalFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 50, offsetInItem: 10, total: 1000 });
@@ -438,7 +438,7 @@ describe("snapshots - restoreScroll", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 10, offsetInItem: 20 });
@@ -457,7 +457,7 @@ describe("snapshots - restoreScroll", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 999, offsetInItem: 5 });
@@ -476,7 +476,7 @@ describe("snapshots - restoreScroll", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -493,7 +493,7 @@ describe("snapshots - restoreScroll", () => {
     methods.set("select", selectFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 0, offsetInItem: 0, selectedIds: [5, 10] });
@@ -508,7 +508,7 @@ describe("snapshots - restoreScroll", () => {
     methods.set("select", selectFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 0, offsetInItem: 0, selectedIds: [] });
@@ -521,7 +521,7 @@ describe("snapshots - restoreScroll", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 0, offsetInItem: 0, selectedIds: [1, 2, 3] });
@@ -539,7 +539,7 @@ describe("snapshots - NaN Guard", () => {
   it("should do nothing when index is NaN", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: NaN, offsetInItem: 10 });
@@ -551,7 +551,7 @@ describe("snapshots - NaN Guard", () => {
   it("should do nothing when offsetInItem is NaN", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: NaN });
@@ -563,7 +563,7 @@ describe("snapshots - NaN Guard", () => {
   it("should do nothing when index is Infinity", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: Infinity, offsetInItem: 10 });
@@ -575,7 +575,7 @@ describe("snapshots - NaN Guard", () => {
   it("should do nothing when offsetInItem is -Infinity", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: -Infinity });
@@ -600,7 +600,7 @@ describe("snapshots - sizeCache Rebuild", () => {
       sizeCacheTotal: 0, // Stale!
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 704, offsetInItem: 10 });
@@ -617,7 +617,7 @@ describe("snapshots - sizeCache Rebuild", () => {
       sizeCacheTotal: 100, // Already correct
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -635,7 +635,7 @@ describe("snapshots - sizeCache Rebuild", () => {
       sizeCacheTotal: 225, // Grid row count, NOT item count
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -662,7 +662,7 @@ describe("snapshots - sizeCache Rebuild", () => {
       actualSize: virtualSize,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 704, offsetInItem: 10 });
@@ -689,7 +689,7 @@ describe("snapshots - loadVisibleRange", () => {
     methods.set("reload", reloadFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -706,7 +706,7 @@ describe("snapshots - loadVisibleRange", () => {
     methods.set("reload", reloadFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -719,7 +719,7 @@ describe("snapshots - loadVisibleRange", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 10 });
@@ -741,7 +741,7 @@ describe("snapshots - Auto-Restore", () => {
 
     const snapshot: ScrollSnapshot = { index: 10, offsetInItem: 20, total: 100 };
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -754,7 +754,7 @@ describe("snapshots - Auto-Restore", () => {
     const { ctx, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -766,7 +766,7 @@ describe("snapshots - Auto-Restore", () => {
     const { ctx, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const plugin = snapshots<TestItem>({ restore: undefined });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -788,7 +788,7 @@ describe("snapshots - Auto-Restore", () => {
       total: 1000000,
     };
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -804,7 +804,7 @@ describe("snapshots - Auto-Restore", () => {
 
     const snapshot: ScrollSnapshot = { index: 5, offsetInItem: 0, total: 100 };
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -817,7 +817,7 @@ describe("snapshots - Auto-Restore", () => {
 
     const snapshot = { index: NaN, offsetInItem: 0 } as ScrollSnapshot;
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -830,7 +830,7 @@ describe("snapshots - Auto-Restore", () => {
 
     const snapshot: ScrollSnapshot = { index: 50, offsetInItem: 10 };
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -856,7 +856,7 @@ describe("snapshots - Auto-Restore", () => {
 
     const snapshot: ScrollSnapshot = { index: 50, offsetInItem: 10, total: 1000 };
     const plugin = snapshots<TestItem>({ restore: snapshot });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await new Promise((resolve) => queueMicrotask(resolve));
 
@@ -879,7 +879,7 @@ describe("snapshots - Save/Restore Roundtrip", () => {
     // Save phase
     const save = createMockContext({ totalItems, itemHeight, scrollTop, containerSize: 500 });
     const savePlugin = snapshots<TestItem>();
-    savePlugin.setup(save.ctx);
+    savePlugin.setup!(save.ctx);
     const getSnapshot = save.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
     save.cleanup();
@@ -887,7 +887,7 @@ describe("snapshots - Save/Restore Roundtrip", () => {
     // Restore phase
     const restore = createMockContext({ totalItems, itemHeight, containerSize: 500 });
     const restorePlugin = snapshots<TestItem>();
-    restorePlugin.setup(restore.ctx);
+    restorePlugin.setup!(restore.ctx);
     const restoreFn = restore.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restoreFn(snapshot);
 
@@ -899,7 +899,7 @@ describe("snapshots - Save/Restore Roundtrip", () => {
   it("should preserve total through save/restore", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 50000, scrollTop: 1000 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -916,7 +916,7 @@ describe("snapshots - Save/Restore Roundtrip", () => {
     const save = createMockContext({ totalItems, itemHeight, scrollTop: 0 });
     save.methods.set("getSelected", () => [3, 7, 11]);
     const savePlugin = snapshots<TestItem>();
-    savePlugin.setup(save.ctx);
+    savePlugin.setup!(save.ctx);
     const getSnapshot = save.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
     expect(snapshot.selectedIds).toEqual([3, 7, 11]);
@@ -927,7 +927,7 @@ describe("snapshots - Save/Restore Roundtrip", () => {
     const restore = createMockContext({ totalItems, itemHeight });
     restore.methods.set("select", selectFn);
     const restorePlugin = snapshots<TestItem>();
-    restorePlugin.setup(restore.ctx);
+    restorePlugin.setup!(restore.ctx);
     const restoreFn = restore.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restoreFn(snapshot);
 
@@ -944,7 +944,7 @@ describe("snapshots - Edge Cases", () => {
   it("should handle index 0 with offset 0", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 0, offsetInItem: 0 });
@@ -961,7 +961,7 @@ describe("snapshots - Edge Cases", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 99, offsetInItem: 0 });
@@ -975,7 +975,7 @@ describe("snapshots - Edge Cases", () => {
   it("should handle negative index by clamping to 0", () => {
     const { ctx, methods, scrollCalls, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: -5, offsetInItem: 0 });
@@ -992,7 +992,7 @@ describe("snapshots - Edge Cases", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 0, offsetInItem: 10 });
@@ -1018,7 +1018,7 @@ describe("snapshots - Edge Cases", () => {
       containerSize: 500,
     });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore(parsed);
@@ -1050,7 +1050,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=100, itemHeight=48 → index=2, offsetInItem=4
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 100, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // Fire the idle hook
     expect(plugin.hooks?.onIdle).toBeInstanceOf(Function);
@@ -1070,7 +1070,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=100, itemHeight=48 → index=2, offsetInItem=4
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 100, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
 
@@ -1089,7 +1089,7 @@ describe("snapshots - autoSave", () => {
 
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const differentSnapshot: ScrollSnapshot = { index: 99, offsetInItem: 0, total: 100 };
     methods.set("getScrollSnapshot", () => differentSnapshot);
@@ -1111,7 +1111,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=0, itemHeight=48 → index=0, offsetInItem=0
     const { ctx, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1130,7 +1130,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=0, itemHeight=48 → index=0, offsetInItem=0
     const { ctx, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // Flush microtask to lift guard
     await flushAsync();
@@ -1151,7 +1151,7 @@ describe("snapshots - autoSave", () => {
 
     const { ctx, scrollCalls, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1172,7 +1172,7 @@ describe("snapshots - autoSave", () => {
     sessionStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(savedSnapshot));
 
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     expect(cancelAutoLoad).toHaveBeenCalled();
     cleanup();
@@ -1185,7 +1185,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=0, itemHeight=48 → index=0, offsetInItem=0
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // selection:change should save immediately (no guard)
     ctx.emitter.emit("selection:change", { selected: [1], items: [] as TestItem[] });
@@ -1204,7 +1204,7 @@ describe("snapshots - autoSave", () => {
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
     // Should not throw during setup (corrupt data is ignored)
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // No guard since readSnapshot returned undefined — idle handler should save normally
     plugin.hooks!.onIdle!();
@@ -1220,7 +1220,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=0, itemHeight=48 → index=0, offsetInItem=0
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     ctx.emitter.emit("focus:change", { id: 7, index: 6 });
 
@@ -1237,7 +1237,7 @@ describe("snapshots - autoSave", () => {
 
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const differentSnapshot: ScrollSnapshot = { index: 99, offsetInItem: 0, total: 100, focusedId: 99 };
     methods.set("getScrollSnapshot", () => differentSnapshot);
@@ -1257,7 +1257,7 @@ describe("snapshots - autoSave", () => {
     // scrollTop=0, itemHeight=48 → index=0, offsetInItem=0
     const { ctx, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // Flush microtask to lift guard
     await flushAsync();
@@ -1293,7 +1293,7 @@ describe("snapshots - saves after restore with dataIndex", () => {
 
     const { ctx, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1318,7 +1318,7 @@ describe("snapshots - saves after restore with dataIndex", () => {
 
     const { ctx, cleanup } = createMockContext({ totalItems: 50, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1342,7 +1342,7 @@ describe("snapshots - saves after restore with dataIndex", () => {
 
     const { ctx, cleanup } = createMockContext({ totalItems: 200, scrollTop: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1388,7 +1388,7 @@ describe("snapshots - Selection Seeding", () => {
     });
 
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     // _seedSelection is called synchronously during setup, before any microtask
     expect(seeded).toEqual([42, 99]);
@@ -1412,7 +1412,7 @@ describe("snapshots - Selection Seeding", () => {
     });
 
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1437,7 +1437,7 @@ describe("snapshots - Selection Seeding", () => {
     methods.set("getSelected", () => [42]);
 
     const plugin = snapshots<TestItem>({ autoSave: KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1463,7 +1463,7 @@ describe("snapshots - Selection Seeding", () => {
     });
 
     const plugin = snapshots<TestItem>({ autoSave: AUTO_SAVE_KEY });
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     await flushAsync();
 
@@ -1484,7 +1484,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => 42);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     expect(getSnapshot().focusedId).toBe(42);
@@ -1496,7 +1496,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => "abc-123");
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     expect(getSnapshot().focusedId).toBe("abc-123");
@@ -1508,7 +1508,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => undefined);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     expect(getSnapshot().focusedId).toBeUndefined();
@@ -1519,7 +1519,7 @@ describe("snapshots - Focus Save/Restore", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     expect(getSnapshot().focusedId).toBeUndefined();
@@ -1531,7 +1531,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => 42);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     // totalItems=0 returns early — focusedId is not captured
@@ -1545,7 +1545,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => 7);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1560,7 +1560,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_focusById", focusByIdFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 0, focusedId: 42 });
@@ -1576,7 +1576,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_focusById", focusByIdFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 0 });
@@ -1589,7 +1589,7 @@ describe("snapshots - Focus Save/Restore", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     expect(() => restore({ index: 5, offsetInItem: 0, focusedId: 42 })).not.toThrow();
@@ -1605,7 +1605,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("loadVisibleRange", loadVisibleFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 0, focusedId: 42 });
@@ -1626,7 +1626,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("loadVisibleRange", loadVisibleFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({ index: 5, offsetInItem: 0 }); // no focusedId
@@ -1643,7 +1643,7 @@ describe("snapshots - Focus Save/Restore", () => {
     methods.set("_getFocusedId", () => 99);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1671,7 +1671,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1691,7 +1691,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1708,7 +1708,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1723,7 +1723,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1736,7 +1736,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, scrollTop: 0 });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1760,7 +1760,7 @@ describe("snapshots - Cross-Mode Snapshot Fields", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -1790,7 +1790,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1817,7 +1817,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1849,7 +1849,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1871,7 +1871,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1893,7 +1893,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1916,7 +1916,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1941,7 +1941,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     methods.set("_setTotal", setTotalFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1969,7 +1969,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     methods.set("_setTotal", setTotalFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore({
@@ -1995,7 +1995,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const getSnapshot = methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -2024,7 +2024,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const gridPlugin = snapshots<TestItem>();
-    gridPlugin.setup(gridCtx.ctx);
+    gridPlugin.setup!(gridCtx.ctx);
 
     const getSnapshot = gridCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -2042,7 +2042,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const listPlugin = snapshots<TestItem>();
-    listPlugin.setup(listCtx.ctx);
+    listPlugin.setup!(listCtx.ctx);
 
     const restore = listCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore(JSON.parse(JSON.stringify(snapshot)));
@@ -2067,7 +2067,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const listPlugin = snapshots<TestItem>();
-    listPlugin.setup(listCtx.ctx);
+    listPlugin.setup!(listCtx.ctx);
 
     const getSnapshot = listCtx.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
     const snapshot = getSnapshot();
@@ -2087,7 +2087,7 @@ describe("snapshots - Cross-Mode restoreScroll", () => {
     });
 
     const gridPlugin = snapshots<TestItem>();
-    gridPlugin.setup(gridCtx.ctx);
+    gridPlugin.setup!(gridCtx.ctx);
 
     const restore = gridCtx.methods.get("restoreScroll") as (s: ScrollSnapshot) => void;
     restore(JSON.parse(JSON.stringify(snapshot)));
@@ -2109,7 +2109,7 @@ describe("snapshots - restoreScroll returns a Promise", () => {
   it("should return a thenable", () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 100, itemHeight: 48 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
     const result = restore({ index: 5, offsetInItem: 0, total: 100 });
@@ -2133,7 +2133,7 @@ describe("snapshots - restoreScroll returns a Promise", () => {
     methods.set("loadVisibleRange", loadVisibleFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
     await restore({ index: 5, offsetInItem: 0, total: 100 });
@@ -2147,7 +2147,7 @@ describe("snapshots - restoreScroll returns a Promise", () => {
   it("should resolve immediately when there is no data to restore (total 0)", async () => {
     const { ctx, methods, cleanup } = createMockContext({ totalItems: 0, itemHeight: 48 });
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
     // Should settle without hanging.
@@ -2170,7 +2170,7 @@ describe("snapshots - restoreScroll returns a Promise", () => {
     methods.set("loadVisibleRange", loadVisibleFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
 
@@ -2191,7 +2191,7 @@ describe("snapshots - restoreScroll returns a Promise", () => {
     methods.set("reload", reloadFn);
 
     const plugin = snapshots<TestItem>();
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
 
     const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
     await restore({ index: 5, offsetInItem: 0, total: 100 });
