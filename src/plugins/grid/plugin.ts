@@ -12,6 +12,10 @@
  *
  * Restrictions:
  * - Cannot be combined with masonry or table plugins
+ * - Cannot be combined with autosize: it measures items, while this size cache
+ *   is indexed by row. A row's height is a question about the row's cells, and
+ *   answering it belongs to whichever plugin owns the layout. Give grid lists a
+ *   fixed `item.height` (or `item.width` when horizontal).
  */
 
 import type { VListItem, ItemTemplate, ItemState } from "../../types";
@@ -290,7 +294,15 @@ export function grid<T extends VListItem = VListItem>(
   return {
     name: "grid",
     priority: 10,
-    conflicts: ["masonry", "table"],
+    // autosize measures individual items; this plugin's size cache is indexed
+    // by row. With a numeric estimate and no gap the two combine silently and
+    // wrongly: the cache is rebuilt in row space while autosize's item-space
+    // size function stays installed, so row n takes item n's measurement —
+    // twenty items in two columns, two cells measured at 200, came to 800px
+    // where 650px is right. With a gap or a function spec the measurements are
+    // dropped instead. A row's height is a question about the row's cells, and
+    // answering it belongs to whichever plugin owns the layout.
+    conflicts: ["masonry", "table", "autosize"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

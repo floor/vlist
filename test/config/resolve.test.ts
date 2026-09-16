@@ -363,17 +363,52 @@ describe("createVListFromConfig", () => {
 
   it("#119: runs (does not throw Duplicate plugin) with a plugins array that overlaps auto-wiring", () => {
     // The reporter's pattern — plugins passed directly — even when the config
-    // would auto-wire the same plugin (estimatedHeight → autosize).
+    // would auto-wire the same plugin (estimatedHeight → autosize). The report
+    // paired it with grid(), which 3.0 now rejects outright; the case below
+    // covers that, and this keeps the duplicate-name regression it was filed for.
     const container = createContainer({ width: 400, height: 500 });
     const create = () =>
       createVListFromConfig<TestItem>({
         container,
         item: { estimatedHeight: 200, template },
         items: createTestItems(50),
-        plugins: [grid({ columns: 4 }), autosize()],
+        plugins: [autosize()],
       });
     expect(create).not.toThrow();
     create().destroy();
+  });
+
+  it("rejects grid with autosize, whichever way the two arrive", () => {
+    // grid indexes its size cache by row while autosize measures items, so row
+    // n took item n's measurement: twenty items in two columns with two cells
+    // at 200px came to 800px where 650px is right.
+    const container = createContainer({ width: 400, height: 500 });
+    try {
+      expect(() =>
+        createVListFromConfig<TestItem>({
+          container,
+          item: { estimatedHeight: 200, template },
+          items: createTestItems(50),
+          plugins: [grid({ columns: 4 }), autosize()],
+        }),
+      ).toThrow('conflicts with "autosize"');
+
+      // Through the convenience fields the error names those fields instead:
+      // this layer wires both plugins, and the caller never wrote "autosize".
+      expect(() =>
+        createVListFromConfig<TestItem>({
+          container,
+          item: { estimatedHeight: 200, template },
+          items: createTestItems(50),
+          layout: "grid",
+          grid: { columns: 4 },
+        }),
+      ).toThrow('layout: "grid" needs a fixed item size');
+
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
 
