@@ -178,26 +178,26 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
-| **Base (`vlist`)** | 25.6 KB | 9.4 KB |
-| `vlist/synthetic` | 31.5 KB | 11.6 KB |
-| `vlist/native` (alias) | 25.6 KB | 9.4 KB |
-| `a11y()` | 28.8 KB | 10.6 KB |
-| `selection()` | 34.9 KB | 12.3 KB |
-| `data()` | 39.2 KB | 14.2 KB |
+| **Base (`vlist`)** | 25.7 KB | 9.4 KB |
+| `vlist/synthetic` | 31.6 KB | 11.7 KB |
+| `vlist/native` (alias) | 25.7 KB | 9.4 KB |
+| `a11y()` | 28.9 KB | 10.7 KB |
+| `selection()` | 35.0 KB | 12.3 KB |
+| `data()` | 39.3 KB | 14.3 KB |
 | `scrollbar()` | 33.8 KB | 12.3 KB |
-| `sortable()` | 37.3 KB | 12.9 KB |
-| `groups()` | 41.3 KB | 14.7 KB |
+| `sortable()` | 37.4 KB | 13.0 KB |
+| `groups()` | 41.4 KB | 14.7 KB |
 | `page()` | 28.1 KB | 10.3 KB |
-| `snapshots()` | 28.9 KB | 10.6 KB |
-| `transition()` | 32.3 KB | 11.4 KB |
+| `snapshots()` | 29.0 KB | 10.6 KB |
+| `transition()` | 32.4 KB | 11.4 KB |
 | `autosize()` | 28.6 KB | 10.5 KB |
-| `grid()` | 32.4 KB | 11.8 KB |
-| `table()` | 44.0 KB | 15.3 KB |
-| `masonry()` | 36.8 KB | 13.5 KB |
-| `tree()` | 40.8 KB | 14.5 KB |
-| `search()` | 34.5 KB | 12.6 KB |
-| `carousel()` | 38.3 KB | 13.9 KB |
-| `vlist/synthetic` + `carousel()` | 44.2 KB | 16.1 KB |
+| `grid()` | 32.5 KB | 11.8 KB |
+| `table()` | 44.1 KB | 15.3 KB |
+| `masonry()` | 36.9 KB | 13.6 KB |
+| `tree()` | 40.9 KB | 14.5 KB |
+| `search()` | 34.6 KB | 12.6 KB |
+| `carousel()` | 38.4 KB | 13.9 KB |
+| `vlist/synthetic` + `carousel()` | 44.3 KB | 16.1 KB |
 | `vlist/synthetic` + `sortable()` | 43.3 KB | 15.2 KB |
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,674 bytes gzipped**, below the 9.9 KB target that `bun run size` now enforces — the build fails above it; synthetic input is **11,960 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.

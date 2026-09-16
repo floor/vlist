@@ -236,16 +236,21 @@ describe("groups + table + data", () => {
 
       await waitForLoad(list);
 
-      // getItemAt should return header pseudo-items at group boundaries
+      // getItemAt takes data indices, as types.ts and the README document, so
+      // it never returns a header pseudo-item: headers are layout entries. This
+      // asserted the reverse until P9, which is how getItemAt came to mean one
+      // index space under table+groups and another everywhere else.
       const item0 = list.getItemAt(0);
       expect(item0).toBeDefined();
-      expect((item0 as any).__groupHeader).toBe(true);
+      expect((item0 as any).__groupHeader).toBeUndefined();
+      expect(item0!.name).toBe("City 1");
 
-      // First data item should be at index 1 (after the first group header)
+      // The layout mapping still runs underneath — reaching a data item through
+      // groups' accessor is what this test is really about.
       const item1 = list.getItemAt(1);
       expect(item1).toBeDefined();
       expect((item1 as any).__groupHeader).toBeUndefined();
-      expect(item1!.name).toBe("City 1");
+      expect(item1!.name).toBeDefined();
     });
   });
 
@@ -650,12 +655,12 @@ describe("groups + table + data", () => {
 
       await waitForLoad(list);
 
-      // getItemAt(0) should return a group header (not undefined)
+      // getItemAt takes data indices (P9), so both are data items and neither
+      // is a header pseudo-entry.
       const item0 = list.getItemAt(0);
       expect(item0).toBeDefined();
-      expect((item0 as any).__groupHeader).toBe(true);
+      expect((item0 as any).__groupHeader).toBeUndefined();
 
-      // getItemAt(1) should return a data item (not undefined)
       const item1 = list.getItemAt(1);
       expect(item1).toBeDefined();
       expect((item1 as any).__groupHeader).toBeUndefined();

@@ -856,7 +856,13 @@ export function groups<T extends VListItem = VListItem>(
 
       sizeCache.rebuild(layout.totalEntries);
       rebuildGridPositions();
-      ctx.items.setTotalFn(() => layout.totalEntries);
+      // The public list.total is the consumer-facing count, not the engine's
+      // render count: engineState.totalItems carries the layout entries, and
+      // carousel states the same split in its own setup. Reporting entries here
+      // counted the group headers as items, so a grouped list of ten reported
+      // twelve and getItemAt(10) and (11) came back undefined. This is the same
+      // number _getTotal already publishes.
+      ctx.items.setTotalFn(() => layout.totalEntries - layout.groupCount);
 
       rootElement.classList.add(`${classPrefix}--grouped`);
 
