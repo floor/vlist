@@ -290,7 +290,7 @@ export function masonry<T extends VListItem = VListItem>(
     if (rawSizeSpec !== null && typeof rawSizeSpec === "function") {
       return (index: number): number => (rawSizeSpec as Function)(index, masonryCtx);
     }
-    return (index: number): number => storedCtx!.sizeCache.getSize(index);
+    return (index: number): number => storedCtx!.sizes.cache.getSize(index);
   }
 
   function updateMasonryContext(): void {

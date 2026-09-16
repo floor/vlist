@@ -244,7 +244,7 @@ describe("carousel — Logical Totals", () => {
     // engineState.totalItems is inflated for the render pipeline
     // but consumers never read it directly.
     // In the mock we can't call list.total, so check via getItems().length
-    expect(ctx.getItems().length).toBe(10);
+    expect(ctx.items.all().length).toBe(10);
 
     cleanup();
   });
@@ -447,7 +447,7 @@ describe("carousel — Virtual Item Mapping", () => {
     carousel().setup!(ctx);
 
     // The plugin should set getItemFn so that indices beyond total wrap
-    const getItem = ctx.getItem.bind(ctx);
+    const getItem = ctx.items.at.bind(ctx);
     // Items at virtual indices 0-4 should match real items
     for (let i = 0; i < 5; i++) {
       const item = getItem(i);
@@ -621,8 +621,8 @@ describe("carousel — Variant: hero — step size", () => {
     carousel({ variant: "hero", peek: 56 }).setup!(ctx);
 
     // All items have the same step size = 800 - 56 = 744
-    const size0 = ctx.sizeCache.getSize(0);
-    const size1 = ctx.sizeCache.getSize(1);
+    const size0 = ctx.sizes.cache.getSize(0);
+    const size1 = ctx.sizes.cache.getSize(1);
     expect(size0).toBe(800 - 56);
     expect(size1).toBe(800 - 56);
 
@@ -641,9 +641,9 @@ describe("carousel — Variant: hero — step size", () => {
     carousel({ variant: "hero", peek: 56 }).setup!(ctx);
 
     const stepSize = 800 - 56;
-    expect(ctx.sizeCache.getOffset(0)).toBe(0);
-    expect(ctx.sizeCache.getOffset(1)).toBe(stepSize);
-    expect(ctx.sizeCache.getOffset(3)).toBe(stepSize * 3);
+    expect(ctx.sizes.cache.getOffset(0)).toBe(0);
+    expect(ctx.sizes.cache.getOffset(1)).toBe(stepSize);
+    expect(ctx.sizes.cache.getOffset(3)).toBe(stepSize * 3);
 
     cleanup();
   });
@@ -764,7 +764,7 @@ describe("carousel — Variant: hero — peek config", () => {
 
     carousel({ variant: "hero", peek: 48 }).setup!(ctx);
 
-    expect(ctx.sizeCache.getSize(0)).toBe(800 - 48);
+    expect(ctx.sizes.cache.getSize(0)).toBe(800 - 48);
 
     cleanup();
   });
@@ -781,7 +781,7 @@ describe("carousel — Variant: hero — peek config", () => {
     carousel({ variant: "hero", peek: "10%" }).setup!(ctx);
 
     // 10% of 800 = 80 → stepSize = 800 - 80 = 720
-    expect(ctx.sizeCache.getSize(0)).toBe(720);
+    expect(ctx.sizes.cache.getSize(0)).toBe(720);
 
     cleanup();
   });
@@ -798,7 +798,7 @@ describe("carousel — Variant: hero — peek config", () => {
     carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
 
     // 15% of 800 = 120, capped at 120
-    expect(ctx.sizeCache.getSize(0)).toBe(800 - 120);
+    expect(ctx.sizes.cache.getSize(0)).toBe(800 - 120);
 
     cleanup();
   });
@@ -815,7 +815,7 @@ describe("carousel — Variant: hero — peek config", () => {
     carousel({ variant: "hero", peek: "auto" }).setup!(ctx);
 
     // 15% of 200 = 30, clamped to min 40
-    const stepSize = ctx.sizeCache.getSize(0);
+    const stepSize = ctx.sizes.cache.getSize(0);
     const peekSize = 200 - stepSize;
     expect(peekSize).toBe(40);
 
@@ -858,8 +858,8 @@ describe("carousel — Variant: hero-center — layout", () => {
     carousel({ variant: "hero-center", peek: 56 }).setup!(ctx);
 
     // hero-center: stepSize = containerSize - 2*peek = 800 - 112 = 688
-    expect(ctx.sizeCache.getSize(0)).toBe(688);
-    expect(ctx.sizeCache.getSize(1)).toBe(688);
+    expect(ctx.sizes.cache.getSize(0)).toBe(688);
+    expect(ctx.sizes.cache.getSize(1)).toBe(688);
 
     cleanup();
   });
@@ -954,7 +954,7 @@ describe("carousel — Variant: hero — vertical", () => {
     carousel({ variant: "hero", peek: 56 }).setup!(ctx);
 
     // Vertical: containerSize = 600, stepSize = 600 - 56 = 544
-    expect(ctx.sizeCache.getSize(0)).toBe(544);
+    expect(ctx.sizes.cache.getSize(0)).toBe(544);
 
     cleanup();
   });
@@ -1021,7 +1021,7 @@ describe("carousel — Variant: hero — infinite loop", () => {
 
     carousel({ variant: "hero" }).setup!(ctx);
 
-    expect(ctx.getItems().length).toBe(8);
+    expect(ctx.items.all().length).toBe(8);
 
     cleanup();
   });
@@ -1512,7 +1512,7 @@ describe("carousel — Mutation Sync", () => {
     plugin.setup!(ctx);
     // The new plugin instance won't have the same state,
     // so we verify via getItems().length
-    expect(ctx.getItems().length).toBe(6);
+    expect(ctx.items.all().length).toBe(6);
 
     cleanup();
   });
@@ -1525,10 +1525,10 @@ describe("carousel — Mutation Sync", () => {
     });
 
     carousel().setup!(ctx);
-    expect(ctx.getItems().length).toBe(5);
+    expect(ctx.items.all().length).toBe(5);
 
     items.push({ id: 5, name: "Item 5" });
-    expect(ctx.getItems().length).toBe(6);
+    expect(ctx.items.all().length).toBe(6);
 
     cleanup();
   });
@@ -1764,7 +1764,7 @@ describe("carousel — syncItemCount", () => {
     items.push({ id: 5, name: "Item 5" });
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
-    expect(ctx.getItems().length).toBe(6);
+    expect(ctx.items.all().length).toBe(6);
     expect(getState().index).toBe(1);
 
     cleanup();
@@ -1814,7 +1814,7 @@ describe("carousel — syncItemCount", () => {
     items.push({ id: 6, name: "Item 6" });
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
-    expect(ctx.getItems().length).toBe(7);
+    expect(ctx.items.all().length).toBe(7);
     expect(getState().index).toBe(0);
 
     cleanup();
@@ -2093,8 +2093,8 @@ describe("carousel — scrollToIndexFn", () => {
 
     let scrollToIndexCalled = false;
     let capturedFn: Function | null = null;
-    const origSetFn = ctx.setScrollToIndexFn.bind(ctx);
-    ctx.setScrollToIndexFn = (fn: any) => {
+    const origSetFn = ctx.scroll.setToIndexFn.bind(ctx);
+    ctx.scroll.setToIndexFn = (fn: any) => {
       capturedFn = fn;
       origSetFn(fn);
     };
@@ -2117,8 +2117,8 @@ describe("carousel — scrollToIndexFn", () => {
     });
 
     let capturedFn: Function | null = null;
-    const origSetFn = ctx.setScrollToIndexFn.bind(ctx);
-    ctx.setScrollToIndexFn = (fn: any) => {
+    const origSetFn = ctx.scroll.setToIndexFn.bind(ctx);
+    ctx.scroll.setToIndexFn = (fn: any) => {
       capturedFn = fn;
       origSetFn(fn);
     };
@@ -2227,7 +2227,7 @@ describe("carousel — NavConfig navigate", () => {
     });
 
     carousel().setup!(ctx);
-    const navCfg = ctx.getNavConfig();
+    const navCfg = ctx.nav.get();
     expect(navCfg.navigate).not.toBeNull();
 
     const result = navCfg.navigate!(0, "ArrowRight", 5);
@@ -2244,7 +2244,7 @@ describe("carousel — NavConfig navigate", () => {
     });
 
     carousel().setup!(ctx);
-    const navCfg = ctx.getNavConfig();
+    const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(0, "ArrowLeft", 5);
     expect(result).toBe(4);
@@ -2260,7 +2260,7 @@ describe("carousel — NavConfig navigate", () => {
     });
 
     carousel().setup!(ctx);
-    const navCfg = ctx.getNavConfig();
+    const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(3, "Home", 5);
     expect(result).toBe(0);
@@ -2276,7 +2276,7 @@ describe("carousel — NavConfig navigate", () => {
     });
 
     carousel().setup!(ctx);
-    const navCfg = ctx.getNavConfig();
+    const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(0, "End", 5);
     expect(result).toBe(4);
@@ -2292,7 +2292,7 @@ describe("carousel — NavConfig navigate", () => {
     });
 
     carousel().setup!(ctx);
-    const navCfg = ctx.getNavConfig();
+    const navCfg = ctx.nav.get();
 
     const result = navCfg.navigate!(2, "Tab", 5);
     expect(result).toBe(2);
@@ -2315,9 +2315,9 @@ describe("carousel — sizeCache.indexAtOffset", () => {
 
     carousel().setup!(ctx);
 
-    const idx = ctx.sizeCache.indexAtOffset(1200);
+    const idx = ctx.sizes.cache.indexAtOffset(1200);
     expect(idx).toBe(3);
-    expect(ctx.sizeCache.indexAtOffset(0)).toBe(0);
+    expect(ctx.sizes.cache.indexAtOffset(0)).toBe(0);
 
     cleanup();
   });
@@ -2381,7 +2381,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
 
     for (let i = 0; i < 5; i++) {
-      expect(ctx.sizeCache.getSize(i)).toBe(WIDTHS[i]! + 8);
+      expect(ctx.sizes.cache.getSize(i)).toBe(WIDTHS[i]! + 8);
     }
 
     cleanup();
@@ -2392,8 +2392,8 @@ describe("carousel — Variable-width (multi-aspect)", () => {
 
     carousel({ variant: "multi-aspect", gap: 8 }).setup!(ctx);
 
-    expect(ctx.sizeCache.getSize(5)).toBe(WIDTHS[0]! + 8);
-    expect(ctx.sizeCache.getSize(6)).toBe(WIDTHS[1]! + 8);
+    expect(ctx.sizes.cache.getSize(5)).toBe(WIDTHS[0]! + 8);
+    expect(ctx.sizes.cache.getSize(6)).toBe(WIDTHS[1]! + 8);
 
     cleanup();
   });
@@ -2404,9 +2404,9 @@ describe("carousel — Variable-width (multi-aspect)", () => {
 
     carousel({ variant: "multi-aspect", gap }).setup!(ctx);
 
-    expect(ctx.sizeCache.getOffset(0)).toBe(0);
-    expect(ctx.sizeCache.getOffset(1)).toBe(WIDTHS[0]! + gap);
-    expect(ctx.sizeCache.getOffset(2)).toBe(WIDTHS[0]! + WIDTHS[1]! + gap * 2);
+    expect(ctx.sizes.cache.getOffset(0)).toBe(0);
+    expect(ctx.sizes.cache.getOffset(1)).toBe(WIDTHS[0]! + gap);
+    expect(ctx.sizes.cache.getOffset(2)).toBe(WIDTHS[0]! + WIDTHS[1]! + gap * 2);
 
     cleanup();
   });
@@ -2460,9 +2460,9 @@ describe("carousel — Variable-width (multi-aspect)", () => {
 
     carousel({ variant: "multi-aspect", gap }).setup!(ctx);
 
-    expect(ctx.sizeCache.indexAtOffset(0)).toBe(0);
-    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + gap)).toBe(1);
-    expect(ctx.sizeCache.indexAtOffset(WIDTHS[0]! + WIDTHS[1]! + gap * 2)).toBe(2);
+    expect(ctx.sizes.cache.indexAtOffset(0)).toBe(0);
+    expect(ctx.sizes.cache.indexAtOffset(WIDTHS[0]! + gap)).toBe(1);
+    expect(ctx.sizes.cache.indexAtOffset(WIDTHS[0]! + WIDTHS[1]! + gap * 2)).toBe(2);
 
     cleanup();
   });
@@ -2538,11 +2538,11 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     carousel({ variant: "hero", peek: 56 }).setup!(ctx);
 
     const stepSz = 800 - 56;
-    expect(ctx.sizeCache.getSize(0)).toBe(stepSz);
-    expect(ctx.sizeCache.getSize(1)).toBe(stepSz);
-    expect(ctx.sizeCache.getOffset(0)).toBe(0);
-    expect(ctx.sizeCache.getOffset(1)).toBe(stepSz);
-    expect(ctx.sizeCache.getOffset(3)).toBe(stepSz * 3);
+    expect(ctx.sizes.cache.getSize(0)).toBe(stepSz);
+    expect(ctx.sizes.cache.getSize(1)).toBe(stepSz);
+    expect(ctx.sizes.cache.getOffset(0)).toBe(0);
+    expect(ctx.sizes.cache.getOffset(1)).toBe(stepSz);
+    expect(ctx.sizes.cache.getOffset(3)).toBe(stepSz * 3);
 
     cleanup();
   });
@@ -2567,8 +2567,8 @@ describe("carousel — snapEasing", () => {
     const snapEasing = (t: number): number => t; // marker (linear) easing
     let smoothCalled = false;
     let capturedEasing: ((t: number) => number) | undefined;
-    const realSmooth = ctx.smoothScrollTo;
-    ctx.smoothScrollTo = ((
+    const realSmooth = ctx.scroll.smoothTo;
+    ctx.scroll.smoothTo = ((
       target: number | (() => number),
       duration: number,
       easing?: (t: number) => number,
@@ -2577,7 +2577,7 @@ describe("carousel — snapEasing", () => {
       smoothCalled = true;
       capturedEasing = easing;
       return realSmooth(target, duration, easing, onComplete);
-    }) as typeof ctx.smoothScrollTo;
+    }) as typeof ctx.scroll.smoothTo;
 
     carousel({ snapEasing }).setup!(ctx);
 
@@ -2618,7 +2618,7 @@ for(const [entry,create] of carouselEntries) for(const isX of [false,true]) {
  it(`${entry}/${isX?'horizontal':'vertical'} public navigation and keyboard after a fold`,()=>{
   const f=carouselEntry(create,{},isX);
   try {
-   f.ctx.scrollTo(89980);f.wheel(40);expect(f.list.getScrollPosition()).toBe(50020);
+   f.ctx.scroll.to(89980);f.wheel(40);expect(f.list.getScrollPosition()).toBe(50020);
    const next=f.list.next as (n:number,o:{behavior:string})=>void;
    const prev=f.list.prev as typeof next;
    const goTo=f.list.goTo as typeof next;
@@ -2635,7 +2635,7 @@ for(const [entry,create] of carouselEntries) for(const isX of [false,true]) {
  it(`${entry}/${isX?'horizontal':'vertical'} item-count changes immediately after a fold`,()=>{
   const f=carouselEntry(create,{},isX);
   try {
-   f.ctx.scrollTo(89980);f.wheel(40);
+   f.ctx.scroll.to(89980);f.wheel(40);
    f.list.setItems(Array.from({length:7},(_,id)=>({id})));f.advance();
    expect(f.list.total).toBe(7);expect(f.state().index).toBeGreaterThanOrEqual(0);expect(f.state().index).toBeLessThan(7);
    f.list.scrollToIndex(6);(f.list.next as Function)(1,{behavior:'auto'});expect(f.state().index).toBe(0);

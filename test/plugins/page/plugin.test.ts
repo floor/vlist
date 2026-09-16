@@ -154,7 +154,7 @@ describe("page — Context Method Delegation", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const disableScrollSpy = mock(() => {});
-    (ctx as any).setScrollSource = disableScrollSpy;
+    (ctx as any).scroll.setSource = disableScrollSpy;
 
     plugin.setup!(ctx);
 
@@ -167,7 +167,7 @@ describe("page — Context Method Delegation", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const disableResizeSpy = mock(() => {});
-    (ctx as any).disableDefaultResize = disableResizeSpy;
+    (ctx as any).scroll.disableResize = disableResizeSpy;
 
     plugin.setup!(ctx);
 
@@ -182,7 +182,7 @@ describe("page — Context Method Delegation", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const setScrollTargetSpy = mock((_target: any) => {});
-    (ctx as any).setScrollTarget = setScrollTargetSpy;
+    (ctx as any).scroll.setTarget = setScrollTargetSpy;
 
     plugin.setup!(ctx);
 
@@ -196,7 +196,7 @@ describe("page — Context Method Delegation", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
-    (ctx as any).setScrollSource = setScrollSourceSpy;
+    (ctx as any).scroll.setSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
@@ -229,7 +229,7 @@ describe("page — Scroll Position Functions", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
-    (ctx as any).setScrollSource = setScrollSourceSpy;
+    (ctx as any).scroll.setSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
@@ -247,7 +247,7 @@ describe("page — Scroll Position Functions", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
-    (ctx as any).setScrollSource = setScrollSourceSpy;
+    (ctx as any).scroll.setSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
@@ -264,7 +264,7 @@ describe("page — Scroll Position Functions", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
     const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
-    (ctx as any).setScrollSource = setScrollSourceSpy;
+    (ctx as any).scroll.setSource = setScrollSourceSpy;
 
     ctx.dom.viewport.getBoundingClientRect = () => ({ left: -125, top: -250 } as DOMRect);
     plugin.setup!(ctx);
@@ -282,7 +282,7 @@ describe("page — Scroll Position Functions", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
     const setScrollSourceSpy = mock((_source: { write(pos: number): void }) => {});
-    (ctx as any).setScrollSource = setScrollSourceSpy;
+    (ctx as any).scroll.setSource = setScrollSourceSpy;
 
     plugin.setup!(ctx);
 
@@ -379,7 +379,7 @@ describe("page — Window Resize Handler", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const forceRenderSpy = mock(() => {});
-    (ctx as any).forceRender = forceRenderSpy;
+    (ctx as any).render.force = forceRenderSpy;
 
     plugin.setup!(ctx);
 
@@ -819,7 +819,7 @@ describe("page — Window scroll", () => {
     const items = createTestItems(100);
     const { ctx, engineState, cleanup } = createPluginMockContext(items);
     const onScrollFrameSpy = mock(() => {});
-    (ctx as any).onScrollFrame = onScrollFrameSpy;
+    (ctx as any).scroll.onFrame = onScrollFrameSpy;
 
     plugin.setup!(ctx);
 
@@ -837,7 +837,7 @@ describe("page — Window scroll", () => {
     const plugin = page<TestItem>();
     const { ctx, cleanup } = createPluginMockContext(createTestItems(100));
     const commit = mock(() => {});
-    ctx.commitScroll = commit;
+    ctx.scroll.commit = commit;
     ctx.dom.viewport.getBoundingClientRect = () => ({ top: -120 } as DOMRect);
     plugin.setup!(ctx);
     window.dispatchEvent(new Event("scroll"));
@@ -850,7 +850,7 @@ describe("page — Window scroll", () => {
     const plugin = page<TestItem>();
     const { ctx, cleanup } = createPluginMockContext(createTestItems(100));
     const commit = mock(() => {});
-    ctx.commitScroll = commit;
+    ctx.scroll.commit = commit;
     ctx.dom.viewport.getBoundingClientRect = () => ({ top: -0.25 } as DOMRect);
     plugin.setup!(ctx);
     window.dispatchEvent(new Event("scroll"));
@@ -864,7 +864,7 @@ describe("page — Window scroll", () => {
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items);
     const onScrollFrameSpy = mock(() => {});
-    (ctx as any).onScrollFrame = onScrollFrameSpy;
+    (ctx as any).scroll.onFrame = onScrollFrameSpy;
 
     plugin.setup!(ctx);
     plugin.destroy!();

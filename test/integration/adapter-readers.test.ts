@@ -58,7 +58,7 @@ it("autosize corrects measurements above the adapter's first visible item", () =
     observe() {} unobserve() {} disconnect() {}
   };
   const shifts: number[] = [];
-  t.ctx.shiftScroll = delta => { shifts.push(delta); };
+  t.ctx.scroll.shiftBy = delta => { shifts.push(delta); };
   t.ctx.scroll.getPixelEquivalent = () => 200;
   t.engineState.scrollPosition = 0;
   const plugin = autosize();
@@ -66,7 +66,7 @@ it("autosize corrects measurements above the adapter's first visible item", () =
     plugin.setup!(t.ctx);
     const row = document.createElement("div"); row.dataset.index = "0";
     t.dom.content.appendChild(row);
-    t.ctx.getRenderedElement = index => index === 0 ? row : null;
+    t.ctx.dom.renderedElement = index => index === 0 ? row : null;
     t.engineState.visibleCount = 1; t.engineState.visibleIndices[0] = 0;
     plugin.hooks!.onCommit!(t.engineState);
     callback([{ target: row, borderBoxSize: [{ blockSize: 60, inlineSize: 400 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);

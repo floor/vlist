@@ -14,8 +14,8 @@ function make(id){let ctx;const list=(q.get('entry')==='native'?native:synthetic
 window.main=make('#list');window.reference=make('#reference');
 window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performance.now();const check=()=>{if(Math.abs(main.list.getScrollPosition()-target)<0.001){requestAnimationFrame(resolve);return;}if(performance.now()-start>5000){reject(Error('animation did not reach '+target));return;}requestAnimationFrame(check);};check();});
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
-window.begin=(gap)=>{main.ctx.scrollTo(90*lap-gap);window.startSampling();};
-window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scrollTo(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
+window.begin=(gap)=>{main.ctx.scroll.to(90*lap-gap);window.startSampling();};
+window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
 window.finish=()=>{cancelAnimationFrame(frame);return trace;};window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
@@ -50,7 +50,7 @@ try {
  for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) for(const direction of [1,-1]) {
   const page=await browser.newPage();await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=full&entry=${entry}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(d=>{main.ctx.scrollTo((d>0?90:10)*lap-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
+  await page.evaluate(d=>{main.ctx.scroll.to((d>0?90:10)*lap-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
   await page.evaluate(({entry,d})=>untilPosition(entry==='native'?(d>0?360400:39600):200000+d*400),{entry,d:direction});
   const start=await page.evaluate(d=>{main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?d:0,deltaY:isX?0:d,cancelable:true}));startSampling();const start=main.list.getScrollPosition();main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});return start;},direction);
   await page.evaluate(d=>untilPosition(200000+d*800),direction);const trace=await page.evaluate(()=>window.finish());const target=200000+direction*800;
@@ -62,7 +62,7 @@ try {
  for(const axis of ['horizontal','vertical']) for(const variant of ['full','hero','multi']) {
   const page=await browser.newPage();const x=axis==='horizontal';await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=${variant}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(()=>{main.ctx.scrollTo(90*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
+  await page.evaluate(()=>{main.ctx.scroll.to(90*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
   const read=()=>page.evaluate(()=>{const el=[...document.querySelectorAll('#list [data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0');const r=el.getBoundingClientRect(),v=main.ctx.dom.viewport.getBoundingClientRect();return {size:isX?r.width:r.height,offset:isX?r.left-v.left:r.top-v.top,index:main.list.getCarouselState().index,pos:main.list.getCarouselState().scrollPosition};});
   const before=await read();assert.equal(before.index,3);
   await page.evaluate(()=>document.querySelector('#list').style[isX?'height':'width']='500px');await wait(100);assert.deepEqual(await read(),before);

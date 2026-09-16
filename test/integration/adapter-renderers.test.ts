@@ -37,7 +37,7 @@ for (const factory of factories) describe(`${factory().name} adapter boundary`, 
       t.engineState.prevBaseOffset = 777;
       t.engineState.scrollPosition = 1000;
       originReads = positionReads = 0;
-      t.ctx.forceRender();
+      t.ctx.render.force();
       const row = t.dom.content.querySelector('[data-index="0"]') as HTMLElement;
       expect(row).not.toBeNull();
       const y = () => {
@@ -50,7 +50,7 @@ for (const factory of factories) describe(`${factory().name} adapter boundary`, 
       const range = [t.engineState.prevRangeStart, t.engineState.prevRangeEnd];
       origin = 107;
       originReads = positionReads = 0;
-      t.ctx.renderIfNeeded();
+      t.ctx.render.ifNeeded();
       expect(y()).toBe(-107);
       expect([t.engineState.prevRangeStart, t.engineState.prevRangeEnd]).toEqual(range);
       expect(originReads).toBe(1);

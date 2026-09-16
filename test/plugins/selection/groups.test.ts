@@ -55,12 +55,12 @@ function setupWithGroups(mode: "single" | "multiple" = "multiple") {
   });
 
   // Register group-awareness methods that the selection plugin resolves
-  mockCtx.ctx.registerMethod("_isGroupHeader", (layoutIdx: number): boolean => {
+  mockCtx.ctx.hooks.method("_isGroupHeader", (layoutIdx: number): boolean => {
     const item = items[layoutIdx];
     return item?.__groupHeader === true;
   });
-  mockCtx.ctx.registerMethod("_layoutToDataIndex", (layoutIdx: number): number => layoutIdx);
-  mockCtx.ctx.registerMethod("_dataToLayoutIndex", (dataIdx: number): number => dataIdx);
+  mockCtx.ctx.hooks.method("_layoutToDataIndex", (layoutIdx: number): number => layoutIdx);
+  mockCtx.ctx.hooks.method("_dataToLayoutIndex", (dataIdx: number): number => dataIdx);
 
   const plugin = selection<TestItem>({ mode });
   plugin.setup(mockCtx.ctx);
@@ -363,10 +363,10 @@ describe("selection + groups — followFocus=false desync", () => {
       containerHeight: 500,
     });
 
-    mockCtx.ctx.registerMethod("_isGroupHeader", (i: number): boolean =>
+    mockCtx.ctx.hooks.method("_isGroupHeader", (i: number): boolean =>
       items[i]?.__groupHeader === true);
-    mockCtx.ctx.registerMethod("_layoutToDataIndex", (i: number): number => i);
-    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (i: number): number => i);
+    mockCtx.ctx.hooks.method("_layoutToDataIndex", (i: number): number => i);
+    mockCtx.ctx.hooks.method("_dataToLayoutIndex", (i: number): number => i);
 
     const plugin = selection<TestItem>({ mode: "multiple", followFocus: false });
     plugin.setup(mockCtx.ctx);
@@ -397,10 +397,10 @@ describe("selection + groups — followFocus=false desync", () => {
       containerHeight: 500,
     });
 
-    mockCtx.ctx.registerMethod("_isGroupHeader", (i: number): boolean =>
+    mockCtx.ctx.hooks.method("_isGroupHeader", (i: number): boolean =>
       items[i]?.__groupHeader === true);
-    mockCtx.ctx.registerMethod("_layoutToDataIndex", (i: number): number => i);
-    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (i: number): number => i);
+    mockCtx.ctx.hooks.method("_layoutToDataIndex", (i: number): number => i);
+    mockCtx.ctx.hooks.method("_dataToLayoutIndex", (i: number): number => i);
 
     const plugin = selection<TestItem>({ mode: "single", followFocus: true });
     plugin.setup(mockCtx.ctx);
@@ -443,7 +443,7 @@ describe("selection + groups — click with layout/data offset", () => {
       { id: 6, name: "Zeta" },
     ];
 
-    // Layout has 8 entries (6 data + 2 headers) but ctx.getItems() returns
+    // Layout has 8 entries (6 data + 2 headers) but ctx.items.all() returns
     // only the 6 data items — headers are virtual.
     const mockCtx = createPluginMockContext<TestItem>(dataItems, {
       itemSize: 40,
@@ -452,14 +452,14 @@ describe("selection + groups — click with layout/data offset", () => {
     // engineState.totalItems must reflect layout count (data + headers)
     mockCtx.engineState.totalItems = 8;
 
-    mockCtx.ctx.registerMethod("_isGroupHeader", (layoutIdx: number): boolean =>
+    mockCtx.ctx.hooks.method("_isGroupHeader", (layoutIdx: number): boolean =>
       layoutIdx === 0 || layoutIdx === 4);
 
-    mockCtx.ctx.registerMethod("_layoutToDataIndex", (layoutIdx: number): number => {
+    mockCtx.ctx.hooks.method("_layoutToDataIndex", (layoutIdx: number): number => {
       if (layoutIdx === 0 || layoutIdx === 4) return -1;
       return layoutIdx < 4 ? layoutIdx - 1 : layoutIdx - 2;
     });
-    mockCtx.ctx.registerMethod("_dataToLayoutIndex", (dataIdx: number): number => {
+    mockCtx.ctx.hooks.method("_dataToLayoutIndex", (dataIdx: number): number => {
       return dataIdx < 3 ? dataIdx + 1 : dataIdx + 2;
     });
 
@@ -546,7 +546,7 @@ describe("selection + groups — click with layout/data offset", () => {
 
     handler(makeClickEvent(makeItemElement(3)));
 
-    const stateFn = mockCtx.ctx.getItemStateFn();
+    const stateFn = mockCtx.ctx.render.getStateFn();
     expect(stateFn).not.toBeNull();
 
     const state3 = { selected: false, focused: false };

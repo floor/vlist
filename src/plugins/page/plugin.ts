@@ -48,7 +48,8 @@ export function page<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
-      const { dom, sizeCache, config: cfg, emitter } = ctx;
+      const { dom, config: cfg, emitter } = ctx;
+      const sizeCache = ctx.sizes.cache;
       const isX = cfg.axis.primary === "x";
       const win = window;
       const state = ctx.getState();

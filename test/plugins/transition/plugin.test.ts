@@ -138,32 +138,41 @@ function createMockContext(
   const ctx: PluginContext<TestItem> = {
     ...base.ctx,
 
-    forceRender: forceRenderMock,
+    render: { ...base.ctx.render, force: forceRenderMock },
 
-    removeItemById: (id: string | number): number => {
-      let index = testItems.findIndex((item) => item.id === id);
-      if (index < 0 && typeof id === "number") index = id;
-      if (index < 0 || index >= testItems.length) return -1;
-      testItems.splice(index, 1);
-      base.engineState.totalItems = testItems.length;
-      return index;
+    items: {
+      ...base.ctx.items,
+
+      removeById: (id: string | number): number => {
+        let index = testItems.findIndex((item) => item.id === id);
+        if (index < 0 && typeof id === "number") index = id;
+        if (index < 0 || index >= testItems.length) return -1;
+        testItems.splice(index, 1);
+        base.engineState.totalItems = testItems.length;
+        return index;
+      },
+
+      insertAt: (item: TestItem, index: number): void => {
+        testItems.splice(index, 0, item);
+        base.engineState.totalItems = testItems.length;
+      },
+
+      all: () => testItems,
     },
 
-    insertItemAt: (item: TestItem, index: number): void => {
-      testItems.splice(index, 0, item);
-      base.engineState.totalItems = testItems.length;
+    dom: {
+      ...base.ctx.dom,
+
+      renderedElement: (index: number): HTMLElement | null => {
+        const children = base.dom.content.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i] as HTMLElement;
+          if (el.dataset.index === String(index)) return el;
+        }
+        return null;
+      },
     },
 
-    getRenderedElement: (index: number): HTMLElement | null => {
-      const children = base.dom.content.children;
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        if (el.dataset.index === String(index)) return el;
-      }
-      return null;
-    },
-
-    getItems: () => testItems,
     getState: () => base.engineState,
   };
 
@@ -294,8 +303,8 @@ describe("withTransition — Setup", () => {
     const baseRemove = mock((_id: string | number): boolean => true);
 
     const { ctx, methods } = createMockContext();
-    ctx.registerMethod("insertItem", baseInsert);
-    ctx.registerMethod("removeItem", baseRemove);
+    ctx.hooks.method("insertItem", baseInsert);
+    ctx.hooks.method("removeItem", baseRemove);
 
     const plugin = transition();
     plugin.setup!(ctx);
@@ -310,7 +319,7 @@ describe("withTransition — Setup", () => {
   it("captures _dataToLayoutIndex from methods map", () => {
     const { ctx, dom, methods } = createMockContext();
     const layoutMapper = (i: number): number => i + 1;
-    ctx.registerMethod("_dataToLayoutIndex", layoutMapper);
+    ctx.hooks.method("_dataToLayoutIndex", layoutMapper);
 
     const plugin = transition();
     plugin.setup!(ctx);
@@ -513,7 +522,7 @@ describe("withTransition — removeItem (animated)", () => {
     const baseRemove = mock(
       (_id: string | number): boolean => false,
     );
-    ctx.registerMethod("removeItem", baseRemove);
+    ctx.hooks.method("removeItem", baseRemove);
 
     const plugin = transition();
     plugin.setup!(ctx);
@@ -523,7 +532,7 @@ describe("withTransition — removeItem (animated)", () => {
     ) => boolean;
 
     // Override removeItemById to return -1 so the base wrapper returns false
-    (ctx as any).removeItemById = (_id: string | number): number => -1;
+    (ctx as any).items.removeById = (_id: string | number): number => -1;
 
     const result = removeFn(2);
 
@@ -909,7 +918,7 @@ describe("withTransition — Groups integration", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    ctx.registerMethod("_dataToLayoutIndex", (i: number) => i + 1);
+    ctx.hooks.method("_dataToLayoutIndex", (i: number) => i + 1);
 
     const plugin = transition();
     plugin.setup!(ctx);
@@ -955,8 +964,8 @@ describe("withTransition — Groups integration", () => {
       testItems.splice(index ?? 0, 0, item);
     };
     const staticRemove = (_id: string | number): boolean => true;
-    ctx.registerMethod("insertItem", staticInsert);
-    ctx.registerMethod("removeItem", staticRemove);
+    ctx.hooks.method("insertItem", staticInsert);
+    ctx.hooks.method("removeItem", staticRemove);
 
     const plugin = transition();
     plugin.setup!(ctx);
@@ -982,13 +991,13 @@ describe("withTransition — Groups integration", () => {
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const staleRemove = mock((_id: string | number): boolean => false);
-    ctx.registerMethod("removeItem", staleRemove);
+    ctx.hooks.method("removeItem", staleRemove);
 
     const plugin = transition();
     plugin.setup!(ctx);
 
     // Simulate async groups replacing removeItemById after setup
-    (ctx as any).removeItemById = (id: string | number): number => {
+    (ctx as any).items.removeById = (id: string | number): number => {
       const index = testItems.findIndex((item) => item.id === id);
       if (index < 0) return -1;
       testItems.splice(index, 1);
@@ -1014,13 +1023,13 @@ describe("withTransition — Groups integration", () => {
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const staleInsert = mock((_item: TestItem, _index?: number): void => {});
-    ctx.registerMethod("insertItem", staleInsert);
+    ctx.hooks.method("insertItem", staleInsert);
 
     const plugin = transition();
     plugin.setup!(ctx);
 
     // Simulate async groups replacing insertItemAt after setup
-    (ctx as any).insertItemAt = (item: TestItem, index: number): void => {
+    (ctx as any).items.insertAt = (item: TestItem, index: number): void => {
       testItems.splice(index, 0, item);
     };
 
@@ -1580,12 +1589,12 @@ for (const reverse of [false, true]) it(`adapter correction preserves FLIP posit
     set: () => { throw new Error("plugin wrote source-owned scroll position"); },
     configurable: true,
   });
-  ctx.shiftScroll = delta => { shifts.push(delta); position += delta; renderOrigin += delta; };
-  const remove = ctx.removeItemById, insert = ctx.insertItemAt;
-  ctx.removeItemById = id => { const index = remove(id); ctx.sizeCache.rebuild(testItems.length); return index; };
-  ctx.insertItemAt = (item, index) => { insert(item, index); ctx.sizeCache.rebuild(testItems.length); };
-  ctx.forceRender = () => { dom.content.replaceChildren(); populateDOM(dom.content, testItems, 50, 0, testItems.length); };
-  ctx.forceRender();
+  ctx.scroll.shiftBy = delta => { shifts.push(delta); position += delta; renderOrigin += delta; };
+  const remove = ctx.items.removeById, insert = ctx.items.insertAt;
+  ctx.items.removeById = id => { const index = remove(id); ctx.sizes.cache.rebuild(testItems.length); return index; };
+  ctx.items.insertAt = (item, index) => { insert(item, index); ctx.sizes.cache.rebuild(testItems.length); };
+  ctx.render.force = () => { dom.content.replaceChildren(); populateDOM(dom.content, testItems, 50, 0, testItems.length); };
+  ctx.render.force();
   transition<TestItem>().setup!(ctx);
   const start = allAnimations.length;
   if (reverse) {

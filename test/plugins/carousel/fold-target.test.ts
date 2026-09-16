@@ -7,7 +7,7 @@ for(const [entry,create] of carouselEntries) for(const direction of [1,-1]) for(
   const f=carouselEntry(create);
   const navigate=f.list[direction>0?'next':'prev'] as (n:number,o:{behavior:string;duration:number})=>void;
   try {
-   f.ctx.scrollTo(direction>0?89980:10020);
+   f.ctx.scroll.to(direction>0?89980:10020);
    const count=accumulated?24:1;
    if(accumulated){navigate(12,{behavior:'smooth',duration:64});navigate(12,{behavior:'smooth',duration:64});}
    else navigate(1,{behavior:'smooth',duration:64});

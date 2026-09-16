@@ -26,18 +26,18 @@ function setup() {
 it("native context, correction, adapter and public index writes commit synchronously", () => {
   const t = setup();
   try {
-    t.ctx.scrollTo(480);
+    t.ctx.scroll.to(480);
     expect(t.list.getScrollPosition()).toBe(480);
-    t.ctx.shiftScroll(40);
+    t.ctx.scroll.shiftBy(40);
     expect(t.list.getScrollPosition()).toBe(520);
     t.ctx.scroll.setPixelEquivalent(640);
     expect(t.list.getScrollPosition()).toBe(640);
     t.list.scrollToIndex(20);
     expect(t.list.getScrollPosition()).toBe(800);
     expect(t.ctx.getState().scrollDirection).toBe(1);
-    t.ctx.scrollTo(100);
+    t.ctx.scroll.to(100);
     expect(t.ctx.getState().scrollDirection).toBe(-1);
-    t.ctx.scrollTo(100.25);
+    t.ctx.scroll.to(100.25);
     expect(t.list.getScrollPosition()).toBe(100.25);
   } finally { t.cleanup(); }
 });
@@ -48,7 +48,7 @@ it("native writes commit the clamped value and dedupe DOM events without losing 
   try {
     t.list.on("scroll", e => positions.push(e.scrollPosition));
     t.list.on("scroll:idle", e => idle.push(e.scrollPosition));
-    t.ctx.scrollTo(99999);
+    t.ctx.scroll.to(99999);
     expect(t.list.getScrollPosition()).toBe(3600);
     expect(positions).toEqual([3600]);
     t.ctx.dom.viewport.dispatchEvent(new Event("scroll"));
@@ -65,8 +65,8 @@ for (const [from, target, direction] of [[100, 500, 1], [500, 100, -1]]) {
     let frame!: FrameRequestCallback;
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     try {
-      t.ctx.scrollTo(from!);
-      t.ctx.smoothScrollTo(target!, 100, x => x);
+      t.ctx.scroll.to(from!);
+      t.ctx.scroll.smoothTo(target!, 100, x => x);
       frame(performance.now() + 40);
       expect(t.ctx.getState().prevScrollPosition).toBe(from!);
       expect(t.ctx.getState().scrollDirection).toBe(direction!);

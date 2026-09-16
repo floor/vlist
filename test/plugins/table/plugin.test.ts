@@ -341,8 +341,8 @@ describe("table - Render Functions", () => {
     engineState.destroyed = true;
 
     // Should not throw
-    ctx.renderIfNeeded();
-    ctx.forceRender();
+    ctx.render.ifNeeded();
+    ctx.render.force();
     cleanup();
   });
 
@@ -352,14 +352,14 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     engineState.baseOffset = 4000;
-    ctx.forceRender();
+    ctx.render.force();
     const row = dom.content.querySelector("[data-index='100']") as HTMLElement;
     const before = row.style.transform;
 
     // Sub-row step: identical rendered range, baseOffset moved by 12 px.
     engineState.scrollPosition = 3988;
     engineState.baseOffset = 3988;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     expect(row.style.transform).not.toBe(before);
     expect(row.style.transform).toContain("12px");
     cleanup();
@@ -371,7 +371,7 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // With container 200px and row height 40px, should see ~5 visible rows + overscan
     const rows = dom.content.querySelectorAll(".vlist-table-row");
@@ -387,11 +387,11 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     // First render
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     const rowCount1 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     // Second render with same state — should be a no-op (early exit)
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     const rowCount2 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     expect(rowCount2).toBe(rowCount1);
@@ -407,14 +407,14 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const firstRowBefore = dom.content.querySelector(".vlist-table-row[data-index='0']");
     expect(firstRowBefore).not.toBeNull();
 
     // Scroll down
     engineState.scrollPosition = 800; // 800 / 40 = row 20
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Rows around index 20 should exist
     const row20 = dom.content.querySelector(".vlist-table-row[data-index='20']");
@@ -428,10 +428,10 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Force render should work even though nothing changed
-    ctx.forceRender();
+    ctx.render.force();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
@@ -444,7 +444,7 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBe(0);
@@ -459,7 +459,7 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     // Should not throw — graceful handling is the requirement
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     cleanup();
   });
@@ -480,7 +480,7 @@ describe("table - Engine State", () => {
     expect(engineState.prevRangeStart).toBe(0);
     expect(engineState.prevRangeEnd).toBe(-1);
 
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     expect(engineState.prevRangeEnd).toBeGreaterThanOrEqual(0);
@@ -496,7 +496,7 @@ describe("table - Engine State", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // engineState.scrollPosition was set to 160 before render
     expect(engineState.scrollPosition).toBe(160);
@@ -512,7 +512,7 @@ describe("table - Engine State", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Render range should extend by overscan beyond visible range
     // visStart at scroll=200, rowHeight=40 → index 5
@@ -738,7 +738,7 @@ describe("table - Public Methods", () => {
     engineState.containerSize = 600;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const updateColumns = methods.get("updateColumns") as (cols: TableColumn<TestItem>[]) => void;
     const newColumns: TableColumn<TestItem>[] = [
@@ -881,7 +881,7 @@ describe("table - Configuration", () => {
 
     // Should not throw
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
@@ -1064,7 +1064,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 120; // ~3 visible rows
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Should have rendered rows with cells
     const rows = dom.content.querySelectorAll(".vlist-table-row");
@@ -1090,7 +1090,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     // With 200px container and 40px rows = 5 visible + 2 overscan each side ≈ 9
@@ -1107,7 +1107,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Verify 3 cells per row initially
     let firstRow = dom.content.querySelector(".vlist-table-row")!;
@@ -1146,11 +1146,11 @@ describe("table - Integration", () => {
 
     // Simulate selection plugin registering methods
     const selectedIds = new Set<string | number>([0, 2]);
-    ctx.registerMethod("_getSelectedIds", () => selectedIds);
-    ctx.registerMethod("_getFocusedIndex", () => 0);
+    ctx.hooks.method("_getSelectedIds", () => selectedIds);
+    ctx.hooks.method("_getFocusedIndex", () => 0);
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Row 0 should be selected and focused
     const row0 = dom.content.querySelector(".vlist-table-row[data-index='0']") as HTMLElement;
@@ -1285,7 +1285,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 600;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const updateForGroups = methods.get("_updateTableForGroups") as Function;
     expect(updateForGroups).toBeDefined();

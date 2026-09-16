@@ -56,7 +56,7 @@ describe("tree async — loadChildren success", () => {
       },
     }).setup!(ctx);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     expand("2");
@@ -87,13 +87,13 @@ describe("tree async — loadChildren success", () => {
     }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     expand("2");
 
     await new Promise((r) => setTimeout(r, 5));
-    ctx.forceRender();
+    ctx.render.force();
 
     const loadingEl = dom.content.querySelector(".vlist-tree-node--loading");
     expect(loadingEl).not.toBeNull();
@@ -117,7 +117,7 @@ describe("tree async — loadChildren success", () => {
       ],
     }).setup!(ctx);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     const isExpanded = methods.get("isExpanded") as (id: string) => boolean;
@@ -157,7 +157,7 @@ describe("tree async — loadChildren error", () => {
       loadChildren: async () => { throw new Error("network failure"); },
     }).setup!(ctx);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     expand("2");
@@ -195,7 +195,7 @@ describe("tree async — dedup concurrent loads", () => {
       },
     }).setup!(ctx);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     expand("2");
@@ -227,13 +227,13 @@ describe("tree async — stale node after rebuild", () => {
       loadChildren: () => new Promise((resolve) => { resolveLoad = resolve; }),
     }).setup!(ctx);
 
-    ctx.forceRender();
+    ctx.render.force();
 
     const expand = methods.get("expand") as (id: string) => void;
     expand("2");
     await new Promise((r) => setTimeout(r, 5));
 
-    ctx.removeItemById("2");
+    ctx.items.removeById("2");
     await new Promise((r) => setTimeout(r, 5));
 
     resolveLoad([{ id: "2.1", name: "child", children: [] }]);

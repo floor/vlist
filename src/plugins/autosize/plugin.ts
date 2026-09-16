@@ -112,7 +112,7 @@ export function autosize<T extends VListItem = VListItem>(
   function maxScrollPos(): number {
     return Math.max(
       0,
-      storedCtx!.sizeCache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
+      storedCtx!.sizes.cache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
     );
   }
 
@@ -124,12 +124,12 @@ export function autosize<T extends VListItem = VListItem>(
   function snapToEnd(): void {
     const maxScroll = maxScrollPos();
     if (maxScroll > scroll.getPixelEquivalent()) {
-      storedCtx!.scrollTo(maxScroll);
+      storedCtx!.scroll.to(maxScroll);
     }
   }
 
   function updateContentSize(): void {
-    storedCtx!.updateContentSize(storedCtx!.sizeCache.getTotalSize());
+    storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
   }
 
   return {

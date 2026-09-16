@@ -256,7 +256,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
 
     engineState.containerSize = 300;
-    ctx.forceRender();
+    ctx.render.force();
 
     const treeItems = dom.content.querySelectorAll("[role='treeitem']");
     expect(treeItems.length).toBeGreaterThan(0);
@@ -272,7 +272,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>().setup!(ctx);
 
     engineState.containerSize = 300;
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.content.getAttribute("role")).toBe("tree");
     cleanup();
@@ -287,7 +287,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const treeItems = Array.from(dom.content.querySelectorAll("[role='treeitem']"));
     const levels = treeItems.map((el) => el.getAttribute("aria-level"));
@@ -305,7 +305,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const srcEl = dom.content.querySelector("[data-id='1']") as HTMLElement;
     expect(srcEl.getAttribute("aria-expanded")).toBe("true");
@@ -324,7 +324,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>().setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const readmeEl = dom.content.querySelector("[data-id='3']") as HTMLElement;
     expect(readmeEl.hasAttribute("aria-expanded")).toBe(false);
@@ -340,7 +340,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const srcEl = dom.content.querySelector("[data-id='1']") as HTMLElement;
     expect(srcEl.getAttribute("aria-setsize")).toBe("3");
@@ -361,7 +361,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"], indent: 20 }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const srcEl = dom.content.querySelector("[data-id='1']") as HTMLElement;
     expect(srcEl.style.paddingLeft).toBe("0px");
@@ -380,7 +380,7 @@ describe("tree plugin — rendering", () => {
     tree<TreeItem>({ expanded: ["1"] }).setup!(ctx);
 
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.root.classList.contains("vlist--tree")).toBe(true);
 
@@ -407,7 +407,7 @@ describe("tree plugin — keyboard", () => {
     });
     tree<TreeItem>({ expanded: expandedIds }).setup!(testCtx.ctx);
     testCtx.engineState.containerSize = 400;
-    testCtx.ctx.forceRender();
+    testCtx.ctx.render.force();
     return testCtx;
   }
 
@@ -488,7 +488,7 @@ describe("tree plugin — removeItem return value", () => {
     const { ctx, cleanup } = createPluginMockContext<TreeItem>(items);
     tree<TreeItem>().setup!(ctx);
 
-    const result = ctx.removeItemById("nonexistent");
+    const result = ctx.items.removeById("nonexistent");
     expect(result).toBe(-1);
     cleanup();
   });
@@ -498,7 +498,7 @@ describe("tree plugin — removeItem return value", () => {
     const { ctx, cleanup } = createPluginMockContext<TreeItem>(items);
     tree<TreeItem>({ expanded: true }).setup!(ctx);
 
-    const result = ctx.removeItemById("3");
+    const result = ctx.items.removeById("3");
     expect(result).toBeGreaterThan(0);
     cleanup();
   });
@@ -517,13 +517,13 @@ describe("tree plugin — appendItems detection", () => {
     });
     tree<TreeItem>().setup!(ctx);
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const layoutBefore = (methods.get("getTreeLayout") as () => { totalVisible: number })();
     const countBefore = layoutBefore.totalVisible;
 
     items.push({ id: "new-root", name: "new", children: [] } as TreeItem);
-    ctx.forceRender();
+    ctx.render.force();
 
     const layoutAfter = (methods.get("getTreeLayout") as () => { totalVisible: number })();
     expect(layoutAfter.totalVisible).toBe(countBefore + 1);
@@ -597,7 +597,7 @@ describe("tree plugin — parentId mode", () => {
     const { ctx, cleanup } = createPluginMockContext(items);
     tree({ parentId: "parentId", expanded: true }).setup!(ctx);
 
-    ctx.removeItemById("2");
+    ctx.items.removeById("2");
     expect(items.find((i: any) => i.id === "2")).toBeUndefined();
     cleanup();
   });
@@ -630,7 +630,7 @@ describe("tree plugin — focus adjustment on collapse", () => {
     });
     tree<TreeItem>({ expanded: ["1", "1.1"] }).setup!(ctx);
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const handler = keydownHandlers[0]!;
     const fireKey = (key: string) => handler(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
@@ -662,7 +662,7 @@ describe("tree plugin — focus adjustment on collapse", () => {
     });
     tree<TreeItem>({ expanded: ["1", "1.1"] }).setup!(ctx);
     engineState.containerSize = 400;
-    ctx.forceRender();
+    ctx.render.force();
 
     const handler = keydownHandlers[0]!;
     const fireKey = (key: string) => handler(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
@@ -700,7 +700,7 @@ describe("tree + selection — click handler", () => {
     selection<TreeItem>(selOpts).setup!(mock.ctx);
 
     mock.engineState.containerSize = 400;
-    mock.ctx.forceRender();
+    mock.ctx.render.force();
 
     function clickItem(id: string): void {
       const el = mock.dom.content.querySelector(`[data-id="${id}"]`) as HTMLElement | null;

@@ -239,7 +239,7 @@ export function carousel<T extends VListItem = VListItem>(
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
-    storedCtx?.smoothScrollTo(target, duration, snapEasing);
+    storedCtx?.scroll.smoothTo(target, duration, snapEasing);
   }
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
@@ -524,7 +524,7 @@ export function carousel<T extends VListItem = VListItem>(
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
         const baseVi = getBaseVi();
         const targetVi = baseVi + s;
         intendedVi = targetVi;
@@ -534,7 +534,7 @@ export function carousel<T extends VListItem = VListItem>(
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
         } else {
-          storedCtx!.scrollTo(nearestPos);
+          storedCtx!.scroll.to(nearestPos);
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -549,7 +549,7 @@ export function carousel<T extends VListItem = VListItem>(
         const smooth = options?.behavior !== "auto";
         const dur = options?.duration ?? snapDuration;
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
         const baseVi = getBaseVi();
         const targetVi = baseVi - s;
         intendedVi = targetVi;
@@ -559,7 +559,7 @@ export function carousel<T extends VListItem = VListItem>(
         if (smooth) {
           smoothScrollTo(nearestPos, dur);
         } else {
-          storedCtx!.scrollTo(nearestPos);
+          storedCtx!.scroll.to(nearestPos);
           updateItemLayout();
         }
         if (currentIndex !== prevIndex) {
@@ -583,7 +583,7 @@ export function carousel<T extends VListItem = VListItem>(
           return;
         }
 
-        storedCtx!.cancelScroll();
+        storedCtx!.scroll.cancel();
 
         if (direction === "forward" || direction === "backward") {
           const delta = shortestPath(currentIndex, target,
@@ -597,7 +597,7 @@ export function carousel<T extends VListItem = VListItem>(
           if (smooth) {
             smoothScrollTo(nearestPos, dur);
           } else {
-            storedCtx!.scrollTo(nearestPos);
+            storedCtx!.scroll.to(nearestPos);
             updateItemLayout();
           }
         } else {
@@ -649,7 +649,7 @@ export function carousel<T extends VListItem = VListItem>(
           }
           if (target !== current) {
             navigateTo(target, false, 0);
-            storedCtx?.forceRender();
+            storedCtx?.render.force();
             updateItemLayout();
           }
           return target;
@@ -686,12 +686,12 @@ export function carousel<T extends VListItem = VListItem>(
       // ── Destroy handler ─────────────────────────────────────────
 
       ctx.hooks.onDestroy(() => {
-        storedCtx?.cancelScroll();
+        storedCtx?.scroll.cancel();
       });
     },
 
     destroy(): void {
-      storedCtx?.cancelScroll();
+      storedCtx?.scroll.cancel();
       storedCtx = null;
     },
 

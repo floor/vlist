@@ -73,7 +73,8 @@ export function transition<T extends VListItem = VListItem>(
     priority: 45,
 
     setup(ctx: PluginContext<T>): void {
-      const { sizeCache: sc, emitter, scroll } = ctx;
+      const { emitter, scroll } = ctx;
+      const sc = ctx.sizes.cache;
       const cfg = ctx.config;
       const dom = ctx.dom;
       const state = ctx.getState();

@@ -32,7 +32,7 @@ function fixture(create:typeof native,isX=false,handle=false,keyboard=false){
 for(const [entry,create] of [['native',native],['synthetic',synthetic]] as const)for(const isX of [false,true]){
  const name=`${entry}/${isX?'x':'y'}`;
  test(`${name} keyboard reordering remains available`,()=>{
-  const f=fixture(create,isX,false,true);(f.ctx.getMethod('_focusById') as Function)(12);
+  const f=fixture(create,isX,false,true);(f.ctx.hooks.get('_focusById') as Function)(12);
   const key=(key:string)=>f.ctx.dom.root.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
   key(' ');expect((f.list.isSorting as ()=>boolean)()).toBe(true);key(isX?'ArrowRight':'ArrowDown');key(' ');
   expect((f.list.isSorting as ()=>boolean)()).toBe(false);expect(f.events.filter(e=>e.name==='sort:start')).toHaveLength(1);expect(f.events.filter(e=>e.name==='sort:end').map(e=>e.data)).toEqual([{fromIndex:12,toIndex:13}]);
@@ -75,7 +75,7 @@ for(const [entry,create] of [['native',native],['synthetic',synthetic]] as const
  if(entry==='synthetic')test(`${name} auto-scroll origin changes do not animate the whole rendered list`,()=>{
   const f=fixture(create,isX);f.pointer('pointerdown');f.advance(350);f.pointer('pointermove',320);
   expect([...f.ctx.dom.content.children].some(el=>(el as HTMLElement).style.transition.includes('transform'))).toBe(true);
-  f.ctx.scrollTo(1040);
+  f.ctx.scroll.to(1040);
   expect([...f.ctx.dom.content.children].every(el=>(el as HTMLElement).style.transition==='')).toBe(true);
   f.pointer('pointerup',320);
  });
@@ -85,8 +85,8 @@ for(const [entry,create] of [['native',native],['synthetic',synthetic]] as const
   expect(f.list.getScrollPosition()).toBe(caught);expect(f.events).toHaveLength(0);f.pointer('pointerup',220);
  });
  test(`${name} press during smooth movement catches motion without arming a hold`,()=>{
-  const f=fixture(create,isX);f.ctx.smoothScrollTo(1500,500);f.advance(32);const pos=f.list.getScrollPosition();f.pointer('pointerdown');
-  if(entry==='native')f.ctx.cancelScroll(); // Native momentum is stopped by the browser's touch contact.
+  const f=fixture(create,isX);f.ctx.scroll.smoothTo(1500,500);f.advance(32);const pos=f.list.getScrollPosition();f.pointer('pointerdown');
+  if(entry==='native')f.ctx.scroll.cancel(); // Native momentum is stopped by the browser's touch contact.
   f.advance(400);expect(f.events).toHaveLength(0);if(entry==='synthetic')expect(f.list.getScrollPosition()).toBe(pos);f.pointer('pointerup');
  });
  for(const claimed of [false,true])test(`${name} cancel ${claimed?'claimed':'pending'} press`,()=>{const f=fixture(create,isX);f.pointer('pointerdown');if(claimed)f.advance(350);f.pointer('pointercancel');f.advance(500);expect(f.events.filter(e=>e.name==='sort:start')).toHaveLength(claimed?1:0);expect(f.events.filter(e=>e.name==='sort:cancel')).toHaveLength(claimed?1:0);expect((f.list.isSorting as ()=>boolean)()).toBe(false);});

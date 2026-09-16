@@ -75,7 +75,7 @@ function createMockContext(options: MockOptions = {}): {
   scrollCalls: number[];
   engineState: ReturnType<typeof createPluginMockContext<TestItem>>["engineState"];
   contentSizeHistory: number[];
-  sizeCache: ReturnType<typeof createPluginMockContext<TestItem>>["ctx"]["sizeCache"];
+  sizeCache: ReturnType<typeof createPluginMockContext<TestItem>>["ctx"]["sizes"]["cache"];
   cleanup: () => void;
 } {
   const {
@@ -134,11 +134,11 @@ function createMockContext(options: MockOptions = {}): {
   };
 
   // Replace the sizeCache on ctx with our tracked version
-  (ctx as any).sizeCache = sizeCache;
+  (ctx as any).sizes.cache = sizeCache;
 
   // Track content size updates
-  const originalUpdateContentSize = ctx.updateContentSize.bind(ctx);
-  (ctx as any).updateContentSize = (size: number) => {
+  const originalUpdateContentSize = ctx.render.contentSize.bind(ctx);
+  (ctx as any).render.contentSize = (size: number) => {
     contentSizeHistory.push(size);
     originalUpdateContentSize(size);
   };

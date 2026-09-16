@@ -258,7 +258,7 @@ export function grid<T extends VListItem = VListItem>(
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {
       lastContentTotalSize = totalSize;
-      storedCtx?.updateContentSize(totalSize);
+      storedCtx?.render.contentSize(totalSize);
     }
 
     // Update engine state for other hooks/plugins

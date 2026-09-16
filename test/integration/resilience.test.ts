@@ -139,7 +139,7 @@ describe("plugin setup error isolation", () => {
       name: "method-registrar",
       priority: 20,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerMethod("customMethod", () => 42);
+        ctx.hooks.method("customMethod", () => 42);
       },
     };
 
@@ -167,7 +167,7 @@ describe("plugin setup error isolation", () => {
       name: "destroy-registrar",
       priority: 20,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(destroyCalled);
+        ctx.hooks.onDestroy(destroyCalled);
       },
     };
 
@@ -207,10 +207,10 @@ describe("destroy resilience", () => {
       name: "dual-destroy-handlers",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler boom");
         });
-        ctx.registerDestroyHandler(secondHandler);
+        ctx.hooks.onDestroy(secondHandler);
       },
     };
 
@@ -260,7 +260,7 @@ describe("destroy resilience", () => {
       name: "destroy-throws",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler error");
         });
       },
@@ -290,7 +290,7 @@ describe("destroy resilience", () => {
       name: "destroy-err",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("boom");
         });
       },
@@ -320,10 +320,10 @@ describe("destroy resilience", () => {
       name: "multi-throw",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler 1 boom");
         });
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler 2 boom");
         });
       },
@@ -361,7 +361,7 @@ describe("destroy resilience", () => {
       name: "log-test",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("logged error");
         });
       },

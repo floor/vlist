@@ -62,7 +62,8 @@ export function snapshots<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
-      const { sizeCache, emitter, scroll } = ctx;
+      const { emitter, scroll } = ctx;
+      const sizeCache = ctx.sizes.cache;
       const state = ctx.getState();
 
       // ── getScrollSnapshot ──────────────────────────────────────

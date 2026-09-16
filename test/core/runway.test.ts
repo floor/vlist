@@ -159,14 +159,14 @@ describe("bounded scroll — runway sizing", () => {
 
   it("keeps content at the runway when a plugin grows the virtual total", () => {
     // Plugins (autosize, masonry, data, snapshots, search) grow the virtual size
-    // via ctx.updateContentSize. Under bounded mode that must resize to the runway,
+    // via ctx.render.contentSize. Under bounded mode that must resize to the runway,
     // not the full virtual total, or the browser element-size limit is reached.
     let grow: ((size: number) => void) | null = null;
     const grower: VListPlugin<TestItem> = {
       name: "grower",
       priority: 1,
       setup(ctx): void {
-        grow = (size: number): void => ctx.updateContentSize(size);
+        grow = (size: number): void => ctx.render.contentSize(size);
       },
     };
 
@@ -269,7 +269,7 @@ describe("bounded scroll — rebasing", () => {
 });
 
 // =============================================================================
-// Wrap mode (infinite loop — carousel uses this via ctx.setBoundedWrap)
+// Wrap mode (infinite loop — carousel uses this via ctx.scroll.setBoundedWrap)
 // =============================================================================
 
 /**
@@ -291,22 +291,22 @@ function wrapPlugin(
     priority: 10,
     setup(ctx): void {
       const es = ctx.getState();
-      ctx.setGetItemFn((i) => ctx.getItems()[mod(i)]);
-      ctx.sizeCache.getTotalSize = (): number => virtualTotal * step;
-      ctx.sizeCache.getOffset = (index): number => index * step;
-      ctx.sizeCache.getSize = (): number => step;
-      ctx.sizeCache.indexAtOffset = (off): number =>
+      ctx.items.setGetFn((i) => ctx.items.all()[mod(i)]);
+      ctx.sizes.cache.getTotalSize = (): number => virtualTotal * step;
+      ctx.sizes.cache.getOffset = (index): number => index * step;
+      ctx.sizes.cache.getSize = (): number => step;
+      ctx.sizes.cache.indexAtOffset = (off): number =>
         Math.max(0, Math.min(Math.floor(off / step), virtualTotal - 1));
-      ctx.sizeCache.getTotal = (): number => virtualTotal;
+      ctx.sizes.cache.getTotal = (): number => virtualTotal;
       es.totalItems = virtualTotal;
-      ctx.setVirtualTotalFn(() => realTotal);
-      ctx.setIndexMapFn(mod);
-      ctx.setBoundedWrap({
+      ctx.items.setTotalFn(() => realTotal);
+      ctx.items.setIndexMapFn(mod);
+      ctx.scroll.setBoundedWrap({
         lapSize: () => lapSize,
         home: () => opts.middle * lapSize,
         thresholdLaps: opts.middle - opts.threshold,
       }, createBoundedScrollHandler);
-      ctx.registerMethod("jump", (px: number) => ctx.scrollTo(px));
+      ctx.hooks.method("jump", (px: number) => ctx.scroll.to(px));
     },
   };
 }
@@ -465,7 +465,7 @@ describe("bounded scroll — resize", () => {
 
 // =============================================================================
 // Renderer plugins — grid / table / masonry install setRenderFn and own content
-// sizing, so they must route through ctx.updateContentSize to respect the
+// sizing, so they must route through ctx.render.contentSize to respect the
 // bounded runway instead of writing the full physical size (RFC-013 Phase A).
 // =============================================================================
 

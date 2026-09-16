@@ -243,12 +243,12 @@ export function sortable<T extends VListItem = VListItem>(
   // ── Selection helpers ──
 
   const getFocusedIndex = (): number => {
-    const fn = storedCtx?.getMethod("_getFocusedIndex") as (() => number) | undefined;
+    const fn = storedCtx?.hooks.get("_getFocusedIndex") as (() => number) | undefined;
     return fn ? fn() : -1;
   };
 
   const focusById = (id: string | number): void => {
-    const fn = storedCtx?.getMethod("_focusById") as ((id: string | number) => void) | undefined;
+    const fn = storedCtx?.hooks.get("_focusById") as ((id: string | number) => void) | undefined;
     if (fn) fn(id);
   };
 
@@ -421,7 +421,7 @@ export function sortable<T extends VListItem = VListItem>(
         requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       } else {
         rootEl.classList.add(settlingClass);
-        storedCtx.emitter.emit("sort:cancel" as never, { originalItems: [...storedCtx.getItems()] } as never);
+        storedCtx.emitter.emit("sort:cancel" as never, { originalItems: [...storedCtx.items.all()] } as never);
         cleanupDrag(false);
         requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       }

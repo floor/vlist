@@ -51,8 +51,8 @@ const errorSpy = (): { plugin: VListPlugin<TestItem>; calls: { error: Error; con
 describe("method bus — public names", () => {
   it("rejects a second plugin claiming a public name", () => {
     const spy = errorSpy();
-    const first: VListPlugin<TestItem> = { name: "first", setup: (ctx) => ctx.registerMethod("doThing", () => "first") };
-    const second: VListPlugin<TestItem> = { name: "second", setup: (ctx) => ctx.registerMethod("doThing", () => "second") };
+    const first: VListPlugin<TestItem> = { name: "first", setup: (ctx) => ctx.hooks.method("doThing", () => "first") };
+    const second: VListPlugin<TestItem> = { name: "second", setup: (ctx) => ctx.hooks.method("doThing", () => "second") };
 
     const list = createVList<TestItem>(
       { container, items: createTestItems(5) as TestItem[], item: { height: 40, template: simpleTemplate } },
@@ -79,12 +79,12 @@ describe("method bus — public names", () => {
 
   it("allows plugins to override an internal underscore name", () => {
     const spy = errorSpy();
-    const provider: VListPlugin<TestItem> = { name: "provider", setup: (ctx) => ctx.registerMethod("_shared", () => "provider") };
-    const overrider: VListPlugin<TestItem> = { name: "overrider", setup: (ctx) => ctx.registerMethod("_shared", () => "overrider") };
+    const provider: VListPlugin<TestItem> = { name: "provider", setup: (ctx) => ctx.hooks.method("_shared", () => "provider") };
+    const overrider: VListPlugin<TestItem> = { name: "overrider", setup: (ctx) => ctx.hooks.method("_shared", () => "overrider") };
     let seen: unknown;
     const reader: VListPlugin<TestItem> = {
       name: "reader", priority: 90,
-      setup: (ctx) => { seen = (ctx.getMethod("_shared") as (() => string) | undefined)?.(); },
+      setup: (ctx) => { seen = (ctx.hooks.get("_shared") as (() => string) | undefined)?.(); },
     };
 
     const list = createVList<TestItem>(
@@ -101,8 +101,8 @@ describe("method bus — public names", () => {
     const provider: VListPlugin<TestItem> = {
       name: "provider",
       setup: (ctx) => {
-        ctx.registerMethod("_secret", () => 42);
-        ctx.registerMethod("publicThing", () => 1);
+        ctx.hooks.method("_secret", () => 42);
+        ctx.hooks.method("publicThing", () => 1);
       },
     };
     const list = createVList<TestItem>(

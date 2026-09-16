@@ -130,8 +130,8 @@ describe('entry fold geometry',()=>{
     id:el.textContent,size:el.style[isX?'width':'height'],offset:parseFloat(el.style.transform.match(/\(([-\d.]+)/)![1]!)-(isX?f.ctx.dom.viewport.scrollLeft:f.ctx.dom.viewport.scrollTop),
    })).sort((a,b)=>Number(a.id)-Number(b.id));
    try {
-    f.ctx.scrollTo(500*step+20);const expected=read();
-    f.ctx.scrollTo(900*step-20);f.wheel(40);
+    f.ctx.scroll.to(500*step+20);const expected=read();
+    f.ctx.scroll.to(900*step-20);f.wheel(40);
     expect(f.list.getScrollPosition()).toBe(500*step+20);expect(read()).toEqual(expected);
    } finally {f.destroy();}
   });
