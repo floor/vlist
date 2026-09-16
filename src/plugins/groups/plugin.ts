@@ -38,8 +38,6 @@ export interface GroupsPluginConfig extends GroupsConfig {}
 
 const itemState: ItemState = { selected: false, focused: false };
 
-const DEBUG = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
-
 /** Methods the groups plugin adds to the list instance. */
 export interface GroupsMethods {
   /** The current group layout: entries, boundaries and sticky state. */
@@ -125,10 +123,6 @@ export function groups<T extends VListItem = VListItem>(
   function syncLayoutIfNeeded(): void {
     const dataCount = engineState.totalItems;
     if (dataCount === lastDataCount) return;
-
-    if (DEBUG) {
-      console.log(`[groups] syncLayout: ${lastDataCount} → ${dataCount}`);
-    }
 
     const wasLoaded = lastDataCount > 0;
     lastDataCount = dataCount;
@@ -659,10 +653,6 @@ export function groups<T extends VListItem = VListItem>(
   function groupsForceRender(): void {
     if (engineState.destroyed) return;
     syncGridIfResized();
-
-    if (DEBUG) {
-      console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
-    }
 
     // When async data arrives, group boundaries may change. But forceRender is
     // also called at frame rate by animating plugins, so we must NOT run the

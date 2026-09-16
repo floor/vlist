@@ -541,7 +541,10 @@ describe("baseline a11y — keyboard: false", () => {
 
     const content = getContent(container);
     const item = content.querySelector<HTMLElement>('[data-index="0"]');
-    item?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    // Optional-chained before: a list that rendered nothing failed on the
+    // selection assertion below, which reported the wrong cause.
+    expect(item).not.toBeNull();
+    item!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flush();
 
     expect(selectionEvents.length).toBeGreaterThan(0);
