@@ -13,6 +13,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- **Breaking:** `item:click`, `item:dblclick` and `item:contextmenu` report the DATA index — the space `getItemAt`, `scrollToIndex` and `removeItem` take. They reported the layout index, so in a grouped list data row 3 arrived as row 5, one off per header above it, and feeding that index straight back to `getItemAt` returned the wrong item. Lists with no index-mapping plugin are unaffected: the two spaces are the same there.
+
+- **Breaking:** `createVList` copies the `items` array it is given. It kept a reference, and `insertItem`, `removeItem` and `removeItems` splice that array in place, so a list rewrote the caller's array from under it — while `setItems` had always copied. Code relying on that aliasing to observe list edits should read `list.items` instead.
+
 - **Breaking:** `vlist/config` — the path every framework adapter goes through — wires only the plugins the config asks for. It used to add `selection({ mode: "none" })`, `snapshots()` and the custom overlay scrollbar to every list, so an adapter list and a core list built from the same options did not behave the same. Selection now follows the `selection` field, `snapshots: true` restores scroll save/restore, and `scrollbar: true` (or an options object) restores the overlay scrollbar; with neither, the browser's native scrollbar stays, as in core.
 - **Breaking:** `selection({ mode: "none" })` no longer claims the listbox role. Selection in that mode has no selection semantics, yet the role came with `tabindex="0"` on the list and an option role on every item while the arrow keys did nothing. Through `vlist/config` every adapter list inherited it, accessible in name only.
 - **Breaking:** `vlist/config` throws when `layout: "grid"` or `layout: "masonry"` arrives without its options object, instead of quietly resolving to a plain list.
@@ -34,6 +38,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write.
 
 ### Fixed
+
+- Keep a reverse-mode list pinned to the end when `appendItems` adds to it, which the README has always documented and core never did: `reverse` reached the plugins but core itself never read it, so a chat view held its pixel position while messages piled up below the fold. A list scrolled back through history stays where it is. The README now states what `reverse` does and does not do — it does not reverse the layout — and that `masonry()` and `table()` reject it.
+
+- Drop the `interactive` row from the README's config table. No version of vlist has ever read that option; keyboard navigation comes from `a11y()` or a selection mode.
 
 - Pass the `groups` config through to the plugin from `vlist/config`. The documented `groups.header` shape was dropped on the way, so those configs threw "header.template is required", and a function `headerHeight` was called once with `("", 0)`: every group got the first group's height.
 

@@ -455,6 +455,10 @@ list.on('sort:end', ({ fromIndex, toIndex }) => {})
 list.on('sort:cancel', ({ originalItems }) => {})
 ```
 
+The `index` on `item:click`, `item:dblclick` and `item:contextmenu` is the data
+index — the one `getItemAt`, `scrollToIndex` and `removeItem` take — not the
+layout index, which counts group headers and carousel laps.
+
 ### Properties
 
 | Property | Description |
@@ -502,8 +506,7 @@ Full configuration reference → **[vlist.io](https://vlist.io)**
 | `ariaLabel` | — | Accessible label for the listbox |
 | `orientation` | `'vertical'` | `'vertical'` or `'horizontal'` scroll direction |
 | `padding` | `0` | Content inset — number, `[v, h]`, or `[top, right, bottom, left]` |
-| `interactive` | `true` | Enable built-in keyboard navigation |
-| `reverse` | `false` | Reverse mode for chat UIs |
+| `reverse` | `false` | The list reads bottom-up (chat UIs): a view sitting at the end stays there as `appendItems` adds to it, arrow keys invert, and `transition()` animates from the bottom. Item order is yours to supply; the layout itself is not reversed. `masonry()` and `table()` reject it |
 
 ## Styling
 
