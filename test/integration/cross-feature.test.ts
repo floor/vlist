@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Cross-Feature Integration Tests
+ * vlist — Cross-Feature Integration Tests
  *
  * Recovers missing coverage from v1 integration/features.test.ts.
  * Tests multi-plugin combos, data ops with features, horizontal mode

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin
+ * vlist — Table Plugin
  *
  * Switches from list layout to a data table with columns, resizable headers,
  * sticky header row, and cell-based rendering.

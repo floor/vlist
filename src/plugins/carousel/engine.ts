@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Carousel Layout Engine
+ * vlist — Carousel Layout Engine
  *
  * Computes per-item sizes and positions for carousel variants.
  * All MD3 variants use the same engine — the difference is the

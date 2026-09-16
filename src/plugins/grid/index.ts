@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid Plugin
+ * vlist — Grid Plugin
  */
 
 export { grid, type GridPluginConfig } from "./plugin";

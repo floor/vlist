@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Plugin
+ * vlist — Autosize Plugin
  */
 
 export { autosize, type AutosizePluginConfig } from "./plugin";

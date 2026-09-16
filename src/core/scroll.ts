@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scroll Handling
+ * vlist — Scroll Handling
  *
  * Wheel interception for synchronous rendering, scroll idle detection,
  * and smooth scroll animation.

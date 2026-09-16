@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Core Type Definitions
+ * vlist — Core Type Definitions
  *
  * Zero-allocation pipeline types. All hot-path state lives in TypedArrays
  * on the EngineState singleton — no intermediate object allocation.

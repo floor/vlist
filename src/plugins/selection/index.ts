@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection Plugin
+ * vlist — Selection Plugin
  */
 
 export { selection, type SelectionPluginConfig } from "./plugin";

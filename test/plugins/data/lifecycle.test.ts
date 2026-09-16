@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Async Plugin Lifecycle & Deep Coverage Tests
+ * vlist — Async Plugin Lifecycle & Deep Coverage Tests
  *
  * Recovers missing coverage from v1 features/async/feature.test.ts and
  * features/async/integration.test.ts. Tests velocity-gated loading,

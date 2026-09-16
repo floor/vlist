@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry 2D Keyboard Navigation Tests
+ * vlist — Masonry 2D Keyboard Navigation Tests
  *
  * Tests the masonry plugin's lane-aware navigate() function:
  * - ArrowUp/Down: move within the same lane

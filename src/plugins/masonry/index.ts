@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry Plugin
+ * vlist — Masonry Plugin
  */
 
 export { masonry, type MasonryPluginConfig, type MasonryContext } from "./plugin";

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Gap Handling Tests
+ * vlist — Autosize Gap Handling Tests
  *
  * Verifies that the autosize plugin correctly handles gap configuration:
  * gap added to estimatedSize, gap added to measured sizes, gap subtracted

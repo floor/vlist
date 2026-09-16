@@ -1,5 +1,5 @@
 /**
- * vlist v2 — DOM Structure
+ * vlist — DOM Structure
  * Container resolution and DOM scaffold creation.
  */
 

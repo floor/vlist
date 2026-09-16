@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection Plugin Tests
+ * vlist — Selection Plugin Tests
  * Tests for selection(): factory, setup wiring, click handlers, keyboard
  * handlers, registered methods, destroy cleanup.
  *

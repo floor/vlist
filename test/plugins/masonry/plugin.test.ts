@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry Plugin Tests
+ * vlist — Masonry Plugin Tests
  * Tests for masonry() plugin: factory validation, setup, render function
  * replacement via setRenderFn, resize handling, data changes, scrollToIndex,
  * destroy cleanup, and edge cases.

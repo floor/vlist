@@ -1,5 +1,5 @@
 /**
- * vlist v2 — phase1Calculate Unit Tests
+ * vlist — phase1Calculate Unit Tests
  *
  * Exercises the range calculation engine in isolation.
  * Uses EngineState + SizeCache directly — no DOM required.

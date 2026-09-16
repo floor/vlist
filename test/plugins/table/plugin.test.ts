@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin Tests
+ * vlist — Table Plugin Tests
  * Tests for table() plugin: initialization, configuration, render pipeline,
  * resize handlers, public methods, and event emission.
  *

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scrollbar Plugin
+ * vlist — Scrollbar Plugin
  */
 
 export { scrollbar, type ScrollbarPluginConfig } from "./plugin";

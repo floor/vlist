@@ -1,7 +1,8 @@
-/** Build first; VLIST_BROWSER_DRIVER points to a module exporting launchBrowser. */
+/** Build first. Uses scripts/browser-driver.mjs; VLIST_BROWSER_DRIVER overrides
+ * it with another module exporting launchBrowser. */
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
-const {launchBrowser}=await import(resolve(process.env.VLIST_BROWSER_DRIVER));
+const {launchBrowser}=await import(resolve(process.env.VLIST_BROWSER_DRIVER??resolve(import.meta.dir,'browser-driver.mjs')));
 const root=resolve(import.meta.dir,'../dist');
 const html=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/vlist.css"><style>body{margin:0}#list{width:400px;height:400px}.handle{display:inline-block;padding:16px}.vlist-item{background:#ddd}</style><div id="list"></div><script type="module">
 import {createVList as native,sortable} from '/index.js';import {createVList as synthetic} from '/synthetic.js';

@@ -1,5 +1,5 @@
 /**
- * vlist v2 - Core DOM Tests
+ * vlist — Core DOM Tests
  *
  * Tests the core DOM structure creation functions:
  * - resolveContainer: resolve HTML elements or selectors

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Pipeline ARIA & EngineState Tests
+ * vlist — Pipeline ARIA & EngineState Tests
  *
  * Tests ARIA attribute handling in phase2Commit and the createEngineState factory.
  */

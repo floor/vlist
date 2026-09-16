@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Groups Plugin
+ * vlist — Groups Plugin
  *
  * Adds grouped lists with sticky headers.
  * Priority 10 — runs before selection (50).
@@ -664,10 +664,10 @@ export function groups<T extends VListItem = VListItem>(
       console.log(`[groups] forceRender, placeholders: ${placeholderIndices.size}, rendered: ${rendered.size}`);
     }
 
-    // When async data arrives, group boundaries may change. But forceRender
-    // is also called on every scale-plugin lerp tick (60fps), so we must NOT
-    // run the expensive layout.rebuild on every call. O(1) check: compare
-    // loaded item count — only changes when async plugin delivers new data.
+    // When async data arrives, group boundaries may change. But forceRender is
+    // also called at frame rate by animating plugins, so we must NOT run the
+    // expensive layout.rebuild on every call. O(1) check: compare the loaded
+    // item count — it only changes when the data plugin delivers new items.
     const currentLoaded = getLoadedCount?.() ?? 0;
     if (currentLoaded !== lastRebuildLoadedCount) {
       lastRebuildLoadedCount = currentLoaded;

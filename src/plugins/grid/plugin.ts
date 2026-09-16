@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid Plugin
+ * vlist — Grid Plugin
  *
  * Switches from list layout to a 2D grid with configurable columns and gap.
  * Priority 10 — runs before selection (50) so layout is ready for other plugins.

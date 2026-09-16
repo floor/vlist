@@ -1,5 +1,5 @@
 /**
- * vlist v2 -- Selection Plugin Extended E2E Tests
+ * vlist — Selection Plugin Extended E2E Tests
  *
  * Integration tests that exercise selection behaviors through createVList
  * rather than mock plugin contexts. Each test creates its own isolated

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Core Public API
+ * vlist — Core Public API
  */
 
 // Factory

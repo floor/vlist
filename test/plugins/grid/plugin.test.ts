@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid Plugin Tests
+ * vlist — Grid Plugin Tests
  * Tests for grid() plugin: factory validation, setup, render function
  * replacement via setRenderFn, resize handling, updateGrid, scrollToIndex,
  * destroy cleanup, and edge cases.

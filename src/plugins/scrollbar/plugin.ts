@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scrollbar Plugin
+ * vlist — Scrollbar Plugin
  *
  * Replaces the native scrollbar with a custom, cross-browser consistent scrollbar.
  * Priority 15 — runs after layout plugins (10) but before selection (50).
@@ -55,7 +55,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       mainAxisPadding = resolvedConfig.mainAxisPadding;
 
-      // Indirect callback — scale plugin can redirect via registerMethod.
+      // Indirect callback — a plugin can redirect it via registerMethod.
       // Route through ctx.scrollTo so the position reaches the bounded handler's
       // setLogical (which clamps using maxLogical that includes padding) rather
       // than the adapter's clampPixel (which only knows sizeCache, no padding).

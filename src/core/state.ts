@@ -1,5 +1,5 @@
 /**
- * vlist v2 — EngineState
+ * vlist — EngineState
  *
  * Persistent singleton instantiated once during createVList().
  * All hot-path state lives in pre-allocated TypedArrays.

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Performance Integration Tests
+ * vlist — Performance Integration Tests
  *
  * Tests that critical operations complete within reasonable time bounds.
  * These are not micro-benchmarks — they verify scaling behavior and

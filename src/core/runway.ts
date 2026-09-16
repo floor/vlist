@@ -6,8 +6,8 @@
  *
  * The content element is sized to a bounded *runway* (a multiple of the
  * viewport, capped at the real virtual size) instead of `totalItems × itemSize`.
- * This sidesteps the browser's ~16.7M px element-size limit without the scale
- * plugin's compression — no compression ratio leaks into offsets or hit-testing.
+ * This sidesteps the browser's ~16.7M px element-size limit without compressing
+ * the coordinate space — no compression ratio leaks into offsets or hit-testing.
  *
  * Coordinates:
  *   logical = baseOffset + scrollTop        (absolute virtual pixel position)

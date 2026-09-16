@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry Plugin
+ * vlist — Masonry Plugin
  *
  * Switches from list layout to masonry/Pinterest-style layout with
  * shortest-lane placement. Each item is positioned in the shortest

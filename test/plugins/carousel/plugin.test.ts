@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Carousel Plugin Tests (RFC-011)
+ * vlist — Carousel Plugin Tests (RFC-011)
  *
  * Tests written before implementation — acceptance criteria from the RFC:
  * - Infinite loop: next() from last → first, prev() from first → last
@@ -77,9 +77,10 @@ describeCarousel("carousel — Factory", () => {
     }
   });
 
-  it("should declare conflicts with scale", () => {
+  it("declares no conflicts", () => {
+    // Its only declared conflict was with scale(), which 3.0 removed.
     const plugin = carousel();
-    expect(plugin.conflicts).toContain("scale");
+    expect(plugin.conflicts).toBeUndefined();
   });
 });
 

@@ -38,8 +38,7 @@ console.log('RTL fixture: '+server.url.href);
 if(!process.argv.includes('--serve')) {
  let browser;
  try {
-  const driver=process.env.VLIST_BROWSER_DRIVER;
-  if(!driver)throw new Error('Set VLIST_BROWSER_DRIVER or pass --serve for WebDriver');
+  const driver=process.env.VLIST_BROWSER_DRIVER??resolve(import.meta.dir,'browser-driver.mjs');
   browser=await (await import(resolve(driver))).launchBrowser();console.log(await browser.version());
   for(const dir of ['ltr','rtl'])for(const table of [true,false]) {
    const page=await browser.newPage();await page.goto(`${server.url}?dir=${dir}&table=${table}`);await page.waitForFunction(()=>window.ready);

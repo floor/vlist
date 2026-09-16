@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [staging, main]
+    branches: [next, staging, main]
   pull_request:
-    branches: [staging, main]
+    branches: [next, staging, main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -38,3 +38,25 @@ jobs:
 
       - name: Bundle size + tree-shaking
         run: bun run size
+
+  browser:
+    name: Browser suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The suites load the built bundles from dist/ over a local server.
+      - name: Build
+        run: bun run build
+
+      # scripts/browser-driver.mjs finds the runner's Chrome; puppeteer-core
+      # ships no browser of its own.
+      - name: Browser suites
+        run: bun run test:browser

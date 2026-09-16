@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Tree Layout
+ * vlist — Tree Layout
  *
  * Manages the flat representation of a tree: DFS traversal, expand/collapse,
  * surgical splice, and index lookups. All mutations target the flatNodes array

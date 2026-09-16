@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Boundary Conditions & Edge Case Tests
+ * vlist — Boundary Conditions & Edge Case Tests
  *
  * Adapted from v1 builder/boundary.test.ts and builder/recovery.test.ts.
  * Tests extreme dimensions, zero-size containers, single items,

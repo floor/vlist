@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Range Calculation, Overscan & range:change Event Tests
+ * vlist — Range Calculation, Overscan & range:change Event Tests
  *
  * Verifies visible range computation, overscan buffer application,
  * and range:change event emission when scrolling.

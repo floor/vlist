@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Async Plugin Tests
+ * vlist — Async Plugin Tests
  * Unit tests for async() plugin: setup, lifecycle, reload, ARIA, network recovery,
  * onIdle hook, autoLoad flag, and edge cases.
  *
