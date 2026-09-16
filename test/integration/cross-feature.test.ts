@@ -735,21 +735,23 @@ describe("cross-feature — group header interaction", () => {
     expect(clicked).toBe(false);
   });
 
-  // Skipped deliberately, and named: this asserts correct behaviour that the
-  // library does not yet have. See review finding P8.
+  // Regression for P8: a click on the first row of a group was dropped. Two
+  // defects with one root, and the test needs both fixed.
   //
-  // The case previously carried a comment claiming it "requires a real browser"
-  // because table rendering "doesn't produce clickable data-index rows". That
-  // reason is wrong — the rows are there and queryable in happy-dom — but the
-  // conclusion happened to hold, for a different reason. Probed directly:
-  // table alone emits 1 click event, table with groups emits 0. `table` writes
-  // the row's own index into data-index (renderer.ts:456) while groups'
-  // layoutToDataIndex returns −1 for a header layout index (layout.ts:293), so
-  // resolveClickedItem drops the click for the first row of each group.
+  // `groups()` defers its table-mode wiring to a microtask and never re-rendered
+  // afterwards, so the rows kept data-space indices and no header class while
+  // core resolves clicks through the layout space: layout index 0 is a header,
+  // layoutToDataIndex returned -1, and the click was discarded for good. Behind
+  // that sat the second fault — with the DOM in layout space, core fetched the
+  // item with a data index against the layout-aware accessor groups installs,
+  // so a row answered as the header above it.
   //
-  // Nothing in the suite had ever asserted item:click under table, which is how
-  // a defect sat behind a sentence saying it had been checked by hand.
-  it.skip("item:click reports the data index with table and groups together (P8)", () => {
+  // The assertion that binds is the emitted item against the clicked row's own
+  // data-id. Feeding the reported index back into getItemAt does NOT bind here:
+  // under table+groups getItemAt takes layout indices (pinned by
+  // groups-table-data.test.ts), so before the fix that round-trip agreed with
+  // itself while the reported item was wrong — which is how this sat green.
+  it("item:click reports the clicked row with table and groups together (P8)", async () => {
     const items = createTestItems(50);
     list = createVList<TestItem>(
       { container, items, item: { height: 40, template: simpleTemplate } },
@@ -762,6 +764,11 @@ describe("cross-feature — group header interaction", () => {
       ],
     );
 
+    // groups wires table mode in a microtask and re-renders there. Measured:
+    // with no await at all this emits nothing, because the rows still carry
+    // data-space indices; one microtask is enough.
+    await Promise.resolve();
+
     const seen: Array<{ id: string | number; index: number }> = [];
     list.on("item:click", ({ item, index }) => seen.push({ id: item.id, index }));
 
@@ -769,11 +776,16 @@ describe("cross-feature — group header interaction", () => {
     const rows = content.querySelectorAll("[data-index]:not(.vlist-table-group-header)");
     expect(rows.length).toBeGreaterThan(0);
 
-    (rows[0] as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const row = rows[0] as HTMLElement;
+    const rowId = row.getAttribute("data-id");
+    expect(rowId).toBeTruthy();
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     expect(seen.length).toBe(1);
-    // The reported index addresses the same row through the public API.
-    expect(String(list.getItemAt(seen[0]!.index)!.id)).toBe(String(seen[0]!.id));
+    // The item is the row clicked, not the header above it.
+    expect(String(seen[0]!.id)).toBe(String(rowId));
+    // And the index is the data index the event documents: layout 1 -> data 0.
+    expect(seen[0]!.index).toBe(0);
   });
 });
 
