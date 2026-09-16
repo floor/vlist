@@ -212,13 +212,16 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Validate config ─────────────────────────────────────────────
 
   validateConfig(rawConfig);
-  if (logicalHandlerFactory) {
-    if (typeof rawConfig.scroll?.scrollbar === "string") {
-      throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
-    }
-    if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
-      throw new Error('vlist: RTL horizontal lists require createVList from "vlist"');
-    }
+  if (logicalHandlerFactory && typeof rawConfig.scroll?.scrollbar === "string") {
+    throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
+  }
+  // Both entries reject it. Native used to accept the combination and then sit
+  // on the first page: RTL makes scrollLeft negative, the wheel clamp pins it
+  // at 0, and items translate the wrong way. Supporting it means signing every
+  // DOM boundary and every renderer that writes its own transform, so 3.0 says
+  // no out loud instead. Saying yes later is additive, not breaking.
+  if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
+    throw new Error('vlist: horizontal RTL lists are not supported; use a vertical list, or an LTR container');
   }
 
   // ── Resolve config ──────────────────────────────────────────────

@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- **Breaking:** horizontal lists in an RTL container are rejected at creation by both entries, not just `vlist/synthetic`. `vlist` accepted the combination and then sat on its first page: RTL makes `scrollLeft` negative, the wheel clamp pins it at 0 and items translate the wrong way, so the list rendered once and never moved while the README advertised it as working. Supporting it means signing every DOM scroll boundary and every renderer that writes its own transform; 3.0 refuses out loud instead, and a later implementation would be additive rather than breaking. Vertical RTL lists and RTL tables are unaffected, including cross-axis wheel movement, aligned headers and keyboard column navigation.
+
 - **Breaking:** `item:click`, `item:dblclick` and `item:contextmenu` report the DATA index — the space `getItemAt`, `scrollToIndex` and `removeItem` take. They reported the layout index, so in a grouped list data row 3 arrived as row 5, one off per header above it, and feeding that index straight back to `getItemAt` returned the wrong item. Lists with no index-mapping plugin are unaffected: the two spaces are the same there.
 
 - **Breaking:** `createVList` copies the `items` array it is given. It kept a reference, and `insertItem`, `removeItem` and `removeItems` splice that array in place, so a list rewrote the caller's array from under it — while `setItems` had always copied. Code relying on that aliasing to observe list edits should read `list.items` instead.

@@ -108,7 +108,7 @@ const list = createVList({
 
 ## Scroll input
 
-Native scrolling is the default: import `createVList` and plugins from `vlist`. This preserves browser scrollbars, native touch momentum, boundary handoff and native assistive-technology scrolling. Carousel, sortable and horizontal RTL lists work with this factory. Carousel supplies its private wrap runway only when the plugin is imported; bounded scrolling is no longer a public mode.
+Native scrolling is the default: import `createVList` and plugins from `vlist`. This preserves browser scrollbars, native touch momentum, boundary handoff and native assistive-technology scrolling. Carousel and sortable work with this factory; horizontal RTL lists are rejected by both entries. Carousel supplies its private wrap runway only when the plugin is imported; bounded scrolling is no longer a public mode.
 
 | Entry | Input model | Use |
 |---|---|---|
@@ -138,7 +138,7 @@ const list = createVList({
 
 Synthetic input limitations:
 
-- Horizontal RTL lists throw with instructions to use `vlist`. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
+- Horizontal RTL lists throw at creation — in this entry and in `vlist`. Vertical lists and tables support `dir="rtl"` in both, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
 - Same-axis touch stops at either boundary with no parent handoff, including gestures starting inside an edge-pinned list. Use the native default when boundary gestures must scroll the parent page.
 - There is no native main-axis scrollbar. Add `scrollbar()` for an accessible custom scrollbar. The synthetic entry rejects the `"native"` and `"none"` scrollbar strings.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.

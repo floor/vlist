@@ -80,14 +80,18 @@ it("synthetic entry permits sortable setup", () => {
   finally {list.destroy();container.remove();}
 });
 
-it("synthetic entry rejects horizontal RTL before creating DOM", () => {
+it("both entries reject horizontal RTL before creating DOM", () => {
+  // Native accepted it and then stayed on the first page, which is worse than
+  // refusing: nothing reported the list was not going to scroll.
   const container = createContainer();
   container.style.direction = "rtl";
   try {
-    expect(() => createSynthetic({ container, orientation: "horizontal", items: createTestItems(1),
-      item: { width: 40, template: simpleTemplate },
-    })).toThrow('RTL horizontal lists require createVList from "vlist"');
-    expect(container.children).toHaveLength(0);
+    for (const factory of [createSynthetic, createVList]) {
+      expect(() => factory({ container, orientation: "horizontal", items: createTestItems(1),
+        item: { width: 40, template: simpleTemplate },
+      })).toThrow("horizontal RTL lists are not supported");
+      expect(container.children).toHaveLength(0);
+    }
   } finally { container.remove(); }
 });
 
