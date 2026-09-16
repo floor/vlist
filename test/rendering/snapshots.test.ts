@@ -1,5 +1,5 @@
 /**
- * vlist v2 — DOM Structure Snapshot Tests
+ * vlist — DOM Structure Snapshot Tests
  *
  * Verifies that createVList() produces the correct DOM tree for
  * different configurations: vertical list, horizontal list, and

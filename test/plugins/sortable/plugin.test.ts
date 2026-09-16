@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Sortable Plugin Tests
+ * vlist — Sortable Plugin Tests
  * Tests for sortable(): factory, setup wiring, pointer handlers,
  * drag ghost/placeholder, sort events, handle configuration, destroy cleanup.
  *
@@ -175,12 +175,14 @@ describe("sortable — factory", () => {
     expect(plugin.setup).toBeInstanceOf(Function);
   });
 
-  it("declares conflicts with grid, masonry, table, and scale", () => {
+  it("declares conflicts with grid, masonry, table and tree", () => {
     const plugin = sortable<TestItem>();
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("masonry");
     expect(plugin.conflicts).toContain("table");
-    expect(plugin.conflicts).toContain("scale");
+    expect(plugin.conflicts).toContain("tree");
+    // The conflict with scale() outlived the plugin itself, removed in 3.0.
+    expect(plugin.conflicts).not.toContain("scale");
   });
 
   it("accepts config with handle selector", () => {

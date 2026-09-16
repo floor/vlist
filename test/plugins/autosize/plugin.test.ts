@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Plugin Tests
+ * vlist — Autosize Plugin Tests
  * Tests for: factory shape, validation, setup (size cache replacement,
  * ResizeObserver wiring, onCommit observation), idle flush, destroy cleanup.
  *

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Live Region Announcement Tests
+ * vlist — Live Region Announcement Tests
  *
  * Verifies that the a11y plugin announces focus and selection changes
  * via the ARIA live region for screen reader users.

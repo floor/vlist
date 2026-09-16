@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Data Operations Edge Case Tests
+ * vlist — Data Operations Edge Case Tests
  *
  * Tests boundary cases for: setItems, appendItems, prependItems,
  * insertItem, updateItem, removeItem, removeItems.

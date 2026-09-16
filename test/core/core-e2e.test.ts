@@ -1,5 +1,5 @@
 /**
- * vlist v2 — createVList End-to-End Tests
+ * vlist — createVList End-to-End Tests
  *
  * Covers config validation, plugin validation, horizontal mode E2E,
  * smooth scrollToIndex, destroy safety, data operations, and scroll config.

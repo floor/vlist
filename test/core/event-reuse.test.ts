@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Event Object Reuse Safety Tests
+ * vlist — Event Object Reuse Safety Tests
  *
  * The core and plugins pre-allocate event objects (_scrollEvt, _velEvt,
  * _rangeEvt, _focusEvt, _selEvt) and mutate them before each emission

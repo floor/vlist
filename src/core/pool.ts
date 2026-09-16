@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Element Pool
+ * vlist — Element Pool
  *
  * acquire() = pop or create, release() = reset + push.
  * Max pool size: 100.

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — scrollToIndex Alignment & Edge Case Tests
+ * vlist — scrollToIndex Alignment & Edge Case Tests
  *
  * Tests start/center/end alignment, index clamping,
  * empty list handling, and options-object form.

@@ -1,5 +1,5 @@
 /**
- * vlist v2 - Scrolling Class Toggle Tests
+ * vlist — Scrolling Class Toggle Tests
  *
  * Tests that the `{classPrefix}--scrolling` class is correctly toggled
  * on the root element during scroll activity:

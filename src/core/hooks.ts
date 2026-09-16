@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Build-Time Compiled Hooks
+ * vlist — Build-Time Compiled Hooks
  *
  * Hooks are collected during createVList() and frozen into plain arrays.
  * On the hot path they are iterated with a for-loop — no closures,

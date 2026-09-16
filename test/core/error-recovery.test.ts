@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Error Recovery & Destroy Resilience Tests
+ * vlist — Error Recovery & Destroy Resilience Tests
  *
  * Verifies that: API calls after destroy are safe no-ops,
  * double-destroy is safe, and destroy event fires correctly.

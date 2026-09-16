@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Groups Plugin Tests
+ * vlist — Groups Plugin Tests
  * Tests for groups() plugin: factory validation, setup wiring, DOM class,
  * size config, render function replacement, sticky header, destroy cleanup.
  *

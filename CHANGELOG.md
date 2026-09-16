@@ -13,6 +13,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- CI runs on `next` as well as `staging` and `main`. The 3.0 work happens on `next`, where no pull request has had a single automated check: every merge so far was gated by hand.
+
+- `bun run size` fails when the base bundle passes its gzip budget, and prints exact byte counts. The README has always quoted bytes and called 9.9 KB the target, but nothing enforced it, so the number could be spent a hundred bytes at a time with only a human reading the table to notice. Base is 9,688 bytes against a 10,137 budget.
+
+- The four browser suites run in CI, and default to an in-repo Chrome launcher (`scripts/browser-driver.mjs`) instead of requiring `VLIST_BROWSER_DRIVER` to point at a module outside the package. The variable still overrides it. `puppeteer-core` joins the devDependencies; it ships no browser, using the one already on the machine. Runtime dependencies remain zero.
+
 - **Breaking:** horizontal lists in an RTL container are rejected at creation by both entries, not just `vlist/synthetic`. `vlist` accepted the combination and then sat on its first page: RTL makes `scrollLeft` negative, the wheel clamp pins it at 0 and items translate the wrong way, so the list rendered once and never moved while the README advertised it as working. Supporting it means signing every DOM scroll boundary and every renderer that writes its own transform; 3.0 refuses out loud instead, and a later implementation would be additive rather than breaking. Vertical RTL lists and RTL tables are unaffected, including cross-axis wheel movement, aligned headers and keyboard column navigation.
 
 - **Breaking:** `item:click`, `item:dblclick` and `item:contextmenu` report the DATA index — the space `getItemAt`, `scrollToIndex` and `removeItem` take. They reported the layout index, so in a grouped list data row 3 arrived as row 5, one off per header above it, and feeding that index straight back to `getItemAt` returned the wrong item. Lists with no index-mapping plugin are unaffected: the two spaces are the same there.
@@ -40,6 +46,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write.
 
 ### Fixed
+
+- `carousel()` and `sortable()` no longer declare a conflict with `scale`, a plugin 3.0 removed. Carousel's only conflict was that one, so it now declares none; sortable keeps grid, masonry, table and tree. Two tests asserted the stale conflicts and had outlived the plugin as well.
+
+- Refresh both READMEs' size tables from a measured run. Every row was stale — the base had moved from 9,514 to 9,688 bytes across the 3.0 merges while the tables still read 9.3 KB.
+
+- 88 file headers across `src/`, `test/` and `scripts/` still said "vlist v2", and CONTRIBUTING.md documented a source tree that no longer exists: the deleted `async/` and `scale/` plugin folders, `core/data.ts` and `core/range.ts`, and `test/builder/` and `test/features/`, which never existed. The a11y, carousel, data, search and tree plugins were missing from it entirely.
 
 - Keep a reverse-mode list pinned to the end when `appendItems` adds to it, which the README has always documented and core never did: `reverse` reached the plugins but core itself never read it, so a chat view held its pixel position while messages piled up below the fold. A list scrolled back through history stays where it is. The README now states what `reverse` does and does not do — it does not reverse the layout — and that `masonry()` and `table()` reject it.
 

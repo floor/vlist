@@ -1,5 +1,5 @@
 /**
- * vlist v2 — A11y Plugin
+ * vlist — A11y Plugin
  *
  * Baseline keyboard navigation, single-select, focus management, and ARIA.
  * Extracted from createVList() so it tree-shakes when selection() is used.

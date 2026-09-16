@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Sortable Plugin
+ * vlist — Sortable Plugin
  *
  * Drag-and-drop reordering for virtual lists.
  * Priority 30 — runs after layout plugins and scrollbar, before selection.
@@ -17,7 +17,7 @@
  * The consumer reorders their data and calls `setItems()`.
  *
  * Restrictions:
- * - Cannot be combined with grid, masonry, table, or scale plugins
+ * - Cannot be combined with the grid, masonry, table or tree plugins
  */
 
 import type { VListItem } from "../../types";
@@ -847,7 +847,7 @@ export function sortable<T extends VListItem = VListItem>(
   return {
     name: "sortable",
     priority: 30,
-    conflicts: ["grid", "masonry", "table", "scale", "tree"],
+    conflicts: ["grid", "masonry", "table", "tree"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

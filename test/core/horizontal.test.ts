@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Horizontal Mode Tests
+ * vlist — Horizontal Mode Tests
  *
  * Tests orientation="horizontal": DOM structure, scroll axis,
  * content sizing, scrollToIndex, and ARIA orientation.

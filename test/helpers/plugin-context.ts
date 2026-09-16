@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Test Mock for PluginContext
+ * vlist — Test Mock for PluginContext
  *
  * Creates a fully functional mock PluginContext for testing v2 plugins
  * without going through createVList(). Tracks method registrations,

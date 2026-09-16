@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Page (Window Scroll) Plugin Tests
+ * vlist — Page (Window Scroll) Plugin Tests
  * Tests for page(): factory, setup DOM modifications, context method calls,
  * window resize listener, destroy cleanup.
  *

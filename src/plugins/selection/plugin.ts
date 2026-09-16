@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection Plugin
+ * vlist — Selection Plugin
  *
  * Manages selection state, click/keyboard handlers, ARIA attributes.
  * Adapted from v1 withSelection feature + a11y.ts to the v2 plugin interface.

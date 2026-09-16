@@ -1,9 +1,9 @@
-/** Chrome integration probes. Build first, then set VLIST_BROWSER_DRIVER to a
- * module exporting launchBrowser() (e.g. vlist.io/scripts/debug/core.mjs). */
+/** Chrome integration probes. Build first. Uses scripts/browser-driver.mjs;
+ * set VLIST_BROWSER_DRIVER to another module exporting launchBrowser() to
+ * override it (e.g. vlist.io/scripts/debug/core.mjs). */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-const driver = process.env.VLIST_BROWSER_DRIVER;
-if (!driver) throw new Error("Set VLIST_BROWSER_DRIVER to the Chrome launchBrowser module");
+const driver = process.env.VLIST_BROWSER_DRIVER ?? resolve(import.meta.dir, "browser-driver.mjs");
 const { launchBrowser } = await import(resolve(driver));
 const root = resolve(import.meta.dir, "..");
 const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">

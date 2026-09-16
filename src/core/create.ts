@@ -1,5 +1,5 @@
 /**
- * vlist v2 — createVList()
+ * vlist — createVList()
  *
  * Factory function. Resolves config, creates DOM, compiles hooks from
  * plugins, wires the 2-phase pipeline, returns the public VList API.

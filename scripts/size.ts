@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Plugin Size Measurement + Tree-Shaking Verification
+ * vlist — Plugin Size Measurement + Tree-Shaking Verification
  * Builds each plugin combination with tree-shaking and reports gzipped sizes.
  * Also verifies that unused plugins are actually excluded from the bundle.
  *
@@ -110,6 +110,9 @@ const scenarios: Scenario[] = [
 
 interface Result {
   name: string;
+  /** Exact bytes, kept because the README quotes them and the budget gates on them. */
+  minBytes: number;
+  gzBytes: number;
   minKB: number;
   gzKB: number;
   deltaKB: number;
@@ -155,6 +158,8 @@ for (const scenario of scenarios) {
 
   results.push({
     name: scenario.name,
+    minBytes,
+    gzBytes,
     minKB: minBytes / 1024,
     gzKB: gzBytes / 1024,
     deltaKB: 0,
@@ -214,7 +219,7 @@ const pad = (s: string, n: number) => s.padStart(n);
 const sep = "─".repeat(LINE_W);
 
 console.log("");
-console.log("  vlist v2 — Plugin Sizes");
+console.log("  vlist — Plugin Sizes");
 console.log("");
 console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Delta".padStart(COL_DELTA)}`);
 console.log(`  ${sep}`);
@@ -247,10 +252,40 @@ if (treeShakeFailures.length === 0) {
 
 console.log("");
 
+// ── Byte budget ───────────────────────────────────────────────────
+//
+// The README quotes the base in exact bytes and calls 9.9 KB the target, but
+// nothing enforced it: the number could be spent a hundred bytes at a time and
+// only a human reading the table would notice. Exact bytes are printed so the
+// README can be sourced from a run rather than from memory.
+
+const BUDGET_BYTES: Record<string, number> = {
+  "Base (createVList)": Math.floor(9.9 * 1024),
+};
+
+const overBudget: string[] = [];
+
+for (const r of results) {
+  const budget = BUDGET_BYTES[r.name];
+  if (budget === undefined) continue;
+  const over = r.gzBytes > budget;
+  if (over) overBudget.push(r.name);
+  console.log(
+    `  ${over ? "✗" : "✓"} ${r.name}: ${r.gzBytes} bytes gzipped (budget ${budget})`,
+  );
+}
+
+for (const name of ["synthetic", "native"]) {
+  const r = results.find((x) => x.name === name);
+  if (r) console.log(`    ${name}: ${r.gzBytes} bytes gzipped`);
+}
+
+console.log("");
+
 rmSync(scratch, { recursive: true, force: true });
 
 // ── Exit code ─────────────────────────────────────────────────────
 
-if (treeShakeFailures.length > 0) {
+if (treeShakeFailures.length > 0 || overBudget.length > 0) {
   process.exit(1);
 }

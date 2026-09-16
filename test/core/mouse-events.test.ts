@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Mouse Event Tests (dblclick, contextmenu)
+ * vlist — Mouse Event Tests (dblclick, contextmenu)
  *
  * Verifies that item:dblclick and item:contextmenu events are emitted
  * with correct payload when users interact with rendered items.

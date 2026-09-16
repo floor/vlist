@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Gap Tests
+ * vlist — Gap Tests
  *
  * Tests item gap support: size cache bakes gap into slot sizes,
  * pipeline subtracts gap for DOM element sizing, trailing gap

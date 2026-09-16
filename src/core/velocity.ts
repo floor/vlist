@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Velocity Tracking
+ * vlist — Velocity Tracking
  * Lightweight 2-sample velocity tracker for scroll momentum detection.
  */
 

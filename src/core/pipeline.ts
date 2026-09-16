@@ -1,5 +1,5 @@
 /**
- * vlist v2 — 2-Phase Pipeline
+ * vlist — 2-Phase Pipeline
  *
  * Phase 1: Calculate & Reconcile — zero allocation hot path.
  *   Reads scroll position + size cache, writes into EngineState TypedArrays.

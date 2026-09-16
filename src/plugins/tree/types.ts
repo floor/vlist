@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Tree Plugin Types
+ * vlist — Tree Plugin Types
  */
 
 import type { VListItem } from "../../types";

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scroll Event Pipeline Tests
+ * vlist — Scroll Event Pipeline Tests
  *
  * Tests the full scroll event pipeline: scroll, velocity:change,
  * range:change emission sequence, and scroll:idle after timeout.

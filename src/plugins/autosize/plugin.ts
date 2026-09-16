@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Plugin
+ * vlist — Autosize Plugin
  *
  * Enables dynamic item measurement via ResizeObserver for items with
  * unknown sizes. Items are rendered without an explicit main-axis size,

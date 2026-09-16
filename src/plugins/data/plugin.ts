@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Async Plugin
+ * vlist — Async Plugin
  *
  * Enables async data loading with sparse storage, placeholders, and infinite scroll.
  * Priority 20 — runs before scrollbar and selection, after layout plugins.

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Snapshots Plugin Tests
+ * vlist — Snapshots Plugin Tests
  * Unit tests for snapshots(): factory, getScrollSnapshot, restoreScroll,
  * auto-restore via config, NaN guards, sizeCache rebuild, loadVisibleRange.
  *

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Template Error Handling Tests
+ * vlist — Template Error Handling Tests
  *
  * Verifies that template() errors in the render pipeline are caught,
  * emitted as error events, and do not crash the render cycle.

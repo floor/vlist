@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Baseline A11y Tests
+ * vlist — Baseline A11y Tests
  *
  * Tests the baseline accessibility behaviour wired in createVList when
  * `interactive: true` (default) and no selection plugin is provided.

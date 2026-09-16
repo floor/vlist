@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scroll Handler Extended Tests
+ * vlist — Scroll Handler Extended Tests
  *
  * Covers wheel handler gaps (vertical/horizontal modes, cross-axis overflow),
  * SCROLL_EASING function correctness, state update edge cases, smooth scroll

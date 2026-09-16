@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Content Size Overflow Warning Tests
+ * vlist — Content Size Overflow Warning Tests
  *
  * Verifies that an error event is emitted when content size exceeds
  * the browser's 16M pixel limit without a scale plugin active.

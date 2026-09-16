@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin Extended Tests
+ * vlist — Table Plugin Extended Tests
  *
  * Covers gaps from v1 table feature tests not present in v2:
  * - Roles and ARIA attributes

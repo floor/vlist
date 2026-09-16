@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Page (Window Scroll) Plugin
+ * vlist — Page (Window Scroll) Plugin
  *
  * Redirects scroll from the viewport to the window, enabling
  * the list to scroll with the page. Useful for infinite feeds,

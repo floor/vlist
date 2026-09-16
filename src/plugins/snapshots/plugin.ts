@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Snapshots Plugin
+ * vlist — Snapshots Plugin
  *
  * Scroll save/restore for SPA navigation and tab switching.
  * Captures the first visible item index + sub-pixel offset,

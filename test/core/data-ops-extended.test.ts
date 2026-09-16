@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Data Operations Extended Tests
+ * vlist — Data Operations Extended Tests
  *
  * Covers data operation edge cases from v1 not in the base data-ops.test.ts:
  * state transitions, event emission, string IDs, large datasets,

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Transition Plugin
+ * vlist — Transition Plugin
  *
  * FLIP-based enter/exit animations for insertItem and removeItem.
  * Without this plugin, insert/remove are instantaneous.

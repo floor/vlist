@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid 2D Keyboard Navigation Tests
+ * vlist — Grid 2D Keyboard Navigation Tests
  *
  * Tests that grid plugin configures navConfig with ud=columns, lr=1
  * so that ArrowUp/Down moves by rows and ArrowLeft/Right moves by columns.

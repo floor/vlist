@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Tree Plugin
+ * vlist — Tree Plugin
  *
  * Renders hierarchical data as a virtualized, collapsible tree view with
  * WAI-ARIA treeview keyboard navigation. Owns the tree→flat conversion

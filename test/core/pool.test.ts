@@ -1,5 +1,5 @@
 /**
- * vlist v2 - Builder Pool Tests
+ * vlist — Builder Pool Tests
  * Tests for element pool (DOM element recycling)
  */
 

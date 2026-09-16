@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scrollbar Plugin Tests
+ * vlist — Scrollbar Plugin Tests
  * Tests for scrollbar() plugin: factory, setup wiring, DOM class, afterScroll,
  * resize, destroy.
  *

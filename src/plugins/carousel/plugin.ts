@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Carousel Plugin (RFC-011)
+ * vlist — Carousel Plugin (RFC-011)
  *
  * Infinite-loop scrolling with snap-to-item, focal scaling, and peek.
  * Uses a finite virtual scroll window with silent rebasing — the scroll
@@ -397,7 +397,6 @@ export function carousel<T extends VListItem = VListItem>(
   return {
     name: "carousel",
     priority: 10,
-    conflicts: ["scale"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

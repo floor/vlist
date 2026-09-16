@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection + Groups Integration Tests
+ * vlist — Selection + Groups Integration Tests
  *
  * Verifies selection behavior when group headers are present:
  * shift+click range selection skips headers, keyboard range selection

@@ -79,6 +79,7 @@
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "test:changed": "bun test --changed",
+    "test:browser": "bun scripts/rtl-cross-axis-browser.mjs && bun scripts/synthetic-browser.mjs && bun scripts/synthetic-carousel-browser.mjs && bun scripts/synthetic-sortable-browser.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.types.json && tsc --noEmit -p tsconfig.test.json",
     "bench": "bun run scripts/bench.ts",
     "bench:quick": "bun run scripts/bench.ts --quick",
@@ -99,6 +100,7 @@
     "@types/jsdom": "^27.0.0",
     "happy-dom": "^20.9.0",
     "jsdom": "^28.0.0",
+    "puppeteer-core": "^24.43.1",
     "typescript": "^5.0.0"
   }
 }
