@@ -13,7 +13,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, PluginContext } from "../../core/types";
+import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 
@@ -232,6 +232,15 @@ export function table<T extends VListItem = VListItem>(
     priority: 10,
     conflicts: ["grid", "masonry"],
 
+    validateConfig(resolvedConfig: ResolvedConfig): void {
+      if (resolvedConfig.axis.primary === "x") {
+        throw new Error("[vlist] table: cannot be used with horizontal orientation");
+      }
+      if (resolvedConfig.reverse) {
+        throw new Error("[vlist] table: cannot be used with reverse mode");
+      }
+    },
+
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
       storedCtx = ctx;
@@ -240,13 +249,6 @@ export function table<T extends VListItem = VListItem>(
 
       const { dom, config: resolvedConfig, emitter } = ctx;
       const { classPrefix } = resolvedConfig;
-
-      if (resolvedConfig.axis.primary === "x") {
-        throw new Error("[vlist] table: cannot be used with horizontal orientation");
-      }
-      if (resolvedConfig.reverse) {
-        throw new Error("[vlist] table: cannot be used with reverse mode");
-      }
 
       // ── Resolve config ──────────────────────────────────────────
       const resizable = config.resizable ?? true;

@@ -40,7 +40,7 @@ import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } fr
 // Config Validation
 // =============================================================================
 
-function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
+function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
   const { item } = raw;
 
   // Validate item.height (only if explicitly provided and is a number)
@@ -172,6 +172,24 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
   }
 }
 
+/**
+ * A plugin that cannot work with this list's configuration is the same kind of
+ * failure as a declared conflict: a programming error the caller has to see,
+ * not a runtime fault to absorb. So it is checked here, next to the conflicts
+ * and outside the setup catch, and it throws.
+ *
+ * `table()` rejecting reverse mode used to throw. Making setup errors
+ * observable turned every setup throw into an event that fires before
+ * createVList returns — which no caller can hear — so the list came back
+ * half wired and rendering plain rows instead.
+ */
+function checkConfigCompatibility<T extends VListItem>(
+  plugins: readonly VListPlugin<T>[],
+  config: ResolvedConfig,
+): void {
+  for (const p of plugins) p.validateConfig?.(config);
+}
+
 // =============================================================================
 // createVList()
 // =============================================================================
@@ -211,7 +229,7 @@ export function createCore<T extends VListItem = VListItem>(
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
-  validateConfig(rawConfig);
+  validateRawConfig(rawConfig);
   if (logicalHandlerFactory && typeof rawConfig.scroll?.scrollbar === "string") {
     throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
   }
@@ -248,7 +266,10 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Sort and validate plugins ───────────────────────────────────
 
   const sorted = plugins.length > 0 ? sortPlugins(plugins) : plugins;
-  if (plugins.length > 0) checkConflicts(sorted);
+  if (plugins.length > 0) {
+    checkConflicts(sorted);
+    checkConfigCompatibility(sorted, config);
+  }
 
   // ── Create core components ──────────────────────────────────────
 

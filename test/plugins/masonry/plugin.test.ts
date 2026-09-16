@@ -107,7 +107,7 @@ describe("masonry - Setup", () => {
     });
 
     expect(() => {
-      plugin.setup!(ctx);
+      plugin.validateConfig!(ctx.config);
     }).toThrow("cannot be combined with reverse mode");
     cleanup();
   });
