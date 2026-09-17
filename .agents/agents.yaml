@@ -1,0 +1,183 @@
+# vlist — agent manifest
+#
+# The root of resolution: agents find this by convention in the checkout they
+# already have, and it names everything else. An issue or discussion may
+# describe this file, but where they disagree, this wins.
+#
+# It declares WHERE things are and WHO may do what. It is not a TODO: item
+# status lives in the source below, never here, or we have two task lists again.
+
+name: "vlist 3.0"
+
+project:
+  name: "vlist"
+  root: "."
+  repo: "vlist"
+  baseBranch: "next"          # 3.0 integrates on next; main is the 2.x line
+  language: "typescript"
+  runtime: "bun"
+
+  setup:
+    - name: Install dependencies
+      command: [bun, install, --frozen-lockfile]
+
+  # The gate, declared rather than remembered. Every one of these must pass on a
+  # clean export of the exact commit before anything merges.
+  verification:
+    - name: Typecheck
+      command: [bun, run, typecheck]
+    - name: Tests
+      command: [bun, test]
+    - name: Coverage threshold
+      command: [bun, run, scripts/coverage.ts, --threshold, "85"]
+    - name: Build
+      command: [bun, run, build, --, --types]
+    - name: Bundle size
+      command: [bun, run, size]
+    - name: Heap growth
+      command: [bun, run, heap]
+    # A docs-only change passes every other step trivially. This one reads the
+    # migration notes and fails when they name an API that no longer exists.
+    - name: Migration notes
+      command: [bun, run, "docs:check"]
+    - name: Browser suites
+      command: [bun, run, "test:browser"]
+
+  conventions:
+    semicolons: true
+    quotes: "double"
+    indent: 2
+    modules: "esm"
+
+  structure:
+    backend: "src/"
+    tests: "test/"
+
+# ── Sources ────────────────────────────────────────────────────────
+#
+# Not in the upstream schema yet; this is the key we agreed to define. The
+# findings source is HTML: rows carry their data in `data-*` attributes, so the
+# page IS the record and no parser sits between the view and the check.
+#
+# It is PRIVATE. A finding becomes a public issue only by promotion, and only
+# the user-facing half crosses.
+
+sources:
+  findings:
+    path: "../docs/projects/vlist/findings.html"   # private repo, sibling checkout
+    format: "html"
+    visibility: "private"
+    idAttribute: "data-id"
+    lint: [bun, run, "../docs/projects/vlist/tools/lint.ts"]
+
+  narrative:
+    path: "../docs/activity/2026/vlist.md"
+    format: "markdown"
+    visibility: "private"
+
+# ── Related projects ───────────────────────────────────────────────
+#
+# Findings span more than this repository; issues do not. This is the
+# cross-repo state that the service holds and a per-repo tracker cannot.
+
+relatedProjects:
+  - repo: "vlist.io"
+    role: "docs and examples"
+    visibility: "public"
+  - repo: "vlist-react"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-vue"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-svelte"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-solidjs"
+    role: "adapter"
+    visibility: "public"
+
+# ── Promotion ──────────────────────────────────────────────────────
+#
+# A TODO is private; a TODO can become an issue. Mechanical, never an agent's
+# judgement: the fields that cross are named here, and the row records the
+# issue it became so the join is explicit and checkable in both directions.
+
+promotion:
+  target: "floor/vlist"
+  linkAttribute: "data-issue"
+  publicFields: [finding, evidence, severity, area]
+  privateFields: [claimedBy, claimedAt, notes, verdict]
+  labels:
+    severity: { blocking: "blocking", critical: "critical", suggestion: "enhancement" }
+    area: "area/{value}"
+  milestone: "3.0.0"
+
+agents:
+  - id: cto
+    name: "Claude"
+    promptTemplate: "../../agents/agents/cto.md"
+    llm:
+      provider: claude-code
+      model: opus
+    capabilities: [read_code, create_pr, review_rfc]
+    autonomy: T1
+    # Coordinates, reviews, merges into next after a clean-export gate. Never
+    # tags, releases, deploys, or posts to discussions without Dr Jones.
+
+  - id: grok
+    name: "Grok"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: openai          # provider entry, not the model's vendor
+      model: grok-4
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: gemini
+    name: "Gemini"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: gemini
+      model: gemini-2.5-pro
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: gpt
+    name: "GPT"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: openai
+      model: gpt-4.1
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+# ── Guardrails ─────────────────────────────────────────────────────
+#
+# Visibility decides provider eligibility, not just where an issue is filed: a
+# hosted provider means the prompt leaves this machine. Private sources are
+# readable only by local providers.
+
+guardrails:
+  maxFilesPerTask: 20
+  maxFileSizeBytes: 102400
+  blockedPaths:
+    - ".env*"
+    - "*.pem"
+    - "*.key"
+    - ".github/workflows/*"
+    - "package.json"
+    - "bun.lock"
+    - ".gitignore"
+  privateSourceProviders: [claude-code, lmstudio]
+
+# ── Record ─────────────────────────────────────────────────────────
+#
+# Mechanical, never an agent's decision. Append-only events so concurrent
+# writers cannot conflict; greppable and diffable so the record survives the
+# tooling. Any query index is rebuilt from this and is never authoritative.
+
+record:
+  format: "jsonl"
+  path: "../docs/activity/2026/vlist-events.jsonl"
+  events: [claimed, promoted, pr_opened, review_passed, review_rejected, status_changed]

@@ -14,7 +14,11 @@ dist/
 *~
 
 #AI
-.agents/
+# The agent manifest is tracked; everything else here is local run state
+# (STATE_DIR defaults to runs/ beside it). Excluding the directory itself
+# would make the negation below unreachable: git never descends into it.
+.agents/*
+!.agents/agents.yaml
 .cursor/
 .claude/
 .claude/settings.local.json
@@ -40,7 +44,6 @@ coverage/
 .env.local
 .env.*.local
 .env.agents
-.agents/
 
 # Bun
 bun.lockb
