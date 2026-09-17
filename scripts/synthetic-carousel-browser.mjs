@@ -16,7 +16,7 @@ window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performa
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
 window.begin=(gap)=>{main.ctx.scroll.to(90*lap-gap);window.startSampling();};
 window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
-window.finish=()=>{cancelAnimationFrame(frame);return trace;};window.ready=true;
+window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);return trace;};window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
 const browser=await launchBrowser();const wait=ms=>new Promise(r=>setTimeout(r,ms));let largest=0,folds=0;

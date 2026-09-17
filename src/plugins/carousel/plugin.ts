@@ -853,8 +853,11 @@ export function carousel<T extends VListItem = VListItem>(
 
       onIdle(): void {
         // Still snapping: the destination is already known, and forgetting it
-        // here is what loses a key press.
-        if (snapUntil > performance.now()) return;
+        // here is what loses a key press. But an animation can land a hair
+        // early, with an idle arriving inside the deadline: then the snap
+        // below is what settles the last 0.001px, so it must run.
+        if (snapUntil > performance.now() && intendedVi >= 0
+          && Math.abs(scroll.getPixelEquivalent() - scrollPositionForVirtual(intendedVi)) > 0.5) return;
         snapUntil = 0;
         const dir = lastDirection;
         intendedVi = -1;
