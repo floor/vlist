@@ -5,8 +5,13 @@
 # manifest holding a `vote` agent: one file for the agents that write code, one
 # for the agents that judge it.
 #
-# Project, sources and promotion are declared once, in agents.yaml. This file
-# names only who sits on the committee and what they may read.
+# Members are the ones the committee scripts in floor/agents can actually run:
+# Claude in-process, the others through a bridge on the gateway. That is how the
+# three model families are seated — GPT through the Codex CLI, Grok through its
+# own bridge, Gemini through Antigravity. For external members the bridge picks
+# the model, so `provider` and `model` below are documentation, not dispatch.
+#
+# Project, sources and promotion are declared once, in agents.yaml.
 
 name: "vlist 3.0 committee"
 
@@ -19,34 +24,49 @@ project:
   runtime: "bun"
 
 agents:
+  - id: claude
+    name: "Claude"
+    promptTemplate: "../../agents/agents/claude-reviewer.md"
+    llm:
+      provider: claude-code
+      model: opus
+      temperature: 0.3
+      maxTokens: 32000
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: codex                 # GPT, through the Codex CLI
+    name: "Codex"
+    external: true
+    promptTemplate: "../../agents/agents/codex-reviewer.md"
+    llm:
+      provider: openai
+      model: local
+    capabilities: [review_rfc, vote]
+    autonomy: T1
+
   - id: grok
     name: "Grok"
-    promptTemplate: "../../agents/agents/committee.md"
+    external: true
+    promptTemplate: "../../agents/agents/grok-reviewer.md"
     llm:
       provider: cursor
       model: cursor-grok-4.6-high
-    capabilities: [read_code, review_rfc, vote]
+    capabilities: [review_rfc, vote]
     autonomy: T1
 
-  - id: gemini
-    name: "Gemini"
-    promptTemplate: "../../agents/agents/committee.md"
+  - id: antigravity           # Gemini. Parked: the GUI has no unattended wake,
+    name: "Antigravity"       # so it is left out of the scripts' default AGENTS.
+    external: true
+    promptTemplate: "../../agents/agents/antigravity-reviewer.md"
     llm:
       provider: gemini
-      model: gemini-2.5-pro
-    capabilities: [read_code, review_rfc, vote]
+      model: local
+    capabilities: [review_rfc, vote]
     autonomy: T1
 
-  - id: gpt
-    name: "GPT"
-    promptTemplate: "../../agents/agents/committee.md"
-    llm:
-      provider: openai
-      model: gpt-4.1
-    capabilities: [read_code, review_rfc, vote]
-    autonomy: T1
-
-# Every member here is hosted, so none may read the private findings source.
+# Claude is the only member that reads the repository locally; every external
+# member is hosted, so none may read the private findings source.
 guardrails:
   maxFilesPerTask: 20
   maxFileSizeBytes: 102400
