@@ -213,6 +213,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   emitter (`process.env.NODE_ENV !== "production"`) and the dist builds define
   `NODE_ENV`, so the log is dropped from a production bundle.
 
+- `bun run size` fails when a scenario fails to compile, and budgets every
+  published plugin size rather than only the base. A failed `Bun.build`
+  used to be logged and skipped, so a broken Base scenario dropped out of
+  `results` and the 9.9 KB check never ran. The other twenty-two rows were
+  measured and printed with no ceiling, so a plugin that doubled still
+  exited 0. Each row now has a gzip budget; a compile failure or an oversize
+  plugin fails the command.
+
 - `bun run release` can cut 3.0.0 from `next`. It refused any branch but `staging`,
   which is the frozen 2.x line, and its version split misread a prerelease: from
   `3.0.0-next.N` the default bump gave `3.0.NaN`, and `minor` and `major` gave
