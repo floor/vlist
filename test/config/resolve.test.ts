@@ -47,7 +47,7 @@ describe("resolvePlugins — baseline", () => {
 
   it("leaves a plain adapter list display-only, out of the tab order", () => {
     const container = createContainer({ width: 300, height: 500 });
-    const list = createVListFromConfig<TestItem>({
+    const list = createVListFromConfig({
       container,
       item: { height: 40, template },
       items: createTestItems(10),
@@ -178,7 +178,7 @@ describe("resolvePlugins — groups", () => {
     // number, so a 20/60 pair of groups rendered every header at 20.
     const container = createContainer({ width: 300, height: 500 });
     const asked: string[] = [];
-    const list = createVListFromConfig<TestItem>({
+    const list = createVListFromConfig({
       container,
       item: { height: 40, template },
       items: createTestItems(10),
@@ -215,7 +215,7 @@ describe("resolvePlugins — selection", () => {
 
   it("passes an explicit none mode through without claiming the listbox role", () => {
     const container = createContainer({ width: 300, height: 500 });
-    const list = createVListFromConfig<TestItem>({
+    const list = createVListFromConfig({
       container,
       item: { height: 40, template },
       items: createTestItems(10),
@@ -245,7 +245,7 @@ describe("resolvePlugins — a11y", () => {
 
   it("gives an a11y list the listbox role and a tab stop", () => {
     const container = createContainer({ width: 300, height: 500 });
-    const list = createVListFromConfig<TestItem>({
+    const list = createVListFromConfig({
       container,
       item: { height: 40, template },
       items: createTestItems(10),
@@ -338,7 +338,7 @@ describe("resolvePlugins — plugins escape hatch (#119)", () => {
 describe("createVListFromConfig", () => {
   it("creates a working instance from a high-level config", () => {
     const container = createContainer({ width: 300, height: 500 });
-    const instance = createVListFromConfig<TestItem>({
+    const instance = createVListFromConfig({
       container,
       item: { height: 40, template },
       items: createTestItems(20),
@@ -350,7 +350,7 @@ describe("createVListFromConfig", () => {
 
   it("applies grid layout end-to-end", () => {
     const container = createContainer({ width: 400, height: 500 });
-    const instance = createVListFromConfig<TestItem>({
+    const instance = createVListFromConfig({
       container,
       item: { height: 100, template },
       items: createTestItems(50),
@@ -368,7 +368,7 @@ describe("createVListFromConfig", () => {
     // covers that, and this keeps the duplicate-name regression it was filed for.
     const container = createContainer({ width: 400, height: 500 });
     const create = () =>
-      createVListFromConfig<TestItem>({
+      createVListFromConfig({
         container,
         item: { estimatedHeight: 200, template },
         items: createTestItems(50),
@@ -385,7 +385,7 @@ describe("createVListFromConfig", () => {
     const container = createContainer({ width: 400, height: 500 });
     try {
       expect(() =>
-        createVListFromConfig<TestItem>({
+        createVListFromConfig({
           container,
           item: { estimatedHeight: 200, template },
           items: createTestItems(50),
@@ -396,7 +396,7 @@ describe("createVListFromConfig", () => {
       // Through the convenience fields the error names those fields instead:
       // this layer wires both plugins, and the caller never wrote "autosize".
       expect(() =>
-        createVListFromConfig<TestItem>({
+        createVListFromConfig({
           container,
           item: { estimatedHeight: 200, template },
           items: createTestItems(50),

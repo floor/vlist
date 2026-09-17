@@ -19,7 +19,15 @@
 
 import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
 import { createVList } from "./core/create";
-import type { CreateVListConfig, VList, VListPlugin } from "./core/types";
+import type { CreateVListConfig, VList, VListPlugin, PluginMethods } from "./core/types";
+import type { AutosizeMethods } from "./plugins/autosize/plugin";
+import type { DataMethods } from "./plugins/data/plugin";
+import type { GridMethods } from "./plugins/grid/plugin";
+import type { MasonryMethods } from "./plugins/masonry/plugin";
+import type { GroupsMethods } from "./plugins/groups/plugin";
+import type { SelectionMethods } from "./plugins/selection/plugin";
+import type { ScrollbarMethods } from "./plugins/scrollbar/plugin";
+import type { SnapshotsMethods } from "./plugins/snapshots/plugin";
 import { page } from "./plugins/page";
 import { autosize } from "./plugins/autosize";
 import { data } from "./plugins/data";
@@ -225,14 +233,80 @@ export function resolvePlugins<T extends VListItem = VListItem>(
   return plugins;
 }
 
+// =============================================================================
+// Methods a config wires
+// =============================================================================
+
+/** A field value that wires no plugin. `"none"` is the scrollbar's spelling of off. */
+type Off = false | undefined | null | "none";
+
+/**
+ * The methods a field adds when it is on. Distributive on purpose: a widened
+ * `boolean` is `true | false`, so the result is `M | {}` and a call on it is a
+ * type error — the honest answer when the compiler cannot know whether the
+ * plugin is seated. Narrow the config, or spell the field as a literal.
+ */
+type OnOff<V, M> = V extends Off ? {} : M;
+
+/**
+ * The methods field `K` adds, or nothing when the config has no such field.
+ * Indexing `C[K]` directly would fall back to the constraint's type for an
+ * absent key and hand a plain config every plugin's methods.
+ */
+type Field<C, K extends PropertyKey, M> = C extends Record<K, infer V> ? OnOff<V, M> : {};
+
+/** Whether the item spec carries an estimate, which wires autosize(). */
+type Estimated<C> = C extends { item: { estimatedHeight: number } | { estimatedWidth: number } }
+  ? C extends { item: { height: number } | { width: number } } ? {} : AutosizeMethods
+  : {};
+
+/**
+ * The plugin methods a {@link VListConfig} wires, derived from its fields the
+ * same way {@link resolvePlugins} derives the plugins — the two are the type
+ * and runtime halves of one mapping, and `test/types/config.ts` asserts they
+ * agree. This is what lets an adapter list carry `select()` or `reload()` the
+ * way a core list built with `createVList(config, [selection()])` does.
+ */
+export type ConfigMethods<T extends VListItem, C extends VListConfig<T>> =
+  Field<C, "adapter", DataMethods> &
+  (C extends { layout: "grid" } ? GridMethods : {}) &
+  (C extends { layout: "masonry" } ? MasonryMethods : {}) &
+  Field<C, "groups", GroupsMethods> &
+  Field<C, "selection", SelectionMethods<T>> &
+  Field<C, "scrollbar", ScrollbarMethods> &
+  Field<C, "snapshots", SnapshotsMethods> &
+  Estimated<C> &
+  (C extends { plugins: infer P extends readonly unknown[] } ? PluginMethods<P> : {});
+
+/**
+ * The item type a config is written for: the element type of its `items`, else
+ * the parameter of its template. `VListConfig<infer T>` would do neither
+ * reliably — a config with no `items` inferred `any`.
+ */
+export type ConfigItem<C> = C extends { items: readonly (infer T extends VListItem)[] }
+  ? T
+  : C extends { item: { template: (item: infer T extends VListItem, ...rest: never[]) => unknown } }
+    ? T
+    : VListItem;
+
 /**
  * Create a vlist instance from a high-level {@link VListConfig}, resolving its
  * feature fields into plugins via {@link resolvePlugins}. This is the single
  * entry point every framework adapter delegates to.
+ *
+ * One type parameter, the config itself: the item type comes from its `items`
+ * or `template`, and the list's methods from its feature fields
+ * ({@link ConfigMethods}). Do not pass a type argument — `createVListFromConfig<Row>`
+ * would name a config type, not an item type, and fail to compile; the same
+ * trap `createVList<Row>` falls into is closed here by having no second slot.
  */
-export function createVListFromConfig<T extends VListItem = VListItem>(
-  config: VListConfig<T> & { container: HTMLElement | string },
-): VList<T> {
-  const { factory, ...options } = config;
-  return (factory ?? createVList<T>)(options as CreateVListConfig<T>, resolvePlugins(config));
+export function createVListFromConfig<
+  const C extends VListConfig<any> & { container: HTMLElement | string },
+>(config: C): VList<ConfigItem<C>> & ConfigMethods<ConfigItem<C>, C> {
+  type T = ConfigItem<C>;
+  const { factory, ...options } = config as VListConfig<T> & { container: HTMLElement | string };
+  return (factory ?? createVList<T>)(
+    options as CreateVListConfig<T>,
+    resolvePlugins<T>(config as VListConfig<T>),
+  ) as VList<T> & ConfigMethods<T, C>;
 }
