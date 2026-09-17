@@ -975,7 +975,12 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     getItemAt(index: number): T | undefined {
-      if (rc.indexMap) return items[index];
+      if (rc.indexMap) {
+        // A data index, as documented. Under an adapter the raw array is empty
+        // and the loaded item lives in data()'s storage.
+        const loaded = methods.get("_getLoadedItem") as ((i: number) => T | undefined) | undefined;
+        return loaded ? loaded(index) : items[index];
+      }
       // groups() in table mode replaces getItemFn with a layout-aware accessor,
       // which would make this public method take layout indices in that one
       // combination and data indices everywhere else. It publishes both halves
