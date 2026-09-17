@@ -160,11 +160,15 @@ export function search<T extends VListItem = VListItem>(
   // Lazily-resolved cross-plugin methods.
   let resolved = false;
   let scrollToIndexFn: ((index: number, align?: string) => void) | null = null;
+  let d2lFn: ((dataIndex: number) => number) | null = null;
+  let l2dFn: ((layoutIndex: number) => number) | null = null;
 
   const resolveOnce = (): void => {
     if (resolved) return;
     resolved = true;
     scrollToIndexFn = (ctx.hooks.get("scrollToIndex") as typeof scrollToIndexFn) ?? null;
+    d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+    l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
   };
 
   // ── Matching ────────────────────────────────────────────────────────────
@@ -328,11 +332,17 @@ export function search<T extends VListItem = VListItem>(
 
   const highlightVisible = (state: EngineState): void => {
     if (!doHighlight || query.length < minLength) return;
+    resolveOnce();
     const start = state.startIndex;
     const end = start + Math.max(0, state.visibleCount - 1);
     const currentOriginal = mode === "navigate" ? matches[current] : -1;
-    for (let i = start; i <= end; i++) {
-      const el = ctx.dom.renderedElement(i);
+    // startIndex/visibleCount are data-space (groups fills them that way so
+    // loaders request items, not headers). renderedElement is layout-space —
+    // headers occupy indices — so look up through the mapping groups publishes.
+    for (let dataIndex = start; dataIndex <= end; dataIndex++) {
+      const layoutIndex = d2lFn !== null ? d2lFn(dataIndex) : dataIndex;
+      if (l2dFn !== null && l2dFn(layoutIndex) < 0) continue;
+      const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
       if (highlightWithin) {
         // Scope marking to the matching descendants only.
@@ -345,7 +355,7 @@ export function search<T extends VListItem = VListItem>(
       }
       if (mode === "navigate") {
         // Toggle the current-match class on this row's marks.
-        const isCurrentRow = i === currentOriginal;
+        const isCurrentRow = dataIndex === currentOriginal;
         const marks = el.querySelectorAll(`.${matchClass}`);
         for (let m = 0; m < marks.length; m++) {
           marks[m]!.classList.toggle(currentClass, isCurrentRow);

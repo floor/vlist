@@ -13,6 +13,7 @@ import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
 import { selection } from "../../../src/plugins/selection/plugin";
+import { groups } from "../../../src/plugins/groups/plugin";
 import { data } from "../../../src/plugins/data";
 import { tree } from "../../../src/plugins/tree";
 import { createTestItems } from "../../helpers/factory";
@@ -679,6 +680,53 @@ describe("search + selection", () => {
     (list as any).clearSelection();
     fireKey(list.element, "a", { ctrlKey: true });
     expect((list as any).getSelected()).toEqual([9, 19]);
+  });
+});
+
+describe("search + groups", () => {
+  it("highlights the same rows with groups() as without, and never a header", () => {
+    // "1" matches Item 1 and Item 10–19 — 11 rows, the measured ungrouped count.
+    const items = createTestItems(20);
+    const item = { height: 30, template: (row: TestItem) => row.name };
+    const query = "1";
+    const highlightedRows = (root: HTMLElement): number => {
+      let n = 0;
+      const rows = root.querySelectorAll(".vlist-item");
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i]!.querySelector(".vlist-search-match")) n++;
+      }
+      return n;
+    };
+
+    const plainContainer = document.createElement("div");
+    document.body.appendChild(plainContainer);
+    const plain = createVList<TestItem>(
+      { container: plainContainer, items: items.slice(), item },
+      [search<TestItem>({ field: "name" })],
+    );
+    lists.push(plain);
+    (plain as any).setQuery(query);
+    const plainCount = highlightedRows(plainContainer);
+
+    const groupedContainer = document.createElement("div");
+    document.body.appendChild(groupedContainer);
+    const grouped = createVList<TestItem>(
+      { container: groupedContainer, items: items.slice(), item },
+      [
+        groups<TestItem>({
+          getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+          header: { height: 24, template: (key) => key },
+        }),
+        search<TestItem>({ field: "name" }),
+      ],
+    );
+    lists.push(grouped);
+    (grouped as any).setQuery(query);
+
+    expect(plainCount).toBe(11);
+    expect(highlightedRows(groupedContainer)).toBe(plainCount);
+    expect(groupedContainer.querySelectorAll(".vlist-group-header .vlist-search-match").length).toBe(0);
+    expect(groupedContainer.querySelectorAll(".vlist-group-header").length).toBeGreaterThan(0);
   });
 });
 

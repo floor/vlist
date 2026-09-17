@@ -30,7 +30,7 @@ import { createScrollSource } from "./scroll-source";
 import type { BoundedScrollHandler, BoundedScrollConfig, WrapConfig } from "./runway";
 import type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
-import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
+import { compileHooks, runAfterScrollHooks, runCommitHooks, runIdleHooks, runResizeHooks } from "./hooks";
 import { render, createRenderConfig } from "./pipeline";
 import { createEmitter, type Emitter } from "../events";
 import type { VListEvents } from "../types";
@@ -527,8 +527,23 @@ export function createCore<T extends VListItem = VListItem>(
         ifNeeded(): void { doRender(); },
         contentSize: updateContentSize,
         setFn(renderFn: () => void, forceFn: () => void): void {
-          customRenderIfNeeded = renderFn;
-          customForceRender = forceFn;
+          // Layout plugins (groups, grid, table, …) replace the core pipeline.
+          // phase2Commit is the only caller of onCommit, so without this wrap
+          // those hooks never run — search highlighting is the visible case.
+          // Skip when the custom renderer early-returned (range unchanged);
+          // force always commits, including a same-range rebuild of innerHTML.
+          customRenderIfNeeded = (): void => {
+            const start = state.prevRangeStart;
+            const end = state.prevRangeEnd;
+            renderFn();
+            if (state.prevRangeStart !== start || state.prevRangeEnd !== end) {
+              runCommitHooks(hooks.commit, state);
+            }
+          };
+          customForceRender = (): void => {
+            forceFn();
+            runCommitHooks(hooks.commit, state);
+          };
         },
         setStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
         getStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
