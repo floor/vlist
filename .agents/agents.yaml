@@ -62,16 +62,20 @@ project:
 # It is PRIVATE. A finding becomes a public issue only by promotion, and only
 # the user-facing half crosses.
 
+# Paths are relative to this file, like promptTemplate: `../../docs` is the
+# sibling docs checkout. Commands such as `lint` run from the repository root,
+# so their arguments are relative to that instead.
+
 sources:
   findings:
-    path: "../docs/projects/vlist/findings.html"   # private repo, sibling checkout
+    path: "../../docs/projects/vlist/findings.html"   # private repo, sibling checkout
     format: "html"
     visibility: "private"
     idAttribute: "data-id"
-    lint: [bun, run, "../docs/projects/vlist/tools/lint.ts"]
+    lint: [bun, run, "../docs/projects/vlist/tools/lint.ts"]   # from the repository root
 
   narrative:
-    path: "../docs/activity/2026/vlist.md"
+    path: "../../docs/activity/2026/vlist.md"
     format: "markdown"
     visibility: "private"
 
@@ -153,9 +157,9 @@ agents:
     # writing it, both exit 0. So completion is decided by `verification` against
     # the worktree diff, never by what the agent says it did.
     #
-    # `cursor` is hosted, so the prompt leaves this machine. It is absent from
-    # privateSourceProviders below and therefore may not read findings.html: it
-    # works from the public issue alone.
+    # `cursor` is hosted, so what it reads leaves this machine. It is trusted with
+    # private sources (see privateSourceProviders below), so it may read the
+    # findings as well as the public issue.
 
   # ── Committee ───────────────────────────────────────────────────
   #
@@ -202,9 +206,15 @@ agents:
 
 # ── Guardrails ─────────────────────────────────────────────────────
 #
-# Visibility decides provider eligibility, not just where an issue is filed: a
-# hosted provider means the prompt leaves this machine. Private sources are
-# readable only by local providers.
+# Visibility decides provider eligibility, not just where an issue is filed.
+# Whatever an agent reads becomes part of a prompt sent to its provider, so
+# privateSourceProviders is a list of companies trusted with private material —
+# not of local tools: claude-code sends to Anthropic, cursor to Cursor and the
+# model's vendor. Agents on any other provider (codex-cli, today) are meant not
+# to read private sources.
+#
+# Not yet enforced: no engine code reads this list, so every agent can currently
+# read the private sources. Enforcement is tracked in floor/agents.
 
 guardrails:
   maxFilesPerTask: 20
@@ -217,7 +227,9 @@ guardrails:
     - "package.json"
     - "bun.lock"
     - ".gitignore"
-  privateSourceProviders: [claude-code, lmstudio]
+  # cursor added 2026-09-17 by Dr Jones's decision: Grok may use the private
+  # findings for context when it implements or reviews.
+  privateSourceProviders: [claude-code, lmstudio, cursor]
 
 # ── Record ─────────────────────────────────────────────────────────
 #
@@ -227,5 +239,5 @@ guardrails:
 
 record:
   format: "jsonl"
-  path: "../docs/activity/2026/vlist-events.jsonl"
+  path: "../../docs/activity/2026/vlist-events.jsonl"
   events: [claimed, promoted, pr_opened, review_passed, review_rejected, status_changed]
