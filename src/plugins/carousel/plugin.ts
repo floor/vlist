@@ -134,6 +134,18 @@ export function carousel<T extends VListItem = VListItem>(
 
   let currentIndex = initialIndex;
   let realTotal = 0;
+  /**
+   * Under data(), the total is 0 when this plugin sets up: it sits at priority
+   * 10 and the adapter at 20, and items arrive later still. So the virtual
+   * window — the modulo accessor, the inflated total, the wrapping scroll —
+   * cannot be installed in setup(); it is installed when the total first
+   * becomes known, and it composes with the accessor data() put in place.
+   */
+  let windowInstalled = false;
+  let upstreamTotal: (() => number) | null = null;
+  let upstreamGet: ((index: number) => T | undefined) | null = null;
+  let upstreamResolved = false;
+  const ownGetTotal = (): number => realTotal;
   let stepSize = 0;
   let layoutContainerSize = 0;
   let lapSize = 0;
@@ -257,12 +269,108 @@ export function carousel<T extends VListItem = VListItem>(
 
   let layoutEngine: ReturnType<typeof createLayoutEngine> | null = null;
 
+  /** The virtual window: the wrap that makes this a carousel. Once, when the total is known. */
+  function installWindow(): void {
+    if (windowInstalled || !storedCtx || realTotal <= 1) return;
+    const ctx = storedCtx;
+    windowInstalled = true;
+      // The accessor in place before this one — data()'s, under an adapter —
+      // answers in data space; this one only folds the virtual index first.
+      const inner = upstreamGet ?? ((index: number): T | undefined => ctx.items.all()[index]);
+      ctx.items.setGetFn((i: number): T | undefined => inner(logicalIndexOf(i)));
+
+      sizeCache.getTotalSize = (): number => lapSize * CYCLES;
+      sizeCache.getOffset = (index: number): number => scrollPositionForVirtual(index);
+      sizeCache.getSize = (index: number): number => {
+        const logical = logicalIndexOf(index);
+        return stepSizes[logical] ?? stepSizes[0] ?? 0;
+      };
+      sizeCache.indexAtOffset = (offset: number): number => {
+        if (lapSize <= 0) return 0;
+        const cycle = Math.floor(offset / lapSize);
+        const rem = offset - cycle * lapSize;
+        if (!isVariableWidth) {
+          const s = stepSizes[0] ?? 1;
+          return Math.max(0, Math.min(cycle * realTotal + Math.floor(rem / s), virtualTotal - 1));
+        }
+        let lo = 0;
+        let hi = realTotal - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >> 1;
+          if (stepOffsets[mid]! <= rem) lo = mid;
+          else hi = mid - 1;
+        }
+        return Math.max(0, Math.min(cycle * realTotal + lo, virtualTotal - 1));
+      };
+      sizeCache.getTotal = (): number => virtualTotal;
+
+      // Don't hook rebuild — the engine may call rebuild(virtualTotal)
+      // internally, and we don't want that to corrupt realTotal.
+      // The hooked getters (getOffset, getSize, etc.) are stable
+      // regardless of the internal prefix-sum state.
+
+      // Engine needs virtualTotal for rendering at virtual indices.
+      // Public API (list.total) returns realTotal via virtualTotalFn.
+      engineState.totalItems = virtualTotal;
+      ctx.items.setTotalFn(() => realTotal);
+      ctx.items.setIndexMapFn(logicalIndexOf);
+      ctx.hooks.method("_layoutToDataIndex", logicalIndexOf);
+      // The engine total is the inflated virtual one (101 laps), which is
+      // what rendering needs and what any plugin asking "how many items are
+      // there" must not use. data() publishes the same answer the same way.
+      ctx.hooks.method("_getTotal", ownGetTotal);
+
+      // Route scroll through the bounded handler in wrap mode: the logical
+      // position never clamps, and the handler folds it back toward the
+      // middle cycle by whole laps once it drifts far enough. The carousel's
+      // modulo getItemFn maps the shifted virtual indices to identical real
+      // items at identical paint positions, so the fold is seamless.
+      ctx.scroll.setBoundedWrap({
+        lapSize: () => lapSize,
+        home: () => MIDDLE_CYCLE * lapSize,
+        thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
+        onFold(shift: number) {
+          if (intendedVi >= 0) intendedVi -= Math.round(shift / lapSize) * realTotal;
+        },
+      }, createBoundedScrollHandler);
+
+      initialScrollPending = true;
+  }
+
+  /**
+   * Where the item count really lives. data() publishes `_getTotal` and
+   * `_getItem` after this plugin sets up, so both are read once on the render
+   * path — never this plugin's own `_getTotal`, which it publishes on install.
+   */
+  function resolveUpstream(): void {
+    if (upstreamResolved || !storedCtx) return;
+    upstreamResolved = true;
+    const total = storedCtx.hooks.get("_getTotal") as (() => number) | undefined;
+    if (total && total !== ownGetTotal) upstreamTotal = total;
+    const get = storedCtx.hooks.get("_getItem") as ((index: number) => T | undefined) | undefined;
+    if (get) upstreamGet = get;
+  }
+
+  function currentTotal(): number {
+    if (!storedCtx) return 0;
+    return upstreamTotal ? upstreamTotal() : storedCtx.items.all().length;
+  }
+
   function syncItemCount(): void {
     if (!storedCtx) return;
-    const currentTotal = storedCtx.items.all().length;
-    if (currentTotal === realTotal) return;
+    resolveUpstream();
+    const total = currentTotal();
+    if (total === realTotal) return;
     const savedIndex = currentIndex;
-    realTotal = currentTotal;
+    realTotal = total;
+    // With no items at setup there was no size to measure; a fixed spec still
+    // says what one is, and a slot preset already knows its step.
+    if (stepSize <= 0 && !isVariableWidth) {
+      const rawSpec = storedCtx.sizes.rawSpec;
+      stepSize = layoutEngine ? layoutEngine.stepSize : typeof rawSpec === "number" ? rawSpec : 0;
+      if (stepSize <= 0) return;
+      stepSizes = [];
+    }
     if (isVariableWidth) {
       const rawSpec = storedCtx.sizes.rawSpec;
       const getSz = typeof rawSpec === "function"
@@ -273,6 +381,13 @@ export function carousel<T extends VListItem = VListItem>(
       buildStepCache(Array.from({ length: realTotal }, () => stepSizes[0] ?? stepSize));
     }
     virtualTotal = realTotal * CYCLES;
+    if (!windowInstalled) {
+      // The window brings the inflated total and the seeding of the start
+      // position (initialScrollPending) with it; the commit that follows does
+      // the rest, as it does for a static list.
+      installWindow();
+      return;
+    }
     engineState.totalItems = virtualTotal;
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
@@ -464,69 +579,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Virtual scroll window ─────────────────────────────────────
 
-      if (realTotal > 1) {
-        ctx.items.setGetFn((i: number): T | undefined => {
-          const logical = logicalIndexOf(i);
-          return ctx.items.all()[logical];
-        });
-
-        sizeCache.getTotalSize = (): number => lapSize * CYCLES;
-        sizeCache.getOffset = (index: number): number => scrollPositionForVirtual(index);
-        sizeCache.getSize = (index: number): number => {
-          const logical = logicalIndexOf(index);
-          return stepSizes[logical] ?? stepSizes[0] ?? 0;
-        };
-        sizeCache.indexAtOffset = (offset: number): number => {
-          if (lapSize <= 0) return 0;
-          const cycle = Math.floor(offset / lapSize);
-          const rem = offset - cycle * lapSize;
-          if (!isVariableWidth) {
-            const s = stepSizes[0] ?? 1;
-            return Math.max(0, Math.min(cycle * realTotal + Math.floor(rem / s), virtualTotal - 1));
-          }
-          let lo = 0;
-          let hi = realTotal - 1;
-          while (lo < hi) {
-            const mid = (lo + hi + 1) >> 1;
-            if (stepOffsets[mid]! <= rem) lo = mid;
-            else hi = mid - 1;
-          }
-          return Math.max(0, Math.min(cycle * realTotal + lo, virtualTotal - 1));
-        };
-        sizeCache.getTotal = (): number => virtualTotal;
-
-        // Don't hook rebuild — the engine may call rebuild(virtualTotal)
-        // internally, and we don't want that to corrupt realTotal.
-        // The hooked getters (getOffset, getSize, etc.) are stable
-        // regardless of the internal prefix-sum state.
-
-        // Engine needs virtualTotal for rendering at virtual indices.
-        // Public API (list.total) returns realTotal via virtualTotalFn.
-        engineState.totalItems = virtualTotal;
-        ctx.items.setTotalFn(() => realTotal);
-        ctx.items.setIndexMapFn(logicalIndexOf);
-        ctx.hooks.method("_layoutToDataIndex", logicalIndexOf);
-        // The engine total is the inflated virtual one (101 laps), which is
-        // what rendering needs and what any plugin asking "how many items are
-        // there" must not use. data() publishes the same answer the same way.
-        ctx.hooks.method("_getTotal", (): number => realTotal);
-
-        // Route scroll through the bounded handler in wrap mode: the logical
-        // position never clamps, and the handler folds it back toward the
-        // middle cycle by whole laps once it drifts far enough. The carousel's
-        // modulo getItemFn maps the shifted virtual indices to identical real
-        // items at identical paint positions, so the fold is seamless.
-        ctx.scroll.setBoundedWrap({
-          lapSize: () => lapSize,
-          home: () => MIDDLE_CYCLE * lapSize,
-          thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
-          onFold(shift: number) {
-            if (intendedVi >= 0) intendedVi -= Math.round(shift / lapSize) * realTotal;
-          },
-        }, createBoundedScrollHandler);
-
-        initialScrollPending = true;
-      }
+      if (realTotal > 1) installWindow();
 
       // ── next / prev / goTo ──────────────────────────────────────
 
@@ -759,7 +812,10 @@ export function carousel<T extends VListItem = VListItem>(
       },
 
       onCommit(): void {
-        if (!initialScrollPending || !storedCtx) return;
+        if (!storedCtx) return;
+        // Under an adapter the total arrives through a render, not a scroll.
+        syncItemCount();
+        if (!initialScrollPending) return;
         initialScrollPending = false;
 
         // The first render used scrollPosition=0. Seed the real start
@@ -797,8 +853,11 @@ export function carousel<T extends VListItem = VListItem>(
 
       onIdle(): void {
         // Still snapping: the destination is already known, and forgetting it
-        // here is what loses a key press.
-        if (snapUntil > performance.now()) return;
+        // here is what loses a key press. But an animation can land a hair
+        // early, with an idle arriving inside the deadline: then the snap
+        // below is what settles the last 0.001px, so it must run.
+        if (snapUntil > performance.now() && intendedVi >= 0
+          && Math.abs(scroll.getPixelEquivalent() - scrollPositionForVirtual(intendedVi)) > 0.5) return;
         snapUntil = 0;
         const dir = lastDirection;
         intendedVi = -1;

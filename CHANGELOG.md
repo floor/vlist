@@ -205,6 +205,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `carousel()` over `data()` is a carousel again. It read the item count once in
+  `setup()`, where an adapter's total is still 0, so the virtual window — the
+  modulo accessor, the inflated total, the wrapping scroll — was never installed
+  and the list rendered flat: `prev()` on the first item did nothing. The window
+  is now installed when the total first becomes known and composes with the
+  accessor `data()` put in place, and `getItemAt` reads the loaded item rather
+  than the raw array an adapter leaves empty.
+
 - A production browser bundle no longer logs plugin `setup()` failures. The guard
   treated a missing `process` as development (`typeof process === "undefined" ||
   NODE_ENV !== "production"`), and the shipped builds never defined `NODE_ENV` —
