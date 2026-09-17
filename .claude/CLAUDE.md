@@ -37,7 +37,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI)
+- `bun run release [patch|minor|major|<version>] [--from next|staging]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `next`, 2.x from `staging`.
 
 ## Project Structure
 
@@ -217,20 +217,21 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major]` automates the full release flow:
-1. Verifies you're on `staging` with a clean tree, pulls latest
-2. Bumps version in `package.json`
+`bun run release [patch|minor|major|<version>] [--from next|staging]` automates
+the full release flow. The source branch is derived from the version being
+released: `next` for 3.x, `staging` for 2.x. `--from` confirms that branch; it
+cannot send 3.x through `staging`.
+
+1. Verifies you're on the source branch with a clean tree, pulls latest
+2. Bumps version in `package.json`. A prerelease (`3.0.0-next.2`) is never
+   bumped: its stable release is named explicitly (`bun run release 3.0.0`), and
+   a version not above the current one is refused
 3. Updates README version badge and changelog stats
-4. Commits `chore(release): vX.Y.Z` and pushes `staging`
-5. Creates PR `staging → main` via `gh` CLI
+4. Commits `chore(release): vX.Y.Z` and pushes the source branch
+5. Creates PR `<source> → main` via `gh` CLI
 6. Polls every 10s until the PR is merged (max 10 min)
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
-8. Returns to `staging`
-
-This describes the 2.x path, and it is accurate for a 2.8.x patch. It cannot cut
-3.0.0: the script refuses to run on any branch but `staging`, while the 3.0 line
-integrates on `next`. Tracked in #200 — fix the script before attempting a 3.0
-release, not during one.
+8. Returns to the source branch
 
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:

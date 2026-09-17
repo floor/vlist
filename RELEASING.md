@@ -17,15 +17,16 @@ API must never ship in a patch — that's exactly the surprise SemVer prevents.
 
 ## Two trains
 
-- **Patch train** — batches of `fix` / `perf` / `docs` only. Ship as often as
-  needed; during post-2.0 stabilization that can be frequent, and it slows
-  naturally as the surface stabilizes.
-- **Minor train** — the moment a `feat` lands on `staging`, the next release is
-  a minor. Batch features together rather than dribbling them out.
+- **3.x** lives on `next`. A 3.0.0 (and later 3.x) release is `next → main`,
+  then the tag from `main`.
+- **2.x** lives on `staging`. A 2.8.x patch is `staging → main`, then the tag
+  from `main`. `staging` is frozen maintenance: it holds nothing `next` does
+  not, and staging.vlist.io deploys from `next`.
 
-To keep `staging` patch-shippable at any time during stabilization, land
-features on a short-lived branch and merge to `staging` only when you intend to
-cut a minor.
+Within a line, a patch is `fix` / `perf` / `docs` only. The moment a `feat`
+lands, the next release on that line is a minor.
+
+`main` is protected and is the released line.
 
 ## When to cut a release
 
@@ -37,20 +38,26 @@ Release on a trigger, not a timer:
 - a critical fix must go out now (→ focused patch).
 
 `CHANGELOG.md`'s `[Unreleased]` section is the rolling buffer for what's on
-`staging` but not yet published.
+the integration branch but not yet published.
 
 ## Process
 
-Work on `staging`; `main` is protected and is the released line.
+Work on the integration branch for the line you are releasing (`next` for 3.x,
+`staging` for 2.x).
 
 1. **Prep (manual)** — stamp `[Unreleased]` → `[X.Y.Z] - <date>` in
    `CHANGELOG.md` and add a fresh `[Unreleased]`; run `bun run size` and refresh
    the README plugin-size table + base-size tagline and `npm-readme.md`. Commit.
-2. **Release** — `bun run release [patch|minor|major]`. The script bumps
-   `package.json`, updates the README version badge and CHANGELOG stats line,
-   commits `chore(release): vX.Y.Z`, pushes `staging`, opens a `staging → main`
-   PR, waits for it to merge, then tags `vX.Y.Z` on `main`. The tag triggers
-   `publish.yml` → `npm publish` + GitHub Release.
+2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging]`.
+   The script derives the source branch from the version being released (`next`
+   for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
+   `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
+   stable release is named, `bun run release 3.0.0` — and a version not above the
+   current one is refused), updates the README version badge and
+   CHANGELOG stats line, commits `chore(release): vX.Y.Z`, pushes the source
+   branch, opens a PR onto `main`, waits for it to merge, then tags `vX.Y.Z` on
+   `main`. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
+   `--from` confirms the derived branch; it cannot send 3.x through `staging`.
 
 ### Pre-releases
 
@@ -82,5 +89,6 @@ npm. Fix the branch, delete the tag (`git push origin :refs/tags/vX.Y.Z-next.N`
 and `git tag -d vX.Y.Z-next.N`), and tag the fixed commit with the same version.
 **Once npm has a version, never reuse it**: bump to the next `-next.N` instead.
 
-**Promotion** — the final `X.Y.Z` follows the normal process after the
-integration branch is merged into `staging`.
+**Promotion** — the final `X.Y.Z` is cut from the integration branch with
+`bun run release X.Y.Z` (`next → main` for 3.x). Do not merge into `staging` first;
+`staging` is the 2.x maintenance line.
