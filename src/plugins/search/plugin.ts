@@ -497,6 +497,12 @@ export function search<T extends VListItem = VListItem>(
         }
       });
 
+      // Filter remaps getItemFn, not the source array. selection() (and
+      // masonry, sortable) resolve rows through this hook; without it they
+      // read items.all()[i] and select the unfiltered occupant of a
+      // filtered row.
+      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => ctx.items.at(index));
+
       // Public methods.
       ctx.hooks.method("openSearch", openSearch);
       ctx.hooks.method("closeSearch", closeSearch);

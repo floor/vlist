@@ -12,8 +12,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
+import { selection } from "../../../src/plugins/selection/plugin";
 import { data } from "../../../src/plugins/data";
 import { tree } from "../../../src/plugins/tree";
+import { createTestItems } from "../../helpers/factory";
+import type { TestItem } from "../../helpers/factory";
 import type { VListItem, ItemState } from "../../../src/types";
 
 interface Fruit extends VListItem {
@@ -47,7 +50,7 @@ afterAll(() => {
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());
 
-let lists: VList<Fruit>[] = [];
+let lists: Array<VList<VListItem>> = [];
 afterEach(() => {
   for (const l of lists) l.destroy();
   lists = [];
@@ -619,6 +622,65 @@ describe("search — conflicts with data", () => {
   });
 });
 
+
+// =============================================================================
+// search + selection (filtered index space)
+// =============================================================================
+
+describe("search + selection", () => {
+  function fireKey(el: HTMLElement, key: string, opts: KeyboardEventInit = {}): void {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts }));
+  }
+
+  it("click, keyboard, and Ctrl+A select the rendered items on a filtered list", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(20),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [selection<TestItem>({ mode: "multiple" }), search<TestItem>({ field: "name" })],
+    );
+    lists.push(list);
+
+    // "Item 9" and "Item 19" — first filtered row is original index 8, not 0.
+    // The bug selected getItems()[0] (id=1) for a click on this row.
+    (list as any).setQuery("9");
+    expect(list.total).toBe(2);
+
+    const row = container.querySelector<HTMLElement>("[data-index='0']");
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain("Item 9");
+    expect(row!.getAttribute("data-id")).toBe("9");
+
+    let clickedId: string | number | undefined;
+    list.on("item:click", ({ item }) => {
+      clickedId = item.id;
+    });
+    let selectionIds: Array<string | number> = [];
+    list.on("selection:change", ({ selected }) => {
+      selectionIds = selected;
+    });
+
+    fireKey(list.element, "ArrowDown");
+    fireKey(list.element, " ");
+    expect((list as any).getSelected()).toEqual([9]);
+
+    (list as any).clearSelection();
+    expect((list as any).getSelected()).toEqual([]);
+
+    row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(clickedId).toBe(9);
+    expect(selectionIds).toEqual([9]);
+    expect((list as any).getSelected()).toEqual([9]);
+
+    (list as any).clearSelection();
+    fireKey(list.element, "a", { ctrlKey: true });
+    expect((list as any).getSelected()).toEqual([9, 19]);
+  });
+});
 
 describe("search — conflicts with tree", () => {
   it("declares the conflict", () => {
