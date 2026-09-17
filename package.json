@@ -87,6 +87,7 @@
     "bench:compare": "bun run scripts/bench.ts --quick --compare",
     "size": "bun run scripts/size.ts",
     "heap": "bun run scripts/heap.ts",
+    "docs:check": "bun run scripts/docs-check.ts",
     "release": "bun run scripts/release.ts",
     "prepublishOnly": "bun run build -- --types && cp README.md README.github.md && cp npm-readme.md README.md",
     "postpublish": "cp README.github.md README.md && rm README.github.md"
