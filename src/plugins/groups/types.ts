@@ -83,7 +83,12 @@ export interface GroupLayout {
   /** All group boundaries, in order */
   readonly groups: readonly GroupBoundary[];
 
-  /** Get the layout entry at a layout index — O(log g) */
+  /**
+   * Get the layout entry at a layout index — O(log g).
+   *
+   * The returned object is reused and mutated in place. Read fields
+   * immediately; do not retain the reference across calls.
+   */
   getEntry: (layoutIndex: number) => LayoutEntry;
 
   /** Map layout index → data index, or -1 if it's a header — O(log g) */
