@@ -129,10 +129,29 @@ agents:
     name: "Grok"
     promptTemplate: "../../agents/agents/committee.md"
     llm:
-      provider: openai          # provider entry, not the model's vendor
-      model: grok-4
-    capabilities: [read_code, review_rfc, vote]
+      # `provider` names the adapter package — the transport — and never the
+      # model's vendor; the model string carries vendor and family. Under that
+      # rule `claude-code` and `lmstudio` were already transports, while `openai`
+      # here named a vendor and reached nothing. Grok comes through the Cursor
+      # CLI (`cursor-agent -p`), billed to the Cursor subscription. The xAI `grok`
+      # CLI is a different account and is not authenticated on this machine.
+      provider: cursor
+      # Effort is part of the identifier rather than a separate field:
+      #   cursor-grok-4.6-{low,medium,high,xhigh}   (+ a -fast variant of each)
+      # 4.5 exists under the same shape. `--model` takes this string verbatim.
+      model: cursor-grok-4.6-high
+    capabilities: [read_code, write_code, write_tests, create_pr, review_rfc, vote]
     autonomy: T1
+    # Implements as well as reviews, under two guards.
+    #
+    # A headless turn can end having written nothing and still report success —
+    # measured: two identical runs, one wrote the file, one only described
+    # writing it, both exit 0. So completion is decided by `verification` against
+    # the worktree diff, never by what the agent says it did.
+    #
+    # `cursor` is hosted, so the prompt leaves this machine. It is absent from
+    # privateSourceProviders below and therefore may not read findings.html: it
+    # works from the public issue alone.
 
   - id: gemini
     name: "Gemini"
