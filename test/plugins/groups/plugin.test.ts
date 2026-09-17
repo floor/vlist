@@ -55,7 +55,7 @@ describe("groups — Factory", () => {
     });
 
     expect(plugin.name).toBe("groups");
-    expect(plugin.priority).toBe(10);
+    expect(plugin.priority).toBe(11);
     expect(typeof plugin.setup).toBe("function");
   });
 

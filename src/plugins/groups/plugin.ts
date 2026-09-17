@@ -2,7 +2,9 @@
  * vlist — Groups Plugin
  *
  * Adds grouped lists with sticky headers.
- * Priority 10 — runs before selection (50).
+ * Priority 11 — after layout plugins (grid/masonry/table at 10) so it can
+ * wrap the size cache and take over render regardless of array order;
+ * before selection (50).
  *
  * Architecture:
  * - Transforms items list: inserts group header pseudo-items at group boundaries
@@ -368,7 +370,7 @@ export function groups<T extends VListItem = VListItem>(
     layoutIndex: number,
   ): boolean {
     // Listbox semantics, resolved on the render path: groups sets up at
-    // priority 10, before a11y (55) and selection (50), so this cannot be
+    // priority 11, before a11y (55) and selection (50), so this cannot be
     // read during setup.
     //
     // Both a11y() and selection() call ctx.dom.enableListbox(), which marks
@@ -743,7 +745,7 @@ export function groups<T extends VListItem = VListItem>(
 
   return {
     name: "groups",
-    priority: 10,
+    priority: 11,
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;
@@ -768,8 +770,10 @@ export function groups<T extends VListItem = VListItem>(
       // Resolve raw storage accessor (async plugin) — returns undefined for
       // unloaded items without generating placeholder objects. Used in
       // buildGroups to skip unloaded items efficiently.
-      // Resolve grid info synchronously — grid runs at same priority (10)
-      // but may be listed before groups in the plugin array
+      // Layout plugins publish getGridLayout / getMasonryLayout at priority 10.
+      // Groups is 11 so this read sees them even when the caller listed
+      // groups first — wrapping the size cache and replacing render has to
+      // happen after those plugins, or they overwrite both and headers vanish.
       const gridLayoutFn = getMethod?.("getGridLayout") as (() => { columns: number; gap: number }) | undefined;
       const masonryLayoutFn = getMethod?.("getMasonryLayout") as (() => { columns: number; gap: number; containerSize: number }) | undefined;
       if (gridLayoutFn) {
@@ -934,11 +938,10 @@ export function groups<T extends VListItem = VListItem>(
       tableMode = hasTable;
 
       if (hasTable) {
-        // Deferred: data plugin (priority 20) runs after groups (priority 10)
-        // and overwrites getItemFn. The table plugin (same priority 10, later
-        // in the array) calls setSizeConfig which Object.assigns a new cache,
-        // overwriting our sizeCache.rebuild hook. Re-hook in a microtask after
-        // all same-priority setups have completed.
+        // Deferred: data plugin (priority 20) runs after groups (priority 11)
+        // and overwrites getItemFn. Table (priority 10) has already registered
+        // _updateTableForGroups and called setSizeConfig; this microtask wires
+        // the layout-index accessor after data has claimed getItemFn.
         queueMicrotask(() => {
           // Use _getItem (includes placeholders) rather than _getLoadedItem
           // (returns undefined for unloaded items). Placeholders let the
@@ -1140,7 +1143,7 @@ export function groups<T extends VListItem = VListItem>(
       },
       onResize(_w: number, _h: number): void {
         if (gridColumns <= 0) return;
-        // Grid plugin's onResize runs first (same priority, earlier in array)
+        // Grid plugin's onResize runs first (priority 10, before groups at 11)
         // and updates its internal columnWidth. Now sizeCache sizes will
         // reflect the new column width. Rebuild positions and re-render.
         origSizeCacheRebuild(layout.totalEntries);
