@@ -19,6 +19,7 @@ dist/
 # would make the negation below unreachable: git never descends into it.
 .agents/*
 !.agents/agents.yaml
+!.agents/committee.yaml
 .cursor/
 .claude/
 .claude/settings.local.json
