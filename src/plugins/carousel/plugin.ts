@@ -142,6 +142,17 @@ export function carousel<T extends VListItem = VListItem>(
   let initialScrollPending = false;
   let prefix = "vlist";
   let intendedVi = -1;
+  /**
+   * When the current programmatic snap is due to finish.
+   *
+   * The engine can report idle while that snap is still running — selection()
+   * renders on every focus change, and an idle arrives between frames. onIdle
+   * then dropped `intendedVi`, onAfterScroll recomputed the index from a
+   * position halfway between two items, and the next key moved from there:
+   * three presses inside one snap advanced two items. A deadline rather than a
+   * flag, so an interrupted animation cannot leave the carousel wedged.
+   */
+  let snapUntil = 0;
   let lastDirection = 0;
 
   let stepSizes: number[] = [];
@@ -239,6 +250,8 @@ export function carousel<T extends VListItem = VListItem>(
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
+    // Every programmatic snap passes here, so this is where its deadline is set.
+    snapUntil = performance.now() + duration;
     storedCtx?.scroll.smoothTo(target, duration, snapEasing);
   }
 
@@ -634,9 +647,26 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Keyboard nav integration with selection ─────────────────
 
+      // One key, two handlers: this plugin's runs first and starts the snap,
+      // then selection() asks nav.navigate where focus goes. Answering by
+      // moving as well jumped the list to the target and back within a frame,
+      // and moved from selection's focus rather than from where the carousel
+      // was — so quick presses left the two an item apart. While a key is being
+      // handled here, navigate only reports the index this carousel is already
+      // going to, and focus follows it.
+      //
+      // The flag is cleared in a microtask: core dispatches every keydown
+      // handler synchronously, so all of them have run by the time it fires.
+      let handlingKey = false;
+      const holdKey = (): void => {
+        handlingKey = true;
+        queueMicrotask(() => { handlingKey = false; });
+      };
+
       ctx.nav.set({
         total: () => realTotal,
         navigate: (current: number, key: string, total: number): number => {
+          if (handlingKey) return currentIndex;
           let target = current;
           if (key === "ArrowRight" || key === "ArrowDown") {
             target = (current + 1) % total;
@@ -670,15 +700,19 @@ export function carousel<T extends VListItem = VListItem>(
         const key = event.key;
         if (key === "ArrowRight" || key === "ArrowDown") {
           event.preventDefault();
+          holdKey();
           navNext(1, { behavior: "smooth", duration: snapDuration });
         } else if (key === "ArrowLeft" || key === "ArrowUp") {
           event.preventDefault();
+          holdKey();
           navPrev(1, { behavior: "smooth", duration: snapDuration });
         } else if (key === "Home") {
           event.preventDefault();
+          holdKey();
           navGoTo(0, { behavior: "smooth", duration: snapDuration });
         } else if (key === "End") {
           event.preventDefault();
+          holdKey();
           navGoTo(realTotal - 1, { behavior: "smooth", duration: snapDuration });
         }
       });
@@ -762,6 +796,10 @@ export function carousel<T extends VListItem = VListItem>(
       },
 
       onIdle(): void {
+        // Still snapping: the destination is already known, and forgetting it
+        // here is what loses a key press.
+        if (snapUntil > performance.now()) return;
+        snapUntil = 0;
         const dir = lastDirection;
         intendedVi = -1;
         lastDirection = 0;
