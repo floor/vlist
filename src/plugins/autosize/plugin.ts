@@ -132,6 +132,21 @@ export function autosize<T extends VListItem = VListItem>(
     storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
   }
 
+  /**
+   * Refresh the prefix sums over `low..high`, the indices a batch changed.
+   *
+   * A layout plugin (groups, grid) can replace the size cache with one keyed
+   * by its own layout indices, where a data index names the wrong rows. Such a
+   * plugin hooks `rebuild` to do the mapping, so that hook's presence is the
+   * signal to fall back to the full rebuild — the only call that still lands
+   * on the right entries.
+   */
+  function refreshSizes(low: number, high: number): void {
+    const ctx = storedCtx!;
+    if (ctx.hooks.get("_setSizeCacheBase")) ctx.sizes.rebuild();
+    else ctx.sizes.cache.invalidate(low, high);
+  }
+
   return {
     name: "autosize",
     priority: 5,
@@ -158,6 +173,11 @@ export function autosize<T extends VListItem = VListItem>(
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
+        // Lowest and highest index the batch changed. The size cache only
+        // re-reads the blocks this range covers, so a handful of measured
+        // rows no longer costs one Map lookup per item in the list.
+        let changedLow = -1;
+        let changedHigh = -1;
         const firstVisible = ctx.sizes.cache.indexAtOffset(scroll.getPixelEquivalent());
 
         for (const entry of entries) {
@@ -186,7 +206,11 @@ export function autosize<T extends VListItem = VListItem>(
 
           measuredSizes.set(index, sizeWithGap);
           pendingRemeasure.delete(index);
-          if (!wasMeasured || sizeWithGap !== oldSize) hasNewMeasurements = true;
+          if (!wasMeasured || sizeWithGap !== oldSize) {
+            hasNewMeasurements = true;
+            if (changedLow < 0 || index < changedLow) changedLow = index;
+            if (index > changedHigh) changedHigh = index;
+          }
 
           if (index < firstVisible && sizeWithGap !== oldSize) {
             pendingScrollDelta += sizeWithGap - oldSize;
@@ -202,8 +226,8 @@ export function autosize<T extends VListItem = VListItem>(
 
         const atEnd = isAtEnd();
 
-        // Rebuild prefix sums with new measurements
-        ctx.sizes.rebuild();
+        // Refresh the prefix sums over the measured range only
+        refreshSizes(changedLow, changedHigh);
 
         // Apply scroll correction for items above viewport
         if (pendingScrollDelta) {
@@ -295,6 +319,7 @@ export function autosize<T extends VListItem = VListItem>(
 
       ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
         measuredSizes.set(index, size);
+        refreshSizes(index, index);
       });
 
       ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);

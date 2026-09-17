@@ -1049,6 +1049,12 @@ describe("autosize remeasure on late content", () => {
   let nextSize: number;
   let forceRenders: number;
   let rebuilds: number;
+  // Measurements refresh the size cache through the scoped `invalidate`, data
+  // changes through the full `rebuild`. Most assertions here only care that
+  // the cache was refreshed at all, so count both.
+  let invalidations: number[][];
+  let refreshes: number;
+  let deliverBatch: (entries: ResizeObserverEntry[]) => void;
 
   const entry = (target: Element, blockSize: number): ResizeObserverEntry =>
     ({
@@ -1062,7 +1068,15 @@ describe("autosize remeasure on late content", () => {
   const installObserver = (fires: boolean): void => {
     (global as any).ResizeObserver = class {
       callback: ResizeObserverCallback;
-      constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+      constructor(cb: ResizeObserverCallback) {
+        this.callback = cb;
+        // A real ResizeObserver delivers several entries in one callback;
+        // `observe` here fires one at a time, so keep a handle for the tests
+        // that need a genuine batch.
+        deliverBatch = (entries: ResizeObserverEntry[]): void => {
+          cb(entries, this as unknown as ResizeObserver);
+        };
+      }
       observe(el: Element): void {
         observed.push(el);
         if (fires) this.callback([entry(el, nextSize)], this as unknown as ResizeObserver);
@@ -1096,6 +1110,8 @@ describe("autosize remeasure on late content", () => {
     nextSize = 80;
     forceRenders = 0;
     rebuilds = 0;
+    invalidations = [];
+    refreshes = 0;
     installObserver(true);
     plugin = autosize<TestItem>();
     plugin.setup!(mockCtx.ctx);
@@ -1104,7 +1120,11 @@ describe("autosize remeasure on late content", () => {
       forceRenders++;
       plugin.hooks!.onCommit!(mockCtx.engineState);
     };
-    mockCtx.ctx.sizes.rebuild = () => { rebuilds++; };
+    mockCtx.ctx.sizes.rebuild = () => { rebuilds++; refreshes++; };
+    mockCtx.ctx.sizes.cache.invalidate = (lo: number, hi = lo) => {
+      invalidations.push([lo, hi]);
+      refreshes++;
+    };
   });
 
   afterEach(() => {
@@ -1154,16 +1174,62 @@ describe("autosize remeasure on late content", () => {
     expect(el.style.height).toBe("120px");
   });
 
-  it("a remeasure with an unchanged size does not rebuild the cache", () => {
+  it("a remeasure with an unchanged size does not refresh the cache", () => {
     const { el, img } = renderItem(0);
     commit(0);
-    expect(rebuilds).toBe(1);
+    expect(refreshes).toBe(1);
 
     img.dispatchEvent(new Event("error"));
 
-    expect(rebuilds).toBe(1);
+    expect(refreshes).toBe(1);
     expect(el.style.height).toBe("80px");
     expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
+  });
+
+  it("a measurement batch invalidates only the measured range", () => {
+    renderItem(3, false);
+    commit(3);
+
+    // Scoped to the row that actually changed — never a full rebuild, whose
+    // cost would track the item count rather than the batch size.
+    expect(rebuilds).toBe(0);
+    expect(invalidations).toEqual([[3, 3]]);
+  });
+
+  it("a measurement batch spans the lowest and highest changed index", () => {
+    installObserver(false);
+    plugin.destroy!();
+    plugin = autosize<TestItem>();
+    plugin.setup!(mockCtx.ctx);
+
+    const els = [7, 1, 4].map((i) => renderItem(i, false).el);
+    commit(7, 1, 4);
+    expect(invalidations).toEqual([]);
+
+    deliverBatch(els.map((el) => entry(el, 90)));
+
+    // One scoped invalidation for the whole batch, covering 1 through 7.
+    expect(rebuilds).toBe(0);
+    expect(invalidations).toEqual([[1, 7]]);
+  });
+
+  it("falls back to a full rebuild when a layout plugin remapped the cache", () => {
+    // groups() and grid() key the size cache by layout index and hook
+    // `rebuild` to map into it, so a data index would name the wrong rows.
+    mockCtx.methods.set("_setSizeCacheBase", () => {});
+
+    renderItem(3, false);
+    commit(3);
+
+    expect(invalidations).toEqual([]);
+    expect(rebuilds).toBe(1);
+  });
+
+  it("setMeasuredSize invalidates the item it records", () => {
+    method<(i: number, size: number) => void>("setMeasuredSize")(6, 95);
+
+    expect(rebuilds).toBe(0);
+    expect(invalidations).toEqual([[6, 6]]);
   });
 
   it("media events on unmeasured items are ignored", () => {
@@ -1231,7 +1297,7 @@ describe("autosize remeasure on late content", () => {
     nextSize = 100;
     method<(i?: number) => void>("remeasure")();
 
-    expect(rebuilds).toBeGreaterThanOrEqual(2);
+    expect(refreshes).toBeGreaterThanOrEqual(2);
     expect(a.style.height).toBe("100px");
     expect(b.style.height).toBe("100px");
     expect(method<() => number>("getMeasuredCount")()).toBe(2);

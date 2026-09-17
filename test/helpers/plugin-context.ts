@@ -119,6 +119,8 @@ export function createPluginMockContext<T extends VListItem>(
     },
     getTotal: () => items.length,
     rebuild: () => {},
+    // This mock reads sizes live, so nothing can go stale.
+    invalidate: () => {},
     isVariable: () => typeof itemSizeConfig === "function",
   };
 

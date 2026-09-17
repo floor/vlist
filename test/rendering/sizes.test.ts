@@ -315,6 +315,172 @@ describe("createSizeCache (variable)", () => {
       expect(cache.indexAtOffset(100)).toBe(1);
     });
   });
+
+  // Blocks hold ~√n items, so a list has to be big enough to span several of
+  // them before the two levels are exercised at all.
+  describe("multi-block lists", () => {
+    const TOTAL = 500;
+
+    it("should compute offsets across block boundaries", () => {
+      const cache = createSizeCache(alternatingSize, TOTAL);
+      let expected = 0;
+      for (let i = 0; i < TOTAL; i++) {
+        expect(cache.getOffset(i)).toBe(expected);
+        expected += alternatingSize(i);
+      }
+      expect(cache.getTotalSize()).toBe(expected);
+    });
+
+    it("should find the item at any offset across block boundaries", () => {
+      const cache = createSizeCache(alternatingSize, TOTAL);
+      for (let i = 0; i < TOTAL; i++) {
+        const start = cache.getOffset(i);
+        expect(cache.indexAtOffset(start)).toBe(i);
+        expect(cache.indexAtOffset(start + alternatingSize(i) - 1)).toBe(i);
+      }
+    });
+
+    it("should return the last of several items sharing an offset", () => {
+      // Zero-sized items collapse onto one offset; the search must land on the
+      // last of them, as a single flat prefix-sum search did.
+      const withZeros = (i: number): number => (i >= 100 && i < 110 ? 0 : 50);
+      const cache = createSizeCache(withZeros, TOTAL);
+      expect(cache.indexAtOffset(cache.getOffset(100))).toBe(110);
+    });
+  });
+
+  describe("invalidate", () => {
+    it("should pick up a changed size without a full rebuild", () => {
+      const sizes = new Map<number, number>();
+      const cache = createSizeCache((i) => sizes.get(i) ?? 50, 500);
+      expect(cache.getTotalSize()).toBe(500 * 50);
+
+      sizes.set(300, 150);
+      cache.invalidate(300);
+
+      expect(cache.getTotalSize()).toBe(500 * 50 + 100);
+      expect(cache.getOffset(300)).toBe(300 * 50);
+      expect(cache.getOffset(301)).toBe(300 * 50 + 150);
+      expect(cache.getOffset(499)).toBe(499 * 50 + 100);
+      expect(cache.indexAtOffset(300 * 50 + 149)).toBe(300);
+      expect(cache.indexAtOffset(300 * 50 + 150)).toBe(301);
+    });
+
+    it("should refresh every item in the given range", () => {
+      const sizes = new Map<number, number>();
+      const cache = createSizeCache((i) => sizes.get(i) ?? 50, 500);
+      cache.getTotalSize();
+
+      // One range spanning several blocks, the way a measurement batch does.
+      for (let i = 40; i <= 400; i += 3) sizes.set(i, 80);
+      cache.invalidate(40, 400);
+
+      let expected = 0;
+      for (let i = 0; i < 500; i++) {
+        expect(cache.getOffset(i)).toBe(expected);
+        expected += sizes.get(i) ?? 50;
+      }
+      expect(cache.getTotalSize()).toBe(expected);
+    });
+
+    it("should accumulate several separate invalidations", () => {
+      const sizes = new Map<number, number>();
+      const cache = createSizeCache((i) => sizes.get(i) ?? 50, 500);
+      cache.getTotalSize();
+
+      sizes.set(10, 70);
+      sizes.set(490, 70);
+      cache.invalidate(10);
+      cache.invalidate(490);
+
+      expect(cache.getTotalSize()).toBe(500 * 50 + 40);
+      expect(cache.getOffset(11)).toBe(10 * 50 + 70);
+      expect(cache.getOffset(491)).toBe(491 * 50 + 40);
+    });
+
+    it("should ignore out-of-range and non-numeric indices", () => {
+      const cache = createSizeCache(() => 50, 500);
+      const before = cache.getTotalSize();
+      cache.invalidate(-5);
+      cache.invalidate(500);
+      cache.invalidate(NaN);
+      cache.invalidate(-10, -1);
+      expect(cache.getTotalSize()).toBe(before);
+      expect(cache.getOffset(250)).toBe(250 * 50);
+    });
+
+    it("should be a no-op on an empty list", () => {
+      const cache = createSizeCache(() => 50, 0);
+      cache.invalidate(0);
+      expect(cache.getTotalSize()).toBe(0);
+      expect(cache.indexAtOffset(10)).toBe(0);
+    });
+
+    it("should be a no-op on a fixed cache", () => {
+      const cache = createSizeCache(50, 100);
+      cache.invalidate(0, 99);
+      expect(cache.getTotalSize()).toBe(5000);
+      expect(cache.getOffset(10)).toBe(500);
+    });
+
+    it("should match a full rebuild after random edits", () => {
+      const TOTAL = 700;
+      const sizes = new Map<number, number>();
+      const cache = createSizeCache((i) => sizes.get(i) ?? 50, TOTAL);
+      const reference = createSizeCache((i) => sizes.get(i) ?? 50, TOTAL);
+
+      let seed = 12345;
+      const next = (n: number): number => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed % n;
+      };
+
+      for (let round = 0; round < 20; round++) {
+        const lo = next(TOTAL);
+        const hi = Math.min(TOTAL - 1, lo + next(80));
+        for (let i = lo; i <= hi; i++) sizes.set(i, 10 + next(200));
+        cache.invalidate(lo, hi);
+        reference.rebuild(TOTAL);
+
+        expect(cache.getTotalSize()).toBe(reference.getTotalSize());
+        for (let i = 0; i <= TOTAL; i += 17) {
+          expect(cache.getOffset(i)).toBe(reference.getOffset(i));
+        }
+        const totalSize = reference.getTotalSize();
+        for (let o = 0; o < totalSize; o += 311) {
+          expect(cache.indexAtOffset(o)).toBe(reference.indexAtOffset(o));
+        }
+      }
+    });
+
+    // The point of the whole structure: a measurement batch used to cost one
+    // size read per item in the list, so scrolling a 100K-item autosize list
+    // rebuilt 100K prefix sums per batch.
+    it("should not read more sizes as the list grows", () => {
+      const reads = (total: number, refresh: (c: SizeCache) => void): number => {
+        let count = 0;
+        const cache = createSizeCache(() => { count++; return 50; }, total);
+        cache.getTotalSize();
+        count = 0;
+        refresh(cache);
+        cache.getTotalSize();
+        return count;
+      };
+
+      const batch = (c: SizeCache): void => { c.invalidate(5_000, 5_020); };
+
+      const small = reads(10_000, batch);
+      const large = reads(100_000, batch);
+
+      // Same batch, ten times the list, same cost.
+      expect(large).toBe(small);
+      expect(large).toBeLessThanOrEqual(2 * 512);
+
+      // A full rebuild is what that batch used to cost.
+      expect(reads(10_000, (c) => c.rebuild(10_000))).toBe(10_000);
+      expect(reads(100_000, (c) => c.rebuild(100_000))).toBe(100_000);
+    });
+  });
 });
 
 // =============================================================================
