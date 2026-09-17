@@ -22,6 +22,7 @@ import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
 import { neutralizeFocusable } from "../../core/dom";
+import { createScrollPaddingReader } from "../../utils/scroll-padding";
 
 import {
   createGroupLayout,
@@ -1027,6 +1028,12 @@ export function groups<T extends VListItem = VListItem>(
 
       const mainPadStart = ctx.config.startPadding;
       const mainPadEnd = mainAxisPadding - mainPadStart;
+
+      // page() keeps a band of the window clear at each end. This hook and the
+      // scrollToIndex one below replace page's, so they fold the band in;
+      // without page it reads zero and the geometry is unchanged.
+      const readScrollPadding = createScrollPaddingReader(ctx);
+
       ctx.hooks.method("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
         const pos = gridItemPositions?.get(layoutIndex);
@@ -1034,11 +1041,17 @@ export function groups<T extends VListItem = VListItem>(
         const size = pos?.h ?? sizeCache.getSize(layoutIndex);
         const cs = engineState.containerSize;
         const sp = scroll.getPixelEquivalent();
+        const pagePad = readScrollPadding();
+        const padStart = mainPadStart + pagePad.start;
+        const padEnd = mainPadEnd + pagePad.end;
+        // page() scrolls the window, so the list may legitimately sit below the
+        // viewport top by the start band. Without page the floor stays 0.
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
 
-        if (offset < sp + mainPadStart) {
-          ctx.scroll.to(Math.max(0, offset - mainPadStart));
-        } else if (offset + size + mainPadEnd > sp + cs) {
-          ctx.scroll.to(offset + size + mainPadEnd - cs);
+        if (offset < sp + padStart) {
+          ctx.scroll.to(Math.max(minPos, offset - padStart));
+        } else if (offset + size + padEnd > sp + cs) {
+          ctx.scroll.to(offset + size + padEnd - cs);
         }
       });
 
@@ -1071,7 +1084,8 @@ export function groups<T extends VListItem = VListItem>(
 
 
         // Bottom padding to keep clear when aligning the last item to the end.
-        const endPad = gridItemPositions ? mainAxisPadding : 0;
+        const pagePad = readScrollPadding();
+        const endPad = (gridItemPositions ? mainAxisPadding : 0) + pagePad.end;
 
         // Masonry: align:end targets the group's tallest-lane bottom, not the
         // target item's own bottom (which may be in a shorter lane). This lets
@@ -1086,15 +1100,16 @@ export function groups<T extends VListItem = VListItem>(
         let pos: number;
         switch (align) {
           case "center":
-            pos = offset - (cs - itemSize) / 2;
+            pos = offset - pagePad.start - (cs - pagePad.start - pagePad.end - itemSize) / 2;
             break;
           case "end":
             pos = endBottom - cs + endPad;
             break;
           default:
-            pos = offset;
+            pos = offset - pagePad.start;
         }
-        pos = Math.max(0, Math.min(pos, maxScroll));
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+        pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
 
         if (behavior === "smooth" && duration && duration > 0) {
           ctx.scroll.smoothTo(pos, duration);

@@ -15,6 +15,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import { createScrollPaddingReader } from "../../utils/scroll-padding";
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
 import type { MasonryLayout } from "./types";
@@ -479,6 +480,11 @@ export function masonry<T extends VListItem = VListItem>(
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);
 
+      // page() keeps a band of the window clear at each end. Masonry replaces
+      // page's scroll computations, so it folds the band into its own;
+      // without page it reads zero and the geometry is unchanged.
+      const readScrollPadding = createScrollPaddingReader(ctx);
+
       // Replace render pipeline
       ctx.render.setFn(masonryRenderIfNeeded, masonryForceRender);
 
@@ -521,17 +527,20 @@ export function masonry<T extends VListItem = VListItem>(
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
+        const pagePad = readScrollPadding();
 
-        let pos = placement.y;
+        let pos = placement.y - pagePad.start;
         if (align === "center") {
-          pos = placement.y - containerSize / 2 + placement.size / 2;
+          pos = placement.y - pagePad.start
+            - (containerSize - pagePad.start - pagePad.end - placement.size) / 2;
         } else if (align === "end") {
-          pos = placement.y - containerSize + placement.size;
+          pos = placement.y - containerSize + placement.size + pagePad.end;
           if (index >= engineState.totalItems - 1 && placement.y + placement.size > maxScroll) {
-            pos = maxScroll;
+            pos = maxScroll + pagePad.end;
           }
         }
-        pos = Math.max(0, Math.min(pos, maxScroll));
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+        pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
 
         if (behavior === "smooth" && duration && duration > 0) {
           ctx.scroll.smoothTo(pos, duration);
@@ -549,18 +558,24 @@ export function masonry<T extends VListItem = VListItem>(
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
+        const pagePad = readScrollPadding();
+        const padStart = mainPadStart + pagePad.start;
+        const padEnd = mainPadEnd + pagePad.end;
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
+        // page() scrolls the window, so the list may legitimately sit below the
+        // viewport top by the start band. Without page the floor stays 0.
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
 
-        if (itemTop - mainPadStart < scrollPos) {
-          ctx.scroll.to(Math.max(0, itemTop - mainPadStart));
-        } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
+        if (itemTop - padStart < scrollPos) {
+          ctx.scroll.to(Math.max(minPos, itemTop - padStart));
+        } else if (itemBottom + padEnd > scrollPos + containerSize) {
           const lastLane = laneItems[layout.columns - 1];
           const isEndTarget = lastLane && lastLane.length > 0 && index === lastLane[lastLane.length - 1];
           if (isEndTarget && itemTop >= maxScroll) {
-            ctx.scroll.to(maxScroll);
+            ctx.scroll.to(maxScroll + pagePad.end);
           } else {
-            ctx.scroll.to(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+            ctx.scroll.to(Math.min(itemBottom + padEnd - containerSize, maxScroll + pagePad.end));
           }
         }
       });

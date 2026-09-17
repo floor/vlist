@@ -205,6 +205,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `page({ scrollPadding })` survives `groups()` and `masonry()`. page() applied the
+  caller's band in its own `_scrollItemIntoView` and `setToPosFn`, but both layout
+  plugins replace those — they are the only ones that know where an entry sits, and
+  they are seated later (priority 10 against page's 5). The band silently vanished,
+  so keyboard focus and `scrollToIndex` parked items under the sticky header the
+  padding existed to clear.
+
+  page() now publishes the resolved band through a `_getScrollPadding` hook, and
+  `groups()` and `masonry()` fold it into their own geometry. The band is read on
+  every call, so a function padding that measures a sticky header still re-measures.
+  Without page() the hook is absent, it reads zero, and the layout maths is unchanged.
+
 - `createVList`'s JSDoc says why an explicit item type argument returns a list
   with no plugin methods, and what to do instead. The caveat lived only in a type
   test, while `createVList<Row>(…)` is the first thing a `VListItem` constraint
