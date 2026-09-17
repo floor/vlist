@@ -11,7 +11,7 @@
  * published by `selection()`, and keying on it is why `groups()` used to render
  * `listitem` for an `a11y()`-only list.
  *
- * It has to be resolved on the render path: groups sets up at priority 10, ahead
+ * It has to be resolved on the render path: groups sets up at priority 11, ahead
  * of selection (50) and a11y (55).
  */
 

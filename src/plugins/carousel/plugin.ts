@@ -532,10 +532,11 @@ export function carousel<T extends VListItem = VListItem>(
   return {
     name: "carousel",
     priority: 10,
-    // Layout tier, like groups, and both at priority 10 — so setup order was
-    // array order and the pair broke differently depending on which the caller
-    // wrote first. This plugin assigns its size-cache methods directly; groups
-    // calls setSizeConfig, which Object.assigns a fresh cache over them.
+    // Layout tier, like groups. They used to share priority 10 — so setup
+    // order was array order and the pair broke differently depending on which
+    // the caller wrote first. This plugin assigns its size-cache methods
+    // directly; groups calls setSizeConfig, which Object.assigns a fresh
+    // cache over them.
     conflicts: ["groups"],
 
     setup(ctx: PluginContext<T>): void {

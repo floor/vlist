@@ -239,6 +239,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   accessor `data()` put in place, and `getItemAt` reads the loaded item rather
   than the raw array an adapter leaves empty.
 
+- `groups()` with `grid()` or `masonry()` no longer depends on plugin array order.
+  Both layout plugins sat at priority 10 with groups, so setup was the order the
+  caller wrote. Groups resolved `getGridLayout` / `getMasonryLayout` in `setup()`;
+  listed first it never saw them, the layout plugin then overwrote render and the
+  size cache, and every group header vanished with no error. Groups is now
+  priority 11 — after the layout plugins — so it wraps the size cache and takes
+  over render in either order. `test/integration/groups-layout-order.test.ts`
+  builds both orders for grid and for masonry and asserts identical header and
+  row counts.
+
 - A production browser bundle no longer logs plugin `setup()` failures. The guard
   treated a missing `process` as development (`typeof process === "undefined" ||
   NODE_ENV !== "production"`), and the shipped builds never defined `NODE_ENV` —
