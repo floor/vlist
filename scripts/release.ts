@@ -7,8 +7,9 @@
  * What it does:
  *   1. Resolves the source branch from the version being released
  *      (`next` for 3.x, `staging` for 2.x) and verifies a clean working tree
- *   2. Bumps the version in package.json (patch by default; a prerelease
- *      graduates to its stable version rather than incrementing past it)
+ *   2. Bumps the version in package.json (patch by default). A prerelease is
+ *      never bumped: its stable release is named explicitly, so a bare
+ *      `bun run release` on `next` cannot cut 3.0.0 by accident
  *   3. Updates the version badge in README.md
  *   4. Updates the CHANGELOG.md header stats (commit count, days, date range)
  *   5. Commits `chore(release): vX.Y.Z` and pushes the source branch
@@ -109,14 +110,18 @@ export const parseVersion = (version: string): ParsedVersion => {
 const formatStable = (v: ParsedVersion): string => `${v.major}.${v.minor}.${v.patch}`;
 
 /**
- * Increment a stable version, or graduate a prerelease to the version it
- * already names. `3.0.0-next.2` + any bump is `3.0.0`, not `4.0.0` — the
- * major bump happened when the prerelease line started, and cutting the
- * stable release means dropping the suffix.
+ * Increment a stable version. A prerelease is refused rather than bumped: every
+ * bump of `3.0.0-next.2` would mean something different (`3.0.0`, `3.1.0`,
+ * `4.0.0`), and a bare `bun run release` on `next` must never be the command
+ * that cuts 3.0.0. Its stable release is named: `bun run release 3.0.0`.
  */
 export const bumpVersion = (version: string, part: BumpType): string => {
   const v = parseVersion(version);
-  if (v.prerelease !== null) return formatStable(v);
+  if (v.prerelease !== null) {
+    throw new Error(
+      `v${version} is a prerelease; name the stable release explicitly: bun run release ${formatStable(v)}`,
+    );
+  }
   if (part === "major") return `${v.major + 1}.0.0`;
   if (part === "minor") return `${v.major}.${v.minor + 1}.0`;
   return `${v.major}.${v.minor}.${v.patch + 1}`;
@@ -167,9 +172,29 @@ export const assertCurrentBranch = (
   }
 };
 
+/**
+ * Order two versions. A stable version is above its own prereleases
+ * (`3.0.0` > `3.0.0-next.2`); two prereleases of the same version compare equal,
+ * which is enough here because a release is always stable.
+ */
+export const compareVersions = (a: string, b: string): number => {
+  const x = parseVersion(a);
+  const y = parseVersion(b);
+  if (x.major !== y.major) return x.major - y.major;
+  if (x.minor !== y.minor) return x.minor - y.minor;
+  if (x.patch !== y.patch) return x.patch - y.patch;
+  if (x.prerelease === y.prerelease || (x.prerelease !== null && y.prerelease !== null)) return 0;
+  return x.prerelease === null ? 1 : -1;
+};
+
 export const resolveNewVersion = (current: string, args: ReleaseArgs): string => {
   const next = args.kind === "exact" ? args.version : bumpVersion(current, args.bumpType);
   assertStableRelease(next);
+  // npm refuses a version it has, so a repeat or a step back fails at publish —
+  // after the release commit, the PR and the tag. Refuse it before anything is written.
+  if (compareVersions(next, current) <= 0) {
+    throw new Error(`v${next} is not above the current v${current}`);
+  }
   return next;
 };
 
@@ -287,10 +312,7 @@ const main = async (): Promise<void> => {
 
   pkg.version = newVersion;
   await Bun.write("package.json", JSON.stringify(pkg, null, 2) + "\n");
-  const graduated = parseVersion(oldVersion).prerelease !== null;
-  console.log(
-    `  ✓ package.json: ${oldVersion} → ${newVersion}${graduated ? " (prerelease graduation)" : ""}`,
-  );
+  console.log(`  ✓ package.json: ${oldVersion} → ${newVersion}`);
 
   // ── Update README version badge ────────────────────────────────────────────
   step(3, "Updating README.md...");

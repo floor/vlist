@@ -51,8 +51,9 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
 2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging]`.
    The script derives the source branch from the version being released (`next`
    for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
-   `package.json` (a prerelease such as `3.0.0-next.2` graduates to `3.0.0`
-   rather than incrementing past it), updates the README version badge and
+   `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
+   stable release is named, `bun run release 3.0.0` — and a version not above the
+   current one is refused), updates the README version badge and
    CHANGELOG stats line, commits `chore(release): vX.Y.Z`, pushes the source
    branch, opens a PR onto `main`, waits for it to merge, then tags `vX.Y.Z` on
    `main`. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
@@ -89,5 +90,5 @@ and `git tag -d vX.Y.Z-next.N`), and tag the fixed commit with the same version.
 **Once npm has a version, never reuse it**: bump to the next `-next.N` instead.
 
 **Promotion** — the final `X.Y.Z` is cut from the integration branch with
-`bun run release` (`next → main` for 3.x). Do not merge into `staging` first;
+`bun run release X.Y.Z` (`next → main` for 3.x). Do not merge into `staging` first;
 `staging` is the 2.x maintenance line.

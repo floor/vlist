@@ -223,8 +223,9 @@ released: `next` for 3.x, `staging` for 2.x. `--from` confirms that branch; it
 cannot send 3.x through `staging`.
 
 1. Verifies you're on the source branch with a clean tree, pulls latest
-2. Bumps version in `package.json`. A prerelease (`3.0.0-next.2`) graduates to
-   its stable version (`3.0.0`) rather than incrementing past it
+2. Bumps version in `package.json`. A prerelease (`3.0.0-next.2`) is never
+   bumped: its stable release is named explicitly (`bun run release 3.0.0`), and
+   a version not above the current one is refused
 3. Updates README version badge and changelog stats
 4. Commits `chore(release): vX.Y.Z` and pushes the source branch
 5. Creates PR `<source> → main` via `gh` CLI

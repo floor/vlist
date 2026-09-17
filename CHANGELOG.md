@@ -198,10 +198,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Fixed
 
 - `bun run release` can cut 3.0.0 from `next`. It refused any branch but `staging`,
-  which is the frozen 2.x line, and a `3.0.0-next.N` version bumped as major would
-  have become 4.0.0. The source branch is now derived from the version being
-  released (`next` for 3.x, `staging` for 2.x), a prerelease graduates to its
-  stable version, and `--from` confirms the branch rather than hard-coding it.
+  which is the frozen 2.x line, and its version split misread a prerelease: from
+  `3.0.0-next.N` the default bump gave `3.0.NaN`, and `minor` and `major` gave
+  `3.1.0` and `4.0.0`. The source branch is now derived from the version being
+  released (`next` for 3.x, `staging` for 2.x) and `--from` confirms it. A
+  prerelease is never bumped — its stable release is named, `bun run release
+  3.0.0` — and a version not above the current one is refused before anything is
+  written.
 
 - `carousel()` and `sortable()` no longer declare a conflict with `scale`, a plugin 3.0 removed. Carousel's only conflict was that one, so it now declares none; sortable keeps grid, masonry, table and tree. Two tests asserted the stale conflicts and had outlived the plugin as well.
 

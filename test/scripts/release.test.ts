@@ -2,8 +2,9 @@
  * vlist — Release script
  *
  * The 3.0 line integrates on `next` and the 2.x line stays on `staging`.
- * These tests pin the branch derivation, prerelease graduation, and README
- * rewrite so cutting 3.0.0 cannot fail at the first guard again.
+ * These tests pin the branch derivation, the explicit stable release of a
+ * prerelease, and the README rewrite — so cutting 3.0.0 cannot fail at the
+ * first guard again, and cannot happen by a bare `bun run release` either.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -12,6 +13,7 @@ import {
   assertCurrentBranch,
   assertStableRelease,
   bumpVersion,
+  compareVersions,
   currentBranchLabel,
   execErrorMessage,
   parseArgs,
@@ -55,10 +57,26 @@ describe("bumpVersion", () => {
     expect(bumpVersion("2.8.1", "major")).toBe("3.0.0");
   });
 
-  it("graduates a prerelease to its stable version for any bump", () => {
-    expect(bumpVersion("3.0.0-next.2", "patch")).toBe("3.0.0");
-    expect(bumpVersion("3.0.0-next.2", "minor")).toBe("3.0.0");
-    expect(bumpVersion("3.0.0-next.2", "major")).toBe("3.0.0");
+  it("refuses to bump a prerelease and names the explicit command", () => {
+    for (const part of ["patch", "minor", "major"] as const) {
+      expect(() => bumpVersion("3.0.0-next.2", part)).toThrow(
+        "v3.0.0-next.2 is a prerelease; name the stable release explicitly: bun run release 3.0.0",
+      );
+    }
+  });
+});
+
+describe("compareVersions", () => {
+  it("orders by major, minor, then patch", () => {
+    expect(compareVersions("3.0.0", "2.8.1")).toBeGreaterThan(0);
+    expect(compareVersions("2.9.0", "2.10.0")).toBeLessThan(0);
+    expect(compareVersions("2.8.1", "2.8.1")).toBe(0);
+  });
+
+  it("puts a stable version above its own prereleases", () => {
+    expect(compareVersions("3.0.0", "3.0.0-next.2")).toBeGreaterThan(0);
+    expect(compareVersions("3.0.0-next.2", "3.0.0")).toBeLessThan(0);
+    expect(compareVersions("2.8.1", "3.0.0-next.2")).toBeLessThan(0);
   });
 });
 
@@ -132,9 +150,18 @@ describe("resolveNewVersion", () => {
     );
   });
 
-  it("graduates 3.0.0-next.2 to 3.0.0", () => {
-    expect(resolveNewVersion("3.0.0-next.2", { kind: "bump", bumpType: "major", from: null })).toBe(
-      "3.0.0",
+  it("will not cut 3.0.0 from a bare bump on a prerelease", () => {
+    expect(() =>
+      resolveNewVersion("3.0.0-next.2", { kind: "bump", bumpType: "patch", from: null }),
+    ).toThrow("name the stable release explicitly");
+  });
+
+  it("refuses a version that is not above the current one", () => {
+    expect(() => resolveNewVersion("2.8.1", { kind: "exact", version: "2.8.1", from: null })).toThrow(
+      "v2.8.1 is not above the current v2.8.1",
+    );
+    expect(() => resolveNewVersion("2.8.1", { kind: "exact", version: "2.8.0", from: null })).toThrow(
+      "is not above",
     );
   });
 
