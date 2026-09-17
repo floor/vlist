@@ -31,7 +31,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun test` — run all tests
 - `bun test --concurrent` — run all tests in parallel (~2x faster)
 - `bun test --changed` — run only tests affected by uncommitted changes
-- `bun test --changed=staging` — run tests affected by changes since staging
+- `bun test --changed=next` — run tests affected by changes since `next`
 - `bun test test/plugins/grid/` — run one folder
 - `bun test --watch` — watch mode
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
@@ -182,24 +182,30 @@ Conventional Commits: `type(scope): description`
 
 ## Git Workflow
 
-**Working branch is `staging`.** The `main` branch is protected and requires a pull request.
+**Working branch is `next`.** The 3.0 line integrates there. `main` is the released
+2.x line and is protected. `staging` is the frozen 2.x maintenance branch: it holds
+nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
 
-- ❌ **NEVER push directly to `main`** — it is protected on GitHub and will be rejected
-- ❌ **NEVER commit on `main`** — always work on `staging` or feature branches
-- ❌ **NEVER commit or push without explicit user permission**
-- ✅ Push to `staging`: `git push origin staging`
-- ✅ Merge to `main` via PR: `staging` → `main`
-- ✅ Feature branches branch off `staging`, merge back to `staging`
+- ❌ **NEVER commit or push to `main`** — it is protected and will be rejected
+- ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
+- ✅ Feature branches branch off `next` and merge back into `next` through a PR
+- ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
+- ✅ A PR merges only after the gate in `.agents/agents.yaml` passes on a clean export
+
+The boundary is at publication, not at authorship: writing code and proposing it is
+the work, while anything the outside world sees as final — a merge, a tag, a release,
+a deploy, a public post — is a decision someone takes deliberately. The same line
+applies to every contributor, human or agent.
 
 **Before any git operation**, verify you're on the right branch:
 ```
-git branch --show-current  # Should show 'staging' or a feature branch, NEVER 'main'
+git branch --show-current  # a feature branch or `next`, NEVER `main`
 ```
 
 ## CI/CD
 
 ### CI (`ci.yml`)
-Runs on push to `staging`/`main` and on PRs:
+Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
 - Typecheck → Test → Coverage threshold (85%) → Build → Bundle size
 
 ### Publish (`publish.yml`)
@@ -220,6 +226,11 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 6. Polls every 10s until the PR is merged (max 10 min)
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
 8. Returns to `staging`
+
+This describes the 2.x path, and it is accurate for a 2.8.x patch. It cannot cut
+3.0.0: the script refuses to run on any branch but `staging`, while the 3.0 line
+integrates on `next`. Tracked in #200 — fix the script before attempting a 3.0
+release, not during one.
 
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:
