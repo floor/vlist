@@ -73,6 +73,23 @@ describe("method bus — public names", () => {
     list.destroy();
   });
 
+  it("does not log a failed setup when NODE_ENV is production", () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const boom: VListPlugin<TestItem> = { name: "boom", setup: () => { throw new Error("kaboom"); } };
+      const list = createVList<TestItem>(
+        { container, items: createTestItems(5) as TestItem[], item: { height: 40, template: simpleTemplate } },
+        [boom],
+      );
+      expect(console.error).not.toHaveBeenCalled();
+      list.destroy();
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
   it("allows plugins to override an internal underscore name", () => {
     const spy = errorSpy();
     const provider: VListPlugin<TestItem> = { name: "provider", setup: (ctx) => ctx.hooks.method("_shared", () => "provider") };

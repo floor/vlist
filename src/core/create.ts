@@ -564,7 +564,11 @@ export function createCore<T extends VListItem = VListItem>(
           // The event fires before createVList returns, so a listener attached
           // afterwards cannot hear it: without this the list comes back half
           // wired, with no throw and nothing logged.
-          if (typeof process === "undefined" || process.env?.NODE_ENV !== "production") {
+          //
+          // `process.env.NODE_ENV` (no `typeof process`, no optional chaining)
+          // is what the dist define replaces. Treating a missing `process` as
+          // development made every browser bundle log in production.
+          if (process.env.NODE_ENV !== "production") {
             console.error(`[vlist] plugin "${plugin.name}" setup failed`, error);
           }
           emitter.emit("error", { error, context: `plugin:setup:${plugin.name}` });

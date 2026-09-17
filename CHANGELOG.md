@@ -205,6 +205,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- A production browser bundle no longer logs plugin `setup()` failures. The guard
+  treated a missing `process` as development (`typeof process === "undefined" ||
+  NODE_ENV !== "production"`), and the shipped builds never defined `NODE_ENV` —
+  only the size-measurement builds did — so the first disjunct was always true in
+  a browser and the built library logged in production. The guard now matches the
+  emitter (`process.env.NODE_ENV !== "production"`) and the dist builds define
+  `NODE_ENV`, so the log is dropped from a production bundle.
+
 - `bun run release` can cut 3.0.0 from `next`. It refused any branch but `staging`,
   which is the frozen 2.x line, and its version split misread a prerelease: from
   `3.0.0-next.N` the default bump gave `3.0.NaN`, and `minor` and `major` gave

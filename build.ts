@@ -11,6 +11,14 @@ async function build() {
   const totalStart = performance.now();
   console.log("Building vlist...\n");
 
+  // Shipped browser bundles have no `process`. Without this replace, a
+  // `process.env.NODE_ENV !== "production"` guard either always logs or
+  // throws; with it, the production log is dropped. Watch builds keep
+  // development so setup failures still print.
+  const define = {
+    "process.env.NODE_ENV": isDev ? '"development"' : '"production"',
+  };
+
   // Clean dist folder before building to avoid stale files
   const cleanStart = performance.now();
   if (!isDev) {
@@ -43,6 +51,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "index.js",
+    define,
   });
 
   if (!bundleResult.success) {
@@ -66,6 +75,7 @@ async function build() {
       entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
       format: "esm", target: "browser", minify: !isDev,
       sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
+      define,
     });
     if (!result.success) {
       for (const log of result.logs) console.error(log);
@@ -76,9 +86,13 @@ async function build() {
   await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
 
   for (const name of ["index", "native", "synthetic"]) {
-    const hasDriver = (await Bun.file(`./dist/${name}.js`).text()).includes("pan-x pinch-zoom");
+    const text = await Bun.file(`./dist/${name}.js`).text();
+    const hasDriver = text.includes("pan-x pinch-zoom");
     if (hasDriver !== (name === "synthetic")) {
       throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
+    }
+    if (name !== "native" && text.includes("setup failed")) {
+      throw new Error(`Production dist/${name}.js still logs plugin setup failures`);
     }
   }
 
@@ -97,6 +111,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "config.js",
+    define,
   });
 
   if (!configResult.success) {
@@ -129,6 +144,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "internals.js",
+    define,
   });
 
   if (!internalsResult.success) {
