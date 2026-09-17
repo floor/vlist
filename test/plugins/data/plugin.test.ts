@@ -667,8 +667,12 @@ describe("async - onResize Hook", () => {
 // Network Recovery — online event
 // =============================================================================
 
+// `online` is dispatched on the one `window` that every live data() plugin
+// listens to, so these tests reach other tests' adapters. They are `it.serial`
+// (not `describe.serial`, which Bun 1.4 does not honour) so nothing else is in
+// flight while the event fans out.
 describe("async - Network Recovery", () => {
-  it("should not crash when 'online' event fires", async () => {
+  it.serial("should not crash when 'online' event fires", async () => {
     const adapter = createMockAdapter();
     const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter({
@@ -686,7 +690,7 @@ describe("async - Network Recovery", () => {
     }).not.toThrow();
   });
 
-  it("should not call ensureRange on 'online' when destroyed", async () => {
+  it.serial("should not call ensureRange on 'online' when destroyed", async () => {
     const adapter = createMockAdapter();
     // Use autoLoad: false so the initial queueMicrotask path is skipped.
     // We mark the list as destroyed before dispatching 'online' to verify
@@ -710,7 +714,7 @@ describe("async - Network Recovery", () => {
     expect(adapter.read).not.toHaveBeenCalled();
   });
 
-  it("should clean up online listener on destroy", () => {
+  it.serial("should clean up online listener on destroy", () => {
     const adapter = createMockAdapter();
     const plugin = dataPlugin({ adapter });
     const { ctx, destroyHandlers } = createContextWithRealEmitter();

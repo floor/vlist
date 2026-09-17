@@ -11,11 +11,11 @@
  * right. Nothing asserted a grid's public total, which is why it survived.
  */
 
-import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
-import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
+import type { VListPlugin, PluginContext } from "../../src/core/types";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
 import { grid } from "../../src/plugins/grid/plugin";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
@@ -35,54 +35,54 @@ afterAll(() => {
 });
 afterAll(() => geometry.assertRestored());
 
-let list: VList<TestItem> | null = null;
-let container: HTMLElement | null = null;
-
-afterEach(() => {
-  list?.destroy();
-  list = null;
-  container?.remove();
-  container = null;
-});
-
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("grid — the public total is the item count", () => {
   it("reports items, not rows", async () => {
-    container = createContainer({ width: 300, height: 400 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 400 });
+    const list = createVList<TestItem>(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [grid({ columns: 3 })],
     );
-    await tick(0);
-    await tick(40);
+    try {
+      await tick(0);
+      await tick(40);
 
-    // Was 34: ceil(100 / 3) rows.
-    expect(list.total).toBe(100);
-    // The accessor always took item indices; now the total agrees with it.
-    expect(list.getItemAt(99)?.id).toBe(100);
-    expect(list.items.length).toBe(100);
+      // Was 34: ceil(100 / 3) rows.
+      expect(list.total).toBe(100);
+      // The accessor always took item indices; now the total agrees with it.
+      expect(list.getItemAt(99)?.id).toBe(100);
+      expect(list.items.length).toBe(100);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 
   it("agrees with a plain list given the same items", async () => {
-    container = createContainer({ width: 300, height: 400 });
+    const plainContainer = createContainer({ width: 300, height: 400 });
     const plain = createVList<TestItem>(
-      { container, items: createTestItems(60), item: { height: 40, template: simpleTemplate } },
+      { container: plainContainer, items: createTestItems(60), item: { height: 40, template: simpleTemplate } },
       [],
     );
     const plainTotal = plain.total;
     plain.destroy();
-    container.remove();
+    plainContainer.remove();
 
-    container = createContainer({ width: 300, height: 400 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 400 });
+    const list = createVList<TestItem>(
       { container, items: createTestItems(60), item: { height: 40, template: simpleTemplate } },
       [grid({ columns: 4 })],
     );
-    await tick(0);
-    await tick(40);
+    try {
+      await tick(0);
+      await tick(40);
 
-    expect(list.total).toBe(plainTotal);
+      expect(list.total).toBe(plainTotal);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 
   it("publishes the same number through _getTotal, which plugins read", async () => {
@@ -101,31 +101,41 @@ describe("grid — the public total is the item count", () => {
       },
     };
 
-    container = createContainer({ width: 300, height: 400 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 400 });
+    const list = createVList<TestItem>(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [grid({ columns: 3 }), inspect],
     );
-    await tick(0);
+    try {
+      await tick(0);
 
-    // null here means grid never published the hook at all, which is what it did
-    // before: selection, snapshots and the ARIA resolvers all ask through it.
-    expect(seen).toBe(100);
+      // null here means grid never published the hook at all, which is what it did
+      // before: selection, snapshots and the ARIA resolvers all ask through it.
+      expect(seen).toBe(100);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 
   it("still renders in row space — the engine is untouched", async () => {
-    container = createContainer({ width: 300, height: 400 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 400 });
+    const list = createVList<TestItem>(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [grid({ columns: 3 })],
     );
-    await tick(0);
-    await tick(40);
+    try {
+      await tick(0);
+      await tick(40);
 
-    // A 400px viewport of 40px rows shows ~10 rows, so ~30 items, not 100.
-    const rendered = container.querySelectorAll("[data-index]").length;
-    expect(rendered).toBeGreaterThan(0);
-    expect(rendered).toBeLessThan(100);
+      // A 400px viewport of 40px rows shows ~10 rows, so ~30 items, not 100.
+      const rendered = container.querySelectorAll("[data-index]").length;
+      expect(rendered).toBeGreaterThan(0);
+      expect(rendered).toBeLessThan(100);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 
   it("reports the adapter's total under data()", async () => {
@@ -137,16 +147,21 @@ describe("grid — the public total is the item count", () => {
       })),
     } as unknown as VListAdapter<TestItem>;
 
-    container = createContainer({ width: 300, height: 400 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 400 });
+    const list = createVList<TestItem>(
       { container, item: { height: 40, template: simpleTemplate } },
       [grid({ columns: 3 }), dataPlugin({ adapter })],
     );
-    await tick(0);
-    await tick(80);
+    try {
+      await tick(0);
+      await tick(80);
 
-    // data() owns engineState.totalItems under an adapter, so the grid's total
-    // must follow it rather than a row count derived from it.
-    expect(list.total).toBe(100);
+      // data() owns engineState.totalItems under an adapter, so the grid's total
+      // must follow it rather than a row count derived from it.
+      expect(list.total).toBe(100);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 });

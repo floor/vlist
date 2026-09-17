@@ -144,6 +144,9 @@ createVList(config, [       → VList instance
 # All tests
 bun test
 
+# All tests in parallel (~2x faster) — also gated in CI
+bun test --concurrent
+
 # Specific file
 bun test test/plugins/grid/plugin.test.ts
 
@@ -155,6 +158,25 @@ bun test --watch
 ```
 
 Tests use [Bun's test runner](https://bun.sh/docs/cli/test) with JSDOM for DOM testing. Every domain has corresponding tests mirroring the `src/` structure. Plugin tests use the `createPluginMockContext()` helper from `test/helpers/plugin-context.ts`.
+
+#### Writing tests that survive `--concurrent`
+
+`--concurrent` runs the tests **within each file** at the same time, so a test
+that reaches module-level state is reading and writing its neighbours'. CI runs
+the suite both ways; a test that passes alone and fails interleaved fails the
+build. Two rules keep it green:
+
+1. **A test owns what it builds.** Create the list, container and fixture inside
+   the test (or in a helper that returns them) and tear it down in a `finally`.
+   Do not park a `let list` / `let container` at module scope with an
+   `afterEach` that destroys it — under concurrency that hook fires while
+   another test is still using it.
+2. **If the test owns a process global, mark it `it.serial` / `test.serial`**
+   and say which global in a comment. `document.activeElement`, an
+   `HTMLElement.prototype` geometry getter driven by a mutable variable, a
+   single mocked `ResizeObserver` callback, and `window.dispatchEvent(...)` are
+   all one-per-process — no amount of fixture hygiene isolates them. Note that
+   `describe.serial` is **not** honoured by Bun 1.4; only the per-test form is.
 
 ### Building
 

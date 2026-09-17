@@ -1,10 +1,18 @@
-import {afterAll, beforeAll, beforeEach, expect, test} from 'bun:test';
+import {afterAll, beforeAll, beforeEach, expect, test as baseTest} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
 import {createVList as createNative} from '../../../src/core/create';
 import {createVList as createSynthetic} from '../../../src/synthetic';
 import {carousel} from '../../../src/plugins/carousel/plugin';
 import type {PluginContext} from '../../../src/core/types';
 import type {CarouselMethods, CarouselState} from '../../../src/plugins/carousel/plugin';
+
+/**
+ * Serial: `width`/`height` are read through `HTMLElement.prototype` getters, and
+ * the mocked ResizeObserver and rAF queue below each hold a single callback for
+ * the whole process. Interleaving these tests under `bun test --concurrent`
+ * would have one variant resize and frame another's list.
+ */
+const test = baseTest.serial;
 
 let width=400, height=250;
 let observer: ResizeObserverCallback;

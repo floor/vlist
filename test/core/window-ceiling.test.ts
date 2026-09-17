@@ -15,13 +15,21 @@
  * existed to remove.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it as baseIt, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, createTestItems, type TestItem } from "../helpers/factory";
 import { OVERSCAN } from "../../src/constants";
+
+/**
+ * Serial: `viewportHeight` below is read through an `HTMLElement.prototype`
+ * getter, so it is the viewport height of every element in the document. A test
+ * that changes it changes what its neighbours measure, which is exactly what
+ * `bun test --concurrent` would let happen.
+ */
+const it = baseIt.serial;
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 let viewportHeight = 400;

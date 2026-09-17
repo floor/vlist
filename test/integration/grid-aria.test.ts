@@ -16,7 +16,7 @@
  * of selection (50) and a11y (55).
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
@@ -40,84 +40,110 @@ afterAll(() => {
 });
 afterAll(() => geometry.assertRestored());
 
-let list: VList<TestItem> | null = null;
-let container: HTMLElement | null = null;
-
-afterEach(() => {
-  list?.destroy();
-  list = null;
-  container?.remove();
-  container = null;
-});
-
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function build(plugins: VListPlugin<TestItem>[], count = 100): Promise<HTMLElement> {
-  container = createContainer({ width: 300, height: 400 });
-  list = createVList<TestItem>(
+/** A built list owned by one test, so tests can run concurrently. */
+interface Fixture {
+  readonly list: VList<TestItem>;
+  readonly container: HTMLElement;
+  /** The first rendered row, re-read on access so it survives a re-render. */
+  readonly row: HTMLElement;
+  dispose(): void;
+}
+
+async function build(plugins: VListPlugin<TestItem>[], count = 100): Promise<Fixture> {
+  const container = createContainer({ width: 300, height: 400 });
+  const list = createVList<TestItem>(
     { container, items: createTestItems(count), item: { height: 40, template: simpleTemplate } },
     plugins,
   );
   await tick(0);
   await tick(50);
-  return container.querySelector("[data-index]") as HTMLElement;
+  return {
+    list,
+    container,
+    get row(): HTMLElement {
+      return container.querySelector("[data-index]") as HTMLElement;
+    },
+    dispose(): void {
+      list.destroy();
+      container.remove();
+    },
+  };
 }
 
 describe("grid — listbox semantics", () => {
   it("gives rows a role even without a11y or selection", async () => {
     // Was: no role attribute at all.
-    const row = await build([grid({ columns: 3 })]);
-    expect(row.getAttribute("role")).toBe("listitem");
-    // Not interactive, so no position attributes — the same as core.
-    expect(row.hasAttribute("aria-setsize")).toBe(false);
-    expect(row.hasAttribute("aria-posinset")).toBe(false);
+    const fixture = await build([grid({ columns: 3 })]);
+    try {
+      expect(fixture.row.getAttribute("role")).toBe("listitem");
+      // Not interactive, so no position attributes — the same as core.
+      expect(fixture.row.hasAttribute("aria-setsize")).toBe(false);
+      expect(fixture.row.hasAttribute("aria-posinset")).toBe(false);
+    } finally {
+      fixture.dispose();
+    }
   });
 
   it("announces position and size under selection()", async () => {
-    const row = await build([grid({ columns: 3 }), selection({ mode: "multiple" })]);
-    expect(row.getAttribute("role")).toBe("option");
-    expect(row.getAttribute("aria-setsize")).toBe("100");
-    expect(row.getAttribute("aria-posinset")).toBe("1");
+    const fixture = await build([grid({ columns: 3 }), selection({ mode: "multiple" })]);
+    try {
+      expect(fixture.row.getAttribute("role")).toBe("option");
+      expect(fixture.row.getAttribute("aria-setsize")).toBe("100");
+      expect(fixture.row.getAttribute("aria-posinset")).toBe("1");
+    } finally {
+      fixture.dispose();
+    }
   });
 
   it("does the same under a11y() alone, which publishes no _getSelectedIds", async () => {
     // The case groups() gets wrong: it asks for that hook, which only
     // selection() publishes, so an a11y()-only list loses listbox semantics.
-    const row = await build([grid({ columns: 3 }), a11y()]);
-    expect(row.getAttribute("role")).toBe("option");
-    expect(row.getAttribute("aria-setsize")).toBe("100");
-    expect(row.getAttribute("aria-posinset")).toBe("1");
+    const fixture = await build([grid({ columns: 3 }), a11y()]);
+    try {
+      expect(fixture.row.getAttribute("role")).toBe("option");
+      expect(fixture.row.getAttribute("aria-setsize")).toBe("100");
+      expect(fixture.row.getAttribute("aria-posinset")).toBe("1");
+    } finally {
+      fixture.dispose();
+    }
   });
 
   it("matches a plain list given the same plugins", async () => {
-    const plainRow = await build([a11y()]);
+    const plainList = await build([a11y()]);
     const plain = {
-      role: plainRow.getAttribute("role"),
-      setsize: plainRow.getAttribute("aria-setsize"),
-      posinset: plainRow.getAttribute("aria-posinset"),
+      role: plainList.row.getAttribute("role"),
+      setsize: plainList.row.getAttribute("aria-setsize"),
+      posinset: plainList.row.getAttribute("aria-posinset"),
     };
-    list?.destroy();
-    list = null;
-    container?.remove();
+    plainList.dispose();
 
-    const gridRow = await build([grid({ columns: 3 }), a11y()]);
-    expect({
-      role: gridRow.getAttribute("role"),
-      setsize: gridRow.getAttribute("aria-setsize"),
-      posinset: gridRow.getAttribute("aria-posinset"),
-    }).toEqual(plain);
+    const gridList = await build([grid({ columns: 3 }), a11y()]);
+    try {
+      expect({
+        role: gridList.row.getAttribute("role"),
+        setsize: gridList.row.getAttribute("aria-setsize"),
+        posinset: gridList.row.getAttribute("aria-posinset"),
+      }).toEqual(plain);
+    } finally {
+      gridList.dispose();
+    }
   });
 
   it("rewrites aria-setsize when the total changes", async () => {
-    const row = await build([grid({ columns: 3 }), selection({ mode: "multiple" })], 60);
-    expect(row.getAttribute("aria-setsize")).toBe("60");
+    const fixture = await build([grid({ columns: 3 }), selection({ mode: "multiple" })], 60);
+    try {
+      expect(fixture.row.getAttribute("aria-setsize")).toBe("60");
 
-    list!.setItems(createTestItems(90));
-    await tick(0);
-    await tick(50);
+      fixture.list.setItems(createTestItems(90));
+      await tick(0);
+      await tick(50);
 
-    // A row already on screen must not keep announcing the old count.
-    const after = container!.querySelector("[data-index]") as HTMLElement;
-    expect(after.getAttribute("aria-setsize")).toBe("90");
+      // A row already on screen must not keep announcing the old count.
+      expect(fixture.row.getAttribute("aria-setsize")).toBe("90");
+    } finally {
+      fixture.dispose();
+    }
   });
 });
