@@ -37,10 +37,6 @@ export {
   type GridPosition,
   type ItemRange,
 } from "./plugins/grid";
-export {
-  createGridRenderer,
-  type GridRenderer,
-} from "./plugins/grid/renderer";
 export type { GridConfig } from "./plugins/grid/types";
 
 // =============================================================================

@@ -203,6 +203,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - Support `carousel()` with `vlist/synthetic`. Whole-lap folds preserve touch drags, flings, smooth navigation and directional snapping without a native main-axis scroll write.
 
+### Removed
+
+- `createGridRenderer` and `GridRenderer` from `vlist/internals`. No grid list ever
+  ran them: `grid()` renders through its own path, which is where the listbox
+  semantics (#197, #212) and the groups ordering fix (#228) landed, so the
+  published renderer was a second implementation that nothing exercised — 705
+  lines and a 1,696-line test of code no list executes. A grid is `grid()`; there
+  is no separate renderer to import.
+
 ### Fixed
 
 - `page({ scrollPadding })` survives `groups()` and `masonry()`. page() applied the
