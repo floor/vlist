@@ -9,6 +9,8 @@
  */
 
 import { MAX_ELEMENT_SIZE } from "../../constants";
+import { SCROLL_PADDING_HOOK } from "../../utils/scroll-padding";
+import type { ScrollPadding } from "../../utils/scroll-padding";
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 
@@ -142,9 +144,16 @@ export function page<T extends VListItem = VListItem>(
 
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
       if (scrollPadding) {
+        // Published so the layout plugins that displace page's own scroll
+        // computations — groups(), masonry() — keep honouring the band.
+        const getPadding = (): ScrollPadding => ({
+          start: resolvePad(isX ? scrollPadding.left : scrollPadding.top),
+          end: resolvePad(isX ? scrollPadding.right : scrollPadding.bottom),
+        });
+        ctx.hooks.method(SCROLL_PADDING_HOOK, getPadding);
+
         ctx.scroll.setToPosFn((index, sc, containerSize, totalItems, align) => {
-          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
+          const { start: startPad, end: endPad } = getPadding();
           if (totalItems === 0) return 0;
           const clamped = Math.max(0, Math.min(index, totalItems - 1));
           const offset = sc.getOffset(clamped);
@@ -167,8 +176,7 @@ export function page<T extends VListItem = VListItem>(
 
         ctx.hooks.method("_scrollItemIntoView", (index: number): void => {
           const containerSize = isX ? win.innerWidth : win.innerHeight;
-          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
+          const { start: startPad, end: endPad } = getPadding();
 
           const rect = dom.viewport.getBoundingClientRect();
           const domScroll = isX ? win.scrollX : win.scrollY;
