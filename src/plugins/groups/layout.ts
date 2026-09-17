@@ -23,6 +23,15 @@ import type {
 } from "./types";
 import type { VListItem } from "../../types";
 
+/** Shared empty-group sentinel — returned when the layout has no groups. */
+const EMPTY_GROUP: GroupBoundary = {
+  key: "",
+  groupIndex: 0,
+  headerLayoutIndex: 0,
+  firstDataIndex: 0,
+  count: 0,
+};
+
 // =============================================================================
 // Binary Search Helpers
 // =============================================================================
@@ -254,34 +263,39 @@ export const createGroupLayout = (
   // Public API
   // =========================================================================
 
+  // Reused by getEntry — one object per entry kind, mutated in place.
+  // Callers must read fields immediately; the next getEntry overwrites them.
+  const reusableHeader: { type: "header"; group: GroupBoundary } = {
+    type: "header",
+    group: EMPTY_GROUP,
+  };
+  const reusableItem: { type: "item"; dataIndex: number; group: GroupBoundary } = {
+    type: "item",
+    dataIndex: 0,
+    group: EMPTY_GROUP,
+  };
+
   const getEntry = (layoutIndex: number): LayoutEntry => {
     if (groups.length === 0) {
       // Fallback: shouldn't happen if totalEntries > 0
-      return {
-        type: "item",
-        dataIndex: layoutIndex,
-        group: {
-          key: "",
-          groupIndex: 0,
-          headerLayoutIndex: 0,
-          firstDataIndex: 0,
-          count: 0,
-        },
-      };
+      reusableItem.dataIndex = layoutIndex;
+      reusableItem.group = EMPTY_GROUP;
+      return reusableItem;
     }
 
     const gi = findGroupByLayoutIndex(groups, layoutIndex);
     const group = groups[gi]!;
 
     if (layoutIndex === group.headerLayoutIndex) {
-      return { type: "header", group };
+      reusableHeader.group = group;
+      return reusableHeader;
     }
 
     // It's a data item within this group
     const offsetInGroup = layoutIndex - group.headerLayoutIndex - 1;
-    const dataIndex = group.firstDataIndex + offsetInGroup;
-
-    return { type: "item", dataIndex, group };
+    reusableItem.dataIndex = group.firstDataIndex + offsetInGroup;
+    reusableItem.group = group;
+    return reusableItem;
   };
 
   const layoutToDataIndex = (layoutIndex: number): number => {
@@ -310,30 +324,14 @@ export const createGroupLayout = (
   };
 
   const getGroupAtLayoutIndex = (layoutIndex: number): GroupBoundary => {
-    if (groups.length === 0) {
-      return {
-        key: "",
-        groupIndex: 0,
-        headerLayoutIndex: 0,
-        firstDataIndex: 0,
-        count: 0,
-      };
-    }
+    if (groups.length === 0) return EMPTY_GROUP;
 
     const gi = findGroupByLayoutIndex(groups, layoutIndex);
     return groups[gi]!;
   };
 
   const getGroupAtDataIndex = (dataIndex: number): GroupBoundary => {
-    if (groups.length === 0) {
-      return {
-        key: "",
-        groupIndex: 0,
-        headerLayoutIndex: 0,
-        firstDataIndex: 0,
-        count: 0,
-      };
-    }
+    if (groups.length === 0) return EMPTY_GROUP;
 
     const gi = findGroupByDataIndex(groups, dataIndex);
     return groups[gi]!;

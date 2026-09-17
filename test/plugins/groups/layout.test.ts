@@ -235,6 +235,73 @@ describe("createGroupLayout", () => {
         expect(entry8.group.key).toBe("C");
       }
     });
+
+    it("should reuse the same header object across calls (no allocation)", () => {
+      const layout = createGroupLayout(CONTACTS.length, makeConfig(), getContact);
+
+      const first = layout.getEntry(0);
+      expect(first.type).toBe("header");
+      const second = layout.getEntry(3);
+      expect(second.type).toBe("header");
+      expect(second === first).toBe(true);
+      expect(second.group.key).toBe("B");
+    });
+
+    it("should reuse the same item object across calls (no allocation)", () => {
+      const layout = createGroupLayout(CONTACTS.length, makeConfig(), getContact);
+
+      const first = layout.getEntry(1);
+      expect(first.type).toBe("item");
+      const second = layout.getEntry(8);
+      expect(second.type).toBe("item");
+      expect(second === first).toBe(true);
+      if (second.type === "item") {
+        expect(second.dataIndex).toBe(5);
+        expect(second.group.key).toBe("C");
+      }
+    });
+
+    it("should overwrite stale fields from a previous call", () => {
+      const layout = createGroupLayout(CONTACTS.length, makeConfig(), getContact);
+
+      layout.getEntry(0);
+      const item = layout.getEntry(4);
+      expect(item.type).toBe("item");
+      if (item.type === "item") {
+        expect(item.dataIndex).toBe(2);
+        expect(item.group.key).toBe("B");
+      }
+
+      const header = layout.getEntry(7);
+      expect(header.type).toBe("header");
+      if (header.type === "header") {
+        expect(header.group.key).toBe("C");
+        expect(header.group.groupIndex).toBe(2);
+      }
+    });
+
+    it("should not allocate across a render-range walk", () => {
+      const layout = createGroupLayout(CONTACTS.length, makeConfig(), getContact);
+
+      const headerRef = layout.getEntry(0);
+      const itemRef = layout.getEntry(1);
+      expect(headerRef === itemRef).toBe(false);
+
+      let headerHits = 0;
+      let itemHits = 0;
+      for (let li = 0; li < layout.totalEntries; li++) {
+        const entry = layout.getEntry(li);
+        if (entry.type === "header") {
+          expect(entry === headerRef).toBe(true);
+          headerHits++;
+        } else {
+          expect(entry === itemRef).toBe(true);
+          itemHits++;
+        }
+      }
+      expect(headerHits).toBe(3);
+      expect(itemHits).toBe(6);
+    });
   });
 
   // ===========================================================================
@@ -418,6 +485,29 @@ describe("createGroupLayout", () => {
       expect(layout.groupCount).toBe(0);
       expect(layout.totalEntries).toBe(0);
     });
+
+    it("should reuse the same getEntry objects after rebuild", () => {
+      const layout = createGroupLayout(CONTACTS.length, makeConfig(), getContact);
+      const headerRef = layout.getEntry(0);
+      const itemRef = layout.getEntry(1);
+
+      layout.rebuild(2, getContact);
+
+      expect(layout.groupCount).toBe(1);
+      expect(layout.totalEntries).toBe(3);
+
+      const header = layout.getEntry(0);
+      expect(header === headerRef).toBe(true);
+      expect(header.type).toBe("header");
+      expect(header.group.key).toBe("A");
+
+      const item = layout.getEntry(1);
+      expect(item === itemRef).toBe(true);
+      expect(item.type).toBe("item");
+      if (item.type === "item") {
+        expect(item.dataIndex).toBe(0);
+      }
+    });
   });
 
   // ===========================================================================
@@ -490,6 +580,19 @@ describe("createGroupLayout", () => {
       expect(layout.dataToLayoutIndex(99)).toBe(100); // last item in first group
       expect(layout.layoutToDataIndex(101)).toBe(-1); // second header
       expect(layout.dataToLayoutIndex(100)).toBe(102); // first item of second group
+
+      // Walking every layout index (size-cache rebuild / render hot path)
+      // must reuse the two result objects — no per-call allocation.
+      const headerRef = layout.getEntry(0);
+      const itemRef = layout.getEntry(1);
+      const seen = new Set<object>();
+      for (let li = 0; li < layout.totalEntries; li++) {
+        const entry = layout.getEntry(li);
+        seen.add(entry);
+        if (entry.type === "header") expect(entry === headerRef).toBe(true);
+        else expect(entry === itemRef).toBe(true);
+      }
+      expect(seen.size).toBe(2);
     });
 
     it("should return fallback group boundary for empty layout", () => {
@@ -526,6 +629,17 @@ describe("createGroupLayout", () => {
       if (entry.type === "item") {
         expect(entry.dataIndex).toBe(5);
         expect(entry.group.key).toBe("");
+      }
+    });
+
+    it("should reuse the item object for empty-layout fallbacks", () => {
+      const layout = createGroupLayout(0, makeConfig());
+      const first = layout.getEntry(0);
+      const second = layout.getEntry(5);
+      expect(second === first).toBe(true);
+      expect(second.type).toBe("item");
+      if (second.type === "item") {
+        expect(second.dataIndex).toBe(5);
       }
     });
   });
