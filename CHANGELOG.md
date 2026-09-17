@@ -13,6 +13,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
+- `createVListFromConfig` — the entry point every framework adapter uses — now
+  returns a list typed with the methods its config wires: `selection: {…}` gives
+  `select()`, `adapter` gives `reload()`, `layout: "grid"` gives `getGridLayout()`,
+  and so on, derived from the same fields `resolvePlugins` reads. It takes one type
+  parameter, the config itself, so the item type comes from `items` or the template
+  and there is no second slot to fall into: `createVListFromConfig<Row>(…)` no
+  longer compiles — drop the type argument. Before, `resolvePlugins` returned a
+  homogeneous array, every plugin's method marker was erased, and an adapter list
+  was a bare `VList<T>` on every framework. A widened `boolean` field (`snapshots:
+  maybe`) yields no methods, since the compiler cannot know; spell it as a literal
+  or narrow first.
+
 - Grid rows carry listbox semantics. They carried **no `role` at all**, and no `aria-posinset` or
   `aria-setsize`, while a plain list gave `role="option"` with both and a masonry list gave
   `role="listitem"` with both. Core sets these in its render pipeline, and `grid()` replaces that
