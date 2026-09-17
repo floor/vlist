@@ -55,12 +55,12 @@ project:
 
 # ── Sources ────────────────────────────────────────────────────────
 #
-# Not in the upstream schema yet; this is the key we agreed to define. The
-# findings source is HTML: rows carry their data in `data-*` attributes, so the
+# The engine reads `path` and `visibility` (floor/agents#45); the other keys are
+# ours, for the lint and promotion tooling. The findings source is HTML: rows carry their data in `data-*` attributes, so the
 # page IS the record and no parser sits between the view and the check.
 #
 # It is PRIVATE. A finding becomes a public issue only by promotion, and only
-# the user-facing half crosses.
+# the user-facing half crosses. A source without `visibility` counts as private.
 
 # Paths are relative to this file, like promptTemplate: `../../docs` is the
 # sibling docs checkout. Commands such as `lint` run from the repository root,
@@ -210,11 +210,15 @@ agents:
 # Whatever an agent reads becomes part of a prompt sent to its provider, so
 # privateSourceProviders is a list of companies trusted with private material —
 # not of local tools: claude-code sends to Anthropic, cursor to Cursor and the
-# model's vendor. Agents on any other provider (codex-cli, today) are meant not
-# to read private sources.
+# model's vendor. Agents on any other provider (codex-cli, today) cannot read
+# private sources.
 #
-# Not yet enforced: no engine code reads this list, so every agent can currently
-# read the private sources. Enforcement is tracked in floor/agents.
+# Enforced by the operating system, not by instruction (floor/agents#45): every
+# agent whose provider is not listed runs in a sandbox that denies each private
+# source path. A bridge that cannot be sandboxed (the xAI grok CLI, Antigravity)
+# is refused for an untrusted provider. `floor-agents doctor` checks the paths
+# exist, since a denial on a mistyped path protects nothing. Only the declared
+# paths are denied; the rest of the docs checkout stays readable.
 
 guardrails:
   maxFilesPerTask: 20
