@@ -217,6 +217,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   every call, so a function padding that measures a sticky header still re-measures.
   Without page() the hook is absent, it reads zero, and the layout maths is unchanged.
 
+- `search()` with `selection()` selects the item a filtered row actually shows.
+  Clicking a match used to select the item that sat at that index **before**
+  the filter: the row painted "Item 9", `item:click` reported `id=9`, and
+  `selection:change` reported `[1]`. `applyFilter` remaps `getItemFn` and
+  never replaces the source array, and `selection()` resolves rows through
+  `_getLoadedItem` — a hook only `data()` and `tree()` published. `search()`
+  now publishes it via `items.at()`, so click, keyboard, and Ctrl+A on a
+  filtered list name the rendered ids.
+
 - `createVList`'s JSDoc says why an explicit item type argument returns a list
   with no plugin methods, and what to do instead. The caveat lived only in a type
   test, while `createVList<Row>(…)` is the first thing a `VListItem` constraint
