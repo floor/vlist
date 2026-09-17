@@ -125,7 +125,13 @@ agents:
     # Coordinates, reviews, merges into next after a clean-export gate. Never
     # tags, releases, deploys, or posts to discussions without Dr Jones.
 
-  - id: grok
+  # ── Implementers ────────────────────────────────────────────────
+  #
+  # `run` hands an issue to the first agent here with write_code. It runs on a
+  # worktree inside an implementer sandbox: it may write that worktree and nothing
+  # else, and the engine verifies and publishes the tree.
+
+  - id: grok-dev
     name: "Grok"
     promptTemplate: "../../agents/agents/backend-dev.md"
     llm:
@@ -142,9 +148,6 @@ agents:
       model: cursor-grok-4.6-high
     capabilities: [read_code, write_code, write_tests, create_pr]
     autonomy: T1
-    # Implements, under two guards. Its committee seat is in committee.yaml:
-    # `run` refuses any manifest holding a `vote` agent, so voters live apart.
-    #
     # A headless turn can end having written nothing and still report success —
     # measured: two identical runs, one wrote the file, one only described
     # writing it, both exit 0. So completion is decided by `verification` against
@@ -153,6 +156,49 @@ agents:
     # `cursor` is hosted, so the prompt leaves this machine. It is absent from
     # privateSourceProviders below and therefore may not read findings.html: it
     # works from the public issue alone.
+
+  # ── Committee ───────────────────────────────────────────────────
+  #
+  # The agents with `vote` review proposals and vote. They sit in this file beside
+  # the implementers: the engine runs development for write_code agents and the
+  # committee for voters, each on its own labels. Grok votes here as `grok` and
+  # implements above as `grok-dev` — ids are unique, and the committee scripts run
+  # `claude,codex,grok` by default.
+  #
+  # Every member reviews inside a reviewer sandbox: it reads the repository and
+  # cannot write to it. Antigravity (Gemini) is parked — its GUI cannot vote
+  # unattended — so it is not seated.
+
+  - id: claude
+    name: "Claude"
+    promptTemplate: "../../agents/agents/claude-reviewer.md"
+    llm:
+      provider: claude-code
+      model: opus
+      temperature: 0.3
+      maxTokens: 32000
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: codex                 # GPT, through the Codex CLI
+    name: "Codex"
+    external: true
+    promptTemplate: "../../agents/agents/codex-reviewer.md"
+    llm:
+      provider: codex-cli     # picks the bridge: codex-agent.ts
+      model: local            # the Codex CLI's own default
+    capabilities: [review_rfc, vote]
+    autonomy: T1
+
+  - id: grok
+    name: "Grok"
+    external: true
+    promptTemplate: "../../agents/agents/grok-reviewer.md"
+    llm:
+      provider: cursor        # picks the bridge: cursor-agent-bridge.ts
+      model: cursor-grok-4.6-high
+    capabilities: [review_rfc, vote]
+    autonomy: T1
 
 # ── Guardrails ─────────────────────────────────────────────────────
 #
