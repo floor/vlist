@@ -26,7 +26,13 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { ItemState } from "../../types";
-import { makeGetText, textMatches, highlightElement, type FieldAccessor } from "./match";
+import {
+  makeGetText,
+  textMatches,
+  highlightElement,
+  clearHighlights,
+  type FieldAccessor,
+} from "./match";
 import { createSearchBar, type SearchBar } from "./searchbar";
 
 /**
@@ -148,6 +154,10 @@ export function search<T extends VListItem = VListItem>(
   let bar: SearchBar | null = null;
   let open = false;
   let query = "";
+  /** Bumped on every query change. Rows stamped with an older value re-highlight. */
+  let queryVersion = 0;
+  /** Whether any rendered row may still carry marks — gates the clearing pass. */
+  let marksPresent = false;
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
@@ -252,6 +262,7 @@ export function search<T extends VListItem = VListItem>(
   // ── Query application ───────────────────────────────────────────────────────
 
   const applyQuery = (next: string): void => {
+    if (next !== query) queryVersion++;
     query = next;
     bar?.setValue(query);
     computeMatches();
@@ -330,8 +341,51 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Highlight pass (after each commit) ────────────────────────────────────────
 
+  /**
+   * A row's marks stay valid until either the query changes or the row's
+   * content is rewritten, and a commit that merely moved the range does
+   * neither. The stamp therefore rides on the row's first child node: every
+   * path that rewrites a row (`innerHTML =`, `textContent = ""` on pool
+   * release, a layout plugin's own renderer) replaces the child nodes with new
+   * objects, so an unstamped first child *is* the "content was rewritten"
+   * signal — no cooperation needed from whichever renderer produced the row.
+   */
+  interface StampedNode extends Node {
+    /** `queryVersion` the marks below this row were built for. */
+    _searchMarkVersion?: number;
+    /** Whether this row currently carries the `--current` class (navigate). */
+    _searchMarkCurrent?: boolean;
+  }
+
+  const highlightRow = (el: HTMLElement): void => {
+    if (highlightWithin) {
+      // Scope marking to the matching descendants only.
+      const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+      for (let s = 0; s < scoped.length; s++) {
+        highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+      }
+    } else {
+      highlightElement(el, query, caseSensitive, matchClass);
+    }
+  };
+
+  const clearRow = (el: HTMLElement): void => {
+    if (highlightWithin) {
+      const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+      for (let s = 0; s < scoped.length; s++) {
+        clearHighlights(scoped[s]!, matchClass);
+      }
+    } else {
+      clearHighlights(el, matchClass);
+    }
+  };
+
   const highlightVisible = (state: EngineState): void => {
-    if (!doHighlight || query.length < minLength) return;
+    if (!doHighlight) return;
+    // No query and no marks left over from one: every commit of every list
+    // that merely has search() installed lands here, so it costs one compare.
+    const active = query.length >= minLength;
+    if (!active && !marksPresent) return;
     resolveOnce();
     const start = state.startIndex;
     const end = start + Math.max(0, state.visibleCount - 1);
@@ -344,24 +398,41 @@ export function search<T extends VListItem = VListItem>(
       if (l2dFn !== null && l2dFn(layoutIndex) < 0) continue;
       const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
-      if (highlightWithin) {
-        // Scope marking to the matching descendants only.
-        const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
-        for (let s = 0; s < scoped.length; s++) {
-          highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+
+      let stamp = el.firstChild as StampedNode | null;
+      if (stamp === null || stamp._searchMarkVersion !== queryVersion) {
+        // Newly rendered, rewritten, or built for an older query.
+        if (active) {
+          highlightRow(el);
+          marksPresent = true;
+          // Highlighting splits text nodes, so re-read the first child.
+          stamp = el.firstChild as StampedNode | null;
+          if (stamp !== null) {
+            stamp._searchMarkVersion = queryVersion;
+            stamp._searchMarkCurrent = false;
+          }
+        } else if (stamp !== null && stamp._searchMarkVersion !== undefined) {
+          // Marks built for a query that is no longer active. Rows this pass
+          // never touched keep an unstamped first child and cost nothing.
+          clearRow(el);
         }
-      } else {
-        highlightElement(el, query, caseSensitive, matchClass);
       }
-      if (mode === "navigate") {
-        // Toggle the current-match class on this row's marks.
+
+      if (active && mode === "navigate" && stamp !== null) {
+        // Cheap by construction: only the row entering or leaving the current
+        // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
-        const marks = el.querySelectorAll(`.${matchClass}`);
-        for (let m = 0; m < marks.length; m++) {
-          marks[m]!.classList.toggle(currentClass, isCurrentRow);
+        if (stamp._searchMarkCurrent !== isCurrentRow) {
+          const marks = el.querySelectorAll(`.${matchClass}`);
+          for (let m = 0; m < marks.length; m++) {
+            marks[m]!.classList.toggle(currentClass, isCurrentRow);
+          }
+          stamp._searchMarkCurrent = isCurrentRow;
         }
       }
     }
+    // The pass above visited every rendered row, so nothing is marked now.
+    if (!active) marksPresent = false;
   };
 
   // ── Keyboard ─────────────────────────────────────────────────────────────────

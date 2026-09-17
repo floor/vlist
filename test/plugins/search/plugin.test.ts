@@ -397,6 +397,161 @@ describe("highlighting", () => {
 });
 
 // =============================================================================
+// Highlight invalidation — a commit that only moved the range rebuilds nothing
+// =============================================================================
+
+describe("highlight invalidation", () => {
+  /** Map of data index → the row's first `<mark>`, for every marked row. */
+  const markNodes = (root: HTMLElement): Map<string, Node> => {
+    const map = new Map<string, Node>();
+    const rows = root.querySelectorAll(".vlist-item");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const mark = row.querySelector(".vlist-search-match");
+      if (mark) map.set(row.getAttribute("data-index")!, mark);
+    }
+    return map;
+  };
+
+  /** Rows marked in both snapshots whose `<mark>` nodes were re-created. */
+  const rebuiltRows = (before: Map<string, Node>, after: Map<string, Node>): number => {
+    let n = 0;
+    for (const [index, mark] of after) {
+      const prev = before.get(index);
+      if (prev !== undefined && prev !== mark) n++;
+    }
+    return n;
+  };
+
+  const withScrollableList = (
+    run: (list: VList<TestItem>, container: HTMLElement) => void,
+    mode: "filter" | "navigate" = "filter",
+  ): void => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(200),
+        item: { height: 30, template: (row: TestItem) => row.name },
+      },
+      [search<TestItem>({ field: "name", mode })],
+    );
+    try {
+      run(list, container);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  };
+
+  it("rebuilds only the newly entered rows when the range moves", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      expect(before.size).toBeGreaterThan(0);
+
+      list.scrollToIndex(3);
+      const after = markNodes(container);
+
+      // Rows that stayed in the range keep the exact <mark> nodes built for
+      // them — the whole point: a range move is not a highlight invalidation.
+      let retained = 0;
+      for (const index of after.keys()) if (before.has(index)) retained++;
+      expect(retained).toBeGreaterThan(0);
+      expect(rebuiltRows(before, after)).toBe(0);
+
+      // The rows that did enter are highlighted, so the marks are correct.
+      for (const [, mark] of after) expect(mark.textContent).toBe("1");
+    });
+  });
+
+  it("rebuilds every visible row when the query changes", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      (list as any).setQuery("11");
+      const after = markNodes(container);
+      expect(after.size).toBeGreaterThan(0);
+      expect(rebuiltRows(before, after)).toBe(after.size);
+      for (const [, mark] of after) expect(mark.textContent).toBe("11");
+    });
+  });
+
+  it("re-highlights a row whose item was updated under an active query", () => {
+    // Navigate mode keeps every row in place, so the update is the only thing
+    // that changed: the marks must follow the new text, not the old stamp.
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const row = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(row.textContent).toBe("Item 2");
+      expect(row.querySelector(".vlist-search-match")).toBeNull();
+
+      list.updateItem(list.items[1]!.id, { name: "Item 101" } as Partial<TestItem>);
+
+      const updated = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(updated.textContent).toBe("Item 101");
+      expect(updated.querySelectorAll(".vlist-search-match").length).toBe(2);
+    }, "navigate");
+  });
+
+  it("re-highlights a row that left the range and came back", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      list.scrollToIndex(150);
+      list.scrollToIndex(0);
+      const after = markNodes(container);
+      // Same indices, freshly rendered rows: the pool cleared their content,
+      // so the marks must have been rebuilt rather than assumed still there.
+      expect(after.size).toBe(before.size);
+      for (const [index, mark] of after) {
+        expect(before.has(index)).toBe(true);
+        expect(mark.textContent).toBe("1");
+      }
+    });
+  });
+});
+
+describe("navigate mode — current match", () => {
+  const currentRow = (container: HTMLElement): string | null => {
+    const mark = container.querySelector(".vlist-search-match--current");
+    return mark ? mark.closest(".vlist-item")!.getAttribute("data-index") : null;
+  };
+
+  it("moves the --current class without rebuilding the marks", () => {
+    // All five fruits fit the viewport, so nothing scrolls out: any change to
+    // the <mark> nodes would be a rebuild the current-match move did not need.
+    const { container, list } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("a"); // Apple, Banana, Apricot, Grape
+
+    const marks = Array.from(container.querySelectorAll(".vlist-search-match"));
+    expect(marks.length).toBeGreaterThan(1);
+    const first = currentRow(container);
+    expect(first).not.toBeNull();
+
+    q(list, "nextMatch")();
+
+    // Node identity, not deep equality: the marks must be the very same nodes.
+    const after = Array.from(container.querySelectorAll(".vlist-search-match"));
+    expect(after.length).toBe(marks.length);
+    for (let i = 0; i < after.length; i++) expect(after[i] === marks[i]).toBe(true);
+    expect(currentRow(container)).not.toBe(first);
+  });
+
+  it("removes the marks when the query is cleared", () => {
+    // Navigate mode keeps every item rendered, so no re-render sweeps the
+    // marks away — the highlight pass has to clear them itself.
+    const { container, list } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("err");
+    expect(container.querySelector(".vlist-search-match")).not.toBeNull();
+    q(list, "setQuery")("");
+    expect(container.querySelector(".vlist-search-match")).toBeNull();
+    expect(container.textContent).toContain("Cherry");
+  });
+});
+
+// =============================================================================
 // Template state
 // =============================================================================
 
