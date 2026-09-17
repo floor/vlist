@@ -29,7 +29,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 
 - `bun install` — install deps
 - `bun test` — run all tests
-- `bun test --concurrent` — run all tests in parallel (~2x faster)
+- `bun test --concurrent` — run all tests in parallel (~2x faster); gated in CI
 - `bun test --changed` — run only tests affected by uncommitted changes
 - `bun test --changed=next` — run tests affected by changes since `next`
 - `bun test test/plugins/grid/` — run one folder
@@ -161,6 +161,14 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 - `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
 - Each plugin tested by: factory/validation, setup/registration, public methods, cross-plugin integration
 - Plugins are unit-tested via mock `PluginContext` — see existing tests for the pattern
+- **Tests must pass under `bun test --concurrent`**, which CI runs alongside the
+  sequential suite. `--concurrent` runs the tests *within a file* at the same
+  time, so a test owns what it builds: create the list and container inside the
+  test and dispose them in a `finally`, never through a module-level `let` plus
+  an `afterEach`. A test that owns a process global — `document.activeElement`,
+  a mutable `HTMLElement.prototype` geometry getter, a single mocked
+  `ResizeObserver`, `window.dispatchEvent` — gets `it.serial` / `test.serial`
+  and a comment naming the global. `describe.serial` is not honoured by Bun 1.4
 - 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/plugin.test.ts)
 
 ## Adding a New Plugin

@@ -631,8 +631,12 @@ describe("async lifecycle — loadVisibleRange", () => {
 // Network Recovery
 // =============================================================================
 
+// `online` is dispatched on the one `window` that every live data() plugin
+// listens to, so these tests reach other tests' adapters. They are `it.serial`
+// (not `describe.serial`, which Bun 1.4 does not honour) so nothing else is in
+// flight while the event fans out.
 describe("async lifecycle — network recovery", () => {
-  it("online event triggers load for visible range", async () => {
+  it.serial("online event triggers load for visible range", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
@@ -651,7 +655,7 @@ describe("async lifecycle — network recovery", () => {
     expect(adapter.read).toHaveBeenCalled();
   });
 
-  it("online event is ignored when destroyed", async () => {
+  it.serial("online event is ignored when destroyed", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
@@ -744,7 +748,9 @@ describe("async lifecycle — destroy cleanup", () => {
     expect(() => plugin.destroy!()).not.toThrow();
   });
 
-  it("online listener is removed on destroy", async () => {
+  // Serial for the same reason as the network-recovery tests: the `online`
+  // event reaches every live data() plugin, not just this one.
+  it.serial("online listener is removed on destroy", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({

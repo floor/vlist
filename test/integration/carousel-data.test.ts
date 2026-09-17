@@ -13,7 +13,7 @@
  * leaves empty.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
@@ -36,16 +36,6 @@ afterAll(() => {
   GlobalRegistrator.unregister();
 });
 
-let list: VList<TestItem> | null = null;
-let container: HTMLElement | null = null;
-
-afterEach(() => {
-  list?.destroy();
-  list = null;
-  container?.remove();
-  container = null;
-});
-
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const all = createTestItems(10);
@@ -59,56 +49,86 @@ const adapter = {
 
 type CarouselApi = { getCarouselState(): { index: number }; prev(): void; next(): void };
 
-async function buildOverAdapter(): Promise<PluginContext<TestItem>> {
+/** A built list owned by one test, so tests can run concurrently. */
+interface Fixture {
+  readonly list: VList<TestItem> & CarouselApi;
+  readonly ctx: PluginContext<TestItem>;
+  dispose(): void;
+}
+
+async function buildOverAdapter(): Promise<Fixture> {
   let ctx: PluginContext<TestItem> | null = null;
   const inspect: VListPlugin<TestItem> = { name: "inspect", priority: 99, setup(c) { ctx = c as PluginContext<TestItem>; } };
-  container = createContainer({ width: 300, height: 500 });
-  list = createVList<TestItem>(
+  const container = createContainer({ width: 300, height: 500 });
+  const list = createVList<TestItem>(
     { container, items: [], item: { height: 50, template: simpleTemplate } },
     [carousel({ snapDuration: 0 }), data<TestItem>({ adapter }), inspect],
   );
   await tick(0);
   await tick(50);
   await tick(50);
-  return ctx!;
+  return {
+    list: list as VList<TestItem> & CarouselApi,
+    ctx: ctx!,
+    dispose(): void {
+      list.destroy();
+      container.remove();
+    },
+  };
 }
 
 describe("carousel + data", () => {
   it("installs the wrap once the adapter reports its total", async () => {
-    const ctx = await buildOverAdapter();
-    // The public total is the list's; the engine's is the inflated one that
-    // rendering at virtual indices needs. Before the fix both read 10.
-    expect(list!.total).toBe(10);
-    expect(ctx.getState().totalItems).toBeGreaterThan(10);
-    // Seeded in the middle lap, so there is room to wrap either way.
-    expect(list!.getScrollPosition()).toBeGreaterThan(0);
+    const { list, ctx, dispose } = await buildOverAdapter();
+    try {
+      // The public total is the list's; the engine's is the inflated one that
+      // rendering at virtual indices needs. Before the fix both read 10.
+      expect(list.total).toBe(10);
+      expect(ctx.getState().totalItems).toBeGreaterThan(10);
+      // Seeded in the middle lap, so there is room to wrap either way.
+      expect(list.getScrollPosition()).toBeGreaterThan(0);
+    } finally {
+      dispose();
+    }
   });
 
   it("wraps backwards from the first item, as a static carousel does", async () => {
-    await buildOverAdapter();
-    const api = list as unknown as CarouselApi;
-    expect(api.getCarouselState().index).toBe(0);
-    api.prev();
-    await tick(0);
-    // Before the fix: index 0, position 0 — prev() did nothing.
-    expect(api.getCarouselState().index).toBe(9);
+    const { list, dispose } = await buildOverAdapter();
+    try {
+      expect(list.getCarouselState().index).toBe(0);
+      list.prev();
+      await tick(0);
+      // Before the fix: index 0, position 0 — prev() did nothing.
+      expect(list.getCarouselState().index).toBe(9);
+    } finally {
+      dispose();
+    }
   });
 
   it("getItemAt reads the loaded item, in data space", async () => {
-    await buildOverAdapter();
-    expect(list!.getItemAt(3)?.id).toBe(all[3]!.id);
-    expect(list!.getItemAt(0)?.id).toBe(all[0]!.id);
+    const { list, dispose } = await buildOverAdapter();
+    try {
+      expect(list.getItemAt(3)?.id).toBe(all[3]!.id);
+      expect(list.getItemAt(0)?.id).toBe(all[0]!.id);
+    } finally {
+      dispose();
+    }
   });
 });
 
 describe("carousel alone — getItemAt space", () => {
   it("takes a data index, so an index past the list is undefined rather than a wrapped item", () => {
-    container = createContainer({ width: 300, height: 500 });
-    list = createVList<TestItem>(
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList<TestItem>(
       { container, items: createTestItems(10), item: { height: 50, template: simpleTemplate } },
       [carousel({ snapDuration: 0 })],
     );
-    expect(list.getItemAt(3)?.id).toBe(4);
-    expect(list.getItemAt(12)).toBeUndefined();
+    try {
+      expect(list.getItemAt(3)?.id).toBe(4);
+      expect(list.getItemAt(12)).toBeUndefined();
+    } finally {
+      list.destroy();
+      container.remove();
+    }
   });
 });

@@ -30,6 +30,12 @@ jobs:
       - name: Test
         run: bun test
 
+      # CONTRIBUTING.md offers --concurrent as the fast way to run the suite, so
+      # it is gated here: a test that leaks process state passes alone and fails
+      # interleaved, and only this step tells the difference.
+      - name: Test (concurrent — test isolation)
+        run: bun test --concurrent
+
       - name: Coverage threshold
         run: bun run scripts/coverage.ts --threshold 85
 

@@ -12,7 +12,7 @@
  * Nothing covered masonry with an adapter before this file.
  */
 
-import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
@@ -36,16 +36,6 @@ afterAll(() => {
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());
-
-let list: VList<TestItem> | null = null;
-let container: HTMLElement | null = null;
-
-afterEach(() => {
-  list?.destroy();
-  list = null;
-  container?.remove();
-  container = null;
-});
 
 /** Renders the id, so an unresolved item is visible rather than silently blank. */
 const idTemplate = (item: TestItem): string => `<div class="item">${item.id}</div>`;
@@ -76,12 +66,18 @@ interface Rendered {
   readonly count: number;
   readonly ids: string[];
   readonly contentSize: string;
+  /** How many items the list itself holds — empty under an adapter. */
+  readonly itemCount: number;
 }
 
+/**
+ * Builds a masonry list, reads what it rendered, then tears it down. Nothing
+ * outlives the call, so tests owning one of these can run concurrently.
+ */
 async function renderAndCollect(withAdapter: boolean): Promise<Rendered> {
-  container = createContainer({ width: 300, height: 400 });
+  const container = createContainer({ width: 300, height: 400 });
 
-  list = withAdapter
+  const list = withAdapter
     ? createVList<TestItem>(
         { container, item: { height: 40, template: idTemplate } },
         [masonry({ columns: 2 }), dataPlugin({ adapter: createMockAdapter(100) })],
@@ -91,17 +87,23 @@ async function renderAndCollect(withAdapter: boolean): Promise<Rendered> {
         [masonry({ columns: 2 })],
       );
 
-  if (withAdapter) await waitForLoad(list);
-  await settle();
+  try {
+    if (withAdapter) await waitForLoad(list);
+    await settle();
 
-  const rows = [...container.querySelectorAll("[data-index]")] as HTMLElement[];
-  const content = container.querySelector(".vlist-content") as HTMLElement | null;
+    const rows = [...container.querySelectorAll("[data-index]")] as HTMLElement[];
+    const content = container.querySelector(".vlist-content") as HTMLElement | null;
 
-  return {
-    count: rows.length,
-    ids: rows.slice(0, 6).map((r) => r.textContent?.trim() ?? ""),
-    contentSize: content?.style.height ?? "",
-  };
+    return {
+      count: rows.length,
+      ids: rows.slice(0, 6).map((r) => r.textContent?.trim() ?? ""),
+      contentSize: content?.style.height ?? "",
+      itemCount: list.items.length,
+    };
+  } finally {
+    list.destroy();
+    container.remove();
+  }
 }
 
 describe("masonry + data — rendering across an adapter", () => {
@@ -131,7 +133,7 @@ describe("masonry + data — rendering across an adapter", () => {
     const adapted = await renderAndCollect(true);
     // The array masonry used to read is still empty: the fix routes through
     // _getLoadedItem, it does not populate items.
-    expect(list!.items.length).toBe(0);
+    expect(adapted.itemCount).toBe(0);
     expect(adapted.count).toBeGreaterThan(0);
   });
 });
