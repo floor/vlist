@@ -200,7 +200,7 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `vlist/synthetic` + `carousel()` | 44.4 KB | 16.2 KB |
 | `vlist/synthetic` + `sortable()` | 43.5 KB | 15.3 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,674 bytes gzipped**, below the 9.9 KB target that `bun run size` now enforces — the build fails above it; synthetic input is **11,960 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **9,674 bytes gzipped**, below the 9.9 KB target. `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **11,960 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Examples
 
