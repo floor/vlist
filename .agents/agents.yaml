@@ -131,9 +131,16 @@ agents:
 
   # ── Implementers ────────────────────────────────────────────────
   #
-  # `run` hands an issue to the first agent here with write_code. It runs on a
-  # worktree inside an implementer sandbox: it may write that worktree and nothing
-  # else, and the engine verifies and publishes the tree.
+  # `run` hands an issue to the agent whose id is a label on it, and otherwise to
+  # the first agent here with write_code — so grok-dev is the default and a
+  # `claude-dev` label routes the issue to Claude. Either runs on a worktree
+  # inside an implementer sandbox: it may write that worktree and nothing else,
+  # and the engine verifies and publishes the tree.
+  #
+  # Two implementers, because they fail differently. Measured: Grok finished #198
+  # and #200 inside ten minutes and reached the ten-minute limit on #210, an issue
+  # spanning two plugins. Which one suits a task is a judgement, so it is a label
+  # on the issue rather than a rule here.
 
   - id: grok-dev
     name: "Grok"
@@ -160,6 +167,22 @@ agents:
     # `cursor` is hosted, so what it reads leaves this machine. It is trusted with
     # private sources (see privateSourceProviders below), so it may read the
     # findings as well as the public issue.
+
+  - id: claude-dev
+    name: "Claude"
+    promptTemplate: "../../agents/agents/backend-dev.md"
+    llm:
+      # The Claude Code CLI, billed to the Claude subscription like the cto agent.
+      provider: claude-code
+      # An alias takes the current model of that family; a full name pins one
+      # (`claude-opus-4-1-20250805`), which keeps a superseded model as the
+      # release line moves. Alias unless a pin is deliberate.
+      model: opus
+    capabilities: [read_code, write_code, write_tests, create_pr]
+    autonomy: T1
+    # Longer than the default ten minutes: this agent takes the issues that span
+    # several files. Needs floor/agents#46, and is ignored by an engine without it.
+    timeoutMs: 2400000
 
   # ── Committee ───────────────────────────────────────────────────
   #
