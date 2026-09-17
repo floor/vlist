@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
-import type { VList } from "../../src/core/types";
+import type { VList, VListPlugin } from "../../src/core/types";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
 import { selection } from "../../src/plugins/selection/plugin";
 import { carousel } from "../../src/plugins/carousel/plugin";
@@ -95,5 +95,87 @@ describe("selection + groups — Ctrl+A totals", () => {
     // The comparison used to be against 12 layout entries, so it never cleared.
     pressSelectAll(container);
     expect((list as unknown as { getSelected(): Array<string | number> }).getSelected().length).toBe(0);
+  });
+});
+
+/**
+ * One key, two handlers (N3).
+ *
+ * carousel() and selection() both handle keydown. carousel's handler runs first
+ * and starts a smooth snap; selection's then asks `nav.navigate` where focus
+ * goes, and that answer used to move the list as well — instantly. Measured in
+ * Chromium before the fix: every arrow key rendered the target for one frame and
+ * returned the next (-338px then +337px in the hero variant), and because each
+ * plugin moved from its own idea of "current", three presses inside one snap left
+ * the carousel on item 2 while `aria-activedescendant` pointed at item 3.
+ */
+function pressArrow(host: HTMLElement, key: "ArrowRight" | "ArrowLeft"): void {
+  const content = host.querySelector(".vlist-content");
+  if (!content) throw new Error("vlist-content not found");
+  content.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+}
+
+const carouselIndex = (l: VList<TestItem>): number =>
+  (l as unknown as { getCarouselState(): { index: number } }).getCarouselState().index;
+
+/**
+ * Selection's own focused index. `aria-activedescendant` carries the rendered
+ * element's id, which in a carousel names the virtual lap (item-501), so it
+ * cannot be compared with a logical index.
+ */
+let focusedIndex: (() => number) | null = null;
+const inspect: VListPlugin<TestItem> = {
+  name: "inspect-focus",
+  priority: 99,
+  setup(ctx) { focusedIndex = ctx.hooks.get("_getFocusedIndex") as () => number; },
+};
+
+describe("selection + carousel — one key, one movement", () => {
+  const build = (): HTMLElement => {
+    container = createContainer({ width: 300, height: 500 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(10), item: { height: 50, template: simpleTemplate } },
+      [carousel({ snapDuration: 300 }), selection<TestItem>({ mode: "single" }), inspect],
+    );
+    return container;
+  };
+
+  it("leaves the scrolling to the snap instead of jumping to the target", () => {
+    const host = build();
+    const step = 50;
+    const before = list!.getScrollPosition();
+
+    pressArrow(host, "ArrowRight");
+
+    // The carousel knows where it is going…
+    expect(carouselIndex(list!)).toBe(1);
+    // …and has not teleported there: the snap does the moving, over its 300ms.
+    expect(Math.abs(list!.getScrollPosition() - before)).toBeLessThan(step / 2);
+  });
+
+  it("keeps focus on the item the carousel is going to, through repeated presses", () => {
+    const host = build();
+
+    pressArrow(host, "ArrowRight");
+    expect(focusedIndex!()).toBe(carouselIndex(list!));
+
+    // Three presses inside one snap: each moves one item, and focus follows.
+    pressArrow(host, "ArrowRight");
+    pressArrow(host, "ArrowRight");
+    expect(carouselIndex(list!)).toBe(3);
+    // Before the fix each plugin moved from its own idea of "current": the
+    // carousel reached 2 while focus was on 3.
+    expect(focusedIndex!()).toBe(3);
+  });
+
+  it("wraps backwards the same way, without a jump", () => {
+    const host = build();
+    const before = list!.getScrollPosition();
+
+    pressArrow(host, "ArrowLeft");
+
+    expect(carouselIndex(list!)).toBe(9);
+    expect(Math.abs(list!.getScrollPosition() - before)).toBeLessThan(25);
+    expect(focusedIndex!()).toBe(9);
   });
 });
