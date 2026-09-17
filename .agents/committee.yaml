@@ -1,0 +1,61 @@
+# vlist — review committee
+#
+# The agents that deliberate and vote on proposals. They live apart from
+# agents.yaml because `floor-agents run` implements an issue and refuses any
+# manifest holding a `vote` agent: one file for the agents that write code, one
+# for the agents that judge it.
+#
+# Project, sources and promotion are declared once, in agents.yaml. This file
+# names only who sits on the committee and what they may read.
+
+name: "vlist 3.0 committee"
+
+project:
+  name: "vlist"
+  root: ".."                  # relative to this file, so the repository root
+  repo: "vlist"
+  baseBranch: "next"
+  language: "typescript"
+  runtime: "bun"
+
+agents:
+  - id: grok
+    name: "Grok"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: cursor
+      model: cursor-grok-4.6-high
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: gemini
+    name: "Gemini"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: gemini
+      model: gemini-2.5-pro
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: gpt
+    name: "GPT"
+    promptTemplate: "../../agents/agents/committee.md"
+    llm:
+      provider: openai
+      model: gpt-4.1
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+# Every member here is hosted, so none may read the private findings source.
+guardrails:
+  maxFilesPerTask: 20
+  maxFileSizeBytes: 102400
+  blockedPaths:
+    - ".env*"
+    - "*.pem"
+    - "*.key"
+    - ".github/workflows/*"
+    - "package.json"
+    - "bun.lock"
+    - ".gitignore"
+  privateSourceProviders: [claude-code, lmstudio]

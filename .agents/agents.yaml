@@ -11,7 +11,7 @@ name: "vlist 3.0"
 
 project:
   name: "vlist"
-  root: "."
+  root: ".."                  # relative to this file, so the repository root
   repo: "vlist"
   baseBranch: "next"          # 3.0 integrates on next; main is the 2.x line
   language: "typescript"
@@ -127,7 +127,7 @@ agents:
 
   - id: grok
     name: "Grok"
-    promptTemplate: "../../agents/agents/committee.md"
+    promptTemplate: "../../agents/agents/backend-dev.md"
     llm:
       # `provider` names the adapter package — the transport — and never the
       # model's vendor; the model string carries vendor and family. Under that
@@ -140,9 +140,10 @@ agents:
       #   cursor-grok-4.6-{low,medium,high,xhigh}   (+ a -fast variant of each)
       # 4.5 exists under the same shape. `--model` takes this string verbatim.
       model: cursor-grok-4.6-high
-    capabilities: [read_code, write_code, write_tests, create_pr, review_rfc, vote]
+    capabilities: [read_code, write_code, write_tests, create_pr]
     autonomy: T1
-    # Implements as well as reviews, under two guards.
+    # Implements, under two guards. Its committee seat is in committee.yaml:
+    # `run` refuses any manifest holding a `vote` agent, so voters live apart.
     #
     # A headless turn can end having written nothing and still report success —
     # measured: two identical runs, one wrote the file, one only described
@@ -152,24 +153,6 @@ agents:
     # `cursor` is hosted, so the prompt leaves this machine. It is absent from
     # privateSourceProviders below and therefore may not read findings.html: it
     # works from the public issue alone.
-
-  - id: gemini
-    name: "Gemini"
-    promptTemplate: "../../agents/agents/committee.md"
-    llm:
-      provider: gemini
-      model: gemini-2.5-pro
-    capabilities: [read_code, review_rfc, vote]
-    autonomy: T1
-
-  - id: gpt
-    name: "GPT"
-    promptTemplate: "../../agents/agents/committee.md"
-    llm:
-      provider: openai
-      model: gpt-4.1
-    capabilities: [read_code, review_rfc, vote]
-    autonomy: T1
 
 # ── Guardrails ─────────────────────────────────────────────────────
 #
