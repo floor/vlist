@@ -171,6 +171,10 @@ interface TrackedItem {
  * @param isHorizontal - Whether layout is horizontal (scrolls right)
  * @param totalItemsGetter - Optional getter for total item count (for aria-setsize)
  * @param ariaIdPrefix - Optional unique prefix for element IDs (for aria-activedescendant)
+ * @param ariaPosInSetGetter - Optional mapper from layout index to aria-posinset
+ * @param interactive - Whether the list is a listbox. A getter is resolved on
+ *   each render so masonry can wait for a11y()/selection() (priority 50/55)
+ *   to call enableListbox() after this plugin's priority-10 setup.
  */
 export const createMasonryRenderer = <T extends VListItem = VListItem>(
   itemsContainer: HTMLElement,
@@ -180,7 +184,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   totalItemsGetter?: () => number,
   ariaIdPrefix?: string,
   ariaPosInSetGetter?: (layoutIndex: number) => number,
-  interactive?: boolean,
+  interactive?: boolean | (() => boolean),
   // RFC-013: the main-axis placement offset is shifted into the bounded runway
   // by subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
   getBaseOffset: () => number = () => 0,
@@ -197,6 +201,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   // Track aria-setsize to avoid redundant updates
   let lastAriaSetSize = "";
   let lastAriaTotal = -1;
+  // Resolved once per render() so renderItem does not call the getter per item.
+  let isInteractive = false;
 
   // Reusable item state to avoid allocation per render
   const reusableItemState: ItemState = { selected: false, focused: false };
@@ -297,7 +303,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
       element.removeAttribute("aria-setsize");
       element.removeAttribute("aria-posinset");
       element.removeAttribute("id");
-    } else if (interactive === true) {
+    } else if (isInteractive) {
       element.setAttribute("role", "option");
       element.ariaSelected = String(isSelected);
       if (ariaIdPrefix) {
@@ -316,16 +322,9 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     } else {
       element.setAttribute("role", "listitem");
       element.removeAttribute("aria-selected");
-      if (totalItemsGetter) {
-        const total = totalItemsGetter();
-        if (total !== lastAriaTotal) {
-          lastAriaTotal = total;
-          lastAriaSetSize = String(total);
-        }
-        element.setAttribute("aria-setsize", lastAriaSetSize);
-        const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
-        element.setAttribute("aria-posinset", String(posInSet));
-      }
+      element.removeAttribute("aria-setsize");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("id");
     }
 
     // Apply sizing
@@ -374,6 +373,23 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   ): void => {
     renderOrigin = origin;
     frameCounter++;
+    isInteractive = typeof interactive === "function" ? interactive() : interactive === true;
+
+    // aria-setsize is the same for every row, so it only needs rewriting when
+    // the total moves — appending items must not leave the rendered rows
+    // announcing the old count.
+    if (isInteractive && totalItemsGetter) {
+      const total = totalItemsGetter();
+      if (total !== lastAriaTotal) {
+        lastAriaTotal = total;
+        lastAriaSetSize = String(total);
+        for (const tracked of rendered.values()) {
+          if (tracked.element.getAttribute("role") === "option") {
+            tracked.element.setAttribute("aria-setsize", lastAriaSetSize);
+          }
+        }
+      }
+    }
 
     // Repopulate reusable visibleSet — O(k) clear + O(k) add, no allocation
     visibleSet.clear();
@@ -423,7 +439,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
 
           // Refresh aria-posinset when element is reused for a different item
           const isGH = (item as any).__groupHeader;
-          if (!isGH) {
+          if (!isGH && isInteractive) {
             const posInSet = ariaPosInSetGetter ? ariaPosInSetGetter(itemIndex) : itemIndex + 1;
             existing.element.setAttribute("aria-posinset", String(posInSet));
           }
@@ -432,7 +448,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         // Class + aria updates only when selection/focus changed
         if (itemChanged || selectedChanged || focusedChanged) {
           applyClasses(existing.element, isSelected, isFocused);
-          existing.element.ariaSelected = String(isSelected);
+          if (isInteractive) existing.element.ariaSelected = String(isSelected);
+          else existing.element.removeAttribute("aria-selected");
           existing.lastSelected = isSelected;
           existing.lastFocused = isFocused;
         }

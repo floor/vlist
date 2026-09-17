@@ -366,8 +366,15 @@ export function groups<T extends VListItem = VListItem>(
     isf: ItemStateFn | null,
     layoutIndex: number,
   ): boolean {
+    // Listbox semantics, resolved on the render path: groups sets up at
+    // priority 10, before a11y (55) and selection (50), so this cannot be
+    // read during setup.
+    //
+    // Both a11y() and selection() call ctx.dom.enableListbox(), which marks
+    // the content element. `_getSelectedIds` is only published by selection(),
+    // so keying on it dropped listbox semantics for an a11y()-only list.
     if (interactive === null) {
-      interactive = !!getMethod?.("_getSelectedIds");
+      interactive = contentElement.getAttribute("role") === "listbox";
     }
     if (entry.type === "header") {
       const headerId = `__group_header_${entry.group.groupIndex}`;

@@ -127,10 +127,8 @@ export function grid<T extends VListItem = VListItem>(
   //
   // Both a11y() and selection() call ctx.dom.enableListbox(), which marks the
   // content element, and core renders role="option" with aria-posinset and
-  // aria-setsize for either. Reading that marker is what keeps an a11y()-only
-  // list right: groups() asks for _getSelectedIds instead, which only
-  // selection() publishes, so it renders listitem there and drops both
-  // attributes.
+  // aria-setsize for either. Reading that marker keeps an a11y()-only list
+  // right; `_getSelectedIds` is only published by selection().
   function resolveInteractive(): void {
     if (interactive !== null || storedCtx === null) return;
     interactive = storedCtx.dom.content.getAttribute("role") === "listbox";

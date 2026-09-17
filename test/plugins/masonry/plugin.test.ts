@@ -965,6 +965,22 @@ describe("masonry - Selection Integration", () => {
     }
     cleanup();
   });
+
+  it("renders role=option with aria attrs when content is a listbox, without _getSelectedIds", () => {
+    const plugin = masonry<TestItem>({ columns: 4 });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.dom.content.setAttribute("role", "listbox");
+    ctx.render.force();
+
+    const el = dom.content.querySelector("[data-index]") as HTMLElement;
+    expect(el.getAttribute("role")).toBe("option");
+    expect(el.getAttribute("aria-setsize")).toBe("10");
+    expect(el.getAttribute("aria-posinset")).toBe("1");
+    cleanup();
+  });
 });
 
 // =============================================================================

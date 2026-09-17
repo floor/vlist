@@ -23,11 +23,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   the total changes.
 
   What counts as interactive is the marker `ctx.dom.enableListbox()` leaves on the content
-  element, because **both** `a11y()` and `selection()` call it. `groups()` instead asks whether
-  `_getSelectedIds` exists, which only `selection()` publishes — so an `a11y()`-only grouped list
-  renders `listitem` and drops both attributes. Grid reads the marker for that reason, and
-  `masonry()` never passes an interactive flag to its renderer at all, so it always says
-  `listitem`. Both remain open.
+  element, because **both** `a11y()` and `selection()` call it. `_getSelectedIds` is only
+  published by `selection()`, so keying on that hook would miss an `a11y()`-only list.
+
+- Grouped and masonry rows carry the same listbox semantics as a plain list. `groups()` keyed
+  interactivity on `_getSelectedIds`, which only `selection()` publishes — so an `a11y()`-only
+  grouped list rendered `role="listitem"` with no `aria-posinset` or `aria-setsize`. `masonry()`
+  never passed an interactive flag to its renderer, so every row took the non-interactive branch
+  even under `selection()`.
+
+  Both now read the `enableListbox()` marker on the render path (they set up at priority 10,
+  ahead of selection and a11y) and give rows `role="option"` with position attributes when the
+  list is interactive, and `role="listitem"` without those attributes when it is not. A
+  non-interactive masonry row also no longer carries leftover `aria-setsize` / `aria-posinset`.
 
 - `grid()` reports the item count as the list's total. It reported the row count: a hundred items
   in three columns gave `list.total === 34`, while `getItemAt(99)` returned item 100 and

@@ -108,11 +108,24 @@ export function masonry<T extends VListItem = VListItem>(
   let focusedIndexGetter: (() => number) | null = null;
   let selectionResolved = false;
 
+  // Listbox semantics, resolved on the render path: masonry sets up at
+  // priority 10, before a11y (55) and selection (50). Both of those call
+  // enableListbox(), which marks the content element; `_getSelectedIds` is
+  // only published by selection().
+  let interactive: boolean | null = null;
+
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
     selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
     focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
+  }
+
+  function resolveInteractive(): boolean {
+    if (interactive !== null) return interactive;
+    if (!storedCtx) return false;
+    interactive = storedCtx.dom.content.getAttribute("role") === "listbox";
+    return interactive;
   }
 
   // ── Per-lane navigation index ──
@@ -458,9 +471,9 @@ export function masonry<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         () => engineState.totalItems,
+        classPrefix,
         undefined,
-        undefined,
-        undefined,
+        resolveInteractive,
         scroll.getRenderOrigin,
       );
 
@@ -564,6 +577,7 @@ export function masonry<T extends VListItem = VListItem>(
       ctx.hooks.onDestroy(() => {
         renderer?.destroy();
         renderer = null;
+        interactive = null;
         ctx.dom.root.classList.remove(`${classPrefix}--masonry`);
       });
     },
@@ -589,6 +603,7 @@ export function masonry<T extends VListItem = VListItem>(
       renderer?.destroy();
       renderer = null;
       cachedPlacements = [];
+      interactive = null;
       storedCtx = null;
     },
   };

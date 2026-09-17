@@ -818,6 +818,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     ctx.hooks.method("_getSelectedIds", () => new Set());
+    ctx.dom.content.setAttribute("role", "listbox");
     plugin.setup!(ctx);
     ctx.render.force();
 
@@ -854,6 +855,30 @@ describe("groups — Edge Cases", () => {
     cleanup();
   });
 
+  it("data items have listbox semantics under a11y() with no _getSelectedIds", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    // a11y() calls enableListbox() and does not publish _getSelectedIds.
+    ctx.dom.content.setAttribute("role", "listbox");
+    plugin.setup!(ctx);
+    ctx.render.force();
+
+    const dataItems = Array.from(dom.content.querySelectorAll('[role="option"]'));
+    expect(dataItems.length).toBeGreaterThan(0);
+
+    for (const el of dataItems) {
+      expect(el.id).toMatch(/^vlist-item-\d+$/);
+      expect(el.getAttribute("aria-posinset")).not.toBeNull();
+      expect(el.getAttribute("aria-setsize")).toBe("10");
+    }
+    cleanup();
+  });
+
   it("group headers do not have id or aria-posinset", () => {
     const plugin = groups<TestItem>({
       getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
@@ -863,6 +888,7 @@ describe("groups — Edge Cases", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     ctx.hooks.method("_getSelectedIds", () => new Set());
+    ctx.dom.content.setAttribute("role", "listbox");
     plugin.setup!(ctx);
     ctx.render.force();
 
@@ -1423,6 +1449,7 @@ describe("groups — Render Lifecycle", () => {
     });
 
     ctx.hooks.method("_getSelectedIds", () => new Set());
+    ctx.dom.content.setAttribute("role", "listbox");
     plugin.setup!(ctx);
     ctx.render.force();
 
