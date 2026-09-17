@@ -118,7 +118,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `setScrollSource` to supply an external position source and commit callback. |
 | `scale()` and `ScalePluginConfig` | Remove them; use `vlist/synthetic` for the full logical range. Config no longer installs a scale stub. |
 
-Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.setBoundedWrap`.
+Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers now supply their handler factory as the second argument of `ctx.scroll.setBoundedWrap`.
 
 ## Plugins
 
