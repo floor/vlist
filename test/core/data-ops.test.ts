@@ -239,6 +239,153 @@ describe("data ops — prependItems", () => {
     vlist.prependItems(createTestItems(3));
     expect(vlist.total).toBe(3);
   });
+
+  it("leaves the scroll position alone without reverse", () => {
+    const vlist = makeList(40);
+    vlist.scrollToIndex(20, "start");
+    const before = vlist.getScrollPosition();
+
+    vlist.prependItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBe(before);
+  });
+});
+
+// =============================================================================
+// prependItems — reverse mode
+// =============================================================================
+
+describe("data ops — prependItems in reverse mode", () => {
+  // 50px items in a 500px viewport, so 40 items leave 1,500px of scroll.
+  function makeReverseList(count: number) {
+    list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(count),
+        item: { height: 50, template: simpleTemplate },
+        reverse: true,
+      },
+      [],
+    );
+    return list;
+  }
+
+  /** Where a rendered row sits relative to the viewport's leading edge. */
+  function viewportOffsetOf(vlist: VList<TestItem>, id: number): number {
+    const el = vlist.element.querySelector<HTMLElement>(`[data-id="${id}"]`);
+    if (!el) throw new Error(`item ${id} is not rendered`);
+    const transform = /translateY\((-?[\d.]+)px\)/.exec(el.style.transform);
+    if (!transform) throw new Error(`no translateY on item ${id}: ${el.style.transform}`);
+    return Number(transform[1]) - vlist.getScrollPosition();
+  }
+
+  it("holds the visible rows where they were", () => {
+    const vlist = makeReverseList(40);
+    vlist.scrollToIndex(20, "start");
+    // Item 21 is at index 20 — the first row inside the viewport.
+    const before = viewportOffsetOf(vlist, 21);
+
+    vlist.prependItems(createTestItems(4, 100));
+
+    expect(viewportOffsetOf(vlist, 21)).toBe(before);
+  });
+
+  it("advances the scroll position by the inserted size", () => {
+    const vlist = makeReverseList(40);
+    vlist.scrollToIndex(20, "start");
+    const before = vlist.getScrollPosition();
+
+    vlist.prependItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBe(before + 4 * 50);
+  });
+
+  it("holds the rows a list sitting at the start was reading", () => {
+    // Scroll position 0 is where "load older messages" fires, and the rows
+    // there are the ones the reader is looking at.
+    const vlist = makeReverseList(40);
+    expect(vlist.getScrollPosition()).toBe(0);
+    const before = viewportOffsetOf(vlist, 1);
+
+    vlist.prependItems(createTestItems(4, 100));
+
+    expect(vlist.getScrollPosition()).toBe(4 * 50);
+    expect(viewportOffsetOf(vlist, 1)).toBe(before);
+  });
+
+  it("accounts for variable item sizes", () => {
+    // An id-keyed size lookup: the prepended rows are 120px, not the 50px the
+    // rows already on screen use, so a count × fixed-size correction would
+    // land 280px off.
+    const sizes = new Map<number, number>();
+    const source = createTestItems(40);
+    for (const item of source) sizes.set(item.id, 50);
+
+    const vlist = createVList<TestItem>(
+      {
+        container,
+        items: source,
+        item: {
+          height: (index: number): number => sizes.get(source[index]!.id) ?? 50,
+          template: simpleTemplate,
+        },
+        reverse: true,
+      },
+      [],
+    );
+    list = vlist;
+
+    vlist.scrollToIndex(20, "start");
+    const before = viewportOffsetOf(vlist, 21);
+
+    const older = createTestItems(2, 100);
+    for (const item of older) sizes.set(item.id, 120);
+    // The size function reads `source` by index, so it shifts with the list.
+    source.unshift(...older);
+    vlist.prependItems(older);
+
+    expect(vlist.getScrollPosition()).toBe(20 * 50 + 2 * 120);
+    expect(viewportOffsetOf(vlist, 21)).toBe(before);
+  });
+
+  it("prepending nothing does not move the view", () => {
+    const vlist = makeReverseList(40);
+    vlist.scrollToIndex(20, "start");
+    const before = vlist.getScrollPosition();
+
+    vlist.prependItems([]);
+
+    expect(vlist.getScrollPosition()).toBe(before);
+  });
+
+  it("leaves an empty list at the start", () => {
+    // Nothing was on screen to hold, so compensating would scroll away from
+    // the items just supplied.
+    const vlist = createVList<TestItem>(
+      {
+        container,
+        items: [],
+        item: { height: 50, template: simpleTemplate },
+        reverse: true,
+      },
+      [],
+    );
+    list = vlist;
+
+    vlist.prependItems(createTestItems(40));
+
+    expect(vlist.getScrollPosition()).toBe(0);
+    expect(viewportOffsetOf(vlist, 1)).toBe(0);
+  });
+
+  it("does not scroll past the end of a list shorter than the viewport", () => {
+    const vlist = makeReverseList(2);
+
+    vlist.prependItems(createTestItems(4, 100));
+
+    // 6 rows of 50px in a 500px viewport: there is nowhere to scroll to.
+    expect(vlist.getScrollPosition()).toBe(0);
+  });
 });
 
 // =============================================================================
