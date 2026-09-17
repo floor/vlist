@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.0-next.3] - 2026-09-17
+
 ### Changed
 
 - `createVListFromConfig` — the entry point every framework adapter uses — now
