@@ -205,6 +205,11 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `createVList`'s JSDoc says why an explicit item type argument returns a list
+  with no plugin methods, and what to do instead. The caveat lived only in a type
+  test, while `createVList<Row>(…)` is the first thing a `VListItem` constraint
+  error suggests — and it compiles.
+
 - `carousel()` over `data()` is a carousel again. It read the item count once in
   `setup()`, where an adapter's total is still 0, so the virtual window — the
   modulo accessor, the inflated total, the wrapping scroll — was never installed

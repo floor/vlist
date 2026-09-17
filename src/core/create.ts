@@ -194,7 +194,25 @@ function checkConfigCompatibility<T extends VListItem>(
 // createVList()
 // =============================================================================
 
-/** Create a list with native scrolling. Opt into synthetic input via vlist/synthetic. */
+/**
+ * Create a list with native scrolling. Opt into synthetic input via vlist/synthetic.
+ *
+ * Let the item type be inferred from the config — its `items`, or the
+ * `template` parameter — rather than passing it as a type argument. The list's
+ * type carries exactly the methods its plugins add, and that inference needs
+ * the plugins tuple as the second type parameter; TypeScript allows no partial
+ * type-argument list, so `createVList<Row>(config, [selection()])` fills the
+ * tuple with its default and returns a bare `VList<Row>`, with every plugin
+ * method gone. It compiles, which is why it looks like the fix for a
+ * `VListItem` constraint error on `Row`. The fix is the constraint: give `Row`
+ * an `id`, and keep the argument list empty.
+ *
+ * @example
+ * // inferred: list has select(), getSelected() …
+ * const list = createVList({ container, items, item: { height: 40, template } }, [selection()]);
+ * // explicit: compiles, and list.select does not exist
+ * const bare = createVList<Row>({ container, items, item: { height: 40, template } }, [selection()]);
+ */
 export function createVList<
   T extends VListItem = VListItem,
   const P extends readonly VListPlugin<T, any>[] = VListPlugin<T>[],
