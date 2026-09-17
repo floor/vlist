@@ -373,6 +373,28 @@ describe("render", () => {
     expect(el0.getAttribute("role")).toBe("option");
   });
 
+  it("should honour an interactive getter resolved at render time", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+      () => 4,
+      undefined,
+      undefined,
+      () => true,
+    );
+    const items = createTestItems(1);
+    const placements = [createPlacement(0)];
+
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+
+    const el0 = container.children[0] as HTMLElement;
+    expect(el0.getAttribute("role")).toBe("option");
+    expect(el0.getAttribute("aria-setsize")).toBe("4");
+    expect(el0.getAttribute("aria-posinset")).toBe("1");
+  });
+
   it("should apply base CSS classes including masonry-item", () => {
     const renderer = createMasonryRenderer<TestItem>(
       container,
@@ -673,6 +695,8 @@ describe("render - ARIA", () => {
       false,
       () => 100,
       "vlist-1",
+      undefined,
+      true,
     );
     const items = createTestItems(2);
     const placements = [createPlacement(0), createPlacement(1)];
@@ -724,6 +748,25 @@ describe("render - ARIA", () => {
 
     const el0 = container.children[0] as HTMLElement;
     expect(el0.getAttribute("aria-setsize")).toBeNull();
+  });
+
+  it("should not set aria-setsize when not interactive even if totalItemsGetter is provided", () => {
+    const renderer = createMasonryRenderer<TestItem>(
+      container,
+      defaultTemplate,
+      "vlist",
+      false,
+      () => 100,
+    );
+    const items = createTestItems(1);
+    const placements = [createPlacement(0)];
+
+    renderer.render(toGetItem(items), placements, new Set(), -1);
+
+    const el0 = container.children[0] as HTMLElement;
+    expect(el0.getAttribute("role")).toBe("listitem");
+    expect(el0.getAttribute("aria-setsize")).toBeNull();
+    expect(el0.getAttribute("aria-posinset")).toBeNull();
   });
 });
 
@@ -1484,6 +1527,10 @@ describe("masonry renderer — existing item updates", () => {
       defaultTemplate,
       "vlist",
       false,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
 
     const items = createTestItems(2, 1);
@@ -1717,6 +1764,7 @@ describe("masonry renderer — group header ARIA", () => {
       () => 3,
       "test",
       posInSet,
+      true,
     );
 
     const items: GroupedItem[] = [
@@ -1759,6 +1807,7 @@ describe("masonry renderer — group header ARIA", () => {
       () => 5,
       "test",
       posInSet,
+      true,
     );
 
     // First render
