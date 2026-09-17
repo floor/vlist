@@ -20,7 +20,7 @@ import {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import { createVList as createNative } from "../../src/native";
-import type { VList } from "../../src/core/types";
+import type { PluginContext, VList } from "../../src/core/types";
 import {
   createTestItems,
   createContainer,
@@ -34,6 +34,7 @@ import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { table } from "../../src/plugins/table/plugin";
+import { autosize } from "../../src/plugins/autosize/plugin";
 import type { VListAdapter } from "../../src/types";
 
 // =============================================================================
@@ -947,5 +948,78 @@ describe("grid + snapshots", () => {
     expect(contentHeight).toBeGreaterThan(0);
 
     sessionStorage.removeItem(autoSaveKey);
+  });
+});
+
+// =============================================================================
+// Autosize + reverse data ops
+// =============================================================================
+
+describe("cross-feature — autosize + prependItems in reverse mode", () => {
+  /**
+   * A ResizeObserver whose callback is triggered by the test rather than on
+   * observe: firing synchronously from inside `observe` would re-enter the
+   * render that is installing the observation.
+   */
+  function captureResizeObserver() {
+    const original = globalThis.ResizeObserver;
+    const observed = new Set<Element>();
+    let callback: ResizeObserverCallback | null = null;
+
+    globalThis.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) { callback = cb; }
+      observe(el: Element): void { observed.add(el); }
+      unobserve(el: Element): void { observed.delete(el); }
+      disconnect(): void { observed.clear(); }
+    } as unknown as typeof ResizeObserver;
+
+    return {
+      /** Report `size` for every element observed so far. */
+      measureAll(size: number): void {
+        const entries = [...observed]
+          .filter((el) => (el as HTMLElement).hasAttribute("data-index"))
+          .map((el) => ({
+            target: el,
+            borderBoxSize: [{ blockSize: size, inlineSize: 300 }],
+          }) as unknown as ResizeObserverEntry);
+        if (entries.length > 0) callback!(entries, {} as ResizeObserver);
+      },
+      restore(): void { globalThis.ResizeObserver = original; },
+    };
+  }
+
+  it("compensates by the measured size cache, not the estimate", () => {
+    // With autosize seated there is no `item.height` to multiply by: the
+    // inserted size has to come from the cache the plugin owns.
+    const ro = captureResizeObserver();
+    try {
+      let ctx!: PluginContext<TestItem>;
+      const vlist = createVList<TestItem>(
+        {
+          container,
+          items: createTestItems(40),
+          item: { estimatedHeight: 50, template: simpleTemplate },
+          reverse: true,
+        },
+        [autosize(), { name: "capture-context", setup(value: PluginContext<TestItem>): void { ctx = value; } }],
+      );
+      list = vlist;
+
+      vlist.scrollToIndex(20, "start");
+      ro.measureAll(80);
+
+      const before = vlist.getScrollPosition();
+      const totalBefore = ctx.sizes.cache.getTotalSize();
+      // Measurements landed: the cache no longer reports 40 x the estimate.
+      expect(totalBefore).not.toBe(40 * 50);
+
+      vlist.prependItems(createTestItems(4, 100));
+
+      const grew = ctx.sizes.cache.getTotalSize() - totalBefore;
+      expect(grew).toBeGreaterThan(0);
+      expect(vlist.getScrollPosition()).toBe(before + grew);
+    } finally {
+      ro.restore();
+    }
   });
 });

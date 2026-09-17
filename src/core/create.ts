@@ -921,11 +921,32 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     prependItems(newItems: T[]): void {
+      // The reverse-mode counterpart of appendItems: this is the chat "load
+      // older messages" path, so the rows being read must not move when
+      // history lands above them. Content grows at the start, so holding the
+      // scroll position pushes those rows down by the inserted size instead.
+      //
+      // The growth is measured from the size cache rather than summed per
+      // item: a variable spec, or an autosize() measurement, has no per-item
+      // size to add up here. One trailing gap is excluded from both readings,
+      // so it cancels.
+      const hadItems = state.totalItems > 0;
+      const sizeBefore = sizeCache.getTotalSize();
       items.unshift(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
       syncContentSize();
       doForceRender();
+      // A list that was empty has no visible row to hold: compensating there
+      // would scroll away from the items just supplied.
+      if (!config.reverse || !hadItems) return;
+      const grew = sizeCache.getTotalSize() - sizeBefore;
+      if (grew <= 0) return;
+      const maxScroll = Math.max(
+        0,
+        sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize,
+      );
+      writeScroll(Math.min(state.scrollPosition + grew, maxScroll));
     },
 
     updateItem(id: string | number, updates: Partial<T>): void {

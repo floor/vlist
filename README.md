@@ -419,7 +419,7 @@ const list = createVList(config, [plugin1(), plugin2()])
 |--------|-------------|
 | `list.setItems(items)` | Replace all items |
 | `list.appendItems(items)` | Add to end (auto-scrolls in reverse mode) |
-| `list.prependItems(items)` | Add to start (preserves scroll position) |
+| `list.prependItems(items)` | Add to start (in reverse mode, the visible rows hold their position) |
 | `list.updateItem(id, partial)` | Update a single item by ID |
 | `list.insertItem(item, index?)` | Insert at index (animated with `transition`) |
 | `list.removeItem(id)` | Remove by ID (animated with `transition`) |
@@ -514,7 +514,7 @@ Full configuration reference → **[vlist.io](https://vlist.io)**
 | `ariaLabel` | — | Accessible label for the listbox |
 | `orientation` | `'vertical'` | `'vertical'` or `'horizontal'` scroll direction |
 | `padding` | `0` | Content inset — number, `[v, h]`, or `[top, right, bottom, left]` |
-| `reverse` | `false` | The list reads bottom-up (chat UIs): a view sitting at the end stays there as `appendItems` adds to it, arrow keys invert, and `transition()` animates from the bottom. Item order is yours to supply; the layout itself is not reversed. `masonry()` and `table()` reject it |
+| `reverse` | `false` | The list reads bottom-up (chat UIs): a view sitting at the end stays there as `appendItems` adds to it, `prependItems` holds the visible rows in place as older history loads above them, arrow keys invert, and `transition()` animates from the bottom. Item order is yours to supply; the layout itself is not reversed. `masonry()` and `table()` reject it |
 
 ## Styling
 
