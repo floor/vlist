@@ -189,6 +189,19 @@ agents:
     # private sources (see privateSourceProviders below), so it may read the
     # findings as well as the public issue.
 
+  # A speed trial (Dr Jones, 2026-09-18): the same Grok at the same effort on
+  # Cursor's `-fast` variant. An issue labelled `grok-fast` comes here; compare
+  # turn time, gate result and review verdict with `grok-dev` before switching.
+  - id: grok-fast
+    name: "Grok"
+    promptTemplate: "../../agents/agents/backend-dev.md"
+    llm:
+      provider: cursor
+      model: cursor-grok-4.6-high-fast
+    capabilities: [read_code, write_code, write_tests, create_pr]
+    autonomy: T1
+    timeoutMs: 2400000
+
   # ── Committee ───────────────────────────────────────────────────
   #
   # The agents with `vote` review proposals and vote. They sit in this file beside
