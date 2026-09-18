@@ -264,7 +264,10 @@ agents:
 
 guardrails:
   maxFilesPerTask: 20
-  maxFileSizeBytes: 102400
+  # CHANGELOG.md is 103,828 bytes and every release-bound change touches it: the
+  # 100 KB cap stopped FLO-163 after a finished 27-minute turn. 256 KB keeps the
+  # guard against a generated blob and lets the changelog grow.
+  maxFileSizeBytes: 262144
   blockedPaths:
     - ".env*"
     - "*.pem"
