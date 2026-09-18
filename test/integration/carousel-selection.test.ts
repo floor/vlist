@@ -181,23 +181,88 @@ describe("selection + carousel — one key, one movement", () => {
 });
 
 describe("selection + carousel — selectNext reveals", () => {
-  it("selectNext past the fold moves the viewport to the selected item", () => {
+  const asSel = (l: VList<TestItem>) => l as unknown as {
+    selectNext(): void;
+    selectPrevious(): void;
+    getSelected(): Array<string | number>;
+    getCarouselState(): { index: number };
+  };
+
+  it("selectNext past the fold stays in the current virtual lap", () => {
     container = createContainer({ width: 300, height: 200 });
     list = createVList<TestItem>(
       { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
       [carousel(), selection<TestItem>({ mode: "single" })],
     );
 
-    const sel = list as unknown as {
-      selectNext(): void;
-      getSelected(): Array<string | number>;
-    };
-    const before = list.getScrollPosition();
+    const sel = asSel(list);
+    const home = list.getScrollPosition();
+    // Middle cycle: a size-cache offset of the logical index would land
+    // near 0 (lap 0), fifty laps behind this origin.
+    expect(home).toBeGreaterThan(10_000);
+
     for (let i = 0; i < 10; i++) sel.selectNext();
 
     expect(sel.getSelected()).toEqual([10]);
-    // carousel publishes nav.navigate without _scrollItemIntoView; skipping
-    // the reveal because navigate exists used to leave scroll untouched.
-    expect(list.getScrollPosition()).not.toBe(before);
+    expect(sel.getCarouselState().index).toBe(9);
+
+    const pos = list.getScrollPosition();
+    // Still in the seeded lap — not teleported to the hard start of the window.
+    expect(pos).toBeGreaterThan(home * 0.5);
+    expect(pos).toBeGreaterThan(home);
+
+    const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row!.style.display).not.toBe("none");
+    expect(row!.getAttribute("data-id")).toBe("10");
+  });
+
+  it("selectPrevious reveals the previous item in the same lap", () => {
+    container = createContainer({ width: 300, height: 200 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [carousel(), selection<TestItem>({ mode: "single" })],
+    );
+
+    const sel = asSel(list);
+    const home = list.getScrollPosition();
+    for (let i = 0; i < 10; i++) sel.selectNext();
+    for (let i = 0; i < 10; i++) sel.selectPrevious();
+
+    expect(sel.getSelected()).toEqual([1]);
+    expect(sel.getCarouselState().index).toBe(0);
+    expect(Math.abs(list.getScrollPosition() - home)).toBeLessThan(1);
+
+    const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row!.style.display).not.toBe("none");
+  });
+
+  it("selectNext at the last item does not wrap or leave the current lap", () => {
+    container = createContainer({ width: 300, height: 200 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [carousel(), selection<TestItem>({ mode: "single" })],
+    );
+
+    const sel = asSel(list);
+    const home = list.getScrollPosition();
+    for (let i = 0; i < 25; i++) sel.selectNext();
+
+    expect(sel.getSelected()).toEqual([20]);
+    expect(sel.getCarouselState().index).toBe(19);
+
+    const atEnd = list.getScrollPosition();
+    expect(atEnd).toBeGreaterThan(home * 0.5);
+
+    sel.selectNext();
+    expect(sel.getSelected()).toEqual([20]);
+    expect(sel.getCarouselState().index).toBe(19);
+    expect(list.getScrollPosition()).toBe(atEnd);
+
+    const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row!.style.display).not.toBe("none");
+    expect(row!.getAttribute("data-id")).toBe("20");
   });
 });

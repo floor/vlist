@@ -529,6 +529,33 @@ export function carousel<T extends VListItem = VListItem>(
     }
   }
 
+  /**
+   * Bring an already-clamped logical index into view in the current virtual
+   * lap. `navigateTo` takes the shortest path, which wraps; selectNext /
+   * selectPrevious clamp via moveFocus and must not jump 50 laps to the
+   * hard start of the window or travel the long way around at an end.
+   *
+   * Instant: a player's Next button has to show the track, and the
+   * keyboard path still owns the snap animation through next()/navigate().
+   */
+  function revealInCurrentLap(logicalTarget: number): void {
+    if (!storedCtx) return;
+    const target = realTotal <= 0 ? 0 : Math.max(0, Math.min(logicalTarget, realTotal - 1));
+    currentIndex = target;
+    if (realTotal <= 1) {
+      storedCtx.render.force();
+      return;
+    }
+    storedCtx.scroll.cancel();
+    const baseVi = getBaseVi();
+    const currentLogical = logicalIndexOf(baseVi);
+    const targetVi = baseVi + (target - currentLogical);
+    intendedVi = targetVi;
+    storedCtx.scroll.to(scrollPositionForVirtual(targetVi));
+    storedCtx.render.force();
+    updateItemLayout();
+  }
+
   return {
     name: "carousel",
     priority: 10,
@@ -719,6 +746,7 @@ export function carousel<T extends VListItem = VListItem>(
 
       ctx.nav.set({
         total: () => realTotal,
+        reveal: revealInCurrentLap,
         navigate: (current: number, key: string, total: number): number => {
           if (handlingKey) return currentIndex;
           let target = current;

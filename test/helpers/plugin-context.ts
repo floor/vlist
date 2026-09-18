@@ -360,10 +360,26 @@ export function createPluginMockContext<T extends VListItem>(
     },
 
     nav: {
-      set: (cfg: any) => { _navConfig = cfg; },
-      get: () => _navConfig
-        ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null }
-        : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
+      set: (cfg: any) => {
+        _navConfig = {
+          ud: 0,
+          lr: 0,
+          scrollIndex: null,
+          navigate: null,
+          total: null,
+          reveal: null,
+          ...(_navConfig ?? {}),
+          ...cfg,
+        };
+      },
+      get: () => _navConfig ?? {
+        ud: 0,
+        lr: 0,
+        scrollIndex: null,
+        navigate: null,
+        total: null,
+        reveal: null,
+      },
     },
   };
 

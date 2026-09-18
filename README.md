@@ -439,7 +439,7 @@ const list = createVList(config, [plugin1(), plugin2()])
 
 | Method | Description |
 |--------|-------------|
-| `list.select(...ids)` | Select item(s) |
+| `list.select(...ids)` | Select item(s) without moving the viewport |
 | `list.deselect(...ids)` | Deselect item(s) |
 | `list.toggleSelect(id)` | Toggle |
 | `list.selectAll()` / `list.clearSelection()` | Bulk operations |

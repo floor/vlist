@@ -755,5 +755,13 @@ describe("table — selection integration", () => {
     const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
     expect(row).not.toBeNull();
     expect(row!.classList.contains("vlist-table-row")).toBe(true);
+
+    const transform = row!.style.transform;
+    const yOnly = /translateY\((-?\d+(?:\.\d+)?)px\)/.exec(transform);
+    expect(yOnly).not.toBeNull();
+    const rowY = Number(yOnly![1]);
+    const visibleTop = rowY - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + rowHeight).toBeLessThanOrEqual(viewport + 1);
   });
 });

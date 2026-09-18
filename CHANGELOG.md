@@ -18,10 +18,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   start/end padding and layout plugins' `_scrollItemIntoView` (grouped sticky
   headers, grid rows, table). Calling either method used to move the selection
   without revealing it, so a player's Next/Previous control could select a
-  track that was neither on screen nor in the DOM. They always reveal — even
-  when a layout plugin published `nav.navigate` (carousel). That helper is
-  the keyboard path's; these methods never call it, so skipping the scroll
-  because it existed left the selected item off-screen.
+  track that was neither on screen nor in the DOM. Reveal is a layout-aware
+  operation with one owner: a plugin may publish `nav.reveal(index)` (carousel
+  snaps in the current virtual lap, no wrap); otherwise `_scrollItemIntoView`
+  or nearest-edge scrolling. `nav.navigate` is the keyboard path — these
+  methods never call it, and must not skip the reveal because it exists.
+  `select(id)` still selects without moving the viewport.
 
 ## [3.0.0-next.3] - 2026-09-17
 

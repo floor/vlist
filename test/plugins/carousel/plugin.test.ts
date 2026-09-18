@@ -2299,6 +2299,20 @@ describe("carousel — NavConfig navigate", () => {
 
     cleanup();
   });
+
+  it("publishes nav.reveal for programmatic selectNext", () => {
+    const items = createTestItems(5);
+    const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {
+      containerHeight: 400,
+      itemSize: 400,
+    });
+
+    carousel<TestItem>().setup!(ctx);
+    const navCfg = ctx.nav.get();
+    expect(typeof navCfg.reveal).toBe("function");
+
+    cleanup();
+  });
 });
 
 // =============================================================================

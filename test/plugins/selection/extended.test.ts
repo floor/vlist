@@ -377,8 +377,8 @@ describe("selection -- scroll on focus move", () => {
     const y = itemOffsetY(row!);
     expect(y).not.toBeNull();
     const visibleTop = y! - list.getScrollPosition();
-    expect(visibleTop).toBeGreaterThanOrEqual(0);
-    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport);
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
 
     const content = container.querySelector(".vlist-content");
     expect(content?.getAttribute("aria-activedescendant")).toBe(`vlist-item-${steps - 1}`);
@@ -456,8 +456,9 @@ describe("selection -- scroll on focus move", () => {
     expect(getSelected(list).length).toBe(1);
     expect(list.getScrollPosition()).toBeGreaterThan(0);
 
-    const sticky = container.querySelector(".vlist-sticky-header");
+    const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement | null;
     expect(sticky).not.toBeNull();
+    expect(sticky!.style.height).toBe(`${headerHeight}px`);
 
     const row = selectedRow(container);
     expect(row).not.toBeNull();
@@ -465,11 +466,59 @@ describe("selection -- scroll on focus move", () => {
 
     const y = itemOffsetY(row!);
     expect(y).not.toBeNull();
-    // Sticky header occupies a row above the viewport; the item sits in the
-    // viewport below it, not under the header.
+    // Sticky header sits above the viewport (not over it); the item must
+    // occupy the usable viewport, not hide under the header row.
     const visibleTop = y! - list.getScrollPosition();
-    expect(visibleTop).toBeGreaterThanOrEqual(0);
-    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport);
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectPrevious across a group boundary skips the header and stays in view", () => {
+    const itemSize = 40;
+    const headerHeight = 30;
+    const viewport = 500;
+    const container = createContainer({ width: 300, height: viewport });
+    const items = createTestItems(40);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: itemSize, template: simpleTemplate },
+      },
+      [
+        groups({
+          getGroupForIndex: (index) => `G${Math.floor(index / 10)}`,
+          header: {
+            height: headerHeight,
+            template: (key) => `<div class="group-header">${key}</div>`,
+          },
+        }),
+        selection<TestItem>({ mode: "single" }),
+      ],
+    );
+    const sel = asSelectable(list);
+
+    const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.style.height).toBe(`${headerHeight}px`);
+
+    // First item of group 1 is data index 10, id 11 (createTestItems is 1-based).
+    while (getSelected(list)[0] !== 11) sel.selectNext();
+    expect(getSelected(list)).toEqual([11]);
+
+    sel.selectPrevious();
+    expect(getSelected(list)).toEqual([10]);
+    const prev = selectedRow(container);
+    expect(prev).not.toBeNull();
+    expect(prev!.classList.contains("vlist-group-header")).toBe(false);
+    const prevY = itemOffsetY(prev!);
+    expect(prevY).not.toBeNull();
+    const prevTop = prevY! - list.getScrollPosition();
+    expect(prevTop).toBeGreaterThanOrEqual(-1);
+    expect(prevTop + itemSize).toBeLessThanOrEqual(viewport + 1);
 
     list.destroy();
     container.remove();

@@ -1361,6 +1361,37 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
     cleanup();
   });
 
+  it("selectNext prefers nav.reveal over an instant size-cache scroll", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    const revealCalls: number[] = [];
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, total: number): number => {
+        return (current + (key === "ArrowDown" ? 1 : 0) + total) % total;
+      },
+      reveal: (index: number): void => { revealCalls.push(index); },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const getSelected = methods.get("getSelected") as () => Array<string | number>;
+
+    selectNext();
+    selectNext();
+    selectNext();
+
+    expect(revealCalls).toEqual([0, 1, 2]);
+    expect(scrollCalls.length).toBe(0);
+    expect(getSelected()).toEqual([2]);
+
+    cleanup();
+  });
+
   it("selectNext still reveals when only nav.navigate exists (no sivFn)", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(

@@ -281,6 +281,14 @@ describe("grid + selection integration", () => {
       const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
       expect(row).not.toBeNull();
       expect(row!.getAttribute("data-id")).toBe(String(selected[0]));
+
+      const transform = row!.style.transform;
+      const xy = /translate\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px\)/.exec(transform);
+      expect(xy).not.toBeNull();
+      const rowY = Number(xy![2]);
+      const visibleTop = rowY - list.getScrollPosition();
+      expect(visibleTop).toBeGreaterThanOrEqual(-1);
+      expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
     });
   });
 });

@@ -1,8 +1,13 @@
-/** Build first. Uses scripts/browser-driver.mjs; VLIST_BROWSER_DRIVER overrides
+/** Reproduction of selectNext / selectPrevious leaving the selected row
+ * off-screen. This is not the track-list example; it is a minimal fixture
+ * whose Next/Previous buttons (`#btn-select-next`, `#btn-select-previous`)
+ * match that example's contract.
+ *
+ * Build first. Uses scripts/browser-driver.mjs; VLIST_BROWSER_DRIVER overrides
  * it with another module exporting launchBrowser.
  *
- * The track-list Next button (`#btn-select-next`) calls `list.selectNext()`.
- * Forty clicks used to leave scrollTop at 0 and the selected row unrendered.
+ * The coordinator wires this script into `test:browser` after merge;
+ * package.json is left untouched here.
  */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
@@ -65,6 +70,31 @@ const server = Bun.serve({
   },
 });
 
+const sample = () => ({
+  selectedCount: window.list.getSelected().length,
+  selectedId: window.list.getSelected()[0],
+  scrollPosition: window.list.getScrollPosition(),
+  nativeScrollTop: document.querySelector(".vlist-viewport")?.scrollTop ?? null,
+  rendered: !!document.querySelector(".vlist-item--selected"),
+  ...(() => {
+    const selected = document.querySelector(".vlist-item--selected");
+    const viewport = document.querySelector(".vlist-viewport");
+    const sr = selected?.getBoundingClientRect();
+    const vr = viewport?.getBoundingClientRect();
+    const tol = 1;
+    const fullyContained = !!(sr && vr
+      && sr.top >= vr.top - tol
+      && sr.bottom <= vr.bottom + tol);
+    return {
+      fullyContained,
+      selectedTop: sr?.top ?? null,
+      selectedBottom: sr?.bottom ?? null,
+      viewportTop: vr?.top ?? null,
+      viewportBottom: vr?.bottom ?? null,
+    };
+  })(),
+});
+
 const browser = await launchBrowser();
 try {
   console.log(await browser.version());
@@ -79,32 +109,30 @@ try {
     for (let i = 0; i < n; i++) btn.click();
   }, clicks);
 
-  const result = await page.evaluate(() => {
-    const selected = document.querySelector(".vlist-item--selected");
-    const viewport = document.querySelector(".vlist-viewport");
-    const sr = selected?.getBoundingClientRect();
-    const vr = viewport?.getBoundingClientRect();
-    const inViewport = !!(sr && vr && sr.bottom > vr.top && sr.top < vr.bottom);
-    return {
-      selectedCount: window.list.getSelected().length,
-      selectedId: window.list.getSelected()[0],
-      scrollPosition: window.list.getScrollPosition(),
-      nativeScrollTop: viewport?.scrollTop ?? null,
-      rendered: !!selected,
-      inViewport,
-      selectedTop: sr?.top ?? null,
-      viewportTop: vr?.top ?? null,
-      viewportBottom: vr?.bottom ?? null,
-    };
-  });
+  const afterNext = await page.evaluate(sample);
 
-  assert.equal(result.selectedCount, 1, `expected one selected track, got ${JSON.stringify(result)}`);
-  assert.equal(result.selectedId, clicks - 1, `expected track ${clicks - 1} after ${clicks} Next clicks`);
-  assert(result.scrollPosition > 0, `selectNext must reveal: scrollPosition=${result.scrollPosition}`);
-  assert(result.rendered, "selected track must be in the DOM");
-  assert(result.inViewport, `selected track must intersect the viewport: ${JSON.stringify(result)}`);
+  assert.equal(afterNext.selectedCount, 1, `expected one selected track, got ${JSON.stringify(afterNext)}`);
+  assert.equal(afterNext.selectedId, clicks - 1, `expected track ${clicks - 1} after ${clicks} Next clicks`);
+  assert(afterNext.scrollPosition > 0, `selectNext must reveal: scrollPosition=${afterNext.scrollPosition}`);
+  assert(afterNext.rendered, "selected track must be in the DOM");
+  assert(afterNext.fullyContained, `selected track must be fully inside the viewport: ${JSON.stringify(afterNext)}`);
 
-  console.log("PASS #btn-select-next ×40 reveals the selected track", JSON.stringify(result));
+  console.log("PASS #btn-select-next ×40 reveals the selected track", JSON.stringify(afterNext));
+
+  await page.evaluate((n) => {
+    const btn = document.querySelector("#btn-select-previous");
+    for (let i = 0; i < n; i++) btn.click();
+  }, clicks);
+
+  const afterPrev = await page.evaluate(sample);
+
+  assert.equal(afterPrev.selectedCount, 1, `expected one selected track after Previous, got ${JSON.stringify(afterPrev)}`);
+  assert.equal(afterPrev.selectedId, 0, `expected track 0 after ${clicks} Previous clicks`);
+  assert.equal(afterPrev.scrollPosition, 0, `selectPrevious back to start must restore scrollPosition, got ${afterPrev.scrollPosition}`);
+  assert(afterPrev.rendered, "selected track must be in the DOM after Previous");
+  assert(afterPrev.fullyContained, `selected track must be fully inside the viewport after Previous: ${JSON.stringify(afterPrev)}`);
+
+  console.log("PASS #btn-select-previous ×40 returns to the start", JSON.stringify(afterPrev));
   await page.close();
 } finally {
   await browser.close();

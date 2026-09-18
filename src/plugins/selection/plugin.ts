@@ -45,7 +45,7 @@ const focusPreventScroll = { preventScroll: true };
 
 /** Methods the selection plugin adds to the list instance. */
 export interface SelectionMethods<T extends VListItem = VListItem> {
-  /** Select one or more items by id. */
+  /** Select one or more items by id. Does not move the viewport. */
   select(...ids: Array<string | number>): void;
   /** Deselect one or more items by id. */
   deselect(...ids: Array<string | number>): void;
@@ -59,9 +59,9 @@ export interface SelectionMethods<T extends VListItem = VListItem> {
   getSelected(): Array<string | number>;
   /** The selected items. */
   getSelectedItems(): T[];
-  /** Select the next item and scroll it into view. */
+  /** Select the next item and scroll it into view. `select(id)` selects without moving the viewport. */
   selectNext(): void;
-  /** Select the previous item and scroll it into view. */
+  /** Select the previous item and scroll it into view. `select(id)` selects without moving the viewport. */
   selectPrevious(): void;
 }
 
@@ -702,23 +702,27 @@ export function selection<T extends VListItem = VListItem>(
 
       const selectAdjacent = (delta: 1 | -1): void => {
         resolveOnce(ctx);
-        const total = getTotalFn();
+        const nav = ctx.nav.get();
+        // Layout plugins that own the item space (carousel's real total,
+        // grid's item count) publish nav.total. Without it this is layout
+        // space — groups counts headers, then skipHeaders walks off them.
+        // Using the engine total under carousel walked 101 laps and wrapped.
+        const total = nav.total ? nav.total() : getTotalFn();
         if (total === 0) return;
         moveFocus(state, delta, total, resolvedConfig.reverse);
         if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
         const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
-        // Mutate selection first so a synchronous scroll render already has
-        // the new selected state, then reveal. Always reveal: nav.navigate
-        // is the keyboard path's way of asking a layout plugin where focus
-        // goes, and selectNext never calls it. Skipping scrollFocusIntoView
-        // because navigate exists left carousel (and any similar plugin)
-        // selecting an item that never appeared. Keyboard still skips the
-        // instant scroll when navigate is set, because the layout plugin's
-        // own key handler has already started the snap. _scrollItemIntoView
-        // still wins inside scrollFocusIntoView (groups/masonry).
+        // Selection first so a synchronous reveal render already has the
+        // new selected state. Reveal is a layout-aware operation with one
+        // owner: nav.reveal (carousel, current virtual lap, no wrap), else
+        // _scrollItemIntoView (groups sticky header, masonry lanes), else
+        // nearest-edge scrollFocusIntoView. Never nothing — and never skip
+        // because nav.navigate exists; that helper is the keyboard path,
+        // which these methods do not call.
         if (state.focusedIndex >= 0) {
-          scrollFocusIntoView(state.focusedIndex);
+          if (nav.reveal) nav.reveal(state.focusedIndex);
+          else scrollFocusIntoView(state.focusedIndex);
           setActiveDescendant(state.focusedIndex);
         }
         emitSelectionChange();
