@@ -174,6 +174,11 @@ agents:
       model: cursor-grok-4.6-high
     capabilities: [read_code, write_code, write_tests, create_pr]
     autonomy: T1
+    # The engine's default is ten minutes, which a carousel change spent
+    # reading its 23 context files (FLO-163, killed at 10m with 12 lines
+    # written). Forty minutes covers a plugin-wide change with its tests and
+    # the browser suite.
+    timeoutMs: 2400000
     # A headless turn can end having written nothing and still report success —
     # measured: two identical runs, one wrote the file, one only described
     # writing it, both exit 0. So completion is decided by `verification` against
