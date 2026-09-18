@@ -199,6 +199,13 @@ export interface NavCapability {
     lr?: number;
     scrollIndex?: (itemIndex: number) => number;
     navigate?: (currentIndex: number, key: string, total: number) => number;
+    /**
+     * Bring this layout index into view, the layout plugin's way.
+     * `selectNext` / `selectPrevious` call this when present so a plugin that
+     * owns motion (carousel snap, current virtual lap) reveals the item
+     * without selection falling back to a raw size-cache offset.
+     */
+    reveal?: (index: number) => void;
   }): void;
   get(): {
     ud: number;
@@ -206,6 +213,7 @@ export interface NavCapability {
     scrollIndex: ((itemIndex: number) => number) | null;
     navigate: ((currentIndex: number, key: string, total: number) => number) | null;
     total: (() => number) | null;
+    reveal: ((index: number) => void) | null;
   };
 }
 

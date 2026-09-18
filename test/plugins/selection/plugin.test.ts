@@ -587,7 +587,7 @@ describe("selection — Methods Behavior", () => {
     cleanup();
   });
 
-  it("selectNext should not scroll (scroll glitch open issue)", () => {
+  it("selectNext scrolls the selected item into view past the fold", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
       createTestItems(100),
@@ -599,9 +599,64 @@ describe("selection — Methods Behavior", () => {
 
     for (let i = 0; i < 10; i++) selectNext();
 
-    // selectNext currently does not scroll — the scroll-at-edge behaviour
-    // for programmatic navigation is an open issue.
-    expect(scrollCalls.length).toBe(0);
+    // Index 9 sits at offset 900; viewport is 600. Nearest-edge reveal
+    // scrolls to offset + size - container = 400.
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(400);
+    cleanup();
+  });
+
+  it("selectPrevious scrolls back to the start", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(100),
+      { itemSize: 100, containerHeight: 600 },
+    );
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const selectPrevious = methods.get("selectPrevious") as () => void;
+
+    for (let i = 0; i < 10; i++) selectNext();
+    scrollCalls.length = 0;
+    for (let i = 0; i < 10; i++) selectPrevious();
+
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(0);
+    cleanup();
+  });
+
+  it("selectNext honours startPadding and endPadding", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200, padding: { top: 10, bottom: 10 } },
+    );
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    for (let i = 0; i < 20; i++) selectNext();
+
+    // target = startPadding + offset(19) + size + endPadding - container
+    //        = 10 + 950 + 50 + 10 - 200 = 820
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(820);
+    cleanup();
+  });
+
+  it("selectNext and selectPrevious update aria-activedescendant", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, dom, cleanup } = createPluginMockContext(createTestItems(10));
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const selectPrevious = methods.get("selectPrevious") as () => void;
+
+    selectNext();
+    expect(dom.content.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+    selectNext();
+    expect(dom.content.getAttribute("aria-activedescendant")).toBe("vlist-item-1");
+    selectPrevious();
+    expect(dom.content.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
+
     cleanup();
   });
 
@@ -1302,6 +1357,123 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
 
     // No _scrollItemIntoView registered → no scroll calls from focusIntoView
     expect(scrollCalls.length).toBe(0);
+
+    cleanup();
+  });
+
+  it("selectNext prefers nav.reveal over an instant size-cache scroll", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    const revealCalls: number[] = [];
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, total: number): number => {
+        return (current + (key === "ArrowDown" ? 1 : 0) + total) % total;
+      },
+      reveal: (index: number): void => { revealCalls.push(index); },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const getSelected = methods.get("getSelected") as () => Array<string | number>;
+
+    selectNext();
+    selectNext();
+    selectNext();
+
+    expect(revealCalls).toEqual([0, 1, 2]);
+    expect(scrollCalls.length).toBe(0);
+    expect(getSelected()).toEqual([2]);
+
+    cleanup();
+  });
+
+  it("selectNext still reveals when only nav.navigate exists (no sivFn)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, total: number): number => {
+        return (current + (key === "ArrowDown" ? 1 : 0) + total) % total;
+      },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const getSelected = methods.get("getSelected") as () => Array<string | number>;
+
+    for (let i = 0; i < 10; i++) selectNext();
+
+    // navigate is a keyboard helper; selectNext never calls it, so skipping
+    // the reveal because it exists would leave the selected item off-screen.
+    // Wrap stays what moveFocus decides (no wrap) — navigate wrapping is
+    // the plugin's keyboard path.
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(300);
+    expect(getSelected()).toEqual([9]);
+
+    cleanup();
+  });
+
+  it("selectNext still reveals via _scrollItemIntoView when nav.navigate is also set", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    const sivCalls: number[] = [];
+    methods.set("_scrollItemIntoView", (index: number) => { sivCalls.push(index); });
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, _total: number): number => {
+        if (key === "ArrowDown") return Math.min(current + 1, 19);
+        return current;
+      },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    selectNext();
+    selectNext();
+    selectNext();
+
+    expect(sivCalls).toEqual([0, 1, 2]);
+
+    cleanup();
+  });
+
+  it("selectPrevious still reveals when only nav.navigate exists (no sivFn)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, total: number): number => {
+        return (current + (key === "ArrowUp" ? -1 : 0) + total) % total;
+      },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const selectPrevious = methods.get("selectPrevious") as () => void;
+
+    for (let i = 0; i < 10; i++) selectNext();
+    scrollCalls.length = 0;
+    for (let i = 0; i < 10; i++) selectPrevious();
+
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(0);
 
     cleanup();
   });

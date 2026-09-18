@@ -370,6 +370,7 @@ export function createCore<T extends VListItem = VListItem>(
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let navTotalFn: (() => number) | null = null;
+  let navRevealFn: ((index: number) => void) | null = null;
   let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
@@ -567,21 +568,23 @@ export function createCore<T extends VListItem = VListItem>(
       },
 
       nav: {
-        set(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
+        set(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number; reveal?: (index: number) => void }): void {
           if (cfg.ud !== undefined) navUd = cfg.ud;
           if (cfg.lr !== undefined) navLr = cfg.lr;
           if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
           if (cfg.navigate) navNavigateFn = cfg.navigate;
           if (cfg.total) navTotalFn = cfg.total;
+          if (cfg.reveal) navRevealFn = cfg.reveal;
         },
         get: (() => {
-          const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null };
+          const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null, reveal: null as ((index: number) => void) | null };
           return (): typeof _nav => {
             _nav.ud = navUd;
             _nav.lr = navLr;
             _nav.scrollIndex = navScrollIndexFn;
             _nav.navigate = navNavigateFn;
             _nav.total = navTotalFn;
+            _nav.reveal = navRevealFn;
             return _nav;
           };
         })(),

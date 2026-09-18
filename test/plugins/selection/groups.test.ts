@@ -677,3 +677,52 @@ describe("selection + groups — click with layout/data offset", () => {
     mockCtx.cleanup();
   });
 });
+
+// =============================================================================
+// selectNext / selectPrevious reveal via groups' _scrollItemIntoView
+// =============================================================================
+
+describe("selection + groups — selectNext reveals through _scrollItemIntoView", () => {
+  it("selectNext skips headers and asks groups to scroll the item into view", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups("single");
+    const sivCalls: number[] = [];
+    mockCtx.methods.set("_scrollItemIntoView", (index: number) => {
+      sivCalls.push(index);
+    });
+
+    const selectNext = mockCtx.methods.get("selectNext") as () => void;
+    selectNext();
+    selectNext();
+    selectNext();
+    selectNext(); // from item 3, next layout index is header 4 → skip to 5
+
+    expect(sivCalls).toEqual([1, 2, 3, 5]);
+    expect(getSelected()).toEqual([5]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
+  it("selectPrevious skips headers and reveals the previous item", () => {
+    const { plugin, mockCtx, getSelected } = setupWithGroups("single");
+    const sivCalls: number[] = [];
+    mockCtx.methods.set("_scrollItemIntoView", (index: number) => {
+      sivCalls.push(index);
+    });
+
+    const selectNext = mockCtx.methods.get("selectNext") as () => void;
+    const selectPrevious = mockCtx.methods.get("selectPrevious") as () => void;
+    selectNext();
+    selectNext();
+    selectNext();
+    selectNext(); // focused at 5
+    sivCalls.length = 0;
+    selectPrevious(); // 5 → 4 (header) → 3
+
+    expect(sivCalls).toEqual([3]);
+    expect(getSelected()).toEqual([3]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+});

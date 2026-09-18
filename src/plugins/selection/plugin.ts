@@ -45,7 +45,7 @@ const focusPreventScroll = { preventScroll: true };
 
 /** Methods the selection plugin adds to the list instance. */
 export interface SelectionMethods<T extends VListItem = VListItem> {
-  /** Select one or more items by id. */
+  /** Select one or more items by id. Does not move the viewport. */
   select(...ids: Array<string | number>): void;
   /** Deselect one or more items by id. */
   deselect(...ids: Array<string | number>): void;
@@ -59,9 +59,9 @@ export interface SelectionMethods<T extends VListItem = VListItem> {
   getSelected(): Array<string | number>;
   /** The selected items. */
   getSelectedItems(): T[];
-  /** Move the selection to the next item. */
+  /** Select the next item and scroll it into view. `select(id)` selects without moving the viewport. */
   selectNext(): void;
-  /** Move the selection to the previous item. */
+  /** Select the previous item and scroll it into view. `select(id)` selects without moving the viewport. */
   selectPrevious(): void;
 }
 
@@ -700,26 +700,40 @@ export function selection<T extends VListItem = VListItem>(
         return collectSelectedItems();
       });
 
-      ctx.hooks.method("selectNext", (): void => {
+      const selectAdjacent = (delta: 1 | -1): void => {
         resolveOnce(ctx);
-        const total = getTotalFn();
+        const nav = ctx.nav.get();
+        // Layout plugins that own the item space (carousel's real total,
+        // grid's item count) publish nav.total. Without it this is layout
+        // space — groups counts headers, then skipHeaders walks off them.
+        // Using the engine total under carousel walked 101 laps and wrapped.
+        const total = nav.total ? nav.total() : getTotalFn();
         if (total === 0) return;
-        moveFocus(state, 1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, 1, total);
+        moveFocus(state, delta, total, resolvedConfig.reverse);
+        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
         const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
+        // Selection first so a synchronous reveal render already has the
+        // new selected state. Reveal is a layout-aware operation with one
+        // owner: nav.reveal (carousel, current virtual lap, no wrap), else
+        // _scrollItemIntoView (groups sticky header, masonry lanes), else
+        // nearest-edge scrollFocusIntoView. Never nothing — and never skip
+        // because nav.navigate exists; that helper is the keyboard path,
+        // which these methods do not call.
+        if (state.focusedIndex >= 0) {
+          if (nav.reveal) nav.reveal(state.focusedIndex);
+          else scrollFocusIntoView(state.focusedIndex);
+          setActiveDescendant(state.focusedIndex);
+        }
         emitSelectionChange();
+      };
+
+      ctx.hooks.method("selectNext", (): void => {
+        selectAdjacent(1);
       });
 
       ctx.hooks.method("selectPrevious", (): void => {
-        resolveOnce(ctx);
-        const total = getTotalFn();
-        if (total === 0) return;
-        moveFocus(state, -1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, -1, total);
-        const item = getDataItemAtLayout(state.focusedIndex);
-        if (item) doSelect(item.id, item);
-        emitSelectionChange();
+        selectAdjacent(-1);
       });
 
       // ── Internal methods (used by snapshots, sortable) ────────

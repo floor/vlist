@@ -11,6 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- `selectNext()` and `selectPrevious()` scroll the newly selected item into view:
+  nearest edge, no movement when the item is already fully visible, honouring
+  start/end padding and layout plugins' `_scrollItemIntoView` (grouped sticky
+  headers, grid rows, table). Calling either method used to move the selection
+  without revealing it, so a player's Next/Previous control could select a
+  track that was neither on screen nor in the DOM. Reveal is a layout-aware
+  operation with one owner: a plugin may publish `nav.reveal(index)` (carousel
+  snaps in the current virtual lap, no wrap); otherwise `_scrollItemIntoView`
+  or nearest-edge scrolling. `nav.navigate` is the keyboard path — these
+  methods never call it, and must not skip the reveal because it exists.
+  `select(id)` still selects without moving the viewport.
+
 ## [3.0.0-next.3] - 2026-09-17
 
 ### Changed

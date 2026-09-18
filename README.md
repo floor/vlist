@@ -439,12 +439,14 @@ const list = createVList(config, [plugin1(), plugin2()])
 
 | Method | Description |
 |--------|-------------|
-| `list.select(...ids)` | Select item(s) |
+| `list.select(...ids)` | Select item(s) without moving the viewport |
 | `list.deselect(...ids)` | Deselect item(s) |
 | `list.toggleSelect(id)` | Toggle |
 | `list.selectAll()` / `list.clearSelection()` | Bulk operations |
 | `list.getSelected()` | Array of selected IDs |
 | `list.getSelectedItems()` | Array of selected items |
+| `list.selectNext()` | Select the next item and scroll it into view |
+| `list.selectPrevious()` | Select the previous item and scroll it into view |
 
 ### Events
 
