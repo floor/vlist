@@ -278,7 +278,10 @@ guardrails:
     - ".gitignore"
   # cursor added 2026-09-17 by Dr Jones's decision: Grok may use the private
   # findings for context when it implements or reviews.
-  privateSourceProviders: [claude-code, lmstudio, cursor]
+  # antigravity added 2026-09-18 by Dr Jones's decision: Gemini, through the
+  # Antigravity CLI on his Google AI Pro account (telemetry off), may read the
+  # private record like Claude and Grok — same trust class as cursor.
+  privateSourceProviders: [claude-code, lmstudio, cursor, antigravity]
 
 # ── Record ─────────────────────────────────────────────────────────
 #
