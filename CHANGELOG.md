@@ -21,12 +21,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   typed for another shape) need to name the item or use `groups<Row>(…)`.
 
 - `createVListFromConfig` types an inline `groups.getGroupForIndex` with the
-  inferred item (from `items` or the template), not `any`. The check also
+  inferred item (`items` first, then the template), not `any`. The check also
   applies when `groups` is optional on the input type. Escape-hatch `plugins`
-  stay as loose as on `createVList`: a default-generic `autosize()` or
-  `selection()` is accepted. `GroupLayout.rebuild`, `createGroupLayout`, and
-  `createAsyncGroupBridge` take `(index: number) => T | undefined` instead of
-  `any`.
+  are looser than on `createVList`: a plugin explicitly typed for a different
+  item, such as `groups<Other>()`, is accepted with no check.
+  `GroupLayout.rebuild`, `createGroupLayout`, and `createAsyncGroupBridge`
+  take `(index: number) => T | undefined` instead of `any`.
 
 ### Fixed
 

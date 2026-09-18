@@ -1,9 +1,8 @@
 // Type tests for the adapter path.
 //
 // `createVListFromConfig` derives the list's methods from the config's feature
-// fields, the same fields `resolvePlugins` turns into plugins. One type
-// parameter, the config itself, so there is no partial-type-argument trap: the
-// item type is read from `items` or the template.
+// fields, the same fields `resolvePlugins` turns into plugins. The item type
+// is read from `items` when present, otherwise the template.
 
 import { createVListFromConfig, type ConfigMethods, type VListConfig } from "../../src/config";
 
@@ -78,12 +77,13 @@ unsure.getScrollSnapshot();
 
 import { search } from "../../src/plugins/search";
 import { autosize } from "../../src/plugins/autosize";
+import { groups } from "../../src/plugins/groups";
 import { selection } from "../../src/plugins/selection";
 const searched = createVListFromConfig({ ...base, plugins: [search<Row>()] });
 searched.openSearch();
 
-// Default-generic plugins are accepted the same way as on createVList, whether
-// the template is an identifier or the config is a spread.
+// plugins is looser than createVList: a default-generic autosize() / selection()
+// is accepted, and so is a plugin typed for a different item.
 const tplRow = (r: Row): string => r.name;
 const measuredByPlugin = createVListFromConfig({
   container,
@@ -95,6 +95,12 @@ measuredByPlugin.remeasure();
 
 const selectedBySpread = createVListFromConfig({ ...base, plugins: [selection()] });
 selectedBySpread.select(1);
+
+interface Other { id: number; other: string }
+createVListFromConfig({
+  ...base,
+  plugins: [groups<Other>({ getGroupForIndex: () => "x", header: { height: 20, template: (key) => key } })],
+});
 
 // ── The type half and the runtime half are one mapping ───────────────────────
 //

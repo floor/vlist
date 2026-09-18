@@ -17,7 +17,7 @@
  * config (the adapters) pull in this module and, with it, every plugin it wires.
  */
 
-import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
+import type { VListItem, ItemConfig, ItemTemplate, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
 import { createVList } from "./core/create";
 import type { CreateVListConfig, VList, VListPlugin, PluginMethods } from "./core/types";
 import type { AutosizeMethods } from "./plugins/autosize/plugin";
@@ -114,8 +114,8 @@ export interface VListConfig<T extends VListItem = VListItem>
    * (e.g. passing `grid()` while `layout: "grid"` is set) replaces it rather
    * than duplicating; plugins with new names are appended.
    *
-   * Item-generic on purpose: a default `autosize()` / `selection()` is
-   * accepted the same way as `createVList`'s plugin list.
+   * Looser than `createVList`'s plugin list: a plugin explicitly typed for a
+   * different item, such as `groups<Other>()`, is accepted with no check.
    */
   plugins?: VListPlugin<any, any>[];
 }
@@ -292,22 +292,35 @@ export type ConfigItem<C> = C extends { items: readonly (infer T extends VListIt
     ? T
     : VListItem;
 
+/** {@link VListConfig} with the template blocked as an inference site, so `items` wins. */
+type CheckedConfig<T extends VListItem> = Omit<VListConfig<T>, "item"> & {
+  item: Omit<ItemConfig<T>, "template"> & { template: ItemTemplate<NoInfer<T>> };
+};
+
 /**
  * Create a vlist instance from a high-level {@link VListConfig}, resolving its
  * feature fields into plugins via {@link resolvePlugins}. This is the single
  * entry point every framework adapter delegates to.
  *
- * Two type parameters, both inferred: the item from `items` or the template,
- * and the config itself for the methods its feature fields wire
- * ({@link ConfigMethods}). Do not pass a type argument — `createVListFromConfig<Row>`
- * does not compile (TypeScript requires both parameters), so the partial-argument
- * trap `createVList<Row>` falls into stays closed.
+ * The item type comes from `items` when present, otherwise the template, and
+ * the list's methods from the config's feature fields ({@link ConfigMethods}).
+ * Do not pass a type argument — `createVListFromConfig<Row>` does not compile
+ * (TypeScript requires both parameters), so the partial-argument trap
+ * `createVList<Row>` falls into stays closed.
  *
  * `groups.getGroupForIndex` is typed with that item: an inline callback
  * receives `item?: T`, not `any`, and a callback written for a different
  * item type is a type error, including when `groups` is optional on the
  * input type.
  */
+export function createVListFromConfig<
+  T extends VListItem,
+  const C extends CheckedConfig<T> & { container: HTMLElement | string; items: readonly T[] },
+>(config: { items: readonly T[] } & CheckedConfig<T> & C): VList<T> & ConfigMethods<T, C>;
+export function createVListFromConfig<
+  T extends VListItem,
+  const C extends VListConfig<T> & { container: HTMLElement | string },
+>(config: VListConfig<T> & C): VList<T> & ConfigMethods<T, C>;
 export function createVListFromConfig<
   T extends VListItem,
   const C extends VListConfig<T> & { container: HTMLElement | string },

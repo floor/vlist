@@ -130,6 +130,33 @@ void first;
 const groupLayout = list.getGroupLayout();
 groupLayout.rebuild(items.length, (index) => items[index]);
 
+// ── items wins over a wider template (inline and identifier) ─────────────────
+
+interface Entity {
+  id: number;
+  name: string;
+}
+
+const entityTemplate = (entity: Entity): string => entity.name;
+
+const fromIdentifier = createVListFromConfig({
+  container,
+  items,
+  item: { height: 40, template: entityTemplate },
+  groups: { getGroupForIndex: (_index, row) => row!.category },
+});
+const fromIdentifierItem: Row | undefined = fromIdentifier.getItemAt(0);
+void fromIdentifierItem;
+
+const fromInline = createVListFromConfig({
+  container,
+  items,
+  item: { height: 40, template: (entity: Entity) => entity.name },
+  groups: { getGroupForIndex: (_index, row) => row!.category },
+});
+const fromInlineItem: Row | undefined = fromInline.getItemAt(0);
+void fromInlineItem;
+
 // ── Partial type argument is still rejected ──────────────────────────────────
 
 // @ts-expect-error createVListFromConfig<Row> requires both type parameters
