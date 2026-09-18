@@ -279,6 +279,11 @@ guardrails:
   # 100 KB cap stopped FLO-163 after a finished 27-minute turn. 256 KB keeps the
   # guard against a generated blob and lets the changelog grow.
   maxFileSizeBytes: 262144
+  # The engine sums the whole of every touched file, not the diff (FLO-201): a
+  # one-line changelog entry plus a few large test files crossed the 512 KB
+  # default and stopped a gate-green revision (FLO-185). 2 MB until it measures
+  # the diff.
+  maxTotalOutputBytes: 2097152
   blockedPaths:
     - ".env*"
     - "*.pem"
