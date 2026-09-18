@@ -21,9 +21,11 @@ natively; `vlist/synthetic` owns the input for lists taller than the browser all
   carry the public (data) index; an element's `id` carries the index it is mounted under.
 - **One owner per concern.** A plugin that owns navigation registers it with `ctx.nav.set()`
   (carousel does); one that owns scrolling an item into view publishes `_scrollItemIntoView`
-  (groups, masonry). Ask the owner; do not scroll behind its back. Read how the keyboard path
-  in `src/plugins/selection/plugin.ts` and `src/plugins/a11y/plugin.ts` does it before adding
-  a second path.
+  (groups, masonry) or `nav.reveal(index)` (carousel: the logical item index, the same space
+  as `nav.total` — not a size-cache or layout index). `NavCapability.get()` always carries a
+  `reveal` property (`null` when no owner set one). Ask the owner; do not scroll behind its
+  back. Read how the keyboard path in `src/plugins/selection/plugin.ts` and
+  `src/plugins/a11y/plugin.ts` does it before adding a second path.
 - **Plugin order is `priority`, lowest first:** layout tier 5–11 (page, autosize, grid, table,
   masonry, tree, carousel 10, groups 11), scrollbar 15, data 20, sortable 30, transition 45,
   selection and snapshots 50, a11y and search 55. A plugin that replaces size-cache methods

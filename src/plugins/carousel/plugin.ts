@@ -541,19 +541,30 @@ export function carousel<T extends VListItem = VListItem>(
   function revealInCurrentLap(logicalTarget: number): void {
     if (!storedCtx) return;
     const target = realTotal <= 0 ? 0 : Math.max(0, Math.min(logicalTarget, realTotal - 1));
+    const prevIndex = currentIndex;
     currentIndex = target;
     if (realTotal <= 1) {
       storedCtx.render.force();
-      return;
+    } else {
+      storedCtx.scroll.cancel();
+      const baseVi = getBaseVi();
+      const currentLogical = logicalIndexOf(baseVi);
+      const targetVi = baseVi + (target - currentLogical);
+      intendedVi = targetVi;
+      storedCtx.scroll.to(scrollPositionForVirtual(targetVi));
+      storedCtx.render.force();
+      updateItemLayout();
     }
-    storedCtx.scroll.cancel();
-    const baseVi = getBaseVi();
-    const currentLogical = logicalIndexOf(baseVi);
-    const targetVi = baseVi + (target - currentLogical);
-    intendedVi = targetVi;
-    storedCtx.scroll.to(scrollPositionForVirtual(targetVi));
-    storedCtx.render.force();
-    updateItemLayout();
+    // onAfterScroll skips index detection while intendedVi is set, and
+    // afterwards currentIndex already equals the destination — so a
+    // selection-driven reveal must emit itself, as next()/prev() do.
+    // Clamping at an end leaves the index unchanged and emits nothing.
+    if (target !== prevIndex) {
+      storedCtx.emitter.emit("carousel:change" as any, {
+        index: currentIndex,
+        scrollPosition: scroll.getPixelEquivalent(),
+      });
+    }
   }
 
   return {

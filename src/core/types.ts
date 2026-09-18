@@ -200,7 +200,10 @@ export interface NavCapability {
     scrollIndex?: (itemIndex: number) => number;
     navigate?: (currentIndex: number, key: string, total: number) => number;
     /**
-     * Bring this layout index into view, the layout plugin's way.
+     * Bring this navigation / focus index into view, the layout plugin's way.
+     * The index is the same space as `nav.total` (carousel: logical item
+     * index; grid: item index) — not a size-cache index and not a layout
+     * index that counts group headers or carousel laps.
      * `selectNext` / `selectPrevious` call this when present so a plugin that
      * owns motion (carousel snap, current virtual lap) reveals the item
      * without selection falling back to a raw size-cache offset.
@@ -213,6 +216,11 @@ export interface NavCapability {
     scrollIndex: ((itemIndex: number) => number) | null;
     navigate: ((currentIndex: number, key: string, total: number) => number) | null;
     total: (() => number) | null;
+    /**
+     * Always present on the returned object: the owner's reveal, or `null`
+     * when no plugin published one. Plugin authors must read this property
+     * rather than treating a missing key as "no owner".
+     */
     reveal: ((index: number) => void) | null;
   };
 }
