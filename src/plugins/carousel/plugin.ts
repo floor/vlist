@@ -560,7 +560,7 @@ export function carousel<T extends VListItem = VListItem>(
     // selection-driven reveal must emit itself, as next()/prev() do.
     // Clamping at an end leaves the index unchanged and emits nothing.
     if (target !== prevIndex) {
-      storedCtx.emitter.emit("carousel:change" as any, {
+      storedCtx.emitter.emit("carousel:change", {
         index: currentIndex,
         scrollPosition: scroll.getPixelEquivalent(),
       });
