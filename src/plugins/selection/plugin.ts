@@ -708,14 +708,17 @@ export function selection<T extends VListItem = VListItem>(
         if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
         const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
-        // Same commit as the keyboard path: mutate selection first so a
-        // synchronous scroll render already has the new selected state, then
-        // reveal. Layout plugins that own motion via nav.navigate (carousel
-        // snap) must not be overridden by an instant scrollTo;
-        // _scrollItemIntoView still wins (groups/masonry).
+        // Mutate selection first so a synchronous scroll render already has
+        // the new selected state, then reveal. Always reveal: nav.navigate
+        // is the keyboard path's way of asking a layout plugin where focus
+        // goes, and selectNext never calls it. Skipping scrollFocusIntoView
+        // because navigate exists left carousel (and any similar plugin)
+        // selecting an item that never appeared. Keyboard still skips the
+        // instant scroll when navigate is set, because the layout plugin's
+        // own key handler has already started the snap. _scrollItemIntoView
+        // still wins inside scrollFocusIntoView (groups/masonry).
         if (state.focusedIndex >= 0) {
-          const nav = ctx.nav.get();
-          if (sivFn || !nav.navigate) scrollFocusIntoView(state.focusedIndex);
+          scrollFocusIntoView(state.focusedIndex);
           setActiveDescendant(state.focusedIndex);
         }
         emitSelectionChange();

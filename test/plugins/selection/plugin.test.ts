@@ -1361,7 +1361,7 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
     cleanup();
   });
 
-  it("selectNext does not instant-scroll when only nav.navigate exists (no sivFn)", () => {
+  it("selectNext still reveals when only nav.navigate exists (no sivFn)", () => {
     const plugin = selection<TestItem>({ mode: "single" });
     const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
       createTestItems(20),
@@ -1381,10 +1381,12 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
 
     for (let i = 0; i < 10; i++) selectNext();
 
-    // Carousel-like: navigate owns the animation; an instant scrollTo would
-    // jump the list and fight the snap. Selection still advances linearly
-    // (moveFocus does not wrap — wrapping stays the plugin's keyboard path).
-    expect(scrollCalls.length).toBe(0);
+    // navigate is a keyboard helper; selectNext never calls it, so skipping
+    // the reveal because it exists would leave the selected item off-screen.
+    // Wrap stays what moveFocus decides (no wrap) — navigate wrapping is
+    // the plugin's keyboard path.
+    expect(scrollCalls.length).toBeGreaterThan(0);
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(300);
     expect(getSelected()).toEqual([9]);
 
     cleanup();
@@ -1414,6 +1416,33 @@ describe("selection — scroll with custom navigate + _scrollItemIntoView", () =
     selectNext();
 
     expect(sivCalls).toEqual([0, 1, 2]);
+
+    cleanup();
+  });
+
+  it("selectPrevious still reveals when only nav.navigate exists (no sivFn)", () => {
+    const plugin = selection<TestItem>({ mode: "single" });
+    const { ctx, methods, scrollCalls, cleanup } = createPluginMockContext(
+      createTestItems(20),
+      { itemSize: 50, containerHeight: 200 },
+    );
+
+    ctx.nav.set({
+      total: () => 20,
+      navigate: (current: number, key: string, total: number): number => {
+        return (current + (key === "ArrowUp" ? -1 : 0) + total) % total;
+      },
+    });
+
+    plugin.setup!(ctx);
+    const selectNext = methods.get("selectNext") as () => void;
+    const selectPrevious = methods.get("selectPrevious") as () => void;
+
+    for (let i = 0; i < 10; i++) selectNext();
+    scrollCalls.length = 0;
+    for (let i = 0; i < 10; i++) selectPrevious();
+
+    expect(scrollCalls[scrollCalls.length - 1]).toBe(0);
 
     cleanup();
   });

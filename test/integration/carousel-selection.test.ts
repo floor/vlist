@@ -179,3 +179,25 @@ describe("selection + carousel — one key, one movement", () => {
     expect(focusedIndex!()).toBe(9);
   });
 });
+
+describe("selection + carousel — selectNext reveals", () => {
+  it("selectNext past the fold moves the viewport to the selected item", () => {
+    container = createContainer({ width: 300, height: 200 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [carousel(), selection<TestItem>({ mode: "single" })],
+    );
+
+    const sel = list as unknown as {
+      selectNext(): void;
+      getSelected(): Array<string | number>;
+    };
+    const before = list.getScrollPosition();
+    for (let i = 0; i < 10; i++) sel.selectNext();
+
+    expect(sel.getSelected()).toEqual([10]);
+    // carousel publishes nav.navigate without _scrollItemIntoView; skipping
+    // the reveal because navigate exists used to leave scroll untouched.
+    expect(list.getScrollPosition()).not.toBe(before);
+  });
+});

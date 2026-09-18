@@ -13,13 +13,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- `selectNext()` and `selectPrevious()` scroll the newly selected item into view
-  the same way keyboard navigation does: nearest edge, no movement when the item
-  is already fully visible, honouring start/end padding and layout plugins'
-  `_scrollItemIntoView` (grouped sticky headers, grid rows, table). Calling
-  either method used to move the selection without revealing it, so a player's
-  Next/Previous control could select a track that was neither on screen nor in
-  the DOM.
+- `selectNext()` and `selectPrevious()` scroll the newly selected item into view:
+  nearest edge, no movement when the item is already fully visible, honouring
+  start/end padding and layout plugins' `_scrollItemIntoView` (grouped sticky
+  headers, grid rows, table). Calling either method used to move the selection
+  without revealing it, so a player's Next/Previous control could select a
+  track that was neither on screen nor in the DOM. They always reveal — even
+  when a layout plugin published `nav.navigate` (carousel). That helper is
+  the keyboard path's; these methods never call it, so skipping the scroll
+  because it existed left the selected item off-screen.
 
 ## [3.0.0-next.3] - 2026-09-17
 
