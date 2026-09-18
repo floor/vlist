@@ -113,8 +113,11 @@ export interface VListConfig<T extends VListItem = VListItem>
    * the convenience fields: a plugin whose `name` matches an auto-wired one
    * (e.g. passing `grid()` while `layout: "grid"` is set) replaces it rather
    * than duplicating; plugins with new names are appended.
+   *
+   * Item-generic on purpose: a default `autosize()` / `selection()` is
+   * accepted the same way as `createVList`'s plugin list.
    */
-  plugins?: VListPlugin<T>[];
+  plugins?: VListPlugin<any, any>[];
 }
 
 /**

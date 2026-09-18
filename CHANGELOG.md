@@ -23,8 +23,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - `createVListFromConfig` types an inline `groups.getGroupForIndex` with the
   inferred item (from `items` or the template), not `any`. The check also
   applies when `groups` is optional on the input type. Escape-hatch `plugins`
-  are checked against that same item (`autosize<Row>()`, not a default
-  `autosize()`). `GroupLayout.rebuild`, `createGroupLayout`, and
+  stay as loose as on `createVList`: a default-generic `autosize()` or
+  `selection()` is accepted. `GroupLayout.rebuild`, `createGroupLayout`, and
   `createAsyncGroupBridge` take `(index: number) => T | undefined` instead of
   `any`.
 

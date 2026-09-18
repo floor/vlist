@@ -372,7 +372,7 @@ describe("createVListFromConfig", () => {
         container,
         item: { estimatedHeight: 200, template },
         items: createTestItems(50),
-        plugins: [autosize<TestItem>()],
+        plugins: [autosize()],
       });
     expect(create).not.toThrow();
     create().destroy();
@@ -389,7 +389,7 @@ describe("createVListFromConfig", () => {
           container,
           item: { estimatedHeight: 200, template },
           items: createTestItems(50),
-          plugins: [grid<TestItem>({ columns: 4 }), autosize<TestItem>()],
+          plugins: [grid({ columns: 4 }), autosize()],
         }),
       ).toThrow('conflicts with "autosize"');
 

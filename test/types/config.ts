@@ -77,8 +77,24 @@ unsure.getScrollSnapshot();
 // ── The escape hatch keeps its methods too ────────────────────────────────────
 
 import { search } from "../../src/plugins/search";
+import { autosize } from "../../src/plugins/autosize";
+import { selection } from "../../src/plugins/selection";
 const searched = createVListFromConfig({ ...base, plugins: [search<Row>()] });
 searched.openSearch();
+
+// Default-generic plugins are accepted the same way as on createVList, whether
+// the template is an identifier or the config is a spread.
+const tplRow = (r: Row): string => r.name;
+const measuredByPlugin = createVListFromConfig({
+  container,
+  items: base.items,
+  item: { estimatedHeight: 40, template: tplRow },
+  plugins: [autosize()],
+});
+measuredByPlugin.remeasure();
+
+const selectedBySpread = createVListFromConfig({ ...base, plugins: [selection()] });
+selectedBySpread.select(1);
 
 // ── The type half and the runtime half are one mapping ───────────────────────
 //
