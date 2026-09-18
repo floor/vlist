@@ -131,16 +131,20 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // regression, not a rounding: with budgets set to the byte, a correct core
 // change (FLO-191) failed this gate three times by 5, 5 and 2 bytes. The sizes
 // quoted in the README still come from `bun run size`, never from this table.
+//
+// Two budgets are not headroom but a promise: the base and native entries stay
+// at 9.9 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
+// apply to them — raising either is a product decision, not a chore.
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
-  "Base (createVList)": kb(10.0),
+  "Base (createVList)": kb(9.9),
   synthetic: kb(12.6),
   "synthetic + carousel": kb(17.4),
   "synthetic + sortable": kb(16.1),
   createStats: kb(10.3),
   "synthetic + createStats": kb(12.8),
-  native: kb(10.0),
+  native: kb(9.9),
   a11y: kb(11.2),
   selection: kb(12.9),
   data: kb(14.8),
