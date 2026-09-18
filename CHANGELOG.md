@@ -11,6 +11,23 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- `GroupsConfig` is generic in the item. `getGroupForIndex` is
+  `(index: number, item?: T) => string` — the same `T` as the list — not
+  `item?: any`. A callback written for a different item type is a type error
+  at `groups()`, `createGroupLayout`, and `createVListFromConfig`. Callers
+  that relied on `any` (reading undeclared fields, or passing a callback
+  typed for another shape) need to name the item or use `groups<Row>(…)`.
+
+- `createVListFromConfig` types an inline `groups.getGroupForIndex` with the
+  inferred item (from `items` or the template), not `any`. The check also
+  applies when `groups` is optional on the input type. Escape-hatch `plugins`
+  are checked against that same item (`autosize<Row>()`, not a default
+  `autosize()`). `GroupLayout.rebuild`, `createGroupLayout`, and
+  `createAsyncGroupBridge` take `(index: number) => T | undefined` instead of
+  `any`.
+
 ### Fixed
 
 - `selectNext()` and `selectPrevious()` scroll the newly selected item into view:

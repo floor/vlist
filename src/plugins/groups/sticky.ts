@@ -17,6 +17,7 @@
  */
 
 import type { GroupLayout, StickyHeader } from "./types";
+import type { VListItem } from "../../types";
 import type { SizeCache } from "../../rendering/sizes";
 
 /**
@@ -48,9 +49,9 @@ export const createStickyContainer = (
   return container;
 };
 
-export const createStickyHeader = (
+export const createStickyHeader = <T extends VListItem = VListItem>(
   root: HTMLElement,
-  layout: GroupLayout,
+  layout: GroupLayout<T>,
   sizeCache: SizeCache,
   renderInto: (slot: HTMLElement, groupIndex: number) => void,
   classPrefix: string,

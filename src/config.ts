@@ -71,7 +71,7 @@ export interface VListConfig<T extends VListItem = VListItem>
   masonry?: MasonryPluginConfig;
 
   /** Sticky group headers. */
-  groups?: GroupsConfig;
+  groups?: GroupsConfig<T>;
 
   /**
    * Row selection (single / multi). Omit it for a display-only list: nothing
@@ -271,7 +271,7 @@ export type ConfigMethods<T extends VListItem, C extends VListConfig<T>> =
   Field<C, "adapter", DataMethods> &
   (C extends { layout: "grid" } ? GridMethods : {}) &
   (C extends { layout: "masonry" } ? MasonryMethods : {}) &
-  Field<C, "groups", GroupsMethods> &
+  Field<C, "groups", GroupsMethods<T>> &
   Field<C, "selection", SelectionMethods<T>> &
   Field<C, "scrollbar", ScrollbarMethods> &
   Field<C, "snapshots", SnapshotsMethods> &
@@ -294,16 +294,21 @@ export type ConfigItem<C> = C extends { items: readonly (infer T extends VListIt
  * feature fields into plugins via {@link resolvePlugins}. This is the single
  * entry point every framework adapter delegates to.
  *
- * One type parameter, the config itself: the item type comes from its `items`
- * or `template`, and the list's methods from its feature fields
+ * Two type parameters, both inferred: the item from `items` or the template,
+ * and the config itself for the methods its feature fields wire
  * ({@link ConfigMethods}). Do not pass a type argument — `createVListFromConfig<Row>`
- * would name a config type, not an item type, and fail to compile; the same
- * trap `createVList<Row>` falls into is closed here by having no second slot.
+ * does not compile (TypeScript requires both parameters), so the partial-argument
+ * trap `createVList<Row>` falls into stays closed.
+ *
+ * `groups.getGroupForIndex` is typed with that item: an inline callback
+ * receives `item?: T`, not `any`, and a callback written for a different
+ * item type is a type error, including when `groups` is optional on the
+ * input type.
  */
 export function createVListFromConfig<
-  const C extends VListConfig<any> & { container: HTMLElement | string },
->(config: C): VList<ConfigItem<C>> & ConfigMethods<ConfigItem<C>, C> {
-  type T = ConfigItem<C>;
+  T extends VListItem,
+  const C extends VListConfig<T> & { container: HTMLElement | string },
+>(config: VListConfig<T> & C): VList<T> & ConfigMethods<T, C> {
   const { factory, ...options } = config as VListConfig<T> & { container: HTMLElement | string };
   return (factory ?? createVList<T>)(
     options as CreateVListConfig<T>,
