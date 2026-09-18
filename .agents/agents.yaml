@@ -26,9 +26,10 @@ project:
   verification:
     - name: Typecheck
       command: [bun, run, typecheck]
-    - name: Tests
-      command: [bun, test]
-    - name: Coverage threshold
+    # One run of the suite, not two: scripts/coverage.ts runs `bun test
+    # --coverage`, prints the failures and exits non-zero when a test fails, so
+    # a separate Tests step only repeated 21 seconds of work.
+    - name: Tests and coverage threshold
       command: [bun, run, scripts/coverage.ts, --threshold, "85"]
     - name: Build
       command: [bun, run, build, --, --types]
@@ -221,15 +222,12 @@ agents:
     capabilities: [review_rfc, vote]
     autonomy: T1
 
-  - id: grok
-    name: "Grok"
-    external: true
-    promptTemplate: "../../agents/agents/grok-reviewer.md"
-    llm:
-      provider: cursor        # picks the bridge: cursor-agent-bridge.ts
-      model: cursor-grok-4.6-high
-    capabilities: [review_rfc, vote]
-    autonomy: T1
+  # Grok does not sit on the committee while Grok is the implementer (Dr Jones,
+  # 2026-09-18): a model reviewing its own PR adds little, and its review bridge
+  # timed out at the 300 s gateway limit in three of four reviews, which set the
+  # floor of every cycle. Claude, Codex and Gemini review. The engine rule that
+  # would let it keep its RFC vote — a member never reviews a PR written by its
+  # own model — is a Linear task; until then the seat is removed.
 
   - id: gemini
     name: "Gemini"
