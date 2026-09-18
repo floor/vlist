@@ -14,8 +14,8 @@ function make(id){let ctx;const list=(q.get('entry')==='native'?native:synthetic
 window.main=make('#list');window.reference=make('#reference');
 window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performance.now();const check=()=>{if(Math.abs(main.list.getScrollPosition()-target)<0.001){requestAnimationFrame(resolve);return;}if(performance.now()-start>5000){reject(Error('animation did not reach '+target));return;}requestAnimationFrame(check);};check();});
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
-window.begin=(gap)=>{main.ctx.scroll.to(90*lap-gap);window.startSampling();};
-window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
+window.begin=(gap)=>{main.ctx.scroll.to(2*lap-gap);window.startSampling();};
+window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scroll.to(lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
 window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);return trace;};window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
@@ -50,11 +50,12 @@ try {
  for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) for(const direction of [1,-1]) {
   const page=await browser.newPage();await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=full&entry=${entry}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(d=>{main.ctx.scroll.to((d>0?90:10)*lap-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
-  await page.evaluate(({entry,d})=>untilPosition(entry==='native'?(d>0?360400:39600):200000+d*400),{entry,d:direction});
+  const lap=await page.evaluate(()=>window.lap);
+  await page.evaluate(d=>{main.ctx.scroll.to((d>0?2:0)*lap-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
+  await page.evaluate(d=>untilPosition(lap+d*400),direction);
   const start=await page.evaluate(d=>{main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?d:0,deltaY:isX?0:d,cancelable:true}));startSampling();const start=main.list.getScrollPosition();main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});return start;},direction);
-  await page.evaluate(d=>untilPosition(200000+d*800),direction);const trace=await page.evaluate(()=>window.finish());const target=200000+direction*800;
-  assert.equal(start,200000+direction*401);assert.equal(trace.at(-1).pos,target);
+  await page.evaluate(d=>untilPosition(lap+d*800),direction);const trace=await page.evaluate(()=>window.finish());const target=lap+direction*800;
+  assert.equal(start,lap+direction*401);assert.equal(trace.at(-1).pos,target);
   assert(trace.every(f=>f.pos>=Math.min(start,target) && f.pos<=Math.max(start,target)),'repeated navigation stays within one item');
   for(const frame of trace)assert.deepEqual(frame.rows,frame.expected);
   console.log('PASS repeated navigation',entry,axis,direction>0?'next':'prev',JSON.stringify({frames:trace.length,start,target}));await page.close();
@@ -62,7 +63,7 @@ try {
  for(const axis of ['horizontal','vertical']) for(const variant of ['full','hero','multi']) {
   const page=await browser.newPage();const x=axis==='horizontal';await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=${variant}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(()=>{main.ctx.scroll.to(90*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
+  await page.evaluate(()=>{main.ctx.scroll.to(2*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
   const read=()=>page.evaluate(()=>{const el=[...document.querySelectorAll('#list [data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0');const r=el.getBoundingClientRect(),v=main.ctx.dom.viewport.getBoundingClientRect();return {size:isX?r.width:r.height,offset:isX?r.left-v.left:r.top-v.top,index:main.list.getCarouselState().index,pos:main.list.getCarouselState().scrollPosition};});
   const before=await read();assert.equal(before.index,3);
   await page.evaluate(()=>document.querySelector('#list').style[isX?'height':'width']='500px');await wait(100);assert.deepEqual(await read(),before);
@@ -71,6 +72,27 @@ try {
   await page.evaluate(()=>{main.list.scrollToIndex(9);main.list.next(1,{behavior:'auto'});});assert.equal((await read()).index,0);
   await page.evaluate(()=>main.list.prev(1,{behavior:'auto'}));assert.equal((await read()).index,9);
   console.log('PASS resize after fold',axis,variant,JSON.stringify({before,after}));await page.close();
+ }
+ for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) {
+  const page=await browser.newPage();await page.setViewport({width:600,height:600});
+  await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=full&entry=${entry}`);await page.waitForFunction(()=>window.ready);
+  const lap=await page.evaluate(()=>window.lap);
+  await page.evaluate(()=>{main.list.scrollToIndex(9);startSampling();main.list.next(1,{behavior:'smooth',duration:180});});
+  await page.evaluate(()=>untilPosition(lap));
+  const snapTrace=await page.evaluate(()=>window.finish());
+  assert.equal(snapTrace.at(-1).pos,lap);
+  let snapJump=0;
+  for(let i=1;i<snapTrace.length;i++) for(const row of snapTrace[i].rows){const old=snapTrace[i-1].rows.find(r=>r.id===row.id);if(old)snapJump=Math.max(snapJump,Math.abs(row.offset-old.offset));}
+  assert(snapJump<400,`${entry}/${axis} last-to-first paint jump ${snapJump}px`);
+  await page.evaluate(()=>{main.list.scrollToIndex(0);startSampling();});
+  const key=axis==='horizontal'?'ArrowRight':'ArrowDown';
+  for(let i=0;i<12;i++){await page.evaluate(k=>document.querySelector('#list .vlist-content').dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true})),key);await wait(60);}
+  const keyTrace=await page.evaluate(()=>window.finish());
+  assert.equal(await page.evaluate(()=>main.list.getCarouselState().index),2);
+  let keyJump=0;
+  for(let i=1;i<keyTrace.length;i++) for(const row of keyTrace[i].rows){const old=keyTrace[i-1].rows.find(r=>r.id===row.id);if(old)keyJump=Math.max(keyJump,Math.abs(row.offset-old.offset));}
+  assert(keyJump<400,`${entry}/${axis} keyboard paint jump ${keyJump}px`);
+  console.log('PASS last-to-first and keyboard',entry,axis,JSON.stringify({snapFrames:snapTrace.length,snapJump,keyFrames:keyTrace.length,keyJump}));await page.close();
  }
  console.log('SUMMARY',JSON.stringify({folds,largestFoldFrameDisplacement:largest}));
 } finally {await browser.close();server.stop();}

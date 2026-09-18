@@ -74,7 +74,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     if (motion.active) schedule(); else scheduleIdle();
   }
   const motion = createMotion({
-    axis: isX ? "x" : "y", getMax: () => max, reducedMotion: () => reduced.matches,
+    axis: isX ? "x" : "y", getMax: () => wrap ? Infinity : max, reducedMotion: () => reduced.matches,
     onChange(position) { if (!folding) commit(position); },
     onFinish() {
       const callback = complete; complete = undefined; callback?.();
@@ -185,7 +185,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     const previous = motion.position;
     cancelScroll(); motion.jump(position);
     // Even an unchanged jump completes the external navigation/idle contract.
-    if (previous === Math.max(0, Math.min(max, position))) commit(motion.position);
+    if (previous === (wrap ? position : Math.max(0, Math.min(max, position)))) commit(motion.position);
     scheduleIdle();
   }
   function refresh(totalSize: number): void {

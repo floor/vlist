@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- carousel: virtual index space is three laps, folded every lap (was 101)
+
 ## [3.0.0-next.3] - 2026-09-17
 
 ### Changed

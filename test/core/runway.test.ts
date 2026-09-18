@@ -307,6 +307,7 @@ function wrapPlugin(
         thresholdLaps: opts.middle - opts.threshold,
       }, createBoundedScrollHandler);
       ctx.hooks.method("jump", (px: number) => ctx.scroll.to(px));
+      ctx.hooks.method("smoothJump", (px: number, duration: number) => ctx.scroll.smoothTo(px, duration, (t) => t));
     },
   };
 }
@@ -412,6 +413,36 @@ describe("bounded scroll — wrap mode", () => {
 
     // Drifted two laps forward, not folded.
     expect(list.getScrollPosition()).toBe(home + 2 * lapSize);
+  });
+
+  it("shifts a running smooth-scroll origin across a wrap fold", async () => {
+    // Own host: this test awaits, so a shared `list` would be destroyed by a
+    // concurrent sibling's afterEach.
+    const host = createContainer({ width: 300, height: VIEWPORT });
+    const current = createVList<TestItem>(
+      {
+        container: host,
+        items: createTestItems(5),
+        item: { height: ITEM, template: simpleTemplate },
+      },
+      [wrapPlugin(5, { cycles: 3, middle: 1, threshold: 0 })],
+    );
+    try {
+      const lapSize = 5 * ITEM; // 250
+      const home = 1 * lapSize; // 250
+      (current as unknown as { jump(px: number): void }).jump(home + lapSize - 20); // 480, about to leave the home lap
+
+      (current as unknown as { smoothJump(px: number, duration: number): void }).smoothJump(home + lapSize + 80, 64);
+      await new Promise((r) => setTimeout(r, 120));
+
+      // Folded back into the home lap; the extra 80px past the boundary remains.
+      // Without shifting from/dest mid-animation, the next tick would apply the
+      // pre-fold dest and jump a whole lap.
+      expect(current.getScrollPosition()).toBe(home + 80);
+    } finally {
+      current.destroy();
+      host.remove();
+    }
   });
 });
 

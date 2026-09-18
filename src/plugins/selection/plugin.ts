@@ -93,7 +93,7 @@ export function selection<T extends VListItem = VListItem>(
   // getTotalFn is a layout-space bound: it walks focus across entries, so with
   // groups it counts headers too. Questions of the form "how many items are
   // there" need the data total instead — the engine's count is render-space,
-  // and carousel inflates it to 101 laps. Plugins that know better publish
+  // and carousel inflates it to three laps. Plugins that know better publish
   // _getTotal; with none, the two spaces coincide.
   let getDataTotalFn: () => number;
   let resolved = false;

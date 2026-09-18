@@ -67,7 +67,7 @@ export interface BoundedScrollHandler extends ScrollHandler {
 export interface WrapConfig {
   /** Current lap period in virtual px (`realTotal × stepSize`). */
   readonly lapSize: () => number;
-  /** Logical position to fold back toward (e.g. the middle cycle). */
+  /** Logical position to fold back toward (the home lap). */
   readonly home: () => number;
   /** Fold the logical position back toward `home` once it drifts this many laps away. */
   readonly thresholdLaps: number;
@@ -121,6 +121,12 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let animationId: number | null = null;
+  // Fold-along origin for an in-flight smooth scroll. wrapRebase shifts these
+  // by the same delta as scrollPosition so a snap that crosses a lap does not
+  // jump by a whole lap on the next tick (from/dest would otherwise stay in
+  // the pre-fold coordinate space).
+  let animFrom = 0;
+  let animShift = 0;
 
   function getScrollTop(): number {
     return isX ? viewport.scrollLeft : viewport.scrollTop;
@@ -146,6 +152,7 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     if (isWrap) {
       state.baseOffset = clamped - centre;
       setScrollTop(centre);
+      wrapRebase();
       return;
     }
     const base = clamp(clamped - centre, 0, maxBaseOffset);
@@ -219,6 +226,8 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     state.scrollPosition -= shift;
     state.prevScrollPosition -= shift;
     state.baseOffset -= shift;
+    animFrom -= shift;
+    animShift -= shift;
     config.onFold?.(shift);
     wrap!.onFold?.(shift);
   }
@@ -284,11 +293,12 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     onComplete?: () => void,
   ): void {
     cancelScroll();
-    const from = state.scrollPosition;
+    animFrom = state.scrollPosition;
+    animShift = 0;
     const getTarget = typeof targetOrFn === "function" ? targetOrFn : (): number => targetOrFn;
     let dest = getTarget();
 
-    if (Math.abs(dest - from) < 1) {
+    if (Math.abs(dest - animFrom) < 1) {
       setLogical(dest);
       onComplete?.();
       return;
@@ -296,9 +306,9 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
 
     const start = performance.now();
     function tick(now: number): void {
-      dest = getTarget();
+      dest = getTarget() + animShift;
       const t = Math.min((now - start) / duration, 1);
-      applySplit(from + (dest - from) * easing(t));
+      applySplit(animFrom + (dest - animFrom) * easing(t));
       onFrame();
       if (t < 1) {
         animationId = requestAnimationFrame(tick);
