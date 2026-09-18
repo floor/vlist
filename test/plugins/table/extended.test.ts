@@ -718,4 +718,42 @@ describe("table — selection integration", () => {
     // The fact that this does not throw is the primary assertion
     expect(root.getAttribute("role")).toBe("grid");
   });
+
+  it("selectNext past the fold leaves the selected row rendered in the table", () => {
+    const items = createTestItems(80);
+    const rowHeight = 40;
+    const viewport = 500;
+
+    list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: rowHeight, template: simpleTemplate },
+      },
+      [
+        table({
+          columns: [
+            { key: "name", label: "Name", width: 200 },
+            { key: "value", label: "Value", width: 100 },
+          ],
+          rowHeight,
+        }),
+        selection({ mode: "single" }),
+      ],
+    );
+
+    const sel = list as unknown as {
+      selectNext(): void;
+      getSelected(): Array<string | number>;
+    };
+    const steps = Math.floor(viewport / rowHeight) + 5;
+    for (let i = 0; i < steps; i++) sel.selectNext();
+
+    expect(sel.getSelected().length).toBe(1);
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+    const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row!.classList.contains("vlist-table-row")).toBe(true);
+  });
 });

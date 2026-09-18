@@ -445,6 +445,8 @@ const list = createVList(config, [plugin1(), plugin2()])
 | `list.selectAll()` / `list.clearSelection()` | Bulk operations |
 | `list.getSelected()` | Array of selected IDs |
 | `list.getSelectedItems()` | Array of selected items |
+| `list.selectNext()` | Select the next item and scroll it into view |
+| `list.selectPrevious()` | Select the previous item and scroll it into view |
 
 ### Events
 

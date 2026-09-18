@@ -59,9 +59,9 @@ export interface SelectionMethods<T extends VListItem = VListItem> {
   getSelected(): Array<string | number>;
   /** The selected items. */
   getSelectedItems(): T[];
-  /** Move the selection to the next item. */
+  /** Select the next item and scroll it into view. */
   selectNext(): void;
-  /** Move the selection to the previous item. */
+  /** Select the previous item and scroll it into view. */
   selectPrevious(): void;
 }
 
@@ -700,26 +700,33 @@ export function selection<T extends VListItem = VListItem>(
         return collectSelectedItems();
       });
 
-      ctx.hooks.method("selectNext", (): void => {
+      const selectAdjacent = (delta: 1 | -1): void => {
         resolveOnce(ctx);
         const total = getTotalFn();
         if (total === 0) return;
-        moveFocus(state, 1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, 1, total);
+        moveFocus(state, delta, total, resolvedConfig.reverse);
+        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
         const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
+        // Same commit as the keyboard path: mutate selection first so a
+        // synchronous scroll render already has the new selected state, then
+        // reveal. Layout plugins that own motion via nav.navigate (carousel
+        // snap) must not be overridden by an instant scrollTo;
+        // _scrollItemIntoView still wins (groups/masonry).
+        if (state.focusedIndex >= 0) {
+          const nav = ctx.nav.get();
+          if (sivFn || !nav.navigate) scrollFocusIntoView(state.focusedIndex);
+          setActiveDescendant(state.focusedIndex);
+        }
         emitSelectionChange();
+      };
+
+      ctx.hooks.method("selectNext", (): void => {
+        selectAdjacent(1);
       });
 
       ctx.hooks.method("selectPrevious", (): void => {
-        resolveOnce(ctx);
-        const total = getTotalFn();
-        if (total === 0) return;
-        moveFocus(state, -1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, -1, total);
-        const item = getDataItemAtLayout(state.focusedIndex);
-        if (item) doSelect(item.id, item);
-        emitSelectionChange();
+        selectAdjacent(-1);
       });
 
       // ── Internal methods (used by snapshots, sortable) ────────

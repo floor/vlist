@@ -256,5 +256,31 @@ describe("grid + selection integration", () => {
       const selected: number[] = (list as any).getSelected();
       expect(selected.length).toBeGreaterThan(0);
     });
+
+    it("selectNext past the fold leaves the selected grid item rendered", () => {
+      const itemSize = 40;
+      const columns = 3;
+      const viewport = 500;
+      list = createVList(
+        {
+          container,
+          items: createTestItems(80),
+          item: { height: itemSize, template: simpleTemplate },
+        },
+        [grid({ columns }), selection({ mode: "single" })],
+      );
+
+      const visibleItems = Math.floor(viewport / itemSize) * columns;
+      const steps = visibleItems + 5;
+      for (let i = 0; i < steps; i++) (list as any).selectNext();
+
+      const selected: number[] = (list as any).getSelected();
+      expect(selected.length).toBe(1);
+      expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+      const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row!.getAttribute("data-id")).toBe(String(selected[0]));
+    });
   });
 });
