@@ -23,7 +23,24 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   snaps in the current virtual lap, no wrap); otherwise `_scrollItemIntoView`
   or nearest-edge scrolling. `nav.navigate` is the keyboard path — these
   methods never call it, and must not skip the reveal because it exists.
-  `select(id)` still selects without moving the viewport.
+  `select(id)` still selects without moving the viewport. The index passed to
+  `nav.reveal` is the navigation / focus index that goes with `nav.total`
+  (carousel: logical item index; grid: item index), not a size-cache or layout
+  index. `NavCapability.get()` always carries a `reveal` property (`null` when
+  no owner set one).
+
+- `selectNext()` / `selectPrevious()` cancel an in-flight smooth scroll before
+  revealing. `scroll.to()` committed the position while the animation kept
+  running, so calling Next during `scrollToIndex({ behavior: "smooth" })`
+  selected the first item and then the animation carried the viewport to the
+  original target, leaving the selection off-screen — including when the
+  selected row was already visible and the reveal itself did not scroll.
+
+- A selection-driven carousel reveal emits `carousel:change` when the index
+  changes, with a scroll position that matches the completed reveal.
+  `revealInCurrentLap()` used to set `intendedVi` and emit nothing, so
+  pagination indicators stayed stale through `selectNext()` /
+  `selectPrevious()`. Clamping at either end still emits nothing.
 
 ## [3.0.0-next.3] - 2026-09-17
 

@@ -266,3 +266,69 @@ describe("selection + carousel — selectNext reveals", () => {
     expect(row!.getAttribute("data-id")).toBe("20");
   });
 });
+
+describe("selection + carousel — selectNext emits carousel:change", () => {
+  const asSel = (l: VList<TestItem>) => l as unknown as {
+    selectNext(): void;
+    selectPrevious(): void;
+    getSelected(): Array<string | number>;
+    getCarouselState(): { index: number };
+  };
+
+  type Change = { index: number; scrollPosition: number };
+  const listen = (l: VList<TestItem>): Change[] => {
+    const events: Change[] = [];
+    (l as unknown as { on(event: string, handler: (payload: Change) => void): void })
+      .on("carousel:change", (payload) => { events.push(payload); });
+    return events;
+  };
+
+  it("emits once per index change in both directions, with the revealed position", () => {
+    container = createContainer({ width: 300, height: 200 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [carousel(), selection<TestItem>({ mode: "single" })],
+    );
+
+    const sel = asSel(list);
+    const events = listen(list);
+
+    for (let i = 0; i < 10; i++) sel.selectNext();
+
+    expect(sel.getCarouselState().index).toBe(9);
+    expect(events.map((e) => e.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const last = events[events.length - 1]!;
+    expect(last.scrollPosition).toBe(list.getScrollPosition());
+
+    events.length = 0;
+    for (let i = 0; i < 10; i++) sel.selectPrevious();
+
+    expect(sel.getCarouselState().index).toBe(0);
+    expect(events.map((e) => e.index)).toEqual([8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    expect(events[events.length - 1]!.scrollPosition).toBe(list.getScrollPosition());
+  });
+
+  it("emits nothing when selectNext / selectPrevious clamp at an end", () => {
+    container = createContainer({ width: 300, height: 200 });
+    list = createVList<TestItem>(
+      { container, items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [carousel(), selection<TestItem>({ mode: "single" })],
+    );
+
+    const sel = asSel(list);
+    const events = listen(list);
+
+    sel.selectPrevious();
+    expect(sel.getCarouselState().index).toBe(0);
+    expect(events).toEqual([]);
+
+    for (let i = 0; i < 25; i++) sel.selectNext();
+    expect(sel.getCarouselState().index).toBe(19);
+    events.length = 0;
+
+    sel.selectNext();
+    expect(sel.getSelected()).toEqual([20]);
+    expect(sel.getCarouselState().index).toBe(19);
+    expect(events).toEqual([]);
+  });
+});

@@ -15,6 +15,7 @@ import { createVList } from "../../../src/core/create";
 import { selection, type SelectionMethods } from "../../../src/plugins/selection";
 import { groups } from "../../../src/plugins/groups";
 import type { VList } from "../../../src/core/types";
+import { advanceTimers } from "../../helpers/timers";
 
 // =============================================================================
 // DOM Setup
@@ -419,6 +420,69 @@ describe("selection -- scroll on focus move", () => {
 
     expect(getSelected(list)).toEqual([3]);
     expect(list.getScrollPosition()).toBe(0);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext during a smooth scroll keeps the selection visible after the animation would have finished", async () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(200, { mode: "single" });
+    const sel = asSelectable(list);
+
+    list.scrollToIndex(100, { align: "start", behavior: "smooth", duration: 300 });
+    await advanceTimers(50);
+    sel.selectNext();
+
+    // The in-flight animation targeted index 100 (5000px). If it is not
+    // cancelled, waiting past its end leaves the newly selected item
+    // off-screen and unrendered.
+    await advanceTimers(400);
+
+    expect(getSelected(list)).toEqual([1]);
+    expect(list.getScrollPosition()).toBeLessThan(viewport);
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe("1");
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext cancels an in-flight smooth scroll even when the selected item is already visible", async () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(200, { mode: "single" });
+    const sel = asSelectable(list);
+
+    sel.selectNext();
+    sel.selectNext();
+    sel.selectNext();
+    expect(getSelected(list)).toEqual([3]);
+    expect(list.getScrollPosition()).toBe(0);
+
+    list.scrollToIndex(100, { align: "start", behavior: "smooth", duration: 300 });
+    await advanceTimers(16);
+    sel.selectNext();
+
+    await advanceTimers(400);
+
+    expect(getSelected(list)).toEqual([4]);
+    expect(list.getScrollPosition()).toBeLessThan(viewport);
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe("4");
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
 
     list.destroy();
     container.remove();

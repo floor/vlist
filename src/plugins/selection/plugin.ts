@@ -340,6 +340,11 @@ export function selection<T extends VListItem = VListItem>(
       let selGridGap = 0;
       const scrollFocusIntoView = (index: number): void => {
         if (index < 0) return;
+        // writeScroll() commits the position; it does not stop an animation
+        // already in flight. Cancel through the scroll owner even when this
+        // item is already visible — otherwise the scheduled frames keep
+        // running and carry the selection off-screen.
+        ctx.scroll.cancel();
         if (sivFn) { sivFn(index); return; }
         if (!selGridGap) {
           const gapFn = ctx.hooks.get("_getRowGap") as (() => number) | undefined;
