@@ -235,13 +235,12 @@ agents:
     name: "Gemini"
     promptTemplate: "../../agents/agents/gemini-reviewer.md"
     llm:
-      # The Gemini API on GEMINI_API_KEY (in .agents/.env): the CLI's individual
-      # login was discontinued in favour of Antigravity, which is a GUI and
-      # cannot vote unattended. Seated 2026-09-18 by Dr Jones. The key is on the
-      # free tier (no billing): 3.8 flash answers there, 3.1 pro preview has no
-      # free quota (429, measured) — switch the model if billing is enabled.
-      provider: gemini
-      model: gemini-3.8-flash
+      # The Antigravity CLI (`agy`) on Dr Jones's Google AI Pro subscription
+      # (floor/agents#64): no API key, no metering, the pro model. Seated
+      # 2026-09-18. `provider: gemini` would be the metered API instead; the
+      # key on GEMINI_API_KEY is on the free tier and is not used here.
+      provider: antigravity
+      model: gemini-3.1-pro-high
       temperature: 0.3
       maxTokens: 32000
     capabilities: [read_code, review_rfc, vote]
