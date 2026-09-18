@@ -254,7 +254,11 @@ agents:
       model: gemini-3.1-pro-high
       temperature: 0.3
       maxTokens: 32000
-    capabilities: [read_code, review_rfc, vote]
+    # Off routine PR review until 3.0.0 / 1.0.0 ship (Dr Jones, 2026-09-18): a
+    # cycle lasted as long as this seat — 5 to 9 minutes, or an empty answer
+    # (FLO-181). Codex and Claude review every PR; the coordinator asks Gemini by
+    # hand on design-sized changes, where its reviews found what others missed.
+    capabilities: [read_code, review_rfc]
     autonomy: T1
 
 # ── Guardrails ─────────────────────────────────────────────────────
