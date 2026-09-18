@@ -197,8 +197,8 @@ agents:
   # `claude,codex,grok` by default.
   #
   # Every member reviews inside a reviewer sandbox: it reads the repository and
-  # cannot write to it. Antigravity (Gemini) is parked — its GUI cannot vote
-  # unattended — so it is not seated.
+  # cannot write to it. Gemini sits here through its API; Antigravity, the GUI,
+  # cannot vote unattended and is not seated.
 
   - id: claude
     name: "Claude"
@@ -229,6 +229,22 @@ agents:
       provider: cursor        # picks the bridge: cursor-agent-bridge.ts
       model: cursor-grok-4.6-high
     capabilities: [review_rfc, vote]
+    autonomy: T1
+
+  - id: gemini
+    name: "Gemini"
+    promptTemplate: "../../agents/agents/gemini-reviewer.md"
+    llm:
+      # The Gemini API on GEMINI_API_KEY (in .agents/.env): the CLI's individual
+      # login was discontinued in favour of Antigravity, which is a GUI and
+      # cannot vote unattended. Seated 2026-09-18 by Dr Jones. The key is on the
+      # free tier (no billing): 3.8 flash answers there, 3.1 pro preview has no
+      # free quota (429, measured) — switch the model if billing is enabled.
+      provider: gemini
+      model: gemini-3.8-flash
+      temperature: 0.3
+      maxTokens: 32000
+    capabilities: [read_code, review_rfc, vote]
     autonomy: T1
 
 # ── Guardrails ─────────────────────────────────────────────────────
