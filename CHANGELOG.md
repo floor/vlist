@@ -58,6 +58,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   indicator. The ring and the active descendant are now on the same row after
   every key move; a click keeps following `focusOnClick`.
 
+- `sortable()` with `selection()`: the focus ring survives a keyboard sort.
+  Space grabbed an item, and the first arrow that moved it took the ring away —
+  mid-sort, not after the drop — because the move reached selection as if it
+  were a click. With the default `focusOnClick: false` the ring vanished,
+  `aria-activedescendant` stayed on the row the item had left, and
+  `_getFocusedIndex()` answered -1, so the Space meant to re-grab the item fell
+  through to selection and selected it instead. The ring and the active
+  descendant now follow the grabbed item through every move, the drop and
+  Escape; a pointer drag keeps following `focusOnClick`.
+
 - A wrap-mode coordinate fold (carousel) now re-keys the mounted row
   elements instead of releasing and re-creating them. Folding used to
   miss every `rendered` lookup because virtual indices moved by whole
