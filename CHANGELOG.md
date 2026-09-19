@@ -102,6 +102,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   pagination indicators stayed stale through `selectNext()` /
   `selectPrevious()`. Clamping at either end still emits nothing.
 
+### Removed
+
+- `grid()`: the placeholder `rebuildAsRows` function the plugin was created
+  with. Setup installs the real one before anything can call it, so it never
+  ran. No behaviour change; the grid bundle is 8 bytes smaller gzipped.
+
 ## [3.0.0-next.3] - 2026-09-17
 
 ### Changed

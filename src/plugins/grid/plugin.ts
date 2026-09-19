@@ -105,7 +105,7 @@ export function grid<T extends VListItem = VListItem>(
   let lastContainerSize = -1;
   let lastContentTotalSize = -1;
   let forceNextRender = true;
-  let rebuildAsRows: (rowCount: number) => void = (n) => sizeCache.rebuild(n);
+  let rebuildAsRows: (rowCount: number) => void;
 
   // Recompute the cached column width — call on resize/config change.
   function recomputeColumnWidth(): void {
