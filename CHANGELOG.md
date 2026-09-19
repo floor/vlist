@@ -108,6 +108,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   with. Setup installs the real one before anything can call it, so it never
   ran. No behaviour change; the grid bundle is 8 bytes smaller gzipped.
 
+- Three internal cross-plugin hooks that no plugin reads any more. Underscore
+  hooks never reach the list instance, so only a plugin calling
+  `ctx.hooks.get()` could have seen them: `_scrollbar:setCallback` (its one
+  consumer, the scale plugin, went with RFC-012; the scrollbar now calls
+  `ctx.scroll.to` directly), and the table's `_updateRenderedItem` and
+  `_updateItemClasses` (orphaned since the v2 plugin migration). No behaviour
+  change; scrollbar is 30 bytes and table 37 bytes smaller gzipped.
+
 ## [3.0.0-next.3] - 2026-09-17
 
 ### Changed
