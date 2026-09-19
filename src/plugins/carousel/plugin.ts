@@ -327,6 +327,7 @@ export function carousel<T extends VListItem = VListItem>(
       // items at identical paint positions, so the fold is seamless.
       ctx.scroll.setBoundedWrap({
         lapSize: () => lapSize,
+        itemsPerLap: () => realTotal,
         home: () => MIDDLE_CYCLE * lapSize,
         thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
         onFold(shift: number) {

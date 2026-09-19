@@ -29,6 +29,7 @@
 
 import type { SizeCache } from "./sizes";
 import type { EngineState } from "./state";
+import { applyWrapFold } from "./fold";
 import {
   SCROLL_IDLE_TIMEOUT,
   WHEEL_SENSITIVITY,
@@ -67,6 +68,12 @@ export interface BoundedScrollHandler extends ScrollHandler {
 export interface WrapConfig {
   /** Current lap period in virtual px (`realTotal × stepSize`). */
   readonly lapSize: () => number;
+  /**
+   * Real items in one lap (e.g. the carousel's `realTotal`). The wrap handler
+   * uses this to re-key mounted elements on a fold so the same DOM nodes
+   * survive the virtual-index shift — only the key changed; paint did not.
+   */
+  readonly itemsPerLap: () => number;
   /** Logical position to fold back toward (e.g. the middle cycle). */
   readonly home: () => number;
   /** Fold the logical position back toward `home` once it drifts this many laps away. */
@@ -92,6 +99,22 @@ export interface BoundedScrollConfig {
   /** Infinite-loop config (carousel). When set, the logical position wraps by
    *  whole laps toward `home` instead of clamping to a maximum. */
   readonly wrap?: WrapConfig;
+  /**
+   * Mounted row map. A wrap fold re-keys it in place so phase 2 finds the
+   * same nodes; omitted when the handler is constructed without a viewport.
+   */
+  readonly rendered?: Map<number, HTMLElement>;
+  /**
+   * Class prefix for rewriting `id` / `aria-activedescendant` on a wrap fold.
+   * Passed explicitly — a prefix containing `-content` cannot be recovered
+   * from the content element's class name.
+   */
+  readonly classPrefix?: string;
+  /**
+   * Stripe class (`{prefix}-item--odd`). Re-toggled on a wrap fold when
+   * `indexShift` is odd, so virtual-index parity survives the re-key.
+   */
+  readonly oddClass?: string;
   /** @internal Coordinate fold: shift core telemetry references before rendering. */
   readonly onFold?: (shift: number) => void;
   /** Called synchronously per frame — triggers the 2-phase pipeline. */
@@ -209,6 +232,8 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   // number of laps leaves scrollTop (and therefore every on-screen position)
   // untouched — the modulo index mapping resolves the shifted window to the same
   // real items, so the loop is seamless and the render window stays bounded.
+  // applyWrapFold re-keys the mounted map by the same lap shift so phase 2
+  // finds those nodes instead of releasing and re-creating the viewport.
   function wrapRebase(): void {
     const lap = wrap!.lapSize();
     if (lap <= 0) return;
@@ -219,6 +244,7 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     state.scrollPosition -= shift;
     state.prevScrollPosition -= shift;
     state.baseOffset -= shift;
+    applyWrapFold(wrap!, shift, state, content, config.rendered, config.classPrefix ?? "", config.oddClass);
     config.onFold?.(shift);
     wrap!.onFold?.(shift);
   }

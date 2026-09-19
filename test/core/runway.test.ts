@@ -303,6 +303,7 @@ function wrapPlugin(
       ctx.items.setIndexMapFn(mod);
       ctx.scroll.setBoundedWrap({
         lapSize: () => lapSize,
+        itemsPerLap: () => realTotal,
         home: () => opts.middle * lapSize,
         thresholdLaps: opts.middle - opts.threshold,
       }, createBoundedScrollHandler);
