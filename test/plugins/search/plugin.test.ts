@@ -632,6 +632,195 @@ describe("search bar input", () => {
 });
 
 // =============================================================================
+// Search bar buttons — what a pointer user reaches
+// =============================================================================
+
+describe("search bar buttons", () => {
+  const click = (el: Element): void => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  };
+
+  it("the clear button empties the query, brings every item back and returns focus to the input", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const clear = container.querySelector(".vlist-search__clear-button")!;
+    input.value = "ap";
+    input.dispatchEvent(new Event("input"));
+    expect(list.total).toBe(3);
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(false);
+
+    click(clear);
+
+    expect(q(list, "getQuery")()).toBe("");
+    expect(input.value).toBe("");
+    expect(list.total).toBe(FRUITS.length);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("");
+    expect(container.querySelector("mark")).toBeNull();
+    // The button hides itself once there is nothing left to clear.
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(true);
+    // The user clicked a button; typing must go on in the field, not the button.
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("the clear button announces the emptied query through search:change", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    q(list, "setQuery")("ap");
+    const changes: Array<{ query: string; matches: number; total: number }> = [];
+    list.on("search:change" as any, (e: any) => changes.push(e));
+
+    click(container.querySelector(".vlist-search__clear-button")!);
+
+    expect(changes).toEqual([{ query: "", matches: 0, total: FRUITS.length }]);
+  });
+
+  it("the next and previous buttons step through the matches in navigate mode", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    const counter = container.querySelector(".vlist-search__counter")!;
+    const matched: number[] = [];
+    list.on("search:match" as any, (e: any) => matched.push(e.index));
+    expect(counter.textContent).toBe("1 of 3");
+
+    click(container.querySelector(".vlist-search__nav-next")!);
+    expect(counter.textContent).toBe("2 of 3");
+    click(container.querySelector(".vlist-search__nav-next")!);
+    expect(counter.textContent).toBe("3 of 3");
+    click(container.querySelector(".vlist-search__nav-prev")!);
+    expect(counter.textContent).toBe("2 of 3");
+
+    // Apple (0), Apricot (3) and Grape (4) match "ap"; the buttons walked 3 → 4 → 3.
+    expect(matched).toEqual([3, 4, 3]);
+  });
+
+  it("the previous button wraps from the first match to the last", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    click(container.querySelector(".vlist-search__nav-prev")!);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("3 of 3");
+  });
+
+  it("shows the step buttons in navigate mode and hides them in filter mode", () => {
+    const nav = makeList({ mode: "navigate" }).container;
+    expect(nav.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(false);
+    expect(nav.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(false);
+
+    const filter = makeList({ mode: "filter" }).container;
+    expect(filter.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(true);
+    expect(filter.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
+  });
+
+  it("clicking the magnifier puts the caret in the input", () => {
+    const { container } = makeList();
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
+    click(container.querySelector(".vlist-search__leading-icon")!);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("typing into a destroyed bar no longer filters the list", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+
+    list.destroy();
+    lists = lists.filter((l) => l !== list);
+    expect(list.total).toBe(FRUITS.length);
+
+    // The node is detached but still reachable by whoever kept a reference.
+    input.value = "ap";
+    input.dispatchEvent(new Event("input"));
+    expect(list.total).toBe(FRUITS.length);
+  });
+});
+
+// =============================================================================
+// Keys pressed while the caret is in the search input
+// =============================================================================
+
+describe("search bar keys", () => {
+  /** A real, cancelable keydown; reports whether the plugin claimed it. */
+  function pressIn(el: HTMLElement, key: string, opts: KeyboardEventInit = {}): boolean {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts });
+    el.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  function openAndType(value: string) {
+    const made = makeList({ mode: "navigate" });
+    const input = made.container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const counter = made.container.querySelector(".vlist-search__counter")!;
+    // Ctrl+F from the list opens search and moves the caret into the field.
+    pressIn(made.list.element, "f", { ctrlKey: true });
+    expect(document.activeElement).toBe(input);
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return { ...made, input, counter };
+  }
+
+  it("Enter in the input steps exactly one match forward, Shift+Enter one back", () => {
+    const { input, counter } = openAndType("ap");
+    expect(counter.textContent).toBe("1 of 3");
+
+    // The keydown also bubbles to the list root; it must not be counted twice.
+    expect(pressIn(input, "Enter")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(pressIn(input, "Enter", { shiftKey: true })).toBe(true);
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  it("ArrowDown and ArrowUp in the input walk the matches instead of moving the caret", () => {
+    const { input, counter } = openAndType("ap");
+
+    expect(pressIn(input, "ArrowDown")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(pressIn(input, "ArrowUp")).toBe(true);
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  it("Escape in the input clears the query and closes search", () => {
+    const { list, input } = openAndType("ap");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+
+    expect(pressIn(input, "Escape")).toBe(true);
+
+    expect(q(list, "getQuery")()).toBe("");
+    expect(input.value).toBe("");
+    expect(list.element.classList.contains("vlist--searching")).toBe(false);
+    expect(list.element.classList.contains("vlist--search-open")).toBe(false);
+  });
+
+  it("leaves every other key to the text field", () => {
+    const { input, counter } = openAndType("ap");
+
+    // Letters, Backspace and the horizontal arrows belong to the input: if the
+    // plugin claimed them the user could not edit the query.
+    for (const key of ["p", "Backspace", "ArrowLeft", "ArrowRight", "Home"]) {
+      expect(pressIn(input, key)).toBe(false);
+    }
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  // BUG (reported with FLO-168, not fixed here): only openSearch(), setQuery()
+  // and Ctrl+F mark search as open. Clicking into the visible bar and typing
+  // filters the list but leaves it "closed", so Enter, the arrows and Escape in
+  // the input do nothing and the root never gets `vlist--searching`.
+  it.todo("the same keys work when the user simply clicked into the bar and typed", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const counter = container.querySelector(".vlist-search__counter")!;
+    input.focus();
+    input.value = "ap";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(counter.textContent).toBe("1 of 3");
+
+    expect(pressIn(input, "Enter")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+    expect(pressIn(input, "Escape")).toBe(true);
+    expect(q(list, "getQuery")()).toBe("");
+  });
+});
+
+// =============================================================================
 // Keyboard handler
 // =============================================================================
 
