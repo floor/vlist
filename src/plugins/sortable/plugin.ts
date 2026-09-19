@@ -18,6 +18,9 @@
  *
  * Restrictions:
  * - Cannot be combined with the grid, masonry, table or tree plugins
+ * - Cannot *yet* be combined with carousel: this plugin asks the size cache
+ *   about a data index, and carousel makes it speak virtual ones. Fixable —
+ *   see `conflicts` below.
  */
 
 import type { VListItem } from "../../types";
@@ -863,7 +866,17 @@ export function sortable<T extends VListItem = VListItem>(
   return {
     name: "sortable",
     priority: 30,
-    conflicts: ["grid", "masonry", "table", "tree"],
+    // carousel is "not yet", not "never" — unlike the four layout plugins
+    // above, which own the geometry this plugin drags through. A sortable
+    // carousel is a reasonable thing to want; it is broken for one fixable
+    // reason. This plugin reads data-index for dragIndex and then hands that
+    // data index to sizeCache.getOffset() in computeDropIndex, and carousel
+    // has made the size cache speak virtual indices. A real pointer gesture
+    // on ten items emitted sort:end { fromIndex: 2, toIndex: 13 }, and the
+    // backward branch of computeDropIndex was unreachable, so dragging
+    // upward was impossible. Converting through _layoutToDataIndex would
+    // close it; until someone does, declare it and leave the door open.
+    conflicts: ["grid", "masonry", "table", "tree", "carousel"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

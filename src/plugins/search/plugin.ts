@@ -20,6 +20,9 @@
  * - Cannot be combined with `tree()`. Filtering a tree means preserving the
  *   ancestors of each match, which belongs to the plugin that owns the layout;
  *   `tree()` provides no such hook.
+ * - Cannot *yet* be combined with `carousel()`. Filter mode replaces the item
+ *   accessors and the total that the carousel window owns, and clearing the
+ *   query does not give them back. Fixable — see `conflicts` below.
  */
 
 import type { VListItem } from "../../types";
@@ -511,7 +514,19 @@ export function search<T extends VListItem = VListItem>(
     // hook this plugin was written to call. Filtering therefore fell through to
     // flat indices into the source array: the total was corrupted, children
     // were never matched, and clearing left the list a size it had never been.
-    conflicts: ["data", "tree"],
+    //
+    // carousel is "not yet", not "never". A searchable carousel is a
+    // reasonable thing to want, and the reason it does not work is fixable:
+    // filter mode replaces setGetFn, setTotalFn and engineState.totalItems,
+    // which is exactly the window carousel installs over the data, and
+    // installWindow runs once. Measured on 30 items: the engine total went
+    // 30 → 1 on a query and came back 10, never 30, because restoreItems
+    // writes identity accessors over carousel's; painted slides went
+    // 12 → 0 → 3. Clearing the query does not recover the list. Whoever
+    // teaches the two to compose — a filter that maps through the window
+    // instead of replacing it — can delete this entry, which is safe to do
+    // in a way that adding one is not.
+    conflicts: ["data", "tree", "carousel"],
     // Run after selection (50) so its item-state fn is captured and composed
     // (state.search alongside state.selected), and so a filter override is the
     // outermost item transform.
