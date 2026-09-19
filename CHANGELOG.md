@@ -44,6 +44,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   scroll still lets rows enter and leave at the window edges; persisting
   rows keep the same `HTMLElement`.
 
+- The element pool no longer drops spares beyond 100. A jump or a data change
+  on a view showing more than 100 elements — a tall viewport, a wide grid —
+  released them all, kept 100 and dropped the rest, and the next frame cloned
+  the difference again. The cap bounded nothing: the pool only holds elements
+  it created, and it creates one only when it is empty, so it can never hold
+  more than the most that were mounted at once. The core renderer, grid,
+  groups, masonry, table and tree are all covered, with no new option, and
+  every bundle is a few bytes smaller.
+
 - `selectNext()` and `selectPrevious()` scroll the newly selected item into view:
   nearest edge, no movement when the item is already fully visible, honouring
   start/end padding and layout plugins' `_scrollItemIntoView` (grouped sticky
