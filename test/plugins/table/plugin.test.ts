@@ -1351,4 +1351,62 @@ describe('table — physical cross-axis keyboard navigation', () => {
       expect(t.engineState.scrollPosition).toBe(0);
     } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
   });
+
+  /** A table in a 300px viewport whose horizontal scroll is a plain number. */
+  function scrollableTable(columns: TableColumn<TestItem>[], maxScroll: number) {
+    const t = createTableMockContext({ containerWidth: 300 });
+    let raw = 0;
+    Object.defineProperty(t.dom.viewport, 'scrollLeft', {
+      configurable: true, get: () => raw,
+      set: (value: number) => { raw = Math.max(0, Math.min(maxScroll, value)); },
+    });
+    table({ columns, rowHeight: 40 }).setup!(t.ctx);
+    const press = (key: string): boolean => {
+      const event = new KeyboardEvent('keydown', { key, cancelable: true });
+      for (const handler of t.keydownHandlers) handler(event);
+      return event.defaultPrevented;
+    };
+    const done = (): void => { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); };
+    return { press, done, scrollLeft: () => raw, scrollTo: (value: number) => { raw = value; } };
+  }
+
+  it('ArrowRight past the last column edge is left to the page instead of being swallowed', () => {
+    // The last column (offset 500) is wider than the viewport, so the table can
+    // scroll beyond its left edge: from there no column starts further right.
+    const wide: TableColumn<TestItem>[] = [
+      { key: 'name', label: 'Name', width: 200 },
+      { key: 'email', label: 'Email', width: 300 },
+      { key: 'role', label: 'Role', width: 400 },
+    ];
+    const t = scrollableTable(wide, 600);
+    try {
+      expect(t.press('ArrowRight')).toBe(true);
+      expect(t.press('ArrowRight')).toBe(true);
+      expect(t.scrollLeft()).toBe(500);
+      t.scrollTo(600);
+
+      expect(t.press('ArrowRight')).toBe(false);
+      expect(t.scrollLeft()).toBe(600);
+
+      // And ArrowLeft from there comes back to the column it was inside.
+      expect(t.press('ArrowLeft')).toBe(true);
+      expect(t.scrollLeft()).toBe(500);
+    } finally { t.done(); }
+  });
+
+  it('ArrowLeft clears a sub-pixel leftover so the first column sits flush', () => {
+    const t = scrollableTable(testColumns, 300);
+    try {
+      // A trackpad or a zoomed page can leave the viewport half a pixel in:
+      // no column starts left of that, yet the table is not at its start.
+      t.scrollTo(0.5);
+
+      expect(t.press('ArrowLeft')).toBe(true);
+      expect(t.scrollLeft()).toBe(0);
+
+      // At the true start there is nothing left to do, and the key is not claimed.
+      expect(t.press('ArrowLeft')).toBe(false);
+      expect(t.scrollLeft()).toBe(0);
+    } finally { t.done(); }
+  });
 });
