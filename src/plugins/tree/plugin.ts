@@ -241,7 +241,7 @@ export function tree<T extends VListItem = VListItem>(
   }
 
   let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
-  let cachedFocusFn: ((id: string | number) => void) | null | undefined;
+  let cachedFocusFn: ((id: string | number, keyboard?: boolean) => void) | null | undefined;
   let cachedFollowFn: (() => boolean) | null | undefined;
 
   function resolveSelectionMethods(): void {
@@ -258,7 +258,8 @@ export function tree<T extends VListItem = VListItem>(
 
     if (hasExternalFocus) {
       resolveSelectionMethods();
-      if (cachedFocusFn) cachedFocusFn(node.id);
+      // Every caller of setFocusTo is a key press; a click goes through its own path.
+      if (cachedFocusFn) cachedFocusFn(node.id, true);
       if (cachedFollowFn?.() && cachedSelectFn) {
         cachedSelectFn(node.id);
       } else {

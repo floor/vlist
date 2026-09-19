@@ -758,7 +758,13 @@ export function selection<T extends VListItem = VListItem>(
         return getDataItemAtLayout(state.focusedIndex)?.id;
       });
 
-      ctx.hooks.method("_focusById", (id: string | number): void => {
+      // `keyboard`: the caller moved focus because of a key press (tree's arrows,
+      // Home, End, type-ahead). The ring then stays visible and the active
+      // descendant follows, exactly as for this plugin's own key moves. Without
+      // it the move was treated like a click: with the default `focusOnClick`
+      // the ring vanished, `_getFocusedIndex` answered -1, and the tree ignored
+      // every further Left/Right until an up/down key revived the focus.
+      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean): void => {
         // Layout space: it scans entries for the one holding this id.
         const total = getTotalFn();
         for (let i = 0; i < total; i++) {
@@ -766,7 +772,8 @@ export function selection<T extends VListItem = VListItem>(
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
-            state.focusVisible = focusOnClick;
+            state.focusVisible = keyboard || focusOnClick;
+            if (keyboard) setActiveDescendant(i);
             emitter.emit("focus:change", { id, index: i });
             return;
           }

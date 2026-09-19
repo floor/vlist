@@ -49,6 +49,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `tree()` with `selection()`: the focus ring follows the tree's own key
+  moves. ArrowLeft and ArrowRight onto a parent or a child, Home, End and
+  type-ahead went through selection as if they were clicks, so with the
+  default `focusOnClick: false` the ring disappeared, `aria-activedescendant`
+  stayed on the old row, and every further ArrowLeft / ArrowRight was ignored
+  until an up or down key revived the focus. A keyboard user lost the focus
+  indicator. The ring and the active descendant are now on the same row after
+  every key move; a click keeps following `focusOnClick`.
+
 - A wrap-mode coordinate fold (carousel) now re-keys the mounted row
   elements instead of releasing and re-creating them. Folding used to
   miss every `rendered` lookup because virtual indices moved by whole
