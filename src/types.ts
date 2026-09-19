@@ -56,7 +56,7 @@ export interface GroupHeaderConfig {
   template: (group: string, groupIndex: number) => string | HTMLElement;
 }
 
-export interface GroupsConfig {
+export interface GroupsConfig<T extends VListItem = VListItem> {
   /**
    * Determine which group an item belongs to.
    * Called with the DATA index (index into the original items array).
@@ -72,7 +72,7 @@ export interface GroupsConfig {
    * @param index - Data index of the item
    * @param item - The item at this index (always provided; undefined only for unloaded async items)
    */
-  getGroupForIndex: (index: number, item?: any) => string;
+  getGroupForIndex: (index: number, item?: T) => string;
 
   /**
    * Group header configuration — mirrors the `item` config shape.

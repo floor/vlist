@@ -92,10 +92,10 @@ export const findGroupByDataIndex = (
  * Items MUST be pre-sorted by group — a new group boundary is created
  * whenever getGroupForIndex returns a different value than the previous call.
  */
-const buildGroups = (
+const buildGroups = <T extends VListItem>(
   itemCount: number,
-  getGroupForIndex: (index: number, item?: any) => string,
-  getItem?: (index: number) => any,
+  getGroupForIndex: (index: number, item?: T) => string,
+  getItem?: (index: number) => T | undefined,
 ): GroupBoundary[] => {
   if (itemCount === 0) return [];
 
@@ -202,8 +202,8 @@ export const buildLayoutItems = <T extends VListItem>(
  * @param itemSize - Original item size config (number or function)
  * @returns A size function (layoutIndex) => number suitable for SizeCache
  */
-export const createGroupedSizeFn = (
-  layout: GroupLayout,
+export const createGroupedSizeFn = <T extends VListItem = VListItem>(
+  layout: GroupLayout<T>,
   itemSize: number | ((index: number) => number),
   sticky: boolean = false,
 ): ((layoutIndex: number) => number) => {
@@ -240,11 +240,11 @@ export const createGroupedSizeFn = (
  * @param itemCount - Number of data items
  * @param config - Groups configuration
  */
-export const createGroupLayout = (
+export const createGroupLayout = <T extends VListItem = VListItem>(
   itemCount: number,
-  config: GroupsConfig,
-  getItem?: (index: number) => any,
-): GroupLayout => {
+  config: GroupsConfig<T>,
+  getItem?: (index: number) => T | undefined,
+): GroupLayout<T> => {
   let groups: GroupBoundary[] = buildGroups(itemCount, config.getGroupForIndex, getItem);
   let totalEntries = itemCount + groups.length;
 
@@ -337,7 +337,7 @@ export const createGroupLayout = (
     return groups[gi]!;
   };
 
-  const rebuild = (newItemCount: number, newGetItem?: (index: number) => any): void => {
+  const rebuild = (newItemCount: number, newGetItem?: (index: number) => T | undefined): void => {
     groups = buildGroups(newItemCount, config.getGroupForIndex, newGetItem ?? getItem);
     totalEntries = newItemCount + groups.length;
   };
