@@ -247,9 +247,15 @@ export function sortable<T extends VListItem = VListItem>(
     return fn ? fn() : -1;
   };
 
-  const focusById = (id: string | number): void => {
-    const fn = storedCtx?.hooks.get("_focusById") as ((id: string | number) => void) | undefined;
-    if (fn) fn(id);
+  // `keyboard`: the move came from a key press, so the focus ring stays visible
+  // and the active descendant follows, as it does for selection's own key
+  // moves. The pointer drop leaves it off: a mouse drag is a click, and whether
+  // a click paints a ring is `focusOnClick`'s answer to give, not this plugin's.
+  const focusById = (id: string | number, keyboard?: boolean): void => {
+    const fn = storedCtx?.hooks.get("_focusById") as
+      | ((id: string | number, keyboard?: boolean) => void)
+      | undefined;
+    if (fn) fn(id, keyboard);
   };
 
   const scrollIntoView = (index: number): void => {
@@ -741,7 +747,7 @@ export function sortable<T extends VListItem = VListItem>(
     rootEl.classList.remove(sortingClass);
     clearKbGrabbedClass();
 
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
 
     announce(`${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`);
@@ -764,7 +770,7 @@ export function sortable<T extends VListItem = VListItem>(
       storedCtx.emitter.emit("sort:cancel" as never, { originalItems: kbOriginalItems } as never);
     }
 
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
     scrollIntoView(originalIndex);
 
@@ -787,7 +793,7 @@ export function sortable<T extends VListItem = VListItem>(
     storedCtx.emitter.emit("sort:end" as never, { fromIndex, toIndex } as never);
 
     kbCurrentIndex = toIndex;
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
     scrollIntoView(toIndex);
     applyKbGrabbedClass();
