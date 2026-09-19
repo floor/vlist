@@ -34,22 +34,22 @@ function fixture(create=createVList,snap=false){
  return {list,ctx,velocities,positions,move(delta:number,native=false){clock+=16;if(native){if(create===createSynthetic){if(!started){pointer("pointerdown",clock-16);started=true;}pointerY-=delta;pointer("pointermove",clock);}else{ctx.dom.viewport.scrollTop+=delta;ctx.dom.viewport.dispatchEvent(new Event("scroll"));}}else ctx.dom.viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:delta,cancelable:true}));}};
 }
 for(const [entry,create] of [["native",createVList],["synthetic",createSynthetic]] as const) for(const native of [false,true]) test(`${entry} carousel ${native?"drag":"wheel"}: fold does not spike public velocity`,()=>{
- const f=fixture(create);clock=200;f.ctx.scroll.to(89960);f.move(10,native);f.move(10,native);f.move(30,native);f.move(10,native);
- expect(f.list.getScrollPosition()).toBe(50020);
+ const f=fixture(create);clock=200;f.ctx.scroll.to(1960);f.move(10,native);f.move(10,native);f.move(30,native);f.move(10,native);
+ expect(f.list.getScrollPosition()).toBe(1020);
  expect(f.velocities.slice(-4)).toEqual([10/16,10/16,30/16,10/16]);
- expect(f.positions.slice(-2)).toEqual([50010,50020]);
+ expect(f.positions.slice(-2)).toEqual([1010,1020]);
 });
 for(const [entry,create] of [["native",createVList],["synthetic",createSynthetic]] as const) test(`${entry}: a fold landing on the last emitted position still emits a scroll event`,()=>{
- const f=fixture(create);clock=200;f.ctx.scroll.to(50000);f.positions.length=0;
- f.move(40000,true);
- expect(f.list.getScrollPosition()).toBe(50000);expect(f.positions).toEqual([50000]);
+ const f=fixture(create);clock=200;f.ctx.scroll.to(1000);f.positions.length=0;
+ f.move(1000,true);
+ expect(f.list.getScrollPosition()).toBe(1000);expect(f.positions).toEqual([1000]);
 });
 
 test("synthetic idle snap after a forward fold chooses the next item",()=>{
  const timers=useFakeTimers();const f=fixture(createSynthetic,true);const destroy=cleanup;cleanup=()=>{destroy?.();timers.restore();};
- clock=200;f.ctx.scroll.to(89980);f.move(40);
- expect(f.list.getScrollPosition()).toBe(50020);
+ clock=200;f.ctx.scroll.to(1980);f.move(40);
+ expect(f.list.getScrollPosition()).toBe(1020);
  timers.tick(150);
  for(let i=0;i<=4;i++){const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(clock);clock+=16;}
- expect(f.list.getScrollPosition()).toBe(50100);expect(f.list.getCarouselState().index).toBe(1);
+ expect(f.list.getScrollPosition()).toBe(1100);expect(f.list.getCarouselState().index).toBe(1);
 });

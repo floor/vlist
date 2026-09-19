@@ -93,7 +93,7 @@ export function selection<T extends VListItem = VListItem>(
   // getTotalFn is a layout-space bound: it walks focus across entries, so with
   // groups it counts headers too. Questions of the form "how many items are
   // there" need the data total instead — the engine's count is render-space,
-  // and carousel inflates it to 101 laps. Plugins that know better publish
+  // and carousel inflates it to three laps. Plugins that know better publish
   // _getTotal; with none, the two spaces coincide.
   let getDataTotalFn: () => number;
   let resolved = false;
@@ -711,7 +711,7 @@ export function selection<T extends VListItem = VListItem>(
         // Layout plugins that own the item space (carousel's real total,
         // grid's item count) publish nav.total. Without it this is layout
         // space — groups counts headers, then skipHeaders walks off them.
-        // Using the engine total under carousel walked 101 laps and wrapped.
+        // Using the engine total under carousel walked every lap and wrapped.
         const total = nav.total ? nav.total() : getTotalFn();
         if (total === 0) return;
         moveFocus(state, delta, total, resolvedConfig.reverse);

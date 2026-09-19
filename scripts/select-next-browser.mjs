@@ -185,7 +185,9 @@ try {
 
   const itemCount = 20;
   const home = await carouselPage.evaluate(() => window.list.getScrollPosition());
-  assert(home > 10_000, `carousel must seed the middle cycle, home=${home}`);
+  // The home lap is one lap in: past the margin lap, so a size-cache offset of the
+  // logical index (which would land in that margin lap, near 0) is told apart from it.
+  assert(home > 1_000, `carousel must seed the home lap, one lap in, home=${home}`);
 
   await carouselPage.evaluate(() => {
     window.carouselChanges = [];

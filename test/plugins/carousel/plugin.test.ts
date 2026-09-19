@@ -901,12 +901,12 @@ describe("carousel — Variant: hero-center — layout", () => {
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [9, 0, 1]);
 
     // stepSize = focalSlotWidth = containerSize - 2*peek = 600
     const es = ctx.getState();
-    es.scrollPosition = middleStart * 600;
+    es.scrollPosition = homeStart * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Left peek at viewport position 0
@@ -1062,12 +1062,12 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    // Simulate rendered elements near the focal index in the middle cycle
-    const middleStart = 50 * 10; // MIDDLE_CYCLE * realTotal
+    // Simulate rendered elements near the focal index in the home lap
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1, 2]);
 
-    // Trigger onAfterScroll at the initial position (middle cycle, item 0)
-    const scrollPos = middleStart * 400;
+    // Trigger onAfterScroll at the initial position (home lap, item 0)
+    const scrollPos = homeStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     // Focal element (offset 0) should have progress ~0
@@ -1093,10 +1093,10 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [9, 0, 1, 2]);
 
-    const scrollPos = middleStart * 400;
+    const scrollPos = homeStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
@@ -1120,11 +1120,11 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
-    const scrollPos = middleStart * stepSz;
+    const scrollPos = homeStart * stepSz;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
 
     expect(els[0]!.style.getPropertyValue("--vlist-carousel-role")).toBe("large");
@@ -1146,19 +1146,19 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1, 2]);
 
     const es = ctx.getState();
 
     // At item 0 — els[0] is focal
-    es.scrollPosition = middleStart * 600;
+    es.scrollPosition = homeStart * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
     expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
     expect(els[1]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("1");
 
     // Scroll to item 1 — els[1] is now focal
-    es.scrollPosition = (middleStart + 1) * 600;
+    es.scrollPosition = (homeStart + 1) * 600;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
     expect(els[0]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("-1");
     expect(els[1]!.style.getPropertyValue("--vlist-carousel-offset")).toBe("0");
@@ -1180,11 +1180,11 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const stepSz = 800 - 56;
-    ctx.getState().scrollPosition = middleStart * stepSz;
+    ctx.getState().scrollPosition = homeStart * stepSz;
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Focal item should have width = stepSize (744)
@@ -1208,10 +1208,10 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
-    ctx.getState().scrollPosition = middleStart * 600;
+    ctx.getState().scrollPosition = homeStart * 600;
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
 
     // Full: focal = containerSize, next = 0 (no peek at rest)
@@ -1236,12 +1236,12 @@ describe("carousel — CSS Variables", () => {
     plugin.setup!(ctx);
     initPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     // Scroll 50% between items
     const es = ctx.getState();
-    es.scrollPosition = middleStart * 600 + 300;
+    es.scrollPosition = homeStart * 600 + 300;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     // Both items visible, sharing the container
@@ -1277,7 +1277,7 @@ describe("carousel — Gap", () => {
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
@@ -1286,7 +1286,7 @@ describe("carousel — Gap", () => {
     // focalSlotWidth = round(792 * 0.85) = 673
     // smallSlotWidth = 792 - 673 = 119
     // stepSize = 673 + 8 = 681
-    es.scrollPosition = middleStart * 681;
+    es.scrollPosition = homeStart * 681;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0]!.style.getPropertyValue("--vlist-carousel-width"));
@@ -1312,13 +1312,13 @@ describe("carousel — Gap", () => {
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
     // full: 1 slot, 0 gaps at rest → availableSize = 600
     // stepSize = 600 + 8 = 608
-    es.scrollPosition = middleStart * 608;
+    es.scrollPosition = homeStart * 608;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0]!.style.getPropertyValue("--vlist-carousel-width"));
@@ -1340,14 +1340,14 @@ describe("carousel — Gap", () => {
     plugin.setup!(ctx);
     commitPlugin(plugin, ctx.getState());
 
-    const middleStart = 50 * 10;
+    const homeStart = 10; // HOME_LAP * realTotal
     const els = addRenderedItems(dom.content, [0, 1]);
 
     const es = ctx.getState();
     // containerSize=600, availableSize=600-12=588
     // focalRatio=(600-100)/600=0.833, focalSlot=round(588*0.833)=490
     // smallSlot=588-490=98, stepSize=490+12=502
-    es.scrollPosition = middleStart * 502;
+    es.scrollPosition = homeStart * 502;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const h0 = parseInt(els[0]!.style.height);
@@ -1947,7 +1947,7 @@ describe("carousel — onIdle snap", () => {
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
-    es.scrollPosition = 50 * 5 * 400 + 150;
+    es.scrollPosition = 1 * 5 * 400 + 150;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     plugin.hooks!.onIdle!();
@@ -1967,7 +1967,7 @@ describe("carousel — onIdle snap", () => {
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const es = ctx.getState();
-    es.scrollPosition = 50 * 5 * 400;
+    es.scrollPosition = 1 * 5 * 400;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     plugin.hooks!.onIdle!();
@@ -2004,7 +2004,7 @@ describe("carousel — onIdle snap", () => {
 
     const es = ctx.getState();
     // Position slightly past item boundary (frac ~0.1 — would round backward without direction)
-    const misaligned = 50 * 5 * 400 + 40;
+    const misaligned = 1 * 5 * 400 + 40;
     es.scrollPosition = misaligned;
     es.scrollDirection = 1;
     scrollCalls.length = 0;
@@ -2033,7 +2033,7 @@ describe("carousel — onIdle snap", () => {
 
     const es = ctx.getState();
     // Position mostly through item (frac ~0.9 — would round forward without direction)
-    const misaligned = 50 * 5 * 400 + 360;
+    const misaligned = 1 * 5 * 400 + 360;
     es.scrollPosition = misaligned;
     es.scrollDirection = -1;
     scrollCalls.length = 0;
@@ -2062,7 +2062,7 @@ describe("carousel — onIdle snap", () => {
 
     const es = ctx.getState();
     // Small forward offset — nearest-snap rounds backward
-    const misaligned = 50 * 5 * 400 + 40;
+    const misaligned = 1 * 5 * 400 + 40;
     es.scrollPosition = misaligned;
     es.scrollDirection = 1;
     scrollCalls.length = 0;
@@ -2493,7 +2493,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     const es = ctx.getState();
 
     const totalLap = WIDTHS.reduce((a, b) => a + b, 0) + gap * 5;
-    es.scrollPosition = 50 * totalLap;
+    es.scrollPosition = 1 * totalLap;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const w0 = parseInt(els[0]!.style.width);
@@ -2522,15 +2522,15 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     const els = addRenderedItems(dom.content, [0, 1, 2]);
     const es = ctx.getState();
 
-    const middleStart = 50 * 10;
-    es.scrollPosition = middleStart * 480;
+    const homeStart = 10; // HOME_LAP * realTotal
+    es.scrollPosition = homeStart * 480;
     es.baseOffset = es.scrollPosition - 240;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
     const t0 = els[0]!.style.transform;
     expect(t0).toBeTruthy();
 
-    es.scrollPosition = middleStart * 480 + 240;
+    es.scrollPosition = homeStart * 480 + 240;
     es.baseOffset = es.scrollPosition - 240;
     plugin.hooks!.onAfterScroll!(es.scrollPosition, 0);
 
@@ -2632,7 +2632,7 @@ for(const [entry,create] of carouselEntries) for(const isX of [false,true]) {
  it(`${entry}/${isX?'horizontal':'vertical'} public navigation and keyboard after a fold`,()=>{
   const f=carouselEntry(create,{},isX);
   try {
-   f.ctx.scroll.to(89980);f.wheel(40);expect(f.list.getScrollPosition()).toBe(50020);
+   f.ctx.scroll.to(1980);f.wheel(40);expect(f.list.getScrollPosition()).toBe(1020);
    const next=f.list.next as (n:number,o:{behavior:string})=>void;
    const prev=f.list.prev as typeof next;
    const goTo=f.list.goTo as typeof next;
@@ -2649,7 +2649,7 @@ for(const [entry,create] of carouselEntries) for(const isX of [false,true]) {
  it(`${entry}/${isX?'horizontal':'vertical'} item-count changes immediately after a fold`,()=>{
   const f=carouselEntry(create,{},isX);
   try {
-   f.ctx.scroll.to(89980);f.wheel(40);
+   f.ctx.scroll.to(1980);f.wheel(40);
    f.list.setItems(Array.from({length:7},(_,id)=>({id})));f.advance();
    expect(f.list.total).toBe(7);expect(f.state().index).toBeGreaterThanOrEqual(0);expect(f.state().index).toBeLessThan(7);
    f.list.scrollToIndex(6);(f.list.next as Function)(1,{behavior:'auto'});expect(f.state().index).toBe(0);

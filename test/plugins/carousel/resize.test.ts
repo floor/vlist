@@ -54,7 +54,7 @@ for(const [entry,createVList] of [['native',createNative],['synthetic',createSyn
    const initialWidth=variant==='full'?400:variant==='hero'?320:160;
    expect(focal().style[sizeProp]).toBe(`${initialWidth}px`);
    // Resize immediately after crossing the fold at real index 3.
-   ctx.scroll.to(initialWidth*899);
+   ctx.scroll.to(initialWidth*19);
    ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?initialWidth*4:0,deltaY:isX?0:initialWidth*4,cancelable:true}));
    expect(state().index).toBe(3);
    const position=list.getScrollPosition(),transform=focal().style.transform;

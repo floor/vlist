@@ -22,7 +22,10 @@ export function createMotion({ getMax, onChange = () => {}, onFinish, axis = "y"
   let ease = cubicOut;
   let getTarget: () => number = () => animationTo;
   const friction = 0.006;
-  const clamp = (value: number) => Math.max(0, Math.min(getMax(), value));
+  const clamp = (value: number): number => {
+    const limit = getMax();
+    return Number.isFinite(limit) ? Math.max(0, Math.min(limit, value)) : value;
+  };
   const main = (x: number, y: number) => axis === "y" ? y : x;
   const cross = (x: number, y: number) => axis === "y" ? x : y;
   function commit(value: number) {

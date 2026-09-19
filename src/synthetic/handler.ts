@@ -2,7 +2,7 @@
 import type { BoundedScrollConfig, BoundedScrollHandler } from "../core/runway";
 // Wrap folds go through this commit, not runway.wrapRebase. Importing fold
 // from create.ts would charge every native list that never wraps.
-import { applyWrapFold } from "../core/fold";
+import { applyWrapFold, wrapLaps } from "../core/fold";
 import { SCROLL_IDLE_TIMEOUT, SCROLL_EASING } from "../constants";
 import { createMotion, TRACKING, PENDING } from "./motion";
 
@@ -37,8 +37,8 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     let previous = state.scrollPosition;
     if (wrap) {
       const lap = wrap.lapSize();
-      const laps = lap > 0 ? Math.trunc((position - wrap.home()) / lap) : 0;
-      if (laps !== 0 && Math.abs(laps) >= wrap.thresholdLaps) {
+      const laps = lap > 0 ? wrapLaps((position - wrap.home()) / lap, wrap.thresholdLaps) : 0;
+      if (laps !== 0) {
         const shift = laps * lap;
         // shiftBy preserves the pointer, velocity and animation target. Suppress
         // only its notification; this outer commit renders the folded frame once.
@@ -78,7 +78,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     if (motion.active) schedule(); else scheduleIdle();
   }
   const motion = createMotion({
-    axis: isX ? "x" : "y", getMax: () => max, reducedMotion: () => reduced.matches,
+    axis: isX ? "x" : "y", getMax: () => wrap ? Infinity : max, reducedMotion: () => reduced.matches,
     onChange(position) { if (!folding) commit(position); },
     onFinish() {
       const callback = complete; complete = undefined; callback?.();
@@ -189,7 +189,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     const previous = motion.position;
     cancelScroll(); motion.jump(position);
     // Even an unchanged jump completes the external navigation/idle contract.
-    if (previous === Math.max(0, Math.min(max, position))) commit(motion.position);
+    if (previous === (wrap ? position : Math.max(0, Math.min(max, position)))) commit(motion.position);
     scheduleIdle();
   }
   function refresh(totalSize: number): void {

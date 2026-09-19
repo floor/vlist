@@ -7,10 +7,13 @@
  *
  * Priority 10 — layout tier (replaces scroll contract).
  *
- * Implementation: the content size is `lapSize * CYCLES`. Items are
- * mapped via modulo so virtual index 817 with 16 real items → item 1.
- * The scroll starts in the middle cycle. When approaching the edges,
- * the position is silently rebased to the middle cycle.
+ * Implementation: the virtual index space is three laps — the home lap
+ * plus one lap of margin on each side. Overscan before index 0 and the
+ * shortest-path snap both reach into the neighbouring lap, and the engine
+ * has no negative indices. The bounded handler folds the logical position
+ * back toward the home lap as soon as it leaves it. Items are mapped via
+ * modulo so virtual index 17 with 16 real items → item 1. The scroll
+ * starts in the home lap.
  *
  * Public API (list.total, ARIA, selection, click events) stays at the
  * real item count. The inflated virtual window is strictly internal.
@@ -69,9 +72,20 @@ export interface CarouselState {
 // Constants
 // =============================================================================
 
-const CYCLES = 101;
-const MIDDLE_CYCLE = 50;
-const REBASE_THRESHOLD = 10;
+/**
+ * Three laps is the smallest index space the engine can render from: the home
+ * lap plus one lap of margin on each side. Overscan before index 0 and the
+ * shortest-path snap (`navigateTo`, always `|delta| < realTotal`) both reach
+ * into the neighbouring lap, and the engine has no negative indices.
+ *
+ * One lap of margin is enough because the position never rests outside the home
+ * lap (the fold is symmetric, `wrapLaps`) and because a lap shorter than the
+ * viewport is not drawn twice anyway: the layout places an element by its data
+ * index, so a slide appears once on screen however many laps exist. (That
+ * limitation — fewer slides than the viewport shows — predates this window.)
+ */
+const LAPS = 3;
+const HOME_LAP = 1;
 
 // =============================================================================
 // Variant normalisation
@@ -153,7 +167,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   let initialScrollPending = false;
   let prefix = "vlist";
-  let intendedVi = -1;
+  let intendedVi: number | null = null;
   /**
    * When the current programmatic snap is due to finish.
    *
@@ -189,7 +203,7 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function virtualIndexOf(logicalIndex: number): number {
-    return MIDDLE_CYCLE * realTotal + logicalIndex;
+    return HOME_LAP * realTotal + logicalIndex;
   }
 
   function logicalIndexOf(virtualIndex: number): number {
@@ -254,11 +268,14 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function getBaseVi(): number {
-    if (intendedVi >= 0) return intendedVi;
+    // Sentinel is -1 ("none"). Negative virtual indices are valid: a reverse
+    // snap from the home lap reaches into the preceding margin lap, and with
+    // only three laps a stacked prev() can sit below 0 until wrapRebase folds.
+    if (intendedVi !== null) return intendedVi;
     return virtualIndexAtScroll(scroll.getPixelEquivalent());
   }
 
-  // Rebasing (folding the logical position back toward the middle cycle) and the
+  // Rebasing (folding the logical position back toward the home lap) and the
   // smooth-scroll animation both live in the bounded scroll handler now — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
@@ -279,7 +296,7 @@ export function carousel<T extends VListItem = VListItem>(
       const inner = upstreamGet ?? ((index: number): T | undefined => ctx.items.all()[index]);
       ctx.items.setGetFn((i: number): T | undefined => inner(logicalIndexOf(i)));
 
-      sizeCache.getTotalSize = (): number => lapSize * CYCLES;
+      sizeCache.getTotalSize = (): number => lapSize * LAPS;
       sizeCache.getOffset = (index: number): number => scrollPositionForVirtual(index);
       sizeCache.getSize = (index: number): number => {
         const logical = logicalIndexOf(index);
@@ -315,23 +332,23 @@ export function carousel<T extends VListItem = VListItem>(
       ctx.items.setTotalFn(() => realTotal);
       ctx.items.setIndexMapFn(logicalIndexOf);
       ctx.hooks.method("_layoutToDataIndex", logicalIndexOf);
-      // The engine total is the inflated virtual one (101 laps), which is
+      // The engine total is the inflated virtual one (three laps), which is
       // what rendering needs and what any plugin asking "how many items are
       // there" must not use. data() publishes the same answer the same way.
       ctx.hooks.method("_getTotal", ownGetTotal);
 
       // Route scroll through the bounded handler in wrap mode: the logical
       // position never clamps, and the handler folds it back toward the
-      // middle cycle by whole laps once it drifts far enough. The carousel's
-      // modulo getItemFn maps the shifted virtual indices to identical real
-      // items at identical paint positions, so the fold is seamless.
+      // home lap as soon as it leaves it. The carousel's modulo getItemFn
+      // maps the shifted virtual indices to identical real items at identical
+      // paint positions, so the fold is seamless.
       ctx.scroll.setBoundedWrap({
         lapSize: () => lapSize,
         itemsPerLap: () => realTotal,
-        home: () => MIDDLE_CYCLE * lapSize,
-        thresholdLaps: MIDDLE_CYCLE - REBASE_THRESHOLD,
+        home: () => HOME_LAP * lapSize,
+        thresholdLaps: 1,
         onFold(shift: number) {
-          if (intendedVi >= 0) intendedVi -= Math.round(shift / lapSize) * realTotal;
+          if (intendedVi !== null) intendedVi -= Math.round(shift / lapSize) * realTotal;
         },
       }, createBoundedScrollHandler);
 
@@ -381,7 +398,7 @@ export function carousel<T extends VListItem = VListItem>(
     } else {
       buildStepCache(Array.from({ length: realTotal }, () => stepSizes[0] ?? stepSize));
     }
-    virtualTotal = realTotal * CYCLES;
+    virtualTotal = realTotal * LAPS;
     if (!windowInstalled) {
       // The window brings the inflated total and the seeding of the start
       // position (initialScrollPending) with it; the commit that follows does
@@ -393,7 +410,7 @@ export function carousel<T extends VListItem = VListItem>(
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
       currentIndex = safeIndex;
-      storedCtx.scroll.to(scrollPositionForVirtual(MIDDLE_CYCLE * realTotal + safeIndex));
+      storedCtx.scroll.to(scrollPositionForVirtual(HOME_LAP * realTotal + safeIndex));
     }
   }
 
@@ -614,7 +631,7 @@ export function carousel<T extends VListItem = VListItem>(
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
       }
-      virtualTotal = realTotal * CYCLES;
+      virtualTotal = realTotal * LAPS;
       currentIndex = resolveIndex(initialIndex);
 
       // ── Virtual scroll window ─────────────────────────────────────
@@ -840,7 +857,7 @@ export function carousel<T extends VListItem = VListItem>(
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
 
-        // Re-anchor in the middle lap using the new step widths. Mark the
+        // Re-anchor in the home lap using the new step widths. Mark the
         // target before refreshing the runway so intermediate commits cannot
         // interpret old pixels as a different focal item.
         intendedVi = virtualIndexOf(currentIndex);
@@ -849,7 +866,7 @@ export function carousel<T extends VListItem = VListItem>(
         storedCtx.scroll.to(scrollPositionForVirtual(intendedVi));
         storedCtx.render.force();
         updateItemLayout();
-        intendedVi = -1;
+        intendedVi = null;
       },
 
       onCommit(): void {
@@ -875,7 +892,7 @@ export function carousel<T extends VListItem = VListItem>(
 
         if (engineState.scrollDirection !== 0) lastDirection = engineState.scrollDirection;
 
-        if (intendedVi < 0) {
+        if (intendedVi === null) {
           const pos = scroll.getPixelEquivalent();
           const vi = virtualIndexAtScroll(pos);
           const newIndex = logicalIndexOf(vi);
@@ -897,11 +914,11 @@ export function carousel<T extends VListItem = VListItem>(
         // here is what loses a key press. But an animation can land a hair
         // early, with an idle arriving inside the deadline: then the snap
         // below is what settles the last 0.001px, so it must run.
-        if (snapUntil > performance.now() && intendedVi >= 0
+        if (snapUntil > performance.now() && intendedVi !== null
           && Math.abs(scroll.getPixelEquivalent() - scrollPositionForVirtual(intendedVi)) > 0.5) return;
         snapUntil = 0;
         const dir = lastDirection;
-        intendedVi = -1;
+        intendedVi = null;
         lastDirection = 0;
         if (!snapEnabled || !storedCtx || realTotal <= 1) return;
         const p = scroll.getPixelEquivalent();

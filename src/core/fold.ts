@@ -87,6 +87,21 @@ export function shiftWindow(state: EngineState, indexShift: number, pixelShift: 
   }
 }
 
+/**
+ * How many whole laps to fold by, for a drift from home measured in laps; 0 for none.
+ *
+ * An owner that folds every lap (threshold 1) keeps its position in
+ * `[home, home + lap)`: the floor, so that leaving the home lap backwards folds
+ * at once, exactly as leaving it forwards does. Truncation folded forwards on
+ * leaving the lap but backwards only a whole lap later — a carousel could rest in
+ * the lap before home at index 0, where a leading peek needs index -1: a blank
+ * peek, then a pop. A larger threshold keeps the symmetric dead zone it always had.
+ */
+export function wrapLaps(driftLaps: number, threshold: number): number {
+  const laps = threshold > 1 ? Math.trunc(driftLaps) : Math.floor(driftLaps);
+  return Math.abs(laps) < threshold ? 0 : laps;
+}
+
 /** Re-key mounted rows and shift window state for a wrap fold, before the next render. */
 export function applyWrapFold(
   wrap: WrapConfig,

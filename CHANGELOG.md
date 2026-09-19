@@ -11,6 +11,22 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- The carousel's index space is three laps instead of 101: the home lap and
+  one lap of margin on each side, which is what overscan, a leading peek
+  and the shortest-path snap reach into. The large window existed for one
+  reason — a fold used to re-create the whole viewport, so it had to be
+  rare. A fold now keeps the mounted elements (below), so the position
+  folds back into the home lap as soon as it leaves it, in either
+  direction. Nothing public changes: `list.total`, ARIA, selection and
+  events stay in data space. The fold is symmetric: leaving the home lap
+  backwards folds at once, exactly as leaving it forwards does, so the
+  carousel never rests in the lap before home, where a leading peek would
+  need an index below zero. A smooth scroll in flight folds with the
+  position, native and synthetic alike, so a snap that crosses the lap
+  does not jump by a lap.
+
 ### Fixed
 
 - A wrap-mode coordinate fold (carousel) now re-keys the mounted row
