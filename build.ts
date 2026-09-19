@@ -1,6 +1,6 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
 
 const isDev = process.argv.includes("--watch");
@@ -23,6 +23,18 @@ async function build() {
   const cleanStart = performance.now();
   if (!isDev) {
     rmSync("./dist", { recursive: true, force: true });
+    // Recreate it rather than leaving the outdir to Bun.build. There are four
+    // separate build calls writing into ./dist, and only the first would create
+    // it; the rest assume it is there. That produced one failure in thirty
+    // builds, always on a later chunk after the first had been written:
+    //
+    //   Bundle  11ms  dist/index.js (184.6 KB)
+    //   error: No such file or directory: writing chunk "./config.js"
+    //
+    // The cause was never reproduced — 29 consecutive builds after it were
+    // clean — so this is not a diagnosis. It removes the window in which the
+    // directory can be absent while a build writes into it, whatever opened it.
+    mkdirSync("./dist", { recursive: true });
     console.log(
       `  Clean       ${(performance.now() - cleanStart).toFixed(0).padStart(6)}ms  dist/`,
     );
