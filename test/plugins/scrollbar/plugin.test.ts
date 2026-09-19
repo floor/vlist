@@ -152,9 +152,8 @@ describe("scrollbar — Setup", () => {
 
     plugin.setup!(ctx);
 
-    // The scrollbar plugin registers internal coordination methods
+    // The scrollbar plugin registers its internal coordination method
     expect(methods.has("_scrollbar:getInstance")).toBe(true);
-    expect(methods.has("_scrollbar:setCallback")).toBe(true);
     cleanup();
   });
 

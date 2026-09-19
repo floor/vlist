@@ -437,12 +437,6 @@ export function table<T extends VListItem = VListItem>(
       ctx.hooks.method("_getTableLayout", () => tableLayout);
       ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
 
-      ctx.hooks.method("_updateRenderedItem", (
-        index: number, item: T, isSelected: boolean, isFocused: boolean,
-      ) => {
-        tableRenderer?.updateItem(index, item, isSelected, isFocused);
-      });
-
       ctx.hooks.method("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
         tableRenderer = newRenderer;
       });
@@ -452,13 +446,6 @@ export function table<T extends VListItem = VListItem>(
         headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
       ) => {
         tableRenderer?.setGroupHeaderFn(isHeaderFn, headerTemplate);
-      });
-
-      // Replace item-class updater for selection integration
-      ctx.hooks.method("_updateItemClasses", (
-        index: number, isSelected: boolean, isFocused: boolean,
-      ): void => {
-        tableRenderer?.updateItemClasses(index, isSelected, isFocused);
       });
 
       // ── Keyboard horizontal scroll ─────────────────────────────

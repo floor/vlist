@@ -55,18 +55,12 @@ export function scrollbar<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       mainAxisPadding = resolvedConfig.mainAxisPadding;
 
-      // Indirect callback — a plugin can redirect it via registerMethod.
       // Route through ctx.scroll.to so the position reaches the bounded handler's
       // setLogical (which clamps using maxLogical that includes padding) rather
       // than the adapter's clampPixel (which only knows sizeCache, no padding).
-      let scrollCb = (position: number): void => {
-        ctx.scroll.to(position);
-      };
-      ctx.hooks.method("_scrollbar:setCallback", (cb: (pos: number) => void) => { scrollCb = cb; });
-
       sb = createScrollbar(
         dom.viewport,
-        (position: number) => { scrollCb(position); },
+        (position: number) => { ctx.scroll.to(position); },
         config,
         classPrefix,
         isX,
