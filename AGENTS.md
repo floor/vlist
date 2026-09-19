@@ -26,10 +26,14 @@ natively; `vlist/synthetic` owns the input for lists taller than the browser all
   `reveal` property (`null` when no owner set one). Ask the owner; do not scroll behind its
   back. Read how the keyboard path in `src/plugins/selection/plugin.ts` and
   `src/plugins/a11y/plugin.ts` does it before adding a second path.
-- **Plugin order is `priority`, lowest first:** layout tier 5–11 (page, autosize, grid, table,
-  masonry, tree, carousel 10, groups 11), scrollbar 15, data 20, sortable 30, transition 45,
-  selection and snapshots 50, a11y and search 55. A plugin that replaces size-cache methods
-  must say which others it conflicts with (`conflicts`).
+- **Plugin order is `priority`, lowest first:** layout tier 5–11 (page and autosize 5, groups 11,
+  and grid, table, masonry, tree and carousel all on 10), scrollbar 15, data 20, sortable 30,
+  transition 45, selection and snapshots 50, a11y and search 55. Those five share one number
+  and `sortPlugins` sorts stably, so among them setup order is whatever order the caller wrote
+  the array in — there is no defined order and you must not rely on one. What keeps that from
+  mattering is that every pair of them is declared incompatible: a plugin that replaces
+  size-cache methods must say which others it conflicts with (`conflicts`), and a missing
+  declaration shows up as a list that works one way round and hangs the other.
 - **The hot path allocates nothing.** `pipeline.ts`, `state.ts` and the scroll handlers run per
   frame: typed arrays, reused objects, no closures or array literals created per scroll event.
 - **A plugin pays for its own bytes.** `bun run size` holds a budget per bundle

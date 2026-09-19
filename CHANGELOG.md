@@ -47,6 +47,38 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `GroupLayout.rebuild`, `createGroupLayout`, and `createAsyncGroupBridge`
   take `(index: number) => T | undefined` instead of `any`.
 
+- `carousel()` declares the plugins it cannot be combined with, so six pairs
+  that used to build a list now throw at `createVList` with
+  `[vlist] Plugin "…" conflicts with "…"`, before any DOM is created. None of
+  them worked; what changes is that the failure is now immediate and legible
+  instead of a list that renders the wrong thing, or no thing, or none at all.
+
+  `carousel()` with `grid()`, `table()`, `masonry()` or `tree()` is a
+  permanent conflict — two plugins owning one list's layout, the same
+  category as `grid()` with `masonry()`. All five share priority 10, so
+  nothing but the order of your plugin array decided which set up first, and
+  the results differed by that order: `[carousel(), grid()]` never returned
+  and allocated until the tab or process died, while `[grid(), carousel()]`
+  constructed and mounted its nine elements — which made the hang look like a
+  mistake in how you ordered the array rather than a pair that cannot work.
+  Measured on ten items in a 500px viewport, carousel first: masonry rendered
+  nothing, table drew four rows of nine, tree drew three.
+
+  `carousel()` with `search()` or `sortable()` is deliberately *not yet*
+  rather than *never*, and the declarations are meant to be removed once the
+  two compose. Filter-mode search replaces the item accessors and the total
+  that the carousel window owns, and clearing the query did not restore them:
+  a 30-item list went to 1 and came back 10, permanently. Sortable reads the
+  public `data-index` and then asks the size cache — which the carousel has
+  made speak virtual indices — where that row sits, so a drag on ten items
+  emitted `sort:end { fromIndex: 2, toIndex: 13 }` and dragging upward was
+  impossible. Removing a conflict later breaks nobody; adding one breaks
+  everyone who shipped the pair, which is why both land before 3.0.0.
+
+  Not addressed here: the five layout plugins still share priority 10 and
+  still have no defined order among themselves. The conflict declarations are
+  what keeps that from mattering.
+
 ### Fixed
 
 - `tree()` with `selection()`: the focus ring follows the tree's own key
