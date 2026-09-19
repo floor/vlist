@@ -25,18 +25,18 @@ import { findGroupByDataIndex, findGroupByLayoutIndex } from "./layout";
 // =============================================================================
 
 /** Configuration for the async group bridge */
-export interface AsyncBridgeConfig {
+export interface AsyncBridgeConfig<T extends VListItem = VListItem> {
   /** Determine group key for an item */
-  getGroupForIndex: (index: number, item?: any) => string;
+  getGroupForIndex: (index: number, item?: T) => string;
 
   /** Header height in pixels (resolved for current orientation) */
   headerHeight: number;
 }
 
 /** Async group bridge instance */
-export interface AsyncGroupBridge {
+export interface AsyncGroupBridge<T extends VListItem = VListItem> {
   /** Process newly loaded items — updates group boundaries */
-  onItemsLoaded(items: VListItem[], offset: number, total: number): void;
+  onItemsLoaded(items: T[], offset: number, total: number): void;
 
   /** Total layout entries (data items + discovered headers) */
   readonly totalEntries: number;
@@ -69,7 +69,7 @@ export interface AsyncGroupBridge {
   getGroupAtDataIndex(dataIndex: number): GroupBoundary;
 
   /** Insert item at data index — shifts group keys up and rebuilds */
-  insertAt(dataIndex: number, item: VListItem): void;
+  insertAt(dataIndex: number, item: T): void;
 
   /** Remove item at data index — shifts group keys and rebuilds */
   removeAt(dataIndex: number): void;
@@ -101,11 +101,11 @@ const EMPTY_GROUP: GroupBoundary = {
  * @param getItem - Item accessor from the async data manager
  * @param isItemLoaded - Check if an item at index is loaded (not placeholder)
  */
-export const createAsyncGroupBridge = (
-  config: AsyncBridgeConfig,
-  _getItem?: (index: number) => VListItem | undefined,
+export const createAsyncGroupBridge = <T extends VListItem = VListItem>(
+  config: AsyncBridgeConfig<T>,
+  _getItem?: (index: number) => T | undefined,
   _isItemLoaded?: (index: number) => boolean,
-): AsyncGroupBridge => {
+): AsyncGroupBridge<T> => {
   let groups: GroupBoundary[] = [];
   let dataTotal = 0;
   let totalEntries = 0;
@@ -197,7 +197,7 @@ export const createAsyncGroupBridge = (
 
   // ── Public API ──
 
-  const onItemsLoaded = (items: VListItem[], offset: number, total: number): void => {
+  const onItemsLoaded = (items: T[], offset: number, total: number): void => {
     dataTotal = total;
 
     // Cache group keys for loaded items
@@ -271,7 +271,7 @@ export const createAsyncGroupBridge = (
     return groups[gi]!;
   };
 
-  const insertAt = (dataIndex: number, item: VListItem): void => {
+  const insertAt = (dataIndex: number, item: T): void => {
     const newMap = new Map<number, string>();
     for (const [idx, key] of groupKeyByIndex) {
       if (idx < dataIndex) newMap.set(idx, key);

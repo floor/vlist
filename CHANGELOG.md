@@ -27,6 +27,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   position, native and synthetic alike, so a snap that crosses the lap
   does not jump by a lap.
 
+- `GroupsConfig` is generic in the item. `getGroupForIndex` is
+  `(index: number, item?: T) => string` — the same `T` as the list — not
+  `item?: any`. A callback written for a different item type is a type error
+  at `groups()`, `createGroupLayout`, and `createVListFromConfig`. Callers
+  that relied on `any` (reading undeclared fields, or passing a callback
+  typed for another shape) need to name the item or use `groups<Row>(…)`.
+
+- `createVListFromConfig` types an inline `groups.getGroupForIndex` with the
+  inferred item (`items` first, then the template), not `any`. The check also
+  applies when `groups` is optional on the input type. When `items` is given it
+  is the **only** place the item type comes from: a template or a grouping
+  callback annotated for a supertype is accepted — it safely takes every item —
+  and does not widen the list to that supertype. The types of `vlist/config`
+  use `NoInfer`, so they need TypeScript 5.4 or later; a mismatch is reported
+  as "no overload matches this call", on the call rather than on the property. Escape-hatch `plugins`
+  are looser than on `createVList`: a plugin explicitly typed for a different
+  item, such as `groups<Other>()`, is accepted with no check.
+  `GroupLayout.rebuild`, `createGroupLayout`, and `createAsyncGroupBridge`
+  take `(index: number) => T | undefined` instead of `any`.
+
 ### Fixed
 
 - A wrap-mode coordinate fold (carousel) now re-keys the mounted row

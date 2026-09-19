@@ -71,7 +71,7 @@ export interface VListConfig<T extends VListItem = VListItem>
   masonry?: MasonryPluginConfig;
 
   /** Sticky group headers. */
-  groups?: GroupsConfig;
+  groups?: GroupsConfig<T>;
 
   /**
    * Row selection (single / multi). Omit it for a display-only list: nothing
@@ -113,8 +113,11 @@ export interface VListConfig<T extends VListItem = VListItem>
    * the convenience fields: a plugin whose `name` matches an auto-wired one
    * (e.g. passing `grid()` while `layout: "grid"` is set) replaces it rather
    * than duplicating; plugins with new names are appended.
+   *
+   * Looser than `createVList`'s plugin list: a plugin explicitly typed for a
+   * different item, such as `groups<Other>()`, is accepted with no check.
    */
-  plugins?: VListPlugin<T>[];
+  plugins?: VListPlugin<any, any>[];
 }
 
 /**
@@ -271,7 +274,7 @@ export type ConfigMethods<T extends VListItem, C extends VListConfig<T>> =
   Field<C, "adapter", DataMethods> &
   (C extends { layout: "grid" } ? GridMethods : {}) &
   (C extends { layout: "masonry" } ? MasonryMethods : {}) &
-  Field<C, "groups", GroupsMethods> &
+  Field<C, "groups", GroupsMethods<T>> &
   Field<C, "selection", SelectionMethods<T>> &
   Field<C, "scrollbar", ScrollbarMethods> &
   Field<C, "snapshots", SnapshotsMethods> &
@@ -290,20 +293,45 @@ export type ConfigItem<C> = C extends { items: readonly (infer T extends VListIt
     : VListItem;
 
 /**
+ * {@link VListConfig} with everything but `items` blocked as an inference site,
+ * so `items` decides the item type and every callback is *checked* against it.
+ *
+ * Blocking the template alone was not enough: a grouping callback annotated for
+ * a supertype (`entity?: Entity` on a list of `Row`) is a second candidate, and
+ * it widened the whole list to `Entity` — `getItemAt()` lost `category`, and
+ * `setItems()` accepted an item without it. A callback for a supertype is still
+ * accepted, as it should be: it safely takes every `Row`.
+ */
+type CheckedConfig<T extends VListItem> = VListConfig<NoInfer<T>>;
+
+/**
  * Create a vlist instance from a high-level {@link VListConfig}, resolving its
  * feature fields into plugins via {@link resolvePlugins}. This is the single
  * entry point every framework adapter delegates to.
  *
- * One type parameter, the config itself: the item type comes from its `items`
- * or `template`, and the list's methods from its feature fields
- * ({@link ConfigMethods}). Do not pass a type argument — `createVListFromConfig<Row>`
- * would name a config type, not an item type, and fail to compile; the same
- * trap `createVList<Row>` falls into is closed here by having no second slot.
+ * The item type comes from `items` when present, otherwise the template, and
+ * the list's methods from the config's feature fields ({@link ConfigMethods}).
+ * Do not pass a type argument — `createVListFromConfig<Row>` does not compile
+ * (TypeScript requires both parameters), so the partial-argument trap
+ * `createVList<Row>` falls into stays closed.
+ *
+ * `groups.getGroupForIndex` is typed with that item: an inline callback
+ * receives `item?: T`, not `any`, and a callback written for a different
+ * item type is a type error, including when `groups` is optional on the
+ * input type.
  */
 export function createVListFromConfig<
-  const C extends VListConfig<any> & { container: HTMLElement | string },
->(config: C): VList<ConfigItem<C>> & ConfigMethods<ConfigItem<C>, C> {
-  type T = ConfigItem<C>;
+  T extends VListItem,
+  const C extends CheckedConfig<T> & { container: HTMLElement | string; items: readonly T[] },
+>(config: { items: readonly T[] } & CheckedConfig<T> & C): VList<T> & ConfigMethods<T, C>;
+export function createVListFromConfig<
+  T extends VListItem,
+  const C extends VListConfig<T> & { container: HTMLElement | string },
+>(config: VListConfig<T> & C): VList<T> & ConfigMethods<T, C>;
+export function createVListFromConfig<
+  T extends VListItem,
+  const C extends VListConfig<T> & { container: HTMLElement | string },
+>(config: VListConfig<T> & C): VList<T> & ConfigMethods<T, C> {
   const { factory, ...options } = config as VListConfig<T> & { container: HTMLElement | string };
   return (factory ?? createVList<T>)(
     options as CreateVListConfig<T>,

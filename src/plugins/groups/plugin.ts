@@ -37,19 +37,19 @@ import {
   type StickyHeader as StickyHeaderInstance,
 } from "./types";
 
-export interface GroupsPluginConfig extends GroupsConfig {}
+export interface GroupsPluginConfig<T extends VListItem = VListItem> extends GroupsConfig<T> {}
 
 const itemState: ItemState = { selected: false, focused: false };
 
 /** Methods the groups plugin adds to the list instance. */
-export interface GroupsMethods {
+export interface GroupsMethods<T extends VListItem = VListItem> {
   /** The current group layout: entries, boundaries and sticky state. */
-  getGroupLayout(): GroupLayout;
+  getGroupLayout(): GroupLayout<T>;
 }
 
 export function groups<T extends VListItem = VListItem>(
-  config: GroupsPluginConfig,
-): VListPlugin<T, GroupsMethods> {
+  config: GroupsPluginConfig<T>,
+): VListPlugin<T, GroupsMethods<T>> {
   if (!config.getGroupForIndex) {
     throw new Error("[vlist] groups: getGroupForIndex is required");
   }
@@ -65,7 +65,7 @@ export function groups<T extends VListItem = VListItem>(
   }
   const headerTemplate = rawHeaderTemplate;
 
-  let layout: GroupLayout;
+  let layout: GroupLayout<T>;
   let stickyHeader: StickyHeaderInstance | null = null;
   let sizeCache: SizeCache;
   let engineState: EngineState;
