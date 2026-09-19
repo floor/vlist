@@ -22,6 +22,11 @@
  * - Cannot be combined with `groups()`: an infinite wrap has no sections to
  *   group, and mechanically groups' `setSizeConfig` replaces the size cache
  *   methods this plugin installs directly.
+ * - Cannot be combined with `grid()`, `table()`, `masonry()` or `tree()`:
+ *   two plugins owning one list's layout, where this one has also made the
+ *   size cache speak virtual indices. Permanent.
+ * - Cannot yet be combined with `search()` or `sortable()` — see the comments
+ *   on their own `conflicts`. Both are fixable and meant to be fixed.
  * - `page()` is rejected by core, since bounded page-mode scrolling does not
  *   exist: document scrolling cannot wrap.
  */
@@ -593,7 +598,18 @@ export function carousel<T extends VListItem = VListItem>(
     // the caller wrote first. This plugin assigns its size-cache methods
     // directly; groups calls setSizeConfig, which Object.assigns a fresh
     // cache over them.
-    conflicts: ["groups"],
+    //
+    // grid, table, masonry and tree are permanent, the same category as grid
+    // with masonry: two plugins owning one list's layout, one of which makes
+    // the size cache speak virtual indices under the other's feet. All four
+    // share priority 10 with this plugin, so nothing decides which sets up
+    // first, and array order is the only thing left. Measured at 10 items of
+    // 100px in a 500px viewport with carousel written first: grid never
+    // returned and allocated to 3.9 GB, masonry rendered nothing, table drew
+    // 4 rows of 9, tree drew 3. Written the other way round grid constructs —
+    // which is worse, not better, because it makes the hang look like a
+    // caller's mistake in ordering rather than a pair that cannot work.
+    conflicts: ["groups", "grid", "table", "masonry", "tree"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

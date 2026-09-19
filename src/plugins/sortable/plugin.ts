@@ -18,6 +18,9 @@
  *
  * Restrictions:
  * - Cannot be combined with the grid, masonry, table or tree plugins
+ * - Cannot *yet* be combined with carousel: this plugin asks the size cache
+ *   about a data index, and carousel makes it speak virtual ones. Fixable —
+ *   see `conflicts` below.
  */
 
 import type { VListItem } from "../../types";
@@ -247,9 +250,15 @@ export function sortable<T extends VListItem = VListItem>(
     return fn ? fn() : -1;
   };
 
-  const focusById = (id: string | number): void => {
-    const fn = storedCtx?.hooks.get("_focusById") as ((id: string | number) => void) | undefined;
-    if (fn) fn(id);
+  // `keyboard`: the move came from a key press, so the focus ring stays visible
+  // and the active descendant follows, as it does for selection's own key
+  // moves. The pointer drop leaves it off: a mouse drag is a click, and whether
+  // a click paints a ring is `focusOnClick`'s answer to give, not this plugin's.
+  const focusById = (id: string | number, keyboard?: boolean): void => {
+    const fn = storedCtx?.hooks.get("_focusById") as
+      | ((id: string | number, keyboard?: boolean) => void)
+      | undefined;
+    if (fn) fn(id, keyboard);
   };
 
   const scrollIntoView = (index: number): void => {
@@ -741,7 +750,7 @@ export function sortable<T extends VListItem = VListItem>(
     rootEl.classList.remove(sortingClass);
     clearKbGrabbedClass();
 
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
 
     announce(`${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`);
@@ -764,7 +773,7 @@ export function sortable<T extends VListItem = VListItem>(
       storedCtx.emitter.emit("sort:cancel" as never, { originalItems: kbOriginalItems } as never);
     }
 
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
     scrollIntoView(originalIndex);
 
@@ -787,7 +796,7 @@ export function sortable<T extends VListItem = VListItem>(
     storedCtx.emitter.emit("sort:end" as never, { fromIndex, toIndex } as never);
 
     kbCurrentIndex = toIndex;
-    focusById(kbGrabbedItemId);
+    focusById(kbGrabbedItemId, true);
     storedCtx.render.force();
     scrollIntoView(toIndex);
     applyKbGrabbedClass();
@@ -863,7 +872,17 @@ export function sortable<T extends VListItem = VListItem>(
   return {
     name: "sortable",
     priority: 30,
-    conflicts: ["grid", "masonry", "table", "tree"],
+    // carousel is "not yet", not "never" — unlike the four layout plugins
+    // above, which own the geometry this plugin drags through. A sortable
+    // carousel is a reasonable thing to want; it is broken for one fixable
+    // reason. This plugin reads data-index for dragIndex and then hands that
+    // data index to sizeCache.getOffset() in computeDropIndex, and carousel
+    // has made the size cache speak virtual indices. A real pointer gesture
+    // on ten items emitted sort:end { fromIndex: 2, toIndex: 13 }, and the
+    // backward branch of computeDropIndex was unreachable, so dragging
+    // upward was impossible. Converting through _layoutToDataIndex would
+    // close it; until someone does, declare it and leave the door open.
+    conflicts: ["grid", "masonry", "table", "tree", "carousel"],
 
     setup(ctx: PluginContext<T>): void {
       scroll = ctx.scroll;

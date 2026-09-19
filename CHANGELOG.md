@@ -47,6 +47,38 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `GroupLayout.rebuild`, `createGroupLayout`, and `createAsyncGroupBridge`
   take `(index: number) => T | undefined` instead of `any`.
 
+- `carousel()` declares the plugins it cannot be combined with, so six pairs
+  that used to build a list now throw at `createVList` with
+  `[vlist] Plugin "…" conflicts with "…"`, before any DOM is created. None of
+  them worked; what changes is that the failure is now immediate and legible
+  instead of a list that renders the wrong thing, or no thing, or none at all.
+
+  `carousel()` with `grid()`, `table()`, `masonry()` or `tree()` is a
+  permanent conflict — two plugins owning one list's layout, the same
+  category as `grid()` with `masonry()`. All five share priority 10, so
+  nothing but the order of your plugin array decided which set up first, and
+  the results differed by that order: `[carousel(), grid()]` never returned
+  and allocated until the tab or process died, while `[grid(), carousel()]`
+  constructed and mounted its nine elements — which made the hang look like a
+  mistake in how you ordered the array rather than a pair that cannot work.
+  Measured on ten items in a 500px viewport, carousel first: masonry rendered
+  nothing, table drew four rows of nine, tree drew three.
+
+  `carousel()` with `search()` or `sortable()` is deliberately *not yet*
+  rather than *never*, and the declarations are meant to be removed once the
+  two compose. Filter-mode search replaces the item accessors and the total
+  that the carousel window owns, and clearing the query did not restore them:
+  a 30-item list went to 1 and came back 10, permanently. Sortable reads the
+  public `data-index` and then asks the size cache — which the carousel has
+  made speak virtual indices — where that row sits, so a drag on ten items
+  emitted `sort:end { fromIndex: 2, toIndex: 13 }` and dragging upward was
+  impossible. Removing a conflict later breaks nobody; adding one breaks
+  everyone who shipped the pair, which is why both land before 3.0.0.
+
+  Not addressed here: the five layout plugins still share priority 10 and
+  still have no defined order among themselves. The conflict declarations are
+  what keeps that from mattering.
+
 ### Fixed
 
 - `search()` re-highlights a row whose `item.template` returns an
@@ -70,6 +102,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   until an up or down key revived the focus. A keyboard user lost the focus
   indicator. The ring and the active descendant are now on the same row after
   every key move; a click keeps following `focusOnClick`.
+
+- `sortable()` with `selection()`: the focus ring survives a keyboard sort.
+  Space grabbed an item, and the first arrow that moved it took the ring away —
+  mid-sort, not after the drop — because the move reached selection as if it
+  were a click. With the default `focusOnClick: false` the ring vanished,
+  `aria-activedescendant` stayed on the row the item had left, and
+  `_getFocusedIndex()` answered -1, so the Space meant to re-grab the item fell
+  through to selection and selected it instead. The ring and the active
+  descendant now follow the grabbed item through every move, the drop and
+  Escape; a pointer drag keeps following `focusOnClick`.
 
 - A wrap-mode coordinate fold (carousel) now re-keys the mounted row
   elements instead of releasing and re-creating them. Folding used to
