@@ -187,27 +187,27 @@ describe("release", () => {
     expect(el2.getAttribute("role")).toBeNull();
   });
 
-  it("should respect max pool size (hardcoded 100)", () => {
+  it("should keep every element that was out at once, beyond 100", () => {
     const pool = createPool("vlist");
     const elements: HTMLElement[] = [];
 
-    // Acquire 150 elements
+    // 150 elements out at the same time
     for (let i = 0; i < 150; i++) {
       elements.push(pool.acquire());
     }
 
-    // Release all of them
     for (const el of elements) {
       pool.release(el);
     }
 
-    // Pool should only keep last 100 (MAX_POOL_SIZE)
+    expect(pool.size).toBe(150);
+
+    // All 150 come back; the next 20 are new
     const recycled: HTMLElement[] = [];
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 170; i++) {
       recycled.push(pool.acquire());
     }
 
-    // Count how many are from original elements
     let recycledCount = 0;
     for (const el of recycled) {
       if (elements.includes(el)) {
@@ -215,8 +215,7 @@ describe("release", () => {
       }
     }
 
-    // Should have exactly 100 recycled, 20 new
-    expect(recycledCount).toBe(100);
+    expect(recycledCount).toBe(150);
   });
 
   it("should allow releasing same element multiple times (no duplicate check)", () => {
@@ -284,35 +283,28 @@ describe("clear", () => {
 });
 
 describe("pool lifecycle", () => {
-  it("should handle many acquire/release cycles with hardcoded max size", () => {
+  it("should remember the peak across acquire/release cycles", () => {
     const pool = createPool("vlist");
     const elements: HTMLElement[] = [];
 
-    // Acquire many elements
+    // Peak: 120 out at once
     for (let i = 0; i < 120; i++) {
       elements.push(pool.acquire());
     }
-
-    // Release them all
     for (const el of elements) {
       pool.release(el);
     }
 
-    // Pool should only keep last 100 (MAX_POOL_SIZE=100)
-    const recycled: HTMLElement[] = [];
-    for (let i = 0; i < 110; i++) {
-      recycled.push(pool.acquire());
+    // A smaller window afterwards does not lower the cap
+    const few: HTMLElement[] = [];
+    for (let i = 0; i < 10; i++) {
+      few.push(pool.acquire());
+    }
+    for (const el of few) {
+      pool.release(el);
     }
 
-    // Exactly 100 should be recycled, 10 should be new
-    let recycledCount = 0;
-    for (const el of recycled) {
-      if (elements.includes(el)) {
-        recycledCount++;
-      }
-    }
-
-    expect(recycledCount).toBe(100);
+    expect(pool.size).toBe(120);
   });
 
   it("should maintain element role attribute across pool cycles", () => {
@@ -373,11 +365,11 @@ describe("edge cases", () => {
     // (only className reset to "vlist-item", innerHTML, style, data-index, data-id, aria-selected)
   });
 
-  it("should handle many elements within MAX_POOL_SIZE limit", () => {
+  it("should recycle all of 100 elements", () => {
     const pool = createPool("vlist");
     const elements: HTMLElement[] = [];
 
-    // Acquire exactly 100 elements (MAX_POOL_SIZE)
+    // Acquire exactly 100 elements
     for (let i = 0; i < 100; i++) {
       elements.push(pool.acquire());
     }
@@ -396,33 +388,21 @@ describe("edge cases", () => {
     expect(recycled.every((el) => elements.includes(el))).toBe(true);
   });
 
-  it("should discard elements beyond MAX_POOL_SIZE when released", () => {
+  it("never holds more than the most that were out at once — which is why it needs no cap", () => {
     const pool = createPool("vlist");
-    const elements: HTMLElement[] = [];
+    let out: HTMLElement[] = [];
+    let peak = 0;
 
-    // Acquire 105 elements
-    for (let i = 0; i < 105; i++) {
-      elements.push(pool.acquire());
+    // Windows of changing size, each released whole: jumps, data changes, resizes.
+    for (const size of [40, 300, 12, 180, 300, 5, 260]) {
+      for (let i = 0; i < size; i++) out.push(pool.acquire());
+      peak = Math.max(peak, out.length);
+      for (const el of out) pool.release(el);
+      out = [];
+      expect(pool.size).toBeLessThanOrEqual(peak);
     }
 
-    // Release all (last 5 should be discarded)
-    for (const el of elements) {
-      pool.release(el);
-    }
-
-    // Should have exactly 100 in pool
-    expect(pool.size).toBe(100);
-
-    // Only first 100 should be recycled
-    const recycled: HTMLElement[] = [];
-    for (let i = 0; i < 100; i++) {
-      recycled.push(pool.acquire());
-    }
-
-    // The last 5 elements should NOT be in recycled
-    const lastFive = elements.slice(100);
-    for (const el of lastFive) {
-      expect(recycled).not.toContain(el);
-    }
+    // It created an element only when it was empty: 300 exist, all of them spares now.
+    expect(pool.size).toBe(300);
   });
 });

@@ -2,12 +2,16 @@
  * vlist — Element Pool
  *
  * acquire() = pop or create, release() = reset + push.
- * Max pool size: 100.
+ *
+ * No cap. The pool only ever holds elements it created — every caller that
+ * releases also acquires here — and it creates one only when it is empty, so it
+ * can never hold more than the most that were mounted at once. A cap of 100 cut
+ * into that: a jump on a view of 300 cells released them all, kept 100, and the
+ * next frame cloned 200 again. A cap that followed the peak would bound nothing
+ * this does not already bound, and would cost every bundle the bytes to track it.
  */
 
 import type { ElementPool } from "./types";
-
-const MAX_POOL_SIZE = 100;
 
 export function createPool(classPrefix: string): ElementPool {
   const pool: HTMLElement[] = [];
@@ -35,9 +39,7 @@ export function createPool(classPrefix: string): ElementPool {
       element.removeAttribute("data-id");
       element.textContent = "";
 
-      if (pool.length < MAX_POOL_SIZE) {
-        pool.push(element);
-      }
+      pool.push(element);
     },
 
     get size(): number {
