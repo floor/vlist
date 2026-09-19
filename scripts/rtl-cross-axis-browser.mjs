@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+import {pinPage} from './browser-page.mjs';
 const root=resolve(import.meta.dir,'..');
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css"><style>body{margin:30px}#host{width:360px;height:400px} .wide{width:800px}</style><div id="host"></div>
 <script type="module">
@@ -20,7 +21,12 @@ window.sample=()=>{
  headers:h.map(c=>({text:c.textContent,left:c.getBoundingClientRect().left,right:c.getBoundingClientRect().right})),cells:[...b].map(c=>({text:c.textContent,left:c.getBoundingClientRect().left,right:c.getBoundingClientRect().right}))};
 };
 window.probe=async()=>{
- const pause=()=>new Promise(r=>setTimeout(r,100));const v=document.querySelector('.vlist-viewport'),results={};
+ // Two frames, not 100ms. The header follows the body from the viewport's scroll
+ // event, which the next frame dispatches; until then the cells have moved and
+ // the header has not, by exactly the scroll delta. A timer can fire first on a
+ // busy machine. Frame one lets a handler that defers to rAF write scrollLeft,
+ // frame two dispatches that scroll before this callback runs.
+ const frame=()=>new Promise(r=>requestAnimationFrame(()=>r()));const pause=async()=>{await frame();await frame();};const v=document.querySelector('.vlist-viewport'),results={};
  await pause();results.initial=sample();
  v.scrollLeft=-100;await pause();results.negative=sample();v.scrollLeft=100;await pause();results.positive=sample();v.scrollLeft=0;await pause();
  for(const key of ['ArrowLeft','ArrowLeft','ArrowRight','ArrowRight']){v.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));await pause();results[key+'-'+Object.keys(results).length]=sample();}
@@ -41,7 +47,7 @@ if(!process.argv.includes('--serve')) {
   const driver=process.env.VLIST_BROWSER_DRIVER??resolve(import.meta.dir,'browser-driver.mjs');
   browser=await (await import(resolve(driver))).launchBrowser();console.log(await browser.version());
   for(const dir of ['ltr','rtl'])for(const table of [true,false]) {
-   const page=await browser.newPage();await page.goto(`${server.url}?dir=${dir}&table=${table}`);await page.waitForFunction(()=>window.ready);
+   const page=await browser.newPage();await pinPage(page,{width:800,height:600});await page.goto(`${server.url}?dir=${dir}&table=${table}`);await page.waitForFunction(()=>window.ready);
    const result=await page.evaluate(()=>window.probe());
    const max=result.initial.max;assert(max>0,'fixture must have cross-axis overflow');
    for(const sample of Object.values(result)) {

@@ -37,11 +37,17 @@ export function findChrome(override) {
 
 export async function launchBrowser(opts = {}) {
   const { headless = true, chrome } = opts;
-  return puppeteer.launch({
+  const browser = await puppeteer.launch({
     headless,
     executablePath: findChrome(chrome),
     // The suites drive scroll and pointer input; a shared memory limit small
     // enough to matter shows up as flaky frames rather than a clean failure.
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
+  // Branded Chrome starts GoogleUpdater, which inherits the stdio pipes and
+  // outlives the browser by minutes. A suite that has closed its browser is
+  // done: do not let those pipes hold the process, and the next suite, open.
+  const child = browser.process();
+  for (const stream of [child?.stdin, child?.stdout, child?.stderr]) stream?.unref?.();
+  return browser;
 }
