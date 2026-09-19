@@ -81,6 +81,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `search()` re-highlights a row whose `item.template` returns an
+  `HTMLElement` and returns the same element object again. The stamp that
+  keeps an unchanged query from re-walking every visible row rode on the
+  row's first child node, on the assumption that rewriting a row replaces
+  its child nodes with new objects. A template is free to keep one node per
+  row and rewrite it in place, and then the first child — and its stamp —
+  outlived the marks it was vouching for: `updateItem` or `setItems` under a
+  live query left that row unhighlighted, and scrolling away and back did
+  not bring the marks back. Only changing the query did. Renderers now void
+  the row's stamp when they write it, so the stamp can no longer outlast the
+  content it describes. A commit that only moved the range still re-walks
+  nothing.
+
 - `tree()` with `selection()`: the focus ring follows the tree's own key
   moves. ArrowLeft and ArrowRight onto a parent or a child, Home, End and
   type-ahead went through selection as if they were clicks, so with the

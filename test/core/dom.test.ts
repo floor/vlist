@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
-import { resolveContainer, createDOMStructure, neutralizeFocusable } from "../../src/core/dom";
+import { resolveContainer, createDOMStructure, rowContentWritten } from "../../src/core/dom";
 
 // =============================================================================
 // JSDOM Setup
@@ -151,28 +151,28 @@ describe("createDOMStructure", () => {
 });
 
 // =============================================================================
-// neutralizeFocusable
+// rowContentWritten
 // =============================================================================
 
-describe("neutralizeFocusable", () => {
+describe("rowContentWritten", () => {
   it("should set tabindex=-1 on anchor elements with href", () => {
     const el = document.createElement("div");
     el.innerHTML = '<a href="https://example.com">Link</a>';
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("a")!.getAttribute("tabindex")).toBe("-1");
   });
 
   it("should set tabindex=-1 on buttons", () => {
     const el = document.createElement("div");
     el.innerHTML = "<button>Click</button>";
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("button")!.getAttribute("tabindex")).toBe("-1");
   });
 
   it("should set tabindex=-1 on form elements", () => {
     const el = document.createElement("div");
     el.innerHTML = '<input type="text"><select><option>A</option></select><textarea></textarea>';
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("input")!.getAttribute("tabindex")).toBe("-1");
     expect(el.querySelector("select")!.getAttribute("tabindex")).toBe("-1");
     expect(el.querySelector("textarea")!.getAttribute("tabindex")).toBe("-1");
@@ -181,14 +181,14 @@ describe("neutralizeFocusable", () => {
   it("should set tabindex=-1 on elements with explicit tabindex", () => {
     const el = document.createElement("div");
     el.innerHTML = '<div tabindex="0">Focusable div</div>';
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("[tabindex]")!.getAttribute("tabindex")).toBe("-1");
   });
 
   it("should handle multiple focusable descendants", () => {
     const el = document.createElement("div");
     el.innerHTML = '<a href="#">L1</a><button>B1</button><a href="#">L2</a><input>';
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     const all = el.querySelectorAll("[tabindex]");
     expect(all.length).toBe(4);
     for (const node of all) {
@@ -199,21 +199,21 @@ describe("neutralizeFocusable", () => {
   it("should not affect anchors without href", () => {
     const el = document.createElement("div");
     el.innerHTML = "<a>Not focusable</a>";
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("a")!.hasAttribute("tabindex")).toBe(false);
   });
 
   it("should be a no-op when no focusable descendants exist", () => {
     const el = document.createElement("div");
     el.innerHTML = "<div><span>Text</span><p>Paragraph</p></div>";
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelectorAll("[tabindex]").length).toBe(0);
   });
 
   it("should handle nested focusable elements", () => {
     const el = document.createElement("div");
     el.innerHTML = '<div><span><a href="#">Deep link</a></span></div>';
-    neutralizeFocusable(el);
+    rowContentWritten(el);
     expect(el.querySelector("a")!.getAttribute("tabindex")).toBe("-1");
   });
 });

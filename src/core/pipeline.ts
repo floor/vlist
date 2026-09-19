@@ -16,7 +16,7 @@ import type { CompiledHooks, ElementPool } from "./types";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
-import { neutralizeFocusable } from "./dom";
+import { rowContentWritten } from "./dom";
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
 // =============================================================================
@@ -286,7 +286,7 @@ export function phase2Commit<T extends VListItem>(
           acquired.textContent = "";
           acquired.appendChild(result);
         }
-        neutralizeFocusable(acquired);
+        rowContentWritten(acquired);
       }
 
       acquired.setAttribute("role", rc.itemRole);
@@ -359,7 +359,7 @@ export function phase2Commit<T extends VListItem>(
           element.textContent = "";
           element.appendChild(result);
         }
-        neutralizeFocusable(element);
+        rowContentWritten(element);
         element.setAttribute("data-id", newId);
         el._lastItem = item;
 

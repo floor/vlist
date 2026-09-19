@@ -6,16 +6,38 @@
 import type { DOMStructure } from "./types";
 
 // =============================================================================
-// Focusable Descendant Neutralization
+// Row Content Write
 // =============================================================================
 
 const FOCUSABLE = "a[href],button,input,select,textarea,[tabindex]";
 
-export function neutralizeFocusable(el: HTMLElement): void {
+/**
+ * A row element, carrying the one slot a plugin may use to record that it has
+ * processed this row's current content. Zero means "written, nobody has looked
+ * at it since"; any other value belongs to whichever plugin wrote it, and only
+ * one plugin may (today: `search()`, for its `<mark>`s).
+ */
+export interface StampableRow extends HTMLElement {
+  _stamp?: number;
+}
+
+/**
+ * Called by every renderer immediately after it writes a row's content.
+ *
+ * Neutralizes focusable descendants, and voids the row's stamp, so an observer
+ * can tell "this row was rewritten" apart from "this row only moved". Node
+ * identity cannot tell them apart: `item.template` may return an `HTMLElement`
+ * and hand back that same object on a later call, rewritten in place, so the
+ * row's child nodes outlive a rewrite that destroyed everything they held. The
+ * renderer doing the write is the only one that knows it happened, so it is
+ * the one that says so.
+ */
+export function rowContentWritten(el: HTMLElement): void {
   const nodes = el.querySelectorAll<HTMLElement>(FOCUSABLE);
   for (let i = 0; i < nodes.length; i++) {
     nodes[i]!.setAttribute("tabindex", "-1");
   }
+  (el as StampableRow)._stamp = 0;
 }
 
 // =============================================================================
