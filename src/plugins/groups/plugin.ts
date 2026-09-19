@@ -23,7 +23,7 @@ type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
-import { neutralizeFocusable } from "../../core/dom";
+import { rowContentWritten } from "../../core/dom";
 import { createScrollPaddingReader } from "../../utils/scroll-padding";
 
 import {
@@ -449,7 +449,7 @@ export function groups<T extends VListItem = VListItem>(
       element.innerHTML = "";
       element.appendChild(content);
     }
-    neutralizeFocusable(element);
+    rowContentWritten(element);
     return !isPlaceholder;
   }
 

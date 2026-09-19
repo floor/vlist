@@ -25,6 +25,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import type { StampableRow } from "../../core/dom";
 import type { ItemState } from "../../types";
 import {
   makeGetText,
@@ -154,8 +155,9 @@ export function search<T extends VListItem = VListItem>(
   let bar: SearchBar | null = null;
   let open = false;
   let query = "";
-  /** Bumped on every query change. Rows stamped with an older value re-highlight. */
-  let queryVersion = 0;
+  /** Bumped on every query change. Rows stamped with an older value re-highlight.
+   *  Starts at 1: 0 is the row stamp a renderer voids when it rewrites a row. */
+  let queryVersion = 1;
   /** Whether any rendered row may still carry marks — gates the clearing pass. */
   let marksPresent = false;
   /** Original-index list of matching items. */
@@ -344,15 +346,14 @@ export function search<T extends VListItem = VListItem>(
   /**
    * A row's marks stay valid until either the query changes or the row's
    * content is rewritten, and a commit that merely moved the range does
-   * neither. The stamp therefore rides on the row's first child node: every
-   * path that rewrites a row (`innerHTML =`, `textContent = ""` on pool
-   * release, a layout plugin's own renderer) replaces the child nodes with new
-   * objects, so an unstamped first child *is* the "content was rewritten"
-   * signal — no cooperation needed from whichever renderer produced the row.
+   * neither. The stamp therefore rides on the row element's `_stamp` slot and
+   * holds the `queryVersion` the marks were built for: every renderer voids
+   * that slot when it writes the row, which is the only sound signal there is.
+   * Node identity is not one — `item.template` may return an `HTMLElement` and
+   * hand back that same object on a later call, so the row's first child
+   * outlives a rewrite that emptied it.
    */
-  interface StampedNode extends Node {
-    /** `queryVersion` the marks below this row were built for. */
-    _searchMarkVersion?: number;
+  interface StampedRow extends StampableRow {
     /** Whether this row currently carries the `--current` class (navigate). */
     _searchMarkCurrent?: boolean;
   }
@@ -399,35 +400,32 @@ export function search<T extends VListItem = VListItem>(
       const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
 
-      let stamp = el.firstChild as StampedNode | null;
-      if (stamp === null || stamp._searchMarkVersion !== queryVersion) {
+      const row = el as StampedRow;
+      if (row._stamp !== queryVersion) {
         // Newly rendered, rewritten, or built for an older query.
         if (active) {
           highlightRow(el);
           marksPresent = true;
-          // Highlighting splits text nodes, so re-read the first child.
-          stamp = el.firstChild as StampedNode | null;
-          if (stamp !== null) {
-            stamp._searchMarkVersion = queryVersion;
-            stamp._searchMarkCurrent = false;
-          }
-        } else if (stamp !== null && stamp._searchMarkVersion !== undefined) {
-          // Marks built for a query that is no longer active. Rows this pass
-          // never touched keep an unstamped first child and cost nothing.
+          row._stamp = queryVersion;
+          row._searchMarkCurrent = false;
+        } else if (row._stamp) {
+          // Marks built for a query that is no longer active. A row the
+          // renderer has written since carries 0 and costs nothing.
           clearRow(el);
+          row._stamp = 0;
         }
       }
 
-      if (active && mode === "navigate" && stamp !== null) {
+      if (active && mode === "navigate") {
         // Cheap by construction: only the row entering or leaving the current
         // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
-        if (stamp._searchMarkCurrent !== isCurrentRow) {
+        if (row._searchMarkCurrent !== isCurrentRow) {
           const marks = el.querySelectorAll(`.${matchClass}`);
           for (let m = 0; m < marks.length; m++) {
             marks[m]!.classList.toggle(currentClass, isCurrentRow);
           }
-          stamp._searchMarkCurrent = isCurrentRow;
+          row._searchMarkCurrent = isCurrentRow;
         }
       }
     }

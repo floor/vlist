@@ -22,7 +22,7 @@ import type { VListItem, ItemState, ItemTemplate, TreeState, VListEvents } from 
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
-import { neutralizeFocusable } from "../../core/dom";
+import { rowContentWritten } from "../../core/dom";
 import { createTreeLayout, type TreeLayout } from "./layout";
 import type { TreePluginConfig, FlatNode } from "./types";
 
@@ -521,7 +521,7 @@ export function tree<T extends VListItem = VListItem>(
       element.innerHTML = "";
       element.appendChild(content);
     }
-    neutralizeFocusable(element);
+    rowContentWritten(element);
   }
 
   function treeRenderIfNeeded(): void {

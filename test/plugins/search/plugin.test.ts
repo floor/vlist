@@ -495,6 +495,53 @@ describe("highlight invalidation", () => {
     }, "navigate");
   });
 
+  it("re-highlights a row whose element template returned the same node again", () => {
+    // An element template may keep one node per row and rewrite it in place.
+    // The row's first child is then the same object before and after the
+    // update, while everything the highlight pass built inside it is gone —
+    // so node identity cannot stand in for "this row still holds its marks".
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const nodes = new Map<number, HTMLElement>();
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(200),
+        item: {
+          height: 30,
+          template: (row: TestItem): HTMLElement => {
+            let node = nodes.get(row.id);
+            if (node === undefined) {
+              node = document.createElement("span");
+              nodes.set(row.id, node);
+            }
+            node.textContent = row.name;
+            return node;
+          },
+        },
+      },
+      [search<TestItem>({ field: "name", mode: "navigate" })],
+    );
+    try {
+      (list as any).setQuery("1");
+      const row = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(row.textContent).toBe("Item 2");
+      expect(row.querySelector(".vlist-search-match")).toBeNull();
+      const reused = row.firstChild;
+
+      list.updateItem(list.items[1]!.id, { name: "Item 101" } as Partial<TestItem>);
+
+      const updated = container.querySelector('.vlist-item[data-index="1"]')!;
+      // The premise: the template really did hand back the same node object.
+      expect(updated.firstChild).toBe(reused);
+      expect(updated.textContent).toBe("Item 101");
+      expect(updated.querySelectorAll(".vlist-search-match").length).toBe(2);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
   it("re-highlights a row that left the range and came back", () => {
     withScrollableList((list, container) => {
       (list as any).setQuery("1");

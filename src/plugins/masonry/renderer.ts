@@ -26,7 +26,7 @@ import type {
 } from "../../types";
 
 import type { ItemPlacement } from "./types";
-import { neutralizeFocusable } from "../../core/dom";
+import { rowContentWritten } from "../../core/dom";
 import { sortRenderedDOM } from "../../rendering/sort";
 
 // =============================================================================
@@ -231,7 +231,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     } else {
       element.replaceChildren(result);
     }
-    neutralizeFocusable(element);
+    rowContentWritten(element);
   };
 
   /**
