@@ -7,12 +7,18 @@
  * list), PageUp/PageDown across group headers, a range that reaches rows the
  * data plugin has not loaded yet, and a single-selection list restored from a
  * snapshot.
+ *
+ * Safe under `bun test --concurrent`: each test owns its list, container and
+ * adapter through `scoped()`; loads are waited for by their effect on the DOM
+ * (`waitFor`), never by a duration; focus is read from the list's own classes
+ * and attributes, never from `document.activeElement`.
  */
 
-import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
-import { advanceTimers } from "../../helpers/timers";
+import { flushMicrotasks } from "../../helpers/timers";
+import { scoped, waitFor, type TestScope } from "../../helpers/scope";
 import { createTestItems, createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
@@ -53,22 +59,15 @@ afterAll(() => geometry.assertRestored());
 
 type SelectableList = VList<TestItem> & SelectionMethods<TestItem>;
 
-let open: Array<{ list: VList<TestItem>; container: HTMLElement }> = [];
-afterEach(() => {
-  for (const { list, container } of open) {
-    list.destroy();
-    container.remove();
-  }
-  open = [];
-});
-
+/** Each test owns its list: `scope` destroys it when that test ends, not before. */
 function makeList(
+  scope: TestScope,
   config: Omit<CreateVListConfig<TestItem>, "container">,
   plugins: Array<VListPlugin<TestItem, any>>,
 ): { list: SelectableList; container: HTMLElement; content: HTMLElement } {
   const container = createContainer({ width: WIDTH, height: HEIGHT });
   const list = createVList<TestItem>({ container, ...config }, plugins);
-  open.push({ list, container });
+  scope.own(list, container);
   const content = container.querySelector<HTMLElement>(".vlist-content")!;
   return { list: list as SelectableList, container, content };
 }
@@ -97,8 +96,9 @@ function selectedIdsInDom(container: HTMLElement): number[] {
 // =============================================================================
 
 describe('selection — mode "none"', () => {
-  it("keeps every method callable and inert, so a consumer can switch modes without guarding calls", () => {
+  it("keeps every method callable and inert, so a consumer can switch modes without guarding calls", scoped((scope) => {
     const { list, container, content } = makeList(
+      scope,
       { items: createTestItems(40), item: { height: 50, template: simpleTemplate } },
       [selection<TestItem>({ mode: "none" })],
     );
@@ -125,7 +125,7 @@ describe('selection — mode "none"', () => {
     expect(focusedId(container)).toBeNull();
     // selectNext reveals the row it selects; with nothing to select it must not scroll.
     expect(list.getScrollPosition()).toBe(0);
-  });
+  }));
 });
 
 // =============================================================================
@@ -133,8 +133,9 @@ describe('selection — mode "none"', () => {
 // =============================================================================
 
 describe("selection — left and right arrows", () => {
-  it("leaves them alone in a plain vertical list, so the page can still use them", () => {
+  it("leaves them alone in a plain vertical list, so the page can still use them", scoped((scope) => {
     const { container, content } = makeList(
+      scope,
       { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
       [selection<TestItem>()],
     );
@@ -148,10 +149,11 @@ describe("selection — left and right arrows", () => {
     expect(focusedId(container)).toBe(1);
     expect(right.claimed).toBe(false);
     expect(left.claimed).toBe(false);
-  });
+  }));
 
-  it("step one cell sideways in a grid, where up and down step a whole row", () => {
+  it("step one cell sideways in a grid, where up and down step a whole row", scoped((scope) => {
     const { container, content } = makeList(
+      scope,
       { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
       [grid({ columns: 4 }), selection<TestItem>()],
     );
@@ -165,10 +167,11 @@ describe("selection — left and right arrows", () => {
     expect(focusedId(container)).toBe(7);
     expect(press(content, "ArrowLeft").claimed).toBe(true);
     expect(focusedId(container)).toBe(6);
-  });
+  }));
 
-  it("stop at the first cell instead of wrapping to the previous row", () => {
+  it("stop at the first cell instead of wrapping to the previous row", scoped((scope) => {
     const { container, content } = makeList(
+      scope,
       { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
       [grid({ columns: 4 }), selection<TestItem>()],
     );
@@ -177,10 +180,11 @@ describe("selection — left and right arrows", () => {
     press(content, "ArrowLeft");
 
     expect(focusedId(container)).toBe(1);
-  });
+  }));
 
-  it("extend a multiple selection cell by cell with Shift held", () => {
+  it("extend a multiple selection cell by cell with Shift held", scoped((scope) => {
     const { list, container, content } = makeList(
+      scope,
       { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
       [grid({ columns: 4 }), selection<TestItem>({ mode: "multiple" })],
     );
@@ -197,10 +201,11 @@ describe("selection — left and right arrows", () => {
     // Shift+arrow toggles the cell it lands on, sideways as it does vertically.
     press(content, "ArrowLeft", { shiftKey: true });
     expect(list.getSelected()).toEqual([1, 3]);
-  });
+  }));
 
-  it("walk the items of a horizontal list, where up and down have nothing to do", () => {
+  it("walk the items of a horizontal list, where up and down have nothing to do", scoped((scope) => {
     const { container, content } = makeList(
+      scope,
       {
         items: createTestItems(20),
         orientation: "horizontal",
@@ -222,10 +227,11 @@ describe("selection — left and right arrows", () => {
     expect(focusedId(container)).toBe(2);
     expect(down.claimed).toBe(false);
     expect(up.claimed).toBe(false);
-  });
+  }));
 
-  it("step a whole column in a horizontal grid, where up and down step one lane", () => {
+  it("step a whole column in a horizontal grid, where up and down step one lane", scoped((scope) => {
     const { container, content } = makeList(
+      scope,
       {
         items: createTestItems(20),
         orientation: "horizontal",
@@ -244,7 +250,7 @@ describe("selection — left and right arrows", () => {
     expect(focusedId(container)).toBe(2);
     press(content, "ArrowUp");
     expect(focusedId(container)).toBe(1);
-  });
+  }));
 });
 
 // =============================================================================
@@ -254,8 +260,9 @@ describe("selection — left and right arrows", () => {
 describe("selection + groups — PageUp and PageDown", () => {
   const ITEM = 50;
 
-  function groupedList(count: number) {
+  function groupedList(scope: TestScope, count: number) {
     return makeList(
+      scope,
       { items: createTestItems(count), item: { height: ITEM, template: simpleTemplate } },
       [
         groups({
@@ -267,8 +274,8 @@ describe("selection + groups — PageUp and PageDown", () => {
     );
   }
 
-  it("PageDown moves a page of items, not a page of rows that headers ate into", () => {
-    const { container, content } = groupedList(60);
+  it("PageDown moves a page of items, not a page of rows that headers ate into", scoped((scope) => {
+    const { container, content } = groupedList(scope, 60);
     press(content, "Home");
     expect(focusedId(container)).toBe(1);
 
@@ -279,10 +286,10 @@ describe("selection + groups — PageUp and PageDown", () => {
     expect(focusedId(container)).toBe(11);
     const focused = container.querySelector<HTMLElement>(".vlist-item--focused")!;
     expect(focused.classList.contains("vlist-group-header")).toBe(false);
-  });
+  }));
 
-  it("PageUp takes the same page back", () => {
-    const { container, content } = groupedList(60);
+  it("PageUp takes the same page back", scoped((scope) => {
+    const { container, content } = groupedList(scope, 60);
     press(content, "Home");
     press(content, "PageDown");
     press(content, "PageDown");
@@ -291,10 +298,10 @@ describe("selection + groups — PageUp and PageDown", () => {
     press(content, "PageUp");
 
     expect(focusedId(container)).toBe(11);
-  });
+  }));
 
-  it("PageDown stops on the last item and PageUp on the first", () => {
-    const { container, content } = groupedList(14);
+  it("PageDown stops on the last item and PageUp on the first", scoped((scope) => {
+    const { container, content } = groupedList(scope, 14);
     press(content, "Home");
 
     press(content, "PageDown");
@@ -304,7 +311,7 @@ describe("selection + groups — PageUp and PageDown", () => {
     press(content, "PageUp");
     press(content, "PageUp");
     expect(focusedId(container)).toBe(1);
-  });
+  }));
 });
 
 // =============================================================================
@@ -327,12 +334,13 @@ describe("selection + data — a range over rows that are not loaded yet", () =>
     };
   }
 
-  it("Ctrl+Shift+End holds the unloaded rows and hands them to the real items once they load", async () => {
+  it("Ctrl+Shift+End holds the unloaded rows and hands them to the real items once they load", scoped(async (scope) => {
     const { list, container, content } = makeList(
+      scope,
       { item: { height: 50, template: simpleTemplate } },
       [data<TestItem>({ adapter: adapter() }), selection<TestItem>({ mode: "multiple" })],
     );
-    await advanceTimers(50);
+    await waitFor(() => container.querySelector('[data-id="1"]') !== null, "the first page to render");
     press(content, "Home");
 
     press(content, "End", { ctrlKey: true, shiftKey: true });
@@ -342,11 +350,10 @@ describe("selection + data — a range over rows that are not loaded yet", () =>
     expect(list.getSelected()).toContain(1);
     expect(list.getSelected()).toContain(`__placeholder_${TOTAL - 1}`);
 
-    // The key also scrolled to the end; let that page load and render.
-    await advanceTimers(300);
+    // The key also scrolled to the end; wait for that page to load and render.
+    await waitFor(() => container.querySelector(`[data-id="${TOTAL}"]`) !== null, "the last page to render");
 
     const last = container.querySelector<HTMLElement>(`[data-id="${TOTAL}"]`);
-    expect(last).not.toBeNull();
     expect(last!.classList.contains("vlist-item--selected")).toBe(true);
     expect(last!.getAttribute("aria-selected")).toBe("true");
 
@@ -357,14 +364,15 @@ describe("selection + data — a range over rows that are not loaded yet", () =>
     expect(selected.length).toBe(TOTAL);
     // And the consumer can read the item back, not just its id.
     expect(list.getSelectedItems().some((item) => item.id === TOTAL)).toBe(true);
-  });
+  }));
 
-  it("Shift+Space does the same for a keyboard range", async () => {
+  it("Shift+Space does the same for a keyboard range", scoped(async (scope) => {
     const { list, container, content } = makeList(
+      scope,
       { item: { height: 50, template: simpleTemplate } },
       [data<TestItem>({ adapter: adapter() }), selection<TestItem>({ mode: "multiple" })],
     );
-    await advanceTimers(50);
+    await waitFor(() => container.querySelector('[data-id="1"]') !== null, "the first page to render");
     press(content, "Home");
     press(content, " ");
     expect(list.getSelected()).toEqual([1]);
@@ -375,14 +383,13 @@ describe("selection + data — a range over rows that are not loaded yet", () =>
     press(content, " ", { shiftKey: true });
     expect(list.getSelected().length).toBe(TOTAL);
 
-    await advanceTimers(300);
+    await waitFor(() => container.querySelector(`[data-id="${TOTAL}"]`) !== null, "the last page to render");
 
     const last = container.querySelector<HTMLElement>(`[data-id="${TOTAL}"]`);
-    expect(last).not.toBeNull();
     expect(last!.classList.contains("vlist-item--selected")).toBe(true);
     expect(list.getSelected()).toContain(TOTAL);
     expect(list.getSelected().length).toBe(TOTAL);
-  });
+  }));
 });
 
 // =============================================================================
@@ -390,9 +397,10 @@ describe("selection + data — a range over rows that are not loaded yet", () =>
 // =============================================================================
 
 describe("selection + snapshots — restoring a single selection", () => {
-  it("shows the saved row as selected on the first render, without announcing a change", async () => {
+  it("shows the saved row as selected on the first render, without announcing a change", scoped(async (scope) => {
     const changes: unknown[] = [];
     const { list, container } = makeList(
+      scope,
       { items: createTestItems(40), item: { height: 50, template: simpleTemplate } },
       [
         selection<TestItem>({ mode: "single" }),
@@ -405,13 +413,15 @@ describe("selection + snapshots — restoring a single selection", () => {
     expect(selectedIdsInDom(container)).toEqual([3]);
     expect(list.getSelected()).toEqual([3]);
 
-    await advanceTimers(20);
+    // The restore finishes on a microtask; one macrotask turn is past it.
+    await flushMicrotasks();
     expect(selectedIdsInDom(container)).toEqual([3]);
     expect(changes).toEqual([]);
-  });
+  }));
 
-  it("refuses a snapshot that carries several ids — a single-selection list cannot hold them", async () => {
+  it("refuses a snapshot that carries several ids — a single-selection list cannot hold them", scoped(async (scope) => {
     const { list, container } = makeList(
+      scope,
       { items: createTestItems(40), item: { height: 50, template: simpleTemplate } },
       [
         selection<TestItem>({ mode: "single" }),
@@ -420,11 +430,12 @@ describe("selection + snapshots — restoring a single selection", () => {
     );
 
     expect(list.getSelected()).toEqual([]);
-    await advanceTimers(20);
+    // The restore finishes on a microtask; one macrotask turn is past it.
+    await flushMicrotasks();
     // Nothing is picked at random from the two, now or once the restore settles.
     expect(list.getSelected()).toEqual([]);
     expect(selectedIdsInDom(container)).toEqual([]);
-  });
+  }));
 });
 
 // =============================================================================
@@ -446,30 +457,21 @@ describe("selection + tree — followFocus", () => {
     { id: "readme", name: "README.md", children: [] },
   ];
 
-  let made: Array<{ list: VList<TreeItem>; container: HTMLElement }> = [];
-  afterEach(() => {
-    for (const { list, container } of made) {
-      list.destroy();
-      container.remove();
-    }
-    made = [];
-  });
-
-  async function treeList(followFocus: boolean) {
+  async function treeList(scope: TestScope, followFocus: boolean) {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
     const list = createVList<TreeItem>(
       { container, items: nodes(), item: { height: 32, template: (item) => item.name } },
       [tree<TreeItem>({ expanded: ["src"] }), selection<TreeItem>({ mode: "single", followFocus })],
     );
-    made.push({ list, container });
+    scope.own(list, container);
     // tree() looks for a focus owner on the microtask after setup.
-    await advanceTimers(5);
+    await flushMicrotasks();
     const content = container.querySelector<HTMLElement>(".vlist-content")!;
     return { list: list as VList<TreeItem> & SelectionMethods<TreeItem>, container, content };
   }
 
-  it("ArrowRight into an open folder selects the child when selection follows focus", async () => {
-    const { list, content } = await treeList(true);
+  it("ArrowRight into an open folder selects the child when selection follows focus", scoped(async (scope) => {
+    const { list, content } = await treeList(scope, true);
     press(content, "Home");
     expect(list.getSelected()).toEqual(["src"]);
 
@@ -477,25 +479,25 @@ describe("selection + tree — followFocus", () => {
     expect(press(content, "ArrowRight").claimed).toBe(true);
 
     expect(list.getSelected()).toEqual(["core"]);
-  });
+  }));
 
-  it("ArrowRight into an open folder leaves the selection alone when it does not", async () => {
-    const { list, content } = await treeList(false);
+  it("ArrowRight into an open folder leaves the selection alone when it does not", scoped(async (scope) => {
+    const { list, content } = await treeList(scope, false);
     list.select("readme");
     press(content, "Home");
 
     expect(press(content, "ArrowRight").claimed).toBe(true);
 
     expect(list.getSelected()).toEqual(["readme"]);
-  });
+  }));
 
   // BUG (reported with FLO-168, not fixed here): tree() moves focus through
   // selection's _focusById, which sets focusVisible to `focusOnClick` (false by
   // default). The focus ring disappears, aria-activedescendant stays on the old
   // row, _getFocusedIndex answers -1, and tree() ignores every further
   // ArrowRight / ArrowLeft until an up/down key revives the focus.
-  it.todo("the focus ring follows the tree's own arrow moves, and the next arrow still works", async () => {
-    const { list, container, content } = await treeList(true);
+  it.todo("the focus ring follows the tree's own arrow moves, and the next arrow still works", scoped(async (scope) => {
+    const { list, container, content } = await treeList(scope, true);
     press(content, "Home");
     press(content, "ArrowRight");
 
@@ -506,5 +508,5 @@ describe("selection + tree — followFocus", () => {
     // "core" is a closed folder: a second ArrowRight opens it.
     expect(press(content, "ArrowRight").claimed).toBe(true);
     expect(list.total).toBe(5);
-  });
+  }));
 });

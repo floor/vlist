@@ -5,12 +5,16 @@
  * and the list is suddenly longer than the viewport. It asks scrollbar() for
  * its instance so the thumb can follow at once, instead of waiting for the next
  * scroll event to notice.
+ *
+ * Safe under `bun test --concurrent`: each test owns its list and container
+ * through `scoped()`; the only wait is one macrotask after creation.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
 import { advanceTimers } from "../../helpers/timers";
+import { scoped, type TestScope } from "../../helpers/scope";
 import { createContainer } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
@@ -54,22 +58,14 @@ const nodes = (): Node[] => [
   { id: "readme", name: "README.md", children: [] },
 ];
 
-let open: Array<{ list: VList<Node>; container: HTMLElement }> = [];
-afterEach(() => {
-  for (const { list, container } of open) {
-    list.destroy();
-    container.remove();
-  }
-  open = [];
-});
-
-async function treeWithScrollbar() {
+/** Each test owns its list: `scope` destroys it when that test ends, not before. */
+async function treeWithScrollbar(scope: TestScope) {
   const container = createContainer({ width: WIDTH, height: HEIGHT });
   const list = createVList<Node>(
     { container, items: nodes(), item: { height: ROW, template: (item) => item.name } },
     [tree<Node>(), scrollbar()],
   );
-  open.push({ list, container });
+  scope.own(list, container);
   await advanceTimers(5);
   const track = container.querySelector<HTMLElement>(".vlist-scrollbar")!;
   const thumb = container.querySelector<HTMLElement>(".vlist-scrollbar__thumb")!;
@@ -77,13 +73,13 @@ async function treeWithScrollbar() {
 }
 
 describe("scrollbar + tree — the thumb follows expand and collapse", () => {
-  it("has no track while the closed tree fits in the viewport", async () => {
-    const { track } = await treeWithScrollbar();
+  it("has no track while the closed tree fits in the viewport", scoped(async (scope) => {
+    const { track } = await treeWithScrollbar(scope);
     expect(track.style.display).toBe("none");
-  });
+  }));
 
-  it("shows a thumb sized for the longer list as soon as a folder opens", async () => {
-    const { list, track, thumb } = await treeWithScrollbar();
+  it("shows a thumb sized for the longer list as soon as a folder opens", scoped(async (scope) => {
+    const { list, track, thumb } = await treeWithScrollbar(scope);
 
     list.expand("src");
 
@@ -97,15 +93,15 @@ describe("scrollbar + tree — the thumb follows expand and collapse", () => {
     // The thumb is the viewport's share of the content, scaled to the track.
     expect(trackLength).toBeGreaterThan(HEIGHT - 20);
     expect(trackLength).toBeLessThanOrEqual(HEIGHT);
-  });
+  }));
 
-  it("drops the track again when the folder closes", async () => {
-    const { list, track } = await treeWithScrollbar();
+  it("drops the track again when the folder closes", scoped(async (scope) => {
+    const { list, track } = await treeWithScrollbar(scope);
     list.expand("src");
     expect(track.style.display).toBe("");
 
     list.collapse("src");
 
     expect(track.style.display).toBe("none");
-  });
+  }));
 });

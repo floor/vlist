@@ -5,12 +5,17 @@
  * list.updateItem / insertItem / removeItem are rerouted to it. These tests
  * drive them through a real createVList and read the result off the DOM, then
  * cover what a consumer hears when the adapter rejects.
+ *
+ * Safe under `bun test --concurrent`: each test owns its list, container and
+ * adapter through `scoped()`, and every load is waited for by its effect
+ * (`waitFor`), never by a duration. Nothing here fires the window-level
+ * "online" event that data() listens to.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
-import { advanceTimers } from "../../helpers/timers";
+import { scoped, waitFor, type TestScope } from "../../helpers/scope";
 import { createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
@@ -39,15 +44,6 @@ afterAll(() => geometry.assertRestored());
 
 type DataList = VList<TestItem> & DataMethods;
 
-let open: Array<{ list: VList<TestItem>; container: HTMLElement }> = [];
-afterEach(() => {
-  for (const { list, container } of open) {
-    list.destroy();
-    container.remove();
-  }
-  open = [];
-});
-
 const row = (index: number): TestItem => ({ id: index + 1, name: `Item ${index + 1}`, value: (index + 1) * 10 });
 
 function pagedAdapter(): VListAdapter<TestItem> {
@@ -61,19 +57,21 @@ function pagedAdapter(): VListAdapter<TestItem> {
   };
 }
 
-function makeList(adapter: VListAdapter<TestItem>) {
+/** Each test owns its list: `scope` destroys it when that test ends, not before. */
+function makeList(scope: TestScope, adapter: VListAdapter<TestItem>) {
   const container = createContainer({ width: WIDTH, height: HEIGHT });
   const list = createVList<TestItem>(
     { container, item: { height: 50, template: simpleTemplate } },
     [data<TestItem>({ adapter })],
   );
-  open.push({ list, container });
+  scope.own(list, container);
   return { list: list as DataList, container };
 }
 
-async function loadedList() {
-  const made = makeList(pagedAdapter());
-  await advanceTimers(50);
+/** A list whose first page is on screen — waited for, not timed. */
+async function loadedList(scope: TestScope) {
+  const made = makeList(scope, pagedAdapter());
+  await waitFor(() => rowText(made.container, 1) === "Item 1", "the first page to render");
   return made;
 }
 
@@ -90,27 +88,27 @@ const renderedIds = (container: HTMLElement): number[] =>
 // =============================================================================
 
 describe("data — editing a remote list", () => {
-  it("updateItem rewrites the row on screen", async () => {
-    const { list, container } = await loadedList();
+  it("updateItem rewrites the row on screen", scoped(async (scope) => {
+    const { list, container } = await loadedList(scope);
     expect(rowText(container, 3)).toBe("Item 3");
 
     list.updateItem(3, { name: "Renamed" });
 
     expect(rowText(container, 3)).toBe("Renamed");
     expect(list.getItemAt(2)?.name).toBe("Renamed");
-  });
+  }));
 
-  it("updateItem for an id that is not loaded changes nothing", async () => {
-    const { list, container } = await loadedList();
+  it("updateItem for an id that is not loaded changes nothing", scoped(async (scope) => {
+    const { list, container } = await loadedList(scope);
     const before = container.querySelector(".vlist-content")!.innerHTML;
 
     list.updateItem(9999, { name: "Nobody" });
 
     expect(container.querySelector(".vlist-content")!.innerHTML).toBe(before);
-  });
+  }));
 
-  it("removeItem takes the row out and pulls the following rows up", async () => {
-    const { list, container } = await loadedList();
+  it("removeItem takes the row out and pulls the following rows up", scoped(async (scope) => {
+    const { list, container } = await loadedList(scope);
     expect(renderedIds(container).slice(0, 4)).toEqual([1, 2, 3, 4]);
 
     list.removeItem(2);
@@ -118,26 +116,26 @@ describe("data — editing a remote list", () => {
     expect(renderedIds(container).slice(0, 4)).toEqual([1, 3, 4, 5]);
     expect(list.total).toBe(TOTAL - 1);
     expect(list.getIndexById(2)).toBe(-1);
-  });
+  }));
 
-  it("removeItem for an id that is not loaded keeps the total", async () => {
-    const { list, container } = await loadedList();
+  it("removeItem for an id that is not loaded keeps the total", scoped(async (scope) => {
+    const { list, container } = await loadedList(scope);
 
     list.removeItem(9999);
 
     expect(list.total).toBe(TOTAL);
     expect(renderedIds(container).slice(0, 3)).toEqual([1, 2, 3]);
-  });
+  }));
 
-  it("insertItem puts the new row where it was asked and pushes the rest down", async () => {
-    const { list, container } = await loadedList();
+  it("insertItem puts the new row where it was asked and pushes the rest down", scoped(async (scope) => {
+    const { list, container } = await loadedList(scope);
 
     list.insertItem({ id: 5000, name: "Inserted", value: 0 }, 1);
 
     expect(renderedIds(container).slice(0, 4)).toEqual([1, 5000, 2, 3]);
     expect(rowText(container, 5000)).toBe("Inserted");
     expect(list.total).toBe(TOTAL + 1);
-  });
+  }));
 });
 
 // =============================================================================
@@ -145,40 +143,37 @@ describe("data — editing a remote list", () => {
 // =============================================================================
 
 describe("data — a load that fails", () => {
-  it("tells the consumer through an error event when the first page cannot be read", async () => {
+  it("tells the consumer through an error event when the first page cannot be read", scoped(async (scope) => {
     const errors: Array<{ message: string; context: string }> = [];
-    const { list } = makeList({ read: async () => { throw new Error("offline"); } });
+    const { list } = makeList(scope, { read: async () => { throw new Error("offline"); } });
     list.on("error", ({ error, context }) => errors.push({ message: error.message, context }));
 
-    await advanceTimers(50);
+    await waitFor(() => errors.length > 0, "the error event");
 
-    expect(errors.length).toBeGreaterThan(0);
     for (const e of errors) expect(e.message).toBe("offline");
     // The list is still alive and simply empty.
     expect(list.total).toBe(0);
-  });
+  }));
 
-  it("tells the consumer when a later page fails, and keeps the rows it already has", async () => {
+  it("tells the consumer when a later page fails, and keeps the rows it already has", scoped(async (scope) => {
     let fail = false;
     const paged = pagedAdapter();
-    const { list, container } = makeList({
+    const { list, container } = makeList(scope, {
       read: async (params) => {
         if (fail) throw new Error("page lost");
         return paged.read(params);
       },
     });
-    await advanceTimers(50);
+    await waitFor(() => rowText(container, 1) === "Item 1", "the first page to render");
     const errors: string[] = [];
     list.on("error", ({ error }) => errors.push(error.message));
 
     fail = true;
     list.scrollToIndex(150);
-    await advanceTimers(300);
+    await waitFor(() => errors.includes("page lost"), "the failed page to be reported");
 
-    expect(errors).toContain("page lost");
     // Going back up, the first page is still there.
     list.scrollToIndex(0);
-    await advanceTimers(50);
-    expect(rowText(container, 1)).toBe("Item 1");
-  });
+    await waitFor(() => rowText(container, 1) === "Item 1", "the first page to come back");
+  }));
 });

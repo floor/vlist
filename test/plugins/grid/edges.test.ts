@@ -5,12 +5,18 @@
  * through a real createVList: a template that returns a node, a horizontal
  * grid whose cross size changes, updateGrid() on an aspect-ratio grid (a
  * height function fed by the column width), and a smooth scrollToIndex.
+ *
+ * Safe under `bun test --concurrent`: each test owns its list and container
+ * through `scoped()`, the patched ResizeObserver files callbacks per viewport
+ * so a test can only resize its own list, and nothing waits on a duration.
+ * One test is serial — it replaces the process-wide requestAnimationFrame to
+ * step the smooth scroll frame by frame.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
-import { advanceTimers } from "../../helpers/timers";
+import { scoped, waitFor, type TestScope } from "../../helpers/scope";
 import { createTestItems, createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
@@ -26,22 +32,30 @@ const WIDTH = 300;
 const HEIGHT = 500;
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
-/** The callback core handed to its ResizeObserver — lets a test resize the viewport. */
-let resizeCallback: ResizeObserverCallback | null = null;
+let originalResizeObserver: typeof ResizeObserver;
+/**
+ * The callback core handed to its ResizeObserver, per observed viewport — lets
+ * a test resize its own list. Keyed by element so that tests running
+ * concurrently never reach each other's observer.
+ */
+const resizeCallbacks = new WeakMap<Element, ResizeObserverCallback>();
 
 beforeAll(() => {
   setupDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => HEIGHT, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => WIDTH, configurable: true });
+  originalResizeObserver = globalThis.ResizeObserver;
   globalThis.ResizeObserver = class {
-    constructor(callback: ResizeObserverCallback) { resizeCallback = callback; }
-    observe(): void {}
-    unobserve(): void {}
+    readonly callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) { this.callback = callback; }
+    observe(target: Element): void { resizeCallbacks.set(target, this.callback); }
+    unobserve(target: Element): void { resizeCallbacks.delete(target); }
     disconnect(): void {}
   } as unknown as typeof ResizeObserver;
 });
 afterAll(() => {
+  globalThis.ResizeObserver = originalResizeObserver;
   geometry.restore();
   teardownDOM();
 });
@@ -54,19 +68,9 @@ afterAll(() => geometry.assertRestored());
 
 type GridList = VList<TestItem> & GridMethods;
 
-let open: Array<{ list: VList<TestItem>; container: HTMLElement }> = [];
-afterEach(() => {
-  for (const { list, container } of open) {
-    list.destroy();
-    container.remove();
-  }
-  open = [];
-  resizeCallback = null;
-});
-
-function track(list: VList<TestItem>, container: HTMLElement): GridList {
-  open.push({ list, container });
-  return list as GridList;
+/** Each test owns its list: `scope` destroys it when that test ends, not before. */
+function track(scope: TestScope, list: VList<TestItem>, container: HTMLElement): GridList {
+  return scope.own(list, container) as GridList;
 }
 
 function cell(container: HTMLElement, index: number): HTMLElement {
@@ -83,9 +87,9 @@ function translate(el: HTMLElement): { x: number; y: number } {
 
 /** Core creates its ResizeObserver on the next task; wait for it, then resize. */
 async function resizeViewport(container: HTMLElement, width: number, height: number): Promise<void> {
-  await advanceTimers(5);
-  if (!resizeCallback) throw new Error("core did not create a ResizeObserver");
   const target = container.querySelector(".vlist-viewport")!;
+  await waitFor(() => resizeCallbacks.has(target), "core to observe the viewport");
+  const resizeCallback = resizeCallbacks.get(target)!;
   resizeCallback(
     [{ target, contentRect: { width, height } } as unknown as ResizeObserverEntry],
     {} as ResizeObserver,
@@ -108,9 +112,9 @@ describe("grid — a template that returns an element", () => {
     return el;
   };
 
-  it("mounts the returned node inside the cell", () => {
+  it("mounts the returned node inside the cell", scoped((scope) => {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
-    track(createVList<TestItem>(
+    track(scope, createVList<TestItem>(
       { container, items: createTestItems(12), item: { height: 50, template: nodeTemplate } },
       [grid({ columns: 3 })],
     ), container);
@@ -120,11 +124,11 @@ describe("grid — a template that returns an element", () => {
     expect(first.firstElementChild!.tagName).toBe("ARTICLE");
     expect(first.textContent).toBe("Item 1");
     expect(cell(container, 4).textContent).toBe("Item 5");
-  });
+  }));
 
-  it("replaces the old node when the item changes, instead of stacking a second one", () => {
+  it("replaces the old node when the item changes, instead of stacking a second one", scoped((scope) => {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
-    const list = track(createVList<TestItem>(
+    const list = track(scope, createVList<TestItem>(
       { container, items: createTestItems(12), item: { height: 50, template: nodeTemplate } },
       [grid({ columns: 3 })],
     ), container);
@@ -137,7 +141,7 @@ describe("grid — a template that returns an element", () => {
     expect(after).toBe(before);
     expect(after.querySelectorAll(".card").length).toBe(1);
     expect(after.textContent).toBe("Renamed");
-  });
+  }));
 });
 
 // =============================================================================
@@ -145,9 +149,9 @@ describe("grid — a template that returns an element", () => {
 // =============================================================================
 
 describe("grid — horizontal grid resized on its cross axis", () => {
-  it("re-lays the lanes out along y and keeps the scroll offset on x", async () => {
+  it("re-lays the lanes out along y and keeps the scroll offset on x", scoped(async (scope) => {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
-    track(createVList<TestItem>(
+    track(scope, createVList<TestItem>(
       {
         container,
         items: createTestItems(24),
@@ -172,7 +176,7 @@ describe("grid — horizontal grid resized on its cross axis", () => {
     expect(translate(cell(container, 3))).toEqual({ x: 100, y: 400 });
     expect(cell(container, 1).style.height).toBe("400px");
     expect(cell(container, 1).style.width).toBe("100px");
-  });
+  }));
 });
 
 // =============================================================================
@@ -180,10 +184,10 @@ describe("grid — horizontal grid resized on its cross axis", () => {
 // =============================================================================
 
 describe("grid — updateGrid with a height function", () => {
-  function squareGrid(config: { columns: number; gap?: number }) {
+  function squareGrid(scope: TestScope, config: { columns: number; gap?: number }) {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
     const seen: GridSizeContext[] = [];
-    const list = track(createVList<TestItem>(
+    const list = track(scope, createVList<TestItem>(
       {
         container,
         items: createTestItems(40),
@@ -202,8 +206,8 @@ describe("grid — updateGrid with a height function", () => {
     return { list, container, seen, contentHeight };
   }
 
-  it("changing the column count keeps the cells square and re-measures every row", () => {
-    const { list, container, contentHeight } = squareGrid({ columns: 3 });
+  it("changing the column count keeps the cells square and re-measures every row", scoped((scope) => {
+    const { list, container, contentHeight } = squareGrid(scope, { columns: 3 });
     // 3 columns of 100px: 14 rows of 100px.
     expect(cell(container, 3).style.height).toBe("100px");
     expect(translate(cell(container, 3))).toEqual({ x: 0, y: 100 });
@@ -218,10 +222,10 @@ describe("grid — updateGrid with a height function", () => {
     expect(translate(third)).toEqual({ x: 0, y: 150 });
     expect(translate(cell(container, 5))).toEqual({ x: 150, y: 300 });
     expect(contentHeight()).toBe(3000);
-  });
+  }));
 
-  it("hands the height function the new columns, gap and column width", () => {
-    const { list, seen } = squareGrid({ columns: 3 });
+  it("hands the height function the new columns, gap and column width", scoped((scope) => {
+    const { list, seen } = squareGrid(scope, { columns: 3 });
     seen.length = 0;
 
     list.updateGrid({ columns: 4, gap: 20 });
@@ -233,12 +237,12 @@ describe("grid — updateGrid with a height function", () => {
       // (300 - 3 × 20) / 4
       expect(context.columnWidth).toBe(60);
     }
-  });
+  }));
 
-  function askedAfterRegrid(columns: number): number[] {
+  function askedAfterRegrid(scope: TestScope, columns: number): number[] {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
     const asked = new Set<number>();
-    const list = track(createVList<TestItem>(
+    const list = track(scope, createVList<TestItem>(
       {
         container,
         items: createTestItems(12),
@@ -259,14 +263,14 @@ describe("grid — updateGrid with a height function", () => {
     return [...asked].sort((a, b) => a - b);
   }
 
-  it("asks the height function about the first item of each row under the new column count", () => {
-    const asked = askedAfterRegrid(4);
+  it("asks the height function about the first item of each row under the new column count", scoped((scope) => {
+    const asked = askedAfterRegrid(scope, 4);
 
     // Twelve items in four columns: rows start at items 0, 4 and 8 — not at
     // 0, 3, 6, 9 as they did under three columns.
     expect(asked).toEqual(expect.arrayContaining([0, 4, 8]));
     for (const index of asked) expect(index % 4).toBe(0);
-  });
+  }));
 
   // BUG (reported with FLO-168, not fixed here): ctx.sizes.setConfig() builds
   // the new cache for `totalItems` rows before grid shrinks it to the row count,
@@ -274,12 +278,12 @@ describe("grid — updateGrid with a height function", () => {
   // list. A function that reads its item (`items[index].ratio`) throws there —
   // at creation too, where core logs `plugin "grid" setup failed` and carries on
   // without a grid.
-  it.todo("never asks the height function about an item past the end of the data", () => {
-    expect(askedAfterRegrid(4)).toEqual([0, 4, 8]);
-  });
+  it.todo("never asks the height function about an item past the end of the data", scoped((scope) => {
+    expect(askedAfterRegrid(scope, 4)).toEqual([0, 4, 8]);
+  }));
 
-  it("a new gap widens the row pitch without stretching the cells", () => {
-    const { list, container, contentHeight } = squareGrid({ columns: 3 });
+  it("a new gap widens the row pitch without stretching the cells", scoped((scope) => {
+    const { list, container, contentHeight } = squareGrid(scope, { columns: 3 });
 
     list.updateGrid({ gap: 30 });
 
@@ -291,14 +295,14 @@ describe("grid — updateGrid with a height function", () => {
     expect(translate(cell(container, 4))).toEqual({ x: 110, y: 110 });
     // 14 rows of 80px with 13 gaps between them — no trailing gap.
     expect(contentHeight()).toBe(14 * 80 + 13 * 30);
-  });
+  }));
 
   // BUG (reported with FLO-168, not fixed here): core re-renders before it runs
   // the resize hooks, so grid rebuilds its row sizes from the old container
   // width, then restyles the cells from the new one. The cells come out 200px
   // tall on a 100px row pitch — rows overlap — and the content height stays 1400.
-  it.todo("a container resize re-measures the rows of an aspect-ratio grid", async () => {
-    const { container, contentHeight } = squareGrid({ columns: 3 });
+  it.todo("a container resize re-measures the rows of an aspect-ratio grid", scoped(async (scope) => {
+    const { container, contentHeight } = squareGrid(scope, { columns: 3 });
 
     await resizeViewport(container, 600, HEIGHT);
 
@@ -306,7 +310,7 @@ describe("grid — updateGrid with a height function", () => {
     expect(fourth.style.height).toBe("200px");
     expect(translate(fourth)).toEqual({ x: 0, y: 200 });
     expect(contentHeight()).toBe(14 * 200);
-  });
+  }));
 });
 
 // =============================================================================
@@ -314,52 +318,86 @@ describe("grid — updateGrid with a height function", () => {
 // =============================================================================
 
 describe("grid — smooth scrollToIndex", () => {
-  function tallGrid() {
+  function tallGrid(scope: TestScope) {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
-    const list = track(createVList<TestItem>(
+    const list = track(scope, createVList<TestItem>(
       { container, items: createTestItems(300), item: { height: 50, template: simpleTemplate } },
       [grid({ columns: 3 })],
     ), container);
     return { list, container };
   }
 
-  it("travels to the item's row over the duration instead of jumping", async () => {
-    const { list, container } = tallGrid();
+  /**
+   * Own the frames: the animation advances only when the test says so, to the
+   * timestamp the test gives. requestAnimationFrame is one per process, so the
+   * test that uses this is serial and puts the original back when it ends.
+   */
+  function manualFrames(scope: TestScope) {
+    const raf = globalThis.requestAnimationFrame;
+    const caf = globalThis.cancelAnimationFrame;
+    const pending = new Map<number, FrameRequestCallback>();
+    let nextId = 0;
+    globalThis.requestAnimationFrame = (callback): number => {
+      pending.set(++nextId, callback);
+      return nextId;
+    };
+    globalThis.cancelAnimationFrame = (id): void => { pending.delete(id); };
+    scope.defer(() => {
+      globalThis.requestAnimationFrame = raf;
+      globalThis.cancelAnimationFrame = caf;
+    });
+    return {
+      /** Run the frames queued so far, as if the clock read `timestamp`. */
+      frame(timestamp: number): void {
+        const callbacks = [...pending.values()];
+        pending.clear();
+        for (const callback of callbacks) callback(timestamp);
+      },
+    };
+  }
+
+  // Serial: patches the process-wide requestAnimationFrame.
+  it.serial("travels to the item's row over the duration instead of jumping", scoped((scope) => {
+    const { list, container } = tallGrid(scope);
+    const frames = manualFrames(scope);
+    const startedAt = performance.now();
 
     // Item 150 is the first of row 50: 50 rows × 50px.
     list.scrollToIndex(150, { align: "start", behavior: "smooth", duration: 200 });
+    // Nothing has moved until a frame runs: it did not jump.
+    expect(list.getScrollPosition()).toBe(0);
 
-    await advanceTimers(40);
+    frames.frame(startedAt + 100);
     const midway = list.getScrollPosition();
     expect(midway).toBeGreaterThan(0);
     expect(midway).toBeLessThan(2500);
 
-    await advanceTimers(400);
+    frames.frame(startedAt + 1000);
     expect(list.getScrollPosition()).toBe(2500);
     // The row the caller asked for is what ends up at the top of the viewport.
     expect(translate(cell(container, 150)).y).toBe(2500);
     expect(translate(cell(container, 152))).toEqual({ x: 200, y: 2500 });
-  });
+  }));
 
-  it("an instant scrollToIndex lands on the row at once", () => {
-    const { list, container } = tallGrid();
+  it("an instant scrollToIndex lands on the row at once", scoped((scope) => {
+    const { list, container } = tallGrid(scope);
 
     list.scrollToIndex(150, { align: "start" });
 
     expect(list.getScrollPosition()).toBe(2500);
     expect(translate(cell(container, 150)).y).toBe(2500);
-  });
+  }));
 
   // BUG (reported with FLO-168, not fixed here): core animates a smooth scroll
   // with no duration over its default; grid() only animates when a duration is
   // given, so `{ behavior: "smooth" }` alone jumps. groups() and masonry() share
   // the same condition.
-  it.todo("behavior: smooth without a duration still animates, as a plain list does", async () => {
-    const { list } = tallGrid();
+  it.todo("behavior: smooth without a duration still animates, as a plain list does", scoped((scope) => {
+    const { list } = tallGrid(scope);
 
     list.scrollToIndex(150, { align: "start", behavior: "smooth" });
 
-    await advanceTimers(20);
-    expect(list.getScrollPosition()).toBeLessThan(2500);
-  });
+    // An animation has not moved yet when the call returns; a jump already has.
+    expect(list.getScrollPosition()).toBe(0);
+  }));
 });

@@ -5,12 +5,17 @@
  * real list: children and labels read from custom keys, updateItem on a node,
  * the standalone focus ring leaving with the focus, and a parentId tree whose
  * lazily loaded children survive a data swap.
+ *
+ * Safe under `bun test --concurrent`: each test owns its list and container
+ * through `scoped()` and nothing is shared between tests. The focus-ring test
+ * dispatches its own FocusEvents and never reads `document.activeElement`.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
 import { advanceTimers } from "../../helpers/timers";
+import { scoped, waitFor, type TestScope } from "../../helpers/scope";
 import { createContainer } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
 import type { CreateVListConfig, VList } from "../../../src/core/types";
@@ -35,23 +40,16 @@ afterAll(() => {
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());
 
-let open: Array<{ list: { destroy(): void }; container: HTMLElement }> = [];
-afterEach(() => {
-  for (const { list, container } of open) {
-    list.destroy();
-    container.remove();
-  }
-  open = [];
-});
-
+/** Each test owns its tree: `scope` destroys it when that test ends, not before. */
 async function makeTree<T extends VListItem>(
+  scope: TestScope,
   items: T[],
   config: TreePluginConfig<T>,
   template: CreateVListConfig<T>["item"]["template"],
 ) {
   const container = createContainer({ width: WIDTH, height: HEIGHT });
   const list = createVList<T>({ container, items, item: { height: 32, template } }, [tree<T>(config)]);
-  open.push({ list, container });
+  scope.own(list, container);
   // tree() decides who owns the focus on the microtask after setup.
   await advanceTimers(5);
   const content = container.querySelector<HTMLElement>(".vlist-content")!;
@@ -90,8 +88,8 @@ describe("tree — children and labels under custom keys", () => {
     { id: "faq", title: "Questions" },
   ];
 
-  it("reads the children from the configured key", async () => {
-    const { list, container } = await makeTree(docs(), { children: "nodes" }, (item) => item.title);
+  it("reads the children from the configured key", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, docs(), { children: "nodes" }, (item) => item.title);
     expect(rowTexts(container)).toEqual(["Guide", "Reference", "Questions"]);
 
     list.expand("guide");
@@ -99,10 +97,10 @@ describe("tree — children and labels under custom keys", () => {
     expect(rowTexts(container)).toEqual(["Guide", "Introduction", "Setup", "Reference", "Questions"]);
     // A node without the key is a leaf, not an error.
     expect(container.querySelector('[data-id="api"]')!.hasAttribute("aria-expanded")).toBe(false);
-  });
+  }));
 
-  it("type-ahead matches against the configured label key", async () => {
-    const { container, content } = await makeTree(docs(), { children: "nodes", label: "title" }, (item) => item.title);
+  it("type-ahead matches against the configured label key", scoped(async (scope) => {
+    const { container, content } = await makeTree(scope, docs(), { children: "nodes", label: "title" }, (item) => item.title);
     press(content, "ArrowDown");
     expect(focusedText(container)).toBe("Guide");
 
@@ -110,10 +108,11 @@ describe("tree — children and labels under custom keys", () => {
     press(content, "q");
 
     expect(focusedText(container)).toBe("Questions");
-  });
+  }));
 
-  it("type-ahead matches against a label function", async () => {
+  it("type-ahead matches against a label function", scoped(async (scope) => {
     const { container, content } = await makeTree(
+      scope,
       docs(),
       { children: "nodes", label: (item) => `#${item.id}` },
       (item) => item.title,
@@ -124,7 +123,7 @@ describe("tree — children and labels under custom keys", () => {
     press(content, "f");
 
     expect(focusedText(container)).toBe("Questions");
-  });
+  }));
 });
 
 // =============================================================================
@@ -146,8 +145,8 @@ describe("tree — updateItem", () => {
     { id: "readme", name: "README.md", children: [] },
   ];
 
-  it("rewrites the node's row in place and keeps the folder open", async () => {
-    const { list, container } = await makeTree(nodes(), { expanded: ["src"] }, (item) => item.name);
+  it("rewrites the node's row in place and keeps the folder open", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, nodes(), { expanded: ["src"] }, (item) => item.name);
     const row = container.querySelector<HTMLElement>('[data-id="core"]')!;
     const changes: unknown[] = [];
     list.on("data:change", (event) => changes.push(event));
@@ -159,10 +158,10 @@ describe("tree — updateItem", () => {
     expect(rowTexts(container)).toEqual(["src", "engine", "plugins", "README.md"]);
     expect(list.isExpanded("src")).toBe(true);
     expect(changes).toEqual([{ type: "update", id: "core" }]);
-  });
+  }));
 
-  it("ignores an id the tree does not hold", async () => {
-    const { list, container } = await makeTree(nodes(), { expanded: ["src"] }, (item) => item.name);
+  it("ignores an id the tree does not hold", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, nodes(), { expanded: ["src"] }, (item) => item.name);
     const changes: unknown[] = [];
     list.on("data:change", (event) => changes.push(event));
 
@@ -170,20 +169,20 @@ describe("tree — updateItem", () => {
 
     expect(rowTexts(container)).toEqual(["src", "core", "plugins", "README.md"]);
     expect(changes).toEqual([]);
-  });
+  }));
 
   // BUG (reported with FLO-168, not fixed here): the update is looked up in
   // layout.idToIndex, which only holds visible nodes. A node inside a closed
   // folder is treated like an unknown id: the update is dropped without an
   // event, and the old name is still there when the folder opens.
-  it.todo("updates a node that sits inside a closed folder", async () => {
-    const { list, container } = await makeTree(nodes(), {}, (item) => item.name);
+  it.todo("updates a node that sits inside a closed folder", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, nodes(), {}, (item) => item.name);
 
     list.updateItem("core", { name: "engine" });
     list.expand("src");
 
     expect(rowTexts(container)).toEqual(["src", "engine", "plugins", "README.md"]);
-  });
+  }));
 });
 
 // =============================================================================
@@ -201,8 +200,8 @@ describe("tree — the focus ring without a selection plugin", () => {
     { id: "b", name: "beta", children: [] },
   ];
 
-  it("leaves with the focus, and stays while focus moves inside the list", async () => {
-    const { list, container, content } = await makeTree(nodes(), {}, (item) => item.name);
+  it("leaves with the focus, and stays while focus moves inside the list", scoped(async (scope) => {
+    const { list, container, content } = await makeTree(scope, nodes(), {}, (item) => item.name);
     press(content, "ArrowDown");
     expect(focusedText(container)).toBe("alpha");
     expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-0");
@@ -213,12 +212,12 @@ describe("tree — the focus ring without a selection plugin", () => {
 
     const outside = document.createElement("button");
     document.body.appendChild(outside);
+    scope.defer(() => outside.remove());
     list.element.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: outside }));
-    outside.remove();
 
     expect(focusedText(container)).toBeNull();
     expect(content.hasAttribute("aria-activedescendant")).toBe(false);
-  });
+  }));
 });
 
 // =============================================================================
@@ -238,8 +237,9 @@ describe("tree — a flat parentId list with lazily loaded children", () => {
     { id: "archive", name: "Archive", parentId: null },
   ];
 
-  it("keeps the loaded children on screen when the flat list is replaced", async () => {
+  it("keeps the loaded children on screen when the flat list is replaced", scoped(async (scope) => {
     const { list, container } = await makeTree(
+      scope,
       rows(),
       {
         parentId: "parentId",
@@ -250,14 +250,14 @@ describe("tree — a flat parentId list with lazily loaded children", () => {
       (item) => item.name,
     );
     list.expand("archive");
-    await advanceTimers(20);
+    await waitFor(() => rowTexts(container).includes("2019"), "the lazily loaded child row");
     expect(rowTexts(container)).toEqual(["Inbox", "Work", "Archive", "2019"]);
 
     // The server sends a fresh flat list: one more folder, still no rows for
     // what was loaded on demand.
     list.setItems([...rows(), { id: "spam", name: "Spam", parentId: null }]);
-    await advanceTimers(5);
+    await waitFor(() => rowTexts(container).includes("Spam"), "the replaced list to render");
 
     expect(rowTexts(container)).toEqual(["Inbox", "Work", "Archive", "2019", "Spam"]);
-  });
+  }));
 });

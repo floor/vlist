@@ -640,7 +640,8 @@ describe("search bar buttons", () => {
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   };
 
-  it("the clear button empties the query, brings every item back and returns focus to the input", () => {
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("the clear button empties the query, brings every item back and returns focus to the input", () => {
     const { container, list } = makeList({ mode: "filter" });
     const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
     const clear = container.querySelector(".vlist-search__clear-button")!;
@@ -709,7 +710,8 @@ describe("search bar buttons", () => {
     expect(filter.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
   });
 
-  it("clicking the magnifier puts the caret in the input", () => {
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("clicking the magnifier puts the caret in the input", () => {
     const { container } = makeList();
     const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
     expect(document.activeElement).not.toBe(input);
@@ -748,13 +750,24 @@ describe("search bar keys", () => {
     const made = makeList({ mode: "navigate" });
     const input = made.container.querySelector(".vlist-search__input") as HTMLInputElement;
     const counter = made.container.querySelector(".vlist-search__counter")!;
-    // Ctrl+F from the list opens search and moves the caret into the field.
+    // Ctrl+F from the list opens search; the user then types in the field.
     pressIn(made.list.element, "f", { ctrlKey: true });
-    expect(document.activeElement).toBe(input);
     input.value = value;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     return { ...made, input, counter };
   }
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("Ctrl+F on the list moves the caret into the search field", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
+
+    expect(pressIn(list.element, "f", { ctrlKey: true })).toBe(true);
+
+    expect(document.activeElement).toBe(input);
+    expect(list.element.classList.contains("vlist--search-open")).toBe(true);
+  });
 
   it("Enter in the input steps exactly one match forward, Shift+Enter one back", () => {
     const { input, counter } = openAndType("ap");
