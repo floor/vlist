@@ -24,6 +24,7 @@ export function carouselEntry(create: typeof native, options: CarouselPluginConf
   carousel({variant:'free',snap:false,snapDuration:64,...options}),{name:'inspect-carousel',setup(value){ctx=value;}},
  ]) as ReturnType<typeof create> & CarouselMethods;
  return {host,list,ctx,state:():CarouselState=>list.getCarouselState(),
+  step(n=1){for(let i=0;i<n;i++){time+=16;const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(time);}},
   advance(){for(let i=0;i<12;i++){time+=16;const pending=[...frames.values()];frames.clear();for(const fn of pending)fn(time);}},
   wheel(delta:number){ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?delta:0,deltaY:isX?0:delta,cancelable:true}));},
   destroy(){list.destroy();host.remove();frames.clear();globalThis.requestAnimationFrame=raf;globalThis.cancelAnimationFrame=caf;if(nowDescriptor)Object.defineProperty(performance,"now",nowDescriptor);else Reflect.deleteProperty(performance,"now");geometry.restore();geometry.assertRestored();},

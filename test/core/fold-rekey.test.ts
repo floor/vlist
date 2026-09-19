@@ -132,7 +132,7 @@ for (const [entry, create] of entries) for (const direction of [1, -1] as const)
       template: (item) => { templates++; return String(item.id); },
     });
     try {
-      f.ctx.scroll.to(direction > 0 ? 89980 : 10020);
+      f.ctx.scroll.to(direction > 0 ? 1980 : 1020);
       const before = mounted(f.host);
       expect(before.length).toBeGreaterThan(0);
       const snapshot = before.map((el) => ({
@@ -165,7 +165,7 @@ for (const [entry, create] of entries) for (const direction of [1, -1] as const)
       }
       observer.disconnect();
 
-      expect(f.list.getScrollPosition()).toBe(direction > 0 ? 50020 : 49980);
+      expect(f.list.getScrollPosition()).toBe(direction > 0 ? 1020 : 1980);
       const after = mounted(f.host);
       const kept = keptCount(before, after);
       expect(removed.filter((n) => added.includes(n))).toEqual([]);
@@ -199,7 +199,7 @@ for (const [entry, create] of entries) {
       },
     });
     try {
-      f.ctx.scroll.to(89980);
+      f.ctx.scroll.to(1980);
       const rows = mounted(f.host);
       const item = rows[rows.length >> 1]!;
       const input = item.querySelector<HTMLInputElement>(".keep-focus")!;
@@ -207,7 +207,7 @@ for (const [entry, create] of entries) {
 
       f.ctx.dom.viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, cancelable: true }));
 
-      expect(f.list.getScrollPosition()).toBe(50020);
+      expect(f.list.getScrollPosition()).toBe(1020);
       expect(item.isConnected).toBe(true);
       expect(input.isConnected).toBe(true);
       expect(f.host.contains(input)).toBe(true);
@@ -277,7 +277,7 @@ test("synthetic wrap plugin: a forced fold re-keys instead of remounting", () =>
 test("a classPrefix containing '-content' still rewrites ids on a fold", () => {
   const f = fixture(createVList, { classPrefix: "my-content" });
   try {
-    f.ctx.scroll.to(89980);
+    f.ctx.scroll.to(1980);
     const before = mounted(f.host);
     const tracked = before[before.length >> 1]!;
     expect(tracked.id.startsWith("my-content-item-")).toBe(true);
@@ -286,7 +286,7 @@ test("a classPrefix containing '-content' still rewrites ids on a fold", () => {
 
     f.ctx.dom.viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, cancelable: true }));
 
-    expect(f.list.getScrollPosition()).toBe(50020);
+    expect(f.list.getScrollPosition()).toBe(1020);
     expect(tracked.isConnected).toBe(true);
     expect(tracked.id).not.toBe(oldId);
     expect(tracked.id.startsWith("my-content-item-")).toBe(true);

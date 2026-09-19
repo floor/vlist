@@ -4,9 +4,9 @@
  * Selection asks two different questions of a list: "where can focus move"
  * (layout space, headers and carousel laps included) and "how many items are
  * there" (data space). It used to answer the second with the engine's total,
- * which is the first. Carousel inflates that to 101 laps and groups counts
+ * which is the first. Carousel inflates that to three laps and groups counts
  * headers in it, so Ctrl+A could select everything and then never clear —
- * the selected set held 10 ids while the comparison wanted 1,010 or 12.
+ * the selected set held 10 ids while the comparison wanted 30 or 12.
  *
  * Neither combination was covered anywhere before this file.
  */
@@ -60,7 +60,7 @@ describe("selection + carousel — Ctrl+A totals", () => {
       [carousel(), selection<TestItem>({ mode: "multiple" })],
     );
 
-    // 101 laps of 10 items: the engine total is 1,010 while the list has 10.
+    // Three laps of 10 items: the engine total is 30 while the list has 10.
     expect(list.total).toBe(10);
 
     pressSelectAll(container);
@@ -197,9 +197,9 @@ describe("selection + carousel — selectNext reveals", () => {
 
     const sel = asSel(list);
     const home = list.getScrollPosition();
-    // Middle cycle: a size-cache offset of the logical index would land
-    // near 0 (lap 0), fifty laps behind this origin.
-    expect(home).toBeGreaterThan(10_000);
+    // The home lap, one lap in (20 items × 500 px): a size-cache offset of the
+    // logical index would land near 0, in the margin lap behind this origin.
+    expect(home).toBe(10_000);
 
     for (let i = 0; i < 10; i++) sel.selectNext();
 

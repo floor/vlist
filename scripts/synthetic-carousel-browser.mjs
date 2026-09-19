@@ -14,8 +14,8 @@ function make(id){let ctx;const list=(q.get('entry')==='native'?native:synthetic
 window.main=make('#list');window.reference=make('#reference');
 window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performance.now();const check=()=>{if(Math.abs(main.list.getScrollPosition()-target)<0.001){requestAnimationFrame(resolve);return;}if(performance.now()-start>5000){reject(Error('animation did not reach '+target));return;}requestAnimationFrame(check);};check();});
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
-window.begin=(gap)=>{main.ctx.scroll.to(90*lap-gap);window.startSampling();};
-window.startSampling=()=>{window.trace=[];const content=document.querySelector('#list .vlist-content');let added=[],removed=[];const observer=new MutationObserver(records=>{for(const r of records)if(r.type==='childList'){added.push(...r.addedNodes);removed.push(...r.removedNodes);}});observer.observe(content,{childList:true});window.observer=observer;let prevEls=null,prevPos=null;window.sample=()=>{const els=[...content.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none');const pos=main.list.getScrollPosition();const recycled=removed.filter(n=>added.includes(n)).length;let persisted=0,persistedSame=true;if(prevEls&&pos<prevPos-1000){const byId=new Map(prevEls.map(el=>[el.textContent,el]));for(const el of els){const old=byId.get(el.textContent);if(old){persisted++;if(old!==el)persistedSame=false;}}}reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop'],childAdded:added.length,childRemoved:removed.length,recycled,persisted,persistedSame});added=[];removed=[];prevEls=els;prevPos=pos;window.frame=requestAnimationFrame(sample);};sample();};
+window.begin=(gap)=>{main.ctx.scroll.to(2*lap-gap);window.startSampling();};
+window.startSampling=()=>{window.trace=[];const content=document.querySelector('#list .vlist-content');let added=[],removed=[];const observer=new MutationObserver(records=>{for(const r of records)if(r.type==='childList'){added.push(...r.addedNodes);removed.push(...r.removedNodes);}});observer.observe(content,{childList:true});window.observer=observer;let prevEls=null,prevPos=null;window.sample=()=>{const els=[...content.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none');const pos=main.list.getScrollPosition();const recycled=removed.filter(n=>added.includes(n)).length;let persisted=0,persistedSame=true;if(prevEls&&pos<prevPos-1000){const byId=new Map(prevEls.map(el=>[el.textContent,el]));for(const el of els){const old=byId.get(el.textContent);if(old){persisted++;if(old!==el)persistedSame=false;}}}reference.ctx.scroll.to(lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop'],childAdded:added.length,childRemoved:removed.length,recycled,persisted,persistedSame});added=[];removed=[];prevEls=els;prevPos=pos;window.frame=requestAnimationFrame(sample);};sample();};
 window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);window.observer.disconnect();return trace;};window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
@@ -53,11 +53,15 @@ try {
  for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) for(const direction of [1,-1]) {
   const page=await browser.newPage();await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=full&entry=${entry}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(d=>{main.ctx.scroll.to((d>0?90:10)*lap-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
-  await page.evaluate(({entry,d})=>untilPosition(entry==='native'?(d>0?360400:39600):200000+d*400),{entry,d:direction});
+  // The position lives in the home lap, [lap, 2·lap), whichever way it left it:
+  // `inLap` is where an offset from home rests once the fold has run. Starting 20 px
+  // from the lap's edge makes the first navigation cross the fold in its direction.
+  const lap=await page.evaluate(()=>window.lap);const inLap=offset=>lap+((offset%lap)+lap)%lap;
+  await page.evaluate(d=>{main.ctx.scroll.to((d>0?2*lap:lap)-d*20);main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});},direction);
+  await page.evaluate(target=>untilPosition(target),inLap(direction*400));
   const start=await page.evaluate(d=>{main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?d:0,deltaY:isX?0:d,cancelable:true}));startSampling();const start=main.list.getScrollPosition();main.list[d>0?'next':'prev'](1,{behavior:'smooth',duration:180});return start;},direction);
-  await page.evaluate(d=>untilPosition(200000+d*800),direction);const trace=await page.evaluate(()=>window.finish());const target=200000+direction*800;
-  assert.equal(start,200000+direction*401);assert.equal(trace.at(-1).pos,target);
+  const target=inLap(direction*800);await page.evaluate(t=>untilPosition(t),target);const trace=await page.evaluate(()=>window.finish());
+  assert.equal(start,inLap(direction*401));assert.equal(trace.at(-1).pos,target);
   assert(trace.every(f=>f.pos>=Math.min(start,target) && f.pos<=Math.max(start,target)),'repeated navigation stays within one item');
   for(const frame of trace)assert.deepEqual(frame.rows,frame.expected);
   console.log('PASS repeated navigation',entry,axis,direction>0?'next':'prev',JSON.stringify({frames:trace.length,start,target}));await page.close();
@@ -65,7 +69,7 @@ try {
  for(const axis of ['horizontal','vertical']) for(const variant of ['full','hero','multi']) {
   const page=await browser.newPage();const x=axis==='horizontal';await page.setViewport({width:600,height:600});
   await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=${variant}`);await page.waitForFunction(()=>window.ready);
-  await page.evaluate(()=>{main.ctx.scroll.to(90*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
+  await page.evaluate(()=>{main.ctx.scroll.to(2*lap-step);main.ctx.dom.viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:isX?4*step:0,deltaY:isX?0:4*step,cancelable:true}));});
   const read=()=>page.evaluate(()=>{const el=[...document.querySelectorAll('#list [data-index]')].find(el=>el.style.getPropertyValue('--vlist-carousel-offset')==='0');const r=el.getBoundingClientRect(),v=main.ctx.dom.viewport.getBoundingClientRect();return {size:isX?r.width:r.height,offset:isX?r.left-v.left:r.top-v.top,index:main.list.getCarouselState().index,pos:main.list.getCarouselState().scrollPosition};});
   const before=await read();assert.equal(before.index,3);
   await page.evaluate(()=>document.querySelector('#list').style[isX?'height':'width']='500px');await wait(100);assert.deepEqual(await read(),before);
