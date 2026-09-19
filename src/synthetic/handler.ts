@@ -1,5 +1,8 @@
 /** RFC-014 input provider. No native main-axis scroll position writes. */
 import type { BoundedScrollConfig, BoundedScrollHandler } from "../core/runway";
+// Wrap folds go through this commit, not runway.wrapRebase. Importing fold
+// from create.ts would charge every native list that never wraps.
+import { applyWrapFold } from "../core/fold";
 import { SCROLL_IDLE_TIMEOUT, SCROLL_EASING } from "../constants";
 import { createMotion, TRACKING, PENDING } from "./motion";
 
@@ -44,6 +47,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
         folding = false;
         position = motion.position;
         previous -= shift;
+        applyWrapFold(wrap, shift, state, content, config.rendered, config.classPrefix ?? "", config.oddClass);
         config.onFold?.(shift);
         wrap.onFold?.(shift);
       }

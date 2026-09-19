@@ -15,8 +15,8 @@ window.main=make('#list');window.reference=make('#reference');
 window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performance.now();const check=()=>{if(Math.abs(main.list.getScrollPosition()-target)<0.001){requestAnimationFrame(resolve);return;}if(performance.now()-start>5000){reject(Error('animation did not reach '+target));return;}requestAnimationFrame(check);};check();});
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
 window.begin=(gap)=>{main.ctx.scroll.to(90*lap-gap);window.startSampling();};
-window.startSampling=()=>{window.trace=[];window.sample=()=>{const pos=main.list.getScrollPosition();reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop']});window.frame=requestAnimationFrame(sample);};sample();};
-window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);return trace;};window.ready=true;
+window.startSampling=()=>{window.trace=[];const content=document.querySelector('#list .vlist-content');let added=[],removed=[];const observer=new MutationObserver(records=>{for(const r of records)if(r.type==='childList'){added.push(...r.addedNodes);removed.push(...r.removedNodes);}});observer.observe(content,{childList:true});window.observer=observer;let prevEls=null,prevPos=null;window.sample=()=>{const els=[...content.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none');const pos=main.list.getScrollPosition();const recycled=removed.filter(n=>added.includes(n)).length;let persisted=0,persistedSame=true;if(prevEls&&pos<prevPos-1000){const byId=new Map(prevEls.map(el=>[el.textContent,el]));for(const el of els){const old=byId.get(el.textContent);if(old){persisted++;if(old!==el)persistedSame=false;}}}reference.ctx.scroll.to(50*lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop'],childAdded:added.length,childRemoved:removed.length,recycled,persisted,persistedSame});added=[];removed=[];prevEls=els;prevPos=pos;window.frame=requestAnimationFrame(sample);};sample();};
+window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);window.observer.disconnect();return trace;};window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
 const browser=await launchBrowser();const wait=ms=>new Promise(r=>setTimeout(r,ms));let largest=0,folds=0;
@@ -36,15 +36,18 @@ try {
    if(input==='drag')await wait(120); // Release stale: no fling; the drag itself folds.
    await touch('touchEnd',0);await wait(input==='fling'?500:80);
   }
-  const trace=await page.evaluate(()=>window.finish());let count=0,jump=0,error=0,moving=0;
+  const trace=await page.evaluate(()=>window.finish());let count=0,jump=0,error=0,moving=0,foldChildAdded=0,foldChildRemoved=0;
   for(let i=0;i<trace.length;i++) {
    const current=trace[i];assert.equal(current.native,0);assert.equal(current.rows.length,current.expected.length);
    for(let j=0;j<current.rows.length;j++){const row=current.rows[j],ref=current.expected[j];assert.equal(row.id,ref.id);error=Math.max(error,Math.abs(row.offset-ref.offset),Math.abs(row.size-ref.size));}
    if(!i)continue;const prev=trace[i-1];if(current.pos!==prev.pos)moving++;
-   if(current.pos<prev.pos-1000){count++;for(const row of current.rows){const old=prev.rows.find(r=>r.id===row.id);if(old)jump=Math.max(jump,Math.abs(row.offset-old.offset));}}
+   // A fold can share its frame with the scroll that crossed the threshold, so
+   // one row may leave and one enter (horizontal/full/drag: childList 2 = 1+1).
+   // Recreating a persisting row is the failure; edge enter/leave is scrolling.
+   if(current.pos<prev.pos-1000){count++;foldChildAdded=current.childAdded;foldChildRemoved=current.childRemoved;assert.equal(current.recycled,0,`${axis}/${variant}/${input} fold recycled a mounted row`);assert.equal(current.persistedSame,true,`${axis}/${variant}/${input} fold recreated a persisting row`);assert(current.persisted>0,`${axis}/${variant}/${input} fold had no overlapping rows`);for(const row of current.rows){const old=prev.rows.find(r=>r.id===row.id);if(old)jump=Math.max(jump,Math.abs(row.offset-old.offset));}}
   }
   assert(moving>0,`${axis}/${variant}/${input} moves`);assert.equal(count,1,`${axis}/${variant}/${input} crosses one fold`);assert(error<=1,`rendered seam deviation ${error}px`);
-  largest=Math.max(largest,jump);folds+=count;console.log('PASS',axis,variant,input,JSON.stringify({frames:trace.length,moving,folds:count,foldFrameDisplacement:jump,referenceDeviation:error}));await page.close();
+  largest=Math.max(largest,jump);folds+=count;console.log('PASS',axis,variant,input,JSON.stringify({frames:trace.length,moving,folds:count,foldFrameDisplacement:jump,referenceDeviation:error,foldChildAdded,foldChildRemoved}));await page.close();
  }
 
  for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) for(const direction of [1,-1]) {

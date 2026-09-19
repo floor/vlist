@@ -26,7 +26,7 @@ function fixture(wrap = true, isX = false) {
   const samples: {position:number;previous:number;direction:number}[]=[];
   const timers=useFakeTimers();let idle=0;
   const handler=createSyntheticScrollHandler({state,viewport,content,isX,sizeCache,wheelEnabled:true,idleTimeout:150,mainAxisPadding:0,
-    ...(wrap?{wrap:{lapSize:()=>1000,home:()=>50000,thresholdLaps:40}}:{}),
+    ...(wrap?{wrap:{lapSize:()=>1000,itemsPerLap:()=>20,home:()=>50000,thresholdLaps:40}}:{}),
     onFrame(){samples.push({position:state.scrollPosition,previous:state.prevScrollPosition,direction:state.scrollDirection});},onIdle(){idle++;},
   });
   handler.attach();handler.refresh(101000);samples.length=0;

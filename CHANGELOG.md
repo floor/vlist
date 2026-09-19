@@ -13,6 +13,21 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- A wrap-mode coordinate fold (carousel) now re-keys the mounted row
+  elements instead of releasing and re-creating them. Folding used to
+  miss every `rendered` lookup because virtual indices moved by whole
+  laps, so every visible node went back to the pool, was re-templated
+  and re-inserted — mid-gesture, with compositor layers dropped. The
+  items and their paint positions are the same before and after; only
+  the key changed. `id` attributes that carry the virtual index are
+  rewritten from the configured `classPrefix` (a prefix containing
+  `-content` is not parsed off the content class), and
+  `aria-activedescendant` is resolved to the same node after every id
+  rewrite. Striped rows keep virtual-index parity when the fold shifts
+  by an odd number of items. A fold that shares its frame with a
+  scroll still lets rows enter and leave at the window edges; persisting
+  rows keep the same `HTMLElement`.
+
 - `selectNext()` and `selectPrevious()` scroll the newly selected item into view:
   nearest edge, no movement when the item is already fully visible, honouring
   start/end padding and layout plugins' `_scrollItemIntoView` (grouped sticky
