@@ -491,22 +491,52 @@ describe("selection + tree — followFocus", () => {
     expect(list.getSelected()).toEqual(["readme"]);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): tree() moves focus through
-  // selection's _focusById, which sets focusVisible to `focusOnClick` (false by
-  // default). The focus ring disappears, aria-activedescendant stays on the old
-  // row, _getFocusedIndex answers -1, and tree() ignores every further
-  // ArrowRight / ArrowLeft until an up/down key revives the focus.
-  it.todo("the focus ring follows the tree's own arrow moves, and the next arrow still works", scoped(async (scope) => {
-    const { list, container, content } = await treeList(scope, true);
+  // FLO-209. tree() moves focus through selection's _focusById, which treated the
+  // move like a click: with the default `focusOnClick: false` the focus ring
+  // disappeared, aria-activedescendant stayed on the old row, _getFocusedIndex
+  // answered -1, and tree() ignored every further ArrowRight / ArrowLeft until an
+  // up/down key revived the focus. A keyboard user lost the focus indicator.
+  for (const followFocus of [true, false]) {
+    it(`the focus ring follows the tree's own arrow moves, and the next arrow still works (followFocus: ${followFocus})`, scoped(async (scope) => {
+      const { list, container, content } = await treeList(scope, followFocus);
+      press(content, "Home");
+      press(content, "ArrowRight");
+
+      const focused = container.querySelector<HTMLElement>(".vlist-item--focused");
+      expect(focused?.getAttribute("data-id")).toBe("core");
+      expect(content.getAttribute("aria-activedescendant")).toBe(focused!.id);
+
+      // "core" is a closed folder: a second ArrowRight opens it.
+      expect(press(content, "ArrowRight").claimed).toBe(true);
+      expect(list.total).toBe(5);
+
+      // …a third steps onto its child, and ArrowLeft walks back to the parent:
+      // the ring and the active descendant are on the same row every time.
+      press(content, "ArrowRight");
+      let ring = container.querySelector<HTMLElement>(".vlist-item--focused");
+      expect(ring?.getAttribute("data-id")).toBe("create");
+      expect(content.getAttribute("aria-activedescendant")).toBe(ring!.id);
+
+      press(content, "ArrowLeft");
+      ring = container.querySelector<HTMLElement>(".vlist-item--focused");
+      expect(ring?.getAttribute("data-id")).toBe("core");
+      expect(content.getAttribute("aria-activedescendant")).toBe(ring!.id);
+    }));
+  }
+
+  it("type-ahead moves the ring too", scoped(async (scope) => {
+    const { container, content } = await treeList(scope, false);
     press(content, "Home");
-    press(content, "ArrowRight");
+    press(content, "r"); // README.md
 
-    const focused = container.querySelector<HTMLElement>(".vlist-item--focused");
-    expect(focused?.getAttribute("data-id")).toBe("core");
-    expect(content.getAttribute("aria-activedescendant")).toBe(focused!.id);
-
-    // "core" is a closed folder: a second ArrowRight opens it.
-    expect(press(content, "ArrowRight").claimed).toBe(true);
-    expect(list.total).toBe(5);
+    const ring = container.querySelector<HTMLElement>(".vlist-item--focused");
+    expect(ring?.getAttribute("data-id")).toBe("readme");
+    expect(content.getAttribute("aria-activedescendant")).toBe(ring!.id);
   }));
+
+  // A click keeps following `focusOnClick` (the tree's click path does not pass
+  // the keyboard flag). Not asserted here: after a click the list takes focus,
+  // and happy-dom matches `:focus-visible` on any focus, which a browser does
+  // not do for a mouse click — the ring would show for a reason that is the
+  // harness's, not vlist's.
 });
