@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 const driver = process.env.VLIST_BROWSER_DRIVER ?? resolve(import.meta.dir, "browser-driver.mjs");
 const { launchBrowser } = await import(resolve(driver));
+import { pinPage, mediaFeatures, settle, SCHEME } from "./browser-page.mjs";
 const root = resolve(import.meta.dir, "..");
 const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css"><link rel="stylesheet" href="/vlist-grid.css"><link rel="stylesheet" href="/vlist-masonry.css">
@@ -38,13 +39,13 @@ const browser = await launchBrowser();
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
-  console.log(await browser.version());
+  console.log(await browser.version(), `scheme=${SCHEME}`);
   // 3.0 removal gate: both entries keep their supported plugin behavior.
   // The wheel gate observes DOM displacement, not only position telemetry.
   for (const entry of ['synthetic','native']) {
     for (const plugin of ['list','table','groups','scrollbar','page','grid','masonry']) {
       const probe = await browser.newPage();
-      await probe.setViewport({width:900,height:700});
+      await pinPage(probe);
       await probe.goto(`http://localhost:${server.port}/?entry=${entry}&plugin=${plugin}&count=10000`);
       await probe.waitForFunction(() => window.ready);
       assert.equal(await probe.evaluate(() => window.creationError),undefined);
@@ -93,7 +94,7 @@ try {
     }
   }
   const documentPage = await browser.newPage();
-  await documentPage.setViewport({width:900,height:700});
+  await pinPage(documentPage);
   await documentPage.goto(`http://localhost:${server.port}/?plugin=page&count=100000`);
   await documentPage.waitForFunction(() => window.ready);
   assert.equal(await documentPage.evaluate(() => window.creationError), undefined);
@@ -135,6 +136,7 @@ try {
   console.log('PASS page 1M size guard',guard);
   await documentPage.close();
   const rtlPage = await browser.newPage();
+  await pinPage(rtlPage);
   await rtlPage.goto(`http://localhost:${server.port}/`);
   await rtlPage.waitForFunction(() => window.ready);
   const rtl = await rtlPage.evaluate(async () => {
@@ -162,25 +164,30 @@ try {
   await rtlPage.close();
   for (const axis of ['y', 'x']) {
     const page = await browser.newPage();
-    await page.setViewport({width:900,height:700,hasTouch:true});
+    const cdp = await pinPage(page,{hasTouch:true});
     await page.goto(`http://localhost:${server.port}/?axis=${axis}&plugin=scrollbar`);
     await page.waitForFunction(()=>window.ready);
-    const cdp = await page.createCDPSession();
     for (const mode of ['normal', 'forced']) {
-      await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'forced-colors',value:mode==='forced'?'active':'none'}]});
+      await cdp.send('Emulation.setEmulatedMedia',{features:mediaFeatures(mode==='forced')});
       await page.evaluate(()=>{
         const host=document.querySelector('#list');host.style.scrollbarWidth='thin';host.style.scrollbarColor='rgb(10, 20, 30) rgb(40, 50, 60)';
         window.list.refreshScrollbar();document.querySelector('.vlist-scrollbar').focus();
       });
-      await wait(250);
+      // The thumb's background-color runs a 0.15s transition whose clock starts
+      // with a frame, not with the style change. Wait for it to finish, not for
+      // 250ms: with two Chromes on the machine it was sampled still pending
+      // (the theme colour) or 133ms in (rgb(250, 250, 250) for white).
+      await settle(page,'.vlist-scrollbar');
       const colors=await page.evaluate(()=>{
         const track=document.querySelector('.vlist-scrollbar'),thumb=track.firstElementChild;
         const reference=document.createElement('div');reference.style.forcedColorAdjust='none';reference.style.colorScheme=getComputedStyle(track).colorScheme;document.body.append(reference);
         const system=name=>{reference.style.backgroundColor=name;return getComputedStyle(reference).backgroundColor;};
         const result={track:getComputedStyle(track).backgroundColor,thumb:getComputedStyle(thumb).backgroundColor,adjust:getComputedStyle(track).forcedColorAdjust,
           focus:getComputedStyle(track).outlineColor,outline:getComputedStyle(track).outlineStyle,focusVisible:track.matches(':focus-visible'),
-          canvas:system('Canvas'),text:system('CanvasText'),highlight:system('Highlight')};reference.remove();return result;
+          canvas:system('Canvas'),text:system('CanvasText'),highlight:system('Highlight'),
+          scheme:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'};reference.remove();return result;
       });
+      assert.equal(colors.scheme,SCHEME,'the page sees the pinned scheme, not the host appearance');
       assert(colors.focusVisible);assert.equal(colors.outline,'solid');
       if(mode==='forced') {
         assert.equal(colors.adjust,'none','forced colors use explicit system colors');
@@ -213,10 +220,9 @@ try {
   for (const axis of ["y", "x"]) for (const plugin of (axis === "y" ? ["", "table", "groups", "a11y", "selection", "snapshots", "autosize", "transition"] : [""])) {
     const page = await browser.newPage();
     page.on("pageerror", e => errors.push(String(e)));
-    await page.setViewport({ width: 430, height: 932, hasTouch: true, isMobile: true });
+    const cdp = await pinPage(page, { width: 430, height: 932, hasTouch: true, isMobile: true });
     await page.goto(`http://localhost:${server.port}/?axis=${axis}&plugin=${plugin}`);
     await page.waitForFunction(() => window.ready);
-    const cdp = await page.createCDPSession();
     const touch = (type, points) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
     const read = () => page.evaluate(() => window.list.getScrollPosition());
     await page.evaluate(() => window.list.scrollToIndex(500, "start"));
