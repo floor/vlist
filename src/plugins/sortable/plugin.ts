@@ -505,8 +505,8 @@ export function sortable<T extends VListItem = VListItem>(
     document.removeEventListener("pointercancel", onPointerCancel, true);
     document.removeEventListener("pointerdown", secondTouch, true);
     document.removeEventListener("touchmove", blockTouchMove, true);
-    contentEl.removeEventListener("contextmenu", blockCallout);
-    contentEl.removeEventListener("selectstart", blockCallout);
+    document.removeEventListener("contextmenu", blockCallout, true);
+    document.removeEventListener("selectstart", blockCallout, true);
   }
 
   function abandonTouch(): void {
@@ -525,7 +525,17 @@ export function sortable<T extends VListItem = VListItem>(
   }
 
   function blockCallout(event: Event): void {
-    if (touchPointer !== null && event.target instanceof Node && touchItem?.contains(event.target)) event.preventDefault();
+    // While a touch press on a row is being tracked, the gesture is ours: a
+    // long-press callout or a text selection would take it away mid-drag.
+    //
+    // This used to require the event's target to sit inside the dragged item,
+    // which never matches once a drag has started. Measured during a drag: the
+    // ghost is appended to `document.body` with `pointer-events: none`, so what
+    // lies under the finger is `.vlist-content` — the item's *parent*, not a
+    // descendant. The guard never fired, and on Android the browser's menu
+    // appeared over the drag. Nothing in the stylesheet catches it either;
+    // there is no `-webkit-touch-callout` rule anywhere.
+    if (touchPointer !== null) event.preventDefault();
   }
 
   function startDrag(): void {
@@ -612,8 +622,11 @@ export function sortable<T extends VListItem = VListItem>(
       document.addEventListener("pointercancel", onPointerCancel, true);
       document.addEventListener("pointerdown", secondTouch, true);
       document.addEventListener("touchmove", blockTouchMove, { capture: true, passive: false });
-      contentEl.addEventListener("contextmenu", blockCallout);
-      contentEl.addEventListener("selectstart", blockCallout);
+      // On the document, capturing: the callout can target the content, the
+      // ghost on `document.body`, or whatever the compositor puts under the
+      // finger. Listening on the content element alone missed it.
+      document.addEventListener("contextmenu", blockCallout, true);
+      document.addEventListener("selectstart", blockCallout, true);
       if (handleSelector) {
         // Reserve handle input before the viewport can begin tracking it.
         storedCtx.scroll.cancel();
