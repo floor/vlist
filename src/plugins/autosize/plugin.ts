@@ -193,9 +193,17 @@ export function autosize<T extends VListItem = VListItem>(
 
           if (isMeasured(index)) continue;
 
-          const boxSize = entry.borderBoxSize[0];
-          if (!boxSize) continue;
-          const newSize = isX ? boxSize.inlineSize : boxSize.blockSize;
+          // borderBoxSize is missing on polyfills and on older WebKit, which
+          // shipped ResizeObserver with contentRect only. contentRect is the
+          // content box, so it undershoots a row that has padding or a border.
+          const boxSize = entry.borderBoxSize?.[0];
+          let newSize: number;
+          if (boxSize) {
+            newSize = isX ? boxSize.inlineSize : boxSize.blockSize;
+          } else {
+            const rect = el.getBoundingClientRect();
+            newSize = isX ? rect.width : rect.height;
+          }
           if (newSize <= 0) continue;
 
           const sizeWithGap = newSize + gap;
@@ -240,7 +248,13 @@ export function autosize<T extends VListItem = VListItem>(
           && engineState.prevRangeEnd >= engineState.totalItems - 1;
         const shouldPin = pinnedToEnd && !animatingToEnd;
 
-        if (shouldPin || atEnd || nearEnd || !isScrolling) {
+        // A smooth jump to the end re-reads its target every frame, but the
+        // browser clamps that write to the content element's current height.
+        // Deferring the height until idle leaves the jump short of the items
+        // measured along the way, which is the blank viewport on the second
+        // jump. Publish the height while the jump is in flight; still don't
+        // snap until the animation has finished, or the two fight.
+        if (shouldPin || atEnd || nearEnd || animatingToEnd || !isScrolling) {
           updateContentSize();
           pendingContentSizeUpdate = false;
 
@@ -276,6 +290,13 @@ export function autosize<T extends VListItem = VListItem>(
           animatingToEnd = true;
           ctx.scroll.smoothTo(dynamicTarget, duration ?? 300, easing, () => {
             animatingToEnd = false;
+            // Measurements taken on the last frames defer their height write
+            // until this moment. Publish it, then land on the end it describes.
+            if (pendingContentSizeUpdate) {
+              updateContentSize();
+              pendingContentSizeUpdate = false;
+            }
+            snapToEnd();
           });
         } else {
           ctx.scroll.to(dynamicTarget());

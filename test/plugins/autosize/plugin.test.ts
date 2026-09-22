@@ -933,6 +933,54 @@ describe("autosize end-pinning", () => {
     mockCtx.cleanup();
   });
 
+  it("publishes the content height during a smooth jump to the end, then snaps when it finishes", () => {
+    const { triggerMeasurement } = createControllableRO();
+    const mockCtx = createPluginMockContext(createTestItems(20), {
+      itemSize: 50,
+      containerHeight: 300,
+    });
+    const published: number[] = [];
+    mockCtx.ctx.render.contentSize = (size: number) => { published.push(size); };
+
+    let finish: (() => void) | undefined;
+    mockCtx.ctx.scroll.smoothTo = (_target, _duration, _easing, onComplete) => {
+      finish = onComplete;
+    };
+    let scrollToIndex: ((index: number, align: string, behavior?: string) => void) | null = null;
+    mockCtx.ctx.scroll.setToIndexFn = (fn) => { scrollToIndex = fn; };
+
+    const plugin = autosize<TestItem>();
+    plugin.setup!(mockCtx.ctx);
+
+    const state = mockCtx.engineState;
+    state.scrollDirection = 1;
+    state.totalItems = 20;
+    state.prevRangeEnd = 4;
+    state.visibleCount = 1;
+    state.visibleIndices[0] = 3;
+    const el = addElement(mockCtx.dom.content, 3);
+    plugin.hooks!.onCommit!(state);
+
+    scrollToIndex!(19, "end", "smooth");
+    published.length = 0;
+    mockCtx.scrollCalls.length = 0;
+
+    // Larger than the 50px estimate, and not near the end, so a normal scroll
+    // would defer the height write. The jump is still in flight.
+    triggerMeasurement(el, 200);
+
+    expect(published).toEqual([1150]);
+    expect(mockCtx.scrollCalls).toEqual([]);
+
+    finish!();
+
+    // 20 items were 50px; index 3 is now 200. End is 1150 - 300.
+    expect(mockCtx.scrollCalls).toEqual([850]);
+
+    plugin.destroy!();
+    mockCtx.cleanup();
+  });
+
   it("does NOT snap during active smooth scroll even when pinned", () => {
     const { mockCtx, plugin, triggerMeasurement, simulateScrollToIndex } = setupPinTest();
     const state = mockCtx.engineState;
@@ -1245,6 +1293,33 @@ describe("autosize remeasure on late content", () => {
 
     img.dispatchEvent(new Event("error"));
     expect(forceRenders).toBe(0);
+  });
+
+  it("measures the border box when the entry has no borderBoxSize", () => {
+    installObserver(false);
+    plugin.destroy!();
+    plugin = autosize<TestItem>();
+    plugin.setup!(mockCtx.ctx);
+
+    const { el } = renderItem(0, false);
+    el.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, bottom: 120, right: 300,
+      width: 300, height: 120, toJSON: () => ({}),
+    }) as DOMRect;
+    commit(0);
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(false);
+
+    // contentRect is a different, smaller box. The measurement must not use it.
+    deliverBatch([{
+      target: el,
+      contentRect: {
+        width: 300, height: 40, top: 0, left: 0, bottom: 40, right: 300,
+        x: 0, y: 0, toJSON: () => ({}),
+      } as DOMRectReadOnly,
+    } as ResizeObserverEntry]);
+
+    expect(el.style.height).toBe("120px");
+    expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);
   });
 
   it("media events outside the list items are ignored", () => {
