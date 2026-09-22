@@ -92,6 +92,8 @@ export interface ElementPool {
   acquire(): HTMLElement;
   release(element: HTMLElement): void;
   readonly size: number;
+  /** Drop spare nodes until at most `keep` remain. Does not touch mounted rows. */
+  trim(keep: number): void;
   clear(): void;
 }
 

@@ -131,6 +131,7 @@ export function createPluginMockContext<T extends VListItem>(
     get size() {
       return 0;
     },
+    trim: () => {},
     clear: () => {},
   };
 
