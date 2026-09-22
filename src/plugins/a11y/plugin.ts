@@ -62,6 +62,10 @@ export function a11y<T extends VListItem = VListItem>(
       // reads these. Without them ArrowLeft, ArrowRight, "*" and type-ahead
       // see no focused row and return.
       ctx.hooks.method("_getFocusedIndex", (): number => (focusVis ? focusIdx : -1));
+      ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
+        if (focusIdx < 0) return undefined;
+        return getItem(focusIdx)?.id;
+      });
       ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
         const total = getTotal();
         for (let i = 0; i < total; i++) {

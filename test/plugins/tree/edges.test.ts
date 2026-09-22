@@ -22,6 +22,7 @@ import type { CreateVListConfig, VList } from "../../../src/core/types";
 import type { VListItem } from "../../../src/types";
 import { tree, type TreeMethods, type TreePluginConfig } from "../../../src/plugins/tree";
 import { a11y } from "../../../src/plugins/a11y/plugin";
+import { selection } from "../../../src/plugins/selection/plugin";
 
 const WIDTH = 300;
 const HEIGHT = 500;
@@ -286,6 +287,67 @@ describe("tree + a11y keyboard", () => {
     press(content, "*");
     expect(list.isExpanded("a")).toBe(true);
     expect(list.isExpanded("b")).toBe(true);
+  }));
+
+  function hideFocusVisible(el: HTMLElement): void {
+    const orig = el.matches.bind(el);
+    el.matches = (selectors: string) => (selectors === ":focus-visible" ? false : orig(selectors));
+  }
+
+  function clickRow(container: HTMLElement, content: HTMLElement, id: string): void {
+    hideFocusVisible(content);
+    hideFocusVisible(container);
+    container.querySelector<HTMLElement>(`[data-id="${id}"]`)!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  }
+
+  it("ArrowRight after a mouse click expands the clicked folder", scoped(async (scope) => {
+    const { list, container, content } = await makeA11yTree(scope, [
+      { id: "a", name: "alpha", children: [{ id: "a1", name: "child", children: [] }] },
+      { id: "b", name: "beta", children: [] },
+    ]);
+
+    clickRow(container, content, "a");
+    expect(list.isExpanded("a")).toBe(false);
+    expect(focusedText(container)).toBeNull();
+
+    press(content, "ArrowRight");
+    expect(list.isExpanded("a")).toBe(true);
+    expect(rowTexts(container)).toEqual(["alpha", "child", "beta"]);
+  }));
+
+  it("type-ahead after a mouse click starts from the clicked node", scoped(async (scope) => {
+    const { container, content } = await makeA11yTree(scope, [
+      { id: "a", name: "alpha", children: [] },
+      { id: "b", name: "bravo", children: [] },
+      { id: "z", name: "zulu", children: [] },
+    ]);
+
+    clickRow(container, content, "a");
+    press(content, "z");
+    expect(focusedText(container)).toBe("zulu");
+  }));
+
+  it("ArrowRight after a mouse click expands when selection owns focus", scoped(async (scope) => {
+    const container = createContainer({ width: WIDTH, height: HEIGHT });
+    const list = createVList<Node>({
+      container,
+      items: [
+        { id: "a", name: "alpha", children: [{ id: "a1", name: "child", children: [] }] },
+        { id: "b", name: "beta", children: [] },
+      ],
+      item: { height: 32, template: (item) => item.name },
+    }, [tree<Node>(), selection<Node>()]);
+    scope.own(list, container);
+    await advanceTimers(5);
+    const content = container.querySelector<HTMLElement>(".vlist-content")!;
+
+    clickRow(container, content, "a");
+    expect((list as VList<Node> & TreeMethods).isExpanded("a")).toBe(false);
+
+    press(content, "ArrowRight");
+    expect((list as VList<Node> & TreeMethods).isExpanded("a")).toBe(true);
+    expect(rowTexts(container)).toEqual(["alpha", "child", "beta"]);
   }));
 
   it("type-ahead moves to the matching node", scoped(async (scope) => {
