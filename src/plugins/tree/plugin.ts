@@ -235,7 +235,15 @@ export function tree<T extends VListItem = VListItem>(
   function getEffectiveFocusedIndex(): number {
     if (hasExternalFocus) {
       const fn = getMethod("_getFocusedIndex") as (() => number) | undefined;
-      return fn ? fn() : -1;
+      const visible = fn ? fn() : -1;
+      if (visible >= 0) return visible;
+      // The ring index is -1 while a click hides it. The owner still remembers
+      // the row. ArrowRight, ArrowLeft, "*" and type-ahead start there.
+      const idFn = getMethod("_getFocusedId") as (() => string | number | undefined) | undefined;
+      const id = idFn?.();
+      if (id === undefined) return -1;
+      const index = layout.idToIndex.get(id);
+      return index === undefined ? -1 : index;
     }
     // A click records the row and hides the ring, because a mouse click is not
     // :focus-visible. The next arrow still starts there. Treating a hidden ring
