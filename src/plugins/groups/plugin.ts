@@ -939,6 +939,9 @@ export function groups<T extends VListItem = VListItem>(
       tableMode = hasTable;
 
       if (hasTable) {
+        // Table paints one row per layout entry, including headers. The engine
+        // total is still the data count, so the last group's rows never render.
+        engineState.totalItems = layout.totalEntries;
         // Deferred: data plugin (priority 20) runs after groups (priority 11)
         // and overwrites getItemFn. Table (priority 10) has already registered
         // _updateTableForGroups and called setSizeConfig; this microtask wires
@@ -1010,9 +1013,13 @@ export function groups<T extends VListItem = VListItem>(
       ctx.hooks.method("_layoutToDataIndex", (layoutIndex: number): number =>
         layout.layoutToDataIndex(layoutIndex),
       );
-      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
-        rendered.get(layoutIndex) ?? null,
-      );
+      // table() paints the rows and publishes this hook itself. Registering
+      // the groups map here would replace it with one that stays empty.
+      if (!tableMode) {
+        ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+          rendered.get(layoutIndex) ?? null,
+        );
+      }
       ctx.hooks.method("_isGroupHeader", (layoutIndex: number): boolean => {
         const entry = layout.getEntry(layoutIndex);
         return entry.type === "header";

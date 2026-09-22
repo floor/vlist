@@ -14,6 +14,7 @@ import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
 import { selection } from "../../../src/plugins/selection/plugin";
 import { groups } from "../../../src/plugins/groups/plugin";
+import { table } from "../../../src/plugins/table/plugin";
 import { data } from "../../../src/plugins/data";
 import { tree } from "../../../src/plugins/tree";
 import { createTestItems } from "../../helpers/factory";
@@ -1127,6 +1128,64 @@ describe("search + groups", () => {
     expect(highlightedRows(groupedContainer)).toBe(plainCount);
     expect(groupedContainer.querySelectorAll(".vlist-group-header .vlist-search-match").length).toBe(0);
     expect(groupedContainer.querySelectorAll(".vlist-group-header").length).toBeGreaterThan(0);
+  });
+});
+
+describe("search + table", () => {
+  const columns = [
+    { key: "name", label: "Name", width: 160 },
+    { key: "kind", label: "Kind", width: 120 },
+  ];
+
+  function tableList(mode: "filter" | "navigate", withGroups = false) {
+    const container = document.createElement("div");
+    container.style.cssText = "width:800px;height:400px";
+    document.body.appendChild(container);
+    const plugins = [
+      table<Fruit>({ columns, rowHeight: 36 }),
+      ...(withGroups
+        ? [groups<Fruit>({
+            getGroupForIndex: (index: number) => (index < 3 ? "A" : "B"),
+            header: { height: 28, template: (key: string) => key },
+          })]
+        : []),
+      search<Fruit>({ field: "name", mode }),
+    ];
+    const list = createVList<Fruit>({
+      container,
+      items: FRUITS.slice(),
+      item: { height: 36, template: (item) => item.name },
+    }, plugins);
+    lists.push(list);
+    return { list, container };
+  }
+
+  it("highlights the matching cells in filter mode", () => {
+    const { list, container } = tableList("filter");
+    q(list, "setQuery")("ap");
+
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(3);
+  });
+
+  it("highlights matches in navigate mode and marks the current one", () => {
+    const { list, container } = tableList("navigate");
+    q(list, "setQuery")("ap");
+
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(5);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-search-match--current").length).toBe(1);
+  });
+
+  it("highlights grouped rows and leaves the group header unmarked", async () => {
+    const { list, container } = tableList("navigate", true);
+    await Promise.resolve();
+    q(list, "setQuery")("ap");
+
+    expect(container.querySelectorAll(".vlist-table-group-header").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-table-group-header .vlist-search-match").length).toBe(0);
   });
 });
 
