@@ -91,6 +91,44 @@ describe("masonry — listbox semantics", () => {
     }
   });
 
+  it("keeps the active descendant on screen while moving through the lanes", async () => {
+    const container = createContainer({ width: 300, height: 300 });
+    const items = Array.from({ length: 40 }, (_, id) => ({ id, name: `item ${id}` }));
+    const list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: {
+          height: (_item, index) => (index % 3 === 0 ? 180 : 48),
+          template: simpleTemplate,
+        },
+      },
+      [masonry({ columns: 2 }), a11y()],
+    );
+    await tick(0);
+    const content = container.querySelector(".vlist-content")!;
+    const press = (key: string): void => {
+      content.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    };
+    for (let i = 0; i < 15; i++) press("ArrowDown");
+
+    const activeId = content.getAttribute("aria-activedescendant");
+    expect(activeId).toBeTruthy();
+    const active = container.querySelector<HTMLElement>(`#${activeId}`);
+    expect(active).not.toBeNull();
+    const y = Number(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(active!.style.transform)?.[2]);
+    const height = parseFloat(active!.style.height);
+    const scroll = list.getScrollPosition();
+    // clientHeight is forced to 400 for this file. The cell must sit inside
+    // that window, not below it with only its id left on aria-activedescendant.
+    const viewport = 400;
+    expect(y).toBeGreaterThanOrEqual(scroll - 1);
+    expect(y + height).toBeLessThanOrEqual(scroll + viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
   it("does the same under a11y() alone, which publishes no _getSelectedIds", async () => {
     const fixture = await build([masonry({ columns: 3 }), a11y()]);
     try {
