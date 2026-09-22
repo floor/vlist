@@ -106,6 +106,8 @@ export function grid<T extends VListItem = VListItem>(
   let lastContentTotalSize = -1;
   let forceNextRender = true;
   let rebuildAsRows: (rowCount: number) => void;
+  // The resize hook is outside setup, so it cannot see the spec captured there.
+  let heightIsFunction = false;
 
   // Recompute the cached column width — call on resize/config change.
   function recomputeColumnWidth(): void {
@@ -376,7 +378,8 @@ export function grid<T extends VListItem = VListItem>(
       // Inject grid context into dynamic height functions
       const rawSpec = ctx.sizes.rawSpec;
       let baseRowSize: number;
-      if (typeof rawSpec === "function") {
+      heightIsFunction = typeof rawSpec === "function";
+      if (heightIsFunction) {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
         baseRowSize = (rawSpec as Function)(0, gridCtx);
@@ -551,6 +554,14 @@ export function grid<T extends VListItem = VListItem>(
         if (Math.abs(newCross - containerWidth) < 1) return;
         containerWidth = newCross;
         recomputeColumnWidth();
+
+        // A height function reads columnWidth. Core has already rendered this
+        // resize against the previous row sizes, so rebuild and render again.
+        // Restyling the cells in place would leave them on the old pitch.
+        if (heightIsFunction) {
+          gridForceRender();
+          return;
+        }
 
         const origin = scroll.getRenderOrigin();
         for (const [index, tracked] of rendered) {

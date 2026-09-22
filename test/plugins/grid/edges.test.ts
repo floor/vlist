@@ -297,11 +297,7 @@ describe("grid — updateGrid with a height function", () => {
     expect(contentHeight()).toBe(14 * 80 + 13 * 30);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): core re-renders before it runs
-  // the resize hooks, so grid rebuilds its row sizes from the old container
-  // width, then restyles the cells from the new one. The cells come out 200px
-  // tall on a 100px row pitch — rows overlap — and the content height stays 1400.
-  it.todo("a container resize re-measures the rows of an aspect-ratio grid", scoped(async (scope) => {
+  it("a container resize re-measures the rows of an aspect-ratio grid", scoped(async (scope) => {
     const { container, contentHeight } = squareGrid(scope, { columns: 3 });
 
     await resizeViewport(container, 600, HEIGHT);
